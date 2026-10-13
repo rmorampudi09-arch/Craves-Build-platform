@@ -7,9 +7,11 @@ const mockNavigate = jest.fn();
 let mockDishes: {items: unknown[]; status: string} = {items: new Array(16).fill({}), status: 'success'};
 let mockPlans: {data: unknown[] | undefined} = {data: [{}]};
 let mockPlansProps: Record<string, unknown> | undefined;
+let mockRoute: {params: {segment?: 'plans'} | undefined} = {params: undefined};
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({navigate: mockNavigate}),
+  useRoute: () => mockRoute,
 }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: require('react-native').View,
@@ -50,6 +52,7 @@ describe('ChefMenuTabScreen', () => {
     mockDishes = {items: new Array(16).fill({}), status: 'success'};
     mockPlans = {data: [{}]};
     mockPlansProps = undefined;
+    mockRoute = {params: undefined};
     act(() => {
       tree = renderer.create(<ChefMenuTabScreen />);
     });
@@ -82,6 +85,28 @@ describe('ChefMenuTabScreen', () => {
     press('Dishes · 16');
     expect(lines()).toContain('DISHES_LIST');
     expect(button('Add dish')).toBeTruthy();
+  });
+
+  it('opens on Meal plans when the tab is opened for them (a meal-plan notification)', () => {
+    act(() => tree.unmount());
+    mockRoute = {params: {segment: 'plans'}};
+    act(() => {
+      tree = renderer.create(<ChefMenuTabScreen />);
+    });
+    expect(lines()).toEqual(expect.arrayContaining(['PLANS_LIST', 'New plan']));
+    expect(button('Meal plans · 1')!.props.accessibilityState.selected).toBe(true);
+  });
+
+  it('moves to Meal plans when an open Menu tab is sent there, even after the chef chose Dishes', () => {
+    expect(lines()).toContain('DISHES_LIST');
+    mockRoute = {params: {segment: 'plans'}};
+    act(() => tree.update(<ChefMenuTabScreen />));
+    expect(lines()).toContain('PLANS_LIST');
+    press('Dishes · 16');
+    expect(lines()).toContain('DISHES_LIST');
+    mockRoute = {params: {segment: 'plans'}};
+    act(() => tree.update(<ChefMenuTabScreen />));
+    expect(lines()).toContain('PLANS_LIST');
   });
 
   it('shows no count until the number is known', () => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import {Switch, Text, TextInput} from 'react-native';
+import {StyleSheet, Switch, Text, TextInput} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -143,6 +143,15 @@ describe('ChefMenuScreen', () => {
     expect(rowNamed('Curd rice').props.accessibilityLabel).toBe('Curd rice, Biryani · 25 min, ₹50');
     expect(has('₹49.50')).toBe(true);
     expect(has('₹50')).toBe(true);
+  });
+
+  it('makes every filter pill itself 48 dp tall, not a smaller pill with a hit slop the scroll view would clip', async () => {
+    await mount();
+    for (const label of ['All 6', 'On 4', 'Off 1', 'Drafts 1', 'Biryani', 'Curry', 'Snacks']) {
+      const tap = tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function' && node.props.style)[0];
+      expect(tap.props.hitSlop).toBeUndefined();
+      expect(StyleSheet.flatten(tap.props.style).minHeight).toBeGreaterThanOrEqual(48);
+    }
   });
 
   it('shows the counts in the filter chips and each filter narrows the list', async () => {

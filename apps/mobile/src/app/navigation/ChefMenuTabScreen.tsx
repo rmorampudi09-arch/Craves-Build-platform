@@ -2,7 +2,9 @@ import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {
   useNavigation,
+  useRoute,
   type CompositeNavigationProp,
+  type RouteProp,
 } from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -40,7 +42,13 @@ const withCount = (label: string, count: number | undefined) => (count === undef
  */
 export function ChefMenuTabScreen() {
   const navigation = useNavigation<ChefMenuNavigation>();
-  const [segment, setSegment] = React.useState<MenuSegment>('dishes');
+  const {params} = useRoute<RouteProp<ChefTabParamList, 'Menu'>>();
+  const [segment, setSegment] = React.useState<MenuSegment>(params?.segment === 'plans' ? 'plans' : 'dishes');
+  // Opened for the plans (a meal-plan notification): every new params object moves the toggle, even after the chef chose Dishes.
+  const firstParams = React.useRef(params);
+  React.useEffect(() => {
+    if (params !== firstParams.current && params?.segment === 'plans') setSegment('plans');
+  }, [params]);
   const dishes = useChefMenuModel();
   const plans = useChefMealPlansQuery();
   const dishCount = dishes.status === 'success' || dishes.items.length > 0 ? dishes.items.length : undefined;

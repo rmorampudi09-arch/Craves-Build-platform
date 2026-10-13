@@ -3,6 +3,7 @@ export * from './ChefCard';
 export * from './ChefScreen';
 export * from './ChefSheet';
 export * from './ChefToast';
+export * from './ChipTap';
 export * from './ChefTopBar';
 export * from './ComingSoon';
 export * from './ConfirmDialog';

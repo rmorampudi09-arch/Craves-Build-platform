@@ -45,7 +45,7 @@ export function EarningsBalanceCard({
   const needsBank = block?.kind === 'bank';
   const lines = [
     block?.text,
-    onHold > 0 ? `${formatRupees(onHold)} on hold until the latest orders are settled` : null,
+    onHold > 0 ? `${formatRupees(onHold, {paise: true})} on hold until the latest orders are settled` : null,
     failed ? "We couldn't load your balance. Pull down to try again." : null,
   ].filter((line): line is string => Boolean(line));
   return (

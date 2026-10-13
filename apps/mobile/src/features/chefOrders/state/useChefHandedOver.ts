@@ -8,15 +8,16 @@ import {chefOrderDetailApi} from '../api/chefOrderDetailApi';
 import {createChefOrderDetailQueryKey} from './useChefOrderDetailContract';
 
 /**
- * Set once the server says it has no hand-over route, so the button stays hidden for the rest of the app session.
+ * Set once the server says it has no hand-over route, so later taps say "coming soon" without asking again this app session.
  * shortcut: not stored on the phone, so the next launch asks the server once more; upgrade if that call ever costs anything.
  */
 export const chefHandedOverRoute = {missing: false};
 
+export const HANDED_OVER_COMING_SOON = 'Handed over is coming soon.';
 export const HANDED_OVER_FAILED = "We couldn't save that. Check your connection and try again.";
 
 export interface ChefHandedOver {
-  /** The Handed over button shows only for an order the server lets the chef hand over, and only until it is done. */
+  /** The Handed over button shows only for an order the server lets the chef hand over, and only until it is done. A route that is not published yet answers "coming soon" when tapped. */
   canHandOver: (order: {id: string; chefHandedOverAt?: string | null}) => boolean;
   /** The order whose hand-over is being sent. */
   busyOrderId: string | null;
@@ -32,18 +33,19 @@ export function useChefHandedOver(): ChefHandedOver {
   const activeRef = React.useRef(new Set<string>());
   const [busyOrderId, setBusyOrderId] = React.useState<string | null>(null);
   const [doneIds, setDoneIds] = React.useState<readonly string[]>([]);
-  // The session-wide flag lives outside React; this makes the screen that found out draw again.
-  const [, redraw] = React.useReducer((count: number) => count + 1, 0);
-
   const canHandOver = React.useCallback(
     (order: {id: string; chefHandedOverAt?: string | null}) =>
-      order.chefHandedOverAt === null && !chefHandedOverRoute.missing && !doneIds.includes(order.id),
+      order.chefHandedOverAt === null && !doneIds.includes(order.id),
     [doneIds],
   );
 
   const handOver = React.useCallback(
     async (orderId: string) => {
       if (activeRef.current.has(orderId)) {
+        return;
+      }
+      if (chefHandedOverRoute.missing) {
+        toast.show(HANDED_OVER_COMING_SOON);
         return;
       }
       activeRef.current.add(orderId);
@@ -60,7 +62,7 @@ export function useChefHandedOver(): ChefHandedOver {
       } catch (error) {
         if (isRouteNotPublished(error)) {
           chefHandedOverRoute.missing = true;
-          redraw();
+          toast.show(HANDED_OVER_COMING_SOON);
         } else {
           toast.show(HANDED_OVER_FAILED);
         }

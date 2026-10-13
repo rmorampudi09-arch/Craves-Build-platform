@@ -33,6 +33,7 @@ import {
   chefSupportCasesApi,
 } from '../api/chefSupportCasesApi';
 import {isTicketClosed, ticketNumber, ticketStatus} from '../domain/supportPresentation';
+import {useSupportCall} from '../state/useSupportCall';
 
 const CHAT_COMING_SOON = {title: 'Chat is on its way', message: 'You will be able to write to Craves support here soon. You can call us in the meantime.'};
 export const SEND_FAILED = "We couldn't send that. Your message is still here.";
@@ -80,6 +81,7 @@ export function ChefSupportTicketScreen() {
   const [sending, setSending] = React.useState(false);
   const [notPublished, setNotPublished] = React.useState(false);
   const busy = React.useRef(false);
+  const support = useSupportCall("We couldn't get our phone number just now. Please try again in a moment.", notPublished);
   const scroller = React.useRef<ScrollView>(null);
 
   const subject =
@@ -116,8 +118,9 @@ export function ChefSupportTicketScreen() {
   const closed = detail ? isTicketClosed(detail.supportCase.status) : false;
   const now = new Date(Date.now());
 
+  // Not published: the box stays with what the chef typed (never thrown away), and Call is offered instead of Send.
   const composer =
-    closed || notPublished || (caseId && !detail) ? null : (
+    closed || (caseId && !detail) ? null : (
       <View style={styles.composer}>
         <View style={styles.inputBox}>
           <TextInput
@@ -133,7 +136,12 @@ export function ChefSupportTicketScreen() {
             value={draft}
           />
         </View>
-        <ChefActionButton busy={sending} disabled={!draft.trim()} label="Send" onPress={() => send().catch(() => undefined)} />
+        <ChefActionButton
+          busy={sending}
+          disabled={!draft.trim() || notPublished}
+          label="Send"
+          onPress={() => send().catch(() => undefined)}
+        />
       </View>
     );
 
@@ -155,7 +163,30 @@ export function ChefSupportTicketScreen() {
 
   let content: React.ReactNode;
   if (notPublished) {
-    content = <ComingSoon {...CHAT_COMING_SOON} />;
+    content = (
+      <>
+        <ComingSoon {...CHAT_COMING_SOON} />
+        {draft.trim() ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.intro}>
+            Your message is still in the box below.
+          </Text>
+        ) : null}
+        <ChefActionButton
+          busy={support.loading}
+          icon="phone"
+          label="Call"
+          onPress={() => {
+            support.call().catch(() => undefined);
+          }}
+          tone="neutral"
+        />
+        {support.loadFailed ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.intro}>
+            We couldn't load our phone number. Press Call to try again.
+          </Text>
+        ) : null}
+      </>
+    );
   } else if (!caseId && !detail) {
     content = (
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.intro}>

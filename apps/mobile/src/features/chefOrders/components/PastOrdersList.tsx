@@ -1,5 +1,5 @@
 import React from 'react';
-import {FlatList, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {FlatList, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {
   borderWidth,
   colors,
@@ -11,7 +11,7 @@ import {
 } from '../../../design/tokens';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
-import {ChefActionButton, ListGroup, ListRow, StatusChip} from '../../chefShell/components/ui';
+import {ChefActionButton, ChipTap, ListGroup, ListRow, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
 import {formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 import {itemsSummary} from '../domain/chefOrderCard';
 import {
@@ -26,6 +26,8 @@ import {
 } from '../domain/chefOrderFilters';
 import {useChefOrderHistoryQuery} from '../query/chefOrderHistoryQueries';
 import {EmptyState} from './OrderCardParts';
+
+const CHIP_HEIGHT = 34;
 
 function PastRow({order, onOpen}: {order: ChefOperationalOrder; onOpen: () => void}) {
   const number = shortOrderNumber(order.id);
@@ -80,18 +82,18 @@ export function PastOrdersList({orders, onOpenOrder, onSeeNew, onRefresh}: PastO
       {PAST_KINDS.map(entry => {
         const on = entry.kind === kind;
         return (
-          <Pressable
+          <ChipTap
             accessibilityLabel={entry.label}
             accessibilityRole="button"
             accessibilityState={{selected: on}}
-            hitSlop={{top: 7, bottom: 7}}
             key={entry.kind}
-            onPress={() => setKind(entry.kind)}
-            style={[styles.chip, on && styles.chipOn]}>
-            <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.chipText, on && styles.chipTextOn]}>
-              {entry.label}
-            </Text>
-          </Pressable>
+            onPress={() => setKind(entry.kind)}>
+            <View style={[styles.chip, on && styles.chipOn]}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.chipText, on && styles.chipTextOn]}>
+                {entry.label}
+              </Text>
+            </View>
+          </ChipTap>
         );
       })}
     </ScrollView>
@@ -139,10 +141,10 @@ export function PastOrdersList({orders, onOpenOrder, onSeeNew, onRefresh}: PastO
 
 const styles = StyleSheet.create({
   content: {flexGrow: 1, gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl},
-  chipScroll: {marginHorizontal: -spacing.md, marginBottom: spacing.md},
+  chipScroll: {marginHorizontal: -spacing.md, ...chipTapOverlap(CHIP_HEIGHT, spacing.md)},
   chips: {gap: spacing.xs, paddingHorizontal: spacing.md},
   chip: {
-    height: 34,
+    height: CHIP_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,

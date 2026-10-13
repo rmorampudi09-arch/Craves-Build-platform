@@ -270,12 +270,12 @@ export function ChefOrdersScreen() {
         <>
           <EmptyState
             icon="bell"
-            message="You'll hear a sound and see the order here as soon as a customer orders."
+            message="New orders show up here. Keep the app open while your kitchen is open."
             title="No new orders"
           />
           <KitchenStatusCard
             cookingCount={counts.PREPARING}
-            onChangeHours={() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'})}
+            onChangeHours={() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule', initial: false})}
           />
         </>
       );

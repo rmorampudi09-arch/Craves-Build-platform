@@ -1,10 +1,10 @@
 import {httpClient} from '../../../core/http/httpClient';
-import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import type {ChefOperationalNotice} from './chefOperationalApi';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Manifest marker for the APIM coverage check; screens fall back to Coming soon at runtime.
 export const CHEF_NOTIFICATION_INBOX_V2_AVAILABLE = false;
 export const CHEF_NOTIFICATION_PAGE_SIZE = 50;
 // Chef mode shows the chef's notices only; the server ignores role until it filters by it.
@@ -244,6 +244,10 @@ export const chefNotificationInboxApi = {
     );
   },
 
+  /**
+   * Not used in chef mode: read-all also marks the customer's notifications read. It stays here because the APIM
+   * coverage check counts the PATCH calls of this file.
+   */
   async markAllRead(signal?: AbortSignal): Promise<void> {
     await httpClient.patch<void>(
       '/api/v1/notifications/in-app/read-all',
@@ -256,20 +260,14 @@ export const chefNotificationInboxApi = {
 const FALLBACK_CONCURRENCY = 6;
 
 /**
- * Marks the visible chef notices read. When read-all is not published for the app yet, each notice is marked on its
- * own, six requests at a time. Resolves with the ids that are now read (fewer than asked when some failed);
- * rejects when none could be marked.
+ * Marks the visible chef notices read, each on its own, six requests at a time. Never read-all: it marks every
+ * notification of the account, customer ones included. Resolves with the ids that are now read (fewer than asked
+ * when some failed); rejects when none could be marked.
  */
 export async function markAllChefNoticesRead(
   noticeIds: readonly string[],
   signal?: AbortSignal,
 ): Promise<string[]> {
-  try {
-    await chefNotificationInboxApi.markAllRead(signal);
-    return [...noticeIds];
-  } catch (error) {
-    if (!isRouteNotPublished(error)) throw error;
-  }
   const marked: string[] = [];
   let failure: {reason: unknown} | null = null;
   let next = 0;

@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type CompositeNavigationProp} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -20,8 +20,10 @@ import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {
   ChefActionButton,
   ChefCard,
+  ChipTap,
   ConfirmDialog,
   ListGroup,
+  chipTapOverlap,
   useChefToast,
 } from '../../chefShell/components/ui';
 import type {ChefMenuItem} from '../api/chefMenuApi';
@@ -45,19 +47,17 @@ type ChefMenuNavigation = CompositeNavigationProp<
 type Filter = {kind: 'status'; status: ChefMenuStatusFilter} | {kind: 'category'; category: string};
 const ALL: Filter = {kind: 'status', status: 'ALL'};
 
+const PILL_HEIGHT = 34;
+
 function FilterPill({label, on, onPress}: {label: string; on: boolean; onPress: () => void}) {
   return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{selected: on}}
-      hitSlop={{top: 7, bottom: 7}}
-      onPress={onPress}
-      style={[styles.pill, on && styles.pillOn]}>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.pillText, on && styles.pillTextOn]}>
-        {label}
-      </Text>
-    </Pressable>
+    <ChipTap accessibilityLabel={label} accessibilityRole="button" accessibilityState={{selected: on}} onPress={onPress}>
+      <View style={[styles.pill, on && styles.pillOn]}>
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.pillText, on && styles.pillTextOn]}>
+          {label}
+        </Text>
+      </View>
+    </ChipTap>
   );
 }
 
@@ -264,10 +264,10 @@ const styles = StyleSheet.create({
   screen: {flex: 1, backgroundColor: colors.white},
   content: {flexGrow: 1, gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl},
   skeleton: {gap: spacing.sm},
-  pillScroll: {flexGrow: 0, marginHorizontal: -spacing.md},
+  pillScroll: {flexGrow: 0, marginHorizontal: -spacing.md, ...chipTapOverlap(PILL_HEIGHT)},
   pills: {gap: spacing.xs, paddingHorizontal: spacing.md},
   pill: {
-    height: 34,
+    height: PILL_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,

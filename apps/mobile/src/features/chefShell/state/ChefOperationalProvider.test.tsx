@@ -1,7 +1,8 @@
 import React from 'react';
 import {act, create} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
-import {markAllChefNoticesRead} from '../api/chefNotificationInboxApi';
+import {AppApiError} from '../../../core/http/apiError';
+import {chefNotificationInboxApi, markAllChefNoticesRead} from '../api/chefNotificationInboxApi';
 import {chefOperationalApi} from '../api/chefOperationalApi';
 import {ChefOperationalProvider, useChefOperationalState} from './ChefOperationalProvider';
 
@@ -14,6 +15,7 @@ jest.mock('../api/chefOperationalApi', () => ({
 }));
 jest.mock('../api/chefNotificationInboxApi', () => ({
   ...jest.requireActual('../api/chefNotificationInboxApi'),
+  chefNotificationInboxApi: {page: jest.fn(), unreadCount: jest.fn(), markRead: jest.fn()},
   markAllChefNoticesRead: jest.fn(),
 }));
 
@@ -65,10 +67,71 @@ async function mountProvider() {
 beforeEach(() => {
   jest.clearAllMocks();
   get(chefOperationalApi.listOrders).mockResolvedValue([]);
+  // By default the server has not published the new inbox, so the older one is used.
+  get(chefNotificationInboxApi.page).mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
+  get(chefNotificationInboxApi.unreadCount).mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
   get(chefOperationalApi.listNotifications).mockResolvedValue([
     notice(CUSTOMER_NOTICE, 'Order created. Complete payment to continue', 'ORDER_CREATED'),
     notice(CHEF_NOTICE, 'New order', 'CHEF_ORDER_AWAITING_ACCEPTANCE'),
   ]);
+});
+
+describe('ChefOperationalProvider notification inbox choice', () => {
+  const page = (notices: ReturnType<typeof notice>[]) => ({notices, nextCursor: null, hasMore: false});
+
+  it('asks for the new inbox first, shows its chef notices and its unread count', async () => {
+    get(chefNotificationInboxApi.page).mockResolvedValue(
+      page([
+        notice(CUSTOMER_NOTICE, 'Order created. Complete payment to continue', 'ORDER_CREATED'),
+        notice(CHEF_NOTICE, 'New order', 'CHEF_ORDER_AWAITING_ACCEPTANCE'),
+      ]),
+    );
+    get(chefNotificationInboxApi.unreadCount).mockResolvedValue({unreadCount: 4});
+    const state = await mountProvider();
+    expect(chefNotificationInboxApi.page).toHaveBeenCalledTimes(1);
+    expect(chefOperationalApi.listNotifications).not.toHaveBeenCalled();
+    // The chef-audience filter still applies to what the new inbox returns.
+    expect(state.current.notices.map(n => n.id)).toEqual([CHEF_NOTICE]);
+    expect(state.current.counters.unreadNotifications).toBe(4);
+    expect(state.current.notificationsStatus).toBe('success');
+  });
+
+  it('falls back to the older inbox, once, when the new one is not published, and never asks the new one again', async () => {
+    const state = await mountProvider();
+    expect(chefNotificationInboxApi.page).toHaveBeenCalledTimes(1);
+    expect(chefOperationalApi.listNotifications).toHaveBeenCalledTimes(1);
+    expect(state.current.notices.map(n => n.id)).toEqual([CHEF_NOTICE]);
+    expect(state.current.notificationsStatus).toBe('success');
+    // The count is worked out from the chef notices, not taken from a route that is not there.
+    expect(state.current.counters.unreadNotifications).toBe(1);
+
+    await act(async () => {
+      await state.current.refresh();
+    });
+    await settle();
+    expect(chefNotificationInboxApi.page).toHaveBeenCalledTimes(1);
+    expect(chefNotificationInboxApi.unreadCount).toHaveBeenCalledTimes(1);
+    expect(chefOperationalApi.listNotifications).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks a notice read on the older inbox after the fallback', async () => {
+    get(chefOperationalApi.markNotificationRead).mockResolvedValue(undefined);
+    const state = await mountProvider();
+    await act(async () => {
+      state.current.markNotificationRead(CHEF_NOTICE);
+    });
+    await settle();
+    expect(chefOperationalApi.markNotificationRead).toHaveBeenCalledWith(CHEF_NOTICE);
+    expect(chefNotificationInboxApi.markRead).not.toHaveBeenCalled();
+    expect(state.current.counters.unreadNotifications).toBe(0);
+  });
+
+  it('keeps a real failure of the new inbox as an error instead of silently switching inbox', async () => {
+    get(chefNotificationInboxApi.page).mockRejectedValue(new AppApiError('HTTP_500', 'Boom', 500));
+    const state = await mountProvider();
+    expect(chefOperationalApi.listNotifications).not.toHaveBeenCalled();
+    expect(state.current.notificationsStatus).toBe('error');
+  });
 });
 
 describe('ChefOperationalProvider notifications', () => {

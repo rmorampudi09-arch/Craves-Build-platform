@@ -256,7 +256,8 @@ describe('ChefProfileScreen', () => {
     await mount();
     await ui.press('Switch to customer mode');
     expect(ui.has('Switch to customer mode?')).toBe(true);
-    expect(ui.has('Your kitchen stays open for orders.')).toBe(true);
+    // The chef has to know that in customer mode nobody tells them about a new order.
+    expect(ui.has("Your kitchen stays open, but you won't see new orders while you are in customer mode.")).toBe(true);
     expect(switchChefToCustomerRole).not.toHaveBeenCalled();
 
     await ui.press('Cancel');

@@ -224,7 +224,7 @@ export function ChefProfileScreen() {
       <ConfirmDialog
         busy={working}
         confirmLabel="Switch"
-        message="Your kitchen stays open for orders."
+        message="Your kitchen stays open, but you won't see new orders while you are in customer mode."
         onCancel={() => setDialog(null)}
         onConfirm={() => {
           run(() => switchChefToCustomerRole(dispatch), "We couldn't switch just now. Please try again.").catch(() => undefined);

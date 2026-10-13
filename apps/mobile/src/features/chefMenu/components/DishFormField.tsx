@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, TextInput, View, type TextInputProps} from 'react-native';
+import {StyleSheet, Text, TextInput, View, type TextInputProps} from 'react-native';
 import {
   borderWidth,
   colors,
@@ -10,6 +10,9 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
+import {ChipTap, chipTapOverlap} from '../../chefShell/components/ui';
+
+const CHIP_HEIGHT = 40;
 
 export interface FormFieldProps extends Omit<TextInputProps, 'style'> {
   /** Shown above the box and spoken as the field's name. */
@@ -100,19 +103,20 @@ export function OptionChip({
   accessibilityRole = 'radio',
 }: OptionChipProps) {
   return (
-    <Pressable
+    <ChipTap
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole={accessibilityRole}
       accessibilityState={accessibilityRole === 'radio' ? {checked: selected, disabled: Boolean(disabled)} : undefined}
       disabled={disabled}
-      hitSlop={{top: 4, bottom: 4}}
       onPress={onPress}
-      style={[styles.chip, selected && styles.chipOn, disabled && styles.chipDisabled]}>
-      {mark}
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.chipText, selected && styles.chipTextOn]}>
-        {label}
-      </Text>
-    </Pressable>
+      style={chipTapOverlap(CHIP_HEIGHT)}>
+      <View style={[styles.chip, selected && styles.chipOn, disabled && styles.chipDisabled]}>
+        {mark}
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.chipText, selected && styles.chipTextOn]}>
+          {label}
+        </Text>
+      </View>
+    </ChipTap>
   );
 }
 
@@ -150,7 +154,7 @@ const styles = StyleSheet.create({
   error: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.semibold},
   helper: {color: colors.textSecondary, fontSize: typography.small},
   chip: {
-    minHeight: 40,
+    minHeight: CHIP_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,

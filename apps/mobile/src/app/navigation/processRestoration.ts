@@ -322,10 +322,9 @@ export function toRestorationNavigatePayload(
     };
   }
   if (target.kind === 'CHEF_NESTED') {
-    return {
-      name: 'ChefTabs',
-      params: {screen: target.tab, params: {screen: target.screen}},
-    };
+    // Profile screens sit on top of Profile home; `initial: false` keeps it beneath them.
+    const params = target.tab === 'Profile' ? {screen: target.screen, initial: false} : {screen: target.screen};
+    return {name: 'ChefTabs', params: {screen: target.tab, params}};
   }
 
   const {screen, ...params} = target.route;

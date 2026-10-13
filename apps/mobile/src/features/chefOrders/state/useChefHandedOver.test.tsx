@@ -22,6 +22,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const ORDER_ID = '00000000-0000-4000-8000-00000000e7cd';
+const COMING_SOON = 'Handed over is coming soon.';
 const updated = {id: ORDER_ID, status: 'READY_FOR_PICKUP', updatedAt: '2026-10-14T07:00:00Z', prepTimeMinutes: 20};
 
 describe('useChefHandedOver', () => {
@@ -70,15 +71,27 @@ describe('useChefHandedOver', () => {
     expect(hook.busyOrderId).toBeNull();
   });
 
-  it('hides the button for the session, with no error, when the server has no such route', async () => {
+  const toastShown = (text: string) => tree.root.findAll(node => node.props.children === text).length > 0;
+
+  it('says "Handed over is coming soon." when the server has no such route, instead of hiding the button without a word', async () => {
     mockHandedOver.mockRejectedValueOnce(new AppApiError('HTTP_404', 'Not found', 404));
     await act(async () => {
       await hook.handOver(ORDER_ID);
     });
     expect(chefHandedOverRoute.missing).toBe(true);
-    expect(hook.canHandOver({id: ORDER_ID, chefHandedOverAt: null})).toBe(false);
-    expect(hook.canHandOver({id: 'another-order', chefHandedOverAt: null})).toBe(false);
+    expect(toastShown(COMING_SOON)).toBe(true);
+    expect(toastShown(HANDED_OVER_FAILED)).toBe(false);
+    expect(hook.canHandOver({id: ORDER_ID, chefHandedOverAt: null})).toBe(true);
     expect(mockReconcile).not.toHaveBeenCalled();
+  });
+
+  it('answers a later tap the same way without asking the server again', async () => {
+    chefHandedOverRoute.missing = true;
+    await act(async () => {
+      await hook.handOver('another-order');
+    });
+    expect(mockHandedOver).not.toHaveBeenCalled();
+    expect(toastShown(COMING_SOON)).toBe(true);
   });
 
   it('keeps the button and says so plainly when the request fails for another reason', async () => {

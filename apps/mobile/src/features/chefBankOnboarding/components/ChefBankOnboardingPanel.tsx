@@ -379,9 +379,9 @@ export function ChefBankOnboardingPanel() {
 
       <Text style={styles.privacy}>
         Craves never shows your full account number again, and this app does not
-        keep it after you submit. Changing your account saves it as a new
-        version. If the details fail, do not match or cannot be confirmed, no
-        payout will be sent to that account.
+        keep it after you submit. Changing your account details starts a new
+        check. If the check fails, or the details do not match or cannot be
+        confirmed, no payout will be sent to that account.
       </Text>
     </View>
   );

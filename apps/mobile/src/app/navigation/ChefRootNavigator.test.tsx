@@ -79,6 +79,14 @@ const press = (label: string) =>
 const navigate = (...args: unknown[]) =>
   act(() => (navigationRef.navigate as (...a: unknown[]) => void)(...args));
 
+type StateLike = {routes: {name: string; state?: StateLike}[]};
+/** Route names of the Orders stack, or [] while that stack has not been opened. */
+const ordersStackRoutes = () => {
+  const tabs = (navigationRef.getRootState() as unknown as StateLike).routes.find(route => route.name === 'ChefTabs');
+  const orders = tabs?.state?.routes.find(route => route.name === 'Orders');
+  return orders?.state?.routes.map(route => route.name) ?? [];
+};
+
 async function mount() {
   act(() => {
     tree = renderer.create(
@@ -128,6 +136,38 @@ describe('ChefRootNavigator', () => {
     act(() => tab('Profile').props.onPress());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');
     expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
+  });
+
+  it('opens a Profile sub-screen from Home with Profile home beneath it, so Back and the Profile tab work', () => {
+    navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefKitchenSchedule', initial: false}});
+    expect(allText()).toContain('SCREEN:ChefKitchenScheduleScreen');
+    act(() => navigationRef.goBack());
+    expect(allText()).toContain('SCREEN:ChefProfileScreen');
+    act(() => tab('Home').props.onPress());
+    navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews', initial: false}});
+    act(() => tab('Home').props.onPress());
+    act(() => tab('Profile').props.onPress());
+    expect(allText()).toContain('SCREEN:ChefReviewsScreen');
+    act(() => navigationRef.goBack());
+    expect(allText()).toContain('SCREEN:ChefProfileScreen');
+  });
+
+  it('opens an Orders filter from Home without stacking a second Orders screen on the one already open', () => {
+    act(() => tab('Orders').props.onPress());
+    expect(ordersStackRoutes()).toEqual(['ChefOrdersNew']);
+    act(() => tab('Home').props.onPress());
+    navigate('ChefTabs', {screen: 'Orders', params: {screen: 'ChefOrdersPreparing'}});
+    expect(ordersStackRoutes()).toEqual(['ChefOrdersPreparing']);
+    navigate('ChefTabs', {screen: 'Orders', params: {screen: 'ChefOrdersNew'}});
+    expect(ordersStackRoutes()).toEqual(['ChefOrdersNew']);
+    expect(allText()).toContain('SCREEN:ChefOrdersScreen');
+  });
+
+  it('opens Scheduled orders from the old Profile route without stacking a second Orders screen', () => {
+    act(() => tab('Orders').props.onPress());
+    act(() => tab('Profile').props.onPress());
+    navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefScheduledOrders'}});
+    expect(ordersStackRoutes()).toEqual(['ChefOrdersScheduled']);
   });
 
   it('reaches every new route without a crash', () => {

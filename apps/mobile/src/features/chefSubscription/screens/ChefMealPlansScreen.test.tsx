@@ -278,7 +278,7 @@ describe('ChefMealPlansScreen', () => {
     expect(button('Fine, Live, ₹1,499 per week')).toBeDefined();
   });
 
-  it('gives every button and filter at least 48 dp to tap', () => {
+  it('gives every button and filter at least 48 dp to tap, in its own box (a hit slop is clipped by the filter scroll view)', () => {
     mockPlans = mixedPlans();
     render();
     const tooSmall = tree.root
@@ -287,12 +287,15 @@ describe('ChefMealPlansScreen', () => {
         const raw = typeof node.props.style === 'function' ? node.props.style({pressed: false}) : node.props.style;
         const style = StyleSheet.flatten(raw) ?? {};
         const declared = (style.height ?? style.minHeight) as number | undefined;
-        const slop = node.props.hitSlop;
-        const extra = typeof slop === 'number' ? slop * 2 : (slop?.top ?? 0) + (slop?.bottom ?? 0);
-        return declared !== undefined && declared + extra < touchTarget.minimum ? [`${node.props.accessibilityLabel}: ${declared} + ${extra}`] : [];
+        return declared !== undefined && declared < touchTarget.minimum ? [`${node.props.accessibilityLabel}: ${declared}`] : [];
       });
 
     expect(tooSmall).toEqual([]);
+    for (const label of ['All 4', 'Live 1', 'Waiting approval 1', 'Drafts 1']) {
+      const tap = tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function' && node.props.style)[0];
+      expect(tap.props.hitSlop).toBeUndefined();
+      expect(StyleSheet.flatten(tap.props.style).minHeight).toBeGreaterThanOrEqual(touchTarget.minimum);
+    }
   });
 
   it('opens the editor for a tapped plan', () => {

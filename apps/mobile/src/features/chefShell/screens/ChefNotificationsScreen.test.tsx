@@ -118,9 +118,16 @@ describe('ChefNotificationsScreen', () => {
   it('opens Payout history for a payout and Reviews for a review', async () => {
     await mount();
     await press(label => label.startsWith('₹2,000 sent to your bank'));
-    expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Profile', params: {screen: 'ChefPayoutHistory'}});
+    expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Profile', params: {screen: 'ChefPayoutHistory', initial: false}});
     await press(label => label.startsWith('New 5★ review'));
-    expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews'}});
+    expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews', initial: false}});
+  });
+
+  it('opens the Menu tab on Meal plans for a meal-plan notice', async () => {
+    mockState.notices = [notice(5, {title: 'Plan approved', body: 'Weekly lunch box is live', noticeType: 'MEAL_PLAN_APPROVED', targetType: 'MEAL_PLAN', targetId: id(9)})];
+    await mount();
+    await press(label => label.startsWith('Plan approved'));
+    expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Menu', params: {segment: 'plans'}});
   });
 
   it('does not mark an already read notice again', async () => {

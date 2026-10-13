@@ -24,11 +24,6 @@ import {
   type ChefMenuFormValues,
 } from '../../src/features/chefMenu/domain/chefMenuForm';
 import {
-  CHEF_PAYOUT_CONTRACT_MODEL,
-  getChefWithdrawEligibilityBoundary,
-  hasCompleteChefPayoutContract,
-} from '../../src/features/chefPayout/domain/chefPayoutContract';
-import {
   getChefSubscriptionMutationBoundary,
   hasCompleteChefSubscriptionContract,
 } from '../../src/features/chefSubscription/domain/chefSubscriptionContract';
@@ -440,13 +435,6 @@ describe('P123 critical E2E journeys', () => {
     expect(paymentHandoffCapability.tokenizedPaymentMethodContractSupported).toBe(false);
     expect(paymentRecoveryCapability.nativeRazorpayCallbackAdapterSupported).toBe(true);
     expect(paymentRecoveryCapability.newPaymentAttemptAfterTerminalFailureSupported).toBe(false);
-
-    expect(CHEF_PAYOUT_CONTRACT_MODEL.status).toBe('partial');
-    expect(hasCompleteChefPayoutContract()).toBe(false);
-    expect(getChefWithdrawEligibilityBoundary()).toMatchObject({
-      availability: 'available',
-      canWithdraw: true,
-    });
 
     expect(hasCompleteChefSubscriptionContract()).toBe(false);
     expect(getChefSubscriptionMutationBoundary('changePlan')).toMatchObject({

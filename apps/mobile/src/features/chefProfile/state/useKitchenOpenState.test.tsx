@@ -333,6 +333,81 @@ describe('useKitchenOpenState actions', () => {
     expect(get(chefKitchenScheduleApi.replace).mock.calls[0][0]).toMatchObject({acceptingOrders: true});
   });
 
+  describe('the schedule is read again right before it is saved', () => {
+    // Hours were changed elsewhere (craves.in, Craves admin) after the app read them.
+    const changedElsewhere = {
+      ...schedule,
+      acceptingOrders: false,
+      weeklyWindows: [
+        {id: WINDOW_ID, dayOfWeek: 3, opensAt: '09:00:00', closesAt: '20:00:00'},
+        {id: '44444444-4444-4444-8444-444444444444', dayOfWeek: 4, opensAt: '10:00:00', closesAt: '18:00:00'},
+      ],
+    };
+    const freshWindows = [
+      {dayOfWeek: 3, opensAt: '09:00:00', closesAt: '20:00:00'},
+      {dayOfWeek: 4, opensAt: '10:00:00', closesAt: '18:00:00'},
+    ];
+
+    it('pause sends the weekly hours as the server has them now', async () => {
+      get(chefKitchenScheduleApi.replace).mockResolvedValue(changedElsewhere);
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockResolvedValue(changedElsewhere);
+      await act(async () => {
+        await state.current.pause(30);
+      });
+      const request = get(chefKitchenScheduleApi.replace).mock.calls[0][0];
+      expect(request.weeklyWindows).toEqual(freshWindows);
+      expect(request.acceptingOrders).toBe(false);
+      expect(request.pausedUntil).not.toBeNull();
+    });
+
+    it('resume sends the weekly hours as the server has them now', async () => {
+      get(chefKitchenScheduleApi.get).mockResolvedValue({...schedule, pausedUntil: new Date(Date.now() + 3_600_000).toISOString()});
+      get(chefKitchenScheduleApi.replace).mockResolvedValue(schedule);
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockResolvedValue({...changedElsewhere, pausedUntil: new Date(Date.now() + 3_600_000).toISOString()});
+      await act(async () => {
+        await state.current.resume();
+      });
+      const request = get(chefKitchenScheduleApi.replace).mock.calls[0][0];
+      expect(request.weeklyWindows).toEqual(freshWindows);
+      expect(request).toMatchObject({pausedUntil: null, acceptingOrders: false});
+    });
+
+    it('opening a kitchen that was not taking orders sends the fresh weekly hours', async () => {
+      get(chefKitchenScheduleApi.get).mockResolvedValue({...schedule, acceptingOrders: false});
+      get(chefKitchenScheduleApi.replace).mockResolvedValue(schedule);
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockResolvedValue(changedElsewhere);
+      await act(async () => {
+        await state.current.setOpen(true);
+      });
+      const request = get(chefKitchenScheduleApi.replace).mock.calls[0][0];
+      expect(request.weeklyWindows).toEqual(freshWindows);
+      expect(request.acceptingOrders).toBe(true);
+    });
+
+    it('opening sends nothing when the fresh schedule already takes orders', async () => {
+      get(chefKitchenScheduleApi.get).mockResolvedValue({...schedule, acceptingOrders: false});
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockResolvedValue({...changedElsewhere, acceptingOrders: true});
+      await act(async () => {
+        await expect(state.current.setOpen(true)).resolves.toBe(true);
+      });
+      expect(chefKitchenScheduleApi.replace).not.toHaveBeenCalled();
+    });
+
+    it('saves nothing when the schedule cannot be read again', async () => {
+      const state = await mountHook();
+      get(chefKitchenScheduleApi.get).mockRejectedValue(new Error('offline'));
+      await act(async () => {
+        await expect(state.current.pause(30)).rejects.toThrow('offline');
+        await expect(state.current.resume()).rejects.toThrow('offline');
+      });
+      expect(chefKitchenScheduleApi.replace).not.toHaveBeenCalled();
+    });
+  });
+
   it('pauses by writing pausedUntil into the schedule and keeps the weekly hours', async () => {
     get(chefKitchenScheduleApi.replace).mockImplementation(async (request: {pausedUntil: string}) => ({
       ...schedule,

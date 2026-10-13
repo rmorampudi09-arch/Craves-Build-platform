@@ -186,7 +186,11 @@ function DishForm({
   });
 
   const model = editing ? editModel : addModel;
-  const busy = model.submitState === 'submitting' || photoBusy;
+  // One save at a time, from the tap to the end of the menu refresh after the upload: a second POST would add the dish twice.
+  const [saving, setSaving] = React.useState(false);
+  const savingRef = React.useRef(false);
+  const savedRef = React.useRef(false);
+  const busy = model.submitState === 'submitting' || photoBusy || saving;
   // The switch saves by itself; a Save sent while it is still being saved could undo it.
   const switchBusy = Boolean(dish && menu.availabilityStateByItem[dish.id]);
   const changed = isDirty || photo !== null;
@@ -200,7 +204,24 @@ function DishForm({
   }, [leaving, navigation]);
   const finish = (message: string) => {
     toast.show(message);
+    savedRef.current = true;
     setLeaving(true);
+  };
+  const runSave = async (save: () => Promise<void>) => {
+    if (savingRef.current) {
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await save();
+    } finally {
+      // A finished save keeps the lock: the screen is on its way out.
+      if (!savedRef.current) {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    }
   };
 
   // Two Modals swapping in one tick misbehave on Android: close the sheet first, then do what it was for on the next frame.
@@ -255,7 +276,7 @@ function DishForm({
   };
 
   const saveNew = (intent: ChefMenuSubmitIntent) =>
-    handleSubmit(async values => {
+    runSave(handleSubmit(async values => {
       addModel.clearError();
       setPhotoError(null);
       const created = await addModel.submit(values, intent);
@@ -276,10 +297,10 @@ function DishForm({
             ? `${created.itemName} is live`
             : 'Draft saved',
       );
-    })();
+    }));
 
   const saveEdit = (publish: boolean) =>
-    handleSubmit(async values => {
+    runSave(handleSubmit(async values => {
       if (!dish) {
         return;
       }
@@ -309,7 +330,7 @@ function DishForm({
       setPhoto(null);
       reset(chefMenuItemToFormValues(saved));
       finish(publish ? `${saved.itemName} is live` : 'Changes saved');
-    })();
+    }));
 
   const deleteDish = async () => {
     if (!dish) {
@@ -435,7 +456,7 @@ function DishForm({
             <Switch
               accessibilityLabel={`${dish.itemName} availability`}
               accessibilityState={{busy: Boolean(menu.availabilityStateByItem[dish.id]), checked: dish.available}}
-              disabled={Boolean(menu.availabilityStateByItem[dish.id])}
+              disabled={busy || Boolean(menu.availabilityStateByItem[dish.id])}
               onValueChange={on => setOn(dish, on)}
               thumbColor={colors.white}
               trackColor={{false: colors.borderStrong, true: colors.success}}

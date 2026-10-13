@@ -27,7 +27,7 @@ import {Icon, type IconName} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {getChefMenuPrimaryImageUrl} from '../../chefMenu/domain/chefMenuPresentation';
 import {useChefMenuModel} from '../../chefMenu/state/useChefMenuModel';
-import {ChefActionButton, ChefCard, ChefTopBar, StatusChip} from '../../chefShell/components/ui';
+import {ChefActionButton, ChefCard, ChefTopBar, ChipTap, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
 import {summarizeSchedule, type ScheduleItemLike} from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
 import type {ChefMealPlan} from '../api/chefSubscriptionApi';
@@ -56,6 +56,7 @@ type ChefMealPlansNavigation = CompositeNavigationProp<
 >;
 
 const PHOTO = spacing.xxxl + spacing.xxl; // the board's 72 dp photo
+const PILL_HEIGHT = 34;
 
 function PlanNote({tone, icon, text}: {tone: 'info' | 'warn'; icon: IconName; text: string}) {
   const color = tone === 'warn' ? colors.warningText : colors.infoText;
@@ -266,18 +267,18 @@ export function ChefMealPlansScreen({hideHeader = false}: {hideHeader?: boolean}
   const pill = (label: string, value: ChefPlanFilter, count: number) => {
     const on = filter === value;
     return (
-      <Pressable
+      <ChipTap
         accessibilityLabel={`${label} ${count}`}
         accessibilityRole="button"
         accessibilityState={{selected: on}}
-        hitSlop={{top: 7, bottom: 7}} // (48 - 34) / 2
         key={value}
-        onPress={() => setFilter(value)}
-        style={[styles.pill, on && styles.pillOn]}>
-        <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.pillText, on && styles.pillTextOn]}>
-          {`${label} ${count}`}
-        </Text>
-      </Pressable>
+        onPress={() => setFilter(value)}>
+        <View style={[styles.pill, on && styles.pillOn]}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.pillText, on && styles.pillTextOn]}>
+            {`${label} ${count}`}
+          </Text>
+        </View>
+      </ChipTap>
     );
   };
 
@@ -368,10 +369,10 @@ const styles = StyleSheet.create({
   screen: {flex: 1, backgroundColor: colors.white},
   content: {flexGrow: 1, gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl},
   list: {gap: spacing.sm},
-  pillScroll: {flexGrow: 0, marginHorizontal: -spacing.md},
+  pillScroll: {flexGrow: 0, marginHorizontal: -spacing.md, ...chipTapOverlap(PILL_HEIGHT)},
   pills: {gap: spacing.xs, paddingHorizontal: spacing.md},
   pill: {
-    height: 34, // matches the Dishes pills; the 48 dp tap area comes from hitSlop
+    height: PILL_HEIGHT, // matches the Dishes pills
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,

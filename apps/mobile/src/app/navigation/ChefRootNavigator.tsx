@@ -1,6 +1,7 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {CommonActions} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {resolveReducedMotionAnimation} from '../../design/motion';
@@ -71,6 +72,15 @@ function useChefStackScreenOptions() {
   );
 }
 
+/** Opening a filter from another tab pushes it; the filters replace each other, so keep only the one on top. */
+const keepOnlyFocusedOrdersFilter: React.ComponentProps<typeof OrdersStack.Navigator>['screenListeners'] = ({navigation}) => ({
+  focus: () => {
+    if (navigation.getState().routes.length > 1) {
+      navigation.dispatch(state => CommonActions.reset({...state, index: 0, routes: state.routes.slice(-1)}));
+    }
+  },
+});
+
 function ChefOrdersNavigator() {
   const stackScreenOptions = useChefStackScreenOptions();
   // Switching between the order lists should feel like changing a filter, not opening a page.
@@ -79,7 +89,10 @@ function ChefOrdersNavigator() {
     [stackScreenOptions],
   );
   return (
-    <OrdersStack.Navigator initialRouteName="ChefOrdersNew" screenOptions={screenOptions}>
+    <OrdersStack.Navigator
+      initialRouteName="ChefOrdersNew"
+      screenListeners={keepOnlyFocusedOrdersFilter}
+      screenOptions={screenOptions}>
       {CHEF_ORDER_ROUTES.map(name => (
         <OrdersStack.Screen key={name} name={name} component={ChefOrdersScreen} />
       ))}

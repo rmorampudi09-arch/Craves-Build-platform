@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {
   borderWidth,
   colors,
@@ -9,6 +9,7 @@ import {
   textDefaults,
   typography,
 } from '../../../design/tokens';
+import {ChipTap, chipTapOverlap} from '../../chefShell/components/ui';
 import {CHEF_ORDER_FILTERS, type ChefOrderFilter} from '../domain/chefOrderFilters';
 
 export interface FilterChipsProps {
@@ -17,6 +18,8 @@ export interface FilterChipsProps {
   counts: Partial<Record<ChefOrderFilter, number>>;
   onSelect: (filter: ChefOrderFilter) => void;
 }
+
+const CHIP_HEIGHT = 38;
 
 /** New · Preparing · Ready · Scheduled · Past. Switching is a filter, not a page: the caller swaps the content in place. */
 export function FilterChips({selected, counts, onSelect}: FilterChipsProps) {
@@ -38,38 +41,39 @@ export function FilterChips({selected, counts, onSelect}: FilterChipsProps) {
         contentContainerStyle={styles.row}
         horizontal
         ref={scrollRef}
-        showsHorizontalScrollIndicator={false}>
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}>
         {CHEF_ORDER_FILTERS.map(({filter, label}) => {
           const on = filter === selected;
           const count = counts[filter];
           // The one list that asks for the chef's answer gets the red number, as on the board.
           const hot = filter === 'NEW' && (count ?? 0) > 0;
           return (
-            <Pressable
+            <ChipTap
               accessibilityLabel={count === undefined ? label : `${label}, ${count} ${count === 1 ? 'order' : 'orders'}`}
               accessibilityRole="tab"
               accessibilityState={{selected: on}}
-              hitSlop={{top: 5, bottom: 5}}
               key={filter}
               onLayout={event => {
                 positions.current[filter] = event.nativeEvent.layout.x;
                 if (on) reveal(filter);
               }}
-              onPress={() => onSelect(filter)}
-              style={[styles.chip, on && styles.chipOn]}>
-              <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.label, on && styles.labelOn]}>
-                {label}
-              </Text>
-              {count !== undefined ? (
-                <View style={[styles.count, on && styles.countOn, hot && styles.countHot]}>
-                  <Text
-                    allowFontScaling={textDefaults.allowFontScaling}
-                    style={[styles.countText, hot && styles.countTextHot]}>
-                    {count > 99 ? '99+' : count}
-                  </Text>
-                </View>
-              ) : null}
-            </Pressable>
+              onPress={() => onSelect(filter)}>
+              <View style={[styles.chip, on && styles.chipOn]}>
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.label, on && styles.labelOn]}>
+                  {label}
+                </Text>
+                {count !== undefined ? (
+                  <View style={[styles.count, on && styles.countOn, hot && styles.countHot]}>
+                    <Text
+                      allowFontScaling={textDefaults.allowFontScaling}
+                      style={[styles.countText, hot && styles.countTextHot]}>
+                      {count > 99 ? '99+' : count}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </ChipTap>
           );
         })}
       </ScrollView>
@@ -84,9 +88,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: borderWidth.standard,
     borderBottomColor: colors.border,
   },
+  scroll: chipTapOverlap(CHIP_HEIGHT),
   row: {gap: spacing.xs, paddingHorizontal: spacing.md},
   chip: {
-    height: 38,
+    height: CHIP_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,

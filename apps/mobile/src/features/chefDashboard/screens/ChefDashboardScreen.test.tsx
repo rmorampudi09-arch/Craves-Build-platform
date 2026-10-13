@@ -335,7 +335,7 @@ describe('Home: kitchen status', () => {
     await press('Change opening hours');
     expect(mockNavigate).not.toHaveBeenCalled();
     await finishInteractions();
-    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule'});
+    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule', initial: false});
   });
 
   it('shows a kitchen the chef closed with just "Closed" and one button to open it', async () => {
@@ -363,7 +363,7 @@ describe('Home: kitchen status', () => {
     expect(hasText('Closed · opens 11:00 AM')).toBe(true);
     expect(pressables('Open kitchen')).toHaveLength(0);
     await press('Change opening hours');
-    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule'});
+    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule', initial: false});
   });
 
   it('does not offer to open a kitchen Craves has suspended', async () => {
@@ -501,7 +501,7 @@ describe('Home: kitchen, today and balance', () => {
     expect(hasText('Latest reviews')).toBe(true);
     expect(hasText('Biryani tasted just like home!')).toBe(true);
     await press('See all');
-    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefReviews'});
+    expect(mockNavigate).toHaveBeenCalledWith('Profile', {screen: 'ChefReviews', initial: false});
   });
 
   it('shows the balance with paise and Withdraw opens the Earnings tab with the withdraw sheet', async () => {

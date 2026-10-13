@@ -193,10 +193,20 @@ export function useKitchenOpenState(): KitchenOpenState {
     status = 'open';
   }
 
+  /** The PUT sends every weekly window back, so it is built on the schedule as the server has it right now, not the cached copy. */
   const replaceSchedule = React.useCallback(
-    async (current: ChefKitchenSchedule, changes: {acceptingOrders: boolean; pausedUntil: string | null}) => {
+    async (change: (fresh: ChefKitchenSchedule) => {acceptingOrders: boolean; pausedUntil: string | null} | null) => {
+      const fresh = await queryClient.fetchQuery({
+        queryKey: scheduleKey,
+        queryFn: ({signal}) => chefKitchenScheduleApi.get(signal),
+        staleTime: 0,
+      });
+      const changes = change(fresh);
+      if (!changes) {
+        return;
+      }
       const saved = await chefKitchenScheduleApi.replace(
-        scheduleUpdateFromCurrent(current, {
+        scheduleUpdateFromCurrent(fresh, {
           ...changes,
           pauseReason: changes.pausedUntil ? 'Paused by chef' : null,
         }),
@@ -232,7 +242,7 @@ export function useKitchenOpenState(): KitchenOpenState {
           await synchronizeChefProfileAfterSave(queryClient, identityId, updated);
         }
         if (open && schedule?.acceptingOrders === false) {
-          await replaceSchedule(schedule, {acceptingOrders: true, pausedUntil: schedule.pausedUntil});
+          await replaceSchedule(fresh => (fresh.acceptingOrders ? null : {acceptingOrders: true, pausedUntil: fresh.pausedUntil}));
         }
       }),
     [guarded, identityId, kitchen, kitchenKey, queryClient, replaceSchedule, schedule],
@@ -244,7 +254,7 @@ export function useKitchenOpenState(): KitchenOpenState {
         if (!schedule) {
           throw new Error('KITCHEN_SCHEDULE_NOT_LOADED');
         }
-        await replaceSchedule(schedule, {acceptingOrders: schedule.acceptingOrders, pausedUntil});
+        await replaceSchedule(fresh => ({acceptingOrders: fresh.acceptingOrders, pausedUntil}));
       }),
     [guarded, replaceSchedule, schedule],
   );

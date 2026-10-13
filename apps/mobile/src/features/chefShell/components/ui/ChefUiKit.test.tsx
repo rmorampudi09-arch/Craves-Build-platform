@@ -9,6 +9,7 @@ import {
   ChefSheet,
   ChefToastProvider,
   ChefTopBar,
+  ChipTap,
   ComingSoon,
   ConfirmDialog,
   ListGroup,
@@ -17,6 +18,7 @@ import {
   StatTile,
   StatusChip,
   VegMark,
+  chipTapOverlap,
   useChefToast,
 } from './index';
 
@@ -149,6 +151,23 @@ describe('Chef UI kit', () => {
     expect(box.backgroundColor).toBe(colors.white);
     const label = tree.root.findAllByType(Text).find(n => textOf(n) === 'Cancel');
     expect(StyleSheet.flatten(label!.props.style).color).toBe(colors.textPrimary);
+  });
+
+  it('ChipTap is itself 48 dp tall around a smaller chip, and a row gives that height back with a negative margin', () => {
+    const press = jest.fn();
+    mount(
+      <ChipTap accessibilityLabel="Ready" onPress={press}>
+        <Text>Ready</Text>
+      </ChipTap>,
+    );
+    const tap = tree.root.findAll(n => n.props.accessibilityLabel === 'Ready' && typeof n.props.onPress === 'function' && n.props.style)[0];
+    expect(StyleSheet.flatten(tap.props.style).minHeight).toBe(48);
+    expect(tap.props.hitSlop).toBeUndefined();
+    act(() => tap.props.onPress());
+    expect(press).toHaveBeenCalledTimes(1);
+    expect(chipTapOverlap(34)).toEqual({marginTop: -7, marginBottom: -7});
+    expect(chipTapOverlap(40)).toEqual({marginTop: -4, marginBottom: -4});
+    expect(chipTapOverlap(34, 16)).toEqual({marginTop: -7, marginBottom: 9});
   });
 
   it('VegMark renders nothing for a missing or unknown food type instead of crashing', () => {

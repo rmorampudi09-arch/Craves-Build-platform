@@ -1,5 +1,5 @@
 import React from 'react';
-import {TextInput} from 'react-native';
+import {Linking, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -12,6 +12,7 @@ jest.setTimeout(20_000);
 
 const mockReplace = jest.fn();
 const mockCases = {get: jest.fn(), create: jest.fn(), addMessage: jest.fn()};
+const mockOnboarding = {load: jest.fn()};
 let mockParams: {caseId?: string; orderId?: string; topic?: string} = {};
 
 jest.mock('@react-navigation/native', () => ({
@@ -33,6 +34,10 @@ jest.mock('../api/chefSupportCasesApi', () => ({
     create: (...args: unknown[]) => mockCases.create(...args),
     addMessage: (...args: unknown[]) => mockCases.addMessage(...args),
   },
+}));
+
+jest.mock('../../chefOnboarding/api/chefOnboardingApi', () => ({
+  chefOnboardingApi: {load: (...args: unknown[]) => mockOnboarding.load(...args)},
 }));
 
 const NOT_PUBLISHED = new AppApiError('HTTP_404', 'Not found', 404);
@@ -61,11 +66,17 @@ async function mount(params: typeof mockParams) {
 }
 
 describe('ChefSupportTicketScreen', () => {
+  let openUrl: jest.SpyInstance;
   beforeEach(() => {
     jest.clearAllMocks();
     mockCases.get.mockResolvedValue(supportDetail());
+    mockOnboarding.load.mockResolvedValue({supportPhone: '+918012345678', supportEmail: 'help@craves.in'});
+    openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   });
-  afterEach(() => act(() => tree.unmount()));
+  afterEach(() => {
+    openUrl.mockRestore();
+    act(() => tree.unmount());
+  });
 
   it('shows the conversation with the ticket number, the subject and who wrote each message', async () => {
     await mount({caseId: CASE_ID});
@@ -197,6 +208,37 @@ describe('ChefSupportTicketScreen', () => {
     await ui.press('Send');
     await ui.settle();
     expect(ui.has('Chat is on its way')).toBe(true);
-    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+  });
+
+  it.each(['Delete my account', 'Move my kitchen', 'Update a document', undefined])(
+    'keeps what the chef typed and offers Call when support is not published (topic: %s)',
+    async topic => {
+      mockCases.create.mockRejectedValue(NOT_PUBLISHED);
+      await mount(topic ? {topic} : {});
+      await type('Please help me with this');
+      await ui.press('Send');
+      await ui.settle();
+      expect(ui.has('Chat is on its way')).toBe(true);
+      // Nothing the chef wrote is thrown away: the words stay in the box, and sending is off until chat exists.
+      expect(composer().props.value).toBe('Please help me with this');
+      expect(ui.byLabel('Send')!.props.accessibilityState.disabled).toBe(true);
+      expect(mockCases.create).toHaveBeenCalledTimes(1);
+      await ui.press('Call');
+      expect(openUrl).toHaveBeenCalledWith('tel:+918012345678');
+    },
+  );
+
+  it('says so plainly when the number cannot be loaded for the Call button', async () => {
+    mockCases.create.mockRejectedValue(NOT_PUBLISHED);
+    mockOnboarding.load.mockRejectedValue(new Error('offline'));
+    await mount({topic: 'Move my kitchen'});
+    await type('Hello');
+    await ui.press('Send');
+    await ui.settle();
+    await ui.press('Call');
+    await ui.settle();
+    expect(openUrl).not.toHaveBeenCalled();
+    expect(ui.has("We couldn't get our phone number just now. Please try again in a moment.")).toBe(true);
+    expect(composer().props.value).toBe('Hello');
   });
 });

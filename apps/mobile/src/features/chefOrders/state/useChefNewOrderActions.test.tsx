@@ -2,7 +2,14 @@ import React from 'react';
 import renderer, {act} from 'react-test-renderer';
 import {AppApiError} from '../../../core/http/apiError';
 import type {ChefOrderDetail} from '../api/chefOrderDetailApi';
+import {Text} from 'react-native';
+import {ChefToastProvider} from '../../chefShell/components/ui';
 import {useChefNewOrderActions, type ChefNewOrderActionsState} from './useChefNewOrderActions';
+
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: require('react-native').View,
+  useSafeAreaInsets: () => ({top: 0, right: 0, bottom: 0, left: 0}),
+}));
 
 const mockExecute = jest.fn();
 const mockGetOrder = jest.fn();
@@ -45,6 +52,25 @@ describe('New order acceptance feedback', () => {
     await act(async () => {await expect(state.accept('order-id')).rejects.toMatchObject({status: 409});});
     expect(state.feedback?.message).toBe('This order is now Preparing. The latest status is shown.');
     expect(mockReconcile).toHaveBeenCalledWith('order-id', 'CHEF_ACCEPTED', pending.updatedAt, 25);
+  });
+
+  it('still shows the result as a toast when the chef switched filters (the screen is gone) while the request ran', async () => {
+    act(() => tree.unmount());
+    let leave: () => void = () => undefined;
+    function Host() {
+      const [shown, setShown] = React.useState(true);
+      leave = () => setShown(false);
+      return <ChefToastProvider>{shown ? <Harness /> : null}</ChefToastProvider>;
+    }
+    await act(async () => {tree = renderer.create(<Host />);});
+    let finish: (value: unknown) => void = () => undefined;
+    mockExecute.mockReturnValueOnce(new Promise(resolve => (finish = resolve)));
+    let request: Promise<unknown> = Promise.resolve();
+    await act(async () => {request = state.accept('order-id');});
+    act(() => leave());
+    await act(async () => {finish({order: {...pending, status: 'CHEF_ACCEPTED', prepTimeMinutes: 25}}); await request;});
+    const shown = tree.root.findAllByType(Text).map(node => String(node.props.children));
+    expect(shown).toContain('Order accepted and moved to Preparing.');
   });
 
   it('does not report failure after a successful acceptance if refresh fails', async () => {

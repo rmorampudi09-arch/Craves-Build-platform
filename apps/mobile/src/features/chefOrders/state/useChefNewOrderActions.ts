@@ -7,6 +7,7 @@ import {
   formatChefOrderStatus,
 } from '../domain/chefOrderDecision';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
+import {useReportFeedback} from './useReportFeedback';
 
 export type ChefNewOrderAction = 'accepting' | 'rejecting';
 
@@ -30,6 +31,7 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
     Record<string, ChefNewOrderAction | undefined>
   >({});
   const [feedback, setFeedback] = React.useState<ChefNewOrderFeedback | null>(null);
+  const report = useReportFeedback<ChefNewOrderFeedback>(setFeedback);
   const {reconcileOrderStatus, refresh} = useChefOperationalState();
 
   const reconcile = React.useCallback(
@@ -65,7 +67,7 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
       try {
         const order = await execute();
         reconcile(order);
-        setFeedback({
+        report({
           kind: 'success',
           message:
             action === 'accepting'
@@ -78,7 +80,7 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
         if (cause instanceof ChefOrderDecisionConflictError) {
           reconcile(cause.latestOrder);
           const conflict = toAppApiError(cause);
-          setFeedback({kind: 'error', message: conflict.message});
+          report({kind: 'error', message: conflict.message});
           refresh().catch(() => undefined);
           throw conflict;
         }
@@ -88,7 +90,7 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
           try {
             const latest = await chefOrderDetailApi.getOrder(orderId);
             reconcile(latest);
-            setFeedback({
+            report({
               kind: 'error',
               message:
                 latest.status === 'CHEF_ACCEPTANCE_PENDING'
@@ -96,11 +98,11 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
                   : `This order is now ${formatChefOrderStatus(latest.status)}. The latest status is shown.`,
             });
           } catch {
-            setFeedback({kind: 'error', message: appError.message});
+            report({kind: 'error', message: appError.message});
           }
           refresh().catch(() => undefined);
         } else {
-          setFeedback({kind: 'error', message: appError.message});
+          report({kind: 'error', message: appError.message});
         }
         throw appError;
       } finally {
@@ -112,7 +114,7 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
         });
       }
     },
-    [reconcile, refresh],
+    [reconcile, refresh, report],
   );
 
   const accept = React.useCallback(

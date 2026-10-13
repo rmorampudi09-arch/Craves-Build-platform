@@ -176,7 +176,7 @@ export function ChefDashboardScreen() {
   // Orders being cooked now (accepted or preparing), by the same rule as the Preparing list; packed ones are not cooking.
   const cooking = ordersForFilter(model.kitchenOrders, 'PREPARING').length;
   const kitchenControl = useKitchenStatusControl(kitchen, cooking, () =>
-    navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'}),
+    navigation.navigate('Profile', {screen: 'ChefKitchenSchedule', initial: false}),
   );
 
   // The order actions explain what happened (accepted, no longer available...); show it once.
@@ -393,7 +393,7 @@ export function ChefDashboardScreen() {
           {closedCopyNow.action === 'hours' ? (
             <ChefActionButton
               label="Change opening hours"
-              onPress={() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule'})}
+              onPress={() => navigation.navigate('Profile', {screen: 'ChefKitchenSchedule', initial: false})}
               style={styles.fullWidth}
               tone="neutral"
             />
@@ -510,7 +510,7 @@ export function ChefDashboardScreen() {
         <>
           <SectionHeader
             actionLabel="See all"
-            onAction={() => navigation.navigate('Profile', {screen: 'ChefReviews'})}
+            onAction={() => navigation.navigate('Profile', {screen: 'ChefReviews', initial: false})}
             title="Latest reviews"
           />
           <ChefCard>

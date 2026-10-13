@@ -242,7 +242,7 @@ export function ChefEarningsScreen() {
         {notice?.kind === 'sent' ? (
           <EarningsBanner
             body={bank?.lastFour ? `Sent to ${bankName}••${bank.lastFour}. Track it in Payout history.` : 'Track it in Payout history.'}
-            title={`${formatRupees(Number(notice.amount))} is on its way`}
+            title={`${formatRupees(Number(notice.amount), {paise: true})} is on its way`}
             tone="success"
           />
         ) : null}

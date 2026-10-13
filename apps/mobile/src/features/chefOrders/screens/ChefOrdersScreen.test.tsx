@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {FlatList, Modal, Text} from 'react-native';
+import {FlatList, Modal, StyleSheet, Text} from 'react-native';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
@@ -68,12 +68,12 @@ jest.mock('../query/chefOrderHistoryQueries', () => ({
     refresh: mockHistoryRefresh,
   }),
 }));
-let mockKitchenCardProps: {cookingCount: number} | undefined;
+let mockKitchenCardProps: {cookingCount: number; onChangeHours: () => void} | undefined;
 jest.mock('../components/KitchenStatusCard', () => {
   const {Text: MockText} = require('react-native');
   const ReactActual = require('react');
   return {
-    KitchenStatusCard: (props: {cookingCount: number}) => {
+    KitchenStatusCard: (props: {cookingCount: number; onChangeHours: () => void}) => {
       mockKitchenCardProps = props;
       return ReactActual.createElement(MockText, null, 'KITCHEN CARD');
     },
@@ -250,6 +250,13 @@ const press = async (label: string) => {
     await target.props.onPress();
   });
 };
+/** The chip's own Pressable: a hitSlop would be clipped by the horizontal ScrollView, so its own box must be 48 dp. */
+const expectOwn48 = (label: string) => {
+  const tap = tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function' && node.props.style)[0];
+  expect(tap).toBeDefined();
+  expect(tap.props.hitSlop).toBeUndefined();
+  expect(StyleSheet.flatten(tap.props.style).minHeight).toBeGreaterThanOrEqual(48);
+};
 const visibleModals = () => tree.root.findAllByType(Modal).filter(modal => modal.props.visible === true);
 const mount = async (route = 'ChefOrdersNew') => {
   mockRouteName = route;
@@ -308,6 +315,13 @@ describe('Orders: filters', () => {
     expect(mockNavigation.replace).toHaveBeenCalledWith('ChefOrdersCompleted');
     expect(mockNavigation.navigate).not.toHaveBeenCalled();
     expect(mockNavigation.push).not.toHaveBeenCalled();
+  });
+
+  it('makes every filter chip itself 48 dp tall, not 38 dp with a hit slop the scroll view would clip', async () => {
+    await mount();
+    for (const label of ['New, 2 orders', 'Preparing, 1 order', 'Ready, 1 order', 'Scheduled, 1 order', 'Past']) {
+      expectOwn48(label);
+    }
   });
 
   it('does nothing when the filter that is already on is pressed', async () => {
@@ -409,8 +423,17 @@ describe('Orders: New', () => {
     mockOperational = baseOperational([cookingOrder]);
     await mount();
     expect(hasText('No new orders')).toBe(true);
-    expect(hasText("You'll hear a sound and see the order here as soon as a customer orders.")).toBe(true);
+    expect(hasText('New orders show up here. Keep the app open while your kitchen is open.')).toBe(true);
+    // The app has no new-order sound, so it must not promise one.
+    expect(allText().join(' ')).not.toMatch(/sound|hear/i);
     expect(hasText('KITCHEN CARD')).toBe(true);
+  });
+
+  it('opens Opening hours with Profile home beneath it, so Back and the Profile tab still work', async () => {
+    mockOperational = baseOperational([cookingOrder]);
+    await mount();
+    act(() => mockKitchenCardProps!.onChangeHours());
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Profile', {screen: 'ChefKitchenSchedule', initial: false});
   });
 
   it('counts only the orders being cooked for the kitchen card, never the ones already packed and waiting', async () => {
@@ -656,12 +679,13 @@ describe('Orders: Ready', () => {
     expect(hasText('Marked as handed over')).toBe(true);
   });
 
-  it('hides Handed over for the session, without an error, when the server has no such route', async () => {
+  it('says "Handed over is coming soon." when the server has no such route, and keeps the button instead of hiding it silently', async () => {
     mockApi.handedOver.mockRejectedValueOnce(new AppApiError('HTTP_404', 'nope', 404));
     await mount('ChefOrdersReady');
     await press('Handed over #0E7CD');
     await flush();
-    expect(buttons('Handed over #0E7CD')).toHaveLength(0);
+    expect(hasText('Handed over is coming soon.')).toBe(true);
+    expect(buttons('Handed over #0E7CD')).toHaveLength(1);
     expect(allText().join(' ')).not.toMatch(/nope|couldn't save/);
   });
 
@@ -824,6 +848,14 @@ describe('Orders: Past', () => {
     expect(mockRefresh).toHaveBeenCalledTimes(1);
     expect((mockQueue.refresh as jest.Mock).mock.calls).toHaveLength(1);
     expect(mockHistoryRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes the Past filter chips themselves 48 dp tall', async () => {
+    mockOperational = baseOperational([rejectedOrder, deliveredOrder]);
+    await mount('ChefOrdersCompleted');
+    for (const label of ['All', 'Delivered', 'Rejected']) {
+      expectOwn48(label);
+    }
   });
 
   it('filters by Rejected and opens a row', async () => {

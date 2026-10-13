@@ -240,7 +240,7 @@ describe('ChefEarningsScreen', () => {
   it('shows the amount on hold only when the balance says it is on hold', () => {
     mockData = baseData({balance: balance({onHold: true, available: '0.00', outstanding: '420.00'})});
     mount();
-    expect(hasText('₹420 on hold until the latest orders are settled')).toBe(true);
+    expect(hasText('₹420.00 on hold until the latest orders are settled')).toBe(true);
     expect(hasText('Your balance is on hold right now. Please contact Craves support.')).toBe(true);
     expect(disabled('Withdraw')).toBe(true);
   });
@@ -327,18 +327,27 @@ describe('ChefEarningsScreen', () => {
     expect(request).toHaveBeenCalledWith(expect.any(String), '3450.00');
     await act(async () => finish({id: 'payout'}));
     expect(mockAfterWithdrawal).toHaveBeenCalledTimes(1);
-    expect(hasText('₹3,450 is on its way')).toBe(true);
+    expect(hasText('₹3,450.00 is on its way')).toBe(true);
     expect(hasText('Sent to State Bank of India ••4521. Track it in Payout history.')).toBe(true);
     expect(hasText('Withdraw to your bank')).toBe(false);
+  });
+
+  it('shows the paise of the withdrawal that is on its way, never a rounded amount', async () => {
+    mockData = baseData({balance: balance({available: '3450.50'})});
+    mount();
+    await press('Withdraw');
+    await press('Withdraw ₹3,450.50');
+    expect(hasText('₹3,450.50 is on its way')).toBe(true);
+    expect(hasText('₹3,451 is on its way')).toBe(false);
   });
 
   it('clears the "on its way" note on the next pull to refresh', async () => {
     mount();
     await press('Withdraw');
     await press('Withdraw ₹3,450.00');
-    expect(hasText('₹3,450 is on its way')).toBe(true);
+    expect(hasText('₹3,450.00 is on its way')).toBe(true);
     await act(async () => tree.root.findByType(RefreshControl).props.onRefresh());
-    expect(hasText('₹3,450 is on its way')).toBe(false);
+    expect(hasText('₹3,450.00 is on its way')).toBe(false);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -352,7 +361,7 @@ describe('ChefEarningsScreen', () => {
     await press('Check withdrawal status');
     expect(request).toHaveBeenCalledTimes(2);
     expect(request.mock.calls[1][0]).toBe(request.mock.calls[0][0]);
-    expect(hasText('₹3,450 is on its way')).toBe(true);
+    expect(hasText('₹3,450.00 is on its way')).toBe(true);
     expect(button('Check withdrawal status')).toBeUndefined();
   });
 
@@ -367,7 +376,7 @@ describe('ChefEarningsScreen', () => {
     expect(hasText("We couldn't confirm your withdrawal")).toBe(true);
     expect(button('Check withdrawal status').props.accessibilityState).toMatchObject({busy: true, disabled: true});
     await act(async () => finish({id: 'payout'}));
-    expect(hasText('₹3,450 is on its way')).toBe(true);
+    expect(hasText('₹3,450.00 is on its way')).toBe(true);
     expect(button('Check withdrawal status')).toBeUndefined();
   });
 

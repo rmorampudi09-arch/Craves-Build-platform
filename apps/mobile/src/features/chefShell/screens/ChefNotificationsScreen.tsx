@@ -88,11 +88,11 @@ export function ChefNotificationsScreen() {
     if (category === 'orders' && notice.targetId) {
       navigation.navigate('ChefOrderDetail', {orderId: notice.targetId});
     } else if (category === 'money') {
-      navigation.navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefPayoutHistory'}});
+      navigation.navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefPayoutHistory', initial: false}});
     } else if (category === 'reviews') {
-      navigation.navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews'}});
+      navigation.navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews', initial: false}});
     } else if (category === 'plans') {
-      navigation.navigate('ChefTabs', {screen: 'Menu'});
+      navigation.navigate('ChefTabs', {screen: 'Menu', params: {segment: 'plans'}});
     }
   };
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Image, Switch, Text, TextInput} from 'react-native';
+import {Alert, Image, StyleSheet, Switch, Text, TextInput} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -207,6 +207,15 @@ describe('ChefDishFormScreen', () => {
       expect(lines().join(' ')).not.toMatch(/Item name|Packaged|full replacement|backend|Thermobox/i);
     });
 
+    it('makes the option chips themselves 48 dp tall around the smaller chip, not 40 dp with a hit slop', async () => {
+      await mount('add', undefined);
+      for (const label of ['Veg', 'Non-veg', 'Egg', 'Biryani', 'Curry', 'More categories']) {
+        const tap = tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function' && node.props.style).pop()!;
+        expect(tap.props.hitSlop).toBeUndefined();
+        expect(StyleSheet.flatten(tap.props.style).minHeight).toBeGreaterThanOrEqual(48);
+      }
+    });
+
     it('shows what is missing under each field as you leave it, and clears it once fixed', async () => {
       await mount('add', undefined);
       expect(has('Enter the dish name.')).toBe(false);
@@ -397,6 +406,41 @@ describe('ChefDishFormScreen', () => {
       expect(mockLeft).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps Publish dish and Save draft off until the refresh after the photo upload is done, so a late tap cannot add the dish twice', async () => {
+      await mount('add', undefined);
+      mockPicker.launchImageLibraryAsync.mockResolvedValue({canceled: false, assets: [{uri: 'file:///g.jpg', mimeType: 'image/jpeg'}]});
+      await press('Add a photo');
+      await press('Choose from gallery');
+      await settle();
+      await fillRequired();
+      mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', images: []}));
+      mockApi.uploadImage.mockResolvedValue({});
+      const refresh = deferred<ChefMenuItem[]>();
+      mockApi.listItems.mockReturnValue(refresh.promise);
+      const publish = withLabel('Publish dish')!;
+      const saveDraft = withLabel('Save draft')!;
+      await act(async () => {
+        publish.props.onPress();
+      });
+      await settle();
+      expect(mockApi.uploadImage).toHaveBeenCalledTimes(1);
+      // Created and uploaded; only the menu refresh is still running.
+      expect(withLabel('Publish dish')!.props.accessibilityState.disabled).toBe(true);
+      expect(withLabel('Save draft')!.props.accessibilityState.disabled).toBe(true);
+      // Even a tap that reaches the handler sends nothing.
+      await act(async () => {
+        publish.props.onPress();
+        saveDraft.props.onPress();
+      });
+      await settle();
+      expect(mockApi.createItem).toHaveBeenCalledTimes(1);
+      await act(async () => refresh.resolve([DUM, DRAFT]));
+      await settle();
+      expect(mockApi.createItem).toHaveBeenCalledTimes(1);
+      expect(has('Tomato curry is live')).toBe(true);
+      expect(mockLeft).toHaveBeenCalledTimes(1);
+    });
+
     it('stays on the form with a plain message when the dish could not be saved', async () => {
       await mount('add', undefined);
       await fillRequired();
@@ -477,6 +521,19 @@ describe('ChefDishFormScreen', () => {
       expect(mockApi.replaceItem).toHaveBeenCalledWith(ID, expect.objectContaining({price: 175, available: false}));
     });
 
+    it('turns the on/off switch off while Save changes is running, so it cannot be undone by the save', async () => {
+      await mount('edit', {menuItemId: ID});
+      await type('Price', '170');
+      expect(dishSwitch()!.props.disabled).toBe(false);
+      const save = deferred<ChefMenuItem>();
+      mockApi.replaceItem.mockReturnValue(save.promise);
+      await press('Save changes');
+      await settle();
+      expect(dishSwitch()!.props.disabled).toBe(true);
+      await act(async () => save.resolve(dish({price: 170})));
+      await settle();
+    });
+
     it('Save changes waits while the switch is still being saved', async () => {
       await mount('edit', {menuItemId: ID});
       await type('Price', '170');
@@ -521,6 +578,32 @@ describe('ChefDishFormScreen', () => {
         expect(mockApi.replaceItem).not.toHaveBeenCalled();
         expect(has('Changes saved')).toBe(true);
         expect(mockLeft).toHaveBeenCalledTimes(1);
+      });
+
+      it('keeps Save changes off until the refresh after the upload is done, and sends the dish once', async () => {
+        await mount('edit', {menuItemId: ID});
+        await type('Price', '170');
+        await choosePhoto();
+        mockApi.replaceItem.mockResolvedValue(dish({price: 170}));
+        mockApi.uploadImage.mockResolvedValue({});
+        const refresh = deferred<ChefMenuItem[]>();
+        mockApi.listItems.mockReturnValue(refresh.promise);
+        const save = withLabel('Save changes')!;
+        await act(async () => {
+          save.props.onPress();
+        });
+        await settle();
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(1);
+        expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(true);
+        await act(async () => {
+          save.props.onPress();
+        });
+        await settle();
+        await act(async () => refresh.resolve([DUM, DRAFT]));
+        await settle();
+        expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(1);
+        expect(has('Changes saved')).toBe(true);
       });
 
       it('keeps the saved text, stays on the form and lets the photo be sent again when the upload fails', async () => {

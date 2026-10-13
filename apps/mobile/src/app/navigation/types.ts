@@ -187,7 +187,8 @@ export type ChefProfileStackParamList = {
 export type ChefTabParamList = {
   Dashboard: undefined;
   Orders: NavigatorScreenParams<ChefOrdersStackParamList> | undefined;
-  Menu: undefined;
+  /** `segment: 'plans'`: open on Meal plans (a meal-plan notification). */
+  Menu: {segment?: 'plans'} | undefined;
   /** `openWithdraw`: Home's Withdraw button opens the withdraw sheet on arrival. */
   Earnings: {openWithdraw?: boolean} | undefined;
   Profile: NavigatorScreenParams<ChefProfileStackParamList> | undefined;

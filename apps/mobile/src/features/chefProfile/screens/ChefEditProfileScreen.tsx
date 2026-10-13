@@ -30,8 +30,10 @@ import {
   useChefToast,
 } from '../../chefShell/components/ui';
 import {chefProfileApi, type ChefKitchenPhotoKind, type ChefKitchenProfile} from '../api/chefProfileApi';
+import {ChefAvatarGrid} from '../components/ChefAvatarGrid';
 import {ChipPicker, PhotoTile} from '../components/KitchenFormParts';
 import {ReadState} from '../components/ReadState';
+import {chefAvatarIdFromUrl} from '../domain/chefAvatars';
 import {
   canEditChefKitchenProfile,
   chefKitchenProfileToFormValues,
@@ -166,8 +168,11 @@ export function ChefEditProfileScreen() {
     requestAnimationFrame(() => navigation.navigate('ChefSupportTicket', {topic: 'Move my kitchen'}));
   };
 
-  // Photos: saved the moment they are chosen, apart from the form.
-  const [photoSheet, setPhotoSheet] = React.useState<ChefKitchenPhotoKind | null>(null);
+  // Photos: saved the moment they are chosen, apart from the form. The camera and gallery are for the kitchen photo only:
+  // the chef's own picture is one of the drawn faces.
+  const [photoSheet, setPhotoSheet] = React.useState<'KITCHEN' | null>(null);
+  const [faceSheet, setFaceSheet] = React.useState(false);
+  const [faceDraft, setFaceDraft] = React.useState<string | null>(null);
   const [photoSaving, setPhotoSaving] = React.useState<ChefKitchenPhotoKind | null>(null);
   const photoBusy = React.useRef(false);
   /** One photo save at a time. `work` returns the toast to show, or null when the chef cancelled. */
@@ -183,7 +188,13 @@ export function ChefEditProfileScreen() {
         toast.show(done);
       }
     } catch (error) {
-      toast.show(isRouteNotPublished(error) ? 'Photos are coming soon.' : "We couldn't save that photo. Please try again.");
+      toast.show(
+        isRouteNotPublished(error)
+          ? 'Photos are coming soon.'
+          : kind === 'CHEF'
+            ? "We couldn't save your picture. Please try again."
+            : "We couldn't save that photo. Please try again.",
+      );
     } finally {
       photoBusy.current = false;
       setPhotoSaving(null);
@@ -218,6 +229,21 @@ export function ChefEditProfileScreen() {
   };
 
   const photoUrl = (kind: ChefKitchenPhotoKind) => (kind === 'CHEF' ? kitchen?.chefPhotoUrl : kitchen?.kitchenPhotoUrl);
+  const openFaces = () => {
+    setFaceDraft(chefAvatarIdFromUrl(photoUrl('CHEF')));
+    setFaceSheet(true);
+  };
+  const saveFace = () => {
+    const avatarId = faceDraft;
+    if (!avatarId) {
+      return undefined;
+    }
+    setFaceSheet(false);
+    return runPhoto('CHEF', async () => {
+      await synchronizeChefProfileAfterSave(queryClient, identityId as string, await chefProfileApi.setAvatar(avatarId));
+      return 'Picture saved';
+    });
+  };
   const hasCuisines = values?.cuisines !== undefined;
   const hasAreas = values?.serviceAreas !== undefined;
   const hasLinks = values?.instagram !== undefined;
@@ -263,8 +289,8 @@ export function ChefEditProfileScreen() {
                 <PhotoTile
                   busy={photoSaving === 'CHEF'}
                   icon="account"
-                  label="Your photo"
-                  onPress={() => setPhotoSheet('CHEF')}
+                  label="Your picture"
+                  onPress={openFaces}
                   url={photoUrl('CHEF')}
                 />
                 <PhotoTile
@@ -433,7 +459,22 @@ export function ChefEditProfileScreen() {
         ) : null}
       </ChefSheet>
 
-      <ChefSheet onClose={() => setPhotoSheet(null)} title={photoSheet === 'CHEF' ? 'Your photo' : 'Kitchen photo'} visible={photoSheet !== null}>
+      <ChefSheet onClose={() => setFaceSheet(false)} title="Change your picture" visible={faceSheet}>
+        <ChefAvatarGrid onSelect={setFaceDraft} selectedId={faceDraft} />
+        <View style={styles.sheetButtons}>
+          <ChefActionButton label="Cancel" onPress={() => setFaceSheet(false)} style={styles.sheetButton} tone="neutral" />
+          <ChefActionButton
+            disabled={!faceDraft}
+            label="Save"
+            onPress={() => {
+              saveFace()?.catch(() => undefined);
+            }}
+            style={styles.sheetButton}
+          />
+        </View>
+      </ChefSheet>
+
+      <ChefSheet onClose={() => setPhotoSheet(null)} title="Kitchen photo" visible={photoSheet !== null}>
         {photoSheet ? (
           <ListGroup>
             <ListRow icon="camera" onPress={() => { choosePhoto(photoSheet, 'camera').catch(() => undefined); }} title="Take a photo" />
@@ -474,4 +515,6 @@ const styles = StyleSheet.create({
   addressStreet: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   muted: {color: colors.textSecondary, fontSize: typography.small},
   sheet: {gap: spacing.sm, paddingBottom: spacing.sm},
+  sheetButtons: {flexDirection: 'row', gap: spacing.sm},
+  sheetButton: {flex: 1},
 });

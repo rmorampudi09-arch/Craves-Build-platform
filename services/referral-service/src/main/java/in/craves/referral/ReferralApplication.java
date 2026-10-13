@@ -11,6 +11,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableConfigurationProperties(ReferralSettings.class)
 public class ReferralApplication {
-    public static void main(String[] args) { SpringApplication.run(ReferralApplication.class, args); }
+    public static void main(String[] args) { LiveRuntimeLock.verify(); SpringApplication.run(ReferralApplication.class, args); }
     @Bean Clock referralClock() { return Clock.systemUTC(); }
 }

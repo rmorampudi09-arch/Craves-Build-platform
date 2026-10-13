@@ -19,6 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 })
 public class UserChefServiceApplication {
     public static void main(String[] args) {
+        LiveRuntimeLock.verify();
         SpringApplication.run(UserChefServiceApplication.class, args);
     }
 }

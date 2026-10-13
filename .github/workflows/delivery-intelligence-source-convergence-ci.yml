@@ -57,6 +57,8 @@ jobs:
           persist-credentials: false
 
       - name: Verify clean convergence scope
+        # One-off gate for the September convergence branch; other PRs that touch these paths still run every check below.
+        if: github.event_name == 'push' || github.head_ref == 'feature/delivery-intelligence-source-convergence-20260910'
         shell: bash
         run: |
           set -euo pipefail

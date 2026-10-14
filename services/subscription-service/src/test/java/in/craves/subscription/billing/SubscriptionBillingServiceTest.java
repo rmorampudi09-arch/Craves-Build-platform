@@ -17,10 +17,11 @@ class SubscriptionBillingServiceTest {
     }
 
     @Test
-    void monthlyCycleUsesCalendarMonth() {
-        LocalDate start = LocalDate.of(2026, 1, 31);
-        assertThat(SubscriptionBillingService.cycleEnd(start, "MONTHLY"))
-            .isEqualTo(LocalDate.of(2026, 2, 28));
+    void cycleEndUsesFixedDayCounts() {
+        LocalDate start = LocalDate.of(2026, 10, 13);
+        assertThat(SubscriptionBillingService.cycleEnd(start, "FORTNIGHTLY")).isEqualTo(LocalDate.of(2026, 10, 27));
+        // A month is four repeats of the chef's week, not a calendar month.
+        assertThat(SubscriptionBillingService.cycleEnd(start, "MONTHLY")).isEqualTo(LocalDate.of(2026, 11, 10));
     }
 
     @Test

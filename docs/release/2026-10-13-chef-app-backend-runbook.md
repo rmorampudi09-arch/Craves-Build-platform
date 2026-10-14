@@ -6,11 +6,11 @@ Branch `feat/chef-app-backend` (base `1ddfd1c1f`; its commits are `origin/main..
 
 | Order | Service | Container app | Migration | New behaviour |
 |---|---|---|---|---|
-| 1 | catalog-service | `ca-craves-catalog-service-prodlo` | catalog `V9__kitchen_storefront_and_chef_settings.sql` | kitchen photos, cuisines, areas, social links, chef settings (auto-accept, default prep), dish archive (`DELETE /kitchens/me/menu-items/{id}`, status `ARCHIVED`) |
+| 1 | catalog-service | `ca-craves-catalog-service-prodlo` | catalog `V9__kitchen_storefront_and_chef_settings.sql` | kitchen photos, cuisines, areas, social links, chef settings (auto-accept, default prep), dish archive (`DELETE /kitchens/me/menu-items/{id}`, status `ARCHIVED`), chef picture: `PUT /kitchens/me/chef-avatar` picks one of 18 hosted Craves faces (uploaded in 1.3a), `chefPhotoUrl` on the nearby and public kitchen lists, real chef-photo uploads answer 400 `CHEF_PHOTO_UPLOAD_DISABLED` |
 | 2 | notification-service | `ca-craves-notification-service-p` | none | optional `role=CHEF\|CUSTOMER` on in-app list, page, unread-count, read-all |
 | 3 | subscription-service | `ca-craves-subscription-service-p` | none | `activeSubscriberCount` on chef plan responses (ACTIVE only; PAUSED not counted) |
 | 4 | order-service | `ca-craves-order-service-prodlow` | order `V37__chef_order_details.sql` | chef order deadline, customer note, status history, delivery partner, `POST /chef/orders/{id}/handed-over`, kitchen auto-accept |
-| 5 | APIM script | `apim-craves-prodlow-kmqgfy` | none | publishes 28 chef-app routes on api.craves.in (only creates what is missing) |
+| 5 | APIM script | `apim-craves-prodlow-kmqgfy` | none | publishes 29 chef-app routes on api.craves.in (only creates what is missing) |
 
 Not deployed, on purpose: **auth-service and integration-service**. Production runs patches that are not on main (central OTP; Pidge coordinate routing + Borzo handoff); deploying either from main would remove them. Consequence: "Log out other devices" and live courier data stay "Coming soon" in the app.
 
@@ -158,6 +158,43 @@ cd ~/c8 && git log --oneline <PREV_SHA>..$SHA -- services/catalog-service
 cd ~/c8 && az acr build -r $ACR -t craves/catalog-service:$TAG services/catalog-service
 ```
 
+1.3a Chef pictures, upload the 18 hosted faces (new files only, nothing existing is touched; do it before the deploy so the faces are already live when the new image starts handing out their links). `PUT /api/v1/kitchens/me/chef-avatar` stores `<public media base>/public/chef-avatars/chef-avatar-NN.jpg` for the chef who picks face NN, and real chef-photo uploads (`POST /kitchens/me/photos?kind=CHEF`) now answer 400 `CHEF_PHOTO_UPLOAD_DISABLED`; the kitchen photo is unchanged. The faces are the 18 JPEGs (512x512) in `docs/release/chef-avatars` of the `~/c8` checkout. Step 1.1 shows only the names of the storage settings, so read the real values from the catalog app (read-only). First the name of the secret that holds the storage connection string:
+
+```bash
+MEDIA_SECRET=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_STORAGE_ENDPOINT_VALUE'].secretRef | [0]" -o tsv); echo "secret: $MEDIA_SECRET"
+```
+Then that secret, read into a plain shell variable (no `export`, so no command started later inherits the key) without printing it (the second half prints only the protocol and account name, never the key):
+
+```bash
+MEDIA_CS=$(az containerapp secret show -g $RG -n $CATALOG_APP --secret-name $MEDIA_SECRET --query value -o tsv); echo "$MEDIA_CS" | tr ';' '\n' | grep -E '^(DefaultEndpointsProtocol|AccountName)='
+```
+Expect `DefaultEndpointsProtocol=https` and an `AccountName=`; the repo's release scripts name the media account `stcravesmediakmqgfy` (`scripts/release/chef_onboarding_release.py`), so it should match. If the secret name is empty or nothing is printed, STOP: run `unset MEDIA_CS MEDIA_SECRET` first, then send what you saw to Claude. Then the container and the public media base the catalog uses:
+
+```bash
+export MEDIA_CONTAINER=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_STORAGE_MEDIA_CONTAINER'].value | [0]" -o tsv); echo "container: $MEDIA_CONTAINER"
+```
+```bash
+export MEDIA_BASE=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_MEDIA_PUBLIC_BASE_URL'].value | [0]" -o tsv); echo "base: $MEDIA_BASE"
+```
+Expect `media` and `https://craves.in/media` (the catalog README gives the base for production; the container's app default is `media`). If the container is blank the app default `media` applies: `export MEDIA_CONTAINER=media`. If the base is blank the app links straight at the blob container: `export MEDIA_BASE=https://<AccountName printed above>.blob.core.windows.net/$MEDIA_CONTAINER`. Upload (Enter is yours; this writes 18 new blobs under `public/chef-avatars/` of the media container, the content never changes and `--overwrite` lets a re-run replace the same bytes instead of failing with a blob-exists error, so a re-run is harmless; if the upload fails, run `unset MEDIA_CS MEDIA_SECRET` first, then send the error to Claude):
+
+```bash
+cd ~/c8 && az storage blob upload-batch --connection-string "$MEDIA_CS" -d $MEDIA_CONTAINER -s docs/release/chef-avatars --destination-path public/chef-avatars --pattern "*.jpg" --overwrite --content-type image/jpeg --content-cache-control "public, max-age=31536000, immutable"
+```
+Check one file through the public address, then all 18:
+
+```bash
+curl -sI "$MEDIA_BASE/public/chef-avatars/chef-avatar-01.jpg"
+```
+```bash
+for i in $(seq -w 1 18); do curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "$MEDIA_BASE/public/chef-avatars/chef-avatar-$i.jpg"; done | sort | uniq -c
+```
+Expect `HTTP/2 200` and `content-type: image/jpeg` for the first, and exactly one line `18 200 image/jpeg` for the second. Anything else: do not go on to 1.4, run `unset MEDIA_CS MEDIA_SECRET` first, then send the output to Claude. Last, remove the connection string from the shell:
+
+```bash
+unset MEDIA_CS MEDIA_SECRET
+```
+
 1.4 Deploy. Catalog's media connection is stored as a plain (non Key Vault) app secret named `media-storage` (`scripts/release/chef_onboarding_release.py:18-21,262-273`; if 1.1 shows `CRAVES_STORAGE_ENDPOINT_VALUE` with a secretRef, it is in use), and `deploy-single-service-preserve-runtime.sh` refuses any plain secret that an env var references ("is not Key Vault-backed"), so **Route A will most likely refuse. Lead with Route B (image-only)**: it changes only the image, secrets and env stay as they are, but it has no automatic rollback, so verify in 1.5. Check no rollout is running:
 
 ```bash
@@ -207,6 +244,8 @@ Expect `chefPhotoUrl`, `kitchenPhotoUrl`, `cuisines`, `serviceAreas`, `socialLin
 ```bash
 az containerapp update -g $RG -n $CATALOG_APP --image <PREV_CATALOG_IMAGE>
 ```
+Once chefs have picked faces, an image from before this change would DELETE the shared face file when a chef replaces or removes a chef photo (it does not know the faces are shared). After any such rollback, re-run the upload in 1.3a.
+
 **Never roll catalog back to a pre-V9 image once any dish has been archived**: the old image throws on the `ARCHIVED` status and chef dish lists fail. Check first (read-only); if the count is above 0, fix forward instead:
 
 ```bash
@@ -410,9 +449,9 @@ cd ~/c8 && command -v xmllint && bash scripts/release/validate-apim-assets.sh
 ```bash
 cd ~/c8 && DRY_RUN=true bash scripts/apim/configure-chef-app-routes-apim.sh
 ```
-Expect 28 operations on 6 APIs.
+Expect 29 operations on 6 APIs.
 
-6.3 Run it (Enter is yours; this writes to the live gateway). Read the Phase 1 lines first: which APIs "exist", which are "covered by wildcard operations of parent" and which "will be created" (a prefix that has a parent API in your 6.1 listing must never say "will be created": settle 6.1 before you run, do not rely on interrupting the run), then KEEP/COVERED/CREATE per route and 28 `OK ... (401 unauthenticated)` lines. The real `az` and `jq` calls had only been exercised through stubs, so Phase 1 is the first real test; any failure there wrote nothing.
+6.3 Run it (Enter is yours; this writes to the live gateway). Read the Phase 1 lines first: which APIs "exist", which are "covered by wildcard operations of parent" and which "will be created" (a prefix that has a parent API in your 6.1 listing must never say "will be created": settle 6.1 before you run, do not rely on interrupting the run), then KEEP/COVERED/CREATE per route and 29 `OK ... (401 unauthenticated)` lines. The real `az` and `jq` calls had only been exercised through stubs, so Phase 1 is the first real test; any failure there wrote nothing.
 
 ```bash
 cd ~/c8 && CONFIRM_APIM_WRITE=true bash scripts/apim/configure-chef-app-routes-apim.sh
@@ -427,7 +466,7 @@ az apim api operation delete -g $RG --service-name $APIM --api-id <API_ID> --ope
 6.4 Gateway smoke, independent of the script's own probes (every line must be 401, so nothing is printed except `ALL-401`):
 
 ```bash
-gw "GET /api/v1/kitchens/me/schedule" "PUT /api/v1/kitchens/me/schedule" "GET /api/v1/kitchens/me/schedule/overrides/probe" "PUT /api/v1/kitchens/me/schedule/overrides/probe" "DELETE /api/v1/kitchens/me/schedule/overrides/probe" "PATCH /api/v1/kitchens/me/menu-items/availability" "DELETE /api/v1/kitchens/me/menu-items/probe/images/probe" "PUT /api/v1/kitchens/me/menu-items/probe/images/probe/primary" "DELETE /api/v1/kitchens/me/menu-items/probe" "POST /api/v1/kitchens/me/photos" "DELETE /api/v1/kitchens/me/photos/CHEF" "GET /api/v1/kitchens/me/settings" "PUT /api/v1/kitchens/me/settings" "GET /api/v1/chef/orders/page" "POST /api/v1/chef/orders/probe/handed-over" "GET /api/v1/chef/scheduled-orders" "PUT /api/v1/chef/scheduled-orders/probe/orders/probe/response" "GET /api/v1/chef/reviews" "GET /api/v1/chef/reviews/kitchens/probe/summary" "POST /api/v1/support/cases" "GET /api/v1/support/cases" "GET /api/v1/support/cases/probe" "POST /api/v1/support/cases/probe/messages" "GET /api/v1/notifications/in-app/page" "GET /api/v1/notifications/in-app/unread-count" "PATCH /api/v1/notifications/in-app/read-all" "GET /api/v1/notifications/preferences" "PUT /api/v1/notifications/preferences/probe" | grep -v '^401 ' || echo ALL-401
+gw "GET /api/v1/kitchens/me/schedule" "PUT /api/v1/kitchens/me/schedule" "GET /api/v1/kitchens/me/schedule/overrides/probe" "PUT /api/v1/kitchens/me/schedule/overrides/probe" "DELETE /api/v1/kitchens/me/schedule/overrides/probe" "PATCH /api/v1/kitchens/me/menu-items/availability" "DELETE /api/v1/kitchens/me/menu-items/probe/images/probe" "PUT /api/v1/kitchens/me/menu-items/probe/images/probe/primary" "DELETE /api/v1/kitchens/me/menu-items/probe" "POST /api/v1/kitchens/me/photos" "DELETE /api/v1/kitchens/me/photos/CHEF" "PUT /api/v1/kitchens/me/chef-avatar" "GET /api/v1/kitchens/me/settings" "PUT /api/v1/kitchens/me/settings" "GET /api/v1/chef/orders/page" "POST /api/v1/chef/orders/probe/handed-over" "GET /api/v1/chef/scheduled-orders" "PUT /api/v1/chef/scheduled-orders/probe/orders/probe/response" "GET /api/v1/chef/reviews" "GET /api/v1/chef/reviews/kitchens/probe/summary" "POST /api/v1/support/cases" "GET /api/v1/support/cases" "GET /api/v1/support/cases/probe" "POST /api/v1/support/cases/probe/messages" "GET /api/v1/notifications/in-app/page" "GET /api/v1/notifications/in-app/unread-count" "PATCH /api/v1/notifications/in-app/read-all" "GET /api/v1/notifications/preferences" "PUT /api/v1/notifications/preferences/probe" | grep -v '^401 ' || echo ALL-401
 ```
 
 6.5 Authenticated check per API (the script only proves 401 without a token). Easiest is the app (Step 7). With a chef access token in `CHEF_TOKEN` (never paste it into chat, a file or git), every line should be 200:
@@ -455,7 +494,7 @@ az apim api delete -g $RG --service-name $APIM --api-id craves-chef-scheduled-or
 Do not place real payments or send real OTPs as a smoke test; use your own test order and test kitchen.
 
 1. Orders: a pending order shows the acceptance deadline and the customer note; the detail screen shows status history; accept, mark ready; once it is READY_FOR_PICKUP the "Handed over" action works, shows its time, and a second tap is a no-op. Courier details stay absent (integration-service is not sending them yet).
-2. Kitchen profile: upload a chef photo and a kitchen photo (JPEG/PNG/WebP up to 8 MiB), replace one, delete one; save cuisines (max 10, 40 chars each), delivery areas, and social links. **The app must always send all four social links** (the object replaces all four; https only). Public kitchen page shows the photos.
+2. Kitchen profile: upload a kitchen photo (JPEG/PNG/WebP up to 8 MiB), replace it, delete it; save cuisines (max 10, 40 chars each), delivery areas, and social links. **The app must always send all four social links** (the object replaces all four; https only). Public kitchen page shows the kitchen photo. Chef picture: a chef-photo upload now answers 400 `CHEF_PHOTO_UPLOAD_DISABLED`; in the app build that has the picture picker, pick a face and check it shows on the public kitchen page and in the nearby kitchen list (`chefPhotoUrl`).
 3. Settings: toggle auto-accept and default prep (5 to 120). Remember Step 5 decides whether it does anything.
 4. Menu: archive a dish with the delete action; it disappears from the chef list and from the customer menu, discovery and favourites; the other dishes are untouched.
 5. Notifications: the chef app shows only chef notices; unread count and "mark all read" with `role=CHEF` leave customer notices unread.
@@ -467,7 +506,7 @@ Do not place real payments or send real OTPs as a smoke test; use your own test 
 
 | Service | Command | Warning |
 |---|---|---|
-| catalog | `az containerapp update -g $RG -n $CATALOG_APP --image <PREV_CATALOG_IMAGE>` | never to a pre-V9 image after any dish is archived (old image throws on `ARCHIVED`); fix forward instead |
+| catalog | `az containerapp update -g $RG -n $CATALOG_APP --image <PREV_CATALOG_IMAGE>` | never to a pre-V9 image after any dish is archived (old image throws on `ARCHIVED`); fix forward instead; an image from before the chef pictures can delete a shared face file (see 1.7) |
 | notification | `az containerapp update -g $RG -n $NOTIF_APP --image <PREV_NOTIFICATION_IMAGE>` | none |
 | subscription | `az containerapp update -g $RG -n $SUB_APP --image <PREV_SUBSCRIPTION_IMAGE>` | none |
 | order | `az containerapp update -g $RG -n $ORDER_APP --image <PREV_ORDER_IMAGE>` | chef detail fields, handed-over and auto-accept vanish from responses; data stays |
@@ -492,6 +531,7 @@ Decisions and gaps you should know before releasing:
 - **Notifications:** `role=` empty is a 400; rows with NULL `recipient_role` drop out of role-filtered lists; the service README does not mention `role`; no EXPLAIN was run on real volumes (role is a residual filter on one user's rows).
 - **Subscriber count:** counts ACTIVE only (PAUSED, PENDING_PAYMENT and the rest excluded); it uses a correlated COUNT, not a literal GROUP BY; no HTTP-layer assertion.
 - **APIM:** a new operation id (`chef-app-*`) is not checked against an operation with a different method or template, so a PUT could overwrite (unlikely); existing operations keep their policy and do not get the new no-store header; `kitchens/me`, `chef/orders` and `notifications` must already be live on kmqgfy, and the older scripts that publish them write to the gateway at once with no confirm flag and can overwrite policies, so a gap means stop and report (6.1b). The script looks for a wildcard owner at a shorter path (since `a8f82276a`): it treats those routes as covered and creates nothing, and it stops when the parent has no wildcard for a needed method (6.1a). The support routes depend on the user-chef app, which this release does not deploy (6.1d).
+- **Chef pictures (faces).** The 18 faces are static files in `docs/release/chef-avatars` that you upload once in 1.3a; the picker route `PUT /api/v1/kitchens/me/chef-avatar` is published in Step 6. Chef-photo uploads now answer 400 `CHEF_PHOTO_UPLOAD_DISABLED` for every client, so the current chef app shows an error on its chef-photo upload until the build with the picture picker is installed (kitchen photos are unaffected). A chef who already uploaded a chef photo keeps it until they pick a face. The catalog never deletes a shared face file, but an image from before this change would (see 1.7). Customer apps that do not read `chefPhotoUrl` ignore the new field.
 - **Follow-up, referral routes are not published** because the live APIM API `craves-referral-members-v1` points at the wrong backend (`docs/referrals/CHEF_ACTIVATION_20261012.md`). The app needs, once that is fixed: `GET /api/v1/referrals/me`, `/me/code`, `/me/code/qr`, `/me/chef-earnings`, `/me/rewards` and `POST /api/v1/auth/referrals/enroll`.
 - **Excluded by design:** auth-service ("Log out other devices") and integration-service (live courier data) stay "Coming soon".
 - **Unverified by me:** everything in this file was written from the repo only. Not checked against Azure: the Postgres FQDN, the catalog database name, whether catalog and notification really hold plain secrets (the preflight will tell you), whether prod serves the internal resolve route (the 1.2 gate answers that), the current value of the worker flag, Flyway tolerating applied-newer migrations on rollback, the prod checksums of V34 and V35 (taken from earlier sessions, not re-read), what an unauthenticated call to the user-chef app returns (read from its `SecurityConfig`, not run), `PGOPTIONS` being accepted by the Postgres server, the `git fetch --unshallow` of a bare SHA in Cloud Shell, and the real `az`/`jq`/`xmllint` behaviour of the APIM script.

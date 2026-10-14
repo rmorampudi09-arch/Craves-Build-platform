@@ -16,7 +16,8 @@ Catalog Service owns kitchen profiles, menu items, public media metadata, packag
 ## Chef app additions (all optional for existing clients)
 
 - `GET/PUT /api/v1/kitchens/me` also carry `chefPhotoUrl`, `kitchenPhotoUrl`, `cuisines`, `serviceAreas` (up to 10 entries of 1-40 characters each) and `socialLinks` (`instagram`, `facebook`, `youtube`, `website`; `https://`, up to 200 characters). A field that is absent or `null` in a PUT keeps the stored value; an empty list or a `socialLinks` object replaces it.
-- `POST /api/v1/kitchens/me/photos?kind=CHEF|KITCHEN` (multipart `file`, JPEG/PNG/WebP, same size limit as dish photos) and `DELETE /api/v1/kitchens/me/photos/{kind}`; the replaced or deleted photo file is removed after the change commits.
+- `POST /api/v1/kitchens/me/photos?kind=KITCHEN` (multipart `file`, JPEG/PNG/WebP, same size limit as dish photos; `kind=CHEF` is refused, see the chef picture below) and `DELETE /api/v1/kitchens/me/photos/{kind}`; the replaced or deleted photo file is removed after the change commits.
+- Chef picture: `PUT /api/v1/kitchens/me/chef-avatar` with `{"avatarId":"chef-avatar-04"}` (`chef-avatar-01` to `chef-avatar-18`) stores the hosted address `<public media base>/public/chef-avatars/<id>.jpg` as `chefPhotoUrl` and returns the kitchen profile; an unknown id is a 400 `CHEF_AVATAR_UNKNOWN`. The 18 drawn faces are static JPEGs kept in `docs/release/chef-avatars`, uploaded to the media container once by the release runbook, and shared by every chef who picks one, so the catalog never deletes a file under `public/chef-avatars/` (switching faces or deleting the chef photo only changes the stored link). Real chef photos are no longer accepted: `POST /api/v1/kitchens/me/photos?kind=CHEF` answers 400 `CHEF_PHOTO_UPLOAD_DISABLED`. `chefPhotoUrl` is also returned by the nearby kitchen list and the public kitchen list.
 - `GET/PUT /api/v1/kitchens/me/settings` with `{autoAcceptOrders, defaultPrepMinutes}` (`defaultPrepMinutes` 5-120 or `null`). The internal kitchen read used by order-service (`GET /api/v1/catalog/internal/kitchens/{id}`) returns both fields; public kitchen reads never do.
 - `DELETE /api/v1/kitchens/me/menu-items/{menuItemId}` archives a dish (status `ARCHIVED`, 204). It disappears from the chef list, the public menu, discovery, favorites and checkout; its photos stay in storage. Archiving again is harmless, an archived dish cannot be edited or reopened, and another chef's dish is a 404.
 
@@ -72,7 +73,8 @@ Example response shape:
       "latitude": 17.4480,
       "longitude": 78.3920,
       "distanceMeters": 74,
-      "activeMenuItemCount": 8
+      "activeMenuItemCount": 8,
+      "chefPhotoUrl": "https://craves.in/media/public/chef-avatars/chef-avatar-04.jpg"
     }
   ]
 }

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -156,6 +157,9 @@ public final class ApiDtos {
     ) {
     }
 
+    public record ChefAvatarRequest(@NotBlank @Size(max = 40) String avatarId) {
+    }
+
     public record AvailabilityRequest(
         boolean available,
         String reason
@@ -172,7 +176,8 @@ public final class ApiDtos {
         BigDecimal latitude,
         BigDecimal longitude,
         BigDecimal distanceKm,
-        long activeMenuItemCount
+        long activeMenuItemCount,
+        String chefPhotoUrl
     ) {
     }
 

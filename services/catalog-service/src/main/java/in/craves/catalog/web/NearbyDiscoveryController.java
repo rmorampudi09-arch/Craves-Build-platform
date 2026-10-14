@@ -147,7 +147,8 @@ public class NearbyDiscoveryController {
                 null,
                 null,
                 kitchen.distanceMeters(),
-                kitchen.activeMenuItemCount()
+                kitchen.activeMenuItemCount(),
+                kitchen.chefPhotoUrl()
             )).toList()
         );
     }

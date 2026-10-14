@@ -35,12 +35,13 @@ class NearbyFinanceCacheTest {
         var allowed = new CatalogFinanceEligibility.Snapshot(UUID.randomUUID(),Instant.now(),true,UUID.randomUUID(),1,"a".repeat(64),List.of(chef));
         var revoked = new CatalogFinanceEligibility.Snapshot(UUID.randomUUID(),Instant.now(),true,allowed.policyId(),2,"b".repeat(64),List.of());
         when(finance.current()).thenReturn(allowed,allowed,revoked).thenThrow(new ApiException(503,"UNAVAILABLE","Unavailable"));
-        var item = new NearbyKitchenSummaryResponse(UUID.randomUUID(),"Test kitchen","Test",null,"Area","City","State",BigDecimal.ONE,BigDecimal.TEN,10,1);
+        var item = new NearbyKitchenSummaryResponse(UUID.randomUUID(),"Test kitchen","Test",null,"Area","City","State",BigDecimal.ONE,BigDecimal.TEN,10,1,"https://media.example/public/chef-avatars/chef-avatar-04.jpg");
         var page = new NearbyKitchenDiscoveryResponse(BigDecimal.ONE,BigDecimal.TEN,1000,new PageMetadata(0,1,1,1,false),List.of(item));
         var empty = new NearbyKitchenDiscoveryResponse(BigDecimal.ONE,BigDecimal.TEN,1000,new PageMetadata(0,1,0,0,false),List.of());
         when(service.discoverKitchens(any(),any(),anyInt(),any(),any(),anyInt(),anyInt(),eq(allowed))).thenReturn(page);
         when(service.discoverKitchens(any(),any(),anyInt(),any(),any(),anyInt(),anyInt(),eq(revoked))).thenReturn(empty);
         var first = read(controller); assertNull(first.kitchens().getFirst().latitude()); assertNull(first.kitchens().getFirst().longitude());
+        assertEquals("https://media.example/public/chef-avatars/chef-avatar-04.jpg",first.kitchens().getFirst().chefPhotoUrl());
         var order = inOrder(finance,values); order.verify(finance).current(); order.verify(values,times(2)).get(anyString());
         assertEquals(first,read(controller));
         assertTrue(read(controller).kitchens().isEmpty());

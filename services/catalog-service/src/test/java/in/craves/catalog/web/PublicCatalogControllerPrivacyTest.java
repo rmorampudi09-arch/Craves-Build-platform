@@ -73,7 +73,8 @@ class PublicCatalogControllerPrivacyTest {
                 new DiscoveryRadiusResponse("Hyderabad", "DEFAULT", BigDecimal.TEN, BigDecimal.valueOf(15)),
                 List.of(new PublicKitchenSummaryResponse(
                     kitchenId, "Kitchen", "Display", "Description", "Madhapur", "Hyderabad",
-                    new BigDecimal("17.44"), new BigDecimal("78.39"), new BigDecimal("2.30"), 5
+                    new BigDecimal("17.44"), new BigDecimal("78.39"), new BigDecimal("2.30"), 5,
+                    "https://media.example/public/chef-avatars/chef-avatar-04.jpg"
                 ))
             )
         );
@@ -81,6 +82,8 @@ class PublicCatalogControllerPrivacyTest {
         assertThat(response.kitchens().getFirst().latitude()).isNull();
         assertThat(response.kitchens().getFirst().longitude()).isNull();
         assertThat(response.kitchens().getFirst().distanceKm()).isEqualByComparingTo("2.30");
+        assertThat(response.kitchens().getFirst().chefPhotoUrl())
+            .isEqualTo("https://media.example/public/chef-avatars/chef-avatar-04.jpg");
     }
 
     @Test

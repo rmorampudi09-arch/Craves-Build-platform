@@ -135,7 +135,8 @@ public class PublicCatalogController {
             null,
             null,
             kitchen.distanceKm(),
-            kitchen.activeMenuItemCount()
+            kitchen.activeMenuItemCount(),
+            kitchen.chefPhotoUrl()
         );
     }
 

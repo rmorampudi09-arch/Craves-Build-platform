@@ -56,6 +56,7 @@ import {
   flattenNearbyKitchenPages,
   formatKitchenDistance,
   getKitchenInitials,
+  kitchenCardImageUrls,
   summarizeKitchenDishes,
   type KitchenDishSummary,
 } from '../chefDiscoveryPresentation';
@@ -129,7 +130,7 @@ function KitchenCard({
   onViewKitchen,
 }: KitchenCardProps) {
   const title = kitchen.kitchenName;
-  const imageUrls = summary?.imageUrls ?? [];
+  const imageUrls = kitchenCardImageUrls(kitchen.kitchenPhotoUrls, summary?.imageUrls ?? []);
   const dishCount = `${kitchen.activeMenuItemCount} ${
     kitchen.activeMenuItemCount === 1 ? 'dish' : 'dishes'
   }`;

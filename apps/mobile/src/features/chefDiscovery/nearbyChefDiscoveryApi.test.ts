@@ -119,6 +119,21 @@ describe('P34 nearby chef discovery API', () => {
     expect(older.kitchens[0].chefPhotoUrl).toBeUndefined();
   });
 
+  it('keeps the kitchen photos the server sends, nearby and from the public catalog fallback', async () => {
+    const photo = 'https://media.craves.test/public/kitchens/k/kitchen/registration-1.jpg';
+    getMock.mockResolvedValueOnce({...response, kitchens: [{...response.kitchens[0], kitchenPhotoUrls: [photo]}]});
+    expect((await nearbyChefDiscoveryApi.listNearbyKitchens(request)).kitchens[0].kitchenPhotoUrls).toEqual([photo]);
+
+    getMock.mockRejectedValueOnce(new Error('discovery unavailable')).mockResolvedValueOnce({
+      kitchens: [{
+        id: '22222222-2222-4222-8222-222222222222', kitchenName: 'Kitchen One', displayName: null, description: null,
+        areaName: null, city: null, latitude: null, longitude: null, distanceKm: 0.32, activeMenuItemCount: 6,
+        kitchenPhotoUrls: [photo],
+      }],
+    });
+    expect((await nearbyChefDiscoveryApi.listNearbyKitchens(request)).kitchens[0].kitchenPhotoUrls).toEqual([photo]);
+  });
+
   it('keeps the chef picture from the public catalog fallback too', async () => {
     const face = 'https://media.craves.test/public/chef-avatars/chef-avatar-04.jpg';
     getMock.mockRejectedValueOnce(new Error('discovery unavailable')).mockResolvedValueOnce({

@@ -232,6 +232,21 @@ describe('P42 customer kitchen profile API contract', () => {
     expect(mapCustomerKitchenProfile(kitchen, []).chefPhotoUrl).toBeNull();
   });
 
+  it('keeps https kitchen photos in slot order and drops anything else', () => {
+    const overall = 'https://media.craves.test/public/kitchens/k/kitchen/registration-1.jpg';
+    const setup = 'https://media.craves.test/public/kitchens/k/kitchen/registration-2.png';
+
+    expect(
+      mapCustomerKitchenProfile({...kitchen, kitchenPhotoUrls: [overall, 'http://insecure.test/x.jpg', ' ', setup]}, [])
+        .kitchenPhotoUrls,
+    ).toEqual([overall, setup]);
+  });
+
+  it('gives no kitchen photos when an older server does not send them', () => {
+    expect(mapCustomerKitchenProfile(kitchen, []).kitchenPhotoUrls).toEqual([]);
+    expect(mapCustomerKitchenProfile({...kitchen, kitchenPhotoUrls: null}, []).kitchenPhotoUrls).toEqual([]);
+  });
+
   it('keeps unsupported reference capabilities explicit instead of fabricating profile metrics', () => {
     const profile = mapCustomerKitchenProfile(
       {

@@ -7,12 +7,14 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   useFocusEffect,
+  useIsFocused,
   useNavigation,
   useRoute,
   type NavigationProp,
@@ -48,6 +50,7 @@ import {
 } from '../../cart/state/cartMutations';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
+import {KitchenImageCarousel} from '../../home/components/KitchenImageCarousel';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
@@ -91,7 +94,7 @@ type KitchenProfileNavigation = NavigationProp<
 >;
 
 const REVIEW_PREVIEW_LIMIT = 3;
-/** Empty for now: chef-uploaded kitchen photos will fill this space. */
+/** The chef's kitchen photos play here as a slideshow; the space stays empty when there are none. */
 const PHOTO_SPACE_HEIGHT = 200;
 const AVATAR_SIZE = 92;
 /** The header shows the kitchen name once the avatar has scrolled under it. */
@@ -152,6 +155,8 @@ export function CustomerKitchenProfileScreen() {
     useState<PublicKitchenReviewSummary | null>(null);
   const [reviewPreview, setReviewPreview] = useState<PublicKitchenReview[]>([]);
   const [reviewLoadError, setReviewLoadError] = useState<string | null>(null);
+  const {width: windowWidth} = useWindowDimensions();
+  const screenFocused = useIsFocused();
 
   const profile = profileQuery.data;
   const queryError = profileQuery.error ? toAppApiError(profileQuery.error) : null;
@@ -508,7 +513,18 @@ export function CustomerKitchenProfileScreen() {
           }
           showsVerticalScrollIndicator={false}>
           <View>
-            <View style={styles.photoSpace} />
+            {profile.kitchenPhotoUrls.length > 0 ? (
+              <KitchenImageCarousel
+                imageUrls={profile.kitchenPhotoUrls}
+                width={windowWidth}
+                height={PHOTO_SPACE_HEIGHT}
+                kitchenName={profile.kitchenName}
+                active={screenFocused}
+                onPress={() => undefined}
+              />
+            ) : (
+              <View style={styles.photoSpace} />
+            )}
             <View style={styles.identity}>
               <View style={styles.avatar}>
                 <CustomerChefFace

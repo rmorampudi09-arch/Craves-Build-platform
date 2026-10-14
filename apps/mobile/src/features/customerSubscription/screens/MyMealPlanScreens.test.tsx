@@ -98,7 +98,8 @@ function occurrence(over: Partial<CustomerSubscriptionOccurrence> = {}): Custome
 const done = () => Promise.resolve(undefined);
 const actions = {
   pause: jest.fn(done),
-  resume: jest.fn((_date: string) => done()),
+  resume: jest.fn((_date: string) => Promise.resolve(subscription())),
+  chooseDayCredit: jest.fn((_creditId: string, _choice: 'REFUND' | 'EXTEND') => done()),
   skip: jest.fn((_date: string) => done()),
   cancel: jest.fn(done),
   pending: false,

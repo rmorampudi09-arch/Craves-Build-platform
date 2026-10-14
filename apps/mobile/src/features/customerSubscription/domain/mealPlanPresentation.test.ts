@@ -1,10 +1,12 @@
 import type {
   CustomerSubscriptionOccurrence,
+  DayCredit,
   PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
 import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import {
   addressAreaLine,
+  dayCreditCard,
   firstScheduledItem,
   formatCutoff,
   formatMealPlanDate,
@@ -14,6 +16,7 @@ import {
   occurrenceStatusPresentation,
   orderTrackerStep,
   pauseInfo,
+  pendingDayCredits,
   planRules,
   resumeDateFor,
   shortSubscriptionId,
@@ -456,5 +459,66 @@ describe('pauseInfo', () => {
     const overdue = pauseInfo({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: '2026-10-27'}, '2026-10-29', '2026-10-28');
     expect(overdue.resumeOffered).toBe(true);
     expect(overdue.restartNote).toBeNull();
+  });
+});
+
+describe('dayCreditCard', () => {
+  const decline: DayCredit = {
+    id: '88888888-8888-4888-8888-888888888888',
+    kind: 'DECLINE',
+    firstDate: '2026-10-14',
+    lastDate: '2026-10-14',
+    mealSlotCode: 'LUNCH',
+    days: null,
+    status: 'PENDING_CHOICE',
+    refundAmount: null,
+    currency: 'INR',
+    // 11:30 IST on Friday 16 October.
+    choiceDeadline: '2026-10-16T06:00:00Z',
+    extendAvailable: true,
+  };
+  const pause: DayCredit = {...decline, kind: 'PAUSE', firstDate: '2026-10-10', lastDate: '2026-10-12', mealSlotCode: null, days: 3};
+
+  it('offers a refund or a day at the end for a declined meal', () => {
+    expect(dayCreditCard(decline, '2026-10-14')).toEqual({
+      title: "Your chef couldn't make Lunch on Wed, 14 Oct",
+      refundLabel: 'Get a refund',
+      extendLabel: 'Add 1 day at the end',
+      note: "If you don't choose by Fri, 16 Oct, we'll add it at the end.",
+      settledLine: null,
+      pending: true,
+      extendAvailable: true,
+    });
+  });
+
+  it('counts paused days', () => {
+    const card = dayCreditCard(pause, '2026-10-14');
+    expect(card.title).toBe('You paused 3 days');
+    expect(card.extendLabel).toBe('Add 3 days at the end');
+  });
+
+  it('shows the refund amount once finance prices it', () => {
+    expect(dayCreditCard({...decline, refundAmount: '120'}, '2026-10-14').refundLabel).toBe('Refund ₹120');
+  });
+
+  it('says a refund is requested at the deadline when the plan has ended', () => {
+    expect(dayCreditCard({...decline, extendAvailable: false}, '2026-10-14').note).toBe(
+      "If you don't choose by Fri, 16 Oct, we'll request a refund.",
+    );
+  });
+
+  it('shows the settled outcome instead of the choice', () => {
+    const refunded = dayCreditCard({...decline, status: 'REFUND_REQUESTED'}, '2026-10-14');
+    expect(refunded.settledLine).toBe('Refund requested. It goes back to the UPI or card you paid with.');
+    expect(refunded.pending).toBe(false);
+    expect(refunded.note).toBeNull();
+    expect(dayCreditCard({...pause, status: 'EXTENDED'}, '2026-10-14').settledLine).toBe('3 days added at the end.');
+    expect(dayCreditCard({...decline, status: 'EXTENDED'}, '2026-10-14').settledLine).toBe('1 day added at the end.');
+  });
+
+  it('noDayCreditsShowsNothing', () => {
+    expect(pendingDayCredits({})).toEqual([]);
+    expect(pendingDayCredits({dayCredits: []})).toEqual([]);
+    expect(pendingDayCredits({dayCredits: [decline, {...pause, status: 'EXTENDED'}]})).toEqual([decline]);
   });
 });

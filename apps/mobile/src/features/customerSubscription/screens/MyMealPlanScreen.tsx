@@ -261,7 +261,7 @@ export function MyMealPlanScreen({navigation, route}: Props) {
       'Resume your plan?',
       `Meals start again from ${formatMealPlanDate(resumeDate, 'long')}.`,
       'Resume plan',
-      () => actions.resume(resumeDate),
+      () => actions.resume(resumeDate).then(() => undefined),
     );
   };
   const openSkip = () => {

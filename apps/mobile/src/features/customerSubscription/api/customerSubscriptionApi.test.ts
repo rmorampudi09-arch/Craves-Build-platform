@@ -290,3 +290,56 @@ describe('customerSubscriptionApi nearby plans', () => {
     );
   });
 });
+
+describe('customerSubscriptionApi day credits', () => {
+  const CREDIT_ID = '88888888-8888-4888-8888-888888888888';
+  const pendingDecline = {
+    id: CREDIT_ID,
+    kind: 'DECLINE',
+    firstDate: '2026-10-14',
+    lastDate: '2026-10-14',
+    mealSlotCode: 'LUNCH',
+    days: null,
+    status: 'PENDING_CHOICE',
+    refundAmount: null,
+    currency: 'INR',
+    choiceDeadline: '2026-10-16T06:00:00Z',
+    extendAvailable: true,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('parses a subscription without dayCredits and one with a pending decline', async () => {
+    (httpClient.get as jest.Mock)
+      .mockResolvedValueOnce([subscriptionBase])
+      .mockResolvedValueOnce([{...subscriptionBase, dayCredits: [pendingDecline]}]);
+
+    const [older] = await customerSubscriptionApi.listMine();
+    const [withCredit] = await customerSubscriptionApi.listMine();
+
+    expect(older.dayCredits).toBeUndefined();
+    expect(withCredit.dayCredits).toEqual([
+      expect.objectContaining({id: CREDIT_ID, kind: 'DECLINE', mealSlotCode: 'LUNCH', days: null, refundAmount: null}),
+    ]);
+  });
+
+  it('posts the choice to the day credit route and checks the answer', async () => {
+    (httpClient.post as jest.Mock).mockResolvedValueOnce({...pendingDecline, status: 'REFUND_REQUESTED'});
+
+    const settled = await customerSubscriptionApi.chooseDayCredit(SUBSCRIPTION_ID, CREDIT_ID, 'REFUND');
+
+    expect(httpClient.post).toHaveBeenCalledWith(
+      `/api/v1/subscriptions/${SUBSCRIPTION_ID}/day-credits/${CREDIT_ID}/choice`,
+      {choice: 'REFUND'},
+    );
+    expect(settled.status).toBe('REFUND_REQUESTED');
+  });
+
+  it('fails closed if the answer is for another choice', async () => {
+    (httpClient.post as jest.Mock).mockResolvedValueOnce({...pendingDecline, id: PLAN_ID});
+
+    await expect(customerSubscriptionApi.chooseDayCredit(SUBSCRIPTION_ID, CREDIT_ID, 'EXTEND')).rejects.toThrow();
+  });
+});

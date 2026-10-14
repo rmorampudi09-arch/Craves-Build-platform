@@ -451,6 +451,8 @@ export function CustomerCartScreen() {
         tabs.navigate('Orders', {
           screen: 'CustomerOrderDetail',
           params: {orderId: checkout.orders[0].orderId},
+          // Keeps My Orders under the new order for Back and the tab.
+          initial: false,
         });
       } else {
         tabs.navigate('Orders', {screen: 'CustomerOrdersRoot'});

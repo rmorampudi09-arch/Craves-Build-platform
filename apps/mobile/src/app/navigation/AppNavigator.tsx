@@ -279,9 +279,11 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
       navigationRef.dispatch(
         CommonActions.navigate({
           name: 'Orders',
+          // initial: false keeps My Orders under the order, so Back and the tab return to the list.
           params: {
             screen: 'CustomerOrderDetail',
             params: {orderId: destination.orderId},
+            initial: false,
           },
         }),
       );
@@ -293,6 +295,7 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
           params: {
             screen: 'CustomerOrderTracking',
             params: {orderId: destination.orderId},
+            initial: false,
           },
         }),
       );

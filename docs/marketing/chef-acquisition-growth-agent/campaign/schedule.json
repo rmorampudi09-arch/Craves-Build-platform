@@ -93,6 +93,15 @@
       "ST3/ST3-04.jpg",
       "ST3/ST3-05.jpg"
      ]
+    },
+    {
+     "type": "reel",
+     "piece": "reel-fssai",
+     "files": [
+      "reels/reel-fssai.mp4"
+     ],
+     "caption": "FSSAI says: 1 Apr 2026 nunchi Rs 1.5 crore turnover varaku registration saripotundi, licence kaadu, renewal ledu (FSSAI press release, 13 Mar 2026). Annual fee matram undi: foscos.fssai.gov.in lo check cheyyandi.\nCraves ki mee 14-digit FSSAI number kavali. Inka raleda? Application start chesi save cheyyandi, 'Request a call from Craves' kuda undi.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\nMusic: \"Life of Riley\" by Kevin MacLeod (incompetech.com), CC BY 4.0\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #IntiVantalu #ManaVantalu #TeluguFood #HyderabadFood #Craves",
+     "thumb_offset": 2000
     }
    ]
   },
@@ -121,6 +130,15 @@
       "ST6/ST6-03.jpg",
       "ST6/ST6-04.jpg"
      ]
+    },
+    {
+     "type": "reel",
+     "piece": "reel-packaging",
+     "files": [
+      "reels/reel-packaging.mp4"
+     ],
+     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nFood ready ayyaka, mee kitchen nunchi pickup Craves arrange chestundi. Customers: launching soon. Chefs: joining first.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\nMusic: \"Life of Riley\" by Kevin MacLeod (incompetech.com), CC BY 4.0\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #IntiVantalu #ManaVantalu #Craves",
+     "thumb_offset": 2000
     }
    ]
   },
@@ -570,34 +588,6 @@
      ]
     }
    ]
-  }
- ],
- "held": [
-  {
-   "slot": "2026-10-15T20:23",
-   "reason": "owner: music not good yet, hold until new music is approved",
-   "item": {
-    "type": "reel",
-    "piece": "reel-fssai",
-    "files": [
-     "reels/reel-fssai.mp4"
-    ],
-    "caption": "FSSAI says: 1 Apr 2026 nunchi Rs 1.5 crore turnover varaku registration saripotundi, licence kaadu, renewal ledu (FSSAI press release, 13 Mar 2026). Annual fee matram undi: foscos.fssai.gov.in lo check cheyyandi.\nCraves ki mee 14-digit FSSAI number kavali. Inka raleda? Application start chesi save cheyyandi, 'Request a call from Craves' kuda undi.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #IntiVantalu #ManaVantalu #TeluguFood #HyderabadFood #Craves",
-    "thumb_offset": 2000
-   }
-  },
-  {
-   "slot": "2026-10-16T11:23",
-   "reason": "owner: music not good yet, hold until new music is approved",
-   "item": {
-    "type": "reel",
-    "piece": "reel-packaging",
-    "files": [
-     "reels/reel-packaging.mp4"
-    ],
-    "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nFood ready ayyaka, mee kitchen nunchi pickup Craves arrange chestundi. Customers: launching soon. Chefs: joining first.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #IntiVantalu #ManaVantalu #Craves",
-    "thumb_offset": 2000
-   }
   }
  ]
 }

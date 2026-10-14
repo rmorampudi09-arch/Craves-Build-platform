@@ -114,7 +114,7 @@ class SubscriptionMigrationDatabaseTest {
         assertTrue(manifest.isObject(), "Structural audit must return one JSON object");
         assertFalse(manifest.isEmpty(), "An empty audit cannot establish migration parity");
         assertTrue(manifest.path("schemaExists").asBoolean());
-        assertEquals(32, manifest.path("relations").size());
+        assertEquals(33, manifest.path("relations").size());
         assertEquals(5, manifest.path("functions").size());
         assertEquals(6, manifest.path("triggers").size());
         assertTrue(manifest.path("policies").isArray());
@@ -157,18 +157,18 @@ class SubscriptionMigrationDatabaseTest {
         List<String> versions = new ArrayList<>();
         if (includeOne) versions.add("1");
         versions.add("1.1");
-        for (int version = 2; version <= 19; version++) versions.add(Integer.toString(version));
+        for (int version = 2; version <= 20; version++) versions.add(Integer.toString(version));
         return versions;
     }
 
     @Test @Order(1)
-    void cleanV1ThroughV19ApplyAllTwentySqlMigrationsAndReplayWithoutSchemaChanges() throws IOException {
+    void cleanV1ThroughV20ApplyAllTwentyOneSqlMigrationsAndReplayWithoutSchemaChanges() throws IOException {
         resetFixtureOnly();
         Flyway clean = flyway(null, "0");
-        assertEquals(20, clean.migrate().migrationsExecuted);
+        assertEquals(21, clean.migrate().migrationsExecuted);
         clean.validate();
         assertEquals(expectedVersions(true), sqlVersions());
-        assertEquals(20, jdbc.queryForObject("SELECT count(*) FROM public." + HISTORY + " WHERE success", Integer.class));
+        assertEquals(21, jdbc.queryForObject("SELECT count(*) FROM public." + HISTORY + " WHERE success", Integer.class));
         assertEquals("true", jdbc.queryForObject(
             "SELECT column_default FROM information_schema.columns WHERE table_schema='subscription_schema' "
                 + "AND table_name='subscription_plan' AND column_name='accepting_subscribers'", String.class));
@@ -176,6 +176,7 @@ class SubscriptionMigrationDatabaseTest {
             "SELECT is_nullable FROM information_schema.columns WHERE table_schema='subscription_schema' "
                 + "AND table_name='subscription_plan' AND column_name='accepting_subscribers'", String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('subscription_schema.subscription_plan_image')::text", String.class));
+        assertNotNull(jdbc.queryForObject("SELECT to_regclass('subscription_schema.subscription_day_credit')::text", String.class));
         assertEquals("0", jdbc.queryForObject(
             "SELECT column_default FROM information_schema.columns WHERE table_schema='subscription_schema' "
                 + "AND table_name='customer_subscription' AND column_name='pause_days_used'", String.class));
@@ -205,10 +206,10 @@ class SubscriptionMigrationDatabaseTest {
         jdbc.update("INSERT INTO subscription_schema.customer_subscription(id,customer_identity_id,plan_id,start_date) VALUES (?,?,?,'2026-09-01')",
             subscription, customer, plan);
         Flyway upgraded = flyway(null, "0");
-        assertEquals(18, upgraded.migrate().migrationsExecuted);
+        assertEquals(19, upgraded.migrate().migrationsExecuted);
         upgraded.validate();
         assertEquals(expectedVersions(false), sqlVersions());
-        assertEquals(20, jdbc.queryForObject("SELECT count(*) FROM public." + HISTORY + " WHERE success", Integer.class));
+        assertEquals(21, jdbc.queryForObject("SELECT count(*) FROM public." + HISTORY + " WHERE success", Integer.class));
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM public." + HISTORY + " WHERE success AND type='BASELINE' AND version='1'", Integer.class));
         assertEquals(baselineRow, jdbc.queryForMap("SELECT * FROM public." + HISTORY + " WHERE type='BASELINE'"),
             "Repair and upgrades must preserve every historical baseline field");

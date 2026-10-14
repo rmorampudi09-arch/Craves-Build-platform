@@ -92,6 +92,7 @@ delete_operation_by_route "$SUB_API" "api/v1/subscriptions" PATCH "/{subscriptio
 delete_operation_by_route "$SUB_API" "api/v1/subscriptions" PATCH "/{subscriptionId}/resume"
 delete_operation_by_route "$SUB_API" "api/v1/subscriptions" PATCH "/{subscriptionId}/cancel"
 delete_operation_by_route "$SUB_API" "api/v1/subscriptions" POST "/{subscriptionId}/skips"
+delete_operation_by_route "$SUB_API" "api/v1/subscriptions" POST "/{subscriptionId}/day-credits/{creditId}/choice"
 
 delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" GET "/"
 delete_operation_by_route "$CHEF_PLAN_API" "api/v1/chef/subscription-plans" POST "/"

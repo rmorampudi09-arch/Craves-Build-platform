@@ -7,7 +7,10 @@ import static org.mockito.Mockito.when;
 import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditRepository;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
+import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import java.time.Clock;
@@ -112,7 +115,8 @@ class PauseAllowanceDatabaseTest {
         CapacityService capacity=mock(CapacityService.class);
         when(capacity.hasCommittedCapacity(subscription)).thenReturn(true);
         SubscriptionLifecycleService service=new SubscriptionLifecycleService(repository,mock(SubscriptionPolicyRepository.class),
-            mock(SubscriptionRepository.class),capacity,new SubscriptionBillingProperties(),new SubscriptionBillingRepository(db),Clock.systemUTC());
+            mock(SubscriptionRepository.class),capacity,new SubscriptionBillingProperties(),
+            new DayCreditService(new DayCreditRepository(db),new SubscriptionBillingRepository(db),new OccurrenceRepository(db),false,Clock.systemUTC()),Clock.systemUTC());
         return new PauseAutoResumeWorker(repository,service);
     }
     String status(){return db.queryForObject("SELECT status FROM subscription_schema.customer_subscription WHERE id=?",String.class,subscription);}

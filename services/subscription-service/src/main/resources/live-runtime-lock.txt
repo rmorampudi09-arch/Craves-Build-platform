@@ -2,6 +2,7 @@
 # to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
 # See docs/runbooks/live-runtime-safety.md.
 in.craves.subscription.capacity.CapacityController
+in.craves.subscription.credit.DayCreditController
 in.craves.subscription.order.OccurrenceOrderInternalController
 in.craves.subscription.plan.ChefPlanWorkflowController
 in.craves.subscription.policy.SubscriptionPolicyController

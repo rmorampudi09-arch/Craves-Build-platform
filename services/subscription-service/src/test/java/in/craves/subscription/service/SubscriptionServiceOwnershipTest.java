@@ -12,9 +12,12 @@ import static org.mockito.Mockito.when;
 import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditRepository;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
+import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -24,6 +27,7 @@ import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -44,7 +48,8 @@ class SubscriptionServiceOwnershipTest {
     private final SubscriptionLifecycleRepository lifecycleRepository = mock(SubscriptionLifecycleRepository.class);
 
     private final SubscriptionService service = new SubscriptionService(
-        repository, capacityService, planImages, billing(true, 7), billingRepository, lifecycleRepository
+        repository, capacityService, planImages, billing(true, 7),
+        new DayCreditService(mock(DayCreditRepository.class), billingRepository, mock(OccurrenceRepository.class), false, Clock.systemUTC()), lifecycleRepository
     );
 
     private static final UUID SUBSCRIPTION_ID = UUID.fromString("55555555-5555-4555-8555-555555555555");

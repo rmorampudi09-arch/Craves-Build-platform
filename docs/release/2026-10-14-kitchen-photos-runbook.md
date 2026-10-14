@@ -7,7 +7,7 @@ lock, import). No new gateway (APIM) routes; the chef photo upload route must al
 ## 0. Variables and code
 
 ```bash
-export RG=rg-craves-prodlow-centralindia ACR=cravesrm09prodlow6bf632 CATALOG_APP=ca-craves-catalog-service-prodlo ORDER_APP=ca-craves-order-service-prodlow SHA=<MERGED_SHA>; export TAG=kphotos-${SHA:0:9}; export USERCHEF_APP=$(az containerapp list -g $RG --query "[?contains(name,'user-chef')].name | [0]" -o tsv); echo "user-chef app: $USERCHEF_APP"
+export RG=rg-craves-prodlow-centralindia ACR=cravesrm09prodlow6bf632 CATALOG_APP=ca-craves-catalog-service-prodlo ORDER_APP=ca-craves-order-service-prodlow SHA=<MERGED_SHA>; export TAG=$SHA; export USERCHEF_APP=$(az containerapp list -g $RG --query "[?contains(name,'user-chef')].name | [0]" -o tsv); echo "user-chef app: $USERCHEF_APP"
 ```
 ```bash
 rm -rf ~/c8 && mkdir -p ~/c8 && cd ~/c8 && git init -q && git fetch -q --depth 1 https://github.com/rmorampudi09-arch/Craves-Build-platform.git $SHA && git checkout -q --detach FETCH_HEAD && git rev-parse HEAD

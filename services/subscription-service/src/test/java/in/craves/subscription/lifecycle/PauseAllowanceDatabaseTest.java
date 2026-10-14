@@ -1,8 +1,16 @@
 package in.craves.subscription.lifecycle;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import in.craves.subscription.billing.SubscriptionBillingProperties;
+import in.craves.subscription.billing.SubscriptionBillingRepository;
+import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
+import in.craves.subscription.policy.SubscriptionPolicyRepository;
+import in.craves.subscription.repository.SubscriptionRepository;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -95,5 +103,38 @@ class PauseAllowanceDatabaseTest {
         assertEquals(d("10-20"),repository.firstUnservedDate(subscription,d("10-20")));
         db.update("INSERT INTO subscription_schema.subscription_occurrence(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,delivery_address_id,service_date,service_at,schedule_version,status,meal_slot_code) VALUES (?,?,?,?,?,?,?,CAST(? AS timestamptz),1,'ORDER_CREATED','LUNCH')",UUID.randomUUID(),subscription,plan,customer,chef,UUID.randomUUID(),d("10-20"),"2026-10-20T06:30:00Z");
         assertEquals(d("10-21"),repository.firstUnservedDate(subscription,d("10-20")));
+    }
+
+    // A customer paused on 20 October with 7 days left, so the plan restarts on 27 October.
+    PauseAutoResumeWorker pausedUntil(LocalDate auto) {
+        pause(d("10-20"),d("10-13"),0,auto);
+        db.update("UPDATE subscription_schema.subscription_status_history SET created_at=CAST('2026-10-20T04:00:00Z' AS timestamptz) WHERE subscription_id=?",subscription);
+        CapacityService capacity=mock(CapacityService.class);
+        when(capacity.hasCommittedCapacity(subscription)).thenReturn(true);
+        SubscriptionLifecycleService service=new SubscriptionLifecycleService(repository,mock(SubscriptionPolicyRepository.class),
+            mock(SubscriptionRepository.class),capacity,new SubscriptionBillingProperties(),new SubscriptionBillingRepository(db),Clock.systemUTC());
+        return new PauseAutoResumeWorker(repository,service);
+    }
+    String status(){return db.queryForObject("SELECT status FROM subscription_schema.customer_subscription WHERE id=?",String.class,subscription);}
+
+    @Test void sweepRestartsPlanTheDayBefore() {
+        assertEquals(1,pausedUntil(d("10-27")).resumeDue(d("10-26")));
+        assertEquals("ACTIVE",status());
+        assertEquals(d("10-27"),db.queryForObject("SELECT next_service_date FROM subscription_schema.customer_subscription WHERE id=?",LocalDate.class,subscription));
+        assertEquals(new PauseUsage(d("10-13"),7,null,null),repository.pauseUsage(subscription));
+        assertEquals("Pause days used up; plan restarted automatically",db.queryForObject(
+            "SELECT reason FROM subscription_schema.subscription_status_history WHERE subscription_id=? AND new_status='ACTIVE'",String.class,subscription));
+        // The 7 paused paid days are carried to the end of the plan.
+        assertEquals(d("11-17"),db.queryForObject("SELECT next_billing_date FROM subscription_schema.customer_subscription WHERE id=?",LocalDate.class,subscription));
+    }
+
+    @Test void sweepLeavesFuturePauses() {
+        assertEquals(0,pausedUntil(d("10-29")).resumeDue(d("10-26")));
+        assertEquals("PAUSED",status());
+    }
+
+    @Test void legacyPauseWithoutAutoDateIsIgnoredBySweep() {
+        assertEquals(0,pausedUntil(null).resumeDue(d("10-26")));
+        assertEquals("PAUSED",status());
     }
 }

@@ -189,6 +189,19 @@ public class SubscriptionLifecycleRepository {
         return lastSent == null ? today : lastSent.plusDays(1);
     }
 
+    /** Customer pauses whose allowance ends on or before `through`; pauses from before the allowance have no date. */
+    public List<AutoResumeCandidate> dueAutoResumes(LocalDate through, int limit) {
+        return jdbcTemplate.query(
+            "SELECT id, customer_identity_id, pause_auto_resume_date FROM subscription_schema.customer_subscription " +
+                "WHERE status = 'PAUSED' AND pause_auto_resume_date <= ? ORDER BY pause_auto_resume_date, id LIMIT ?",
+            (rs, rowNum) -> new AutoResumeCandidate(
+                rs.getObject("id", UUID.class),
+                rs.getObject("customer_identity_id", UUID.class),
+                rs.getObject("pause_auto_resume_date", LocalDate.class)
+            ), through, limit
+        );
+    }
+
     /** Adds the days this pause used to the bill's count and ends the running pause. */
     public void closePause(UUID subscriptionId, LocalDate resumeDate) {
         jdbcTemplate.update(
@@ -372,5 +385,6 @@ public class SubscriptionLifecycleRepository {
     public record OwnedSubscription(UUID id, UUID customerIdentityId, UUID planId, String status, LocalDate nextServiceDate) {}
     public record ScheduleClock(String timezone, LocalTime serviceTime) {}
     public record PauseUsage(LocalDate billStart, int usedDays, LocalDate pausedFrom, LocalDate autoResumeDate) {}
+    public record AutoResumeCandidate(UUID subscriptionId, UUID customerIdentityId, LocalDate autoResumeDate) {}
     private record OccurrenceState(UUID id, String status) {}
 }

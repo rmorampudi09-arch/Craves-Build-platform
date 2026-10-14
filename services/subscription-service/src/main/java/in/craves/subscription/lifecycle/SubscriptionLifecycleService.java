@@ -180,6 +180,23 @@ public class SubscriptionLifecycleService {
         return current(subscriptionId);
     }
 
+    /**
+     * Restarts a plan whose pause days ran out. No policy, lead-time or allowance checks: the customer chose the
+     * pause, and the restart date was fixed when they paused. Returns false if the plan is no longer paused.
+     */
+    @Transactional
+    public boolean autoResume(UUID subscriptionId, UUID customerIdentityId, LocalDate resumeDate) {
+        if (!lifecycleRepository.resume(subscriptionId, customerIdentityId, resumeDate, "Pause days used up; plan restarted automatically")) {
+            return false;
+        }
+        if (!capacityService.hasCommittedCapacity(subscriptionId)) {
+            capacityService.reacquireForResume(requireSubscription(subscriptionId), resumeDate);
+        }
+        lifecycleRepository.closePause(subscriptionId, resumeDate);
+        billingRepository.applyPauseCredit(subscriptionId, resumeDate);
+        return true;
+    }
+
     @Transactional
     public SkipRequestResponse skip(
         UUID subscriptionId,

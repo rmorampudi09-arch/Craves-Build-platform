@@ -16,7 +16,7 @@ Claims:
 - Only use claims from the claims ledger in brand.md. Never go outside it. If a line needs a fact that is not there, write [CONFIRM WITH OWNER: what is missing] instead of guessing.
 - Never mention: earnings figures, the chef referral programme, meal plans/tiffin subscriptions, a chef app download, Craves Academy, competitor commissions, a real chef's name/face/kitchen without written consent, or anyone's home address.
 - No earnings or income figures or promises. Never "start earning today", "orders waiting" or "guaranteed orders". Say instead: be one of the first home chefs on Craves in your area; set up your kitchen before customers open.
-- Whenever a line mentions orders or customers, say in the same reel or DM that Craves is launching soon for customers (ledger S11).
+- Whenever a line mentions orders, customers or earnings, say in the same reel or DM that Craves is launching soon for customers (ledger S11).
 - FSSAI: say "FSSAI says..." and point to fssai.gov.in or foscos.fssai.gov.in. Never state a fee amount. Home cooks need FSSAI registration (not a licence): FSSAI says registration covers turnover up to Rs 1.5 crore from 1 Apr 2026. Craves needs the 14-digit FSSAI number.
 - Hyderabad only. Do not mention other cities (Bangalore comes later).
 - Never state the Craves fee, commission or any percentage. For money questions, say how earnings are settled: daily or weekly, the chef's choice, or with one tap to their bank (brand.md S18), and pair it with "Craves is launching soon for customers".

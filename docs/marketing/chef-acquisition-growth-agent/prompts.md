@@ -77,7 +77,7 @@ Give me:
 3. A shot list: one line per beat with the time, what is on screen, the on-screen text, and which voiceover line is being said. Real home kitchen footage, or for an animated explainer (BUILD 3e) brand cards with some real kitchen footage mixed in. No stock, no AI faces. No address, documents, phone numbers or faces without consent on screen.
 4. A one-line caption that ends with "Comment CHEF", plus 8 to 10 hashtags from the hashtag bank in brand.md or close to it. No income hashtags.
 5. A claims check table for every factual statement in the hooks, script, on-screen text and caption: claim | ledger row | SAFE / CHECK FIRST / NEVER | keep, rewrite or cut. Rewrite or cut anything that is not SAFE.
-6. A style check: no earnings talk, no "orders waiting" or "start today", no hype words, no em dashes, no "game-changer". If the reel mentions orders or customers, it must also say customers open soon (ledger S11).
+6. A style check: no earnings talk, no "orders waiting" or "start today", no hype words, no em dashes, no "game-changer". If the reel mentions orders, customers or earnings, it must also say customers open soon (ledger S11).
 Check everything against brand.md and the best rows in results.csv (highest keyword comments per 1,000 views). Cite the reel you learned from.
 ```
 

@@ -48,7 +48,7 @@ Both posts recruit home chefs. Neither is a customer or food post.
 | Profile visits | 16 | 9 |
 | Link | [DeXWk9Gj1CE](https://www.instagram.com/p/DeXWk9Gj1CE/) | [DeaBR3wT3iq](https://www.instagram.com/p/DeaBR3wT3iq/) |
 
-"Total" likes include boosted and cross-posted likes. "Organic" likes do not. results.csv has no likes column, so if you note likes in `notes`, use organic likes every time.
+"Total" likes include boosted likes. "Organic" likes do not. results.csv has no likes column, so if you note likes in `notes`, use organic likes every time.
 
 We name the posts by their UTC date (the 11 Oct carousel, the 12 Oct image), as results.csv does in its notes. In IST, and in the `date` column of results.csv, they went live on 12 and 13 Oct.
 
@@ -351,7 +351,7 @@ On-screen text for this version: the same English text as the Tenglish version (
 | 0:32-0:38 | Ye sab documents sirf application mein upload karo. DM mein kisi ko bhi nakko bhejo. | Upload all these documents only inside the application. Don't send them to anyone in a DM. |
 | 0:38-0:44 | Craves team aapki application review karti. Link chahiye toh CHEF comment karo. | The Craves team reviews your application. Want the link? Comment CHEF. |
 
-A native Hindi/Dakhini speaker from Hyderabad reads this first. "Nakko" and "hota" are Dakhini touches: keep them only if they sound natural to that reader.
+A native Hindi/Dakhini speaker from Hyderabad reads this first. "Nakko" is a Dakhini touch: keep them only if they sound natural to that reader.
 
 **Shot list (one line per beat, same footage for both versions):**
 
@@ -483,12 +483,12 @@ Public replies never contain the word "chef" (not even inside a link), because o
 - If they ask who pays for delivery or packaging: [CONFIRM WITH OWNER: approved answer on delivery and packaging costs for chefs]
 
 **"What does Craves charge?" / "What's the commission?"**
-- Tenglish: Mee menu, mee prices. Mee earnings daily leda weekly settle avutayi, meeku nachinattu. Leda okka tap tho mee balance bank ki pampukovachu. Payments gurinchi inkemaina unte contact@craves.in ki email cheyyandi.
-- English: You set your own prices. Your earnings are settled daily or weekly, your choice, or you send your balance to your bank with one tap. For anything else about payments, email contact@craves.in.
+- Tenglish: Mee menu, mee prices. Mee earnings daily leda weekly settle avutayi, meeku nachinattu. Leda okka tap tho mee balance bank ki pampukovachu. Customers kosam Craves launching soon. Payments gurinchi inkemaina unte contact@craves.in ki email cheyyandi.
+- English: You set your own prices. Your earnings are settled daily or weekly, your choice, or you send your balance to your bank with one tap. Craves is launching soon for customers. For anything else about payments, email contact@craves.in.
 - Never state a fee or a percentage (owner decision, N16).
 
 **"When do I get paid?"**
-- Tenglish: Mee earnings daily leda weekly settle avutayi, meeku nachinattu. Leda okka tap tho bank ki pampukovachu. Customers open ayyaka orders start avutayi.
+- Tenglish: Mee earnings daily leda weekly settle avutayi, meeku nachinattu. Leda okka tap tho bank ki pampukovachu. Customers kosam Craves launching soon, open ayyaka orders start avutayi.
 - English: Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap. Orders start once customers open, which is soon.
 - Never give an amount (N1).
 
@@ -514,8 +514,8 @@ Public replies never contain the word "chef" (not even inside a link), because o
 - [CONFIRM WITH OWNER: what customers can see of a kitchen's location on Craves]
 
 **"How much can I earn?"**
-- Tenglish: Income entha ani memu promise cheyyamu. Mee menu, mee prices: prati dish rate meere set chestaru.
-- English: We don't promise any income figure. Your menu, your prices: you set the price of every dish.
+- Tenglish: Income entha ani memu promise cheyyamu. Mee menu, mee prices: prati dish rate meere set chestaru. Customers kosam Craves launching soon.
+- English: We don't promise any income figure. Your menu, your prices: you set the price of every dish. Craves is launching soon for customers.
 - Never give a number, an example or a range.
 
 **"Is there an app?"**

@@ -190,6 +190,32 @@ class ChefCatalogDatabaseTest {
         assertEquals(List.of(refilled.kitchenPhotoUrl()),catalog.getMyKitchen(owner).kitchenPhotoUrls());
     }
 
+    @Test void newKitchenImportsRegistrationPhotosOnceAndRegistrationWins() {
+        var client=mock(UserChefKitchenPhotoClient.class);
+        when(client.fetch(chef,1)).thenReturn(java.util.Optional.of(new UserChefKitchenPhotoClient.Photo(new byte[]{1},"image/png")));
+        when(client.fetch(chef,2)).thenReturn(java.util.Optional.of(new UserChefKitchenPhotoClient.Photo(new byte[]{2},"image/jpeg")));
+        when(media.storeKitchenImage(any(),anyString(),any(),anyString())).thenAnswer(i->{
+            String blob="public/kitchens/"+i.getArgument(0)+"/kitchen/"+i.getArgument(1);
+            return new StoredMedia("media",blob,i.getArgument(3),1,"https://media.example/"+blob);
+        });
+        String chefUpload=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file).kitchenPhotoUrl();
+        var importer=new KitchenPhotoImporter(jdbc,
+            new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource())),
+            media,client,mock(DiscoveryCacheService.class));
+
+        assertTrue(importer.importKitchen(kitchen));
+        assertEquals(List.of("https://media.example/public/kitchens/"+kitchen+"/kitchen/registration-1.png",
+            "https://media.example/public/kitchens/"+kitchen+"/kitchen/registration-2.jpg"),catalog.getMyKitchen(owner).kitchenPhotoUrls());
+        verify(media).deleteByPublicUrl(chefUpload);
+
+        assertFalse(importer.importKitchen(kitchen)); // once per kitchen
+        verify(client,times(2)).fetch(any(),anyInt());
+        var backfill=importer.backfill(); // only the other kitchen is left; its chef has no approved photos
+        assertEquals(1,backfill.checked()); assertEquals(0,backfill.imported()); assertEquals(0,backfill.failed());
+        assertEquals(0,importer.backfill().checked());
+        assertTrue(catalog.getMyKitchen(stranger).kitchenPhotoUrls().isEmpty());
+    }
+
     @Test void chefFaceCanStillBeRemoved() {
         catalog.setChefAvatar(owner,"chef-avatar-01");
         assertNull(catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.CHEF).chefPhotoUrl());

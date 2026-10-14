@@ -21,6 +21,7 @@ import in.craves.catalog.security.CravesPrincipal;
 import in.craves.catalog.service.BulkMenuAvailabilityService;
 import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.DiscoveryCacheService;
+import in.craves.catalog.service.KitchenPhotoImporter;
 import in.craves.catalog.web.ApiDtos.KitchenPhotoKind;
 import in.craves.catalog.web.ApiDtos.KitchenProfileRequest;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
@@ -49,6 +50,7 @@ class KitchenControllerChefApiTest {
     private final CravesPrincipal chef = new CravesPrincipal(UUID.randomUUID(), "", Set.of("CHEF"));
     private final CatalogService catalog = mock(CatalogService.class);
     private final DiscoveryCacheService cache = mock(DiscoveryCacheService.class);
+    private final KitchenPhotoImporter importer = mock(KitchenPhotoImporter.class);
     private MockMvc mvc;
 
     @BeforeEach
@@ -58,7 +60,7 @@ class KitchenControllerChefApiTest {
             @Override public Object resolveArgument(MethodParameter p, ModelAndViewContainer m, NativeWebRequest r, WebDataBinderFactory f) { return chef; }
         };
         mvc = MockMvcBuilders
-            .standaloneSetup(new KitchenController(catalog, mock(BulkMenuAvailabilityService.class), cache))
+            .standaloneSetup(new KitchenController(catalog, mock(BulkMenuAvailabilityService.class), cache, importer))
             .setCustomArgumentResolvers(principal)
             .setControllerAdvice(new AppErrorHandler())
             .build();
@@ -211,6 +213,16 @@ class KitchenControllerChefApiTest {
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.code").value("KITCHEN_PHOTOS_LOCKED"));
         verify(cache, never()).invalidateAllDiscovery();
+    }
+
+    @Test
+    void savingTheKitchenStartsTheRegistrationPhotoImport() throws Exception {
+        KitchenProfileResponse saved = kitchen();
+        when(catalog.upsertMyKitchen(any(), any())).thenReturn(saved);
+        mvc.perform(put("/api/v1/kitchens/me").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kitchenName\":\"K\",\"addressLine1\":\"A\",\"city\":\"Hyderabad\",\"state\":\"Telangana\",\"status\":\"ACTIVE\"}"))
+            .andExpect(status().isOk());
+        verify(importer).importInBackground(saved.id());
     }
 
     private static KitchenProfileResponse kitchen() {

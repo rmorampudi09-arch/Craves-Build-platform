@@ -13,11 +13,14 @@ import static org.mockito.Mockito.when;
 import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditRepository;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.ResumeSubscriptionRequest;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.OwnedSubscription;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.ScheduleClock;
+import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.policy.SubscriptionPolicyModels.SubscriptionPolicyResponse;
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
@@ -51,7 +54,7 @@ class SubscriptionLifecyclePauseAllowanceTest {
     private final SubscriptionResponse subscription = mock(SubscriptionResponse.class);
     private final SubscriptionLifecycleService service = new SubscriptionLifecycleService(
         lifecycle, policies, subscriptions, capacity, new SubscriptionBillingProperties(),
-        billingRepository, Clock.fixed(NOW, ZoneOffset.UTC)
+        new DayCreditService(mock(DayCreditRepository.class), billingRepository, mock(OccurrenceRepository.class), false, Clock.systemUTC()), Clock.fixed(NOW, ZoneOffset.UTC)
     );
 
     static LocalDate d(String monthDay) { return LocalDate.parse("2026-" + monthDay); }

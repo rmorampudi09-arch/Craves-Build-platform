@@ -60,7 +60,6 @@ export function CustomerReferralScreen() {
   const { busy, notice, copy } = useInvitationActions();
   return (
     <ReferralScaffold
-      role="Customer"
       title="Refer a friend"
       subtitle="Share Craves with someone you know."
       onBack={() => navigation.goBack()}
@@ -95,11 +94,10 @@ export function CustomerReferralScreen() {
           last
         />
       </ReferralSection>
-      <ReferralSection title="Referral benefits" badge="Not active">
+      <ReferralSection title="Referral rewards" badge="Coming soon">
         <Text style={referralText.body}>
-          {
-            'Customer cash bonuses and referral discounts are not enabled.\nOnly the invitation message is shared.'
-          }
+          Rewards for inviting friends are coming soon. For now, only your
+          invitation message is shared.
         </Text>
       </ReferralSection>
     </ReferralScaffold>
@@ -150,7 +148,6 @@ export function CustomerShareInvitationScreen() {
   ];
   return (
     <ReferralScaffold
-      role="Customer"
       title="Share invitation"
       subtitle="Choose how to share your Craves invitation."
       onBack={() => navigation.goBack()}
@@ -209,13 +206,13 @@ export function CustomerShareInvitationScreen() {
         <ReferralStep
           number={3}
           title="Join and order"
-          detail="Any reward details are not active for customers."
+          detail="They sign up and order homemade food."
           last
         />
       </ReferralSection>
-      <ReferralSection title="Referral status" badge="Info">
+      <ReferralSection title="Referral rewards" badge="Coming soon">
         <Text style={referralText.body}>
-          Customer rewards and invite discounts are not enabled.
+          Rewards for inviting friends are coming soon.
         </Text>
       </ReferralSection>
     </ReferralScaffold>

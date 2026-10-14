@@ -22,17 +22,16 @@ import type {
 import {
   borderWidth,
   colors,
-  elevation,
   fontWeight,
   radius,
   spacing,
   touchTarget,
   typography,
 } from '../../../design/tokens';
+import {IconButton} from '../../../shared/components/IconButton';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
+import {UnderlineTabs} from '../../../shared/components/UnderlineTabs';
 import {
   addCartItem,
   removeCartItem,
@@ -49,14 +48,13 @@ import type {SavedCatalogItem} from '../api/savedCatalogApi';
 import {
   favoriteHomeDisplayName,
   favoriteHomeStateCopy,
-  isCookingToday,
-  type FavoriteHomeTone,
+  mergeSavedHomes,
+  type SavedHomeEntry,
 } from '../presentation/favoriteHomePresentation';
 import {
   canAddSavedDish,
   savedDishDisplayName,
   savedKitchenDisplayName,
-  type SavedAvailabilityTone,
 } from '../presentation/savedCatalogPresentation';
 import {formatDishDetailPrice} from '../../dishDetail/dishDetailPurchase';
 import {
@@ -80,9 +78,12 @@ type FavoritesNavigation = NativeStackNavigationProp<
   'CustomerFavorites'
 >;
 type CustomerTabsNavigation = BottomTabNavigationProp<CustomerTabParamList>;
-type SavedTab = 'DISHES' | 'HOME_CHEFS' | 'KITCHENS';
+type SavedTab = 'DISHES' | 'HOME_CHEFS';
 
-type Tone = SavedAvailabilityTone | FavoriteHomeTone;
+const SAVED_TABS = [
+  {key: 'DISHES', label: 'Dishes'},
+  {key: 'HOME_CHEFS', label: 'Home chefs'},
+] as const;
 
 function FilledIcon({
   name,
@@ -96,7 +97,7 @@ function FilledIcon({
   return <MaterialDesignIcons name={name as never} size={size} color={color} />;
 }
 
-function FavoriteHomeBadge({kitchenId, relationType}: {kitchenId: string | null; relationType: 'CHEF' | 'KITCHEN'}) {
+function FavoriteHomeBadge({kitchenId}: {kitchenId: string | null}) {
   const kitchen = useCustomerOrderKitchenPresentationQuery(kitchenId ?? '');
   return (
     <View style={styles.homeIconBadge}>
@@ -104,8 +105,8 @@ function FavoriteHomeBadge({kitchenId, relationType}: {kitchenId: string | null;
         url={kitchen.data?.chefPhotoUrl}
         fallback={
           <FilledIcon
-            name={relationType === 'CHEF' ? 'chef-hat' : 'home-heart'}
-            size={24}
+            name="chef-hat"
+            size={26}
             color={colors.flameRedAccessible}
           />
         }
@@ -114,62 +115,12 @@ function FavoriteHomeBadge({kitchenId, relationType}: {kitchenId: string | null;
   );
 }
 
-function formatPrice(amount: number | null, currency: string | null): string | null {
-  if (amount === null || !currency) return null;
-  const value = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2);
-  return currency === 'INR' ? `₹${value}` : `${currency} ${value}`;
-}
-
-function toneStyles(tone: Tone) {
-  if (tone === 'positive') {
-    return {container: styles.availabilityPositive, text: styles.availabilityPositiveText};
-  }
-  if (tone === 'attention') {
-    return {container: styles.availabilityAttention, text: styles.availabilityAttentionText};
-  }
-  return {container: styles.availabilityMuted, text: styles.availabilityMutedText};
-}
-
 function sectionRows(
   rows: readonly SavedCatalogItem[],
   states: readonly SavedCatalogItem['availabilityState'][],
 ): SavedCatalogItem[] {
   const stateSet = new Set(states);
   return rows.filter(row => stateSet.has(row.availabilityState));
-}
-
-function SavedTabs({active, onChange}: {active: SavedTab; onChange: (tab: SavedTab) => void}) {
-  const tabs: Array<{key: SavedTab; label: string; icon: string}> = [
-    {key: 'DISHES', label: 'Dishes', icon: 'food-outline'},
-    {key: 'HOME_CHEFS', label: 'Home Chefs', icon: 'chef-hat'},
-    {key: 'KITCHENS', label: 'Kitchens', icon: 'home-heart'},
-  ];
-  return (
-    <View accessibilityRole="tablist" style={styles.tabs}>
-      {tabs.map(tab => {
-        const selected = active === tab.key;
-        return (
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{selected}}
-            key={tab.key}
-            onPress={() => onChange(tab.key)}
-            style={({pressed}) => [
-              styles.tabButton,
-              selected && styles.tabButtonSelected,
-              pressed && styles.pressed,
-            ]}>
-            <FilledIcon
-              name={tab.icon}
-              size={18}
-              color={selected ? colors.flameRedAccessible : colors.textSecondary}
-            />
-            <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>{tab.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
 }
 
 export function CustomerFavoritesScreen() {
@@ -195,7 +146,6 @@ export function CustomerFavoritesScreen() {
     favoriteKitchens.items.map(item => item.kitchenId),
   );
   const [activeTab, setActiveTab] = React.useState<SavedTab>('DISHES');
-  const [locationSelectorVisible, setLocationSelectorVisible] = React.useState(false);
   const [cartErrors, setCartErrors] = React.useState<Record<string, string>>({});
 
   const browseMeals = React.useCallback(() => {
@@ -234,10 +184,6 @@ export function CustomerFavoritesScreen() {
     row => row.availabilityState !== 'AVAILABLE_NOW' && row.availabilityState !== 'COOKING_LATER_TODAY',
   );
 
-  const favoriteChefIds = React.useMemo(
-    () => new Set(favoriteChefs.items.map(item => item.chefIdentityId)),
-    [favoriteChefs.items],
-  );
   const favoriteKitchenIds = React.useMemo(
     () => new Set(favoriteKitchens.items.map(item => item.kitchenId)),
     [favoriteKitchens.items],
@@ -489,162 +435,113 @@ export function CustomerFavoritesScreen() {
     ],
   );
 
-  const renderHomeCard = React.useCallback(
-    (card: FavoriteHomeCard, relationType: 'CHEF' | 'KITCHEN') => {
-      const state = favoriteHomeStateCopy(card);
-      const stateStyle = toneStyles(state.tone);
-      const displayName = favoriteHomeDisplayName(card);
-      const relationId = card.requestedId;
-      const watched = relationType === 'CHEF'
-        ? chefWatchIds.has(relationId)
-        : kitchenWatchIds.has(relationId);
-      const watchMutation = relationType === 'CHEF' ? toggleChefWatch : toggleKitchenWatch;
-      const removeMutation = relationType === 'CHEF' ? toggleChef : toggleKitchen;
-      const relationBusy = removeMutation.isPending;
-      const canOpenKitchen = card.exists && Boolean(card.kitchenId);
-      const area = [card.areaName, card.city].filter(Boolean).join(', ');
+  const renderHomeEntry = (entry: SavedHomeEntry) => {
+    const {card, kitchenId, chefIdentityId} = entry;
+    const state = favoriteHomeStateCopy(card);
+    const displayName = favoriteHomeDisplayName(card);
+    const area = [card.areaName, card.city].filter(Boolean).join(', ');
+    const openKitchenId = card.exists ? card.kitchenId : null;
+    const kitchenWatched = kitchenId !== null && kitchenWatchIds.has(kitchenId);
+    const chefWatched = chefIdentityId !== null && chefWatchIds.has(chefIdentityId);
+    const watched = kitchenWatched || chefWatched;
+    const removeBusy = toggleChef.isPending || toggleKitchen.isPending;
+    const watchBusy = toggleChefWatch.isPending || toggleKitchenWatch.isPending;
 
-      return (
-        <View key={`${relationType}:${relationId}`} style={styles.homeCard}>
-          <View style={styles.homeCardHeader}>
-            <FavoriteHomeBadge kitchenId={card.exists ? card.kitchenId : null} relationType={relationType} />
-            <View style={styles.homeCardTitleCopy}>
-              <Text numberOfLines={2} style={styles.homeCardTitle}>{displayName}</Text>
-              {area ? <Text numberOfLines={1} style={styles.homeCardArea}>{area}</Text> : null}
+    const remove = () => {
+      // Clear every saved relation behind this row, or it would come back from the other list.
+      if (chefIdentityId) toggleChef.mutate({chefIdentityId, favorite: true});
+      if (kitchenId) toggleKitchen.mutate({kitchenId, favorite: true});
+    };
+    const toggleWatch = () => {
+      if (watched) {
+        if (kitchenWatched) toggleKitchenWatch.mutate({entityId: kitchenId!, channel: 'IN_APP', enabled: false});
+        if (chefWatched) toggleChefWatch.mutate({entityId: chefIdentityId!, channel: 'IN_APP', enabled: false});
+      } else if (kitchenId) {
+        toggleKitchenWatch.mutate({entityId: kitchenId, channel: 'IN_APP', enabled: true});
+      } else if (chefIdentityId) {
+        toggleChefWatch.mutate({entityId: chefIdentityId, channel: 'IN_APP', enabled: true});
+      }
+    };
+
+    return (
+      <View key={`${card.requestedType}:${card.requestedId}`} style={styles.homeCard}>
+        {/* The photo and name open the kitchen; the bell and heart stay separate buttons for screen readers. */}
+        <Pressable
+          accessibilityHint={openKitchenId ? 'Opens their kitchen' : undefined}
+          accessibilityLabel={`${displayName}${area ? `, ${area}` : ''}. ${state.title}`}
+          accessibilityRole={openKitchenId ? 'button' : undefined}
+          disabled={!openKitchenId}
+          onPress={() => {
+            if (openKitchenId) navigation.navigate('CustomerKitchenProfile', {kitchenId: openKitchenId});
+          }}
+          style={({pressed}) => [styles.homeCardMain, pressed && styles.pressed]}>
+          <FavoriteHomeBadge kitchenId={openKitchenId} />
+          <View style={styles.homeCardCopy}>
+            <Text numberOfLines={1} style={styles.homeCardTitle}>{displayName}</Text>
+            {area ? <Text numberOfLines={1} style={styles.homeCardArea}>{area}</Text> : null}
+            <View style={styles.homeState}>
+              {state.tone === 'positive' ? <View style={styles.cookingDot} /> : null}
+              <Text style={[styles.homeStateText, state.tone === 'positive' && styles.homeStateTextOn]}>
+                {state.title}
+              </Text>
             </View>
-            <Pressable
-              accessibilityLabel={`Remove ${displayName} from saved ${relationType === 'CHEF' ? 'home chefs' : 'kitchens'}`}
-              accessibilityRole="button"
-              accessibilityState={{busy: relationBusy}}
-              disabled={relationBusy}
-              onPress={() => {
-                if (relationType === 'CHEF') {
-                  toggleChef.mutate({chefIdentityId: relationId, favorite: true});
-                } else {
-                  toggleKitchen.mutate({kitchenId: relationId, favorite: true});
-                }
-              }}
-              style={({pressed}) => [styles.heartButton, pressed && styles.pressed]}>
-              <FilledIcon name="heart" size={22} color={colors.flameRed} />
-            </Pressable>
           </View>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={watched ? `Stop cooking alerts from ${displayName}` : `Alert me in the app when ${displayName} is cooking`}
+          accessibilityRole="button"
+          accessibilityState={{selected: watched, disabled: watchBusy}}
+          disabled={watchBusy}
+          onPress={toggleWatch}
+          style={({pressed}) => [styles.circleButton, pressed && styles.pressed]}>
+          <FilledIcon name={watched ? 'bell-check' : 'bell-plus-outline'} size={22} color={colors.flameRed} />
+        </Pressable>
+        <IconButton
+          accessibilityLabel={`Remove ${displayName} from saved`}
+          disabled={removeBusy}
+          icon="heart"
+          onPress={remove}
+        />
+      </View>
+    );
+  };
 
-          <View style={[styles.availabilityBadge, stateStyle.container]}>
-            <Text style={[styles.availabilityTitle, stateStyle.text]}>{state.title}</Text>
-          </View>
-          {state.detail ? <Text style={styles.availabilityDetail}>{state.detail}</Text> : null}
-
-          {card.exists && card.menuPreview.length > 0 ? (
-            <View style={styles.menuPreviewList}>
-              {card.menuPreview.map(item => (
-                <Pressable
-                  accessibilityRole="button"
-                  key={item.menuItemId}
-                  onPress={() => navigation.navigate('CustomerDishDetail', {menuItemId: item.menuItemId})}
-                  style={({pressed}) => [styles.menuPreviewRow, pressed && styles.pressed]}>
-                  <View style={styles.previewIcon}>
-                    <FilledIcon name="food-outline" size={17} color={colors.espressoBrown} />
-                  </View>
-                  <Text numberOfLines={1} style={styles.menuPreviewName}>{item.itemName}</Text>
-                  <Text style={styles.menuPreviewPrice}>{formatPrice(item.price, item.currency)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.cardActions}>
-            {canOpenKitchen ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate('CustomerKitchenProfile', {kitchenId: card.kitchenId!})}
-                style={({pressed}) => [styles.primarySmallAction, pressed && styles.pressed]}>
-                <Text style={styles.primarySmallActionText}>View today's menu</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              accessibilityLabel={watched ? 'Turn off in-app cooking alerts' : 'Notify me in the Craves app when this favorite is cooking'}
-              accessibilityRole="button"
-              accessibilityState={{selected: watched, busy: watchMutation.isPending}}
-              disabled={watchMutation.isPending}
-              onPress={() => watchMutation.mutate({entityId: relationId, channel: 'IN_APP', enabled: !watched})}
-              style={({pressed}) => [styles.secondarySmallAction, pressed && styles.pressed]}>
-              <FilledIcon name={watched ? 'bell-check-outline' : 'bell-plus-outline'} size={17} color={colors.flameRedAccessible} />
-              <Text style={styles.secondarySmallActionText}>{watched ? 'In-app alerts on' : 'Notify in app'}</Text>
-            </Pressable>
-          </View>
-
-          {card.exists && relationType === 'CHEF' && card.kitchenId && !favoriteKitchenIds.has(card.kitchenId) ? (
-            <Pressable
-              accessibilityRole="button"
-              disabled={toggleKitchen.isPending}
-              onPress={() => toggleKitchen.mutate({kitchenId: card.kitchenId!, favorite: false})}
-              style={({pressed}) => [styles.relationshipCrossAction, pressed && styles.pressed]}>
-              <Text style={styles.relationshipCrossActionText}>Also save this kitchen</Text>
-            </Pressable>
-          ) : null}
-          {card.exists && relationType === 'KITCHEN' && card.chefIdentityId && !favoriteChefIds.has(card.chefIdentityId) ? (
-            <Pressable
-              accessibilityRole="button"
-              disabled={toggleChef.isPending}
-              onPress={() => toggleChef.mutate({chefIdentityId: card.chefIdentityId!, favorite: false})}
-              style={({pressed}) => [styles.relationshipCrossAction, pressed && styles.pressed]}>
-              <Text style={styles.relationshipCrossActionText}>Follow this home chef</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      );
-    },
-    [
-      chefWatchIds,
-      favoriteChefIds,
-      favoriteKitchenIds,
-      kitchenWatchIds,
-      navigation,
-      toggleChef,
-      toggleChefWatch,
-      toggleKitchen,
-      toggleKitchenWatch,
-    ],
+  const homeEntries = mergeSavedHomes(
+    favoriteKitchens.items
+      .map(item => homeFeedByKey.get(`KITCHEN:${item.kitchenId}`))
+      .filter((item): item is FavoriteHomeCard => Boolean(item)),
+    favoriteChefs.items
+      .map(item => homeFeedByKey.get(`CHEF:${item.chefIdentityId}`))
+      .filter((item): item is FavoriteHomeCard => Boolean(item)),
   );
+  const savedHomeCount = favoriteKitchens.items.length + favoriteChefs.items.length;
 
-  const renderHomeRelationshipTab = (relationType: 'CHEF' | 'KITCHEN') => {
-    const relationQuery = relationType === 'CHEF' ? favoriteChefs : favoriteKitchens;
-    const relations = relationType === 'CHEF'
-      ? favoriteChefs.items.map(item => ({id: item.chefIdentityId}))
-      : favoriteKitchens.items.map(item => ({id: item.kitchenId}));
-    const cards = relations
-      .map(item => homeFeedByKey.get(`${relationType}:${item.id}`))
-      .filter((item): item is FavoriteHomeCard => Boolean(item));
-    const cooking = cards.filter(isCookingToday);
-    const label = relationType === 'CHEF' ? 'home chefs' : 'kitchens';
-
-    if (relationQuery.isPending) {
+  const homeChefsTab = (() => {
+    if (favoriteChefs.isPending || favoriteKitchens.isPending) {
       return (
         <View accessibilityRole="progressbar" style={styles.loadingCard}>
           <ActivityIndicator color={colors.flameRed} />
-          <Text style={styles.loadingText}>Loading saved {label}…</Text>
+          <Text style={styles.loadingText}>Loading saved home chefs…</Text>
         </View>
       );
     }
-    if (relationQuery.isError) {
+    if (favoriteChefs.isError || favoriteKitchens.isError) {
       return (
         <TerminalState
-          title={`Saved ${label} could not be loaded`}
-          description="Your relationships are kept on your Craves account. Check your connection and try again."
+          title="Saved home chefs could not be loaded"
+          description="Check your connection and try again."
           actionLabel="Try again"
-          onAction={() => relationQuery.refetch().catch(() => undefined)}
+          onAction={() => {
+            Promise.all([favoriteChefs.refetch(), favoriteKitchens.refetch()]).catch(() => undefined);
+          }}
         />
       );
     }
-    if (relations.length === 0) {
+    if (savedHomeCount === 0) {
       return (
         <TerminalState
-          title={relationType === 'CHEF' ? 'No favorite home chefs yet' : 'No favorite kitchens yet'}
-          description={
-            relationType === 'CHEF'
-              ? 'Save a kitchen from a favorite dish, then follow the home chef from its card.'
-              : 'Tap Save kitchen on a dish you trust to remember the household behind it.'
-          }
+          title="No saved home chefs yet"
+          description="Tap the heart on any kitchen to save its home chef here."
           actionLabel="Browse meals"
           onAction={browseMeals}
         />
@@ -654,81 +551,47 @@ export function CustomerFavoritesScreen() {
       return (
         <View accessibilityRole="progressbar" style={styles.loadingCard}>
           <ActivityIndicator color={colors.flameRed} />
-          <Text style={styles.loadingText}>Checking what your favorites are cooking…</Text>
+          <Text style={styles.loadingText}>Checking who is cooking today…</Text>
         </View>
       );
     }
     if (homeFeed.isError) {
       return (
         <TerminalState
-          title="Your relationships are safe"
-          description="We could not refresh current kitchen schedules. Your saved home chefs and kitchens were not removed."
+          title="Your saved home chefs are safe"
+          description="We could not check who is cooking today. Nothing was removed."
           actionLabel="Check again"
           onAction={() => homeFeed.refetch().catch(() => undefined)}
         />
       );
     }
-
+    const morePages = [favoriteChefs, favoriteKitchens].filter(query => query.hasNextPage);
+    const loadingMore = morePages.some(query => query.isFetchingNextPage);
     return (
       <>
-        {cooking.length > 0 ? (
-          <View style={styles.todaySection}>
-            <View style={styles.todayHeader}>
-              <View style={styles.todayIcon}>
-                <FilledIcon name="pot-steam-outline" size={22} color={colors.successText} />
-              </View>
-              <View style={styles.todayHeaderCopy}>
-                <Text accessibilityRole="header" style={styles.todayTitle}>Your favorites are cooking today</Text>
-                <Text style={styles.todaySubtitle}>
-                  Based on current kitchen schedule and active catalog data—not popularity or marketing guesses.
-                </Text>
-              </View>
-            </View>
-            {cooking.map(card => renderHomeCard(card, relationType))}
-          </View>
-        ) : (
-          <View style={styles.calmStatusCard}>
-            <FilledIcon name="weather-sunset" size={22} color={colors.textSecondary} />
-            <View style={styles.syncCopy}>
-              <Text style={styles.calmStatusTitle}>None of these favorites are cooking today yet</Text>
-              <Text style={styles.calmStatusText}>They stay saved. Current schedule truth will refresh here.</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.savedSection}>
-          <View style={styles.sectionHeader}>
-            <Text accessibilityRole="header" style={styles.sectionTitle}>
-              {relationType === 'CHEF' ? 'Your home chefs' : 'Your kitchens'}
-            </Text>
-            <Text style={styles.countText}>{relations.length}</Text>
-          </View>
-          {cards.filter(card => !isCookingToday(card)).map(card => renderHomeCard(card, relationType))}
-        </View>
-
-        {relationQuery.hasNextPage ? (
+        {homeEntries.map(renderHomeEntry)}
+        {morePages.length > 0 ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{busy: relationQuery.isFetchingNextPage}}
-            disabled={relationQuery.isFetchingNextPage}
-            onPress={() => relationQuery.fetchNextPage().catch(() => undefined)}
+            accessibilityState={{busy: loadingMore}}
+            disabled={loadingMore}
+            onPress={() => {
+              Promise.all(morePages.map(query => query.fetchNextPage())).catch(() => undefined);
+            }}
             style={({pressed}) => [styles.loadMoreButton, pressed && styles.pressed]}>
-            {relationQuery.isFetchingNextPage ? <ActivityIndicator size="small" color={colors.flameRedAccessible} /> : null}
-            <Text style={styles.loadMoreText}>Load more saved {label}</Text>
+            {loadingMore ? <ActivityIndicator size="small" color={colors.flameRedAccessible} /> : null}
+            <Text style={styles.loadMoreText}>Load more saved home chefs</Text>
           </Pressable>
         ) : null}
-
-        <Text style={styles.transparencyCopy}>
-          “Cooking today” describes the kitchen schedule and active catalog only. Delivery serviceability is revalidated in the ordering flow. In-app Notify preferences are explicit and do not turn on push permission automatically.
-        </Text>
+        <Text style={styles.footnote}>Tap the heart on any kitchen to save its home chef here.</Text>
       </>
     );
-  };
+  })();
 
   const dishTab = favorites.sessionRequired ? (
     <TerminalState
       title="Sign in required"
-      description="Saved is private to your customer account."
+      description="Sign in to see your saved dishes and home chefs."
       actionLabel="Go back"
       onAction={() => navigation.goBack()}
     />
@@ -739,14 +602,14 @@ export function CustomerFavoritesScreen() {
     </View>
   ) : favorites.isError ? (
     <TerminalState
-      title="Favorites could not be loaded"
+      title="Saved dishes could not be loaded"
       description="Check your connection and try again."
       actionLabel="Try again"
       onAction={refresh}
     />
   ) : favoriteRows.length === 0 ? (
     <TerminalState
-      title="No favorite dishes yet"
+      title="No saved dishes yet"
       description="Tap the heart on any dish to save it here."
       actionLabel="Browse meals"
       onAction={browseMeals}
@@ -754,12 +617,12 @@ export function CustomerFavoritesScreen() {
   ) : savedCatalog.isPending ? (
     <View accessibilityRole="progressbar" style={styles.loadingCard}>
       <ActivityIndicator color={colors.flameRed} />
-      <Text style={styles.loadingText}>Checking what your favorites are cooking…</Text>
+      <Text style={styles.loadingText}>Checking what is cooking today…</Text>
     </View>
   ) : savedCatalog.isError ? (
     <TerminalState
       title="Your saves are safe"
-      description="We could not refresh current dish and kitchen availability. Your saved items have not been removed."
+      description="We could not check what is cooking today. Nothing was removed."
       actionLabel="Check again"
       onAction={() => savedCatalog.refetch().catch(() => undefined)}
     />
@@ -773,7 +636,7 @@ export function CustomerFavoritesScreen() {
             </View>
             <View style={styles.todayHeaderCopy}>
               <Text accessibilityRole="header" style={styles.todayTitle}>Your favorites are cooking today</Text>
-              <Text style={styles.todaySubtitle}>Based only on the kitchen's current schedule and catalog availability.</Text>
+              <Text style={styles.todaySubtitle}>Order them while they are on today's menu.</Text>
             </View>
           </View>
           {cookingToday.map(renderDishCard)}
@@ -796,19 +659,24 @@ export function CustomerFavoritesScreen() {
           {savedForLater.map(renderDishCard)}
         </View>
       ) : null}
-      <Text style={styles.transparencyCopy}>
-        Availability is checked from Craves catalog and kitchen schedule data. We do not label a dish “sold out” unless inventory data proves it.
-      </Text>
     </>
   );
 
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-favorites">
       <View style={styles.root}>
-        <CustomerHeader
-          title="Saved"
-          onPressLocation={() => setLocationSelectorVisible(true)}
-          onPressNotifications={() => navigation.navigate('CustomerNotifications')}
+        <View style={styles.header}>
+          <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => navigation.goBack()} />
+          <Text accessibilityRole="header" style={styles.title}>
+            Saved
+          </Text>
+        </View>
+        <UnderlineTabs
+          accessibilityLabel="Saved sections"
+          fill
+          onSelect={setActiveTab}
+          selected={activeTab}
+          tabs={SAVED_TABS}
         />
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -832,20 +700,6 @@ export function CustomerFavoritesScreen() {
           scrollEventThrottle={bottomNavScroll.scrollEventThrottle}
           showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
-            <View style={styles.introCard}>
-              <View style={styles.iconBadge}>
-                <FilledIcon name="heart" size={28} color={colors.flameRed} />
-              </View>
-              <View style={styles.introCopy}>
-                <Text accessibilityRole="header" style={styles.title}>Saved & familiar</Text>
-                <Text style={styles.subtitle}>
-                  Remember dishes, home chefs and kitchens you trust—and see what they are actually cooking today.
-                </Text>
-              </View>
-            </View>
-
-            <SavedTabs active={activeTab} onChange={setActiveTab} />
-
             {queueState.hasPendingChanges ? (
               <View accessibilityLiveRegion="polite" style={styles.syncCard}>
                 <FilledIcon name="cloud-sync-outline" size={20} color={colors.flameRedAccessible} />
@@ -853,21 +707,16 @@ export function CustomerFavoritesScreen() {
                   <Text style={styles.syncTitle}>Saving when online</Text>
                   <Text style={styles.syncText}>
                     {queueState.pendingCount === 1
-                      ? '1 dish favorite change is waiting to sync.'
-                      : `${queueState.pendingCount} dish favorite changes are waiting to sync.`}
+                      ? '1 change will save when you are back online.'
+                      : `${queueState.pendingCount} changes will save when you are back online.`}
                   </Text>
                 </View>
               </View>
             ) : null}
 
-            {activeTab === 'DISHES'
-              ? dishTab
-              : activeTab === 'HOME_CHEFS'
-                ? renderHomeRelationshipTab('CHEF')
-                : renderHomeRelationshipTab('KITCHEN')}
+            {activeTab === 'DISHES' ? dishTab : homeChefsTab}
           </View>
         </ScrollView>
-        <CustomerLocationSelector visible={locationSelectorVisible} onClose={() => setLocationSelectorVisible(false)} />
       </View>
     </ScreenShell>
   );
@@ -875,55 +724,23 @@ export function CustomerFavoritesScreen() {
 
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: colors.white},
+  header: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  title: {minWidth: 0, flex: 1, color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
     backgroundColor: colors.white,
   },
-  content: {width: '100%', maxWidth: 640, alignSelf: 'center', gap: spacing.md},
-  introCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  iconBadge: {
-    width: 54,
-    height: 54,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
-  },
-  introCopy: {minWidth: 0, flex: 1},
-  title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
-  subtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
-  tabs: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    padding: spacing.xxs,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
-  },
-  tabButton: {
-    minHeight: touchTarget.minimum,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xxs,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.md,
-  },
-  tabButtonSelected: {backgroundColor: colors.white, ...elevation.card},
-  tabLabel: {color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.semibold},
-  tabLabelSelected: {color: colors.flameRedAccessible, fontWeight: fontWeight.bold},
+  content: {width: '100%', maxWidth: 640, alignSelf: 'center', gap: spacing.sm},
   syncCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -950,36 +767,29 @@ const styles = StyleSheet.create({
   sectionHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   sectionTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
   countText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
-  homeCard: {gap: spacing.xs, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, ...elevation.card},
-  homeCardHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  homeIconBadge: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.md, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
-  homeCardTitleCopy: {minWidth: 0, flex: 1},
-  homeCardTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
-  homeCardArea: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  menuPreviewList: {gap: spacing.xxs, marginTop: spacing.xs},
-  menuPreviewRow: {minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs, borderRadius: radius.sm, backgroundColor: colors.surfaceMuted},
-  previewIcon: {width: 28, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white},
-  menuPreviewName: {minWidth: 0, flex: 1, color: colors.espressoBrown, fontSize: typography.small},
-  menuPreviewPrice: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
-  cardActions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs},
-  primarySmallAction: {minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.flameRedAccessible},
-  primarySmallActionText: {color: colors.white, fontSize: typography.small, fontWeight: fontWeight.bold},
-  secondarySmallAction: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
-  secondarySmallActionText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
-  relationshipCrossAction: {alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.iconSurface},
-  relationshipCrossActionText: {color: colors.espressoBrown, fontSize: typography.tiny, fontWeight: fontWeight.semibold},
+  homeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  homeCardMain: {minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  homeIconBadge: {width: 56, height: 56, borderRadius: radius.pill, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
+  homeCardCopy: {minWidth: 0, flex: 1, gap: 2},
+  homeCardTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  homeCardArea: {color: colors.textSecondary, fontSize: typography.small},
+  homeState: {flexDirection: 'row', alignItems: 'center', gap: 6},
+  cookingDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success},
+  homeStateText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.bold},
+  homeStateTextOn: {color: colors.successText},
+  circleButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.iconSurface},
   loadMoreButton: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
   loadMoreText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
-  transparencyCopy: {padding: spacing.sm, color: colors.textSecondary, fontSize: typography.tiny},
-  availabilityBadge: {alignSelf: 'flex-start', marginTop: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderRadius: radius.pill},
-  availabilityPositive: {backgroundColor: colors.successSoft},
-  availabilityPositiveText: {color: colors.successText},
-  availabilityAttention: {backgroundColor: colors.warningSoft},
-  availabilityAttentionText: {color: colors.warningText},
-  availabilityMuted: {backgroundColor: colors.surfaceMuted},
-  availabilityMutedText: {color: colors.textSecondary},
-  availabilityTitle: {fontSize: typography.tiny, fontWeight: fontWeight.bold},
-  availabilityDetail: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},
-  heartButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.iconSurface},
+  footnote: {marginTop: spacing.xxs, marginHorizontal: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
   pressed: {opacity: 0.72},
 });

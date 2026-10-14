@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from 'react';
 import {AccessibilityInfo} from 'react-native';
 import {toAppApiError} from '../../../core/http/apiError';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
-import {shortOrderNumber} from '../../chefShell/domain/chefFormat';
+import {shortCaseNumber} from '../../chefShell/domain/chefFormat';
 import {
   supportChatApi,
   type SupportChatContextRole,
@@ -35,7 +35,7 @@ const CHAT_LIMIT_CODE = 'SUPPORT_CHAT_RATE_LIMITED';
 /** The chef sees the short ticket number every other chef screen shows (#01042), not the long case number. */
 export function ticketCopy(contextRole: SupportChatContextRole, caseNumber: string): string {
   return contextRole === 'CHEF'
-    ? `Ticket ${shortOrderNumber(caseNumber)} created`
+    ? `Ticket ${shortCaseNumber(caseNumber)} created`
     : `Ticket ${caseNumber} created — our team will reply in your notifications`;
 }
 

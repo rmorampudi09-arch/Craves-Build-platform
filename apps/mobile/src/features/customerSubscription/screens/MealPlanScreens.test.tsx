@@ -1,5 +1,5 @@
 import React from 'react';
-import {Linking, Text} from 'react-native';
+import {Alert, Linking, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import type {PlanScheduleSummary} from '../../mealPlans/domain/mealPlanSchedule';
@@ -8,13 +8,15 @@ import type {
   PublicSubscriptionPlan,
   PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
-import {upcomingStartDates} from '../domain/mealPlanPresentation';
+import {formatMealPlanDate, occurrenceTimeLabel, todayIso, upcomingStartDates} from '../domain/mealPlanPresentation';
 import * as queries from '../query/mealPlanQueries';
 import * as checkout from '../state/MealPlanCheckoutContext';
 import * as subscriptionCheckout from '../state/useSubscriptionCheckout';
 import {MealPlanActivatedScreen} from './MealPlanActivatedScreen';
 import {MealPlanAddressScreen} from './MealPlanAddressScreen';
 import {MealPlanDetailScreen} from './MealPlanDetailScreen';
+import {MealPlanHistoryScreen} from './MealPlanHistoryScreen';
+import {MealPlanHowItWorksScreen} from './MealPlanHowItWorksScreen';
 import {MealPlanPaymentScreen} from './MealPlanPaymentScreen';
 import {MealPlanReviewScreen} from './MealPlanReviewScreen';
 import {MealPlansScreen} from './MealPlansScreen';
@@ -27,6 +29,7 @@ jest.mock('../../../design/reducedMotion', () => ({
   useReducedMotionPreference: () => true,
 }));
 jest.mock('../query/mealPlanQueries', () => ({
+  resolveApiImageUrl: jest.fn(() => null),
   usePublicMealPlansQuery: jest.fn(),
   useNearbyMealPlansQuery: jest.fn(),
   useHasMealPlanLocation: jest.fn(() => true),
@@ -36,6 +39,8 @@ jest.mock('../query/mealPlanQueries', () => ({
   usePlanPolicyQuery: jest.fn(),
   useMenuItemPreview: jest.fn(() => ({imageUrl: null, kitchenName: null})),
   useLatestSubscriptionPaymentQuery: jest.fn(() => ({data: undefined})),
+  useSubscriptionOccurrencesQuery: jest.fn(),
+  useSubscriptionActions: jest.fn(),
 }));
 jest.mock('../state/useSubscriptionCheckout', () => ({
   useSubscriptionCheckout: jest.fn(),
@@ -135,6 +140,14 @@ const navigation = {
   popToTop: jest.fn(),
   getParent: jest.fn(() => ({goBack: jest.fn()})),
 };
+const actions = {
+  pause: jest.fn(() => Promise.resolve()),
+  resume: jest.fn(),
+  chooseDayCredit: jest.fn(),
+  skip: jest.fn((_date: string) => Promise.resolve()),
+  cancel: jest.fn(),
+  pending: false,
+};
 const checkoutState = {
   startDate: null as string | null,
   setStartDate: jest.fn(),
@@ -175,6 +188,8 @@ function given({
   }));
   jest.mocked(queries.usePlanScheduleQuery).mockReturnValue({data: undefined} as never);
   jest.mocked(queries.usePlanPolicyQuery).mockReturnValue({data: policy} as never);
+  jest.mocked(queries.useSubscriptionOccurrencesQuery).mockReturnValue({data: []} as never);
+  jest.mocked(queries.useSubscriptionActions).mockReturnValue(actions as never);
   jest.mocked(checkout.useMealPlanCheckout).mockReturnValue(checkoutState);
   jest.mocked(checkout.useSelectedDeliveryAddress).mockReturnValue({
     address: selected,
@@ -221,6 +236,8 @@ const cards = (root: ReactTestInstance) =>
     .findAll(node => typeof node.type === 'string' && /^meal-plan-card-/.test(node.props.testID))
     .map(node => node.props.testID.replace('meal-plan-card-', ''));
 const route = (params?: object) => ({key: 'route', name: 'route', params}) as never;
+const sub = (id: string, status: string, over: Partial<CustomerSubscription> = {}) =>
+  ({id, planId: weekly.id, status, planName: null, updatedAt: '2026-10-01T00:00:00Z', ...over}) as unknown as CustomerSubscription;
 
 describe('MealPlansScreen', () => {
   const renderList = () => render(<MealPlansScreen navigation={navigation as never} route={route()} />);
@@ -255,7 +272,7 @@ describe('MealPlansScreen', () => {
   it('searches by plan name and by kitchen name', () => {
     given({covers: {[monthly.id]: {kitchenName: "Lakshmi's Kitchen"}}});
     const root = renderList();
-    const search = byLabel(root, 'Search meal plans');
+    const search = byLabel(root, 'Search meal plans or chefs');
     act(() => search.props.onChangeText('lakshmi'));
     expect(cards(root)).toEqual([monthly.id]);
     act(() => search.props.onChangeText('weekly home'));
@@ -307,24 +324,134 @@ describe('MealPlansScreen', () => {
   it('keeps a card without a schedule: name and price, no meal meta', () => {
     given({covers: {[weekly.id]: {summary, kitchenName: "Lakshmi's Kitchen"}}});
     const shown = texts(renderList());
-    expect(shown).toEqual(expect.arrayContaining(['5 meals · Lunch', "By Lakshmi's Kitchen"]));
+    expect(shown).toContain("By Lakshmi's Kitchen · 5 meals · Lunch");
     expect(shown).toEqual(expect.arrayContaining(['Monthly Dinner Plan', '₹5,200', ' / 28 days']));
     expect(shown.filter(text => text.includes('meals ·'))).toHaveLength(1);
   });
 
-  it('offers My plans in the header for one plan and as cards for several', () => {
-    const sub = (id: string, status: string) =>
-      ({id, planId: weekly.id, status, planName: null}) as unknown as CustomerSubscription;
-    given({subscriptions: [sub('cancelled', 'CANCELLED'), sub('active', 'ACTIVE')]});
-    let root = renderList();
-    act(() => byLabel(root, 'My plans').props.onPress());
+  it('opens on My plans when a plan is running, with its card and History', () => {
+    given({
+      subscriptions: [
+        sub('active', 'ACTIVE', {billingPeriod: 'WEEKLY', nextBillingDate: '2026-10-19', pauseDaysLeft: 1}),
+        sub('ended', 'EXPIRED'),
+        sub('cancelled', 'CANCELLED'),
+      ],
+      covers: {[weekly.id]: {kitchenName: 'Relangi'}},
+    });
+    const root = renderList();
+    expect(byLabel(root, 'My plans').props.accessibilityState).toEqual({selected: true});
+    expect(cards(root)).toEqual([]);
+    expect(texts(root)).toEqual(
+      expect.arrayContaining([
+        'Weekly Home Lunch Plan',
+        'Active',
+        'Relangi · Weekly',
+        'Renews Mon, 19 Oct',
+        '1 pause day left this bill. Your plan restarts by itself after a pause.',
+        'Ended and cancelled plans · 2',
+      ]),
+    );
+    act(() => byLabel(root, 'Open Weekly Home Lunch Plan').props.onPress());
     expect(navigation.navigate).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'active'});
+    act(() => byLabel(root, 'History, 2 ended and cancelled plans').props.onPress());
+    expect(navigation.navigate).toHaveBeenCalledWith('MealPlanHistory');
+  });
 
-    given({subscriptions: [sub('one', 'ACTIVE'), sub('two', 'PENDING_PAYMENT')]});
-    root = renderList();
-    expect(byLabel(root, 'My plans')).toBeUndefined();
+  it('shows the next meal and runs the plan page pause and skip flows from the card', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    given({subscriptions: [sub('active', 'ACTIVE')]});
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const serviceAt = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 16, 30).toISOString();
+    jest.mocked(queries.usePlanScheduleQuery).mockReturnValue({
+      data: {items: [{menuItemId: 'dish', menuItemName: 'Samosa', serviceTime: '16:30'}]},
+    } as never);
+    jest.mocked(queries.useSubscriptionOccurrencesQuery).mockReturnValue({
+      data: [
+        {
+          id: 'occ',
+          serviceDate: todayIso(tomorrow),
+          mealSlotCode: 'SNACK',
+          serviceAt,
+          status: 'READY_FOR_ORDER',
+          items: [{menuItemId: 'dish', quantity: 1, sequenceNumber: 1}],
+        },
+        {
+          id: 'later',
+          serviceDate: '2099-01-02',
+          mealSlotCode: 'SNACK',
+          serviceAt: '2099-01-02T11:00:00Z',
+          status: 'READY_FOR_ORDER',
+          items: [],
+        },
+      ],
+    } as never);
+    const root = renderList();
+    expect(texts(root)).toContain(`Tomorrow, ${occurrenceTimeLabel(serviceAt)} · Samosa`);
+
+    act(() => byLabel(root, 'Pause plan').props.onPress());
+    const [title, , buttons] = alert.mock.calls.at(-1) ?? [];
+    expect(title).toBe('Pause your plan?');
+    await act(async () => {
+      buttons?.find(button => button.text === 'Pause plan')?.onPress?.();
+    });
+    expect(actions.pause).toHaveBeenCalled();
+
+    act(() => byLabel(root, 'Skip a meal').props.onPress());
+    const date = root.findAllByType(Text).find(node => node.props.children === formatMealPlanDate('2099-01-02', 'long'));
+    let row = date ?? null;
+    while (row && !row.props.onPress) {
+      row = row.parent;
+    }
+    act(() => row?.props.onPress());
+    await act(async () => {
+      alert.mock.calls.at(-1)?.[2]?.find(button => button.text === 'Skip meal')?.onPress?.();
+    });
+    expect(actions.skip).toHaveBeenCalledWith('2099-01-02');
+    alert.mockRestore();
+  });
+
+  it('offers Resume instead of Pause and Skip for a paused plan', () => {
+    given({subscriptions: [sub('paused', 'PAUSED')]});
+    const root = renderList();
+    expect(texts(root)).toContain('Paused');
+    expect(byLabel(root, 'Pause plan')).toBeUndefined();
+    expect(byLabel(root, 'Skip a meal')).toBeUndefined();
+    expect(byLabel(root, 'Resume plan')).toBeDefined();
+  });
+
+  it('opens on Explore without a running plan; My plans still lists a pending payment', () => {
+    given({subscriptions: [sub('pending', 'PENDING_PAYMENT')]});
+    const root = renderList();
+    expect(cards(root)).toEqual([weekly.id, monthly.id]);
+    act(() => byLabel(root, 'My plans').props.onPress());
     act(() => byLabel(root, 'Weekly Home Lunch Plan, Payment pending').props.onPress());
-    expect(navigation.navigate).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'two'});
+    expect(navigation.navigate).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'pending'});
+  });
+
+  it('sends an empty My plans to Explore', () => {
+    given();
+    const root = renderList();
+    act(() => byLabel(root, 'My plans').props.onPress());
+    expect(texts(root)).toContain('No meal plans yet');
+    expect(cards(root)).toEqual([]);
+    const explore = root.findAll(
+      node =>
+        typeof node.type !== 'string' &&
+        node.props.accessibilityLabel === 'Explore plans' &&
+        node.props.accessibilityRole === 'button',
+    )[0];
+    act(() => explore.props.onPress());
+    expect(cards(root)).toEqual([weekly.id, monthly.id]);
+  });
+
+  it('opens How meal plans work from the header and the Explore card', () => {
+    given();
+    const root = renderList();
+    act(() => byLabel(root, 'How meal plans work').props.onPress());
+    act(() => byLabel(root, 'How meal plans work. Pause, skip, cancel and chef timings').props.onPress());
+    expect(navigation.navigate).toHaveBeenCalledTimes(2);
+    expect(navigation.navigate).toHaveBeenLastCalledWith('MealPlanHowItWorks');
   });
 
   it('leaves the meal-plan flow from the back button', () => {
@@ -336,15 +463,67 @@ describe('MealPlansScreen', () => {
     expect(parent.goBack).toHaveBeenCalled();
   });
 
-  it('shows the empty state', () => {
+  it('shows the empty state, naming the chosen period', () => {
     given({plans: []});
-    expect(texts(renderList())).toContain('No meal plans near you yet');
+    const root = renderList();
+    expect(texts(root)).toContain('No meal plans near you yet');
+    act(() => byLabel(root, '14 days').props.onPress());
+    expect(texts(root)).toContain('No 14-day meal plans near you yet');
+    act(() => byLabel(root, 'Monthly').props.onPress());
+    expect(texts(root)).toContain('No monthly meal plans near you yet');
   });
 
   it('asks for a delivery location before listing nearby plans', () => {
     given({plans: []});
     jest.mocked(queries.useHasMealPlanLocation).mockReturnValueOnce(false);
     expect(texts(renderList())).toContain('Choose a delivery location to see meal plans near you');
+  });
+});
+
+describe('MealPlanHistoryScreen', () => {
+  const renderHistory = () => render(<MealPlanHistoryScreen navigation={navigation as never} route={route()} />);
+
+  it('lists ended and cancelled plans, filters them and opens one', () => {
+    given({
+      subscriptions: [
+        sub('active', 'ACTIVE'),
+        sub('ended', 'EXPIRED', {planName: 'Monthly Tiffin plan', billingPeriod: 'MONTHLY'}),
+        sub('cancelled', 'CANCELLED'),
+      ],
+    });
+    const root = renderHistory();
+    expect(byLabel(root, 'Monthly Tiffin plan, Monthly, Ended')).toBeDefined();
+    expect(byLabel(root, 'Weekly Home Lunch Plan, Weekly, Active')).toBeUndefined();
+
+    act(() => byLabel(root, 'Cancelled').props.onPress());
+    expect(byLabel(root, 'Monthly Tiffin plan, Monthly, Ended')).toBeUndefined();
+    act(() => byLabel(root, 'Weekly Home Lunch Plan, Weekly, Cancelled').props.onPress());
+    expect(navigation.navigate).toHaveBeenCalledWith('MyMealPlan', {subscriptionId: 'cancelled'});
+  });
+
+  it('says when there is nothing in the chosen list', () => {
+    given({subscriptions: [sub('active', 'ACTIVE')]});
+    const root = renderHistory();
+    expect(texts(root)).toContain('No past plans yet');
+    act(() => byLabel(root, 'Completed').props.onPress());
+    expect(texts(root)).toContain('No completed plans yet');
+  });
+});
+
+describe('MealPlanHowItWorksScreen', () => {
+  it('shows the meal plan rules and goes back', () => {
+    const root = render(<MealPlanHowItWorksScreen navigation={navigation as never} route={route()} />);
+    expect(texts(root)).toEqual(
+      expect.arrayContaining([
+        'How meal plans work',
+        'When the chef gets your order',
+        'Your controls',
+        'days per 14-day bill',
+        'Delivery',
+      ]),
+    );
+    act(() => byLabel(root, 'Go back').props.onPress());
+    expect(navigation.goBack).toHaveBeenCalled();
   });
 });
 

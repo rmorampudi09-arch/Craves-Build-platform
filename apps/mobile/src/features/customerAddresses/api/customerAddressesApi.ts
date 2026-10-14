@@ -50,7 +50,7 @@ export class CustomerAddressesContractError extends Error {
   readonly code = 'invalid-response' as const;
 
   constructor() {
-    super('Customer addresses response did not match the approved contract.');
+    super('We could not read your saved addresses. Please try again.');
     this.name = 'CustomerAddressesContractError';
   }
 }

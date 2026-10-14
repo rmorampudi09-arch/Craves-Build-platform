@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -56,8 +57,7 @@ type EditProfileNavigation = NativeStackNavigationProp<
   'CustomerProfileEdit'
 >;
 
-const AVATAR_BLOCKED_COPY =
-  'Photo updates are not available yet because the approved customer profile API does not expose an avatar upload operation.';
+const AVATAR_BLOCKED_COPY = 'Adding a profile photo is coming soon.';
 
 function EditProfileSkeleton() {
   return (
@@ -103,7 +103,7 @@ function EditProfileForm({
       <Pressable accessibilityRole="button" onPress={onAvatarPress} style={styles.photoCopyButton}>
         <Text style={styles.photoAction}>Change profile photo</Text>
       </Pressable>
-      <Text style={styles.photoHelper}>Photo upload will be enabled only when its backend contract is approved.</Text>
+      <Text style={styles.photoHelper}>{AVATAR_BLOCKED_COPY}</Text>
 
       <View style={styles.fields}>
         <InputField
@@ -209,7 +209,7 @@ export function CustomerProfileEditScreen() {
   const handleAvatarPress = useCallback(() => {
     const validation = validateCustomerProfileAvatarSelection();
     if (validation.status === 'unsupported') {
-      Alert.alert('Profile photo unavailable', AVATAR_BLOCKED_COPY, [{text: 'OK'}]);
+      Alert.alert('Profile photo', AVATAR_BLOCKED_COPY, [{text: 'OK'}]);
     }
   }, []);
 
@@ -255,7 +255,7 @@ export function CustomerProfileEditScreen() {
       return (
         <TerminalState
           title="Sign in required"
-          description="Sign in again before changing your customer profile."
+          description="Sign in again before changing your profile."
         />
       );
     }
@@ -276,9 +276,9 @@ export function CustomerProfileEditScreen() {
           <EditProfileSkeleton />
         );
       case 'empty':
-        return <TerminalState title="Profile not available" description="No editable customer profile was returned." />;
+        return <TerminalState title="Profile not available" description="We could not find a profile for this account. Please try again." />;
       case 'unsupported':
-        return <TerminalState title="Profile unavailable" description="The approved customer profile contract cannot provide this state yet." />;
+        return <TerminalState title="Profile unavailable" description="We could not show your profile right now. Please try again." />;
       case 'error':
         return (
           <TerminalState
@@ -292,8 +292,9 @@ export function CustomerProfileEditScreen() {
   })();
 
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding testID="customer-profile-edit">
-      <View style={styles.root}>
+    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-profile-edit">
+      {/* Edge-to-edge Android no longer shrinks the window for the keyboard, so the screen makes room itself. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.root}>
         <View style={styles.header}>
           <Pressable
             accessibilityLabel="Back to profile"
@@ -314,7 +315,7 @@ export function CustomerProfileEditScreen() {
           showsVerticalScrollIndicator={false}>
           {body}
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </ScreenShell>
   );
 }

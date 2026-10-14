@@ -165,6 +165,11 @@ export function subscriptionStatusPresentation(status: string): {
   );
 }
 
+/** Ended and cancelled plans live in History; every other plan is on My plans. */
+export function isPastSubscription(status: string): boolean {
+  return status === 'EXPIRED' || status === 'CANCELLED';
+}
+
 type OccurrenceStep = 0 | 1 | 2 | null;
 
 const AWAITING_PAYMENT = {label: 'Awaiting payment', tone: 'warning', step: 0} as const;

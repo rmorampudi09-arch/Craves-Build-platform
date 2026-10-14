@@ -11,7 +11,9 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
+import {BlurTargetView} from 'expo-blur';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import {
   useFocusEffect,
   useIsFocused,
@@ -24,6 +26,7 @@ import type {CustomerDishDetailStackParamList} from '../../../app/navigation/typ
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
+  borderWidth,
   colors,
   elevation,
   fontWeight,
@@ -94,11 +97,9 @@ type KitchenProfileNavigation = NavigationProp<
 >;
 
 const REVIEW_PREVIEW_LIMIT = 3;
-/** The chef's kitchen photos play here as a slideshow; the space stays empty when there are none. */
-const PHOTO_SPACE_HEIGHT = 200;
+/** Kitchen photos are 4:3; they play whole at full width from the top of the screen. */
+const PHOTO_ASPECT = 3 / 4;
 const AVATAR_SIZE = 92;
-/** The header shows the kitchen name once the avatar has scrolled under it. */
-const HEADER_TITLE_OFFSET = PHOTO_SPACE_HEIGHT + AVATAR_SIZE / 2;
 
 function formatReviewPublishedAt(value: string): string {
   const date = new Date(value);
@@ -156,9 +157,19 @@ export function CustomerKitchenProfileScreen() {
   const [reviewPreview, setReviewPreview] = useState<PublicKitchenReview[]>([]);
   const [reviewLoadError, setReviewLoadError] = useState<string | null>(null);
   const {width: windowWidth} = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const screenFocused = useIsFocused();
+  const photoTarget = useRef<View | null>(null);
 
   const profile = profileQuery.data;
+  const hasPhotos = (profile?.kitchenPhotoUrls.length ?? 0) > 0;
+  const headerHeight = insets.top + spacing.xxs + touchTarget.minimum + spacing.xs;
+  // Without photos the avatar starts just under the header buttons.
+  const photoHeight = hasPhotos
+    ? Math.round(windowWidth * PHOTO_ASPECT)
+    : headerHeight + AVATAR_SIZE / 2;
+  /** The header turns white and shows the kitchen name once the avatar has scrolled under it. */
+  const headerTitleOffset = photoHeight + AVATAR_SIZE / 2 - headerHeight;
   const queryError = profileQuery.error ? toAppApiError(profileQuery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const sections = useMemo(
@@ -221,7 +232,7 @@ export function CustomerKitchenProfileScreen() {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
       scrollOffsetRef.current = contentOffset.y;
-      setHeaderTitleVisible(contentOffset.y > HEADER_TITLE_OFFSET);
+      setHeaderTitleVisible(contentOffset.y > headerTitleOffset);
       if (sections.length === 0) return;
       // The last sections may be too short to reach the tabs, so the end of the page selects the last one.
       const atEnd =
@@ -235,7 +246,7 @@ export function CustomerKitchenProfileScreen() {
           : getActiveMenuSectionIndex(tops, contentOffset.y + tabsHeightRef.current + 1),
       );
     },
-    [sections],
+    [headerTitleOffset, sections],
   );
 
   const scrollToSection = (index: number) => {
@@ -439,57 +450,49 @@ export function CustomerKitchenProfileScreen() {
   const showDescriptionToggle = (profile.biography?.length ?? 0) > 180;
   const dishCount = profile.menuItems.length;
   const facts = [
-    {icon: 'silverware-fork-knife', label: `${dishCount} ${dishCount === 1 ? 'dish' : 'dishes'}`},
-    {icon: 'food-variant', label: getCustomerKitchenFoodMixLabel(profile.menuItems)},
-    {icon: 'clock-outline', label: formatCustomerKitchenPrepRange(profile.menuItems)},
-  ].filter((fact): fact is {icon: string; label: string} => Boolean(fact.label));
+    `${dishCount} ${dishCount === 1 ? 'dish' : 'dishes'}`,
+    getCustomerKitchenFoodMixLabel(profile.menuItems),
+    formatCustomerKitchenPrepRange(profile.menuItems),
+  ].filter(Boolean);
+  const subtitle = [
+    profile.displayName && profile.displayName !== profile.kitchenName ? profile.kitchenName : null,
+    location,
+    joinedLabel,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  // Over the photo the buttons are glass with white icons; on the white header they are soft red tiles.
+  const onPhoto = hasPhotos && !headerTitleVisible;
+  const headerControlStyle = [styles.headerControl, !onPhoto && styles.headerControlSolid];
+  const backButton = (
+    <Pressable
+      accessibilityLabel="Back"
+      accessibilityRole="button"
+      onPress={() => navigation.goBack()}
+      style={({pressed}) => [headerControlStyle, pressed && styles.pressed]}>
+      <Icon name="arrow-left" surface={false} color={onPhoto ? colors.white : colors.flameRed} />
+    </Pressable>
+  );
+  const heartButton = (
+    <CustomerFavoriteHeartButton
+      favorite={kitchenFavorite}
+      pending={toggleFavoriteKitchen.isPending}
+      disabled={!favoriteKitchens.identityId}
+      inactiveColor={onPhoto ? colors.white : colors.flameRed}
+      itemLabel={kitchenName}
+      onToggle={handleKitchenFavorite}
+      style={headerControlStyle}
+    />
+  );
 
   return (
     <ScreenShell
-      edges={['top', 'bottom']}
+      backgroundColor={colors.white}
+      edges={['bottom']}
       keyboardAvoiding={false}
+      statusBarStyle={onPhoto ? 'light-content' : 'dark-content'}
       testID="customer-kitchen-profile">
       <View style={styles.screen}>
-        <View style={styles.header}>
-          <LiquidGlassSurface appearance="home" style={styles.headerGlass}>
-            <Pressable
-              accessibilityLabel="Back"
-              accessibilityRole="button"
-              onPress={() => navigation.goBack()}
-              style={({pressed}) => [styles.headerGlassControl, pressed && styles.pressed]}>
-              <Icon name="arrow-left" surface={false} />
-            </Pressable>
-          </LiquidGlassSurface>
-          <View style={styles.headerTitleRow}>
-            {headerTitleVisible ? (
-              <>
-                <View style={styles.headerAvatar}>
-                  <CustomerChefFace
-                    url={profile.chefPhotoUrl}
-                    fallback={<Text style={styles.headerAvatarText}>{initials}</Text>}
-                  />
-                </View>
-                <Text numberOfLines={1} style={styles.headerTitle}>
-                  {kitchenName}
-                </Text>
-              </>
-            ) : null}
-          </View>
-          <LiquidGlassSurface appearance="home" style={styles.headerGlass}>
-            <CustomerFavoriteHeartButton
-              favorite={kitchenFavorite}
-              pending={toggleFavoriteKitchen.isPending}
-              disabled={!favoriteKitchens.identityId}
-              itemLabel={kitchenName}
-              onToggle={handleKitchenFavorite}
-              style={styles.headerGlassControl}
-            />
-          </LiquidGlassSurface>
-        </View>
-        {interactionNotice ? (
-          <RecoverableErrorBanner message={interactionNotice} style={styles.pinnedNotice} />
-        ) : null}
-
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
@@ -507,24 +510,42 @@ export function CustomerKitchenProfileScreen() {
                 }
                 void loadPublicReviews();
               }}
+              progressViewOffset={headerHeight}
               refreshing={profileQuery.isRefetching && revalidatingItemId === null}
               tintColor={colors.flameRed}
             />
           }
           showsVerticalScrollIndicator={false}>
           <View>
-            {profile.kitchenPhotoUrls.length > 0 ? (
-              <KitchenImageCarousel
-                imageUrls={profile.kitchenPhotoUrls}
-                width={windowWidth}
-                height={PHOTO_SPACE_HEIGHT}
-                kitchenName={profile.kitchenName}
-                active={screenFocused}
-                onPress={() => undefined}
-              />
-            ) : (
-              <View style={styles.photoSpace} />
-            )}
+            <View style={{height: photoHeight}}>
+              {hasPhotos ? (
+                <>
+                  <BlurTargetView ref={photoTarget} style={StyleSheet.absoluteFill}>
+                    <KitchenImageCarousel
+                      imageUrls={profile.kitchenPhotoUrls}
+                      width={windowWidth}
+                      height={photoHeight}
+                      kitchenName={profile.kitchenName}
+                      active={screenFocused}
+                      onPress={() => undefined}
+                      pager="glass-right"
+                    />
+                  </BlurTargetView>
+                  {/* Keeps the white status bar readable on a bright photo. */}
+                  <View pointerEvents="none" style={[styles.photoShade, {height: headerHeight}]}>
+                    <Svg width="100%" height="100%">
+                      <Defs>
+                        <LinearGradient id="kitchenPhotoShade" x1="0" y1="0" x2="0" y2="1">
+                          <Stop offset="0" stopColor={colors.black} stopOpacity={0.3} />
+                          <Stop offset="1" stopColor={colors.black} stopOpacity={0} />
+                        </LinearGradient>
+                      </Defs>
+                      <Rect width="100%" height="100%" fill="url(#kitchenPhotoShade)" />
+                    </Svg>
+                  </View>
+                </>
+              ) : null}
+            </View>
             <View style={styles.identity}>
               <View style={styles.avatar}>
                 <CustomerChefFace
@@ -560,34 +581,12 @@ export function CustomerKitchenProfileScreen() {
               <Text accessibilityRole="header" style={styles.kitchenName}>
                 {kitchenName}
               </Text>
-              {profile.displayName && profile.displayName !== profile.kitchenName ? (
-                <Text style={styles.legalKitchenName}>{profile.kitchenName}</Text>
-              ) : null}
-              {location || joinedLabel ? (
-                <View style={styles.locationRow}>
-                  {location ? (
-                    <Icon
-                      name="location-outline"
-                      size={17}
-                      color={colors.textSecondary}
-                      surface={false}
-                    />
-                  ) : null}
-                  <Text style={styles.location}>
-                    {[location, joinedLabel].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-              ) : null}
+              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
               {facts.length > 0 ? (
                 <View style={styles.facts}>
                   {facts.map(fact => (
-                    <View key={fact.icon} style={styles.fact}>
-                      <MaterialDesignIcons
-                        name={fact.icon as React.ComponentProps<typeof MaterialDesignIcons>['name']}
-                        size={16}
-                        color={colors.flameRedAccessible}
-                      />
-                      <Text style={styles.factText}>{fact.label}</Text>
+                    <View key={fact} style={styles.fact}>
+                      <Text style={styles.factText}>{fact}</Text>
                     </View>
                   ))}
                 </View>
@@ -700,38 +699,44 @@ export function CustomerKitchenProfileScreen() {
             </View>
           </View>
 
-          {/* Sticky category tabs; must stay child index 1 of the ScrollView. */}
+          {/* Sticky category tabs; must stay child index 1 of the ScrollView.
+              The clear spacer above them (pulled up by the same height) makes them stop under the header. */}
           <View
             onLayout={event => {
               tabsHeightRef.current = event.nativeEvent.layout.height;
             }}
-            style={sections.length > 0 ? styles.tabsBar : undefined}>
+            pointerEvents="box-none"
+            style={sections.length > 0 ? {marginTop: -headerHeight} : undefined}>
             {sections.length > 0 ? (
-              <ScrollView
-                ref={tabsScrollRef}
-                contentContainerStyle={styles.tabsContent}
-                horizontal
-                showsHorizontalScrollIndicator={false}>
-                {sections.map((section, index) => {
-                  const selected = index === activeSection;
-                  return (
-                    <Pressable
-                      key={section.category}
-                      accessibilityRole="tab"
-                      accessibilityState={{selected}}
-                      onLayout={event => {
-                        tabXRef.current[index] = event.nativeEvent.layout.x;
-                      }}
-                      onPress={() => scrollToSection(index)}
-                      style={[styles.tab, selected && styles.tabSelected]}>
-                      <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
-                        {menuCategoryLabel(section.category)}
-                      </Text>
-                      <Text style={styles.tabCount}>{section.items.length}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+              <>
+                <View pointerEvents="none" style={{height: headerHeight}} />
+                <ScrollView
+                  ref={tabsScrollRef}
+                  contentContainerStyle={styles.tabsContent}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.tabsBar}>
+                  {sections.map((section, index) => {
+                    const selected = index === activeSection;
+                    return (
+                      <Pressable
+                        key={section.category}
+                        accessibilityRole="tab"
+                        accessibilityState={{selected}}
+                        onLayout={event => {
+                          tabXRef.current[index] = event.nativeEvent.layout.x;
+                        }}
+                        onPress={() => scrollToSection(index)}
+                        style={[styles.tab, selected && styles.tabSelected]}>
+                        <Text style={[styles.tabText, selected && styles.tabTextSelected]}>
+                          {menuCategoryLabel(section.category)}
+                        </Text>
+                        <Text style={styles.tabCount}>{section.items.length}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </>
             ) : null}
           </View>
 
@@ -796,6 +801,49 @@ export function CustomerKitchenProfileScreen() {
             )}
           </View>
         </ScrollView>
+
+        <View pointerEvents="box-none" style={styles.headerOverlay}>
+          <View
+            pointerEvents={headerTitleVisible ? 'auto' : 'box-none'}
+            style={[
+              styles.header,
+              {paddingTop: insets.top + spacing.xxs},
+              headerTitleVisible && styles.headerSolid,
+            ]}>
+            {onPhoto ? (
+              <LiquidGlassSurface appearance="home" blurTarget={photoTarget} style={styles.headerGlass}>
+                {backButton}
+              </LiquidGlassSurface>
+            ) : (
+              backButton
+            )}
+            <View pointerEvents="none" style={styles.headerTitleRow}>
+              {headerTitleVisible ? (
+                <>
+                  <View style={styles.headerAvatar}>
+                    <CustomerChefFace
+                      url={profile.chefPhotoUrl}
+                      fallback={<Text style={styles.headerAvatarText}>{initials}</Text>}
+                    />
+                  </View>
+                  <Text numberOfLines={1} style={styles.headerTitle}>
+                    {kitchenName}
+                  </Text>
+                </>
+              ) : null}
+            </View>
+            {onPhoto ? (
+              <LiquidGlassSurface appearance="home" blurTarget={photoTarget} style={styles.headerGlass}>
+                {heartButton}
+              </LiquidGlassSurface>
+            ) : (
+              heartButton
+            )}
+          </View>
+          {interactionNotice ? (
+            <RecoverableErrorBanner message={interactionNotice} style={styles.pinnedNotice} />
+          ) : null}
+        </View>
       </View>
     </ScreenShell>
   );
@@ -804,15 +852,25 @@ export function CustomerKitchenProfileScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.surfaceBase,
+    backgroundColor: colors.white,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   header: {
-    minHeight: touchTarget.comfortable,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  headerSolid: {
     backgroundColor: colors.white,
+    borderBottomWidth: borderWidth.standard,
+    borderBottomColor: colors.border,
   },
   headerGlass: {
     width: touchTarget.minimum,
@@ -820,12 +878,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     overflow: 'hidden',
   },
-  headerGlassControl: {
-    width: '100%',
-    height: '100%',
+  headerControl: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
+  },
+  headerControlSolid: {
+    backgroundColor: colors.iconSurface,
   },
   headerTitleRow: {
     flex: 1,
@@ -856,14 +918,16 @@ const styles = StyleSheet.create({
   },
   pinnedNotice: {
     marginHorizontal: spacing.md,
-    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
   },
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
-  photoSpace: {
-    height: PHOTO_SPACE_HEIGHT,
-    backgroundColor: colors.white,
+  photoShade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   identity: {
     paddingHorizontal: spacing.md,
@@ -902,24 +966,13 @@ const styles = StyleSheet.create({
   currentAvailabilityOpenText: {color: colors.success},
   currentAvailabilityClosedText: {color: colors.warningText},
   kitchenName: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     color: colors.espressoBrown,
     fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
+    fontWeight: fontWeight.bold,
   },
-  legalKitchenName: {
+  subtitle: {
     marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xs,
-  },
-  location: {
-    flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.small,
   },
@@ -930,11 +983,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   fact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs + 2,
-    height: 30,
-    paddingHorizontal: spacing.sm - 2,
+    height: 32,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceMuted,
   },
@@ -944,7 +995,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   bodyText: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     color: colors.textPrimary,
     fontSize: typography.body,
   },
@@ -1062,7 +1113,8 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
   },
   tabsBar: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexGrow: 0,
+    borderBottomWidth: borderWidth.standard,
     borderBottomColor: colors.border,
     backgroundColor: colors.white,
   },
@@ -1079,7 +1131,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabSelected: {
-    borderBottomColor: colors.flameRed,
+    borderBottomColor: colors.flameRedAccessible,
   },
   tabText: {
     color: colors.textSecondary,
@@ -1088,6 +1140,7 @@ const styles = StyleSheet.create({
   },
   tabTextSelected: {
     color: colors.espressoBrown,
+    fontWeight: fontWeight.bold,
   },
   tabCount: {
     color: colors.textSecondary,

@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Alert, Linking, Modal} from 'react-native';
+import {Alert, KeyboardAvoidingView, Linking, Modal, StyleSheet} from 'react-native';
 import * as Location from 'expo-location';
 import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
@@ -388,68 +388,73 @@ export function CustomerAddressEditorModal({
       onRequestClose={back}
       presentationStyle="fullScreen"
       visible>
-      <ScreenShell edges={['top', 'bottom']} keyboardAvoiding testID="customer-address-editor">
-        {step === 'search' ? (
-          <AddressSearchStep
-            limitedSeconds={search.limitedSeconds}
-            locating={locating}
-            locationDenied={locationDenied}
-            locationError={locationError}
-            onBack={back}
-            onChangeQuery={search.setQuery}
-            onOpenSettings={() => {
-              Linking.openSettings().catch(() => undefined);
-            }}
-            onPickResult={pickResult}
-            onPickSavedAddress={onPickSavedAddress ? pickSaved : undefined}
-            onRetrySearch={search.retry}
-            onSetOnMap={() => advance('map')}
-            onUseCurrentLocation={() => {
-              locate('search').catch(() => undefined);
-            }}
-            query={search.query}
-            savedAddresses={
-              onPickSavedAddress ? addresses.filter(isCustomerAddressDeliveryReady) : []
-            }
-            state={search.state}
-          />
-        ) : step === 'map' ? (
-          <AddressMapStep
-            limitedSeconds={lookupSeconds}
-            locating={locating}
-            locationNotice={mapNotice}
-            lookup={lookup}
-            onBack={back}
-            onCenterChange={placePin}
-            onConfirm={confirmPin}
-            onEnterManually={enterManually}
-            onOpenSearch={() => advance('search')}
-            onRetryLookup={() => {
-              lookUpPin(pin).catch(() => undefined);
-            }}
-            onUseCurrentLocation={() => {
-              locate('map').catch(() => undefined);
-            }}
-            pin={pin}
-          />
-        ) : (
-          <AddressDetailsStep
-            draft={draft}
-            fieldErrors={fieldErrors}
-            formError={formError}
-            houseNeedsInput={houseNeedsInput}
-            mode={mode}
-            onBack={back}
-            onChangeLabel={changeLabel}
-            onChangePin={changePin}
-            onChangeText={updateText}
-            onSave={() => {
-              save().catch(() => undefined);
-            }}
-            saving={saving}
-          />
-        )}
+      <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false} testID="customer-address-editor">
+        {/* Edge-to-edge Android no longer shrinks the window for the keyboard, so the screen makes room itself. */}
+        <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+          {step === 'search' ? (
+            <AddressSearchStep
+              limitedSeconds={search.limitedSeconds}
+              locating={locating}
+              locationDenied={locationDenied}
+              locationError={locationError}
+              onBack={back}
+              onChangeQuery={search.setQuery}
+              onOpenSettings={() => {
+                Linking.openSettings().catch(() => undefined);
+              }}
+              onPickResult={pickResult}
+              onPickSavedAddress={onPickSavedAddress ? pickSaved : undefined}
+              onRetrySearch={search.retry}
+              onSetOnMap={() => advance('map')}
+              onUseCurrentLocation={() => {
+                locate('search').catch(() => undefined);
+              }}
+              query={search.query}
+              savedAddresses={
+                onPickSavedAddress ? addresses.filter(isCustomerAddressDeliveryReady) : []
+              }
+              state={search.state}
+            />
+          ) : step === 'map' ? (
+            <AddressMapStep
+              limitedSeconds={lookupSeconds}
+              locating={locating}
+              locationNotice={mapNotice}
+              lookup={lookup}
+              onBack={back}
+              onCenterChange={placePin}
+              onConfirm={confirmPin}
+              onEnterManually={enterManually}
+              onOpenSearch={() => advance('search')}
+              onRetryLookup={() => {
+                lookUpPin(pin).catch(() => undefined);
+              }}
+              onUseCurrentLocation={() => {
+                locate('map').catch(() => undefined);
+              }}
+              pin={pin}
+            />
+          ) : (
+            <AddressDetailsStep
+              draft={draft}
+              fieldErrors={fieldErrors}
+              formError={formError}
+              houseNeedsInput={houseNeedsInput}
+              mode={mode}
+              onBack={back}
+              onChangeLabel={changeLabel}
+              onChangePin={changePin}
+              onChangeText={updateText}
+              onSave={() => {
+                save().catch(() => undefined);
+              }}
+              saving={saving}
+            />
+          )}
+        </KeyboardAvoidingView>
       </ScreenShell>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({flex: {flex: 1}});

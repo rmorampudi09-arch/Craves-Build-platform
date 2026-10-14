@@ -148,7 +148,7 @@ export function buildCustomerEmptyStateModel(
         illustration: 'star',
         title: 'No reviews yet',
         description:
-          'Eligible delivered orders will appear here when the approved review-list capability is available.',
+          'Your reviews of delivered orders will show here.',
         primaryAction: action('VIEW_ORDERS', 'View orders'),
       };
     case 'NO_COUPONS':

@@ -68,8 +68,9 @@ describe('the two customer referral screens', () => {
   });
   it('opens the customer share screen, not the native sheet, from Share invitation', () => {
     render(<CustomerReferralScreen />);
-    expect(texts()).toContain('Not active');
-    expect(texts()).toContain('Only the invitation message is shared.');
+    expect(texts()).toContain('Coming soon');
+    expect(texts()).toContain('only your invitation message is shared.');
+    expect(texts()).not.toMatch(/\bCustomer\b/);
     act(() => press('Share invitation'));
     expect(mockNavigation.navigate).toHaveBeenCalledWith(
       'CustomerShareInvitation',

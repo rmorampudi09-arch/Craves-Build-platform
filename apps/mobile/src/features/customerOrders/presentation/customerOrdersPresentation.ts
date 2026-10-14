@@ -17,7 +17,7 @@ export interface CustomerOrdersTabDefinition {
 }
 
 export const CUSTOMER_ORDERS_TABS: readonly CustomerOrdersTabDefinition[] = [
-  {key: 'ALL', label: 'All Orders'},
+  {key: 'ALL', label: 'All'},
   {key: 'UPCOMING', label: 'Upcoming'},
   {key: 'COMPLETED', label: 'Completed'},
   {key: 'CANCELLED', label: 'Cancelled'},

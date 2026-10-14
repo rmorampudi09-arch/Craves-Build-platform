@@ -1,10 +1,10 @@
 import React from 'react';
-import {Alert, FlatList, Image, StyleSheet, Text, View} from 'react-native';
+import {Alert, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
 import {
   borderWidth,
   colors,
+  elevation,
   fontWeight,
   iconSize,
   radius,
@@ -25,8 +25,11 @@ import {
   RecoverableErrorBanner,
   ScreenShell,
   TerminalState,
+  type IconName,
 } from '../../../shared/components';
+import {UnderlineTabs} from '../../../shared/components/UnderlineTabs';
 import {
+  billingPeriodLabel,
   billingUnit,
   weeksPerBill,
   type BillingUnit,
@@ -34,39 +37,55 @@ import {
 } from '../../mealPlans/domain/mealPlanSchedule';
 import type {
   CustomerSubscription,
+  CustomerSubscriptionOccurrence,
   PublicSubscriptionPlan,
 } from '../api/customerSubscriptionApi';
 import {
   FoodTypePill,
-  MealPlanHeader,
+  IconTile,
+  MealPlanPageHeader,
   MealPlanPhoto,
   PlanRating,
 } from '../components/MealPlanUi';
 import {
+  formatMealPlanDate,
   formatPlanPrice,
+  isPastSubscription,
+  nextOccurrence,
+  occurrenceDishNames,
+  occurrenceTimeLabel,
   subscriptionStatusPresentation,
+  todayIso,
 } from '../domain/mealPlanPresentation';
+import type {MealPlanStackParamList} from '../navigation/CustomerMealPlanNavigator';
 import {
+  resolveApiImageUrl,
   useMySubscriptionsQuery,
   usePlanCover,
+  usePublicMealPlansQuery,
   useHasMealPlanLocation,
   useNearbyMealPlansQuery,
 } from '../query/mealPlanQueries';
+import {usePlanControls} from '../state/usePlanControls';
 import {
   alertProfileIncomplete,
   useInterruptedPaymentRecovery,
 } from '../state/useSubscriptionCheckout';
 
-type Props = NativeStackScreenProps<CustomerMealPlanStackParamList, 'MealPlans'>;
+type Props = NativeStackScreenProps<MealPlanStackParamList, 'MealPlans'>;
 type Filter = 'all' | BillingUnit;
+type Tab = 'mine' | 'explore';
 
-const FILTERS: {key: Filter; label: string}[] = [
-  {key: 'all', label: 'All'},
-  {key: 'week', label: 'Weekly'},
-  {key: '14 days', label: '14 days'},
-  {key: '28 days', label: 'Monthly'},
+const TABS: {key: Tab; label: string}[] = [
+  {key: 'mine', label: 'My plans'},
+  {key: 'explore', label: 'Explore plans'},
 ];
-const BANNER_IMAGE = require('../../../assets/home/home-kitchen-picks.jpg');
+const FILTERS: {key: Filter; label: string; empty: string}[] = [
+  {key: 'all', label: 'All', empty: 'No meal plans near you yet'},
+  {key: 'week', label: 'Weekly', empty: 'No weekly meal plans near you yet'},
+  {key: '14 days', label: '14 days', empty: 'No 14-day meal plans near you yet'},
+  {key: '28 days', label: 'Monthly', empty: 'No monthly meal plans near you yet'},
+];
 
 function mealMeta(summary: PlanScheduleSummary, unit: BillingUnit): string {
   const count = summary.weekly ? summary.mealCount * weeksPerBill(unit) : summary.mealCount;
@@ -88,6 +107,7 @@ function PlanCard({
   onPress: () => void;
 }) {
   const {imageUrl, kitchenName, summary, rating} = usePlanCover(plan.id);
+  const [failedUri, setFailedUri] = React.useState<string | null>(null);
   const matches = !search || `${plan.name}\n${kitchenName ?? ''}`.toLowerCase().includes(search);
   React.useEffect(() => onMatch(plan.id, matches), [matches, onMatch, plan.id]);
   if (!matches) {
@@ -95,14 +115,30 @@ function PlanCard({
   }
   const unit = billingUnit(plan.billingPeriod);
   const price = formatPlanPrice(plan.amount, plan.currency);
+  // A photo sits on top; without one the card is a row with a chef-hat tile.
+  const photo = imageUrl && imageUrl !== failedUri ? imageUrl : null;
+  const meta = [kitchenName ? `By ${kitchenName}` : null, summary ? mealMeta(summary, unit) : null]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <PressableCard
       accessibilityLabel={`${plan.name}, ${price} per ${unit}`}
       onPress={onPress}
-      style={styles.planCard}
+      style={[styles.planCard, photo ? styles.planCardPhoto : styles.planCardRow]}
       testID={`meal-plan-card-${plan.id}`}>
-      <MealPlanPhoto uri={imageUrl} size={{width: 104, height: 120}} />
-      <View style={styles.planBody}>
+      {photo ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          accessible={false}
+          onError={() => setFailedUri(photo)}
+          resizeMode="cover"
+          source={{uri: photo}}
+          style={styles.cover}
+        />
+      ) : (
+        <IconTile icon="chef" size={64} glyph={iconSize.lg} square background={colors.surfaceMuted} />
+      )}
+      <View style={photo ? styles.planBodyUnderPhoto : styles.planBodyRow}>
         <View style={styles.planTitleRow}>
           <Text
             allowFontScaling={textDefaults.allowFontScaling}
@@ -110,70 +146,182 @@ function PlanCard({
             style={styles.planName}>
             {plan.name}
           </Text>
-          <PlanRating rating={rating} />
+          <FoodTypePill foodType={summary?.foodType} />
         </View>
-        {kitchenName ? (
-          <Text
-            allowFontScaling={textDefaults.allowFontScaling}
-            numberOfLines={1}
-            style={styles.secondary}>
-            By {kitchenName}
+        {meta ? (
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+            {meta}
           </Text>
-        ) : null}
-        {summary ? (
-          <View style={styles.metaRow}>
-            <FoodTypePill foodType={summary.foodType} />
-            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
-              {mealMeta(summary, unit)}
-            </Text>
-          </View>
         ) : null}
         <View style={styles.priceRow}>
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.price}>
             {price}
             <Text style={styles.per}> / {unit}</Text>
           </Text>
-          <Icon
-            name="chevron-right"
-            size={iconSize.lg}
-            color={colors.textSecondary}
-            surface={false}
-          />
+          <PlanRating rating={rating} />
         </View>
       </View>
     </PressableCard>
   );
 }
 
-function SubscriptionCard({
-  subscription,
-  planName,
-  onPress,
-}: {
-  subscription: CustomerSubscription;
-  planName: string;
+/** "Tomorrow, 4:30 PM · Samosa". */
+function nextMealLine(occurrence: CustomerSubscriptionOccurrence, dishes: string, now: Date): string {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const day =
+    occurrence.serviceDate === todayIso(now)
+      ? 'Today'
+      : occurrence.serviceDate === todayIso(tomorrow)
+        ? 'Tomorrow'
+        : formatMealPlanDate(occurrence.serviceDate, 'short');
+  return `${day}, ${occurrenceTimeLabel(occurrence.serviceAt)} · ${dishes}`;
+}
+
+interface CardAction {
+  icon: IconName;
+  label: string;
+  accessibilityLabel: string;
   onPress: () => void;
-}) {
+  disabled: boolean;
+}
+
+/** One current plan; Pause, Resume and Skip run the same flows as the plan page. */
+function MyPlanCard({subscription, onOpen}: {subscription: CustomerSubscription; onOpen: () => void}) {
+  const plan = usePublicMealPlansQuery().data?.find(candidate => candidate.id === subscription.planId);
+  const cover = usePlanCover(subscription.planId);
+  const controls = usePlanControls(subscription.id, subscription);
+  const {pausing, actions} = controls;
+  const name = subscription.planName ?? plan?.name ?? 'Meal plan';
+  const period = subscription.billingPeriod ?? plan?.billingPeriod;
   const status = subscriptionStatusPresentation(subscription.status);
+  const byLine = [cover.kitchenName, period ? billingPeriodLabel(period) : null].filter(Boolean).join(' · ');
+  const when =
+    subscription.status === 'ACTIVE' && subscription.nextBillingDate
+      ? `Renews ${formatMealPlanDate(subscription.nextBillingDate, 'short')}`
+      : pausing.restartNote;
+  const next = nextOccurrence(controls.occurrences, controls.now);
+  const nextLine = next
+    ? nextMealLine(next, occurrenceDishNames(next, controls.scheduleItems).join(' + '), controls.now)
+    : null;
+  const left = subscription.pauseDaysLeft;
+  const pauseLine =
+    typeof left === 'number' && (subscription.status === 'ACTIVE' || subscription.status === 'PAUSED')
+      ? left === 0
+        ? 'No pause days left this bill.'
+        : `${left} pause ${left === 1 ? 'day' : 'days'} left this bill. Your plan restarts by itself after a pause.`
+      : null;
+
+  const buttons: CardAction[] = [];
+  if (controls.canPause) {
+    buttons.push({
+      icon: 'pause',
+      label: 'Pause',
+      accessibilityLabel: pausing.pauseDisabledLabel ?? 'Pause plan',
+      onPress: controls.pause,
+      disabled: actions.pending || pausing.pauseDisabledLabel !== null,
+    });
+  }
+  if (controls.canResume && pausing.resumeOffered) {
+    buttons.push({
+      icon: 'play',
+      label: 'Resume',
+      accessibilityLabel: 'Resume plan',
+      onPress: controls.resume,
+      disabled: actions.pending,
+    });
+  }
+  if (controls.canSkip) {
+    buttons.push({
+      icon: 'calendar-remove',
+      label: 'Skip a meal',
+      accessibilityLabel: 'Skip a meal',
+      onPress: controls.openSkip,
+      disabled: actions.pending,
+    });
+  }
+  buttons.push({
+    icon: 'chevron-right',
+    label: 'Open plan',
+    accessibilityLabel: `Open ${name}`,
+    onPress: onOpen,
+    disabled: false,
+  });
+
   return (
-    <PressableCard
-      accessibilityLabel={`${planName}, ${status.label}`}
-      onPress={onPress}
-      style={styles.subscriptionCard}>
-      <Text
-        allowFontScaling={textDefaults.allowFontScaling}
-        numberOfLines={1}
-        style={styles.subscriptionName}>
-        {planName}
-      </Text>
-      <Badge label={status.label} tone={status.tone} />
-      <Icon
-        name="chevron-right"
-        size={iconSize.md}
-        color={colors.textSecondary}
-        surface={false}
-      />
-    </PressableCard>
+    <View style={styles.mineItem}>
+      <View style={styles.mineCard}>
+        <Pressable
+          accessibilityLabel={`${name}, ${status.label}`}
+          accessibilityRole="button"
+          onPress={onOpen}
+          style={({pressed}) => [styles.mineTop, pressed && styles.pressed]}>
+          <MealPlanPhoto uri={resolveApiImageUrl(subscription.planImageUrl) ?? cover.imageUrl} size={72} />
+          <View style={styles.grow}>
+            <View style={styles.mineTitleRow}>
+              <Text
+                allowFontScaling={textDefaults.allowFontScaling}
+                numberOfLines={2}
+                style={[styles.planName, styles.grow]}>
+                {name}
+              </Text>
+              <Badge label={status.label} tone={status.tone} />
+            </View>
+            {byLine ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                {byLine}
+              </Text>
+            ) : null}
+            {when ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                {when}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
+        {nextLine ? (
+          <View accessible accessibilityLabel={`Next meal: ${nextLine}`} style={[styles.nextMeal, styles.cardDivider]}>
+            <IconTile icon="clock" />
+            <View style={styles.grow}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.overline}>
+                Next meal
+              </Text>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.nextText}>
+                {nextLine}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        <View style={[styles.cardActions, styles.cardDivider]}>
+          {buttons.map((button, index) => (
+            <Pressable
+              key={button.label}
+              accessibilityLabel={button.accessibilityLabel}
+              accessibilityRole="button"
+              accessibilityState={{disabled: button.disabled}}
+              disabled={button.disabled}
+              onPress={button.onPress}
+              style={({pressed}) => [
+                styles.cardAction,
+                index > 0 && styles.cardActionDivider,
+                button.disabled && styles.disabled,
+                pressed && styles.pressed,
+              ]}>
+              <Icon name={button.icon} size={iconSize.md} color={colors.flameRed} surface={false} />
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardActionText}>
+                {button.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {pauseLine ? (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+          {pauseLine}
+        </Text>
+      ) : null}
+      {controls.skipSheet}
+    </View>
   );
 }
 
@@ -181,6 +329,7 @@ export function MealPlansScreen({navigation}: Props) {
   const plansQuery = useNearbyMealPlansQuery();
   const hasLocation = useHasMealPlanLocation();
   const subscriptionsQuery = useMySubscriptionsQuery();
+  const [chosenTab, setTab] = React.useState<Tab | null>(null);
   const [filter, setFilter] = React.useState<Filter>('all');
   const [searchText, setSearchText] = React.useState('');
   const recovery = useInterruptedPaymentRecovery();
@@ -208,15 +357,16 @@ export function MealPlansScreen({navigation}: Props) {
     search !== '' && visiblePlans.length > 0 && visiblePlans.every(plan => unmatched.has(plan.id));
 
   const subscriptions = subscriptionsQuery.data ?? [];
-  const current = subscriptions.filter(subscription => subscription.status !== 'CANCELLED');
-  // One plan: a header shortcut. Several: compact cards instead.
-  const myPlanTarget = current.length > 1 ? null : current[0] ?? subscriptions[0] ?? null;
+  const current = subscriptions.filter(subscription => !isPastSubscription(subscription.status));
+  const pastCount = subscriptions.length - current.length;
+  // Until the customer picks a tab: My plans when a plan is running, else Explore.
+  const tab =
+    chosenTab ??
+    (subscriptions.some(subscription => subscription.status === 'ACTIVE' || subscription.status === 'PAUSED')
+      ? 'mine'
+      : 'explore');
   const openMyPlan = (subscription: CustomerSubscription) =>
     navigation.navigate('MyMealPlan', {subscriptionId: subscription.id});
-  const planNameOf = (subscription: CustomerSubscription) =>
-    subscription.planName ??
-    plans.find(plan => plan.id === subscription.planId)?.name ??
-    'Meal plan';
 
   const resumePayment = async () => {
     const outcome = await recovery.resume();
@@ -232,8 +382,8 @@ export function MealPlansScreen({navigation}: Props) {
   };
 
   const settled = recovery.settled;
-  const header = (
-    <View style={styles.listHeader}>
+  const notices = (
+    <>
       {recovery.pending ? (
         <OfflineNotice
           message="Payment in progress. You have an unfinished meal-plan payment."
@@ -276,31 +426,35 @@ export function MealPlansScreen({navigation}: Props) {
           </View>
         </View>
       ) : null}
-      {current.length > 1 ? (
-        <View style={styles.subscriptions}>
-          <Text
-            accessibilityRole="header"
-            allowFontScaling={textDefaults.allowFontScaling}
-            style={styles.sectionTitle}>
-            My plans
+    </>
+  );
+
+  const header = (
+    <View style={styles.listHeader}>
+      {notices}
+      <Pressable
+        accessibilityLabel="How meal plans work. Pause, skip, cancel and chef timings"
+        accessibilityRole="button"
+        onPress={() => navigation.navigate('MealPlanHowItWorks')}
+        style={({pressed}) => [styles.howCard, pressed && styles.pressed]}>
+        <IconTile icon="clock" square background={colors.white} />
+        <View style={styles.grow}>
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.howTitle}>
+            How meal plans work
           </Text>
-          {current.map(subscription => (
-            <SubscriptionCard
-              key={subscription.id}
-              subscription={subscription}
-              planName={planNameOf(subscription)}
-              onPress={() => openMyPlan(subscription)}
-            />
-          ))}
+          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+            Pause, skip, cancel and chef timings
+          </Text>
         </View>
-      ) : null}
+        <Icon name="chevron-right" size={iconSize.sm} color={colors.flameRed} surface={false} />
+      </Pressable>
       <InputField
-        accessibilityLabel="Search meal plans"
+        accessibilityLabel="Search meal plans or chefs"
         autoCapitalize="none"
         autoCorrect={false}
         leftIcon="search"
         onChangeText={setSearchText}
-        placeholder="Search meal plans, chefs…"
+        placeholder="Search meal plans or chefs"
         returnKeyType="search"
         value={searchText}
       />
@@ -314,23 +468,6 @@ export function MealPlansScreen({navigation}: Props) {
           />
         ))}
       </View>
-      <View style={styles.banner}>
-        <View style={styles.bannerCopy}>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.bannerTitle}>
-            Healthy homemade meals, every day
-          </Text>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
-            Wholesome. Fresh. Crafted with love.
-          </Text>
-        </View>
-        <Image
-          accessibilityIgnoresInvertColors
-          accessible={false}
-          resizeMode="cover"
-          source={BANNER_IMAGE}
-          style={styles.bannerImage}
-        />
-      </View>
       {plansQuery.isError ? (
         <RecoverableErrorBanner
           message="Meal plans could not be loaded. Check your connection and try again."
@@ -342,56 +479,108 @@ export function MealPlansScreen({navigation}: Props) {
     </View>
   );
 
+  const mine = (
+    <ScrollView contentContainerStyle={styles.mineContent} showsVerticalScrollIndicator={false}>
+      {notices}
+      {subscriptionsQuery.isLoading ? (
+        <ListSkeleton count={2} />
+      ) : subscriptionsQuery.isError ? (
+        <RecoverableErrorBanner
+          message="Your plans could not be loaded. Check your connection and try again."
+          onRetry={() => {
+            subscriptionsQuery.refetch();
+          }}
+        />
+      ) : current.length === 0 ? (
+        <TerminalState
+          title="No meal plans yet"
+          description="Pick a weekly, 14-day or monthly plan from a home chef near you."
+          actionLabel="Explore plans"
+          onAction={() => setTab('explore')}
+        />
+      ) : (
+        current.map(subscription => (
+          <MyPlanCard key={subscription.id} subscription={subscription} onOpen={() => openMyPlan(subscription)} />
+        ))
+      )}
+      {pastCount > 0 ? (
+        <Pressable
+          accessibilityLabel={`History, ${pastCount} ended and cancelled ${pastCount === 1 ? 'plan' : 'plans'}`}
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('MealPlanHistory')}
+          style={({pressed}) => [styles.historyRow, pressed && styles.pressed]}>
+          <IconTile icon="clock" square />
+          <View style={styles.grow}>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.howTitle}>
+              History
+            </Text>
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+              {`Ended and cancelled plans · ${pastCount}`}
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
+        </Pressable>
+      ) : null}
+    </ScrollView>
+  );
+
   return (
     <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false} testID="meal-plans">
-      <MealPlanHeader
-        title="Meal Plans"
+      <MealPlanPageHeader
+        title="Meal plans"
         onBack={() => navigation.getParent()?.goBack()}
         right={
-          myPlanTarget ? (
-            <IconButton
-              accessibilityLabel="My plans"
-              icon="calendar-check"
-              onPress={() => openMyPlan(myPlanTarget)}
-            />
-          ) : undefined
-        }
-      />
-      <FlatList
-        contentContainerStyle={styles.content}
-        data={visiblePlans}
-        keyExtractor={plan => plan.id}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          plansQuery.isLoading ? (
-            <ListSkeleton count={3} />
-          ) : plansQuery.isError ? null : (
-            <TerminalState
-              title={
-                !hasLocation
-                  ? 'Choose a delivery location to see meal plans near you'
-                  : filter === 'all'
-                    ? 'No meal plans near you yet'
-                    : `No ${filter === 'week' ? 'weekly' : 'monthly'} meal plans near you yet`
-              }
-            />
-          )
-        }
-        ListFooterComponent={
-          noMatches ? <TerminalState title={`No plans match "${searchText.trim()}".`} /> : null
-        }
-        ListHeaderComponent={header}
-        renderItem={({item}) => (
-          <PlanCard
-            plan={item}
-            search={search}
-            onMatch={onMatch}
-            onPress={() => navigation.navigate('MealPlanDetail', {planId: item.id})}
+          <IconButton
+            accessibilityLabel="How meal plans work"
+            icon="info"
+            onPress={() => navigation.navigate('MealPlanHowItWorks')}
           />
-        )}
-        showsVerticalScrollIndicator={false}
+        }
       />
+      <UnderlineTabs
+        accessibilityLabel="Meal plan sections"
+        fill
+        onSelect={setTab}
+        selected={tab}
+        tabs={TABS}
+      />
+      {tab === 'mine' ? (
+        mine
+      ) : (
+        <FlatList
+          contentContainerStyle={styles.content}
+          data={visiblePlans}
+          keyExtractor={plan => plan.id}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            plansQuery.isLoading ? (
+              <ListSkeleton count={3} />
+            ) : plansQuery.isError ? null : (
+              <TerminalState
+                title={
+                  !hasLocation
+                    ? 'Choose a delivery location to see meal plans near you'
+                    : FILTERS.find(option => option.key === filter)!.empty
+                }
+              />
+            )
+          }
+          ListFooterComponent={
+            noMatches ? <TerminalState title={`No plans match "${searchText.trim()}".`} /> : null
+          }
+          ListHeaderComponent={header}
+          renderItem={({item}) => (
+            <PlanCard
+              plan={item}
+              search={search}
+              onMatch={onMatch}
+              onPress={() => navigation.navigate('MealPlanDetail', {planId: item.id})}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </ScreenShell>
   );
 }
@@ -401,7 +590,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
   },
-  listHeader: {gap: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.md},
+  listHeader: {gap: 14, paddingTop: spacing.md, paddingBottom: 14},
   recovered: {
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
@@ -415,71 +604,104 @@ const styles = StyleSheet.create({
   recoveredText: {color: colors.textPrimary, fontSize: typography.small},
   recoveredActions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md},
   recoveredAction: {paddingHorizontal: spacing.none},
-  subscriptions: {gap: spacing.xs},
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-  },
-  subscriptionCard: {
+  grow: {flex: 1, minWidth: 0},
+  pressed: {opacity: 0.7},
+  disabled: {opacity: 0.48},
+  howCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    paddingHorizontal: 14,
     paddingVertical: spacing.sm,
-  },
-  subscriptionName: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  chips: {flexDirection: 'row', gap: spacing.xs},
-  banner: {
-    minHeight: 104,
-    flexDirection: 'row',
-    overflow: 'hidden',
     borderRadius: radius.lg,
     backgroundColor: colors.cream,
   },
-  bannerCopy: {flex: 1, justifyContent: 'center', gap: spacing.xxs, padding: spacing.md},
-  bannerTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.extrabold,
-  },
-  bannerImage: {width: 128, alignSelf: 'stretch'},
+  howTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
+  chips: {flexDirection: 'row', gap: spacing.xs},
   // Bottom margin, not list gap: a card hidden by search must not leave a gap behind.
-  planCard: {flexDirection: 'row', gap: spacing.sm, padding: spacing.sm, marginBottom: spacing.md},
-  planBody: {flex: 1, minWidth: 0, gap: spacing.xxs},
-  planTitleRow: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs},
+  planCard: {marginBottom: 14},
+  planCardPhoto: {padding: 0, overflow: 'hidden'},
+  planCardRow: {flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14},
+  cover: {width: '100%', height: 140, backgroundColor: colors.surfaceMuted},
+  planBodyUnderPhoto: {gap: spacing.xxs, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 14},
+  planBodyRow: {flex: 1, minWidth: 0, gap: spacing.xxs},
+  planTitleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   planName: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: typography.button,
+    fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
   secondary: {color: colors.textSecondary, fontSize: typography.small},
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xxs,
-  },
   priceRow: {
-    marginTop: 'auto',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   price: {
     color: colors.flameRedAccessible,
-    fontSize: typography.heading,
+    fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
   per: {
     color: colors.textSecondary,
     fontSize: typography.small,
-    fontWeight: fontWeight.regular,
+    fontWeight: fontWeight.medium,
+  },
+  mineContent: {gap: 14, padding: spacing.md, paddingBottom: spacing.xl},
+  mineItem: {gap: spacing.sm},
+  mineCard: {
+    overflow: 'hidden',
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  mineTop: {flexDirection: 'row', gap: 14, paddingHorizontal: spacing.md, paddingVertical: 14},
+  mineTitleRow: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs},
+  cardDivider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
+  nextMeal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  overline: {
+    color: colors.textSecondary,
+    fontSize: typography.tiny,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  nextText: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
+  cardActions: {flexDirection: 'row'},
+  cardAction: {
+    flex: 1,
+    minHeight: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.xxs,
+  },
+  cardActionDivider: {borderLeftWidth: borderWidth.standard, borderLeftColor: colors.border},
+  cardActionText: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
+    textAlign: 'center',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
   },
 });

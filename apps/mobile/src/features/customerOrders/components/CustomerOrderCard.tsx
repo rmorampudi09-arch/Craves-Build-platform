@@ -2,8 +2,7 @@ import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
-import {colors, radius, spacing} from '../../../design/tokens';
-import {iosType, iosWeight} from '../../../design/iosType';
+import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
@@ -26,8 +25,8 @@ interface Props {
 }
 
 const TONES: Record<CustomerOrderStatusTone, {text: string; fill: string}> = {
-  success: {text: '#14824F', fill: colors.successSoft},
-  warning: {text: '#9A5B00', fill: colors.warningSoft},
+  success: {text: colors.successText, fill: colors.successSoft},
+  warning: {text: colors.warningText, fill: colors.warningSoft},
   danger: {text: colors.flameRedAccessible, fill: colors.errorSoft},
   accent: {text: colors.flameRedAccessible, fill: colors.errorSoft},
   muted: {text: colors.textSecondary, fill: colors.surfaceMuted},
@@ -58,41 +57,36 @@ export function CustomerOrderCard({
       onPress={onPressDetails}
       style={({pressed}) => [styles.card, pressed && styles.cardPressed]}>
       <View style={styles.topRow}>
-        <CustomerChefAvatar imageUrl={kitchen.data?.chefPhotoUrl} size={44} />
+        <CustomerChefAvatar imageUrl={kitchen.data?.chefPhotoUrl} size={48} />
         <View style={styles.flexCopy}>
-          <Text numberOfLines={1} style={[iosType.headline, styles.primaryText]}>
+          <Text numberOfLines={1} style={styles.kitchenName}>
             {order.kitchenName}
           </Text>
-          <Text numberOfLines={1} style={[iosType.footnote, styles.secondaryText]}>
+          <Text numberOfLines={1} style={styles.meta}>
             {formatCustomerOrderCreatedAt(order.createdAt)} · #
             {getCustomerOrderDisplayReference(order.id)}
           </Text>
         </View>
-        <Text style={[iosType.headline, styles.primaryText]}>
-          {formatCustomerOrderMoney(order.grandTotal)}
-        </Text>
+        <Text style={styles.total}>{formatCustomerOrderMoney(order.grandTotal)}</Text>
       </View>
 
       <View style={styles.itemsRow}>
         {visibleItems.map(item => (
-          <CustomerOrderMenuItemImage key={item.id} menuItemId={item.menuItemId} size={48} />
+          <CustomerOrderMenuItemImage key={item.id} menuItemId={item.menuItemId} size={52} />
         ))}
         {remainingItems > 0 ? (
           <View style={styles.moreTile}>
-            <Text style={[iosType.footnote, iosWeight.semibold, styles.primaryText]}>
-              +{remainingItems}
-            </Text>
+            <Text style={styles.moreText}>+{remainingItems}</Text>
           </View>
         ) : null}
-        <Text numberOfLines={2} style={[iosType.subheadline, styles.secondaryText, styles.itemSummary]}>
+        <Text numberOfLines={2} style={styles.itemSummary}>
           {itemSummary}
         </Text>
       </View>
 
       <View style={styles.footer}>
         <View style={[styles.statusPill, {backgroundColor: tone.fill}]}>
-          <View style={[styles.statusDot, {backgroundColor: tone.text}]} />
-          <Text numberOfLines={1} style={[iosType.footnote, iosWeight.semibold, {color: tone.text}]}>
+          <Text numberOfLines={1} style={[styles.statusText, {color: tone.text}]}>
             {status.label}
           </Text>
         </View>
@@ -103,7 +97,6 @@ export function CustomerOrderCard({
               accessibilityRole="button"
               accessibilityState={{disabled: reorderDisabled, busy: reorderPending}}
               disabled={reorderDisabled}
-              hitSlop={6}
               onPress={() => {
                 if (!reorderPending && !reorderDisabled) onReorder(order);
               }}
@@ -112,22 +105,21 @@ export function CustomerOrderCard({
                 pressed && styles.pressed,
                 reorderDisabled && styles.disabled,
               ]}>
-              <Icon name="renew" size={15} color={colors.textPrimary} surface={false} />
-              <Text style={[iosType.footnote, iosWeight.semibold, styles.primaryText]}>
-                {reorderPending ? 'Preparing…' : 'Reorder'}
-              </Text>
+              <Icon name="renew" size={16} color={colors.flameRed} surface={false} />
+              <Text style={styles.reorderText}>{reorderPending ? 'Preparing…' : 'Reorder'}</Text>
             </Pressable>
           ) : null}
           <Pressable
             accessibilityLabel={`${referenceAction === 'TRACK' ? 'Track' : 'View'} order from ${order.kitchenName}`}
             accessibilityRole="button"
-            hitSlop={6}
             onPress={onPressDetails}
             style={({pressed}) => [styles.detailsLink, pressed && styles.pressed]}>
-            <Text style={[iosType.subheadline, iosWeight.semibold, styles.redText]}>
+            <Text style={styles.redText}>
               {referenceAction === 'TRACK' ? 'Track order' : 'Details'}
             </Text>
-            <Icon name="chevron-right" size={18} color={colors.flameRedAccessible} surface={false} />
+            {referenceAction === 'TRACK' ? (
+              <Icon name="chevron-right" size={18} color={colors.flameRed} surface={false} />
+            ) : null}
           </Pressable>
         </View>
       </View>
@@ -135,72 +127,72 @@ export function CustomerOrderCard({
   );
 }
 
-const HAIRLINE = StyleSheet.hairlineWidth;
-
 const styles = StyleSheet.create({
   card: {
+    gap: spacing.sm,
     marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    marginBottom: 14,
+    padding: spacing.md,
     borderRadius: radius.lg,
-    borderWidth: HAIRLINE,
-    borderColor: colors.borderStrong,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
     backgroundColor: colors.white,
   },
-  cardPressed: {backgroundColor: '#FBFAF9'},
+  cardPressed: {backgroundColor: colors.surfaceMuted},
   pressed: {opacity: 0.6},
   disabled: {opacity: 0.45},
-  primaryText: {color: colors.textPrimary},
-  secondaryText: {color: colors.textSecondary},
-  redText: {color: colors.flameRedAccessible},
   topRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   flexCopy: {minWidth: 0, flex: 1, gap: 2},
-  itemsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: spacing.sm,
-  },
+  kitchenName: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  meta: {color: colors.textSecondary, fontSize: typography.small},
+  total: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold},
+  itemsRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   moreTile: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceMuted,
   },
-  itemSummary: {minWidth: 0, flex: 1, marginLeft: 6},
+  moreText: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
+  itemSummary: {
+    minWidth: 0,
+    flex: 1,
+    marginLeft: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.body,
+  },
   footer: {
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.xs,
-    marginTop: spacing.sm,
-    borderTopWidth: HAIRLINE,
-    borderTopColor: colors.borderStrong,
+    paddingTop: spacing.sm,
+    borderTopWidth: borderWidth.standard,
+    borderTopColor: colors.border,
   },
   statusPill: {
     flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    minHeight: 30,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
   },
-  statusDot: {width: 6, height: 6, borderRadius: 3},
+  statusText: {fontSize: typography.small, fontWeight: fontWeight.bold},
   actions: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   reorder: {
-    minHeight: 32,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
   },
-  detailsLink: {minHeight: 44, flexDirection: 'row', alignItems: 'center'},
+  reorderText: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
+  detailsLink: {minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2},
+  redText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.bold},
 });

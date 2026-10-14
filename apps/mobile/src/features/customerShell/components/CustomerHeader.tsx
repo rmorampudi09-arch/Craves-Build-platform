@@ -17,12 +17,15 @@ import {
 
 export type CustomerHeaderVariant = 'default' | 'compact';
 
+/** Pin and bell share one 44 dp soft-red tile. */
+const HEADER_ICON_SIZE = 44;
+
 interface Props {
   variant?: CustomerHeaderVariant;
   title?: string;
   onPressLocation: () => void;
   onPressNotifications: () => void;
-  onPressSubscription?: () => void;
+  onPressMealPlans?: () => void;
 }
 
 export function CustomerHeader({
@@ -30,7 +33,7 @@ export function CustomerHeader({
   title,
   onPressLocation,
   onPressNotifications,
-  onPressSubscription,
+  onPressMealPlans,
 }: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {selectedLocation, locationDisplayName, badgeLabel} = useCustomerHeaderState();
@@ -70,7 +73,7 @@ export function CustomerHeader({
         onPress={onPressLocation}
         style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
         <View style={styles.locationIcon}>
-          <Icon name="location" size={19} color={colors.flameRed} />
+          <Icon name="location" size={22} color={colors.flameRed} surface={false} />
         </View>
         {compact ? (
           <View style={styles.locationCopy}>
@@ -104,20 +107,20 @@ export function CustomerHeader({
         </Text>
       ) : null}
 
-      {onPressSubscription ? (
+      {onPressMealPlans ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Subscription"
-          accessibilityHint="Opens your Craves membership page"
-          hitSlop={spacing.xs}
-          onPress={onPressSubscription}
+          accessibilityLabel="Meal plans"
+          accessibilityHint="Opens your meal plans"
+          hitSlop={spacing.xxs}
+          onPress={onPressMealPlans}
           style={({pressed}) => [
-            styles.subscriptionButton,
-            pressed && styles.subscriptionPressed,
+            styles.mealPlansButton,
+            pressed && styles.mealPlansPressed,
           ]}>
-          <Icon name="ticket" size={16} color={colors.flameRedAccessible} />
-          <Text numberOfLines={1} style={styles.subscriptionText}>
-            Subscription
+          <Icon name="calendar-check" size={22} color={colors.flameRed} surface={false} />
+          <Text numberOfLines={1} style={styles.mealPlansText}>
+            Meal plans
           </Text>
         </Pressable>
       ) : null}
@@ -133,7 +136,7 @@ export function CustomerHeader({
           styles.notificationButton,
           pressed && styles.notificationPressed,
         ]}>
-        <Icon name="bell" size={21} color={colors.espressoBrown} />
+        <Icon name="bell" size={22} color={colors.flameRed} surface={false} />
         {badgeLabel ? (
           <View style={styles.badge} accessibilityElementsHidden>
             <Text style={styles.badgeText}>{badgeLabel}</Text>
@@ -149,7 +152,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     backgroundColor: colors.white,
@@ -175,15 +178,15 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 10,
     borderRadius: radius.md,
   },
   locationPressed: {
     opacity: 0.78,
   },
   locationIcon: {
-    width: 34,
-    height: 34,
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -224,45 +227,45 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },
-  subscriptionButton: {
-    minHeight: 36,
+  mealPlansButton: {
+    height: HEADER_ICON_SIZE,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xxs,
-    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
+    paddingLeft: 10,
+    paddingRight: 14,
     borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
-  subscriptionPressed: {
+  mealPlansPressed: {
     backgroundColor: colors.surfaceMuted,
   },
-  subscriptionText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
+  mealPlansText: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
   },
   notificationButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.iconSurface,
   },
   notificationPressed: {
-    backgroundColor: colors.surfaceMuted,
+    opacity: 0.78,
   },
   badge: {
     position: 'absolute',
-    top: 3,
-    right: 1,
-    minWidth: 18,
-    minHeight: 18,
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    minHeight: 20,
     paddingHorizontal: 4,
-    paddingVertical: 1,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -272,7 +275,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: colors.white,
-    fontSize: 9,
+    fontSize: typography.tiny,
     fontWeight: fontWeight.bold,
   },
 });

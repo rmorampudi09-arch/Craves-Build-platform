@@ -47,7 +47,7 @@ export function getCartAddressStatusCopy(
     return address.summary;
   }
 
-  return 'A delivery address is linked, but Craves cannot verify its display details yet.';
+  return 'A delivery address is added, but we could not show its details.';
 }
 
 export function getCartEtaStatusCopy(eta: CartEtaSummaryModel): string {
@@ -55,7 +55,7 @@ export function getCartEtaStatusCopy(eta: CartEtaSummaryModel): string {
     return eta.summary;
   }
 
-  return 'Delivery estimate will appear after the server verifies the address and quote.';
+  return 'Delivery time will show once your address is confirmed.';
 }
 
 export function getCartCheckoutStatusCopy(

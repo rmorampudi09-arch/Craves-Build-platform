@@ -1,5 +1,5 @@
 import type {FavoriteHomeCard} from '../api/favoriteHomeFeedApi';
-import {favoriteHomeStateCopy, isCookingToday} from './favoriteHomePresentation';
+import {favoriteHomeStateCopy, isCookingToday, mergeSavedHomes} from './favoriteHomePresentation';
 
 function card(state: FavoriteHomeCard['cookingState']): FavoriteHomeCard {
   return {
@@ -31,6 +31,18 @@ describe('favoriteHomePresentation', () => {
     expect(isCookingToday(card('COOKING_NOW'))).toBe(true);
     expect(isCookingToday(card('COOKING_LATER_TODAY'))).toBe(true);
     expect(isCookingToday(card('NOT_TODAY'))).toBe(false);
+  });
+
+  it('merges saved kitchens and saved home chefs into one row per home', () => {
+    const kitchen = {...card('NOT_TODAY'), requestedId: 'k1', kitchenId: 'k1', chefIdentityId: 'c1'};
+    const sameChef = {...card('NOT_TODAY'), requestedType: 'CHEF' as const, requestedId: 'c1', kitchenId: 'k1', chefIdentityId: 'c1'};
+    const otherChef = {...card('COOKING_NOW'), requestedType: 'CHEF' as const, requestedId: 'c2', kitchenId: 'k2', chefIdentityId: 'c2'};
+
+    const merged = mergeSavedHomes([kitchen], [sameChef, otherChef]);
+
+    expect(merged).toHaveLength(2);
+    expect(merged[0]).toMatchObject({kitchenId: null, chefIdentityId: 'c2'});
+    expect(merged[1]).toMatchObject({card: kitchen, kitchenId: 'k1', chefIdentityId: 'c1'});
   });
 
   it('does not invent a reopening time when not accepting orders', () => {

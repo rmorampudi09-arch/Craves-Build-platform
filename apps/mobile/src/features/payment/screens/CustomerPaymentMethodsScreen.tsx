@@ -184,8 +184,8 @@ export function CustomerPaymentMethodsScreen() {
           <RecoverableErrorBanner
             message={
               snapshotErrorCode === 'NETWORK_ERROR'
-                ? 'Cart context could not be refreshed while offline. Payment options shown here do not assume live cart eligibility.'
-                : 'Cart context could not be refreshed. Payment options shown here do not assume live cart eligibility.'
+                ? 'Your cart could not be refreshed while you are offline.'
+                : 'Your cart could not be refreshed.'
             }
             onRetry={() => {
               dispatch(refreshCartSnapshot());
@@ -201,24 +201,24 @@ export function CustomerPaymentMethodsScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.contextCard}>
             <Text style={styles.contextEyebrow}>
-              {model.mode === 'ACTIVE_CART' ? 'ACTIVE CART' : 'NO ACTIVE CART'}
+              {model.mode === 'ACTIVE_CART' ? 'YOUR CART' : 'YOUR CART IS EMPTY'}
             </Text>
             <Text style={styles.contextTitle}>
               {model.mode === 'ACTIVE_CART'
-                ? `${itemCount} ${itemCount === 1 ? 'item' : 'items'} ready for payment selection`
-                : 'Browse payment capabilities safely'}
+                ? `${itemCount} ${itemCount === 1 ? 'item' : 'items'} ready to check out`
+                : 'Payment options'}
             </Text>
             <Text style={styles.contextCopy}>
               {model.mode === 'ACTIVE_CART'
-                ? 'Your selection is kept in the current app session and can return to Cart. Checkout review remains a separate phase.'
-                : 'No checkout selection is created without an active cart.'}
+                ? 'You choose how to pay at checkout.'
+                : 'Add dishes to your cart to check out.'}
             </Text>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Payment options</Text>
             <Text style={styles.sectionCaption}>
-              Availability is never inferred from a provider app returning to the foreground.
+              You pay securely through Razorpay.
             </Text>
             {model.options.map(option => (
               <MethodCard key={option.id} option={option} onSelect={handleSelect} />
@@ -233,14 +233,14 @@ export function CustomerPaymentMethodsScreen() {
               <View style={styles.savedCopy}>
                 <Text style={styles.methodTitle}>Saved payment methods</Text>
                 <Text style={styles.methodDescription}>
-                  Saved cards, tokenized UPI instruments, default-method editing and expired-token states require an authoritative token API.
+                  Saving cards and UPI IDs is coming soon.
                 </Text>
               </View>
             </View>
             <View style={styles.blockerRow}>
               <Icon name="lock" size={iconSize.xs} color={colors.warning} />
               <Text style={styles.blockerText}>
-                The approved mobile runtime does not expose payment-token list or mutation endpoints yet, so this screen does not fabricate stored methods.
+                For now, you enter your payment details at checkout.
               </Text>
             </View>
           </View>
@@ -248,9 +248,9 @@ export function CustomerPaymentMethodsScreen() {
           <View style={styles.safetyCard}>
             <Icon name="check" size={iconSize.sm} color={colors.success} />
             <View style={styles.safetyCopy}>
-              <Text style={styles.safetyTitle}>Secure provider handoff</Text>
+              <Text style={styles.safetyTitle}>Safe payments</Text>
               <Text style={styles.safetyText}>
-                Online payment uses the backend-issued Razorpay order. Payment success is accepted only after signed backend verification and checkout reconciliation.
+                Payments go through Razorpay. Craves confirms each payment with Razorpay before your order goes ahead.
               </Text>
             </View>
           </View>

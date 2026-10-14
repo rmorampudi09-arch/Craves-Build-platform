@@ -22,7 +22,7 @@ import type {
   CustomerTabParamList,
 } from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, radius, spacing} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {iosType, iosWeight} from '../../../design/iosType';
 import {
   OfflineNotice,
@@ -36,15 +36,12 @@ import {reorderCart} from '../../cart/state/cartMutations';
 import {isDefinitiveCartRejection} from '../../cart/domain/cartWriteRejection';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
-import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
+import {CustomerBellButton} from '../../notifications/components/CustomerBellButton';
 import {CustomerOrderCard} from '../components/CustomerOrderCard';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {createCustomerOrderReorder} from '../domain/customerOrderReorder';
 import {
-  CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER,
   CUSTOMER_ORDERS_TABS,
-  isCustomerOrdersTabAuthoritative,
   selectCustomerOrdersTab,
   getPendingOrderVisibilityExpiry,
   type CustomerOrdersTabKey,
@@ -107,7 +104,6 @@ export function CustomerOrdersScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const ordersQuery = useCustomerOrdersQuery();
   const [selectedTab, setSelectedTab] = useState<CustomerOrdersTabKey>('ALL');
-  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [capabilityMessage, setCapabilityMessage] = useState<string | null>(null);
   const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
   const [uncertainReorder, setUncertainReorder] = useState(false);
@@ -144,7 +140,6 @@ export function CustomerOrdersScreen() {
   const queryError = ordersQuery.error ? toAppApiError(ordersQuery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const initialLoading = ordersQuery.isPending && !snapshot;
-  const lifecycleBlocked = !isCustomerOrdersTabAuthoritative(selectedTab);
 
   useEffect(() => {
     mounted.current = true;
@@ -387,14 +382,13 @@ export function CustomerOrdersScreen() {
 
   const listHeader = (
     <View>
-      <CustomerHeader
-        onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() => navigation.navigate('CustomerNotifications')}
-      />
-      <Text accessibilityRole="header" style={[iosType.largeTitle, styles.title]}>
-        My Orders
-      </Text>
-      <View accessibilityRole="tablist" style={styles.tabs}>
+      <View style={styles.header}>
+        <Text accessibilityRole="header" style={styles.title}>
+          My Orders
+        </Text>
+        <CustomerBellButton />
+      </View>
+      <View accessibilityLabel="Order filters" accessibilityRole="tablist" style={styles.tabs}>
         {CUSTOMER_ORDERS_TABS.map(tab => {
           const selected = tab.key === selectedTab;
           return (
@@ -410,11 +404,7 @@ export function CustomerOrdersScreen() {
               ]}>
               <Text
                 numberOfLines={1}
-                style={[
-                  iosType.footnote,
-                  styles.tabText,
-                  selected && [iosWeight.semibold, styles.tabTextSelected],
-                ]}>
+                style={[styles.tabText, selected && styles.tabTextSelected]}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -460,8 +450,8 @@ export function CustomerOrdersScreen() {
     if (ordersQuery.sessionRequired) {
       return (
         <TerminalState
-          title="Customer session required"
-          description="Orders are private account data and can only load for the signed-in customer."
+          title="Sign in required"
+          description="Sign in to see your orders."
         />
       );
     }
@@ -487,16 +477,6 @@ export function CustomerOrdersScreen() {
           description={queryError.message}
           actionLabel="Try again"
           onAction={refresh}
-        />
-      );
-    }
-    if (lifecycleBlocked) {
-      return (
-        <TerminalState
-          title="This order group is not available yet"
-          description={`The server currently returns exact order statuses, but it does not define the approved ${selectedTab.toLowerCase()} lifecycle mapping. ${CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER}`}
-          actionLabel="Show all orders"
-          onAction={() => selectTab('ALL')}
         />
       );
     }
@@ -582,10 +562,6 @@ export function CustomerOrdersScreen() {
           ) : null
         }
       />
-      <CustomerLocationSelector
-        visible={locationSelectorVisible}
-        onClose={() => setLocationSelectorVisible(false)}
-      />
     </ScreenShell>
   );
 }
@@ -596,44 +572,58 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     backgroundColor: colors.white,
   },
-  title: {
+  header: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
-    color: colors.textPrimary,
+    paddingVertical: spacing.xs,
   },
-  // iOS segmented control: a grey track with the selected segment raised in white.
+  title: {
+    minWidth: 0,
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.title,
+    fontWeight: fontWeight.bold,
+  },
+  // Warm-grey track with the chosen filter raised in a white pill.
   tabs: {
+    minHeight: 48,
     flexDirection: 'row',
     marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
     marginBottom: spacing.md,
-    padding: 2,
-    borderRadius: 10,
-    backgroundColor: 'rgba(118,118,128,0.12)',
+    padding: spacing.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
   },
   tab: {
-    minHeight: 36,
+    minHeight: 40,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxs,
-    borderRadius: 8,
+    borderRadius: radius.pill,
   },
   tabSelected: {
     backgroundColor: colors.white,
-    shadowColor: '#000',
+    shadowColor: colors.espressoBrown,
     shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: {width: 0, height: 2},
+    shadowRadius: 3,
+    shadowOffset: {width: 0, height: 1},
     elevation: 2,
   },
   tabPressed: {opacity: 0.6},
   tabText: {
-    color: colors.textPrimary,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
     textAlign: 'center',
   },
   tabTextSelected: {
     color: colors.textPrimary,
+    fontWeight: fontWeight.bold,
   },
   banner: {
     marginHorizontal: spacing.md,

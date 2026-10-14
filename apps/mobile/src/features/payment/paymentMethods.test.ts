@@ -30,7 +30,7 @@ describe('production payment methods model', () => {
       selected: false,
       channels: ['Cards', 'UPI', 'Wallets', 'Net banking'],
     });
-    expect(online?.blockerReason).toContain('Continue from Cart');
+    expect(online?.blockerReason).toContain('Continue from your cart');
   });
 
   it('does not fabricate COD eligibility without an authoritative contract', () => {
@@ -41,6 +41,6 @@ describe('production payment methods model', () => {
     const cod = model.options.find(option => option.id === 'COD');
 
     expect(cod?.availability).toBe('BLOCKED');
-    expect(cod?.blockerReason).toContain('not exposed');
+    expect(cod?.blockerReason).toBe('Cash on delivery is not offered yet.');
   });
 });

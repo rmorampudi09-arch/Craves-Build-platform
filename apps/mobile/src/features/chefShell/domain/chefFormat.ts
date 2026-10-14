@@ -6,6 +6,11 @@ export function shortOrderNumber(id: string): string {
   return `#${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
 
+/** Support case numbers are "CRV-000…0987": unlike order ids, the end is what tells them apart. */
+export function shortCaseNumber(caseNumber: string): string {
+  return `#${caseNumber.replace(/-/g, '').slice(-5).toUpperCase()}`;
+}
+
 /** en-IN grouping (12,34,567) done by hand: Hermes does not always ship the en-IN locale. */
 function groupIndian(digits: string): string {
   const last3 = digits.slice(-3);

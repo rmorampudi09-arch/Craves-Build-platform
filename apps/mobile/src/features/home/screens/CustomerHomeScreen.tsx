@@ -74,7 +74,6 @@ import {
   getActiveDiscoveryFilterCount,
   resolveDiscoveryFilterSession,
 } from '../../discoveryFilters/state/discoveryFilterSlice';
-import {DiscoverySearchInput} from '../../discoverySearch/components/DiscoverySearchInput';
 import {
   canRequestNextSearchPage,
   isDiscoverySearchActive,
@@ -93,6 +92,8 @@ import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
+/** Search pill and filter button height on the Home board. */
+const SEARCH_ROW_HEIGHT = 52;
 
 type HomeFeedListItem =
   | {kind: 'categories'; key: 'categories'}
@@ -466,17 +467,6 @@ export function CustomerHomeScreen() {
     listRef.current?.scrollToOffset({offset: 0, animated: false});
   }, []);
 
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      if (feed.isFetchingNextPage) {
-        feed.cancelPendingRequest();
-      }
-      resetSearchPosition();
-      search.setDraft(value);
-    },
-    [feed, resetSearchPosition, search],
-  );
-
   const handleClearSearch = useCallback(() => {
     if (feed.isFetchingNextPage) {
       feed.cancelPendingRequest();
@@ -593,7 +583,7 @@ export function CustomerHomeScreen() {
     [navigation],
   );
 
-  const openSubscription = useCallback(() => {
+  const openMealPlans = useCallback(() => {
     navigation.navigate('CustomerSettingsSubscription');
   }, [navigation]);
 
@@ -737,18 +727,18 @@ export function CustomerHomeScreen() {
       {selectedLocation ? (
         <>
           <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
-            <DiscoverySearchInput
+            {/* Home only opens the search page, so the field is a button. */}
+            <Pressable
+              accessibilityHint="Opens search"
               accessibilityLabel="Search nearby meals"
-              iconColor={colors.flameRedAccessible}
-              onChangeText={handleSearchChange}
-              onClear={handleClearSearch}
-              onFocus={openSearch}
-              pill
-              placeholder="Search nearby dishes or kitchens"
-              showSoftInputOnFocus={false}
-              style={styles.searchField}
-              value=""
-            />
+              accessibilityRole="search"
+              onPress={openSearch}
+              style={({pressed}) => [styles.searchField, pressed && styles.searchFieldPressed]}>
+              <Icon name="search" size={22} color={colors.flameRed} surface={false} />
+              <Text numberOfLines={1} style={styles.searchPlaceholder}>
+                Search dishes or kitchens
+              </Text>
+            </Pressable>
             <Pressable
               accessibilityHint="Open filter and sort options"
               accessibilityLabel="Filters"
@@ -761,8 +751,8 @@ export function CustomerHomeScreen() {
               ]}>
               <Icon
                 name="filter"
-                size={20}
-                color={colors.flameRedAccessible}
+                size={22}
+                color={colors.flameRed}
                 surface={false}
               />
             </Pressable>
@@ -786,7 +776,7 @@ export function CustomerHomeScreen() {
         <CustomerHeader
           onPressLocation={() => setLocationSelectorVisible(true)}
           onPressNotifications={header.openNotifications}
-          onPressSubscription={openSubscription}
+          onPressMealPlans={openMealPlans}
         />
       </View>
       <View style={styles.feedContainer}>
@@ -980,7 +970,7 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
@@ -990,24 +980,41 @@ const styles = StyleSheet.create({
   searchField: {
     minWidth: 0,
     flex: 1,
+    height: SEARCH_ROW_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  searchFieldPressed: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  searchPlaceholder: {
+    minWidth: 0,
+    flex: 1,
+    color: colors.placeholder,
+    fontSize: typography.body,
   },
   filterButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
+    width: SEARCH_ROW_HEIGHT,
+    height: SEARCH_ROW_HEIGHT,
     flexShrink: 0,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.white,
+    borderColor: colors.iconSurface,
+    backgroundColor: colors.iconSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterButtonActive: {
     borderColor: colors.flameRed,
-    backgroundColor: colors.iconSurface,
   },
   filterButtonPressed: {
-    backgroundColor: colors.surfaceMuted,
+    opacity: 0.78,
     transform: [{scale: 0.96}],
   },
   mindHeadingRow: {

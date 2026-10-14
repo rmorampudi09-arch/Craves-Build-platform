@@ -83,7 +83,7 @@ type DishDetailNavigation = NavigationProp<
   'CustomerDishDetail'
 >;
 
-const HERO_HEIGHT = 280;
+const HERO_HEIGHT = 250;
 // Show the slim header once the photo has mostly scrolled away.
 const COMPACT_HEADER_OFFSET = HERO_HEIGHT - 60;
 
@@ -844,8 +844,8 @@ const styles = StyleSheet.create({
   },
   heroDotActive: {width: 16, backgroundColor: colors.white},
   glassButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     overflow: 'hidden',
   },

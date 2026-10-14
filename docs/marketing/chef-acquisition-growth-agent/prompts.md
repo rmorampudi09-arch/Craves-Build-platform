@@ -211,7 +211,7 @@ Rules:
 - Only SAFE claims from the brand.md CLAIMS LEDGER.
 - Never ask for Aadhaar, PAN, FSSAI certificate, bank details or address. Documents go only inside the application.
 - If someone sends a document anyway, don't open or forward it. Reply: "Please upload this inside the application instead, and delete it from this chat." Tell the owner.
-- No earnings talk. If they ask about money, commission, review time, FSSAI, Bangalore or the app, use the "If someone asks..." answers in brand.md. Don't guess.
+- No earnings figures and never the fee or commission. If they ask about money, commission, payouts, review time, FSSAI, Bangalore or the app, use the "If someone asks..." answers in brand.md. Don't guess.
 ```
 
 ### In the first hour after posting
@@ -304,7 +304,7 @@ Read only. Do not reply to, hide or post anything through Windsor.ai. If you thi
 - Reel-only fields (`media_reel_avg_watch_time`, `media_reel_skip_rate`) are empty for feed posts. Our two baseline posts are feed posts.
 - Per-reel follows and profile visits are not available for reels through the API.
 - Instagram usually does not give follower city or age data below 100 followers, and returns none for our account today, so we cannot yet prove the audience is in Hyderabad. The area question in TALK is our best signal.
-- No Meta Ads connector is connected, so boosted results can't be read. If a reel gets boosted, note it in `notes`.
+- The 11 to 13 Oct posts were boosted (owner confirmed). No Meta Ads connector is connected, so boosted results can't be read. If a reel gets boosted, write `boosted` in `notes` and compare it only with other boosted reels.
 
 **Next step, not set up yet:** a weekly scheduled Claude routine can run this auto-pull every Sunday and send the summary. See README.md.
 

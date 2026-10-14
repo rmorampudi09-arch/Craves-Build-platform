@@ -116,14 +116,14 @@ Things to know:
 | Animated explainer reels | **Works today** | Claude Code with the motion-reel skill (or Remotion). Phone footage of a real kitchen for everything else. |
 | Sunday LEARN runs on a schedule | **Next step, not set up** | A weekly scheduled Claude routine can run the Sunday pull and send you the summary. A second routine can send a Monday brief: 3 reel ideas and draft hooks built on Sunday's LEARN rules. SCOUT still needs you to paste the 5 reels you saved, since Claude doesn't browse Instagram. |
 | Knowing which applications came from Instagram | **Needs engineering** | Capture UTM tags on `/chef/application` and store a source on the chef application. Nothing reads the tags today. |
-| Paid boost results | **Optional** | No Meta Ads connector is connected, so boost spend and results can't be read. Connect it in Windsor.ai if posts get boosted. |
+| Paid boost results | **Optional, worth adding** | The 11 to 13 Oct posts were boosted (owner confirmed), but no Meta Ads connector is connected, so spend and paid results can't be read. Connect the Meta Ads (`facebook`) connector in Windsor.ai, and write `boosted` in `notes` for any boosted reel so LEARN compares organic with organic. |
 | Follower city split | **Not until 100 followers** | Meta withholds audience demographics below 100 followers. |
 | AI agent answering DMs | **Optional, later** | People answer real questions for now. Vendor guides say turning on Meta Business Agent pauses existing automations, so check before switching it on. |
 | ManyChat or LinkDM | **Optional** | For buttons and multi-step DMs. Turn the Business Suite automation off first, so two tools don't reply to the same comment. |
 
 ## Rules that never bend
 
-- **Claims come only from the claims ledger in [brand.md](brand.md).** No earnings or income figures or promises, ever.
+- **Claims come only from the claims ledger in [brand.md](brand.md).** No earnings or income figures or promises, ever. Never state the Craves fee or commission (owner decision).
 - **Honest launch framing.** Customers are not open yet. Never "start earning today", "orders waiting" or "guaranteed orders".
 - **A native speaker reads every script before recording:** a Telugu speaker for Tenglish or Telugu script, a Hindi/Dakhini speaker from Hyderabad for Hindi/Dakhini.
 - **Privacy.** Never ask for Aadhaar, PAN, an FSSAI certificate, bank details or an address in DMs or comments. Documents go only inside the Craves application.
@@ -137,7 +137,8 @@ Things to know:
 |---|---|
 | The goal is submitted chef applications from Hyderabad | That is what grows the supply side before customers open. Views and follows don't. |
 | LEARN ranks by CHEF comments per 1,000 views first, then DM replies, CRV references, saves + shares, watch time and skip rate | Applications are too few and too slow to rank reels on alone. Instagram's API doesn't report follows for reels. |
-| Hyderabad only for now | The customer terms and support guide say Hyderabad, and finance checkout accepts only Telangana orders. |
+| Hyderabad only for now | Owner decision (14 Oct 2026): Hyderabad now, Bangalore later. |
+| Never disclose the fee; talk about how earnings are settled | Owner decision (14 Oct 2026). Earnings are settled daily or weekly, the chef's choice, or with one tap to their bank (the choice ships with the RazorpayX payout work). |
 | Comment keyword CHEF, set up as `CHEF`, `Chef`, `chef` and Telugu `చెఫ్` | One easy word. Vendor guides say keywords are case-sensitive exact matches, up to 5 per automation. |
 | DM link `https://craves.in/chef/application?utm_source=instagram&utm_medium=dm&utm_campaign=chef_acq` | Works signed in or signed out (signed out goes to phone OTP, then back). Never `craves.in/#for-chefs`: signed-in visitors get redirected to `/home`. |
 | Attribution through four manual signals | There is no analytics and no source field today. The UTM is ready for when capture is built. |
@@ -150,28 +151,31 @@ Things to know:
 | Posting times are tested, not assumed | Our two posts went out after midnight IST. 11:00 to 12:30 and 20:00 to 21:30 IST are hypotheses for a home-cook audience. |
 | Profile bio speaks to chefs, link `https://craves.in/chef/application` | The bio says "Order at craves.in" while customers can't order yet. Edit it by hand in the app: Windsor.ai can't change the bio. |
 
+## Decided by the owner (14 Oct 2026)
+
+| Question | Answer |
+|---|---|
+| Is the chef application live? | Yes, on craves.in. So the documents list, the save-and-finish-later step, the CRV reference and the "Don't have FSSAI?" guide with "Request a call from Craves" are all SAFE (brand.md S8, S9, S15, S17, S20). |
+| What do we say about the fee? | Nothing. Never state the fee or a percentage (N16). Say instead how earnings are settled: daily or weekly, the chef's choice, or with one tap to their bank (S18). |
+| Bangalore? | Hyderabad only for now, Bangalore later (N17). |
+| Were the 11 to 13 Oct posts boosted? | Yes. The organic baseline is the posts' own reach (71 and 48). |
+
 ## Open questions for the owner
 
 | # | Question | Why it matters |
 |---|---|---|
-| 1 | Is chef onboarding v2 live in production? [CONFIRM WITH OWNER: is CRAVES_CHEF_ONBOARDING_V2_ENABLED on] | The "you need two kitchen photos, an ID proof and a 14-digit FSSAI number" claim matches v2. The older flow says FSSAI submission is not available yet. It also decides whether we can mention the "Don't have FSSAI?" guide and the "Request a call from Craves" callback. |
-| 2 | Can we say "Earnings paid to your bank"? | It is on the live chef sign-in page, but payouts are manual and bank enrolment is deferred. |
-| 3 | What do we tell a chef who asks about the service fee? | The finance docs record a 7% service fee plus GST on the fee, but it is not in any chef-facing copy. Chefs will ask in DMs. [CONFIRM WITH OWNER: approved answer] |
-| 4 | Do we recruit in Bangalore? | Site metadata names Hyderabad and Bangalore. Terms, support and checkout say Hyderabad or Telangana only. |
-| 5 | How long does application review take? | No turnaround is written anywhere. The status page says applications are reviewed in arrival order and the time can vary. |
-| 6 | Is there a customer launch date we may share? | Today we can only say "launching soon for customers". The support guide says never promise a date. |
-| 7 | Can admins approve v2 applications in the live admin portal? | A 9 Oct doc said the live admin portal predated v2. No doc says it was redeployed since. |
-| 8 | Which admin sends the daily count of submitted Hyderabad applications, and who answers chef DMs in the first hour? | LEARN needs daily counts without marketing seeing applicant records, and TALK needs a person. |
-| 9 | Will any chef give written consent to appear in a reel? | We have no testimonials or consented chef footage. Instagram stops recommending accounts that mainly post unoriginal content to non-followers (a Reels rule extended to photos and carousels on 30 Apr 2026), so real kitchen footage matters. |
-| 10 | Were the two chef posts (11 and 12 Oct) boosted? | Account reach spiked on 11 to 13 Oct, hitting 12,304 on 12 Oct, while the two posts reached 71 and 48. Without the Meta Ads connector we can't tell. |
-| 11 | Can engineering add UTM and source capture to the chef application? | Without it, Instagram applications can't be told apart from others. |
-| 12 | What do we say about chef terms, packaging and kitchen standards? | The "Craves Chef Terms" link goes to the general terms page, and no packaging or hygiene standards are written down. Chefs will ask. |
-| 13 | Can chefs also sell on other platforms? | Not documented. Chefs will ask. |
-| 14 | Can we say "free to apply"? | The application has no payment step, but no page says it is free (ledger C13). Chefs will ask. |
-| 15 | What can customers see of a kitchen's location? | Cooks worry about sharing a home address. We can only say the address stays inside the application. |
-| 16 | Does the live form ask for a verified email? | The code on `main` does (ledger C8). If yes, Reel 3 gets a sixth item. |
-| 17 | Who pays for delivery and packaging? | Not documented for chefs. It is in the week-1 reply bank as a placeholder. |
-| 18 | May we delete our old reply to the spam comment on the 12 Oct image? | It tells a promo account it may reuse our content. |
-| 19 | Where are signed consent forms kept, and is there a form? | Every kitchen owner and voiceover speaker in week 1 signs one. |
+| 1 | How long does application review take? | No turnaround is written anywhere. The status page says applications are reviewed in arrival order and the time can vary. |
+| 2 | Is there a customer launch date we may share? | Today we can only say "launching soon for customers". The support guide says never promise a date. |
+| 3 | Can admins approve v2 applications in the live admin portal? | A 9 Oct doc said the live admin portal predated v2. No doc says it was redeployed since. |
+| 4 | Which admin sends the daily count of submitted Hyderabad applications, and who answers chef DMs in the first hour? | LEARN needs daily counts without marketing seeing applicant records, and TALK needs a person. |
+| 5 | Will any chef give written consent to appear in a reel? | We have no testimonials or consented chef footage. Instagram stops recommending accounts that mainly post unoriginal content to non-followers (a Reels rule extended to photos and carousels on 30 Apr 2026), so real kitchen footage matters. |
+| 6 | Can engineering add UTM and source capture to the chef application? | Without it, Instagram applications can't be told apart from others. |
+| 7 | What do we say about chef terms, packaging and kitchen standards? | The "Craves Chef Terms" link goes to the general terms page, and no packaging or hygiene standards are written down. Chefs will ask. |
+| 8 | Can chefs also sell on other platforms? | Not documented. Chefs will ask. |
+| 9 | Can we say "free to apply"? | The application has no payment step, but no page says it is free (ledger C13). Chefs will ask. |
+| 10 | What can customers see of a kitchen's location? | Cooks worry about sharing a home address. We can only say the address stays inside the application. |
+| 11 | Who pays for delivery and packaging? | Not documented for chefs. It is in the week-1 reply bank as a placeholder. |
+| 12 | May we delete our old reply to the spam comment on the 12 Oct image? | It tells a promo account it may reuse our content. |
+| 13 | Where are signed consent forms kept, and is there a form? | Every kitchen owner and voiceover speaker in week 1 signs one. |
 
 **Also unconfirmed, we test in week 1:** whether Meta Business Suite's comment-to-message works on reels, and whether the keyword rules (case-sensitive, up to 5 keywords) apply to comments as well as DMs. Both come from vendor guides, not Meta's own pages.

@@ -68,7 +68,7 @@ From 14 Sep (the start of the pull) to 9 Oct, reach and views were 0 every day. 
 - **Nobody saved or shared anything.** 0 saves and 0 shares on both posts. Nothing yet was worth keeping or sending to another cook.
 - **Nobody raised a hand.** No comment shows chef sign-up intent. The only real comment is spam.
 - **We cannot see bio-link taps.** Instagram insights do not show them, and `profile_links_taps` was 0 every day. So we don't know if the image post's "link in bio" worked. The bio itself talks to customers ("Order at craves.in") while customers cannot order yet.
-- **Most reach did not come from the posts.** Account reach hit 12,304 on 12 Oct, but the two posts reached 71 and 48 on their own. Almost all reach was from non-followers. Total likes are also well above organic likes. This suggests a boost, an ad or Facebook cross-posting. We cannot confirm which, because no Meta Ads connector is connected. [CONFIRM WITH OWNER: were the 11 to 13 Oct posts boosted or cross-posted, and with what budget?]
+- **Most reach did not come from the posts.** Account reach hit 12,304 on 12 Oct, but the two posts reached 71 and 48 on their own. Almost all reach was from non-followers. Total likes are also well above organic likes. The owner confirmed both posts were boosted. So the 11 to 13 Oct account reach was paid. The organic baseline is the posts' own reach (71 and 48) and organic likes. Boost spend and paid results can't be read until the Meta Ads connector is added in Windsor.ai.
 - **Both posts went out after midnight IST.** We have no data on when home cooks scroll. After midnight seems unlikely, so we test 11:00 to 12:30 IST and 20:00 to 21:30 IST this week. These are hypotheses, not facts.
 - **No reel data yet.** There is no watch time or skip rate baseline. Week 1 creates it.
 - **Applications.** The only count on record is 9 chef applications and 6 approved, from the Admin Explorer live check on 14 Sep 2026. [CONFIRM WITH OWNER: submitted chef applications 12 to 18 Oct 2026, from Admin Explorer (chefs dataset) or the chef reviews list]
@@ -160,7 +160,7 @@ Every reel follows the rules in [project-instructions.md](project-instructions.m
 
 ### Reel 1: "Kitchens first. Customers soon."
 
-**Idea (one):** Craves is launching soon for customers, and home chefs are joining first. Set up your kitchen before customers open and be one of the first home chefs in your area. One supporting line only: your menu, your prices. "Orders ring on your phone" and "Craves arranges pickup" get their own reel in week 2.
+**Idea (one):** Craves is launching soon for customers, and home chefs are joining first. Set up your kitchen before customers open and be one of the first home chefs in your area. One supporting line only: your menu, your prices. "Orders ring on your phone", "Craves arranges pickup" and "earnings settled daily or weekly, your choice" (S18) each get their own reel in week 2.
 
 **Why it should work:** It borrows the question hook of our best post (11 Oct carousel) but makes it more specific (one dish, people waiting for it). Hook type: `question`. The honest launch line sits right next to the brand line, so nobody who leaves early thinks orders are coming now (ASCI 1.4). It also gives a true reason to act now.
 
@@ -228,8 +228,6 @@ Gloss: Hyderabad home chefs: Craves is launching soon for customers, and chefs a
 
 **Why it should work:** We expect FSSAI to be the hardest step (no data yet), because it is the only item a cook may not already have. A specific, surprising number makes a strong hook. Hook type: `result-first` (a rule change, not an income result). The steps make it worth saving.
 
-**Hold rule:** the Craves lines (0:30 to 0:38) are true only if the live-form check in section 5 (Before Monday) shows the 14-digit FSSAI field and a way to save and leave. If the FSSAI step looks different, hold Reel 2 until the owner answers.
-
 **Post:** Thu 22 Oct, 20:30 IST, Trial Reel. Language: Tenglish voice, English on-screen numbers.
 
 **Build it with Claude Code and the motion-reel skill** (animated explainer, see "Build notes" below).
@@ -248,7 +246,7 @@ Keep the word "turnover" in the hook. Without it, a big "Rs 1.5 crore" on a Crav
 
 Hook 2 needs the "annual fee still applies" line very early, or it misleads. Hook 3 is the week-2 test if Reel 2 gets saves but few shares.
 
-**Voiceover (Tenglish, about 42 s):**
+**Voiceover (Tenglish, about 45 s):**
 
 | Time | Spoken (Tenglish) | Gloss (English, not spoken) |
 |---|---|---|
@@ -259,9 +257,8 @@ Hook 2 needs the "annual fee still applies" line very early, or it misleads. Hoo
 | 0:17-0:30 | Ela apply cheyyali? foscos.fssai.gov.in lo user ID create cheyyandi. Registration select chesi, mee details fill cheyyandi. Documents upload chesi, declaration accept chesi, portal chupinche fee pay cheyyandi. 17-digit application reference vastundi. | How do you apply? Create a user ID on foscos.fssai.gov.in. Choose registration and fill in your details. Upload your documents, accept the declaration and pay the fee the portal shows. You get a 17-digit application reference. |
 | 0:30-0:33 | Registration ayyaka mee 14-digit FSSAI number vastundi. | Once you are registered, you get your 14-digit FSSAI number. |
 | 0:33-0:38 | Craves application submit cheyyadaniki aa number kavali. Adi vachche lopu application start chesi save cheyyochu. | You need that number to submit your Craves application. Until it comes, you can start your application and save it. |
-| 0:38-0:42 | Ee steps save cheskondi. Craves link kosam CHEF ani comment cheyyandi. | Save these steps. For the Craves link, comment CHEF. |
-
-Optional line, only if the owner confirms onboarding v2 is live: "FSSAI lo help kavalante, application lo 'Request a call from Craves' undi." (If you need help with FSSAI, the application has "Request a call from Craves".) [CONFIRM WITH OWNER: is onboarding v2 live, with the "Don't have FSSAI?" guide and the callback?]
+| 0:38-0:41 | FSSAI lo help kavalante, application lo 'Request a call from Craves' undi. | If you need help with FSSAI, the application has "Request a call from Craves". |
+| 0:41-0:45 | Ee steps save cheskondi. Craves link kosam CHEF ani comment cheyyandi. | Save these steps. For the Craves link, comment CHEF. |
 
 Never say a fee amount. The old Rs 100 figure is from before the reform. The portal shows the current fee.
 
@@ -278,11 +275,12 @@ The FoSCoS steps (0:17 to 0:30) come from a 2022 NIFTEM guide, written before th
 | 0:17-0:30 | Five numbered steps build one by one over real kitchen footage (hands, a phone on the counter). | 1 Create a user ID on foscos.fssai.gov.in, 2 Choose registration, fill your details, 3 Upload documents, 4 Accept the declaration, 5 Pay the fee the portal shows |
 | 0:30-0:33 | A 14-box strip fills with X marks (never a real number). | Your 14-digit FSSAI number |
 | 0:33-0:38 | Phone mock-up of the Craves application with a "save" moment, over real kitchen footage from Reel 1. | Start your Craves application. Save it. Finish later. |
-| 0:38-0:42 | End card: Flame Red, Craves logo, large bold white text. | Comment CHEF |
+| 0:38-0:41 | The same phone mock-up, the "Request a call from Craves" option highlighted. | Stuck on FSSAI? Request a call from Craves |
+| 0:41-0:45 | End card: Flame Red, Craves logo, large bold white text. | Comment CHEF |
 
 **Build notes (Claude Code, motion-reel skill):** open Claude Code in this repo and ask:
 
-> BUILD Reel 2 from docs/marketing/chef-acquisition-growth-agent/week-1.md with the motion-reel skill. 9:16, about 42 seconds, synced to the recorded Tenglish voiceover. Colours, fonts and logo from brand.md: Flame Red #F62E18 with large bold white text only, #C92716 behind any small white text, Plus Jakarta Sans for headings, Inter for body, logo apps/customer-web-next/public/brand/craves-logo-20260805.svg. Keep all text inside the centre safe zone. Show "Source: FSSAI press release, 13 Mar 2026" directly under the rule cards, inside the safe zone. Put the real kitchen footage behind the cards for most beats, with the text animated over it. Render the file only. Do not post.
+> BUILD Reel 2 from docs/marketing/chef-acquisition-growth-agent/week-1.md with the motion-reel skill. 9:16, about 45 seconds, synced to the recorded Tenglish voiceover. Colours, fonts and logo from brand.md: Flame Red #F62E18 with large bold white text only, #C92716 behind any small white text, Plus Jakarta Sans for headings, Inter for body, logo apps/customer-web-next/public/brand/craves-logo-20260805.svg. Keep all text inside the centre safe zone. Show "Source: FSSAI press release, 13 Mar 2026" directly under the rule cards, inside the safe zone. Put the real kitchen footage behind the cards for most beats, with the text animated over it. Render the file only. Do not post.
 
 Record the voiceover first (a real voice, read by a native Telugu speaker) so the animation syncs to it. Put real kitchen footage (hands, a phone on the counter) behind the cards for most beats, with the text animated over it: Instagram has said reels that are mostly text are shown less (Mosseri, May 2023), and since 30 Apr 2026 its originality rule covers photos and carousels as well as Reels. If you test Telugu-script text, check the font has Telugu letters (Plus Jakarta Sans and Inter do not; Noto Sans Telugu does).
 
@@ -292,7 +290,7 @@ Record the voiceover first (a real voice, read by a native Telugu speaker) so th
 >
 > #FSSAI #FSSAIRegistration #FoSCoS #HomeChefs #HyderabadHomeChef #HomeFoodBusiness #HyderabadFood #HomemadeFood #Craves
 
-**Claims used:** from the FSSAI press release of 13 Mar 2026 (fssai.gov.in): from 1 Apr 2026 registration covers turnover up to Rs 1.5 crore (up from Rs 12 lakh), licence above that; registrations are perpetual, no renewal. Separately, from a secondary source (tax article, 9 Jul 2026, brand.md section 10): annual fees still apply. FoSCoS steps and the 17-digit application reference: brand.md section 10 (NIFTEM 2022), checked on foscos.fssai.gov.in on [date of the Mon 19 Oct check]. From the SAFE list: a 14-digit FSSAI number is needed to submit (S8); you can save progress and finish later (S9). Both depend on the live-form check.
+**Claims used:** from the FSSAI press release of 13 Mar 2026 (fssai.gov.in): from 1 Apr 2026 registration covers turnover up to Rs 1.5 crore (up from Rs 12 lakh), licence above that; registrations are perpetual, no renewal. Separately, from a secondary source (tax article, 9 Jul 2026, brand.md section 10): annual fees still apply. FoSCoS steps and the 17-digit application reference: brand.md section 10 (NIFTEM 2022), checked on foscos.fssai.gov.in on [date of the Mon 19 Oct check]. From the SAFE list: a 14-digit FSSAI number is needed to submit (S8); you can save progress and finish later (S9); the "Request a call from Craves" FSSAI help (S17).
 
 **Language variant to test:** Tenglish voice now. In week 2, the motion-reel build makes a Telugu-script text version cheap: same voice, Telugu-script cards. Log it as `Telugu script`.
 
@@ -300,11 +298,9 @@ Record the voiceover first (a real voice, read by a native Telugu speaker) so th
 
 ### Reel 3: Save-bait checklist (with a Hindi/Dakhini language test)
 
-**Idea:** Five things to keep ready before you apply to Craves: 18 or older, your phone number, two kitchen photos, an ID proof, a 14-digit FSSAI number. Plus the privacy rule: documents go only inside the application, never in a DM.
+**Idea:** Five things to keep ready before you apply to Craves: 18 or older, your phone number and email, two kitchen photos, an ID proof, a 14-digit FSSAI number. Plus the privacy rule: documents go only inside the application, never in a DM.
 
-[CONFIRM WITH OWNER: is onboarding v2 live?] This list is the v2 form on `main` (S8). The older form asks for different things (a photo of you, both sides of a government ID and a PAN card) and says FSSAI submission is "not available yet". Do not film or post Reel 3 until the live-form check in section 5 (Before Monday) matches this list.
-
-[CONFIRM WITH OWNER: C8, does the live form ask for a verified email?] If yes, add it as item 6, "Mee email (code vastundi)" (Your email, we send a code), change "5" to "6" in the hook, voiceover and captions, and add email to Follow-up 1 in section 4. The form also asks for a kitchen address with a map pin. Never show that step on screen (N14).
+This list is the live chef application on craves.in (S8, S20; owner confirmed 14 Oct 2026). The form also verifies an email with a code, so item 2 is "phone number and email". It also asks for a kitchen address with a map pin. Never show that step on screen (N14).
 
 **Why it should work:** Both old posts got 0 saves. A short checklist is the kind of reel people save to come back to. Hook type: `curiosity-gap`. A number and a clear payoff make it specific for non-followers who have never heard of Craves. The privacy line builds trust with cooks who worry about sharing documents.
 
@@ -333,7 +329,7 @@ Hook 5 is tempting but it tells people to wait, which works against applications
 |---|---|---|
 | 0:00-0:03 | Home chef avvalante, ee 5 ready ga unchukondi. Save cheskondi. | To become a home chef, keep these 5 ready. Save this. |
 | 0:03-0:07 | Okati: mee age kanisam 18 undali. | One: you must be at least 18. |
-| 0:07-0:12 | Rendu: mee phone number. OTP tho sign in avutaru. | Two: your phone number. You sign in with an OTP. |
+| 0:07-0:12 | Rendu: mee phone number, email. Rendinti ki code vastundi. | Two: your phone number and email. You get a code on each. |
 | 0:12-0:18 | Moodu: mee kitchen photos rendu. Clean ga, manchi light lo teeyandi. | Three: two photos of your kitchen. Take them clean, in good light. |
 | 0:18-0:25 | Naalugu: ID proof. Aadhaar, PAN, bank statement, leda vere government ID edaina okati. | Four: an ID proof. Aadhaar, PAN, a bank statement, or any other government ID. |
 | 0:25-0:32 | Aidu: 14-digit FSSAI number. Inka raleda? Application start chesi save cheyyandi, FSSAI vachaka submit cheyyandi. | Five: a 14-digit FSSAI number. Not yet? Start the application, save it, and submit once your FSSAI comes. |
@@ -348,7 +344,7 @@ On-screen text for this version: the same English text as the Tenglish version (
 |---|---|---|
 | 0:00-0:03 | Home chef banna hai toh, ye 5 ready rakho. Save karlo. | To become a home chef, keep these 5 ready. Save this. |
 | 0:03-0:07 | Ek: aapki umar 18 saal ya usse zyada honi chahiye. | One: you must be 18 or older. |
-| 0:07-0:12 | Do: aapka phone number. OTP se sign in hota. | Two: your phone number. You sign in with an OTP. |
+| 0:07-0:12 | Do: aapka phone number aur email. Dono pe code aata. | Two: your phone number and email. You get a code on each. |
 | 0:12-0:18 | Teen: aapke kitchen ke do photo. Saaf, achhi roshni mein lo. | Three: two photos of your kitchen. Clean, in good light. |
 | 0:18-0:25 | Chaar: ID proof. Aadhaar, PAN, bank statement, ya koi bhi government ID. | Four: an ID proof. Aadhaar, PAN, a bank statement, or any government ID. |
 | 0:25-0:32 | Paanch: 14-digit FSSAI number. Abhi nai aaya? Application shuru karke save karo, FSSAI aane ke baad submit karo. | Five: a 14-digit FSSAI number. Not yet? Start the application, save it, and submit once your FSSAI comes. |
@@ -363,7 +359,7 @@ A native Hindi/Dakhini speaker from Hyderabad reads this first. "Nakko" and "hot
 |---|---|---|
 | 0:00-0:03 | Top-down shot: a hand puts a blank paper checklist on a home kitchen counter. | Before you apply, keep these 5 ready |
 | 0:03-0:07 | A pen ticks box 1. | 1. 18 or older |
-| 0:07-0:12 | A phone on the counter shows the OTP sign-in screen (blurred test number). | 2. Your phone number |
+| 0:07-0:12 | A phone on the counter shows the OTP sign-in screen (blurred test number). | 2. Phone number and email |
 | 0:12-0:18 | Phone camera frames a clean counter and takes a photo, twice. | 3. Two kitchen photos |
 | 0:18-0:25 | A blank card with an ID icon. Never a real ID. | 4. ID proof: Aadhaar, PAN, bank statement or other government ID |
 | 0:25-0:32 | A strip of 14 boxes filled with X marks, then a "save" tick on the phone. | 5. 14-digit FSSAI number. No FSSAI yet? Save and finish later. |
@@ -386,7 +382,7 @@ Gloss: Keep these 5 ready for the Craves home chef application. Save this, Comme
 
 Gloss: Keep these 5 things ready to become a home chef on Craves. Save this, comment CHEF for the link.
 
-**Claims used (all from the SAFE list in brand.md):** S7 18+; S6 apply with your phone number (OTP); S8 two kitchen photos, an ID proof (Aadhaar, PAN, bank statement or other government ID) and a 14-digit FSSAI number to submit; S9 save progress and finish later; S5 applications reviewed by the Craves team. S8 and S9 hold only if the live-form check passes. The privacy line follows N15.
+**Claims used (all from the SAFE list in brand.md):** S7 18+; S6 apply with your phone number (OTP); S20 phone and email, each verified with a code; S8 two kitchen photos, an ID proof (Aadhaar, PAN, bank statement or other government ID) and a 14-digit FSSAI number to submit; S9 save progress and finish later; S5 applications reviewed by the Craves team. The privacy line follows N15.
 
 **Language variant to test:** this is the week's language test. Tenglish (Fri) vs Hindi/Dakhini (Sat), same footage, same on-screen text, same time slot, same bilingual DM, both Trial Reels. Log `language` as `Tenglish` and `Hindi/Dakhini` in results.csv. It is n=1 per language and the day differs, so LEARN treats the result as a hint.
 
@@ -441,7 +437,7 @@ One automation holds all the keywords, so everyone gets this same DM, including 
 
 The English block is the gloss of the Tenglish block, and it is sent.
 
-[CONFIRM WITH OWNER: is onboarding v2 live?] The documents list (S8), the CRV reference (S15) and "progress is saved" (S9) come from the v2 form. If the live-form check in section 5 shows a different list, delete the documents sentence from both blocks before you save the automation. If the live-form check shows "Application ID" instead of a CRV reference, ask for that instead (brand.md S15).
+The documents list (S8), the CRV reference (S15) and "progress is saved" (S9) come from the live chef application.
 
 Notes:
 
@@ -450,7 +446,7 @@ Notes:
 
 ### Follow-ups (only to people who reply, within 24 hours of their reply)
 
-**Follow-up 1: they told us their area and dish.** [CONFIRM WITH OWNER: is onboarding v2 live?] Send only once the live-form check matches the documents below.
+**Follow-up 1: they told us their area and dish.**
 
 > Super! [area] nunchi [dish], chala bagundi. Application lo rendu kitchen photos, ID proof, 14-digit FSSAI number kavali. FSSAI inka lekapothe, application start chesi save cheyyandi, FSSAI vachaka submit cheyyandi. Edaina doubt unte ikkade adagandi.
 
@@ -471,14 +467,13 @@ Public replies never contain the word "chef" (not even inside a link), because o
 **"Do I need FSSAI?"**
 - Tenglish: Avunu. Craves application submit cheyyadaniki 14-digit FSSAI number kavali. FSSAI says 1 April 2026 nunchi turnover Rs 1.5 crore varaku registration saripotundi, renewal ledu. Annual fee matram undi: current fee foscos.fssai.gov.in lo chudandi. Ee lopu Craves application start chesi save cheyyochu.
 - English: Yes. You need a 14-digit FSSAI number to submit the Craves application. FSSAI says registration covers turnover up to Rs 1.5 crore from 1 April 2026, and does not need renewal. Annual fees still apply: check the current fee on foscos.fssai.gov.in, where you also apply. Meanwhile you can start your Craves application and save it.
-- Use these only if the live-form check shows the 14-digit FSSAI field and a way to save. If the FSSAI step looks different, hold this reply until the owner answers.
-- Only if the owner confirms onboarding v2 is live, add: "The application also has a 'Don't have FSSAI?' guide and a 'Request a call from Craves' option." [CONFIRM WITH OWNER: is onboarding v2 live?]
+- Add: "The application also has a 'Don't have FSSAI?' guide and a 'Request a call from Craves' option." (S17)
 
 **"How much is the FSSAI fee?" / "How long does FSSAI take?"**
 - English: The FoSCoS portal shows the current fee when you apply, so please check there. We don't want to quote an old number or guess a timeline.
 - Never say Rs 100 or any other amount, and never promise a timeline.
 
-**"What documents do I need?"** [CONFIRM WITH OWNER: is onboarding v2 live?] Use only once the live-form check matches this list.
+**"What documents do I need?"**
 - Tenglish: Rendu kitchen photos, ID proof (Aadhaar, PAN, bank statement leda vere government ID), 14-digit FSSAI number. Anni application lone upload cheyyandi, DM lo pampakandi.
 - English: Two kitchen photos, an ID proof (Aadhaar, PAN, a bank statement or another government ID) and a 14-digit FSSAI number. Upload them only inside the application, please don't send them in DMs.
 
@@ -488,8 +483,14 @@ Public replies never contain the word "chef" (not even inside a link), because o
 - If they ask who pays for delivery or packaging: [CONFIRM WITH OWNER: approved answer on delivery and packaging costs for chefs]
 
 **"What does Craves charge?" / "What's the commission?"**
-- [CONFIRM WITH OWNER: approved chef-facing answer on the Craves service fee. Do not quote a percentage until the owner approves the wording.]
-- Until then: "Good question. Please email contact@craves.in and the team will explain."
+- Tenglish: Mee menu, mee prices. Mee earnings daily leda weekly settle avutayi, meeku nachinattu. Leda okka tap tho mee balance bank ki pampukovachu. Payments gurinchi inkemaina unte contact@craves.in ki email cheyyandi.
+- English: You set your own prices. Your earnings are settled daily or weekly, your choice, or you send your balance to your bank with one tap. For anything else about payments, email contact@craves.in.
+- Never state a fee or a percentage (owner decision, N16).
+
+**"When do I get paid?"**
+- Tenglish: Mee earnings daily leda weekly settle avutayi, meeku nachinattu. Leda okka tap tho bank ki pampukovachu. Customers open ayyaka orders start avutayi.
+- English: Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap. Orders start once customers open, which is soon.
+- Never give an amount (N1).
 
 **"Is it free to apply?"**
 - [CONFIRM WITH OWNER: can we say applying is free? The application in the code has no payment step, but nothing chef-facing says so.]
@@ -505,7 +506,7 @@ Public replies never contain the word "chef" (not even inside a link), because o
 
 **"I'm in Bangalore. Can I join?"**
 - English: Right now we're focusing on Hyderabad. Email contact@craves.in and we'll keep you posted.
-- [CONFIRM WITH OWNER: Bangalore recruitment]
+- Never promise a Bangalore date (N17).
 
 **"Is it safe? Will strangers see my home address?"**
 - Tenglish: Mee address comments lo, DM lo pettakandi. Kitchen address application lone istaru, pickup kosam.
@@ -556,18 +557,10 @@ Times are IST. Posting times are tests: log them in `post_time_ist`.
 - [ ] Profile fix: new bio and link (section 2).
 - [ ] Edit the two old captions to remove the income lines (section 2). Then tell the owner what you changed.
 - [ ] Hide the 12 Oct spam comment.
-- [ ] **Live-form check.** On a phone with a team test number, open https://craves.in/chef/application. Use placeholder details and never upload a real ID. Do not submit. Write down what you see:
-  - (a) Does the FSSAI step ask for a 14-digit FSSAI number?
-  - (b) Can you save and leave, then come back to your progress?
-  - (c) Do "Don't have FSSAI?" and "Request a call from Craves" appear (C1)?
-  - (d) Are there two kitchen-photo slots?
-  - (e) Are the ID options Aadhaar, PAN, bank statement or other government ID?
-  - (f) Does Basic details ask for an email and send it a code (C8)?
-  - (g) Does the status page show a CRV reference or an "Application ID" (S15)?
-  - If the form looks different, hold Reels 2 and 3, the "Do I need FSSAI?" and "What documents do I need?" replies, and Follow-up 1 until the owner answers. Tell whoever counts applications about the test draft, so it is left out of the counts.
+- [ ] Walk through https://craves.in/chef/application once on a phone with a team test number, for the Reel 1 and Reel 3 screen shots. Use placeholder details, never upload a real ID, and do not submit. Tell whoever counts applications about the test draft, so it is left out of the counts.
 - [ ] Name the people: [CONFIRM WITH OWNER: native Telugu reader], [CONFIRM WITH OWNER: Hindi/Dakhini reader], [CONFIRM WITH OWNER: who answers DMs in the first hour after each post], [CONFIRM WITH OWNER: who builds Reel 2 in Claude Code]. Get written consent from the kitchen owner and each voiceover speaker (section 3).
 - [ ] Agree which admin sends you the daily count of submitted Hyderabad applications (from `/admin/analytics` on admin.craves.in, chefs dataset, or the chef reviews list). Marketing does not get Admin Explorer access.
-- [ ] Ask the owner for every open answer in this pack: is onboarding v2 live (with the FSSAI guide and callback); does the live form need a verified email (C8); the chef-facing answer on the service fee; can we say applying is free; delivery and packaging costs for chefs; what customers can see of a kitchen's location; Bangalore; review turnaround (only if we want to state one); a customer launch date (only if it may be shared); were the 11 to 13 Oct posts boosted or cross-posted, and with what budget; may we delete our old reply to the spam comment; submitted applications 12 to 18 Oct; the four people above; and where signed consent forms are kept.
+- [ ] Ask the owner for the answers still open in this pack: can we say applying is free; delivery and packaging costs for chefs; what customers can see of a kitchen's location; review turnaround (only if we want to state one); a customer launch date (only if it may be shared); may we delete our old reply to the spam comment; submitted applications 12 to 18 Oct; the four people above; and where signed consent forms are kept. Already decided on 14 Oct: the application is live, the fee is not disclosed, earnings are settled daily or weekly or with one tap, Hyderabad only, the 11 to 13 Oct posts were boosted.
 
 ### Mon 19 Oct: SCOUT + WRITE (30 min)
 

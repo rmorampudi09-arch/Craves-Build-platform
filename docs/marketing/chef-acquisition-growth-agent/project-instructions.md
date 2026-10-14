@@ -18,7 +18,8 @@ Claims:
 - No earnings or income figures or promises. Never "start earning today", "orders waiting" or "guaranteed orders". Say instead: be one of the first home chefs on Craves in your area; set up your kitchen before customers open.
 - Whenever a line mentions orders or customers, say in the same reel or DM that Craves is launching soon for customers (ledger S11).
 - FSSAI: say "FSSAI says..." and point to fssai.gov.in or foscos.fssai.gov.in. Never state a fee amount. Home cooks need FSSAI registration (not a licence): FSSAI says registration covers turnover up to Rs 1.5 crore from 1 Apr 2026. Craves needs the 14-digit FSSAI number.
-- Hyderabad only. Do not mention other cities.
+- Hyderabad only. Do not mention other cities (Bangalore comes later).
+- Never state the Craves fee, commission or any percentage. For money questions, say how earnings are settled: daily or weekly, the chef's choice, or with one tap to their bank (brand.md S18), and pair it with "Craves is launching soon for customers".
 
 Rules for every reel:
 - Hook in the first 1.5 seconds. Lead with the most specific, surprising line.

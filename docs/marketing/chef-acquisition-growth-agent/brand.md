@@ -4,7 +4,7 @@ This is the knowledge file the growth agent reads before it writes anything. Upl
 
 **The claims ledger in section 4 is the rule book.** Every other file in this kit (project-instructions.md, prompts.md, week-1.md) only uses claims that this ledger marks SAFE. If a claim is not in the ledger, it is not SAFE.
 
-Last checked: Wednesday 14 Oct 2026. Before each week, re-check anything marked CHECK FIRST.
+Last checked: Wednesday 14 Oct 2026. Owner decisions applied 14 Oct 2026: the chef application on craves.in is live; don't disclose the fee; earnings are settled daily or weekly (the chef's choice) or with one tap to their bank; Hyderabad now, Bangalore later; the 11 to 13 Oct posts were boosted. Before each week, re-check anything marked CHECK FIRST.
 
 ---
 
@@ -13,12 +13,12 @@ Last checked: Wednesday 14 Oct 2026. Before each week, re-check anything marked 
 - **What Craves is.** A homemade food marketplace based in Hyderabad. Home chefs cook in their own home kitchens. Customers order from home chefs near them. Our contact page says: "a Hyderabad-based homemade food marketplace".
 - **Where we are right now.** Craves is welcoming home chefs first. Customer sign-up is not open yet. The app tells customers "Craves is launching soon for customers". Our own support guide says: never promise a date.
 - **So what we are recruiting for.** Home chefs who want to be among the first on Craves in their area, and set up their kitchen before customers open.
-- **City.** Hyderabad only, for now. The customer terms and support guide say Hyderabad, and the finance checkout only accepts Telangana orders. Bangalore appears in some website copy, but we do not recruit there in our content. [CONFIRM WITH OWNER: are we recruiting chefs in Bangalore yet?]
+- **City.** Hyderabad only, for now. Owner decision (14 Oct 2026): recruit in Hyderabad now, Bangalore later. Bangalore appears in some website copy, but we do not mention it in our content until the owner says so.
 - **Instagram.** @craves.in_ (account id 17841414797291891). 56 followers and 2 posts, both chef recruitment, as of 14 Oct 2026.
 - **Where the application starts.** https://craves.in/chef/application. It works whether you are signed in or not. If you are signed out, it asks for your phone number and a one-time code (OTP), then brings you back to the application. Do not send people to craves.in/#for-chefs: signed-in visitors get sent to /home and never see the chef section.
 - **What happens after they apply (in the app's own words).**
   1. "Thank you for joining Craves. Your application has been received, and our team will review your details."
-  2. Their application gets a reference like CRV-10001, shown on the status page. The code gives one as soon as the application is saved, so a reference does not prove it was submitted. [CONFIRM ON LIVE FORM: does the status page show "Application reference CRV-..." or "Application ID"?]
+  2. Their application gets a reference like CRV-10001, shown on the status page. The reference is given as soon as the application is saved, so a reference does not prove it was submitted.
   3. "Applications are reviewed in the order they arrive, so the time can vary."
   4. If approved: "Once approved, you can add menu items, configure working hours and manage orders."
 - **Who to email.** contact@craves.in. The contact page lists it for "home-chef programmes". There is no separate chef recruitment email, WhatsApp or phone line.
@@ -54,6 +54,7 @@ These come from news stories and one study, mostly about Bengaluru and other cit
 | Time and care work | Home-business women spent 5.8 hours a day on the business around 6.6 hours of unpaid care work (IFMR LEAD, 2021; Rajasthan and Tamil Nadu study; figures from search summaries, source PDF not verified). | "Your menu, your prices." Save your application and finish later. |
 | FSSAI and paperwork feel scary | Most home-food platforms in the research require FSSAI or help chefs get it. | FSSAI facts from section 10, said as "FSSAI says...". The list of what you need to submit. |
 | Not confident with apps | Mealawe's founder: cooks "know how to use basic phones", so it built a simple, local-language app. | Apply with your phone number. We help in DMs if you get stuck. |
+| "Will I actually get paid, and when?" | No survey found. Payment trust is a common worry for first-time sellers. | "Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap." (S18) |
 | "Will anyone even order?" | No data. It is a fair worry: customers are not open yet. | Be honest: customers open soon, chefs are joining first. Never promise orders. |
 | Safety of sharing a home address | No survey found. | Share your address only inside the application, never in DMs or comments. Craves uses it to arrange pickup from your kitchen. We never show anyone's address in our posts. [CONFIRM WITH OWNER: what customers see of a kitchen's location.] |
 
@@ -61,7 +62,7 @@ These come from news stories and one study, mostly about Bengaluru and other cit
 
 ## 3. What we offer (SAFE claims only)
 
-Say these freely, with one condition: any line that mentions orders or customers (S1, S3) must also say customers open soon (S11). Each one is in the ledger below with its source.
+Say these freely, with one condition: any line that mentions orders, customers or earnings (S1, S3, S18) must also say customers open soon (S11). Each one is in the ledger below with its source.
 
 - "Cook at home. Craves brings the orders."
 - "Your menu, your prices." You set your dish prices.
@@ -72,6 +73,8 @@ Say these freely, with one condition: any line that mentions orders or customers
 - To submit, you need two kitchen photos, an ID proof (Aadhaar, PAN, bank statement or other government ID) and your 14-digit FSSAI number.
 - You can save your progress and finish later.
 - Craves arranges pickup from your kitchen.
+- Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap.
+- No FSSAI yet? The application has a "Don't have FSSAI?" guide and a "Request a call from Craves" option.
 - Customers open soon. Chefs are joining first. Be one of the first home chefs on Craves in your area and set up your kitchen before customers open.
 - Questions about the home-chef programme: contact@craves.in.
 
@@ -96,28 +99,26 @@ Say these freely, with one condition: any line that mentions orders or customers
 | S5 | "Every Craves home chef goes through an application and document review before their kitchen can list food." | SAFE | `apps/customer-web-next/src/features/seo/lib/seo-craves.ts`. Approval needs documents approved and FSSAI verified by the Craves team (`docs/modules/chef-onboarding-uiux-20261009/README.md`). Use only this first half. The ratings half of that sentence is CHECK FIRST (C9). |
 | S6 | Apply with your phone number. We send a one-time code (OTP). | SAFE | Chef sign-in is phone OTP only (`phone-auth-form.tsx`). |
 | S7 | You must be 18 or older to apply. | SAFE | The form says "You must be at least 18 years old to apply as a Craves home chef." (`chef-onboarding-flow.ts`). |
-| S8 | To submit you need: two kitchen photos, an ID proof (Aadhaar, PAN, bank statement or other government ID) and a 14-digit FSSAI number. | SAFE | `apps/customer-web-next/src/features/chef-onboarding/lib/chef-onboarding-flow.ts`, `chef-onboarding-v2-contract.ts`. This is the flow on `main`. An older flow also exists in the code and handles FSSAI differently, so confirm once on the live form during week 1. [CONFIRM WITH OWNER: which chef application flow is live in production (CRAVES_CHEF_ONBOARDING_V2_ENABLED)?] |
+| S8 | To submit you need: two kitchen photos, an ID proof (Aadhaar, PAN, bank statement or other government ID) and a 14-digit FSSAI number. | SAFE | `apps/customer-web-next/src/features/chef-onboarding/lib/chef-onboarding-flow.ts`, `chef-onboarding-v2-contract.ts`. This is the onboarding v2 flow. The owner confirmed on 14 Oct 2026 that the chef application on craves.in is live. |
 | S9 | You can save your progress and finish later. | SAFE | "Your progress is saved, so you can finish later." (`chef-application-workspace.tsx`). The FSSAI step says "You can save an incomplete application and return later." |
 | S10 | Craves arranges pickup from your kitchen. | SAFE | Craves books the courier after the chef marks the food ready. The first production delivery test passed on 9 Sep 2026 (`docs/handover/2026-09-09-borzo-standard-production-e2e-milestone.md`). Keep to this exact wording. No courier names, no pickup times. |
 | S11 | Customers open soon. Chefs are joining first. "Craves is launching soon for customers." | SAFE | `services/user-chef-service/src/main/resources/support-assistant/guide.md`, `docs/referrals/CHEF_ACTIVATION_20261012.md`. Must be said whenever we mention orders or customers. Never give a date. |
 | S12 | Be one of the first home chefs on Craves in your area. Set up your kitchen before customers open. | SAFE | Follows from S11. This is our main framing. |
 | S13 | Craves is based in Hyderabad. | SAFE | Live contact page. |
 | S14 | contact@craves.in for home-chef programmes. | SAFE | Live contact page: "For partnerships, media, home-chef programmes, or business enquiries, email contact@craves.in." |
-| S15 | Your application gets a reference like CRV-10001, shown on the status page. | SAFE (DMs only), confirm on live form | `docs/modules/chef-onboarding-uiux-20261009/README.md`, `chef-application-status.tsx`. In code, not yet seen live. Needs onboarding v2. The code is given as soon as the application is saved, before submission, so check the status in the admin chef-reviews list before counting it as submitted. If the reference is missing, the status page shows "Application ID" instead. [CONFIRM ON LIVE FORM: does the status page show "Application reference CRV-..." or "Application ID"?] If it shows Application ID, ask for that instead. Used in TALK to ask for the reference. Not a selling point for reels. |
+| S15 | Your application gets a reference like CRV-10001, shown on the status page. | SAFE (DMs only) | `docs/modules/chef-onboarding-uiux-20261009/README.md`, `chef-application-status.tsx`. The reference is given as soon as the application is saved, before submission, so check the status in the admin chef-reviews list before counting it as submitted. Used in TALK to ask for the reference. Not a selling point for reels. |
 | S16 | "Applications are reviewed in the order they arrive, so the time can vary." | SAFE (as an answer) | The app's own status-page wording (`chef-application-status.tsx`). Use only when someone asks how long review takes. Never give a number of days. |
+| S17 | No FSSAI yet? The application has a "Don't have FSSAI?" guide and a "Request a call from Craves" option ("Our Craves team will call you on your registered mobile number to help with your FSSAI application."). | SAFE | Part of onboarding v2 (`chef-onboarding-sections.tsx`), live per the owner (14 Oct 2026). Craves helps; the chef still applies and pays on FoSCoS (N11). Was C1. |
+| S18 | Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap. | SAFE | Owner decision, 14 Oct 2026. The chef finance page has a "Send Rs X to my bank" button, usable once a day (`chef-withdrawal-panel.tsx`), so never say "as many times as you like". The one-tap button exists today. The daily or weekly choice ships with the RazorpayX payout work, before customers open. This is about how money is paid, never how much (N1), and it counts as mentioning orders, so pair it with S11. Was C2. |
+| S19 | Bank details are not needed to submit the application. | SAFE | "You can add bank details later. They aren't needed to submit your application for review." (`chef-onboarding-sections.tsx`). Was C7. |
+| S20 | You need a phone number and an email you can open: the form sends a code to each. | SAFE | Basic details verify the email with a code (`docs/modules/chef-onboarding-v2/README.md`, `chef-onboarding-flow.ts`). Was C8. |
 
 ### CHECK FIRST
 
 | # | Claim | Status | Why / source |
 |---|---|---|---|
-| C1 | "Don't have FSSAI?" guide inside the application, and the "Request a call from Craves" callback ("Our Craves team will call you on your registered mobile number to help with your FSSAI application.") | CHECK FIRST | Only exists in onboarding v2. The v2 switch defaults to off and no release receipt says it is on. The older flow says "FSSAI submission and application assistance are not available yet." Open the live form and look for it before you mention it. |
-| C2 | "Earnings paid to your bank." | CHECK FIRST | Live on the chef sign-in page, but payouts are manual today, bank details are deferred, and the automatic payout provider is not set up. The full payment and bank journey had not been run as of 16 Sep 2026 (`docs/finance/MANUAL_CRAVES_SETTLEMENT.md`, `docs/launch-closure/README.md`). Do not lead with it. |
-| C3 | Craves service fee (7%, plus GST on the fee). | CHECK FIRST | An owner instruction in `docs/finance/MANUAL_CRAVES_SETTLEMENT.md`. Not in any chef-facing copy, and the tax treatment is marked unconfirmed in the code. [CONFIRM WITH OWNER: what should we say when someone asks about the commission or fee?] |
-| C4 | Bangalore. | CHECK FIRST | In website SEO copy, but the terms and support guide say Hyderabad and checkout is Telangana only. [CONFIRM WITH OWNER: Bangalore recruitment.] |
 | C5 | How long review takes. | CHECK FIRST | No turnaround is written anywhere. Use S16 wording only. [CONFIRM WITH OWNER: typical review time, if we ever want to state one.] |
 | C6 | When customers open. | CHECK FIRST | No date anywhere. The support guide says never promise a date. [CONFIRM WITH OWNER: customer launch date, when public.] |
-| C7 | Bank details are not needed to submit the application. | CHECK FIRST | True in the code on `main` ("You can add bank details later. They aren't needed to submit your application for review.", `chef-onboarding-sections.tsx`). Confirm on the live form. |
-| C8 | You need an email address you can open (the form verifies it with a code). | CHECK FIRST | True in the code on `main` (`chef-onboarding-flow.ts`). Useful when helping someone who is stuck. Confirm on the live form. |
 | C9 | Customers can see ratings and reviews. | CHECK FIRST | Built in code, described as "source only" in the 11 Sep 2026 handover. Not confirmed live. |
 | C10 | "Reach nearby customers." | CHECK FIRST | Live on the homepage chef section, but customers are not open yet. If used, it must say "when customers open". |
 | C11 | Dish categories (Biryani, Tiffins, Pickles and so on). | CHECK FIRST | In the chef menu code. Fine as idea prompts. Check the live menu before showing a category on screen as something you can sell. |
@@ -135,27 +136,30 @@ Say these freely, with one condition: any line that mentions orders or customers
 | N4 | Meal plans or tiffin subscriptions for chefs. | NEVER | The chef web page says "Meal plans are coming soon" (`apps/customer-web-next/src/app/chef/meal-plans/page.tsx`). |
 | N5 | "Download the chef app", app store links or badges. | NEVER | "Our iOS and Android apps are awaiting App Store and Google Play approval." (`apps/landing-v20/src/components/LandingNotice.tsx`) |
 | N6 | Craves Academy. | NEVER | It is internal engineering training, not chef training (`docs/academy/README.md`). |
-| N7 | Commission comparisons with any other platform, or naming competitors. | NEVER | Our fee is not public (C3). Comparisons need proof under ASCI 1.1. |
+| N7 | Commission comparisons with any other platform, or naming competitors. | NEVER | We never disclose our fee (N16). Comparisons need proof under ASCI 1.1. |
 | N8 | Numbers about Craves: chef counts, kitchens, orders, ratings ("100+ chefs joined", "6 kitchens serving now"). | NEVER | No real public numbers exist. "6 kitchens serving now" in the homepage mockup is decoration, not data. Internal admin counts are not for public use. |
 | N9 | "Hygiene-inspected kitchens", "FSSAI-certified chefs", "Verified by Craves" badges. | NEVER | No kitchen inspection or hygiene standard is documented. Use S5 instead. |
 | N10 | An FSSAI fee amount (for example "only Rs 100"). | NEVER | Rs 100 is the pre-April 2026 figure and FSSAI says fees were reduced. Tell people to check foscos.fssai.gov.in. |
-| N11 | "You don't need FSSAI", "Craves gets your FSSAI for you", "FSSAI in 5 minutes". | NEVER | Craves needs the 14-digit number to submit (S8). At most Craves offers guidance and a callback (C1). |
+| N11 | "You don't need FSSAI", "Craves gets your FSSAI for you", "FSSAI in 5 minutes". | NEVER | Craves needs the 14-digit number to submit (S8). At most Craves offers guidance and a callback (S17). |
 | N12 | "Job", "hiring", "salary", "work-from-home job". | NEVER | Craves is a marketplace. Home chefs run their own kitchens. This is not employment. |
 | N13 | A real chef's name, face, voice or kitchen without their written consent. | NEVER | See section 11. Includes applicants named in internal docs. |
 | N14 | Anyone's full home address on screen: house number, street, building name, gate, a map pin, a letter or bill, or the address step of the form. | NEVER | Safety. Applies to team members too. |
 | N15 | Asking for Aadhaar, PAN, FSSAI certificate, bank details or address in DMs or comments. | NEVER | All documents go only inside the Craves application. |
+| N16 | The Craves fee or commission, or any percentage. | NEVER | Owner decision, 14 Oct 2026: don't disclose the fee. If asked, answer with how earnings are settled (S18). Was C3. |
+| N17 | Bangalore, or any city other than Hyderabad. | NEVER (for now) | Owner decision, 14 Oct 2026: Hyderabad now, Bangalore later. Was C4. |
 
 ### "If someone asks..." answers
 
 | They ask | Say | Ledger |
 |---|---|---|
 | How much will I earn? | "That depends on your menu, your prices and how many orders come in. Customers open soon, so we can't promise numbers. Your menu, your prices." | S2, S11, N1 |
-| What's the commission? | [CONFIRM WITH OWNER: approved answer.] Until then: "Good question. Please email contact@craves.in and the team will explain." | C3, S14 |
+| What's the commission? / What does Craves charge? | "You set your own prices. Your earnings are settled daily or weekly, your choice, or you send your balance to your bank with one tap. For anything else about payments, email contact@craves.in." Never state a fee or percentage. | S2, S18, S14, N16 |
+| When do I get paid? | "Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap. Customers open soon, so orders start then." | S18, S11 |
 | When will I get orders? | "Customers open soon. Chefs are joining first, so you can set up before they arrive." | S11, S12 |
 | How long is review? | "Applications are reviewed in the order they arrive, so the time can vary." | S16 |
-| I don't have FSSAI. | "You'll need a 14-digit FSSAI number to submit. You can start now and save your application. FSSAI says that from 1 April 2026, registration covers food businesses with turnover up to Rs 1.5 crore. Steps are on foscos.fssai.gov.in." Add the callback only if C1 is confirmed. | S8, S9, section 10 |
+| I don't have FSSAI. | "You'll need a 14-digit FSSAI number to submit. You can start now and save your application. FSSAI says that from 1 April 2026, registration covers food businesses with turnover up to Rs 1.5 crore. Steps are on foscos.fssai.gov.in." Add: "The application has a 'Don't have FSSAI?' guide and a 'Request a call from Craves' option." | S8, S9, S17, section 10 |
 | Is it safe to share my address? | "Please share your address only inside the application, never here in DMs. Craves uses it to arrange pickup from your kitchen." | S10, N15 |
-| Are you in Bangalore? | "Right now we're focusing on Hyderabad. Email contact@craves.in and we'll keep you posted." | C4 |
+| Are you in Bangalore? | "Right now we're focusing on Hyderabad. Email contact@craves.in and we'll keep you posted." | N17 |
 | Is there an app? | "You apply on craves.in. It works on your phone browser." | N5 |
 
 ---
@@ -204,7 +208,7 @@ We sound like a warm, practical neighbour who knows the process. Not a hype acco
 |---|---|
 | home chef, home kitchen, kitchen | vendor, seller, cloud kitchen, partner (for a chef) |
 | apply, application, review, approved | hiring, job, salary, vacancy |
-| your menu, your prices | earn, income, profit, side hustle, passive income, financial freedom |
+| your menu, your prices; "your earnings are settled daily or weekly" (S18 only) | earn, income, profit, side hustle, passive income, financial freedom |
 | be one of the first, set up before customers open | orders waiting, guaranteed, instant, start today |
 | FSSAI registration (for home chefs) | FSSAI licence (wrong for most home chefs, see section 10), FSSAI certified |
 | Craves (in text), Craves team | CRAVES in body text (fine in the logo only) |
@@ -318,7 +322,7 @@ It speaks to customers, who cannot sign up yet. week-1.md has the replacement.
 
 - **Keep:** the opening question about their cooking ("Mee inti vantalu andariki nachutunnaya?" = "Does everyone love your home cooking?"), Tenglish, the home chef framing, #IntiVantalu and #ManaVantalu.
 - **Drop:** income lines. "Mee cooking talent ni income ga marchukondi" ("Turn your cooking talent into income") and "ఇంటి నుంచే డబ్బులు సంపాదించొచ్చు" ("you can earn money from home") now break N1. Also drop "Link in bio": Instagram insights do not show us who taps the bio link, while "Comment CHEF" lets us count interest per reel. Drop the rocket emoji too.
-- **Don't over-read the numbers.** Account-level reach jumped to 12,304 on 12 Oct, almost all from non-followers, far above the two posts' own reach (71 and 48). That points to a boost, an ad or Facebook cross-posting, but the data can't say which. Compare reels with reels, not with those days. [CONFIRM WITH OWNER: were either of these posts boosted or cross-posted to Facebook?]
+- **Don't over-read the numbers.** Account-level reach jumped to 12,304 on 12 Oct, almost all from non-followers, far above the two posts' own reach (71 and 48). That was the boost. The owner confirmed both posts were boosted (14 Oct 2026). So that account-level reach was paid. The posts' own reach (71 and 48) and organic likes are the organic baseline. Compare reels with reels, not with those days.
 
 ---
 
@@ -339,7 +343,7 @@ FSSAI is the most common worry, and the most useful explainer we can make. Say t
 
 Links: https://fssai.gov.in and https://foscos.fssai.gov.in
 
-Craves's own FSSAI help (the in-form guide and "Request a call from Craves") is C1: check the live form first.
+Craves's own FSSAI help (the in-form guide and "Request a call from Craves") is S17.
 
 ---
 
@@ -357,7 +361,7 @@ Craves's own FSSAI help (the in-form guide and "Request a call from Craves") is 
 ### Meta policy
 
 - Meta's unrealistic-outcomes policy (for ads, and we apply it to everything) bans claims of getting rich quickly, claims that little or no work is needed to make money, and guarantees of financial gain without details of the role, requirements and risks. It also bans asking for upfront payment or financial account details. So: no income claims, and we always describe what the work involves (cooking, photos, FSSAI, review).
-- If we ever boost or run ads: Meta has an Employment special ad category with targeting limits. It is not confirmed whether a home-chef recruitment ad in India falls under it. Check in Ads Manager when setting up the ad.
+- When we boost or run ads (the 11 to 13 Oct posts were boosted): Meta has an Employment special ad category with targeting limits. It is not confirmed whether a home-chef recruitment ad in India falls under it. Check in Ads Manager when setting up the ad.
 
 ### When someone other than @craves.in_ posts about Craves
 

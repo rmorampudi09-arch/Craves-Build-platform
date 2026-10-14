@@ -149,28 +149,50 @@ class ChefCatalogDatabaseTest {
 
     // ---- kitchen photos ----
 
-    @Test void photoUploadStoresTheUrlPerKindAndDeleteClearsOnlyThatKind() {
-        var withKitchenPhoto=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+    @Test void uploadsFillSlotsInOrderThenLock() {
+        var first=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
         verify(media).uploadKitchenImage(kitchen,KitchenPhotoKind.KITCHEN,file);
-        assertNotNull(withKitchenPhoto.kitchenPhotoUrl()); assertTrue(withKitchenPhoto.kitchenPhotoUrl().startsWith("https://media.example/public/kitchens/"+kitchen+"/kitchen/"));
-        assertNull(withKitchenPhoto.chefPhotoUrl());
-        assertEquals(withKitchenPhoto.kitchenPhotoUrl(),catalog.getMyKitchen(owner).kitchenPhotoUrl());
+        assertTrue(first.kitchenPhotoUrl().startsWith("https://media.example/public/kitchens/"+kitchen+"/kitchen/"));
+        assertEquals(List.of(first.kitchenPhotoUrl()),first.kitchenPhotoUrls());
+        assertNull(first.chefPhotoUrl());
 
-        var both=catalog.setChefAvatar(owner,"chef-avatar-01");
-        assertNotNull(both.chefPhotoUrl()); assertEquals(withKitchenPhoto.kitchenPhotoUrl(),both.kitchenPhotoUrl());
+        var withFace=catalog.setChefAvatar(owner,"chef-avatar-01");
+        assertEquals(first.kitchenPhotoUrls(),withFace.kitchenPhotoUrls());
 
-        var replaced=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
-        assertNotEquals(withKitchenPhoto.kitchenPhotoUrl(),replaced.kitchenPhotoUrl());
-        verify(media).deleteByPublicUrl(withKitchenPhoto.kitchenPhotoUrl());
+        var second=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+        assertEquals(first.kitchenPhotoUrl(),second.kitchenPhotoUrl());
+        assertEquals(2,second.kitchenPhotoUrls().size());
+        assertEquals(first.kitchenPhotoUrl(),second.kitchenPhotoUrls().get(0));
 
-        var cleared=catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.KITCHEN);
-        assertNull(cleared.kitchenPhotoUrl()); assertEquals(both.chefPhotoUrl(),cleared.chefPhotoUrl());
-        verify(media).deleteByPublicUrl(replaced.kitchenPhotoUrl());
-        assertNull(catalog.getMyKitchen(owner).kitchenPhotoUrl());
-        assertNull(catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.KITCHEN).kitchenPhotoUrl()); // nothing left: still fine
-        verify(media,never()).deleteByPublicUrl(both.chefPhotoUrl());
-        // other chef's kitchen was never touched
-        assertNull(catalog.getMyKitchen(stranger).kitchenPhotoUrl());
+        var full=rejected(()->catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file));
+        assertEquals("KITCHEN_PHOTOS_LOCKED",full.getCode()); assertEquals(409,full.getStatus());
+        assertEquals("KITCHEN_PHOTOS_LOCKED",rejected(()->catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.KITCHEN)).getCode());
+        verify(media,times(2)).uploadKitchenImage(any(),any(),any()); // the locked upload stored nothing
+        verify(media,never()).deleteByPublicUrl(second.kitchenPhotoUrls().get(1));
+        assertEquals(second.kitchenPhotoUrls(),catalog.getMyKitchen(owner).kitchenPhotoUrls());
+        assertTrue(catalog.getMyKitchen(stranger).kitchenPhotoUrls().isEmpty()); // other chef's kitchen untouched
+    }
+
+    @Test void clearSlotEmptiesItAndDeletesBlobAfterCommit() {
+        catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+        var full=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+        String slot1=full.kitchenPhotoUrls().get(0), slot2=full.kitchenPhotoUrls().get(1);
+
+        catalog.clearKitchenPhotoSlot(kitchen,1);
+        verify(media).deleteByPublicUrl(slot1);
+        var cleared=catalog.getMyKitchen(owner);
+        assertNull(cleared.kitchenPhotoUrl()); assertEquals(List.of(slot2),cleared.kitchenPhotoUrls());
+
+        var refilled=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file); // the chef adds a new photo into slot 1
+        assertEquals(2,refilled.kitchenPhotoUrls().size()); assertEquals(slot2,refilled.kitchenPhotoUrls().get(1));
+        catalog.clearKitchenPhotoSlot(kitchen,2); catalog.clearKitchenPhotoSlot(kitchen,2); // clearing an empty slot is fine
+        verify(media).deleteByPublicUrl(slot2);
+        assertEquals(List.of(refilled.kitchenPhotoUrl()),catalog.getMyKitchen(owner).kitchenPhotoUrls());
+    }
+
+    @Test void chefFaceCanStillBeRemoved() {
+        catalog.setChefAvatar(owner,"chef-avatar-01");
+        assertNull(catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.CHEF).chefPhotoUrl());
     }
 
     @Test void photoRoutesAreChefOnlyAndNeedAKitchen() {

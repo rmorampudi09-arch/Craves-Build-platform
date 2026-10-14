@@ -193,12 +193,32 @@ class KitchenControllerChefApiTest {
         verify(cache, never()).invalidateAllDiscovery();
     }
 
+    @Test
+    void uploadingAKitchenPhotoRefreshesDiscoveryAndReturnsTheSlots() throws Exception {
+        when(catalog.uploadKitchenPhoto(any(), eq(KitchenPhotoKind.KITCHEN), any())).thenReturn(kitchen());
+        mvc.perform(multipart("/api/v1/kitchens/me/photos").file(new MockMultipartFile("file", "k.jpg", "image/jpeg", new byte[] {1}))
+                .param("kind", "KITCHEN").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.kitchenPhotoUrls[0]").value("https://cdn.example/kitchen.jpg"));
+        verify(cache).invalidateAllDiscovery();
+    }
+
+    @Test
+    void deletingAKitchenPhotoAnswers409Locked() throws Exception {
+        when(catalog.deleteKitchenPhoto(any(), eq(KitchenPhotoKind.KITCHEN))).thenThrow(
+            ApiException.conflict("KITCHEN_PHOTOS_LOCKED", "Kitchen photos can't be changed. To change one, contact Craves support."));
+        mvc.perform(delete("/api/v1/kitchens/me/photos/KITCHEN").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("KITCHEN_PHOTOS_LOCKED"));
+        verify(cache, never()).invalidateAllDiscovery();
+    }
+
     private static KitchenProfileResponse kitchen() {
         return new KitchenProfileResponse(
             UUID.randomUUID(), UUID.randomUUID(), "K", null, null, null, null, "A", null, null, null, "Hyderabad", "Telangana", null,
             null, null, KitchenStatus.ACTIVE, Instant.now(), Instant.now(),
-            "https://cdn.example/chef.jpg", "https://cdn.example/kitchen.jpg", List.of("Andhra"), List.of("Kondapur"),
-            new SocialLinks("https://instagram.com/k", null, null, null), null, null
+            "https://cdn.example/chef.jpg", "https://cdn.example/kitchen.jpg", List.of("https://cdn.example/kitchen.jpg"),
+            List.of("Andhra"), List.of("Kondapur"), new SocialLinks("https://instagram.com/k", null, null, null), null, null
         );
     }
 }

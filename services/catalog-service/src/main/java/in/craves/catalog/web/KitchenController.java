@@ -71,7 +71,9 @@ public class KitchenController {
         @RequestParam KitchenPhotoKind kind,
         @RequestParam MultipartFile file
     ) {
-        return catalogService.uploadKitchenPhoto(principal, kind, file);
+        KitchenProfileResponse response = catalogService.uploadKitchenPhoto(principal, kind, file);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @PutMapping("/chef-avatar")

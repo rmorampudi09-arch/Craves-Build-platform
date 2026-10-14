@@ -58,6 +58,11 @@ public class MediaStorageService {
         return upload("public/kitchens/" + kitchenId + "/" + kind.name().toLowerCase(Locale.ROOT) + "/", file, "kitchen-photo");
     }
 
+    /** A kitchen photo copied in from elsewhere (the chef's approved registration photos); same optimisation as uploads. */
+    public StoredMedia storeKitchenImage(UUID kitchenId, String fileName, byte[] data, String contentType) {
+        return store("public/kitchens/" + kitchenId + "/kitchen/" + UUID.randomUUID() + "-" + sanitize(fileName), data, contentType);
+    }
+
     private StoredMedia upload(String folder, MultipartFile file, String fallbackName) {
         validate(file);
         String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : fallbackName;

@@ -75,6 +75,7 @@ Say these freely, with one condition: any line that mentions orders, customers o
 - Craves arranges pickup from your kitchen.
 - Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap.
 - No FSSAI yet? The application has a "Don't have FSSAI?" guide and a "Request a call from Craves" option.
+- Craves sends you packaging materials, free.
 - Customers open soon. Chefs are joining first. Be one of the first home chefs on Craves in your area and set up your kitchen before customers open.
 - Questions about the home-chef programme: contact@craves.in.
 
@@ -112,6 +113,7 @@ Say these freely, with one condition: any line that mentions orders, customers o
 | S18 | Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap. | SAFE | Owner decision, 14 Oct 2026. The chef finance page has a "Send Rs X to my bank" button, usable once a day (`chef-withdrawal-panel.tsx`), so never say "as many times as you like". The one-tap button exists today. The daily or weekly choice ships later with the RazorpayX payout work. This is about how money is paid, never how much (N1), and it counts as mentioning orders, so pair it with S11. Was C2. |
 | S19 | Bank details are not needed to submit the application. | SAFE | "You can add bank details later. They aren't needed to submit your application for review." (`chef-onboarding-sections.tsx`). Was C7. |
 | S20 | You need a phone number and an email you can open: the form sends a code to each. | SAFE | Basic details verify the email with a code (`docs/modules/chef-onboarding-v2/README.md`, `chef-onboarding-flow.ts`). Was C8. |
+| S21 | Craves sends you packaging materials, free. | SAFE | Owner decision, 14 Oct 2026. Never add a quantity, brand or delivery time. If the owner later attaches a condition (for example, only after approval), say it in the same line (ASCI 1.4). |
 
 ### CHECK FIRST
 
@@ -124,7 +126,7 @@ Say these freely, with one condition: any line that mentions orders, customers o
 | C11 | Dish categories (Biryani, Tiffins, Pickles and so on). | CHECK FIRST | In the chef menu code. Fine as idea prompts. Check the live menu before showing a category on screen as something you can sell. |
 | C12 | FSSAI guides in Telugu, Hindi and other Indian languages. | CHECK FIRST | v2 supports English plus 22 Indian languages, but content appears only where the team has published it. English shows otherwise. |
 | C13 | It is free to apply. | CHECK FIRST | The application steps include no payment step, but no page says it is free. The chef pays the FSSAI portal fee themselves. [CONFIRM WITH OWNER: can we say "free to apply"?] |
-| C14 | Who supplies packaging, delivery radius, kitchen or hygiene standards, whether chefs may also sell elsewhere, chef terms. | CHECK FIRST | None of these is documented for chefs. The "Craves Chef Terms" link in the form goes to the general customer terms. [CONFIRM WITH OWNER: answers for packaging, radius, standards, exclusivity and chef terms.] |
+| C14 | Delivery radius, kitchen or hygiene standards, whether chefs may also sell elsewhere, chef terms. | CHECK FIRST | None of these is documented for chefs. The "Craves Chef Terms" link in the form goes to the general customer terms. Packaging supply is now S21. [CONFIRM WITH OWNER: answers for radius, standards, exclusivity and chef terms.] |
 
 ### NEVER
 

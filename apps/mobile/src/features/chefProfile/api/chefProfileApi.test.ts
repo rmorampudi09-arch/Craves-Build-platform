@@ -67,6 +67,16 @@ describe('chefProfileApi parsing', () => {
     expect(parsed).not.toHaveProperty('cuisines');
     expect(parsed).not.toHaveProperty('socialLinks');
     expect(parsed).not.toHaveProperty('chefPhotoUrl');
+    expect(parsed).not.toHaveProperty('kitchenPhotoUrls');
+  });
+
+  it('reads the kitchen photo slots in order and keeps only https photos', () => {
+    expect(
+      parseChefKitchenProfile(
+        kitchen({kitchenPhotoUrls: ['https://cdn.example.test/1.jpg', 'http://insecure.test/x.jpg', 'https://cdn.example.test/2.jpg']}),
+      )?.kitchenPhotoUrls,
+    ).toEqual(['https://cdn.example.test/1.jpg', 'https://cdn.example.test/2.jpg']);
+    expect(parseChefKitchenProfile(kitchen({kitchenPhotoUrls: []}))?.kitchenPhotoUrls).toEqual([]);
   });
 
   it('reads the photo, cuisine, area and link fields once the server sends them', () => {

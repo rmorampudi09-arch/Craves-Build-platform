@@ -19,6 +19,18 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.34.3 - Kitchen photos, on top of 1.34.2, 2026-10-14
+
+- Customers: the kitchen page header plays the chef's kitchen photos as a slideshow (it stays empty when there are
+  none), and the Chefs (Discover) cards show the kitchen photos first, then the dish photos.
+- Chefs: Kitchen details shows two kitchen photo tiles, "Overall kitchen" and "Cooking setup". An empty tile offers
+  Take a photo / Choose from gallery; a filled one can't be replaced or removed, and tapping it says "Kitchen photos
+  can't be changed. To change one, contact Craves support." The same message shows if the server refuses an upload.
+- The photos are the two the chef uploaded when applying; the server copies them in once the application is
+  approved (backend PR rmorampudi09-arch/Craves-Build-platform#504, live in production since 14 Oct). Against an older
+  server `kitchenPhotoUrls` is missing, so the kitchen page and Discover look as before and the chef tiles say "Coming soon".
+- versionCode 83: built on feat/app-1.34.1 at e3ec9f8f1 (1.34.2, code 82). Meal plan release 2 takes 1.34.4 (84).
+
 ### Version 1.34.1 - Outfit font, iPhone text sizes, order screens, with the 1.34.0 meal plans, 2026-10-14
 
 - Joins the two lines that were built separately: 1.34.0 (meal plans, versionCode 80) and

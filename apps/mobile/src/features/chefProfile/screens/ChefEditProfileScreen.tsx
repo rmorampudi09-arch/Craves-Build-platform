@@ -3,6 +3,7 @@ import {StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
+import {toAppApiError} from '../../../core/http/apiError';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import {
   colors,
@@ -70,6 +71,8 @@ function ComingSoonField({label}: {label: string}) {
 }
 
 /** Kitchen details: photos, name, about, what you cook, contact, address, delivery areas and links in one form. */
+const KITCHEN_PHOTOS_LOCKED_MESSAGE = "Kitchen photos can't be changed. To change one, contact Craves support.";
+
 export function ChefEditProfileScreen() {
   const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
   const queryClient = useQueryClient();
@@ -189,7 +192,9 @@ export function ChefEditProfileScreen() {
       }
     } catch (error) {
       toast.show(
-        isRouteNotPublished(error)
+        toAppApiError(error).code === 'KITCHEN_PHOTOS_LOCKED'
+          ? KITCHEN_PHOTOS_LOCKED_MESSAGE
+          : isRouteNotPublished(error)
           ? 'Photos are coming soon.'
           : kind === 'CHEF'
             ? "We couldn't save your picture. Please try again."
@@ -220,15 +225,13 @@ export function ChefEditProfileScreen() {
       return 'Photo saved';
     });
   };
-  const removePhoto = (kind: ChefKitchenPhotoKind) => {
-    setPhotoSheet(null);
-    return runPhoto(kind, async () => {
-      await synchronizeChefProfileAfterSave(queryClient, identityId as string, await chefProfileApi.deletePhoto(kind));
-      return 'Photo removed';
-    });
-  };
-
   const photoUrl = (kind: ChefKitchenPhotoKind) => (kind === 'CHEF' ? kitchen?.chefPhotoUrl : kitchen?.kitchenPhotoUrl);
+  // Slot 1 is kitchenPhotoUrl; slot 2 is the other filled one (the list skips empty slots). Undefined = not published yet.
+  const kitchenSlots: Array<string | null | undefined> =
+    kitchen?.kitchenPhotoUrls === undefined
+      ? [undefined, undefined]
+      : [kitchen.kitchenPhotoUrl ?? null, kitchen.kitchenPhotoUrls.find(url => url !== kitchen.kitchenPhotoUrl) ?? null];
+  const nextEmptySlot = kitchenSlots.indexOf(null);
   const openFaces = () => {
     setFaceDraft(chefAvatarIdFromUrl(photoUrl('CHEF')));
     setFaceSheet(true);
@@ -293,13 +296,16 @@ export function ChefEditProfileScreen() {
                   onPress={openFaces}
                   url={photoUrl('CHEF')}
                 />
-                <PhotoTile
-                  busy={photoSaving === 'KITCHEN'}
-                  icon="store"
-                  label="Kitchen photo"
-                  onPress={() => setPhotoSheet('KITCHEN')}
-                  url={photoUrl('KITCHEN')}
-                />
+                {kitchenSlots.map((url, slot) => (
+                  <PhotoTile
+                    busy={photoSaving === 'KITCHEN' && slot === nextEmptySlot}
+                    icon="store"
+                    key={slot}
+                    label={slot === 0 ? 'Overall kitchen' : 'Cooking setup'}
+                    onPress={() => (url ? toast.show(KITCHEN_PHOTOS_LOCKED_MESSAGE) : setPhotoSheet('KITCHEN'))}
+                    url={url}
+                  />
+                ))}
               </View>
 
               <FormField
@@ -484,9 +490,6 @@ export function ChefEditProfileScreen() {
           <ListGroup>
             <ListRow icon="camera" onPress={() => { choosePhoto(photoSheet, 'camera').catch(() => undefined); }} title="Take a photo" />
             <ListRow icon="image" onPress={() => { choosePhoto(photoSheet, 'gallery').catch(() => undefined); }} title="Choose from gallery" />
-            {photoUrl(photoSheet) ? (
-              <ListRow destructive icon="trash" onPress={() => { removePhoto(photoSheet).catch(() => undefined); }} title="Remove photo" />
-            ) : null}
           </ListGroup>
         ) : null}
       </ChefSheet>

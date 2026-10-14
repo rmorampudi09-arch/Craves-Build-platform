@@ -76,6 +76,7 @@ const PUBLISHED: ChefKitchenProfile = {
   ...KITCHEN,
   chefPhotoUrl: null,
   kitchenPhotoUrl: 'https://cdn.example.test/kitchen.jpg',
+  kitchenPhotoUrls: ['https://cdn.example.test/kitchen.jpg'],
   cuisines: ['Andhra', 'Biryani'],
   serviceAreas: ['KPHB'],
   socialLinks: {instagram: null, facebook: null, youtube: null, website: null},
@@ -128,7 +129,8 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     await mount();
     expect(ui.has('Photos')).toBe(true);
     expect(ui.has('Your picture')).toBe(true);
-    expect(ui.has('Kitchen photo')).toBe(true);
+    expect(ui.has('Overall kitchen')).toBe(true);
+    expect(ui.has('Cooking setup')).toBe(true);
     expect(input('Kitchen name').props.value).toBe('Relangi mavayya kitchen');
     expect(input('About your kitchen').props.value).toBe('Brings smile on your face');
     expect(ui.has('25 / 2000')).toBe(true);
@@ -351,26 +353,43 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     expect(ui.has('Social links')).toBe(false);
   });
 
-  it('adds a kitchen photo from the gallery, shows it, and removes it again', async () => {
+  it('adds a kitchen photo into the empty slot, with no way to remove one', async () => {
     mockPickPhoto.mockResolvedValue({photo: {uri: 'file:///k.jpg', fileName: 'k.jpg', mimeType: 'image/jpeg'}});
     // The kitchen the server holds: a photo change is what the next read returns.
     let server: ChefKitchenProfile = PUBLISHED;
     mockApi.getKitchen.mockImplementation(async () => server);
-    mockApi.uploadPhoto.mockImplementation(async () => (server = {...PUBLISHED, kitchenPhotoUrl: 'https://cdn.example.test/new-kitchen.jpg'}));
-    mockApi.deletePhoto.mockImplementation(async () => (server = {...PUBLISHED, kitchenPhotoUrl: null}));
+    mockApi.uploadPhoto.mockImplementation(async () => (server = {
+      ...PUBLISHED,
+      kitchenPhotoUrls: ['https://cdn.example.test/kitchen.jpg', 'https://cdn.example.test/setup.jpg'],
+    }));
     await mount(PUBLISHED, false);
-    await ui.press('Kitchen photo');
+    await ui.press('Cooking setup');
+    expect(ui.has('Remove photo')).toBe(false);
     await ui.press('Choose from gallery');
     await ui.settle();
     expect(mockPickPhoto).toHaveBeenCalledWith('gallery');
     expect(mockApi.uploadPhoto).toHaveBeenCalledWith('KITCHEN', {uri: 'file:///k.jpg', name: 'k.jpg', type: 'image/jpeg'});
     expect(ui.has('Photo saved')).toBe(true);
+    expect(mockApi.deletePhoto).not.toHaveBeenCalled();
+  });
 
-    await ui.press('Kitchen photo');
-    await ui.press('Remove photo');
+  it('shows the support message, and no photo sheet, when a filled kitchen photo is tapped', async () => {
+    await mount(PUBLISHED);
+    await ui.press('Overall kitchen');
     await ui.settle();
-    expect(mockApi.deletePhoto).toHaveBeenCalledWith('KITCHEN');
-    expect(ui.has('Photo removed')).toBe(true);
+    expect(ui.has("Kitchen photos can't be changed. To change one, contact Craves support.")).toBe(true);
+    expect(ui.has('Take a photo')).toBe(false);
+    expect(mockApi.uploadPhoto).not.toHaveBeenCalled();
+  });
+
+  it('shows the support message when the server says kitchen photos are locked', async () => {
+    mockPickPhoto.mockResolvedValue({photo: {uri: 'file:///k.jpg', fileName: 'k.jpg', mimeType: 'image/jpeg'}});
+    mockApi.uploadPhoto.mockRejectedValue(new AppApiError('KITCHEN_PHOTOS_LOCKED', 'locked', 409));
+    await mount(PUBLISHED);
+    await ui.press('Cooking setup');
+    await ui.press('Take a photo');
+    await ui.settle();
+    expect(ui.has("Kitchen photos can't be changed. To change one, contact Craves support.")).toBe(true);
   });
 
   describe('Your picture', () => {
@@ -452,7 +471,7 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     mockPickPhoto.mockResolvedValue({photo: {uri: 'file:///k.jpg', fileName: 'k.jpg', mimeType: 'image/jpeg'}});
     mockApi.uploadPhoto.mockRejectedValue(new Error('network'));
     await mount(PUBLISHED);
-    await ui.press('Kitchen photo');
+    await ui.press('Cooking setup');
     await ui.press('Take a photo');
     await ui.settle();
     expect(mockPickPhoto).toHaveBeenCalledWith('camera');
@@ -460,7 +479,7 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
 
     mockPickPhoto.mockResolvedValue(null);
     mockApi.uploadPhoto.mockClear();
-    await ui.press('Kitchen photo');
+    await ui.press('Cooking setup');
     await ui.press('Choose from gallery');
     await ui.settle();
     expect(mockApi.uploadPhoto).not.toHaveBeenCalled();
@@ -469,7 +488,8 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
   it('marks the photos Coming soon, not tappable, while the server does not send photo fields', async () => {
     await mount();
     expect(ui.byLabel('Your picture')).toBeUndefined();
-    expect(ui.byLabel('Kitchen photo')).toBeUndefined();
+    expect(ui.byLabel('Overall kitchen')).toBeUndefined();
+    expect(ui.byLabel('Cooking setup')).toBeUndefined();
   });
 
   it('asks before leaving with unsaved changes, and leaves freely when nothing changed', async () => {

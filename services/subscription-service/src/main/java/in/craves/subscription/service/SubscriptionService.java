@@ -285,7 +285,8 @@ public class SubscriptionService {
             subscription.notes(), subscription.createdAt(), subscription.updatedAt(),
             subscription.planName(), subscription.billingPeriod(), subscription.amount(), subscription.currency(),
             nextChargeDate(subscription.nextBillingDate(), billing, today),
-            subscription.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate()
+            subscription.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate(),
+            dayCreditService.forCustomer(subscription.id())
         );
     }
 

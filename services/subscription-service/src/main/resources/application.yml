@@ -58,6 +58,8 @@ craves:
     refund-choice:
       # Off until finance can price and pay refunds: declined and paused days are added at the end, as before.
       enabled: ${CRAVES_SUBSCRIPTION_REFUND_CHOICE_ENABLED:false}
+      # On by default, switch on or off: a choice left unanswered for 48 hours is settled (days at the end, else a refund request).
+      deadline-sweep-enabled: ${CRAVES_SUBSCRIPTION_DAY_CREDIT_SWEEP_ENABLED:true}
     occurrence-generator:
       enabled: ${CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED:false}
       batch-size: ${CRAVES_SUBSCRIPTION_OCCURRENCE_BATCH_SIZE:50}

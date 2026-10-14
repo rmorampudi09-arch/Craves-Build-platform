@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.credit.DayCreditRepository.DayCredit;
+import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.order.OccurrenceOrderProperties;
 import in.craves.subscription.order.OccurrenceOrderRepository;
 import in.craves.subscription.order.OccurrenceOrderService;
+import in.craves.subscription.security.CurrentUser;
+import in.craves.subscription.web.ApiDtos.DayCreditResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -132,5 +135,125 @@ class DayCreditOfferDatabaseTest {
         assertEquals(List.of("PAUSE_CREDIT 2026-10-10..2026-10-13 0.00"),endCredits());
         assertEquals(d("10-13"),nextBilling());
         assertEquals(List.of(),choices());
+    }
+
+    // Customer choices and the 48-hour deadline.
+    CurrentUser owner(){return new CurrentUser(customer,"firebase-customer","+919999999999",List.of("CUSTOMER"));}
+    UUID pendingDecline(){decline(true,d("10-08"));return choices().get(0).id();}
+    UUID pendingPause(){
+        pausedOn("2026-10-06T04:00:00Z");
+        tx.executeWithoutResult(s->dayCredits(true).creditPausedDays(subscription,d("10-09")));
+        db.update("UPDATE subscription_schema.customer_subscription SET status='ACTIVE' WHERE id=?",subscription);
+        return choices().get(0).id();
+    }
+    DayCreditResponse choose(boolean enabled,UUID credit,String choice){return tx.execute(s->dayCredits(enabled).choose(subscription,credit,choice,owner()));}
+    DayCredit stored(UUID credit){return credits.lockForSubscription(credit,subscription).orElseThrow();}
+    String refused(Runnable action){return assertThrows(ApiException.class,action::run).getCode();}
+
+    @Test void customerExtendsADeclineChoice() {
+        UUID credit=pendingDecline();
+
+        DayCreditResponse response=choose(true,credit,"EXTEND");
+
+        assertEquals("EXTENDED",response.status());
+        assertEquals(List.of("EXTENDED","CUSTOMER"),List.of(stored(credit).status(),stored(credit).chosenBy()));
+        assertEquals(List.of("DECLINE_CREDIT 2026-10-10..2026-10-13 0.00"),endCredits());
+        assertEquals(d("10-13"),nextBilling());
+    }
+
+    @Test void customerExtendsAPauseChoice() {
+        UUID credit=pendingPause();
+
+        assertEquals("EXTENDED",choose(true,credit,"EXTEND").status());
+
+        assertEquals(List.of("PAUSE_CREDIT 2026-10-10..2026-10-13 0.00"),endCredits());
+        assertEquals(d("10-13"),nextBilling());
+    }
+
+    @Test void customerRequestsARefund() {
+        UUID credit=pendingDecline();
+
+        DayCreditResponse response=choose(true,credit,"REFUND");
+
+        assertEquals("REFUND_REQUESTED",response.status());
+        assertNull(response.refundAmount());
+        assertEquals("INR",response.currency());
+        assertEquals(List.of("REFUND_REQUESTED","CUSTOMER"),List.of(stored(credit).status(),stored(credit).chosenBy()));
+        assertEquals(List.of(),endCredits());
+    }
+
+    @Test void sameChoiceTwiceReturnsTheSameOutcome() {
+        UUID credit=pendingDecline();
+        choose(true,credit,"EXTEND");
+
+        assertEquals("EXTENDED",choose(true,credit,"EXTEND").status());
+
+        assertEquals(1,endCredits().size(),"the day is added once");
+    }
+
+    @Test void secondChoiceAfterSettlingIsRefused() {
+        UUID credit=pendingDecline();
+        choose(true,credit,"REFUND");
+
+        assertEquals("DAY_CREDIT_ALREADY_SETTLED",refused(()->choose(true,credit,"EXTEND")));
+        assertEquals(List.of(),endCredits());
+        assertFalse(credits.settle(credit,"EXTENDED","SYSTEM"),"a settled choice is never settled again");
+    }
+
+    @Test void cancelledPlanCanOnlyRequestRefund() {
+        UUID credit=pendingDecline();
+        db.update("UPDATE subscription_schema.customer_subscription SET status='CANCELLED' WHERE id=?",subscription);
+
+        assertFalse(dayCredits(true).forCustomer(subscription).get(0).extendAvailable());
+        assertEquals("EXTEND_NOT_AVAILABLE",refused(()->choose(true,credit,"EXTEND")));
+        assertEquals("PENDING_CHOICE",stored(credit).status());
+        // At the deadline the system can only save a refund request.
+        assertEquals(1,dayCredits(true).settleOverdue(now.plusSeconds(49*3600)));
+        assertEquals(List.of("REFUND_REQUESTED","SYSTEM"),List.of(stored(credit).status(),stored(credit).chosenBy()));
+        assertEquals(List.of(),endCredits());
+    }
+
+    @Test void refundRefusedWhileSwitchIsOff() {
+        UUID credit=pendingDecline();
+
+        assertEquals("REFUNDS_NOT_AVAILABLE",refused(()->choose(false,credit,"REFUND")));
+        assertEquals("PENDING_CHOICE",stored(credit).status());
+    }
+
+    @Test void anotherCustomersChoiceIsNotFound() {
+        UUID credit=pendingDecline();
+        CurrentUser stranger=new CurrentUser(UUID.randomUUID(),"firebase-other","+918888888888",List.of("CUSTOMER"));
+
+        assertEquals("DAY_CREDIT_NOT_FOUND",refused(()->tx.execute(s->dayCredits(true).choose(subscription,credit,"REFUND",stranger))));
+        assertEquals("PENDING_CHOICE",stored(credit).status());
+    }
+
+    @Test void overdueChoiceIsExtendedBySystem() {
+        UUID credit=pendingDecline();
+
+        assertEquals(0,dayCredits(true).settleOverdue(now.plusSeconds(47*3600)));
+        assertEquals(1,dayCredits(true).settleOverdue(now.plusSeconds(49*3600)));
+
+        assertEquals(List.of("EXTENDED","SYSTEM"),List.of(stored(credit).status(),stored(credit).chosenBy()));
+        assertEquals(List.of("DECLINE_CREDIT 2026-10-10..2026-10-13 0.00"),endCredits());
+    }
+
+    @Test void pendingChoicesStillSettleWhenSwitchIsTurnedOff() {
+        UUID credit=pendingPause();
+
+        assertEquals(1,dayCredits(false).settleOverdue(now.plusSeconds(49*3600)));
+
+        assertEquals("EXTENDED",stored(credit).status());
+        assertEquals(List.of("PAUSE_CREDIT 2026-10-10..2026-10-13 0.00"),endCredits());
+    }
+
+    @Test void customerSeesPendingAndRecentChoices() {
+        UUID credit=pendingDecline();
+
+        List<DayCreditResponse> shown=dayCredits(true).forCustomer(subscription);
+
+        assertEquals(List.of(credit),shown.stream().map(DayCreditResponse::id).toList());
+        assertTrue(shown.get(0).extendAvailable());
+        assertEquals(now.plusSeconds(48*3600),shown.get(0).choiceDeadline());
     }
 }

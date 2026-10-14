@@ -17,7 +17,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class DayCreditRepository {
     private static final String COLUMNS = "id, subscription_id, kind, first_date, last_date, meal_slot_code, days, status,"
-        + " refund_amount, chosen_by, choice_deadline, chosen_at, created_at";
+        + " refund_amount, currency, chosen_by, choice_deadline, chosen_at, created_at";
 
     public record DayCredit(
         UUID id,
@@ -29,6 +29,7 @@ public class DayCreditRepository {
         Integer days,
         String status,
         BigDecimal refundAmount,
+        String currency,
         String chosenBy,
         Instant choiceDeadline,
         Instant chosenAt,
@@ -107,6 +108,19 @@ public class DayCreditRepository {
         ));
     }
 
+    public boolean ownedBy(UUID subscriptionId, UUID customerIdentityId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM subscription_schema.customer_subscription WHERE id = ? AND customer_identity_id = ?)",
+            Boolean.class, subscriptionId, customerIdentityId
+        ));
+    }
+
+    public UUID planIdOf(UUID subscriptionId) {
+        return jdbcTemplate.queryForObject(
+            "SELECT plan_id FROM subscription_schema.customer_subscription WHERE id = ?", UUID.class, subscriptionId
+        );
+    }
+
     /** Days can be added at the end only while the plan is running. */
     public boolean planRunning(UUID subscriptionId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
@@ -126,6 +140,7 @@ public class DayCreditRepository {
             (Integer) rs.getObject("days"),
             rs.getString("status"),
             rs.getBigDecimal("refund_amount"),
+            rs.getString("currency"),
             rs.getString("chosen_by"),
             instant(rs.getTimestamp("choice_deadline")),
             instant(rs.getTimestamp("chosen_at")),

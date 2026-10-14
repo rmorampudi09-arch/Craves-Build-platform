@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public final class ApiDtos {
@@ -106,7 +107,27 @@ public final class ApiDtos {
         String planImageUrl,
         Integer pauseDaysPerBill,
         Integer pauseDaysLeft,
-        LocalDate pauseAutoResumeDate
+        LocalDate pauseAutoResumeDate,
+        List<DayCreditResponse> dayCredits
     ) {
+    }
+
+    /** A declined day or paused days: the customer chooses a refund request or the days at the end before the deadline. */
+    public record DayCreditResponse(
+        UUID id,
+        String kind,
+        LocalDate firstDate,
+        LocalDate lastDate,
+        String mealSlotCode,
+        Integer days,
+        String status,
+        BigDecimal refundAmount,
+        String currency,
+        Instant choiceDeadline,
+        boolean extendAvailable
+    ) {
+    }
+
+    public record DayCreditChoiceRequest(String choice) {
     }
 }

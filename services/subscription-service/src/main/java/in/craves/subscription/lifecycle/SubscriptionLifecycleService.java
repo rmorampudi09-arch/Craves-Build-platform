@@ -364,7 +364,8 @@ public class SubscriptionLifecycleService {
             value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt(),
             value.planName(), value.billingPeriod(), value.amount(), value.currency(),
             SubscriptionService.nextChargeDate(value.nextBillingDate(), billing, today),
-            value.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate()
+            value.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate(),
+            dayCreditService.forCustomer(value.id())
         );
     }
 

@@ -30,7 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChefPlanWorkflowService {
-    private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "MONTHLY");
+    private static final Set<String> BILLING_PERIODS = Set.of("WEEKLY", "FORTNIGHTLY", "MONTHLY");
     private static final Set<String> EDITABLE_STATUSES = Set.of("DRAFT", "REJECTED");
     private static final Set<String> REVIEW_DECISIONS = Set.of("APPROVE", "REJECT");
     private static final int DEFAULT_DISH_SUBSCRIPTION_UNITS = 5;
@@ -250,7 +250,7 @@ public class ChefPlanWorkflowService {
         }
         String billing = normalizeText(input.billingPeriod(), "billingPeriod");
         if (!BILLING_PERIODS.contains(billing)) {
-            throw ApiException.badRequest("INVALID_BILLING_PERIOD", "billingPeriod must be WEEKLY or MONTHLY");
+            throw ApiException.badRequest("INVALID_BILLING_PERIOD", "billingPeriod must be WEEKLY, FORTNIGHTLY or MONTHLY");
         }
         BigDecimal amount = input.amount();
         if (amount == null || amount.signum() < 0) {

@@ -61,6 +61,10 @@ craves:
       projection-scheduler-enabled: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_ENABLED:false}
       projection-batch-size: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_BATCH_SIZE:50}
       projection-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_FIXED_DELAY_MS:60000}
+    pause:
+      # On by default: a paused plan must restart when its pause days run out, or the customer loses meals.
+      auto-resume-enabled: ${CRAVES_SUBSCRIPTION_AUTO_RESUME_ENABLED:true}
+      auto-resume-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_AUTO_RESUME_FIXED_DELAY_MS:300000}
     occurrence-generator:
       enabled: ${CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED:false}
       batch-size: ${CRAVES_SUBSCRIPTION_OCCURRENCE_BATCH_SIZE:50}

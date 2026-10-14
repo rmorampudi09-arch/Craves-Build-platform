@@ -1,0 +1,640 @@
+{
+ "pieces": [
+  {
+   "id": "ST1",
+   "kind": "story",
+   "title": "ST1 We're opening to home chefs",
+   "purpose": "Answers 'Will anyone even order?' honestly: Craves is opening to home chefs first, customers launch soon, so be one of the first in your area.",
+   "hook_type": "curiosity-gap",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Hyderabad home chefs",
+     "headline": "Mundu home chefs. Taruvata customers.",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "cook-fresh-pot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Home chefs first. Customers after."
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "Cook at home. Craves brings the orders.",
+     "body": "Customers open ayye mundu mee kitchen set up cheskondi. Mee area lo first home chefs lo okaru avvandi.",
+     "items": [],
+     "footnote": "Customers: launching soon. Chefs: joining first.",
+     "art": "curry",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Body: Set up your kitchen before customers open. Be one of the first home chefs in your area."
+    },
+    {
+     "layout": "cta",
+     "kicker": "Apply on craves.in",
+     "headline": "Mee phone number tho start cheyyandi",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Start with your phone number. Body: Tap the link below. Sticker: Apply."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S1",
+    "S11",
+    "S12",
+    "S6"
+   ],
+   "notes": "POST: Thu 15 Oct, 11:00 IST. SCHEDULE (the only schedule for ST1 to ST9; per-piece notes do not set repeats): Thu 15 to Fri 23 Oct, one sequence a day at 11:00 IST in order, ST1 to ST9 (ST9 at 20:30 on Fri 23). Two extras tied to reels: ST3 again Thu 22 about 21:00, after Reel 2 (FSSAI) goes live at 20:30; ST2 again Fri 23 about 12:00, after Reel 3 (the same checklist) goes live at 11:30. Sat 24 to Wed 28 Oct, one sequence a day at 11:00 IST: Sat 24 the sequence with the most link-sticker taps in story insights so far, Sun 25 the second most, Mon 26 ST5 (a fresh question box), Tue 27 the top one again, Wed 28 the second one again. ST5 answer frames post from Tue 20 as questions come in. LINK STICKER (every last frame): https://craves.in/chef/application?utm_source=instagram&utm_medium=story&utm_campaign=chef_acq . Add stickers in the app in the lower-middle of the frame, clear of the top 250 px and bottom 340 px; frames with a sticker leave that area empty. Sticker covers (ST4, ST5, ST9 frame 1) have no headline on purpose: the sticker carries the question. SMALL TEXT ON RED: every footnote and the 'Customers: launching soon' kicker go in white on a Contrast Red #C92716 band, or #1A1A1A on #F1F3F5, large enough to read at arm's length. White straight on Flame Red #F62E18 only for large bold headlines (brand.md section 8). A native Telugu reader checks every frame of ST1 to ST9 before posting. MUSIC: soft, warm instrumental from the in-app library at low volume (business accounts may only see royalty-free tracks); no lyrics competing with the text. ALT TEXT (team record; stories have no alt-text field): Flame Red frames with large white text and Craves food illustrations saying home chefs come first and customers after, that Craves is launching soon for customers, and inviting Hyderabad home chefs to set up their kitchen and be one of the first in their area, then an apply link. STORY HIGHLIGHTS (Flame Red covers with one white illustration each; Instagram cannot create an empty highlight, so each is made the day its first frame exists): create 'Join' Thu 15 after ST1 posts (cover art: cook-pot); 'Need' Fri 16 after ST2 (cover art: prep); 'FSSAI' Sat 17 after ST3 (cover art: cook-fresh-pot); 'FAQ' Tue 20 with the first ST5 answer frames, or Wed 21 with ST7 if no answers are ready (cover art: made-with-love). Add ST6 to 'Join' (Tue 20), ST7 to 'FAQ' (Wed 21) and ST8 to 'Join' (Thu 22) the day each posts. Keep ST4 (poll) and ST9 (emoji slider) out: their stickers close after 24 hours. Link stickers keep working inside highlights. Every highlight frame that mentions customers, orders or earnings carries the S11 line; the day customers open, review every highlight and replace the S11 lines.",
+   "manual": false
+  },
+  {
+   "id": "ST2",
+   "kind": "story",
+   "title": "ST2 What you need checklist",
+   "purpose": "Answers 'paperwork feels scary' by naming the five real things to keep ready, and that progress saves so nobody has to finish in one go.",
+   "hook_type": "curiosity-gap",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Apply cheyyadaniki mundu",
+     "headline": "Ee 5 ready ga unchukondi",
+     "body": "Screenshot teeskondi.",
+     "items": [],
+     "footnote": "",
+     "art": "prep",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: Before you apply. Headline: Keep these 5 ready. Body: Take a screenshot."
+    },
+    {
+     "layout": "list",
+     "kicker": "1 to 3",
+     "headline": "Mee gurinchi",
+     "body": "",
+     "items": [
+      "18 or older",
+      "Phone and email: a code is sent to each",
+      "ID proof: Aadhaar, PAN, bank statement or govt ID"
+     ],
+     "footnote": "",
+     "art": "tomato",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: About you."
+    },
+    {
+     "layout": "list",
+     "kicker": "4 and 5",
+     "headline": "Mee kitchen gurinchi",
+     "body": "",
+     "items": [
+      "Two kitchen photos",
+      "Your 14-digit FSSAI number"
+     ],
+     "footnote": "",
+     "art": "cook-pot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: About your kitchen."
+    },
+    {
+     "layout": "statement",
+     "kicker": "Anni ready lekapoyina parledu",
+     "headline": "Progress save avutundi. Taruvata finish cheyyochu.",
+     "body": "Documents application lone upload cheyyandi. DM lo pampakandi.",
+     "items": [],
+     "footnote": "",
+     "art": "onion",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: It's fine if not everything is ready. Headline: Your progress is saved. You can finish later. Body: Upload documents only inside the application. Don't send them in DMs."
+    },
+    {
+     "layout": "cta",
+     "kicker": "",
+     "headline": "Ready aa? Apply cheyyandi.",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Ready? Apply. Body: The link is below."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S7",
+    "S20",
+    "S8",
+    "S9"
+   ],
+   "notes": "POST: Fri 16 Oct, 11:00 IST (its repeat on Fri 23 is in the ST1 schedule). Goes into the 'Need' highlight. Keep the checklist exactly as S8 and S20 say: one ID proof (the 'or' matters), 'two kitchen photos' with no extra photo rules (no 'clean', no lighting standard: C14, N9). Never show a real ID, FSSAI number, phone number or the address step on any frame (N14). MUSIC: light, steady instrumental from the in-app library, low volume. ALT TEXT (team record): checklist frames on light background listing 18 or older, a phone and an email that each get a code, one ID proof (Aadhaar, PAN, bank statement or government ID), two kitchen photos and a 14-digit FSSAI number, then a note that progress is saved. Add the link sticker on frame 5 only.",
+   "manual": false
+  },
+  {
+   "id": "ST3",
+   "kind": "story",
+   "title": "ST3 No FSSAI yet? Start your application",
+   "purpose": "Answers the FSSAI fear: you can start and save your application now, the application has a 'Don't have FSSAI?' guide and a callback, and FSSAI's own March 2026 rule change.",
+   "hook_type": "contrarian",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "FSSAI doubt?",
+     "headline": "FSSAI inka raleda? Application start chesi save cheyyandi.",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "cook-fresh-pot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: No FSSAI yet? Start your application and save it."
+    },
+    {
+     "layout": "statement",
+     "kicker": "Mundu idi telusukondi",
+     "headline": "Submit cheyyadaniki 14-digit FSSAI number kavali.",
+     "body": "Adi vachche lopu application start chesi save cheyyandi. FSSAI vachaka submit cheyyandi.",
+     "items": [],
+     "footnote": "",
+     "art": "carrot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: Know this first. Headline: You need a 14-digit FSSAI number to submit. Body: Until it comes, start your application and save it. Submit once your FSSAI comes."
+    },
+    {
+     "layout": "statement",
+     "kicker": "FSSAI says",
+     "headline": "Registration covers food businesses up to Rs 1.5 crore turnover",
+     "body": "From 1 April 2026. Details: foscos.fssai.gov.in",
+     "items": [],
+     "footnote": "Source: FSSAI press release, 13 Mar 2026",
+     "art": "none",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": ""
+    },
+    {
+     "layout": "statement",
+     "kicker": "Craves help undi",
+     "headline": "Application lo 'Don't have FSSAI?' guide undi.",
+     "body": "'Request a call from Craves' choose cheste, mee FSSAI application ki Craves team call chesi help chestundi.",
+     "items": [],
+     "footnote": "",
+     "art": "cook-pot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: Craves help is there. Headline: The application has a 'Don't have FSSAI?' guide. Body: Choose 'Request a call from Craves' and the Craves team calls you to help with your FSSAI application."
+    },
+    {
+     "layout": "cta",
+     "kicker": "",
+     "headline": "Ippude start cheyyandi, save cheyyandi.",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Start now, save it. Body: The link is below. Sticker: Apply."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S8",
+    "S9",
+    "S17"
+   ],
+   "notes": "POST: Sat 17 Oct, 11:00 IST (its repeat on Thu 22 after Reel 2 is in the ST1 schedule). Goes into the 'FSSAI' highlight; frame 1 is that highlight's first frame, so it must say what you can start (the application), never just 'start'. Frame 3 is brand.md section 10 (FSSAI press release, 13 Mar 2026): keep the word 'turnover' in the headline so Rs 1.5 crore is never read as earnings, keep the source footnote large enough to read, never add a fee amount (N10). Frame 4 keeps S17's scope: Craves helps with your FSSAI application; never say Craves gets FSSAI for you or that FSSAI is not needed (N11). MUSIC: calm instrumental, low volume. ALT TEXT (team record): a cover saying no FSSAI yet, start your application and save it, then frames explaining that a 14-digit FSSAI number is needed to submit, FSSAI's rule that registration covers turnover up to Rs 1.5 crore from 1 April 2026, and the in-app FSSAI guide and a callback to help with your FSSAI application. Link sticker on frame 5 only.",
+   "manual": false
+  },
+  {
+   "id": "ST4",
+   "kind": "story",
+   "title": "ST4 Mee special dish enti? poll",
+   "purpose": "Taps pride in a signature dish with a one-tap poll, then links that pride to joining Craves as one of the first home chefs in your area.",
+   "hook_type": "question",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Hyderabad home cooks",
+     "headline": "",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "dosa",
+     "sticker": "poll",
+     "sticker_text": "Mee special dish enti?",
+     "sticker_options": [
+      "Biryani",
+      "Pulihora",
+      "Sweets",
+      "Vere dish"
+     ],
+     "gloss": "Poll question: What's your special dish? Poll options: Biryani, Pulihora, Sweets, Another dish."
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "Prati special dish venaka oka home kitchen untundi.",
+     "body": "Share what you love to cook.",
+     "items": [],
+     "footnote": "",
+     "art": "feel-like-home",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Every special dish has a home kitchen behind it."
+    },
+    {
+     "layout": "cta",
+     "kicker": "Customers: launching soon",
+     "headline": "Be one of your area's first home chefs",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Body: Chefs are joining first. The link is below. Sticker: Apply."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S4",
+    "S12",
+    "S11"
+   ],
+   "notes": "POST: Sun 18 Oct, 11:00 IST. Frame 1 has no headline on purpose: the poll sticker carries the question, so place it large in the lower-middle (up to 4 options). Link sticker on frame 3. The poll options are ideas to get people talking, never a claim that a dish can be sold on Craves (C11). Do not post vote counts or percentages afterwards. Not in a highlight (the poll closes after 24 hours). MUSIC: upbeat, homely instrumental, low volume. ALT TEXT (team record): a dosa illustration with a poll asking 'What's your special dish?', then 'Every special dish has a home kitchen behind it', then an invitation to be one of your area's first home chefs and an apply link.",
+   "manual": true
+  },
+  {
+   "id": "ST5",
+   "kind": "story",
+   "title": "ST5 Ask us anything question box",
+   "purpose": "Lowers every unspoken worry (FSSAI, documents, pickup, payments) by inviting questions and answering them openly in stories.",
+   "hook_type": "question",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Doubts unnaya?",
+     "headline": "",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "cook-pot",
+     "sticker": "question",
+     "sticker_text": "Craves lo join avvadam gurinchi adagandi",
+     "sticker_options": [],
+     "gloss": "Kicker: Got doubts? Question sticker: Ask about joining Craves."
+    },
+    {
+     "layout": "statement",
+     "kicker": "Answers stories lo",
+     "headline": "Konni questions ki ikkade stories lo answer istam.",
+     "body": "Documents, address ikkada pampakandi. Avi application lone.",
+     "items": [],
+     "footnote": "Inkemaina unte: contact@craves.in",
+     "art": "potato",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: Answers in stories. Headline: We'll answer some of your questions right here in stories. Body: Don't send documents or your address here. They go only inside the application. Footnote: For anything else: contact@craves.in."
+    },
+    {
+     "layout": "cta",
+     "kicker": "",
+     "headline": "Ee lopu application start cheyyochu",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Meanwhile, you can start the application. Body: Your progress is saved, you can finish later."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S9",
+    "S14"
+   ],
+   "notes": "POST: Mon 19 Oct, 11:00 IST (its repeat on Mon 26 is in the ST1 schedule). Frame 1 has no headline on purpose: the question sticker carries the prompt in Tenglish. Link sticker on frame 3. ANSWERS: post them from Tue 20 as 'qa' frames (the question as headline, the answer as body), taken only from brand.md 'If someone asks...' and the week-1 reply bank, in the language the person used. Any answer about orders, customers, payments or earnings carries 'Customers: launching soon. Chefs: joining first.' (S11). No approved answer yet (free to apply, delivery costs, what customers see of a kitchen's location, a review time in days, a launch date): say 'Good question. Please email contact@craves.in' and never guess. Never name or tag the person who asked, never show a handle. Spam questions get ignored. End each answer set with a link-sticker frame. Answer frames go into the 'FAQ' highlight. MUSIC: soft instrumental, low volume. ALT TEXT (team record): a question box inviting questions about joining Craves, a note that we answer some questions in stories and documents stay inside the application, then an apply link.",
+   "manual": true
+  },
+  {
+   "id": "ST6",
+   "kind": "story",
+   "title": "ST6 Packaging free once approved, pickup arranged",
+   "purpose": "Answers 'I know how to cook, not how to sell or deliver': once approved Craves sends packaging materials free, and Craves arranges pickup from your kitchen.",
+   "hook_type": "result-first",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Packaging gurinchi",
+     "headline": "Approve ayyaka, packaging materials Craves free ga pampistundi.",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "pack-delivery",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: About packaging. Headline: Once you're approved, Craves sends you packaging materials, free."
+    },
+    {
+     "layout": "statement",
+     "kicker": "Pickup kuda",
+     "headline": "Mee kitchen nunchi pickup Craves arrange chestundi.",
+     "body": "Meeru mee intlone, mee kitchen lone vanta chestaru.",
+     "items": [],
+     "footnote": "",
+     "art": "cook-pot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: Pickup too. Headline: Craves arranges pickup from your kitchen. Body: You cook right at your home, in your own kitchen."
+    },
+    {
+     "layout": "statement",
+     "kicker": "Honest ga cheptam",
+     "headline": "Customers kosam Craves launching soon.",
+     "body": "Chefs mundu join avutunnaru.",
+     "items": [],
+     "footnote": "",
+     "art": "onion",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: Being honest. Headline: Craves is launching soon for customers. Body: Chefs are joining first."
+    },
+    {
+     "layout": "cta",
+     "kicker": "",
+     "headline": "Customers open ayye mundu apply cheyyandi",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Apply before customers open. Body: The link is below. Sticker: Apply."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S21",
+    "S10",
+    "S11",
+    "S12"
+   ],
+   "notes": "POST: Tue 20 Oct, 11:00 IST (any repeat comes from the ST1 schedule). Goes into the 'Join' highlight. S21 exactly as written, with 'once approved' in the headline itself, never only in the kicker: free, once approved; never add a quantity, brand or delivery time. S10 exactly as written: no courier names, no pickup times. MUSIC: light, cheerful instrumental, low volume. ALT TEXT (team record): a packed-delivery illustration saying that once you're approved Craves sends you packaging materials free, then that Craves arranges pickup from your kitchen while you cook in your own home, then an honest note that Craves is launching soon for customers and chefs are joining first. Link sticker on frame 4 only.",
+   "manual": false
+  },
+  {
+   "id": "ST7",
+   "kind": "story",
+   "title": "ST7 Your money: daily or weekly, or one tap to your bank",
+   "purpose": "Answers 'Will I actually get paid, and when?' with how earnings are settled (never how much), plus your menu, your prices.",
+   "hook_type": "question",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Payments gurinchi",
+     "headline": "Mee earnings eppudu settle avutayi?",
+     "body": "",
+     "items": [],
+     "footnote": "Customers: launching soon. Chefs: joining first.",
+     "art": "curry",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: About payments. Headline: When are your earnings settled?"
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "Daily leda weekly. Mee choice.",
+     "body": "Leda okka tap tho mee balance bank ki pampukondi.",
+     "items": [],
+     "footnote": "Customers: launching soon. Chefs: joining first.",
+     "art": "none",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Daily or weekly. Your choice. Body: Or send your balance to your bank with one tap."
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "Mee menu, mee prices.",
+     "body": "Prati dish rate meere set chestaru.",
+     "items": [],
+     "footnote": "",
+     "art": "tomato",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Your menu, your prices. Body: You set the price of every dish."
+    },
+    {
+     "layout": "cta",
+     "kicker": "Customers: launching soon",
+     "headline": "Chefs mundu join avutunnaru. Meeru kuda?",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Chefs are joining first. You too? Body: The link is below."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S18",
+    "S11",
+    "S2"
+   ],
+   "notes": "POST: Wed 21 Oct, 11:00 IST (Reel 1 also posts at 11:30; any repeat comes from the ST1 schedule). Goes into the 'FAQ' highlight. Never an amount, example or range (N1), never the fee or a percentage (N16), never 'as many times as you like' (the bank button works once a day), never 'customers pay exactly your price'. The S11 footnote sits on frames 1 and 2, next to each earnings line, so each frame reads right on its own inside the highlight. If people reply asking 'how much', use the reply bank answer. MUSIC: calm instrumental, low volume. ALT TEXT (team record): frames saying earnings are settled daily or weekly by your choice, or sent to your bank with one tap, that customers launch soon, and that you set your own menu and prices. Link sticker on frame 4 only.",
+   "manual": false
+  },
+  {
+   "id": "ST8",
+   "kind": "story",
+   "title": "ST8 Send this to the best home cook you know",
+   "purpose": "Reaches cooks who don't follow us through the people who already praise their food, using sends (a top reach signal) without any referral offer.",
+   "hook_type": "send-to-a-friend",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Okka question",
+     "headline": "Mee life lo best home cook evaru?",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "dosa",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Kicker: One question. Headline: Who's the best home cook in your life?"
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "Craves lo home chefs mundu join avutunnaru.",
+     "body": "Customers kosam Craves launching soon. Vaallu vaalla area lo first home chefs lo okaru avvochu.",
+     "items": [],
+     "footnote": "",
+     "art": "cook-pot",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Home chefs are joining Craves first. Body: Craves is launching soon for customers. They can be one of the first home chefs in their area."
+    },
+    {
+     "layout": "cta",
+     "kicker": "",
+     "headline": "Mee best home cook ki ee story pampandi",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Send this story to your best home cook. Body: Tap the paper plane. They can apply to Craves with the link."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S11",
+    "S12"
+   ],
+   "notes": "POST: Thu 22 Oct, 11:00 IST. Goes into the 'Join' highlight (add it the day it posts). The paper-plane button sends the frame on screen, so the send ask sits on frame 3, the frame with the link sticker: the cook who receives it gets the apply link. Viewers cannot tag people in our story; use 'Tag' only on feed posts. Never mention a referral programme or any reward for sending (N3). Never ask for the friend's phone number. MUSIC: warm, upbeat instrumental, low volume. ALT TEXT (team record): frames asking who the best home cook in your life is, saying home chefs are joining Craves first and customers launch soon, then asking viewers to send this story to that cook with the paper-plane icon so they can apply with the link. Link sticker on frame 3 only.",
+   "manual": false
+  },
+  {
+   "id": "ST9",
+   "kind": "story",
+   "title": "ST9 How much do your neighbours love your cooking? slider",
+   "purpose": "Uses the 'people already ask me' motivation with a one-tap emoji slider, then invites them to set up on Craves, with no promise of orders or reach.",
+   "hook_type": "question",
+   "language": "Tenglish",
+   "slides": [
+    {
+     "layout": "cover",
+     "kicker": "Nijam cheppandi",
+     "headline": "",
+     "body": "",
+     "items": [],
+     "footnote": "",
+     "art": "curry",
+     "sticker": "emoji-slider",
+     "sticker_text": "Mee vantalu neighbours ki entha nachutayi?",
+     "sticker_options": [],
+     "gloss": "Kicker: Be honest. Slider question: How much do your neighbours love your cooking?"
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "'Inkoncham pettandi' ani adugutunnara?",
+     "body": "Mee menu, mee prices.",
+     "items": [],
+     "footnote": "",
+     "art": "made-with-love",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Headline: Do they ask 'give me a little more'? Body: Your menu, your prices."
+    },
+    {
+     "layout": "statement",
+     "kicker": "",
+     "headline": "Share what you love to cook.",
+     "body": "Customers kosam Craves launching soon. Chefs mundu join avutunnaru. Mee kitchen ippude set up cheyyandi.",
+     "items": [],
+     "footnote": "",
+     "art": "feel-like-home",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Body: Craves is launching soon for customers. Chefs are joining first. Set up your kitchen now."
+    },
+    {
+     "layout": "cta",
+     "kicker": "",
+     "headline": "Be one of your area's first home chefs",
+     "body": "craves.in/chef/application lo apply cheyyandi. Link bio lo undi.",
+     "items": [],
+     "footnote": "",
+     "art": "logo",
+     "sticker": "none",
+     "sticker_text": "",
+     "sticker_options": [],
+     "gloss": "Body: The link is below. Sticker: Apply."
+    }
+   ],
+   "caption": "",
+   "caption_gloss": "",
+   "hashtags": [],
+   "claims": [
+    "S11",
+    "S12",
+    "S2",
+    "S4"
+   ],
+   "notes": "POST: Fri 23 Oct, 20:30 IST (Reel 3 posts at 11:30 that day). Frame 1 has no headline on purpose: the emoji slider carries the question (pick a 'yum' face emoji in the app). Link sticker on frame 4. Not in a highlight (the slider closes after 24 hours). Frame 3 uses S4 word for word ('Share what you love to cook.') with the S11 line in the same frame. Never add reach lines such as 'more of Hyderabad' or 'beyond your street' (C10, C14), orders, customers waiting or any number (N2, N8). Don't post the slider average afterwards. MUSIC: playful, homely instrumental, low volume. ALT TEXT (team record): a curry illustration with an emoji slider asking how much your neighbours love your cooking, then 'Do they ask for a little more? Your menu, your prices', then 'Share what you love to cook' with a note that customers launch soon and chefs join first, then an invitation to be one of your area's first home chefs and an apply link.",
+   "manual": true
+  }
+ ]
+}

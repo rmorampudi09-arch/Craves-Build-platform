@@ -1,0 +1,561 @@
+{
+ "timezone": "Asia/Kolkata",
+ "account": "17841414797291891",
+ "raw_base": "https://raw.githubusercontent.com/rmorampudi09-arch/Craves-Build-platform/claude/intelligent-pascal-hxcre1/docs/marketing/chef-acquisition-growth-agent/campaign/assets/",
+ "slots": [
+  {
+   "slot": "2026-10-14T22:00",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C1",
+     "files": [
+      "C1/C1-01.jpg",
+      "C1/C1-02.jpg",
+      "C1/C1-03.jpg",
+      "C1/C1-04.jpg"
+     ],
+     "caption": "(published)"
+    },
+    {
+     "type": "story",
+     "piece": "ST1",
+     "files": [
+      "ST1/ST1-01b.jpg",
+      "ST1/ST1-02.jpg",
+      "ST1/ST1-03b.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-15T11:23",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C3",
+     "files": [
+      "C3/C3-01.jpg",
+      "C3/C3-02.jpg",
+      "C3/C3-03.jpg",
+      "C3/C3-04.jpg",
+      "C3/C3-05.jpg",
+      "C3/C3-06.jpg",
+      "C3/C3-07.jpg"
+     ],
+     "caption": "Apply chese mundu ee 5 ready ga unchukondi. Save this.\nDocuments application lone, DM lo kaadu.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HomeChefs #HyderabadHomeChef #HomemadeFood #HomeKitchen #IntiVantalu #TeluguFood #HyderabadFood #Hyderabad #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST2",
+     "files": [
+      "ST2/ST2-01.jpg",
+      "ST2/ST2-02.jpg",
+      "ST2/ST2-03.jpg",
+      "ST2/ST2-04.jpg",
+      "ST2/ST2-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-15T20:23",
+   "items": [
+    {
+     "type": "image",
+     "piece": "I1",
+     "files": [
+      "I1/I1-01.jpg"
+     ],
+     "caption": "Hyderabad home chefs: apply cheyyadaniki rendu kitchen photos, ID proof, 14-digit FSSAI number kavali.\nCustomers kosam Craves launching soon, chefs mundu join avutunnaru.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST3",
+     "files": [
+      "ST3/ST3-01.jpg",
+      "ST3/ST3-02.jpg",
+      "ST3/ST3-03.jpg",
+      "ST3/ST3-04.jpg",
+      "ST3/ST3-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-16T11:23",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C4",
+     "files": [
+      "C4/C4-01.jpg",
+      "C4/C4-02.jpg",
+      "C4/C4-03.jpg",
+      "C4/C4-04.jpg",
+      "C4/C4-05.jpg",
+      "C4/C4-06.jpg"
+     ],
+     "caption": "FSSAI says registration now covers turnover up to Rs 1.5 crore (press release, 13 Mar 2026).\nSteps and the current fee: foscos.fssai.gov.in.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #FSSAI #FSSAIRegistration #IntiVantalu #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST6",
+     "files": [
+      "ST6/ST6-01.jpg",
+      "ST6/ST6-02.jpg",
+      "ST6/ST6-03.jpg",
+      "ST6/ST6-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-16T20:23",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C2",
+     "files": [
+      "C2/C2-01.jpg",
+      "C2/C2-02.jpg",
+      "C2/C2-03.jpg",
+      "C2/C2-04.jpg",
+      "C2/C2-05.jpg",
+      "C2/C2-06.jpg",
+      "C2/C2-07.jpg"
+     ],
+     "caption": "Craves home chef avvadaniki 5 steps: phone, kitchen, documents, review, mee menu.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #HomeChef #IntiVantalu #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST7",
+     "files": [
+      "ST7/ST7-01.jpg",
+      "ST7/ST7-02.jpg",
+      "ST7/ST7-03.jpg",
+      "ST7/ST7-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-17T11:23",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C5",
+     "files": [
+      "C5/C5-01.jpg",
+      "C5/C5-02.jpg",
+      "C5/C5-03.jpg",
+      "C5/C5-04.jpg",
+      "C5/C5-05.jpg",
+      "C5/C5-06.jpg",
+      "C5/C5-07.jpg"
+     ],
+     "caption": "Mee menu, mee prices. Pickup Craves arrange chestundi, approve ayyaka packaging free.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST8",
+     "files": [
+      "ST8/ST8-01.jpg",
+      "ST8/ST8-02.jpg",
+      "ST8/ST8-03.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-17T20:23",
+   "items": [
+    {
+     "type": "image",
+     "piece": "I2",
+     "files": [
+      "I2/I2-01.jpg"
+     ],
+     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #HomeChef #IntiVantalu #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST1",
+     "files": [
+      "ST1/ST1-01b.jpg",
+      "ST1/ST1-02.jpg",
+      "ST1/ST1-03b.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-18T11:23",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C6",
+     "files": [
+      "C6/C6-01.jpg",
+      "C6/C6-02.jpg",
+      "C6/C6-03.jpg",
+      "C6/C6-04.jpg",
+      "C6/C6-05.jpg",
+      "C6/C6-06.jpg",
+      "C6/C6-07.jpg"
+     ],
+     "caption": "Home chefs ekkuva adige 6 questions, honest answers tho.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HomeChefs #HyderabadHomeChef #HomemadeFood #HomeKitchen #IntiVantalu #TeluguFood #HyderabadFood #Hyderabad #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST2",
+     "files": [
+      "ST2/ST2-01.jpg",
+      "ST2/ST2-02.jpg",
+      "ST2/ST2-03.jpg",
+      "ST2/ST2-04.jpg",
+      "ST2/ST2-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-18T20:23",
+   "items": [
+    {
+     "type": "carousel",
+     "piece": "C3-TE",
+     "files": [
+      "C3-TE/C3-TE-01.jpg",
+      "C3-TE/C3-TE-02.jpg",
+      "C3-TE/C3-TE-03.jpg",
+      "C3-TE/C3-TE-04.jpg",
+      "C3-TE/C3-TE-05.jpg",
+      "C3-TE/C3-TE-06.jpg",
+      "C3-TE/C3-TE-07.jpg"
+     ],
+     "caption": "Craves హోమ్ చెఫ్ application కోసం ఈ 5 రెడీగా ఉంచుకోండి. సేవ్ చేసుకోండి.\nడాక్యుమెంట్లు application లోనే, DM లో కాదు.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#TeluguFood #IntiVantalu #ManaVantalu #HyderabadHomeChef #HomeChefs #HomemadeFood #HyderabadFood #Hyderabad #Craves"
+    },
+    {
+     "type": "story",
+     "piece": "ST3",
+     "files": [
+      "ST3/ST3-01.jpg",
+      "ST3/ST3-02.jpg",
+      "ST3/ST3-03.jpg",
+      "ST3/ST3-04.jpg",
+      "ST3/ST3-05.jpg"
+     ]
+    },
+    {
+     "type": "learn",
+     "note": "early read: rank pieces so far, propose next graphics"
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-19T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST6",
+     "files": [
+      "ST6/ST6-01.jpg",
+      "ST6/ST6-02.jpg",
+      "ST6/ST6-03.jpg",
+      "ST6/ST6-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-19T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST7",
+     "files": [
+      "ST7/ST7-01.jpg",
+      "ST7/ST7-02.jpg",
+      "ST7/ST7-03.jpg",
+      "ST7/ST7-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-20T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST8",
+     "files": [
+      "ST8/ST8-01.jpg",
+      "ST8/ST8-02.jpg",
+      "ST8/ST8-03.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-20T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST1",
+     "files": [
+      "ST1/ST1-01b.jpg",
+      "ST1/ST1-02.jpg",
+      "ST1/ST1-03b.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-21T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST2",
+     "files": [
+      "ST2/ST2-01.jpg",
+      "ST2/ST2-02.jpg",
+      "ST2/ST2-03.jpg",
+      "ST2/ST2-04.jpg",
+      "ST2/ST2-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-21T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST3",
+     "files": [
+      "ST3/ST3-01.jpg",
+      "ST3/ST3-02.jpg",
+      "ST3/ST3-03.jpg",
+      "ST3/ST3-04.jpg",
+      "ST3/ST3-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-22T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST6",
+     "files": [
+      "ST6/ST6-01.jpg",
+      "ST6/ST6-02.jpg",
+      "ST6/ST6-03.jpg",
+      "ST6/ST6-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-22T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST7",
+     "files": [
+      "ST7/ST7-01.jpg",
+      "ST7/ST7-02.jpg",
+      "ST7/ST7-03.jpg",
+      "ST7/ST7-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-23T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST8",
+     "files": [
+      "ST8/ST8-01.jpg",
+      "ST8/ST8-02.jpg",
+      "ST8/ST8-03.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-23T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST1",
+     "files": [
+      "ST1/ST1-01b.jpg",
+      "ST1/ST1-02.jpg",
+      "ST1/ST1-03b.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-24T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST2",
+     "files": [
+      "ST2/ST2-01.jpg",
+      "ST2/ST2-02.jpg",
+      "ST2/ST2-03.jpg",
+      "ST2/ST2-04.jpg",
+      "ST2/ST2-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-24T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST3",
+     "files": [
+      "ST3/ST3-01.jpg",
+      "ST3/ST3-02.jpg",
+      "ST3/ST3-03.jpg",
+      "ST3/ST3-04.jpg",
+      "ST3/ST3-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-25T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST6",
+     "files": [
+      "ST6/ST6-01.jpg",
+      "ST6/ST6-02.jpg",
+      "ST6/ST6-03.jpg",
+      "ST6/ST6-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-25T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST7",
+     "files": [
+      "ST7/ST7-01.jpg",
+      "ST7/ST7-02.jpg",
+      "ST7/ST7-03.jpg",
+      "ST7/ST7-04.jpg"
+     ]
+    },
+    {
+     "type": "learn",
+     "note": "full weekly LEARN; 7-day numbers for 14 to 18 Oct pieces"
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-26T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST8",
+     "files": [
+      "ST8/ST8-01.jpg",
+      "ST8/ST8-02.jpg",
+      "ST8/ST8-03.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-26T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST1",
+     "files": [
+      "ST1/ST1-01b.jpg",
+      "ST1/ST1-02.jpg",
+      "ST1/ST1-03b.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-27T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST2",
+     "files": [
+      "ST2/ST2-01.jpg",
+      "ST2/ST2-02.jpg",
+      "ST2/ST2-03.jpg",
+      "ST2/ST2-04.jpg",
+      "ST2/ST2-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-27T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST3",
+     "files": [
+      "ST3/ST3-01.jpg",
+      "ST3/ST3-02.jpg",
+      "ST3/ST3-03.jpg",
+      "ST3/ST3-04.jpg",
+      "ST3/ST3-05.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-28T11:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST6",
+     "files": [
+      "ST6/ST6-01.jpg",
+      "ST6/ST6-02.jpg",
+      "ST6/ST6-03.jpg",
+      "ST6/ST6-04.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "slot": "2026-10-28T20:23",
+   "items": [
+    {
+     "type": "story",
+     "piece": "ST7",
+     "files": [
+      "ST7/ST7-01.jpg",
+      "ST7/ST7-02.jpg",
+      "ST7/ST7-03.jpg",
+      "ST7/ST7-04.jpg"
+     ]
+    }
+   ]
+  }
+ ]
+}

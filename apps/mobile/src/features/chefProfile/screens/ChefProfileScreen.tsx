@@ -26,7 +26,7 @@ import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.33.2';
+export const CHEF_APP_VERSION = '1.33.3';
 
 /** The line under Opening hours: where the kitchen is right now, with today's hours. */
 function hoursLine(status: KitchenOpenState['status'], hoursToday: string | null): string | undefined {

@@ -100,8 +100,8 @@ android {
         applicationId "com.cravesapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 77
-        versionName "1.33.4"
+        versionCode 78
+        versionName "1.33.5"
     }
     signingConfigs {
         debug {

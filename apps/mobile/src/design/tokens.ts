@@ -132,14 +132,16 @@ export const borderWidth = {
  * React Native font scaling enabled; fixed line heights are deliberately not
  * embedded here so scaled text is not clipped by a non-scaling line box.
  */
+// iPhone (Dynamic Type) sizes, one step per level so the app's hierarchy is unchanged:
+// Large Title, Title 1, Title 3, Headline/buttons, Body, Subheadline, Caption 1.
 export const typography = {
-  title: 30,
-  hero: 24,
-  heading: 19,
-  button: 16,
-  body: 15,
-  small: 13,
-  tiny: 11,
+  title: 34,
+  hero: 28,
+  heading: 20,
+  button: 17,
+  body: 17,
+  small: 15,
+  tiny: 12,
 } as const;
 
 export const fontWeight = {

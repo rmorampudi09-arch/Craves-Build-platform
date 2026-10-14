@@ -40,6 +40,7 @@ import {
   occurrenceDishNames,
   occurrenceStatusPresentation,
   occurrenceTimeLabel,
+  pauseInfo,
   resumeDateFor,
   skippableDates,
   subscriptionStatusPresentation,
@@ -251,16 +252,16 @@ export function MyMealPlanScreen({navigation, route}: Props) {
       },
     ]);
 
-  const pause = () =>
-    confirm('Pause your plan?', 'Upcoming meals stop until you resume the plan.', 'Pause plan', actions.pause);
+  const earliestTime = scheduleItems.map(item => item.serviceTime).sort()[0] ?? null;
+  const resumeDate = resumeDateFor(now, policy?.resumeLeadMinutes ?? 0, earliestTime);
+  const pausing = pauseInfo(subscription, resumeDate);
+  const pause = () => confirm('Pause your plan?', pausing.pauseMessage, 'Pause plan', actions.pause);
   const resume = () => {
-    const earliestTime = scheduleItems.map(item => item.serviceTime).sort()[0] ?? null;
-    const date = resumeDateFor(now, policy?.resumeLeadMinutes ?? 0, earliestTime);
     confirm(
       'Resume your plan?',
-      `Meals start again from ${formatMealPlanDate(date, 'long')}.`,
+      `Meals start again from ${formatMealPlanDate(resumeDate, 'long')}.`,
       'Resume plan',
-      () => actions.resume(date),
+      () => actions.resume(resumeDate),
     );
   };
   const openSkip = () => {
@@ -323,6 +324,11 @@ export function MyMealPlanScreen({navigation, route}: Props) {
                 </Text>
                 <Badge label={badge.label} tone={badge.tone} />
               </View>
+              {pausing.restartNote ? (
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                  {pausing.restartNote}
+                </Text>
+              ) : null}
               {cover.kitchenName ? (
                 <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
                   {cover.kitchenName}
@@ -370,10 +376,19 @@ export function MyMealPlanScreen({navigation, route}: Props) {
           />
         ) : null}
 
-        {canPause || canResume || canSkip ? (
+        {canPause || (canResume && pausing.resumeOffered) || canSkip ? (
           <View style={styles.tiles}>
-            {canPause ? <ActionTile icon="pause" label="Pause plan" onPress={pause} disabled={actions.pending} /> : null}
-            {canResume ? <ActionTile icon="play" label="Resume plan" onPress={resume} disabled={actions.pending} /> : null}
+            {canPause ? (
+              <ActionTile
+                icon="pause"
+                label={pausing.pauseDisabledLabel ?? 'Pause plan'}
+                onPress={pause}
+                disabled={actions.pending || pausing.pauseDisabledLabel !== null}
+              />
+            ) : null}
+            {canResume && pausing.resumeOffered ? (
+              <ActionTile icon="play" label="Resume plan" onPress={resume} disabled={actions.pending} />
+            ) : null}
             {canSkip ? (
               <ActionTile icon="calendar-remove" label="Skip a meal" onPress={openSkip} disabled={actions.pending} />
             ) : null}

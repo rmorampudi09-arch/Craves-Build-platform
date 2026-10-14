@@ -30,7 +30,8 @@ public final class DiscoveryDtos {
         BigDecimal latitude,
         BigDecimal longitude,
         long distanceMeters,
-        long activeMenuItemCount
+        long activeMenuItemCount,
+        String chefPhotoUrl
     ) {
     }
 

@@ -23,7 +23,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, radius, spacing} from '../../../design/tokens';
-import {iosType, iosWeight, useIosFonts} from '../../../design/iosType';
+import {iosType, iosWeight} from '../../../design/iosType';
 import {Icon} from '../../../shared/components/Icon';
 import {
   OfflineNotice,
@@ -65,7 +65,6 @@ function TrackingSkeleton() {
 }
 
 export function CustomerOrderTrackingScreen() {
-  useIosFonts();
   const navigation = useNavigation<TrackingNavigation>();
   const route = useRoute<TrackingRoute>();
   const insets = useSafeAreaInsets();

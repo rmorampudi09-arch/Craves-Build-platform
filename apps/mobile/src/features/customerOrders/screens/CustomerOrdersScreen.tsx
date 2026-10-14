@@ -23,7 +23,7 @@ import type {
 } from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, radius, spacing} from '../../../design/tokens';
-import {iosType, iosWeight, useIosFonts} from '../../../design/iosType';
+import {iosType, iosWeight} from '../../../design/iosType';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -76,7 +76,6 @@ function OrdersSkeleton() {
 }
 
 export function CustomerOrdersScreen() {
-  useIosFonts();
   const navigation =
     useNavigation<
       NativeStackNavigationProp<

@@ -30,7 +30,11 @@ export const iosWeight = StyleSheet.create({
   bold: {fontFamily: loginFonts.bold},
 });
 
-/** Signed-in launches skip the auth stack that normally loads Inter; screens using iosType call this. */
-export function useIosFonts(): void {
-  useFonts(loginFontAssets);
+/**
+ * Signed-in launches skip the auth stack that normally loads Inter. Render iosType text only once
+ * this is true: Android keeps the fallback face on text drawn before the font registered.
+ */
+export function useIosFonts(): boolean {
+  const [loaded, error] = useFonts(loginFontAssets);
+  return loaded || Boolean(error);
 }

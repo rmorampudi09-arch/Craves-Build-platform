@@ -24,7 +24,7 @@ import type {
 import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {colors, radius, spacing} from '../../../design/tokens';
-import {iosType, iosWeight, useIosFonts} from '../../../design/iosType';
+import {iosType, iosWeight} from '../../../design/iosType';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {
   OfflineNotice,
@@ -223,7 +223,6 @@ function ActionRow({
 }
 
 export function CustomerOrderDetailScreen() {
-  useIosFonts();
   const navigation = useNavigation<DetailNavigation>();
   const route = useRoute<DetailRoute>();
   const focused = useIsFocused();

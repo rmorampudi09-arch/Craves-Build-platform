@@ -307,7 +307,9 @@ describe('ChefMealPlanEditorScreen', () => {
       fillDetails();
       press('Monthly');
       press('Next: Meals');
-      expect(pressable('Day 28')).toBeDefined();
+      // A monthly plan is the same one week, repeated: no date picker.
+      expect(pressable('Sun')).toBeDefined();
+      expect(pressable('Day 28')).toBeUndefined();
       expect(smallTargets()).toEqual([]);
     });
 
@@ -375,28 +377,41 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(stepLine()).toBe('Step 2 of 3 · Meals');
     });
 
-    it('follows the frequency in the price unit, and asks before it clears planned meals', () => {
+    it('follows the frequency in the price unit and keeps the planned week', () => {
       mockPlans = [plan({})];
       mockSchedule = lunchSchedule();
       render(PLAN_ID);
       expect(input('Price per week')).toBeDefined();
 
       press('Monthly');
-      expect(allText()).toContain('Change how often?');
-      press('Change');
-      expect(input('Price per month')).toBeDefined();
+      expect(allText()).not.toContain('Change how often?');
+      expect(input('Price per 28 days')).toBeDefined();
 
       press('Next: Meals');
-      expect(pressable('Day 1')).toBeDefined();
-      expect(pressable('Lunch dish, Chicken Biryani')).toBeUndefined();
+      expect(pressable('Lunch dish, Chicken Biryani')).toBeDefined();
+      press('Next: Review');
+      expect(allText()).toContain('This week repeats 4 times in each 28-day bill.');
     });
 
-    it('changes frequency straight away while no meals are planned', () => {
+    it('offers a 14-day bill', () => {
       render();
-      press('Monthly');
+      press('14 days');
 
-      expect(allText()).not.toContain('Change how often?');
-      expect(input('Price per month')).toBeDefined();
+      expect(input('Price per 14 days')).toBeDefined();
+    });
+
+    it('starts a draft set up by date again as one empty week', () => {
+      mockPlans = [plan({})];
+      const weekly = lunchSchedule().data;
+      mockSchedule = {
+        data: {...weekly, recurrenceType: 'MONTHLY', items: (weekly.items ?? []).map(item => ({...item, isoDayOfWeek: null, dayOfMonth: 5}))},
+      };
+      render(PLAN_ID);
+      press('Next: Meals');
+
+      expect(allText()).toContain('This plan was set up by date. Set up one week; it repeats every week.');
+      expect(pressable('Sun')).toBeDefined();
+      expect(pressable('Lunch dish, Chicken Biryani')).toBeUndefined();
     });
 
     it('sends the cook-early choice with the schedule', async () => {
@@ -433,11 +448,11 @@ describe('ChefMealPlanEditorScreen', () => {
       render();
       fillDetails();
       press('Next: Meals');
-      press('Add meal slot for Mon');
+      press('Add meal slot for Sun');
       press('Lunch');
       press('Next: Review');
 
-      expect(allText()).toEqual(expect.arrayContaining(['Select a dish.', 'Select a dish for every meal: Mon.', 'Step 2 of 3 · Meals']));
+      expect(allText()).toEqual(expect.arrayContaining(['Select a dish.', 'Select a dish for every meal: Sun.', 'Step 2 of 3 · Meals']));
       expect(mockCreatePlan).not.toHaveBeenCalled();
     });
 
@@ -447,11 +462,12 @@ describe('ChefMealPlanEditorScreen', () => {
       fillDetails();
       press('Next: Meals');
       expect(allText()).toContain('Add a meal');
-      expect(allText()).not.toContain('Copy Monday to all weekdays');
+      expect(allText()).not.toContain('Copy Sunday to all weekdays');
 
-      press('Add meal slot for Mon');
+      // A new week opens on Sunday, the first day chefs fill in.
+      press('Add meal slot for Sun');
       press('Lunch');
-      expect(allText()).toEqual(expect.arrayContaining(['Add breakfast, snack or dinner', 'Copy Monday to all weekdays']));
+      expect(allText()).toEqual(expect.arrayContaining(['Add breakfast, snack or dinner', 'Copy Sunday to all weekdays']));
     });
 
     it('shows the dish with its veg mark and menu price, and a quantity stepper', () => {
@@ -638,7 +654,7 @@ describe('ChefMealPlanEditorScreen', () => {
       render();
       fillDetails();
       press('Next: Meals');
-      press('Add meal slot for Mon');
+      press('Add meal slot for Sun');
       press('Lunch');
       press('Lunch dish, not selected');
       press('Chicken Biryani');

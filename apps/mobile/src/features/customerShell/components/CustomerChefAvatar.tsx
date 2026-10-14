@@ -1,6 +1,7 @@
 import React from 'react';
-import {Image, StyleSheet, View} from 'react-native';
+import {StyleSheet, View} from 'react-native';
 import {colors} from '../../../design/tokens';
+import {CustomerChefFace} from './CustomerChefFace';
 
 interface Props {
   imageUrl?: string | null;
@@ -14,23 +15,17 @@ export function CustomerChefAvatar({imageUrl = null, size = 48}: Props) {
     borderRadius: size / 2,
   } as const;
 
-  if (imageUrl) {
-    return (
-      <Image
-        accessibilityIgnoresInvertColors
-        source={{uri: imageUrl}}
-        resizeMode="cover"
-        style={[styles.frame, frameStyle]}
-      />
-    );
-  }
-
-  return <View accessibilityElementsHidden style={[styles.frame, frameStyle]} />;
+  return (
+    <View accessibilityElementsHidden style={[styles.frame, frameStyle]}>
+      <CustomerChefFace url={imageUrl} fallback={null} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   frame: {
     flexShrink: 0,
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderStrong,
     backgroundColor: colors.surfaceMuted,

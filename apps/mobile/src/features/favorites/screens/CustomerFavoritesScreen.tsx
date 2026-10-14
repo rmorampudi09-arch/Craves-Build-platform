@@ -41,6 +41,8 @@ import {
   type CartMutationOutcome,
 } from '../../cart/state/cartMutations';
 import {refreshCartSnapshot} from '../../cart/state/cartRefresh';
+import {useCustomerOrderKitchenPresentationQuery} from '../../customerOrders/query/customerOrderCatalogQueries';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import type {FavoriteHomeCard} from '../api/favoriteHomeFeedApi';
 import {CustomerFavoriteDishCard} from '../components/CustomerFavoriteDishCard';
 import type {SavedCatalogItem} from '../api/savedCatalogApi';
@@ -92,6 +94,24 @@ function FilledIcon({
   color?: string;
 }) {
   return <MaterialDesignIcons name={name as never} size={size} color={color} />;
+}
+
+function FavoriteHomeBadge({kitchenId, relationType}: {kitchenId: string | null; relationType: 'CHEF' | 'KITCHEN'}) {
+  const kitchen = useCustomerOrderKitchenPresentationQuery(kitchenId ?? '');
+  return (
+    <View style={styles.homeIconBadge}>
+      <CustomerChefFace
+        url={kitchen.data?.chefPhotoUrl}
+        fallback={
+          <FilledIcon
+            name={relationType === 'CHEF' ? 'chef-hat' : 'home-heart'}
+            size={24}
+            color={colors.flameRedAccessible}
+          />
+        }
+      />
+    </View>
+  );
 }
 
 function formatPrice(amount: number | null, currency: string | null): string | null {
@@ -487,13 +507,7 @@ export function CustomerFavoritesScreen() {
       return (
         <View key={`${relationType}:${relationId}`} style={styles.homeCard}>
           <View style={styles.homeCardHeader}>
-            <View style={styles.homeIconBadge}>
-              <FilledIcon
-                name={relationType === 'CHEF' ? 'chef-hat' : 'home-heart'}
-                size={24}
-                color={colors.flameRedAccessible}
-              />
-            </View>
+            <FavoriteHomeBadge kitchenId={card.exists ? card.kitchenId : null} relationType={relationType} />
             <View style={styles.homeCardTitleCopy}>
               <Text numberOfLines={2} style={styles.homeCardTitle}>{displayName}</Text>
               {area ? <Text numberOfLines={1} style={styles.homeCardArea}>{area}</Text> : null}
@@ -938,7 +952,7 @@ const styles = StyleSheet.create({
   countText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
   homeCard: {gap: spacing.xs, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white, ...elevation.card},
   homeCardHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  homeIconBadge: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
+  homeIconBadge: {width: touchTarget.minimum, height: touchTarget.minimum, borderRadius: radius.md, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconSurface},
   homeCardTitleCopy: {minWidth: 0, flex: 1},
   homeCardTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
   homeCardArea: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny},

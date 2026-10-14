@@ -19,6 +19,17 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.33.1 - Chef picture on every kitchen avatar, 2026-10-14
+
+- On top of 1.33.0 (order screens redesign, which already shows the chef's face on the Orders cards
+  and the order details header).
+- Customers now also see the chef's drawn face on the food item "Prepared by" card and the cart
+  kitchen header (were initials), and in Favorites > Home Chefs / Kitchens (was a chef-hat or
+  heart icon). The shared round chef avatar only loads https links and falls back to the plain
+  circle if the face fails to load. No picture keeps the old look.
+- The faces come from the public kitchen read (`GET /api/v1/catalog/kitchens/{id}`, cached and
+  shared with the order screens).
+
 ### Version 1.32.0 - Chef profile pictures, 2026-10-13
 
 - Chefs pick one of 18 drawn faces as their profile picture. Never a real photo: chef photo

@@ -85,6 +85,8 @@ import {
   type CartMutationOutcome,
 } from '../state/cartMutations';
 import {isDefinitiveCartRejection} from '../domain/cartWriteRejection';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
+import {useCustomerOrderKitchenPresentationQuery} from '../../customerOrders/query/customerOrderCatalogQueries';
 import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
 import {cartActions} from '../state/cartSlice';
@@ -214,6 +216,7 @@ function KitchenHeader({
   onOpen: () => void;
 }) {
   const count = section.data.reduce((total, item) => total + item.quantity, 0);
+  const kitchen = useCustomerOrderKitchenPresentationQuery(section.kitchenId);
   return (
     <Pressable
       accessibilityLabel={`Open ${section.kitchenName}`}
@@ -221,7 +224,10 @@ function KitchenHeader({
       onPress={onOpen}
       style={styles.kitchenHeader}>
       <View style={styles.kitchenAvatar}>
-        <Text style={styles.kitchenInitials}>{kitchenInitials(section.kitchenName)}</Text>
+        <CustomerChefFace
+          url={kitchen.data?.chefPhotoUrl}
+          fallback={<Text style={styles.kitchenInitials}>{kitchenInitials(section.kitchenName)}</Text>}
+        />
       </View>
       <View style={styles.kitchenCopy}>
         <Text numberOfLines={1} style={styles.kitchenName}>
@@ -1234,6 +1240,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: radius.pill,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.cream,

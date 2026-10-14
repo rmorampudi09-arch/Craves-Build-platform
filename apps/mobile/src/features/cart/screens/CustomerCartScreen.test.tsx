@@ -61,6 +61,7 @@ jest.mock('../state/cartMutations', () => ({
   addCartItem: (command: unknown) => ({type: 'add', command}),
 }));
 jest.mock('../api/cartServiceabilityApi', () => ({checkCartServiceability: jest.fn()}));
+jest.mock('../../customerOrders/query/customerOrderCatalogQueries', () => ({useCustomerOrderKitchenPresentationQuery: () => ({data: undefined})}));
 jest.mock('../../checkout/domain/checkoutSessionCoordinator', () => ({checkoutSessionCoordinator: {create: jest.fn()}}));
 jest.mock('../../payment/domain/paymentHandoffCoordinator', () => ({paymentHandoffCoordinator: {prepare: jest.fn(async checkout => ({checkout}))}}));
 jest.mock('../../payment/storage/pendingPaymentAttemptStore', () => ({pendingPaymentAttemptStore: {save: jest.fn(async () => undefined), clear: jest.fn(async () => undefined)}}));

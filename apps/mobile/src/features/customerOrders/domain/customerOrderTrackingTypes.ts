@@ -25,6 +25,12 @@ export interface CustomerDeliveryHistoryEntry {
   recordedAt: string;
 }
 
+export interface CustomerCourierLocation {
+  latitude: number;
+  longitude: number;
+  observedAt: string;
+}
+
 export interface CustomerOrderTracking {
   orderId: string;
   deliveryJobId: string | null;
@@ -33,4 +39,6 @@ export interface CustomerOrderTracking {
   trackingUrl: string | null;
   observedAt: string | null;
   history: readonly CustomerDeliveryHistoryEntry[];
+  /** The delivery partner's last reported position; null until the server reports one. */
+  courierLocation: CustomerCourierLocation | null;
 }

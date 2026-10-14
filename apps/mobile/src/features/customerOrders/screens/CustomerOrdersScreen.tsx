@@ -22,14 +22,8 @@ import type {
   CustomerTabParamList,
 } from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
-import {
-  borderWidth,
-  colors,
-  fontWeight,
-  radius,
-  spacing,
-  typography,
-} from '../../../design/tokens';
+import {colors, radius, spacing} from '../../../design/tokens';
+import {iosType, iosWeight, useIosFonts} from '../../../design/iosType';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -82,6 +76,7 @@ function OrdersSkeleton() {
 }
 
 export function CustomerOrdersScreen() {
+  useIosFonts();
   const navigation =
     useNavigation<
       NativeStackNavigationProp<
@@ -397,12 +392,9 @@ export function CustomerOrdersScreen() {
         onPressLocation={() => setLocationSelectorVisible(true)}
         onPressNotifications={() => navigation.navigate('CustomerNotifications')}
       />
-      <View style={styles.titleArea}>
-        <Text accessibilityRole="header" style={styles.title}>
-          My Orders
-        </Text>
-        <Text style={styles.subtitle}>Track, manage and reorder your meals</Text>
-      </View>
+      <Text accessibilityRole="header" style={[iosType.largeTitle, styles.title]}>
+        My Orders
+      </Text>
       <View accessibilityRole="tablist" style={styles.tabs}>
         {CUSTOMER_ORDERS_TABS.map(tab => {
           const selected = tab.key === selectedTab;
@@ -415,11 +407,15 @@ export function CustomerOrdersScreen() {
               style={({pressed}) => [
                 styles.tab,
                 selected && styles.tabSelected,
-                pressed && styles.tabPressed,
+                pressed && !selected && styles.tabPressed,
               ]}>
               <Text
                 numberOfLines={1}
-                style={[styles.tabText, selected && styles.tabTextSelected]}>
+                style={[
+                  iosType.footnote,
+                  styles.tabText,
+                  selected && [iosWeight.semibold, styles.tabTextSelected],
+                ]}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -437,13 +433,6 @@ export function CustomerOrdersScreen() {
               : undefined
           }
           retryLabel={checkingCart ? 'Checking cart…' : 'Check cart'}
-          style={styles.banner}
-        />
-      ) : null}
-      {!ordersQuery.v2Available &&
-      snapshot?.historyCompleteness === 'UNKNOWN_AFTER_SERVER_LIMIT' ? (
-        <RecoverableErrorBanner
-          message="Showing the newest 50 orders. The current server contract does not expose another page or a complete-history count yet."
           style={styles.banner}
         />
       ) : null}
@@ -578,7 +567,7 @@ export function CustomerOrdersScreen() {
                 {ordersQuery.isFetchingNextPage ? (
                   <ActivityIndicator color={colors.flameRed} />
                 ) : (
-                  <Text style={styles.loadOlderButtonText}>
+                  <Text style={[iosType.subheadline, iosWeight.semibold, styles.loadOlderButtonText]}>
                     Load older orders
                   </Text>
                 )}
@@ -608,52 +597,44 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     backgroundColor: colors.white,
   },
-  titleArea: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
   title: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    color: colors.textPrimary,
   },
-  subtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
+  // iOS segmented control: a grey track with the selected segment raised in white.
   tabs: {
     flexDirection: 'row',
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
+    padding: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(118,118,128,0.12)',
   },
   tab: {
-    minHeight: 48,
+    minHeight: 36,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxs,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    borderRadius: 8,
   },
   tabSelected: {
-    borderBottomColor: colors.flameRed,
-  },
-  tabPressed: {
     backgroundColor: colors.white,
-    borderRadius: radius.sm,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: {width: 0, height: 2},
+    elevation: 2,
   },
+  tabPressed: {opacity: 0.6},
   tabText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.semibold,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   tabTextSelected: {
-    color: colors.flameRed,
+    color: colors.textPrimary,
   },
   banner: {
     marginHorizontal: spacing.md,
@@ -663,7 +644,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   skeletonCard: {
-    minHeight: 210,
+    minHeight: 168,
     marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
@@ -691,22 +672,18 @@ const styles = StyleSheet.create({
   loadOlderButton: {
     alignItems: 'center',
     alignSelf: 'center',
-    borderColor: colors.flameRed,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
     justifyContent: 'center',
     marginVertical: spacing.md,
     minHeight: 44,
     paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(118,118,128,0.12)',
   },
   loadOlderButtonPressed: {
-    backgroundColor: colors.surfaceMuted,
-    opacity: 0.72,
+    opacity: 0.6,
   },
   loadOlderButtonText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
   },
   footerLoading: {
     alignItems: 'center',

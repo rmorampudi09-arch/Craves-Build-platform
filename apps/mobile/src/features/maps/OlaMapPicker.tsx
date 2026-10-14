@@ -61,6 +61,19 @@ const SAME_POINT = 1e-6;
 const PIN_WIDTH = 40;
 const PIN_HEIGHT = 52;
 
+/** Every Ola map needs this before its first tile request. */
+export function useMapTilesReferer(base: string = mapTilesBaseUrl()): void {
+  useEffect(() => {
+    // The proxy only serves craves.in; a stable id updates this header in place.
+    TransformRequestManager.addHeader({
+      id: 'craves-map-tiles-referer',
+      match: mapTilesRequestMatch(base),
+      name: 'Referer',
+      value: mapTilesReferer(base),
+    });
+  }, [base]);
+}
+
 const sameCenter = (a: MapPoint, b: MapPoint) =>
   Math.abs(a.latitude - b.latitude) < SAME_POINT &&
   Math.abs(a.longitude - b.longitude) < SAME_POINT;
@@ -101,15 +114,7 @@ export function OlaMapPicker({
     onCenterChangeRef.current = onCenterChange;
   });
 
-  useEffect(() => {
-    // The proxy only serves craves.in; a stable id updates this header in place.
-    TransformRequestManager.addHeader({
-      id: 'craves-map-tiles-referer',
-      match: mapTilesRequestMatch(base),
-      name: 'Referer',
-      value: mapTilesReferer(base),
-    });
-  }, [base]);
+  useMapTilesReferer(base);
 
   useEffect(() => () => clearTimeout(settleTimer.current), []);
 

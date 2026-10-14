@@ -36,7 +36,20 @@ function nullableTrimmed(maxLength: number) {
     });
 }
 
+/** Missing, unreadable or 0 (a placeholder, never a real Indian address) reads as unknown. */
+function coordinateSchema(limit: number) {
+  return z
+    .union([z.number(), z.string()])
+    .nullish()
+    .transform(value => {
+      const number = value === null || value === undefined || value === '' ? NaN : Number(value);
+      return Number.isFinite(number) && number !== 0 && Math.abs(number) <= limit ? number : null;
+    });
+}
+
 const addressSchema = z.object({
+  latitude: coordinateSchema(90),
+  longitude: coordinateSchema(180),
   recipientName: z.string().trim().min(1).max(160),
   addressLine1: z.string().trim().min(1).max(250),
   addressLine2: nullableTrimmed(250),

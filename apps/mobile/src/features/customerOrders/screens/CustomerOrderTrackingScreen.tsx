@@ -8,27 +8,22 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type AppStateStatus,
 } from 'react-native';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {
   useNavigation,
   useRoute,
   type NavigationProp,
   type RouteProp,
 } from '@react-navigation/native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
-import {
-  borderWidth,
-  colors,
-  elevation,
-  fontWeight,
-  radius,
-  spacing,
-  typography,
-} from '../../../design/tokens';
-import {Button} from '../../../shared/components/Button';
+import {colors, radius, spacing} from '../../../design/tokens';
+import {iosType, iosWeight, useIosFonts} from '../../../design/iosType';
 import {Icon} from '../../../shared/components/Icon';
 import {
   OfflineNotice,
@@ -36,7 +31,8 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import type {CustomerDeliveryStatusTone} from '../presentation/customerOrderTrackingPresentation';
+import {OrderMap} from '../components/OrderMap';
+import {getCustomerOrderJourney, hasLeftKitchen} from '../presentation/customerOrderJourney';
 import {
   CUSTOMER_DELIVERY_POLL_INTERVAL_MS,
   formatCustomerDeliveryTimestamp,
@@ -44,28 +40,16 @@ import {
   isTerminalCustomerDeliveryStatus,
 } from '../presentation/customerOrderTrackingPresentation';
 import {getCustomerOrderDisplayReference} from '../presentation/customerOrdersPresentation';
-import {useCustomerOrderTrackingQuery} from '../query/customerOrdersQueries';
+import {
+  useCustomerOrderDetailQuery,
+  useCustomerOrderTrackingQuery,
+} from '../query/customerOrdersQueries';
 
 type TrackingRoute = RouteProp<CustomerOrdersStackParamList, 'CustomerOrderTracking'>;
 type TrackingNavigation = NavigationProp<
   CustomerOrdersStackParamList,
   'CustomerOrderTracking'
 >;
-
-function toneStyle(tone: CustomerDeliveryStatusTone) {
-  switch (tone) {
-    case 'success':
-      return styles.statusSuccess;
-    case 'warning':
-      return styles.statusWarning;
-    case 'danger':
-      return styles.statusDanger;
-    case 'muted':
-      return styles.statusMuted;
-    case 'accent':
-      return styles.statusAccent;
-  }
-}
 
 function TrackingSkeleton() {
   return (
@@ -81,9 +65,14 @@ function TrackingSkeleton() {
 }
 
 export function CustomerOrderTrackingScreen() {
+  useIosFonts();
   const navigation = useNavigation<TrackingNavigation>();
   const route = useRoute<TrackingRoute>();
+  const insets = useSafeAreaInsets();
+  const {height: windowHeight} = useWindowDimensions();
   const tracking = useCustomerOrderTrackingQuery(route.params.orderId);
+  // Usually cached by the order screen; it carries the delivery address pin.
+  const order = useCustomerOrderDetailQuery(route.params.orderId).data;
   const projection = tracking.data;
   const refetchTracking = tracking.refetch;
   const invalidOrderId = tracking.invalidOrderId;
@@ -214,288 +203,257 @@ export function CustomerOrderTrackingScreen() {
   const status = projection.status
     ? getCustomerDeliveryStatusPresentation(projection.status)
     : null;
+  const pickedUp = order
+    ? getCustomerOrderJourney(order, projection.status).kind === 'DELIVERY'
+    : hasLeftKitchen(projection.status);
+  const address = order?.deliveryAddress;
+  const home =
+    address?.latitude != null && address.longitude != null
+      ? {latitude: address.latitude, longitude: address.longitude}
+      : null;
+  const history = [...projection.history].reverse();
 
   return (
     <ScreenShell
-      edges={['top', 'bottom']}
+      backgroundColor={colors.white}
+      edges={['bottom']}
       keyboardAvoiding={false}
       testID="customer-order-tracking">
-      <View style={styles.screen}>
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back to order details"
-            accessibilityRole="button"
-            onPress={() => navigation.goBack()}
-            style={({pressed}) => [styles.headerAction, pressed && styles.pressed]}>
-            <Icon name="arrow-left" />
-          </Pressable>
-          <View style={styles.headerCopy}>
-            <Text accessibilityRole="header" style={styles.headerTitle}>
-              Track Delivery
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Order #{getCustomerOrderDisplayReference(projection.orderId)}
-            </Text>
+      <OrderMap
+        accessibilityLabel={
+          pickedUp ? 'Delivery map' : 'Map, hidden until your order is picked up'
+        }
+        blurred={!pickedUp}
+        bottomInset={24}
+        courier={projection.courierLocation}
+        home={home}
+        interactive
+        style={{height: Math.round(windowHeight * 0.46)}}>
+        {pickedUp ? null : (
+          <View pointerEvents="none" style={styles.mapLocked}>
+            <View style={styles.lockedNote}>
+              <MaterialDesignIcons name="map-marker-path" size={14} color={colors.textPrimary} />
+              <Text style={[iosType.caption1, iosWeight.semibold, styles.primaryText]}>
+                Live map opens once your order is picked up
+              </Text>
+            </View>
           </View>
-          {tracking.isFetching ? (
-            <ActivityIndicator color={colors.flameRed} size="small" />
+        )}
+      </OrderMap>
+
+      <Pressable
+        accessibilityLabel="Back to order details"
+        accessibilityRole="button"
+        onPress={() => navigation.goBack()}
+        style={({pressed}) => [
+          styles.floatingButton,
+          {top: insets.top + spacing.xs},
+          pressed && styles.pressed,
+        ]}>
+        <Icon name="arrow-left" size={22} color={colors.textPrimary} surface={false} />
+      </Pressable>
+      {tracking.isFetching ? (
+        <View style={[styles.floatingButton, styles.floatingRight, {top: insets.top + spacing.xs}]}>
+          <ActivityIndicator color={colors.textSecondary} size="small" />
+        </View>
+      ) : null}
+
+      <ScrollView
+        contentContainerStyle={styles.sheetContent}
+        refreshControl={
+          <RefreshControl
+            colors={[colors.flameRed]}
+            onRefresh={() => tracking.refetch()}
+            refreshing={tracking.isRefetching}
+            tintColor={colors.flameRed}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+        style={styles.sheet}>
+        {queryError ? (
+          offline ? (
+            <OfflineNotice
+              message="Showing the last verified delivery update. Pull to refresh when you are back online."
+              onRetry={() => tracking.refetch()}
+            />
           ) : (
-            <View style={styles.headerPlaceholder} />
+            <RecoverableErrorBanner
+              message="The last verified delivery update is still visible, but the latest refresh failed."
+              onRetry={() => tracking.refetch()}
+            />
+          )
+        ) : null}
+        {linkMessage ? <RecoverableErrorBanner message={linkMessage} /> : null}
+
+        <View style={styles.statusBlock}>
+          <Text style={[iosType.footnote, iosWeight.semibold, styles.secondaryText]}>
+            Order #{getCustomerOrderDisplayReference(projection.orderId)}
+          </Text>
+          <Text
+            accessibilityLiveRegion="polite"
+            accessibilityRole="header"
+            style={[iosType.title1, styles.primaryText]}>
+            {status?.label ?? 'Waiting for delivery updates'}
+          </Text>
+          <Text style={[iosType.subheadline, styles.secondaryText]}>
+            {status?.detail ??
+              'A delivery partner has not been assigned yet. This page refreshes while Craves is open.'}
+          </Text>
+          {projection.observedAt ? (
+            <Text style={[iosType.footnote, styles.secondaryText]}>
+              Updated {formatCustomerDeliveryTimestamp(projection.observedAt)}
+            </Text>
+          ) : null}
+        </View>
+
+        {projection.trackingUrl ? (
+          <Pressable
+            accessibilityLabel="Open partner tracking"
+            accessibilityRole="button"
+            onPress={openProviderTracking}
+            style={({pressed}) => [styles.secondaryButton, pressed && styles.pressed]}>
+            <Icon name="location" size={18} color={colors.textPrimary} surface={false} />
+            <Text style={[iosType.headline, styles.primaryText]}>Open partner tracking</Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.card}>
+          <Text style={[iosType.headline, styles.primaryText, styles.cardTitle]}>
+            Delivery updates
+          </Text>
+          {history.length > 0 ? (
+            history.map((entry, index) => {
+              const entryStatus = getCustomerDeliveryStatusPresentation(entry.newStatus);
+              const latest = index === 0;
+              const last = index === history.length - 1;
+              return (
+                <View key={`${entry.observedAt}-${entry.recordedAt}-${index}`} style={styles.timelineRow}>
+                  <View style={styles.timelineRail}>
+                    <View style={[styles.timelineDot, latest && styles.timelineDotLatest]} />
+                    {last ? null : <View style={styles.timelineLine} />}
+                  </View>
+                  <View style={styles.timelineCopy}>
+                    <Text
+                      style={[
+                        iosType.subheadline,
+                        latest ? [iosWeight.semibold, styles.primaryText] : styles.secondaryText,
+                      ]}>
+                      {entryStatus.label}
+                    </Text>
+                    <Text style={[iosType.footnote, styles.secondaryText]}>
+                      {formatCustomerDeliveryTimestamp(entry.observedAt)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={[iosType.subheadline, styles.secondaryText]}>
+              No delivery updates yet.
+            </Text>
           )}
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.content}
-          refreshControl={
-            <RefreshControl
-              colors={[colors.flameRed]}
-              onRefresh={() => tracking.refetch()}
-              refreshing={tracking.isRefetching}
-              tintColor={colors.flameRed}
-            />
-          }
-          showsVerticalScrollIndicator={false}>
-          {queryError ? (
-            offline ? (
-              <OfflineNotice
-                message="Showing the last verified delivery update. Pull to refresh when you are back online."
-                onRetry={() => tracking.refetch()}
-                style={styles.notice}
-              />
-            ) : (
-              <RecoverableErrorBanner
-                message="The last verified delivery update is still visible, but the latest refresh failed."
-                onRetry={() => tracking.refetch()}
-                style={styles.notice}
-              />
-            )
-          ) : null}
-          {linkMessage ? (
-            <RecoverableErrorBanner message={linkMessage} style={styles.notice} />
-          ) : null}
-
-          {status ? (
-            <View style={[styles.statusCard, toneStyle(status.tone)]}>
-              <Text accessibilityLiveRegion="polite" style={styles.statusTitle}>
-                {status.label}
-              </Text>
-              <Text style={styles.statusDetail}>{status.detail}</Text>
-              {status.stage ? (
-                <Text style={styles.statusMeta}>Delivery stage {status.stage} of 9</Text>
-              ) : null}
-              {projection.observedAt ? (
-                <Text style={styles.statusMeta}>
-                  Last observed {formatCustomerDeliveryTimestamp(projection.observedAt)}
-                </Text>
-              ) : null}
-              {!terminal ? (
-                <Text style={styles.pollingText}>
-                  Updates refresh every 30 seconds while Craves is open. Pull down anytime to refresh now.
-                </Text>
-              ) : null}
-              {projection.trackingUrl ? (
-                <Button
-                  label="Open External Tracking"
-                  onPress={openProviderTracking}
-                  variant="outline"
-                  style={styles.externalButton}
-                />
-              ) : null}
-            </View>
-          ) : (
-            <View style={styles.waitingCard}>
-              <Icon name="orders" size={28} color={colors.flameRed} />
-              <Text accessibilityLiveRegion="polite" style={styles.waitingTitle}>
-                Waiting for delivery updates
-              </Text>
-              <Text style={styles.waitingText}>
-                Your order is valid, but a delivery status has not been recorded yet. This page will refresh while Craves is open.
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.timelineCard}>
-            <Text style={styles.sectionTitle}>Delivery timeline</Text>
-            {projection.history.length > 0 ? (
-              projection.history.map((entry, index) => {
-                const entryStatus = getCustomerDeliveryStatusPresentation(entry.newStatus);
-                return (
-                  <View key={`${entry.observedAt}-${entry.recordedAt}-${index}`} style={styles.timelineRow}>
-                    <View style={styles.timelineMarker} />
-                    <View style={styles.timelineCopy}>
-                      <Text style={styles.timelineTitle}>{entryStatus.label}</Text>
-                      <Text style={styles.timelineTime}>
-                        {formatCustomerDeliveryTimestamp(entry.observedAt)}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })
-            ) : (
-              <Text style={styles.emptyTimelineText}>
-                No delivery history has been recorded yet.
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.limitCard}>
-            <Text style={styles.limitText}>
-              Only verified delivery updates are shown. If an ETA, courier location, route map, cancellation outcome, or refund outcome is not available from Craves, this screen will not estimate it.
-            </Text>
-          </View>
-        </ScrollView>
-      </View>
+        <Text style={[iosType.footnote, styles.secondaryText]}>
+          Only updates confirmed by the delivery partner are shown.
+          {terminal ? '' : ' They refresh every 30 seconds while Craves is open.'}
+        </Text>
+      </ScrollView>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.white},
-  header: {
-    minHeight: 64,
+  primaryText: {color: colors.textPrimary},
+  secondaryText: {color: colors.textSecondary},
+  pressed: {opacity: 0.6},
+  mapLocked: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 24,
+  },
+  lockedNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
-  headerAction: {
+  floatingButton: {
+    position: 'absolute',
+    left: spacing.md,
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.pill,
+    borderRadius: 22,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: {width: 0, height: 2},
+    elevation: 4,
   },
-  headerCopy: {minWidth: 0, flex: 1},
-  headerTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  headerSubtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-  },
-  headerPlaceholder: {width: 20, height: 20},
-  pressed: {opacity: 0.72},
-  content: {padding: spacing.md, paddingBottom: spacing.xl},
-  notice: {marginBottom: spacing.sm},
-  statusCard: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-  },
-  statusAccent: {backgroundColor: colors.white},
-  statusSuccess: {backgroundColor: colors.successSoft},
-  statusWarning: {backgroundColor: colors.warningSoft},
-  statusDanger: {backgroundColor: colors.errorSoft},
-  statusMuted: {backgroundColor: colors.surfaceMuted},
-  statusTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  statusDetail: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.body,
-    lineHeight: 22,
-  },
-  statusMeta: {
-    marginTop: spacing.sm,
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
-  },
-  pollingText: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
-  },
-  externalButton: {marginTop: spacing.md},
-  waitingCard: {
-    alignItems: 'center',
-    padding: spacing.xl,
-    borderRadius: radius.lg,
+  floatingRight: {left: undefined, right: spacing.md},
+  sheet: {
+    flex: 1,
+    marginTop: -24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     backgroundColor: colors.white,
   },
-  waitingTitle: {
-    marginTop: spacing.sm,
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  waitingText: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: 21,
-    textAlign: 'center',
-  },
-  timelineCard: {
-    marginTop: spacing.md,
+  sheetContent: {
     padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    ...elevation.card,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
   },
-  sectionTitle: {
-    marginBottom: spacing.sm,
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  timelineRow: {
-    minHeight: 58,
+  statusBlock: {gap: spacing.xxs},
+  secondaryButton: {
+    minHeight: 50,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
-  },
-  timelineMarker: {
-    width: 12,
-    height: 12,
-    marginTop: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.flameRed,
-  },
-  timelineCopy: {minWidth: 0, flex: 1},
-  timelineTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  timelineTime: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-  },
-  emptyTimelineText: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: 21,
-  },
-  limitCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: 'rgba(118,118,128,0.12)',
   },
-  limitText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
+  card: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.white,
   },
+  cardTitle: {marginBottom: spacing.sm},
+  timelineRow: {flexDirection: 'row', gap: spacing.sm},
+  timelineRail: {width: 14, alignItems: 'center'},
+  timelineDot: {
+    width: 10,
+    height: 10,
+    marginTop: 5,
+    borderRadius: 5,
+    backgroundColor: colors.borderStrong,
+  },
+  timelineDotLatest: {
+    width: 14,
+    height: 14,
+    marginTop: 3,
+    borderRadius: 7,
+    borderWidth: 3,
+    borderColor: colors.errorSoft,
+    backgroundColor: colors.flameRedAccessible,
+  },
+  timelineLine: {
+    flex: 1,
+    width: 2,
+    marginVertical: 2,
+    backgroundColor: colors.border,
+  },
+  timelineCopy: {minWidth: 0, flex: 1, gap: 2, paddingBottom: spacing.md},
   skeletonWrap: {padding: spacing.md},
   skeletonHeader: {
     width: '52%',

@@ -40,6 +40,17 @@ const historySchema = z.object({
   recordedAt: timestampSchema,
 });
 
+/** A bad position must not hide the delivery status, so it reads as no position. */
+const courierLocationSchema = z
+  .object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    observedAt: timestampSchema,
+  })
+  .nullish()
+  .catch(null)
+  .transform(value => value ?? null);
+
 const trackingSchema = z.object({
   orderId: z.string().uuid(),
   deliveryJobId: z.string().uuid().nullable(),
@@ -48,6 +59,7 @@ const trackingSchema = z.object({
   trackingUrl: safeTrackingUrlSchema,
   observedAt: nullableTimestampSchema,
   history: z.array(historySchema).max(100),
+  courierLocation: courierLocationSchema,
 });
 
 export function parseCustomerOrderTrackingResponse(
@@ -61,6 +73,7 @@ export function parseCustomerOrderTrackingResponse(
   const projection = parsed.data;
   if (projection.status === null) {
     if (
+      projection.courierLocation !== null ||
       projection.deliveryJobId !== null ||
       projection.providerId !== null ||
       projection.trackingUrl !== null ||

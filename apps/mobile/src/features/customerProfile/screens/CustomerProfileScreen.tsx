@@ -614,14 +614,15 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xxs,
   },
+  // iPhone contact-card sizes (Title 2, Subheadline): the name and email fit beside the avatar.
   profileName: {
     color: colors.espressoBrown,
-    fontSize: typography.hero,
+    fontSize: 22,
     fontWeight: fontWeight.bold,
   },
   identityMeta: {
     color: colors.textSecondary,
-    fontSize: typography.body,
+    fontSize: typography.small,
   },
   completenessPill: {
     alignSelf: 'flex-start',

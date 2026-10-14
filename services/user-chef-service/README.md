@@ -166,6 +166,15 @@ Header: X-Craves-Internal-Secret
 
 The endpoint uses the existing internal service credential, validates address ownership, and returns active addresses only. It fails closed when internal authentication is not configured. Order Service will consume it in the checkout snapshot module.
 
+## Internal kitchen photos
+
+```text
+GET /internal/v1/chef-kitchen-photos/{slot}?identityId={chefIdentityId}   (slot 1 or 2)
+Header: X-Craves-Internal-Secret
+```
+
+Catalog Service pulls these to publish them on the chef's kitchen. Returns the image bytes (`no-store`) of `KITCHEN_PHOTO_1` or `KITCHEN_PHOTO_2` only when the identity's chef application is `APPROVED` and the document is neither removed nor rejected; otherwise `404 KITCHEN_PHOTO_NOT_FOUND`. No other document type is reachable.
+
 ## Chef APIs
 
 ```text

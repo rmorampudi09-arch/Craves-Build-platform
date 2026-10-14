@@ -26,7 +26,7 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     // One family with real 400/600/700 files, so fontWeight picks a weight instead of faking bold.
-    ReactFontManager.getInstance().addCustomFont(this, "Inter", R.font.inter)
+    ReactFontManager.getInstance().addCustomFont(this, "Outfit", R.font.outfit)
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }

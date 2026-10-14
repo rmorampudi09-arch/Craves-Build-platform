@@ -2,22 +2,22 @@ import React, {useContext, type ComponentType} from 'react';
 import {StyleSheet, type StyleProp, type TextStyle} from 'react-native';
 
 /**
- * Inter is the app-wide stand-in for Apple's SF Pro (licensed for Apple platforms only).
+ * Outfit, the app-wide font the user chose from the font demo (2026-10-14).
  * MainApplication registers it natively with real 400/600/700 files, so fontWeight works.
- * On iOS the name is unregistered and text falls back to the system face, which is SF itself.
+ * On iOS the name is unregistered and text falls back to the system face.
  */
-export const APP_FONT_FAMILY = 'Inter';
+export const APP_FONT_FAMILY = 'Outfit';
 
-/** Inter's size-based tracking (rsms.me/inter/dynmetrics): tighter as text grows, like SF Pro. */
-export function interTracking(fontSize: number): number {
-  return Math.round(fontSize * (-0.0223 + 0.185 * Math.exp(-0.1745 * fontSize)) * 100) / 100;
+/** As in the font demo: titles of 20 and up set 2% tighter, smaller text at Outfit's own spacing. */
+export function appTracking(fontSize: number): number {
+  return fontSize >= 20 ? Math.round(fontSize * -0.02 * 100) / 100 : 0;
 }
 
-/** Puts Inter under a style that names no font; a style's own font or tracking still wins. */
+/** Puts Outfit under a style that names no font; a style's own font or tracking still wins. */
 export function withAppFont(style: StyleProp<TextStyle>): StyleProp<TextStyle> {
   const flat = StyleSheet.flatten(style) ?? {};
   if (flat.fontFamily) return style;
-  return [{fontFamily: APP_FONT_FAMILY, letterSpacing: interTracking(flat.fontSize ?? 14)}, style];
+  return [{fontFamily: APP_FONT_FAMILY, letterSpacing: appTracking(flat.fontSize ?? 14)}, style];
 }
 
 type StyledProps = {style?: StyleProp<TextStyle>};

@@ -1,19 +1,19 @@
 import React from 'react';
 import {StyleSheet} from 'react-native';
 import renderer, {act, type ReactTestRenderer} from 'react-test-renderer';
-import {APP_FONT_FAMILY, installAppFont, interTracking, withAppFont} from './appFont';
+import {APP_FONT_FAMILY, appTracking, installAppFont, withAppFont} from './appFont';
 
 describe('app font', () => {
-  it('tracks tighter as text grows, like SF Pro', () => {
-    expect(interTracking(11)).toBeCloseTo(0.05, 2);
-    expect(interTracking(17)).toBeCloseTo(-0.22, 2);
-    expect(interTracking(34)).toBeCloseTo(-0.74, 2);
+  it('tightens only titles of 20 and up', () => {
+    expect(appTracking(17)).toBe(0);
+    expect(appTracking(20)).toBeCloseTo(-0.4, 2);
+    expect(appTracking(34)).toBeCloseTo(-0.68, 2);
   });
 
-  it('puts Inter under styles that name no font and leaves named fonts alone', () => {
+  it('puts the app font under styles that name no font and leaves named fonts alone', () => {
     expect(StyleSheet.flatten(withAppFont({fontSize: 17, fontWeight: '700'}))).toEqual({
       fontFamily: APP_FONT_FAMILY,
-      letterSpacing: -0.22,
+      letterSpacing: 0,
       fontSize: 17,
       fontWeight: '700',
     });

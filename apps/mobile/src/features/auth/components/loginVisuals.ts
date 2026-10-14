@@ -18,9 +18,9 @@ export const loginFonts = {
 } as const;
 
 export const loginFontAssets = {
-  [loginFonts.regular]: require('../../../assets/auth/fonts/Inter-Regular.ttf'),
-  [loginFonts.semibold]: require('../../../assets/auth/fonts/Inter-SemiBold.ttf'),
-  [loginFonts.bold]: require('../../../assets/auth/fonts/Inter-Bold.ttf'),
+  [loginFonts.regular]: require('../../../assets/auth/fonts/Outfit-Regular.ttf'),
+  [loginFonts.semibold]: require('../../../assets/auth/fonts/Outfit-SemiBold.ttf'),
+  [loginFonts.bold]: require('../../../assets/auth/fonts/Outfit-Bold.ttf'),
 };
 
 /** Share of the screen the white sign-in sheet takes; the video fills the rest. */

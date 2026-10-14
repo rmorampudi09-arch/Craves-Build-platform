@@ -156,7 +156,9 @@ public class SubscriptionLifecycleService {
             throw ApiException.badRequest("INVALID_RESUME_DATE", "resumeDate cannot be in the past");
         }
         LocalDate autoResumeDate = lifecycleRepository.pauseUsage(subscriptionId).autoResumeDate();
-        if (autoResumeDate != null && request.resumeDate().isAfter(autoResumeDate)) {
+        // An overdue restart (switched off or failed) must never lock the customer in, so the limit holds only while it is ahead.
+        if (autoResumeDate != null && !autoResumeDate.isBefore(LocalDate.ofInstant(clock.instant(), BUSINESS_ZONE))
+            && request.resumeDate().isAfter(autoResumeDate)) {
             throw ApiException.badRequest("RESUME_AFTER_AUTO_RESTART",
                 "Your plan restarts by itself on " + autoResumeDate.format(SHORT_DATE) + ".");
         }
@@ -190,7 +192,7 @@ public class SubscriptionLifecycleService {
             return false;
         }
         if (!capacityService.hasCommittedCapacity(subscriptionId)) {
-            capacityService.reacquireForResume(requireSubscription(subscriptionId), resumeDate);
+            capacityService.restoreForAutoResume(requireSubscription(subscriptionId));
         }
         lifecycleRepository.closePause(subscriptionId, resumeDate);
         billingRepository.applyPauseCredit(subscriptionId, resumeDate);

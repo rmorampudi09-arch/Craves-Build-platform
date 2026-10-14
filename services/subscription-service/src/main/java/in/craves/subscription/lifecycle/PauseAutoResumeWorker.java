@@ -35,13 +35,16 @@ public class PauseAutoResumeWorker {
         resumeDue(LocalDate.now(BUSINESS_ZONE));
     }
 
-    /** Resumes a day early so breakfast, sent to the chef at 20:00 the night before, finds its meals generated. */
+    /**
+     * Restarts every plan due by tomorrow with meals from tomorrow: a day early, so breakfast (sent to the chef at 20:00
+     * the night before) finds its meals generated, and an overdue restart never sends the chef a late order for today.
+     */
     int resumeDue(LocalDate today) {
+        LocalDate tomorrow = today.plusDays(1);
         int resumed = 0;
-        for (AutoResumeCandidate candidate : repository.dueAutoResumes(today.plusDays(1), BATCH_SIZE)) {
-            LocalDate resumeDate = candidate.autoResumeDate().isBefore(today) ? today : candidate.autoResumeDate();
+        for (AutoResumeCandidate candidate : repository.dueAutoResumes(tomorrow, BATCH_SIZE)) {
             try {
-                if (service.autoResume(candidate.subscriptionId(), candidate.customerIdentityId(), resumeDate)) {
+                if (service.autoResume(candidate.subscriptionId(), candidate.customerIdentityId(), tomorrow)) {
                     resumed++;
                 }
             } catch (RuntimeException exception) {

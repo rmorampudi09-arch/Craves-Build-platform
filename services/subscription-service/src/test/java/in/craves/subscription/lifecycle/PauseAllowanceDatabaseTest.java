@@ -137,4 +137,19 @@ class PauseAllowanceDatabaseTest {
         assertEquals(0,pausedUntil(null).resumeDue(d("10-26")));
         assertEquals("PAUSED",status());
     }
+
+    @Test void overdueRestartStartsTomorrow() {
+        // The restart was due on 25 October but the sweep only ran on the 26th: never send the chef a late order for today.
+        assertEquals(1,pausedUntil(d("10-25")).resumeDue(d("10-26")));
+        assertEquals(d("10-27"),db.queryForObject("SELECT next_service_date FROM subscription_schema.customer_subscription WHERE id=?",LocalDate.class,subscription));
+    }
+
+    @Test void cancelClearsTheRunningPause() {
+        pause(d("10-20"),d("10-13"),0,d("10-27"));
+        Boolean cancelled=tx.execute(s->repository.cancel(subscription,customer,"Moving"));
+        assertEquals(Boolean.TRUE,cancelled);
+        PauseUsage usage=repository.pauseUsage(subscription);
+        assertNull(usage.pausedFrom());
+        assertNull(usage.autoResumeDate());
+    }
 }

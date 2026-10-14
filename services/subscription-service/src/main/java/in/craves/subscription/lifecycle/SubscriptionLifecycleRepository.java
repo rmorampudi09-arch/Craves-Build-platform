@@ -133,7 +133,8 @@ public class SubscriptionLifecycleRepository {
         if (locked == null || !("ACTIVE".equals(locked.status()) || "PAUSED".equals(locked.status()))) return false;
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET status = 'CANCELLED', end_date = current_date, " +
-                "next_service_date = NULL, generation_lock_token = NULL, generation_locked_at = NULL, updated_at = now() " +
+                "next_service_date = NULL, generation_lock_token = NULL, generation_locked_at = NULL, updated_at = now(), " +
+                "paused_from = NULL, pause_auto_resume_date = NULL " +
                 "WHERE id = ? AND customer_identity_id = ? AND status = ?",
             subscriptionId, customerIdentityId, locked.status()
         );

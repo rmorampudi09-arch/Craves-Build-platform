@@ -264,6 +264,16 @@ class SubscriptionServiceOwnershipTest {
         verify(lifecycleRepository, never()).cancelUndispatchedOccurrences(any(), any(), any());
     }
 
+    @Test
+    void adminMovingAPausedPlanElsewhereEndsItsPause() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("PAUSED", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "CANCELLED", "Customer asked by phone", ADMIN);
+
+        // Otherwise a later admin pause would carry the old restart date and be restarted by the sweep.
+        verify(lifecycleRepository).closePause(eq(SUBSCRIPTION_ID), any());
+    }
+
     // The order worker sends every READY_FOR_ORDER meal without checking the plan's status.
     private void assertAdminChangeCancelsQueuedMeals(String target) {
         when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("ACTIVE", null)));

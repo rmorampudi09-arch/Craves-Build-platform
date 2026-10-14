@@ -31,4 +31,9 @@ class PauseAllowanceTest {
         assertEquals(new PauseStatus(7, 0, d("10-27")),
             PauseAllowance.status("MONTHLY", "PAUSED", d("10-13"), new PauseUsage(d("10-13"), 0, d("10-20"), d("10-27"))));
     }
+
+    @Test void statusHidesRestartDateUnlessPaused() {
+        assertEquals(new PauseStatus(7, 7, null),
+            PauseAllowance.status("MONTHLY", "CANCELLED", d("10-13"), new PauseUsage(null, 0, d("10-20"), d("10-27"))));
+    }
 }

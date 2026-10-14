@@ -152,6 +152,29 @@ class SubscriptionLifecyclePauseAllowanceTest {
         verify(capacity).reacquireForResume(subscription, d("10-14"));
     }
 
+    @Test
+    void resumeAllowedOnceTheAutomaticRestartIsOverdue() {
+        owned("PAUSED");
+        // The restart was due on 8 October but never ran (switched off or failed): the customer must still get out.
+        when(lifecycle.pauseUsage(SUBSCRIPTION_ID)).thenReturn(new PauseUsage(d("10-04"), 0, d("10-05"), d("10-08")));
+        when(capacity.hasCommittedCapacity(SUBSCRIPTION_ID)).thenReturn(true);
+
+        service.resume(SUBSCRIPTION_ID, new ResumeSubscriptionRequest(d("10-14"), null), CUSTOMER);
+
+        verify(lifecycle).resume(eq(SUBSCRIPTION_ID), eq(CUSTOMER_ID), eq(d("10-14")), any());
+    }
+
+    @Test
+    void autoResumeRestoresReleasedCapacityWithoutStrictChecks() {
+        when(capacity.hasCommittedCapacity(SUBSCRIPTION_ID)).thenReturn(false);
+
+        assertThat(service.autoResume(SUBSCRIPTION_ID, CUSTOMER_ID, d("10-14"))).isTrue();
+
+        verify(capacity).restoreForAutoResume(subscription);
+        verify(capacity, never()).reacquireForResume(any(), any());
+        verify(lifecycle).closePause(SUBSCRIPTION_ID, d("10-14"));
+    }
+
     private void owned(String status) {
         when(subscription.status()).thenReturn(status);
         when(lifecycle.findOwned(SUBSCRIPTION_ID, CUSTOMER_ID)).thenReturn(Optional.of(

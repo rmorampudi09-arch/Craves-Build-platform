@@ -29,7 +29,8 @@ public final class PauseAllowance {
 
     public static PauseStatus status(String billingPeriod, String subscriptionStatus, LocalDate currentBillStart, PauseUsage usage) {
         int perBill = daysPerBill(billingPeriod);
-        int left = "PAUSED".equals(subscriptionStatus) ? 0 : daysLeft(perBill, currentBillStart, usage.billStart(), usage.usedDays());
-        return new PauseStatus(perBill, left, usage.autoResumeDate());
+        boolean paused = "PAUSED".equals(subscriptionStatus);
+        int left = paused ? 0 : daysLeft(perBill, currentBillStart, usage.billStart(), usage.usedDays());
+        return new PauseStatus(perBill, left, paused ? usage.autoResumeDate() : null);
     }
 }

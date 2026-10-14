@@ -219,6 +219,10 @@ public class SubscriptionService {
         } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
             capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator moved subscription to " + normalized + ": " + reason.trim());
         }
+        if ("PAUSED".equals(subscription.status()) && !"ACTIVE".equals(normalized)) {
+            // Ends the customer's pause so a later admin pause never inherits its restart date.
+            lifecycleRepository.closePause(subscription.id(), LocalDate.now(BUSINESS_ZONE));
+        }
         SubscriptionResponse updated = repository.updateSubscriptionStatus(
             subscription.id(), subscription.status(), normalized, reason.trim(), user.identityId()
         );

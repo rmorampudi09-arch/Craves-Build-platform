@@ -2,6 +2,8 @@
 
 Branch `feat/meal-plan-week-cycle`. Deploy **subscription-service only**. There is no APIM change, no web deploy and no other service.
 
+Prod runs `nearby-1ddfd1c` (main 1ddfd1c1f). A build from merged main also ships the two subscription-service changes merged since then: #491 (live runtime lock) and #493 (chef plan model/repository changes from the chef app backend).
+
 ## What changes
 
 - **Bill lengths:**
@@ -21,6 +23,9 @@ Branch `feat/meal-plan-week-cycle`. Deploy **subscription-service only**. There 
 - **Capacity:** a customer pause now keeps the chef's capacity. Resume re-acquires capacity only if it was released, which happens with admin pauses and pauses from before this release.
 - **Automatic restart:** a new worker (every 5 min, first run 60 s after start) restarts customer pauses whose allowance ends tomorrow or earlier. It runs a day early, so breakfast sent at 20:00 the night before finds its meals. It goes through the normal resume steps, including the pause credit.
   - Env `CRAVES_SUBSCRIPTION_AUTO_RESUME_ENABLED` defaults to **true**. Pauses from before this release have no restart date, and the worker never touches them.
+  - An overdue restart (worker off or failing) restarts with meals from tomorrow. It never sends the chef a late order for today; the missed day is credited.
+  - If the chef's spot was released while paused, the restart puts it back without the strict capacity checks. An overbooking opens a capacity incident instead of failing.
+  - Once the restart date has passed, the limit on the customer's own resume no longer applies, so a customer is never locked in.
 - **API:** `GET /api/v1/subscriptions` and the pause/resume responses gain `pauseDaysPerBill`, `pauseDaysLeft` and `pauseAutoResumeDate`. These are additive, and older apps ignore them.
 - **V19** (`SET LOCAL lock_timeout = '5s'`):
   - widens `ck_subscription_plan_billing_period`;
@@ -33,7 +38,11 @@ Branch `feat/meal-plan-week-cycle`. Deploy **subscription-service only**. There 
 SELECT status, count(*) FROM subscription_schema.customer_subscription GROUP BY status;
 SELECT p.id, p.name, p.status, p.billing_period, s.recurrence_type, s.status AS schedule_status
 FROM subscription_schema.subscription_plan p LEFT JOIN subscription_schema.subscription_plan_schedule s ON s.plan_id = p.id;
+SELECT cs.status, count(*) FROM subscription_schema.customer_subscription cs
+JOIN subscription_schema.subscription_plan p ON p.id = cs.plan_id WHERE p.billing_period = 'MONTHLY' GROUP BY cs.status;
 ```
+
+- **Monthly subscribers** get 28-day bills from their next bill. The design assumed only the test subscription; if the last query shows real customers, tell them before deploying.
 
 - **PAUSED subscriptions** are legacy pauses. They stay paused until the customer resumes, as today.
 - **Plans with a `MONTHLY` recurrence** keep serving. Any `DRAFT`/`PENDING_APPROVAL` one needs the chef to save one week again in app 1.34.0.
@@ -57,5 +66,6 @@ FROM subscription_schema.subscription_plan p LEFT JOIN subscription_schema.subsc
 ## Rollback
 
 - Redeploy image `craves/subscription-service:nearby-1ddfd1c`. V19 stays applied; the old code ignores the new columns.
-- Customer pauses started on the new image keep their restart date. After a rollback they stay paused until the customer resumes, as before. Let the next deploy restart them, or set `pause_auto_resume_date = NULL` if the release is abandoned.
-- `CRAVES_SUBSCRIPTION_AUTO_RESUME_ENABLED=false` turns off only the automatic restart, without a rollback.
+- Customer pauses started on the new image stay paused after a rollback until the customer resumes, as before.
+- When rolling back, clear the running pauses so a later redeploy does not restart them at once: `UPDATE subscription_schema.customer_subscription SET paused_from = NULL, pause_auto_resume_date = NULL WHERE status = 'PAUSED';`
+- `CRAVES_SUBSCRIPTION_AUTO_RESUME_ENABLED=false` turns off only the automatic restart, without a rollback. Plans then stay paused past their restart date until the customer taps Resume (allowed once the date has passed) or an admin resumes them. Check daily: `SELECT id, pause_auto_resume_date FROM subscription_schema.customer_subscription WHERE status = 'PAUSED' AND pause_auto_resume_date < current_date;`

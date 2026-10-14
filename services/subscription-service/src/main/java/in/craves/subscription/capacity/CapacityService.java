@@ -264,6 +264,12 @@ public class CapacityService {
         return repository.listActiveEntitlements(subscriptionId).stream().anyMatch(value -> "COMMITTED".equals(value.status()));
     }
 
+    /** Puts a paid subscriber's spot back for the automatic restart, which must not fail: an overbooking opens an incident. */
+    @Transactional
+    public void restoreForAutoResume(SubscriptionResponse subscription) {
+        restoreExistingCommitmentProtected(subscription, "Pause days used up; plan restarted automatically", subscription.customerIdentityId());
+    }
+
     @Transactional
     public void releaseForPauseOrTerminal(SubscriptionResponse subscription, LocalDate effectiveDate, String reason) {
         UUID chef = subscription.chefIdentityId();

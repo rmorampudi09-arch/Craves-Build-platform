@@ -320,6 +320,92 @@ describe('MyMealPlanScreen', () => {
   });
 });
 
+describe('MyMealPlanScreen refund-or-extend choices', () => {
+  const renderPlan = () =>
+    render(<MyMealPlanScreen navigation={navigation as never} route={route({subscriptionId})} />);
+  const inTwoDays = () => new Date(Date.now() + 48 * 3_600_000).toISOString();
+  const declineId = '88888888-8888-4888-8888-888888888888';
+  const pauseId = '99999999-9999-4999-8999-999999999999';
+  const decline = (over: object = {}) => ({
+    id: declineId,
+    kind: 'DECLINE',
+    firstDate: '2026-10-14',
+    lastDate: '2026-10-14',
+    mealSlotCode: 'LUNCH',
+    days: null,
+    status: 'PENDING_CHOICE',
+    refundAmount: null,
+    currency: 'INR',
+    choiceDeadline: inTwoDays(),
+    extendAvailable: true,
+    ...over,
+  });
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  it('pendingDeclineShowsChoiceCard', () => {
+    given({sub: subscription({dayCredits: [decline()]})});
+    const root = renderPlan();
+    expect(texts(root)).toContain("Your chef couldn't make Lunch on Wed, 14 Oct");
+    expect(byLabel(root, 'Get a refund')).toBeDefined();
+    expect(byLabel(root, 'Add 1 day at the end')).toBeDefined();
+  });
+
+  it('refundButtonCallsChoose', async () => {
+    given({sub: subscription({dayCredits: [decline()]})});
+    const root = renderPlan();
+    await act(async () => byLabel(root, 'Get a refund').props.onPress());
+    expect(actions.chooseDayCredit).toHaveBeenCalledWith(declineId, 'REFUND');
+  });
+
+  it('shows the server message when a choice is refused', async () => {
+    given({sub: subscription({dayCredits: [decline()]})});
+    actions.chooseDayCredit.mockRejectedValueOnce(
+      new AppApiError('DAY_CREDIT_ALREADY_SETTLED', 'This day has already been settled.'),
+    );
+    const root = renderPlan();
+    await act(async () => byLabel(root, 'Add 1 day at the end').props.onPress());
+    expect(actions.chooseDayCredit).toHaveBeenCalledWith(declineId, 'EXTEND');
+    expect(Alert.alert).toHaveBeenLastCalledWith('Choice not saved', 'This day has already been settled.');
+  });
+
+  it('extendHiddenWhenNotAvailable', () => {
+    given({sub: subscription({dayCredits: [decline({extendAvailable: false})]})});
+    const root = renderPlan();
+    expect(byLabel(root, 'Get a refund')).toBeDefined();
+    expect(byLabel(root, 'Add 1 day at the end')).toBeUndefined();
+  });
+
+  it('settledCreditShowsItsLine', () => {
+    given({sub: subscription({dayCredits: [decline({status: 'REFUND_REQUESTED'})]})});
+    const root = renderPlan();
+    expect(texts(root)).toContain('Refund requested. It goes back to the UPI or card you paid with.');
+    expect(byLabel(root, 'Get a refund')).toBeUndefined();
+  });
+
+  it('noDayCreditsShowsNothing', () => {
+    given();
+    const root = renderPlan();
+    expect(byLabel(root, 'Get a refund')).toBeUndefined();
+  });
+
+  it('resumeOffersThePauseChoice', async () => {
+    given({sub: subscription({status: 'PAUSED'})});
+    const pause = decline({id: pauseId, kind: 'PAUSE', firstDate: '2026-10-10', lastDate: '2026-10-12', mealSlotCode: null, days: 3});
+    actions.resume.mockResolvedValueOnce(subscription({dayCredits: [pause] as never}));
+    const root = renderPlan();
+    act(() => byLabel(root, 'Resume plan').props.onPress());
+    await pressAlert('Resume plan');
+
+    const [title, , buttons] = jest.mocked(Alert.alert).mock.calls.at(-1) ?? [];
+    expect(title).toBe('You paused 3 days');
+    expect((buttons ?? []).map(button => button.text)).toEqual(['Later', 'Get a refund', 'Add 3 days at the end']);
+    await pressAlert('Add 3 days at the end');
+    expect(actions.chooseDayCredit).toHaveBeenCalledWith(pauseId, 'EXTEND');
+  });
+});
+
 describe('MealPlanMealScreen', () => {
   const renderMeal = () =>
     render(

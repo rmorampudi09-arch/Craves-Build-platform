@@ -18,5 +18,6 @@ in.craves.userchef.web.CustomerFavoriteController
 in.craves.userchef.web.CustomerHomeFavoriteController
 in.craves.userchef.web.CustomerProfileController
 in.craves.userchef.web.InternalBankApplicantController
+in.craves.userchef.web.InternalChefKitchenPhotoController
 in.craves.userchef.web.InternalCustomerAddressController
 in.craves.userchef.web.SupportCaseController

@@ -15,10 +15,13 @@ export interface ScheduleItemLike {
   quantity: number;
 }
 
-export type BillingUnit = 'week' | 'month';
+export type BillingUnit = 'week' | '14 days' | '28 days';
 
 export interface PlanScheduleSummary {
+  /** Distinct meals in one week (weekday menus) or one month (old date-based menus). */
   mealCount: number;
+  /** A weekday menu, which repeats every week of the bill. */
+  weekly: boolean;
   slotLabels: string[];
   daysLabel: string | null;
   timeLabel: string | null;
@@ -48,7 +51,24 @@ export function titleCaseCode(code: string): string {
 }
 
 export function billingUnit(period: string): BillingUnit {
-  return period.toUpperCase() === 'MONTHLY' ? 'month' : 'week';
+  switch (period.toUpperCase()) {
+    case 'MONTHLY':
+      return '28 days';
+    case 'FORTNIGHTLY':
+      return '14 days';
+    default:
+      return 'week';
+  }
+}
+
+export function billingPeriodLabel(period: string): 'Weekly' | '14 days' | 'Monthly' {
+  const unit = billingUnit(period);
+  return unit === 'week' ? 'Weekly' : unit === '14 days' ? '14 days' : 'Monthly';
+}
+
+/** Every bill is whole repeats of the chef's week. */
+export function weeksPerBill(unit: BillingUnit): 1 | 2 | 4 {
+  return unit === 'week' ? 1 : unit === '14 days' ? 2 : 4;
 }
 
 // BREAKFAST, LUNCH, SNACK and DINNER all fall out of title casing.
@@ -69,9 +89,9 @@ export function formatServiceTime(time: string): string {
   return `${hours % 12 || 12}:${match[2]} ${hours < 12 ? 'AM' : 'PM'}`;
 }
 
-// Weekly plans use isoDayOfWeek (1-7), monthly plans use dayOfMonth; the two never mix.
+// Weekday menus use isoDayOfWeek (1-7) and start on Sunday; old date-based menus use dayOfMonth. The two never mix.
 function dayKey(item: ScheduleItemLike): number {
-  return item.isoDayOfWeek ?? item.dayOfMonth ?? 0;
+  return item.isoDayOfWeek != null ? item.isoDayOfWeek % 7 : item.dayOfMonth ?? 0;
 }
 
 export function dayLabel(item: ScheduleItemLike, style: 'short' | 'long'): string {
@@ -128,6 +148,7 @@ export function summarizeSchedule(
   const foodTypes = sorted.map(i => normalizeFoodType(i.menuItemFoodType));
   return {
     mealCount: unique(sorted.map(i => `${dayKey(i)}|${i.mealSlotCode}`)).length,
+    weekly: sorted.some(i => i.isoDayOfWeek != null),
     slotLabels: unique(sorted.map(i => mealSlotLabel(i.mealSlotCode))),
     daysLabel: summarizeDays(sorted),
     timeLabel: times.length === 1 ? times[0] : null,
@@ -142,12 +163,13 @@ function pluralize(noun: string): string {
   return /(ch|sh|s|x|z)$/.test(noun) ? `${noun}es` : `${noun}s`;
 }
 
-// `_unit` is part of the agreed signature; the count reads the same for week and month plans.
+/** Meals in one bill: a weekday menu counts once per week of the bill. */
 export function formatMealCount(
   summary: PlanScheduleSummary,
-  _unit: BillingUnit,
+  unit: BillingUnit,
 ): string {
+  const count = summary.weekly ? summary.mealCount * weeksPerBill(unit) : summary.mealCount;
   const noun =
     summary.slotLabels.length === 1 ? summary.slotLabels[0].toLowerCase() : 'meal';
-  return `${summary.mealCount} ${summary.mealCount === 1 ? noun : pluralize(noun)}`;
+  return `${count} ${count === 1 ? noun : pluralize(noun)}`;
 }

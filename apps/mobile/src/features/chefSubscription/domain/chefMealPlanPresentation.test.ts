@@ -90,6 +90,7 @@ describe('chefPlanMetaLine', () => {
   it('shows only the frequency while the schedule is empty or not loaded', () => {
     expect(chefPlanMetaLine(plan({billingPeriod: 'MONTHLY'}), [])).toBe('Monthly');
     expect(chefPlanMetaLine(plan({billingPeriod: 'WEEKLY'}), undefined)).toBe('Weekly');
+    expect(chefPlanMetaLine(plan({billingPeriod: 'FORTNIGHTLY'}), undefined)).toBe('14 days');
   });
 
   it('counts monthly day-of-month meals', () => {
@@ -122,7 +123,10 @@ describe('chefPlanPriceLabel', () => {
     ).toBe('₹1,499 / week');
     expect(
       chefPlanPriceLabel(plan({amount: '5499.50', currency: 'INR', billingPeriod: 'MONTHLY'})),
-    ).toBe('₹5,499.50 / month');
+    ).toBe('₹5,499.50 / 28 days');
+    expect(
+      chefPlanPriceLabel(plan({amount: '1499', currency: 'INR', billingPeriod: 'FORTNIGHTLY'})),
+    ).toBe('₹1,499 / 14 days');
   });
 });
 

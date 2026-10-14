@@ -287,6 +287,10 @@ describe('chefSubscriptionApi plan photo and accepting-subscribers', () => {
     jest.clearAllMocks();
   });
 
+  it('parses a 14-day plan', () => {
+    expect(chefMealPlanSchema.parse({...plan, billingPeriod: 'FORTNIGHTLY'}).billingPeriod).toBe('FORTNIGHTLY');
+  });
+
   it('keeps the new plan fields optional so an older backend still parses', () => {
     const parsed = chefMealPlanSchema.parse(plan);
     expect('imageUrl' in parsed).toBe(false);

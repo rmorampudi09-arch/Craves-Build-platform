@@ -24,6 +24,7 @@ import {Badge, Icon, ScreenShell, type IconName} from '../../../shared/component
 import {customerAddressLabel} from '../../customerAddresses/domain/customerAddressContract';
 import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
 import {
+  billingPeriodLabel,
   billingUnit,
   dayLabel,
   formatMealCount,
@@ -190,7 +191,7 @@ export function MealPlanDetailScreen({navigation, route}: Props) {
         />
         <View>
           <View style={styles.badgeRow}>
-            <Badge label={unit === 'month' ? 'Monthly' : 'Weekly'} tone="error" />
+            <Badge label={billingPeriodLabel(plan.billingPeriod)} tone="error" />
             <FoodTypePill foodType={summary?.foodType} />
           </View>
           <Text
@@ -239,6 +240,11 @@ export function MealPlanDetailScreen({navigation, route}: Props) {
 
         {items.length > 0 ? (
           <CardSection title="What's included">
+            {summary?.weekly ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                Repeats every week
+              </Text>
+            ) : null}
             {items.map((item, index) => (
               <DishRow
                 key={`${item.isoDayOfWeek ?? item.dayOfMonth}-${item.mealSlotCode}-${item.sequenceNumber}`}

@@ -408,7 +408,7 @@ resource acaApps 'Microsoft.App/containerApps@2023-05-01' = [for app in containe
             cpu: json(app.cpu)
             memory: app.memory
           }
-          env: [
+          env: concat([
             {
               name: 'CRAVES_ENVIRONMENT'
               value: environmentName
@@ -421,7 +421,13 @@ resource acaApps 'Microsoft.App/containerApps@2023-05-01' = [for app in containe
               name: 'REDIS_HOST'
               value: managedRedis.name
             }
-          ]
+          ], app.name == 'catalog-service' ? [
+            // Code default is off; without this a rebuild publishes chef phone, email, address and location.
+            {
+              name: 'CRAVES_PUBLIC_CATALOG_PRIVACY_ENFORCEMENT_ENABLED'
+              value: 'true'
+            }
+          ] : [])
         }
       ]
       scale: {

@@ -58,6 +58,11 @@ public class MediaStorageService {
         return upload("public/kitchens/" + kitchenId + "/" + kind.name().toLowerCase(Locale.ROOT) + "/", file, "kitchen-photo");
     }
 
+    /** A kitchen photo copied in from elsewhere (the chef's approved registration photos); same optimisation as uploads. */
+    public StoredMedia storeKitchenImage(UUID kitchenId, String fileName, byte[] data, String contentType) {
+        return store("public/kitchens/" + kitchenId + "/kitchen/" + UUID.randomUUID() + "-" + sanitize(fileName), data, contentType);
+    }
+
     private StoredMedia upload(String folder, MultipartFile file, String fallbackName) {
         validate(file);
         String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : fallbackName;
@@ -134,8 +139,17 @@ public class MediaStorageService {
     }
 
     /** Shrinks the photo when it is oversized, then stores it with long-lived caching for browsers and Front Door. */
+    /** Shrunk and stripped of camera metadata (GPS); a photo that cannot be read is refused. */
+    static MenuPhotoOptimizer.Photo publishable(byte[] data, String contentType) {
+        try {
+            return PhotoMetadata.clean(data, contentType);
+        } catch (IllegalArgumentException ex) {
+            throw ApiException.badRequest("PHOTO_UNREADABLE", "This photo could not be read. Please try another photo.");
+        }
+    }
+
     private StoredMedia store(String blobName, byte[] data, String contentType) {
-        MenuPhotoOptimizer.Photo photo = MenuPhotoOptimizer.optimize(data, contentType);
+        MenuPhotoOptimizer.Photo photo = publishable(data, contentType);
         BlobClient blobClient = containerClient().getBlobClient(blobName);
         blobClient.upload(BinaryData.fromBytes(photo.data()), true);
         blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType(photo.contentType()).setCacheControl(CACHE_CONTROL));

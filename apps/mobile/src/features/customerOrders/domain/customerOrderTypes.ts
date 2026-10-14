@@ -43,6 +43,9 @@ export interface CustomerOrderDeliveryAddress {
   city: string;
   state: string;
   postalCode: string;
+  /** Where the order is delivered; null on orders saved before addresses had a map pin. */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface CustomerOrder {

@@ -643,6 +643,19 @@
       "reason": "Route is added for the chef redesign (docs/superpowers/specs/2026-10-13-chef-app-api-additions.md) and is not published for mobile yet; screens show Coming soon when the gateway answers not published."
     },
     {
+      "id": "chefProfile.setAvatar",
+      "source": "src/features/chefProfile/api/chefProfileApi.ts",
+      "method": "PUT",
+      "path": "/api/v1/kitchens/me/chef-avatar",
+      "auth": "bearer",
+      "requestModel": "{avatarId}",
+      "responseModel": "ChefKitchenProfile",
+      "requestValidator": "CHEF_AVATARS id",
+      "responseValidator": "parseKitchenResponse",
+      "availabilityFlag": "CHEF_KITCHEN_PHOTOS_AVAILABLE",
+      "reason": "Route is added for the chef redesign (docs/superpowers/specs/2026-10-13-chef-app-api-additions.md) and is not published for mobile yet; screens show Coming soon when the gateway answers not published."
+    },
+    {
       "id": "chefKitchenSettings.get",
       "source": "src/features/chefPreferences/api/chefKitchenSettingsApi.ts",
       "method": "GET",

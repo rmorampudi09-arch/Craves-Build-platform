@@ -67,6 +67,7 @@ import {
   evaluateDishCartRevalidation,
   formatDishDetailPrice,
 } from '../dishDetailPurchase';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import {useCustomerKitchenProfileQuery} from '../../kitchenProfile/query/kitchenProfileQueries';
 import {kitchenNavigationAction} from '../dishDetailNavigation';
 import {useCustomerDishDetailQuery} from '../query/dishDetailQueries';
@@ -680,9 +681,14 @@ export function CustomerDishDetailScreen() {
               <Text style={styles.kitchenLabel}>PREPARED BY</Text>
               <View style={styles.kitchenRow}>
                 <View style={styles.kitchenAvatar}>
-                  <Text style={styles.kitchenAvatarText}>
-                    {getKitchenInitials({kitchenName})}
-                  </Text>
+                  <CustomerChefFace
+                    url={kitchenProfile.data?.chefPhotoUrl}
+                    fallback={
+                      <Text style={styles.kitchenAvatarText}>
+                        {getKitchenInitials({kitchenName})}
+                      </Text>
+                    }
+                  />
                 </View>
                 <View style={styles.kitchenCopy}>
                   <Text numberOfLines={1} style={styles.kitchenName}>
@@ -993,6 +999,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.cream,

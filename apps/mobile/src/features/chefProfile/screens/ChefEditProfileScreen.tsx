@@ -3,6 +3,7 @@ import {StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
+import {toAppApiError} from '../../../core/http/apiError';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
 import {
   colors,
@@ -30,8 +31,10 @@ import {
   useChefToast,
 } from '../../chefShell/components/ui';
 import {chefProfileApi, type ChefKitchenPhotoKind, type ChefKitchenProfile} from '../api/chefProfileApi';
+import {ChefAvatarGrid} from '../components/ChefAvatarGrid';
 import {ChipPicker, PhotoTile} from '../components/KitchenFormParts';
 import {ReadState} from '../components/ReadState';
+import {chefAvatarIdFromUrl} from '../domain/chefAvatars';
 import {
   canEditChefKitchenProfile,
   chefKitchenProfileToFormValues,
@@ -68,6 +71,8 @@ function ComingSoonField({label}: {label: string}) {
 }
 
 /** Kitchen details: photos, name, about, what you cook, contact, address, delivery areas and links in one form. */
+const KITCHEN_PHOTOS_LOCKED_MESSAGE = "Kitchen photos can't be changed. To change one, contact Craves support.";
+
 export function ChefEditProfileScreen() {
   const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
   const queryClient = useQueryClient();
@@ -166,8 +171,11 @@ export function ChefEditProfileScreen() {
     requestAnimationFrame(() => navigation.navigate('ChefSupportTicket', {topic: 'Move my kitchen'}));
   };
 
-  // Photos: saved the moment they are chosen, apart from the form.
-  const [photoSheet, setPhotoSheet] = React.useState<ChefKitchenPhotoKind | null>(null);
+  // Photos: saved the moment they are chosen, apart from the form. The camera and gallery are for the kitchen photo only:
+  // the chef's own picture is one of the drawn faces.
+  const [photoSheet, setPhotoSheet] = React.useState<'KITCHEN' | null>(null);
+  const [faceSheet, setFaceSheet] = React.useState(false);
+  const [faceDraft, setFaceDraft] = React.useState<string | null>(null);
   const [photoSaving, setPhotoSaving] = React.useState<ChefKitchenPhotoKind | null>(null);
   const photoBusy = React.useRef(false);
   /** One photo save at a time. `work` returns the toast to show, or null when the chef cancelled. */
@@ -183,7 +191,20 @@ export function ChefEditProfileScreen() {
         toast.show(done);
       }
     } catch (error) {
-      toast.show(isRouteNotPublished(error) ? 'Photos are coming soon.' : "We couldn't save that photo. Please try again.");
+      const locked = toAppApiError(error).code === 'KITCHEN_PHOTOS_LOCKED';
+      if (locked) {
+        // The tiles were out of date (photos arrived from the application or another device): show what the server holds.
+        query.refetch().catch(() => undefined);
+      }
+      toast.show(
+        locked
+          ? KITCHEN_PHOTOS_LOCKED_MESSAGE
+          : isRouteNotPublished(error)
+          ? 'Photos are coming soon.'
+          : kind === 'CHEF'
+            ? "We couldn't save your picture. Please try again."
+            : "We couldn't save that photo. Please try again.",
+      );
     } finally {
       photoBusy.current = false;
       setPhotoSaving(null);
@@ -209,15 +230,28 @@ export function ChefEditProfileScreen() {
       return 'Photo saved';
     });
   };
-  const removePhoto = (kind: ChefKitchenPhotoKind) => {
-    setPhotoSheet(null);
-    return runPhoto(kind, async () => {
-      await synchronizeChefProfileAfterSave(queryClient, identityId as string, await chefProfileApi.deletePhoto(kind));
-      return 'Photo removed';
+  const photoUrl = (kind: ChefKitchenPhotoKind) => (kind === 'CHEF' ? kitchen?.chefPhotoUrl : kitchen?.kitchenPhotoUrl);
+  // Slot 1 is kitchenPhotoUrl; slot 2 is the other filled one (the list skips empty slots). Undefined = not published yet.
+  const kitchenSlots: Array<string | null | undefined> =
+    kitchen?.kitchenPhotoUrls === undefined
+      ? [undefined, undefined]
+      : [kitchen.kitchenPhotoUrl ?? null, kitchen.kitchenPhotoUrls.find(url => url !== kitchen.kitchenPhotoUrl) ?? null];
+  const nextEmptySlot = kitchenSlots.indexOf(null);
+  const openFaces = () => {
+    setFaceDraft(chefAvatarIdFromUrl(photoUrl('CHEF')));
+    setFaceSheet(true);
+  };
+  const saveFace = () => {
+    const avatarId = faceDraft;
+    if (!avatarId) {
+      return undefined;
+    }
+    setFaceSheet(false);
+    return runPhoto('CHEF', async () => {
+      await synchronizeChefProfileAfterSave(queryClient, identityId as string, await chefProfileApi.setAvatar(avatarId));
+      return 'Picture saved';
     });
   };
-
-  const photoUrl = (kind: ChefKitchenPhotoKind) => (kind === 'CHEF' ? kitchen?.chefPhotoUrl : kitchen?.kitchenPhotoUrl);
   const hasCuisines = values?.cuisines !== undefined;
   const hasAreas = values?.serviceAreas !== undefined;
   const hasLinks = values?.instagram !== undefined;
@@ -263,17 +297,26 @@ export function ChefEditProfileScreen() {
                 <PhotoTile
                   busy={photoSaving === 'CHEF'}
                   icon="account"
-                  label="Your photo"
-                  onPress={() => setPhotoSheet('CHEF')}
+                  label="Your picture"
+                  onPress={openFaces}
                   url={photoUrl('CHEF')}
                 />
-                <PhotoTile
-                  busy={photoSaving === 'KITCHEN'}
-                  icon="store"
-                  label="Kitchen photo"
-                  onPress={() => setPhotoSheet('KITCHEN')}
-                  url={photoUrl('KITCHEN')}
-                />
+                {kitchenSlots.map((url, slot) => (
+                  <PhotoTile
+                    busy={photoSaving === 'KITCHEN' && slot === nextEmptySlot}
+                    icon="store"
+                    key={slot}
+                    label={slot === 0 ? 'Overall kitchen' : 'Cooking setup'}
+                    onPress={() =>
+                      url
+                        ? toast.show(KITCHEN_PHOTOS_LOCKED_MESSAGE)
+                        : slot !== nextEmptySlot
+                          ? toast.show('Add the overall kitchen photo first.') // the server fills slot 1 before slot 2
+                          : setPhotoSheet('KITCHEN')
+                    }
+                    url={url}
+                  />
+                ))}
               </View>
 
               <FormField
@@ -433,14 +476,31 @@ export function ChefEditProfileScreen() {
         ) : null}
       </ChefSheet>
 
-      <ChefSheet onClose={() => setPhotoSheet(null)} title={photoSheet === 'CHEF' ? 'Your photo' : 'Kitchen photo'} visible={photoSheet !== null}>
+      <ChefSheet
+        footer={
+          <View style={styles.sheetButtons}>
+            <ChefActionButton label="Cancel" onPress={() => setFaceSheet(false)} style={styles.sheetButton} tone="neutral" />
+            <ChefActionButton
+              disabled={!faceDraft}
+              label="Save"
+              onPress={() => {
+                saveFace()?.catch(() => undefined);
+              }}
+              style={styles.sheetButton}
+            />
+          </View>
+        }
+        onClose={() => setFaceSheet(false)}
+        title="Change your picture"
+        visible={faceSheet}>
+        <ChefAvatarGrid onSelect={setFaceDraft} selectedId={faceDraft} />
+      </ChefSheet>
+
+      <ChefSheet onClose={() => setPhotoSheet(null)} title="Kitchen photo" visible={photoSheet !== null}>
         {photoSheet ? (
           <ListGroup>
             <ListRow icon="camera" onPress={() => { choosePhoto(photoSheet, 'camera').catch(() => undefined); }} title="Take a photo" />
             <ListRow icon="image" onPress={() => { choosePhoto(photoSheet, 'gallery').catch(() => undefined); }} title="Choose from gallery" />
-            {photoUrl(photoSheet) ? (
-              <ListRow destructive icon="trash" onPress={() => { removePhoto(photoSheet).catch(() => undefined); }} title="Remove photo" />
-            ) : null}
           </ListGroup>
         ) : null}
       </ChefSheet>
@@ -474,4 +534,6 @@ const styles = StyleSheet.create({
   addressStreet: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   muted: {color: colors.textSecondary, fontSize: typography.small},
   sheet: {gap: spacing.sm, paddingBottom: spacing.sm},
+  sheetButtons: {flexDirection: 'row', gap: spacing.sm},
+  sheetButton: {flex: 1},
 });

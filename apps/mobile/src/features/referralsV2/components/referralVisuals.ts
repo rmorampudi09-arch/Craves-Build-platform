@@ -18,9 +18,9 @@ export const referralFonts = {
 } as const;
 
 export const referralFontAssets = {
-  [referralFonts.regular]: require('../../../assets/auth/fonts/Inter-Regular.ttf'),
-  [referralFonts.semibold]: require('../../../assets/auth/fonts/Inter-SemiBold.ttf'),
-  [referralFonts.bold]: require('../../../assets/auth/fonts/Inter-Bold.ttf'),
+  [referralFonts.regular]: require('../../../assets/auth/fonts/Outfit-Regular.ttf'),
+  [referralFonts.semibold]: require('../../../assets/auth/fonts/Outfit-SemiBold.ttf'),
+  [referralFonts.bold]: require('../../../assets/auth/fonts/Outfit-Bold.ttf'),
 };
 
 export const referralLayout = {

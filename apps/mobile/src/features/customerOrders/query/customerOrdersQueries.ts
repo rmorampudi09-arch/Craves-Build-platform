@@ -238,7 +238,7 @@ export function useCustomerOrderDetailQuery(orderId: string) {
   };
 }
 
-export function useCustomerOrderTrackingQuery(orderId: string) {
+export function useCustomerOrderTrackingQuery(orderId: string, enabled = true) {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const validOrderId = isCustomerOrderId(orderId);
   const queryKey =
@@ -249,7 +249,7 @@ export function useCustomerOrderTrackingQuery(orderId: string) {
   const query = useQuery({
     queryKey,
     queryFn: ({signal}) => customerOrderTrackingApi.getTracking(orderId, signal),
-    enabled: identityId !== null && validOrderId,
+    enabled: enabled && identityId !== null && validOrderId,
     staleTime: 15_000,
   });
 

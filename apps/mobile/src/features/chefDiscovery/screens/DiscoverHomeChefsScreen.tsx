@@ -34,6 +34,7 @@ import {
 } from '../../../shared/components/LifecycleStates';
 import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
@@ -55,6 +56,7 @@ import {
   flattenNearbyKitchenPages,
   formatKitchenDistance,
   getKitchenInitials,
+  kitchenCardImageUrls,
   summarizeKitchenDishes,
   type KitchenDishSummary,
 } from '../chefDiscoveryPresentation';
@@ -128,7 +130,7 @@ function KitchenCard({
   onViewKitchen,
 }: KitchenCardProps) {
   const title = kitchen.kitchenName;
-  const imageUrls = summary?.imageUrls ?? [];
+  const imageUrls = kitchenCardImageUrls(kitchen.kitchenPhotoUrls, summary?.imageUrls ?? []);
   const dishCount = `${kitchen.activeMenuItemCount} ${
     kitchen.activeMenuItemCount === 1 ? 'dish' : 'dishes'
   }`;
@@ -143,7 +145,12 @@ function KitchenCard({
         style={({pressed}) => pressed && styles.kitchenCardPressed}>
         <View style={styles.cardHeader}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getKitchenInitials(kitchen)}</Text>
+            <View style={styles.avatarFace}>
+              <CustomerChefFace
+                url={kitchen.chefPhotoUrl}
+                fallback={<Text style={styles.avatarText}>{getKitchenInitials(kitchen)}</Text>}
+              />
+            </View>
             <View style={styles.openDot} />
           </View>
           <View style={styles.cardTitleCopy}>
@@ -647,6 +654,14 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Clips the face to the circle; the open dot sits outside it so the dot is not clipped.
+  avatarFace: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },

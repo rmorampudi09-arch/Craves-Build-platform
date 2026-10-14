@@ -8,10 +8,12 @@ export interface ChefSheetProps {
   onClose: () => void;
   title: string;
   children?: React.ReactNode;
+  /** Pinned under the scrolling body, so a main action stays on screen however tall the body is. */
+  footer?: React.ReactNode;
 }
 
 /** White bottom sheet over a dimmed screen. Tapping the dim area or Android back closes it. */
-export function ChefSheet({visible, onClose, title, children}: ChefSheetProps) {
+export function ChefSheet({visible, onClose, title, children, footer}: ChefSheetProps) {
   const insets = useSafeAreaInsets();
   return (
     <Modal animationType="slide" onRequestClose={onClose} statusBarTranslucent transparent visible={visible}>
@@ -40,6 +42,7 @@ export function ChefSheet({visible, onClose, title, children}: ChefSheetProps) {
             showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>
+          {footer}
         </View>
       </View>
     </Modal>

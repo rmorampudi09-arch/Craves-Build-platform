@@ -25,7 +25,7 @@ import {
 } from '../../../shared/components';
 import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
 import {billingUnit} from '../../mealPlans/domain/mealPlanSchedule';
-import type {CustomerSubscriptionOccurrence} from '../api/customerSubscriptionApi';
+import type {CustomerSubscriptionOccurrence, DayCredit, DayCreditChoice} from '../api/customerSubscriptionApi';
 import {
   CardSection,
   DateSheet,
@@ -34,12 +34,15 @@ import {
   PlanUnavailable,
 } from '../components/MealPlanUi';
 import {
+  dayCreditCard,
   formatMealPlanDate,
   formatPlanPrice,
   nextOccurrence,
   occurrenceDishNames,
   occurrenceStatusPresentation,
   occurrenceTimeLabel,
+  pauseInfo,
+  pendingDayCredits,
   resumeDateFor,
   skippableDates,
   subscriptionStatusPresentation,
@@ -140,6 +143,44 @@ function WeekRow({
         {skipped ? 'Skipped' : occurrenceTimeLabel(occurrence.serviceAt)}
       </Text>
     </View>
+  );
+}
+
+function DayCreditCard({
+  credit,
+  today,
+  busy,
+  onChoose,
+}: {
+  credit: DayCredit;
+  today: string;
+  busy: boolean;
+  onChoose: (choice: DayCreditChoice) => void;
+}) {
+  const card = dayCreditCard(credit, today);
+  return (
+    <CardSection>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
+        {card.title}
+      </Text>
+      {card.pending ? (
+        <View style={styles.choices}>
+          <Button label={card.refundLabel} variant="outline" disabled={busy} onPress={() => onChoose('REFUND')} />
+          {card.extendAvailable ? (
+            <Button label={card.extendLabel} disabled={busy} onPress={() => onChoose('EXTEND')} />
+          ) : null}
+          {card.note ? (
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+              {card.note}
+            </Text>
+          ) : null}
+        </View>
+      ) : card.settledLine ? (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+          {card.settledLine}
+        </Text>
+      ) : null}
+    </CardSection>
   );
 }
 
@@ -251,16 +292,52 @@ export function MyMealPlanScreen({navigation, route}: Props) {
       },
     ]);
 
-  const pause = () =>
-    confirm('Pause your plan?', 'Upcoming meals stop until you resume the plan.', 'Pause plan', actions.pause);
+  const earliestTime = scheduleItems.map(item => item.serviceTime).sort()[0] ?? null;
+  const resumeDate = resumeDateFor(now, policy?.resumeLeadMinutes ?? 0, earliestTime);
+  const pausing = pauseInfo(subscription, resumeDate, today);
+  const pause = () => confirm('Pause your plan?', pausing.pauseMessage, 'Pause plan', actions.pause);
+  const choose = (creditId: string, choice: DayCreditChoice) => {
+    actions
+      .chooseDayCredit(creditId, choice)
+      .catch(error => Alert.alert('Choice not saved', toAppApiError(error).message));
+  };
+  // A choice can't be changed later, so the card's buttons ask first (the prompt after Resume is already a question).
+  const confirmChoice = (credit: DayCredit, choice: DayCreditChoice) => {
+    const card = dayCreditCard(credit, today);
+    const label = choice === 'REFUND' ? card.refundLabel : card.extendLabel;
+    Alert.alert(
+      `${label}?`,
+      choice === 'REFUND'
+        ? "The refund goes back to the UPI or card you paid with. You can't change this later."
+        : "Your plan runs longer by these days. You can't change this later.",
+      [
+        {text: 'Not now', style: 'cancel'},
+        {text: label, onPress: () => choose(credit.id, choice)},
+      ],
+    );
+  };
+  const offerChoice = (credit: DayCredit) => {
+    const card = dayCreditCard(credit, today);
+    Alert.alert(card.title, card.note ?? '', [
+      {text: 'Later', style: 'cancel'},
+      {text: card.refundLabel, onPress: () => choose(credit.id, 'REFUND')},
+      ...(card.extendAvailable ? [{text: card.extendLabel, onPress: () => choose(credit.id, 'EXTEND')}] : []),
+    ]);
+  };
   const resume = () => {
-    const earliestTime = scheduleItems.map(item => item.serviceTime).sort()[0] ?? null;
-    const date = resumeDateFor(now, policy?.resumeLeadMinutes ?? 0, earliestTime);
+    const offered = new Set(pendingDayCredits(subscription).map(credit => credit.id));
     confirm(
       'Resume your plan?',
-      `Meals start again from ${formatMealPlanDate(date, 'long')}.`,
+      `Meals start again from ${formatMealPlanDate(resumeDate, 'long')}.`,
       'Resume plan',
-      () => actions.resume(date),
+      () =>
+        actions.resume(resumeDate).then(resumed => {
+          // The paused paid days come back as a new choice when refunds are on.
+          const paused = pendingDayCredits(resumed).find(credit => credit.kind === 'PAUSE' && !offered.has(credit.id));
+          if (paused) {
+            offerChoice(paused);
+          }
+        }),
     );
   };
   const openSkip = () => {
@@ -323,6 +400,11 @@ export function MyMealPlanScreen({navigation, route}: Props) {
                 </Text>
                 <Badge label={badge.label} tone={badge.tone} />
               </View>
+              {pausing.restartNote ? (
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                  {pausing.restartNote}
+                </Text>
+              ) : null}
               {cover.kitchenName ? (
                 <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
                   {cover.kitchenName}
@@ -370,10 +452,29 @@ export function MyMealPlanScreen({navigation, route}: Props) {
           />
         ) : null}
 
-        {canPause || canResume || canSkip ? (
+        {(subscription.dayCredits ?? []).map(credit => (
+          <DayCreditCard
+            key={credit.id}
+            credit={credit}
+            today={today}
+            busy={actions.pending}
+            onChoose={choice => confirmChoice(credit, choice)}
+          />
+        ))}
+
+        {canPause || (canResume && pausing.resumeOffered) || canSkip ? (
           <View style={styles.tiles}>
-            {canPause ? <ActionTile icon="pause" label="Pause plan" onPress={pause} disabled={actions.pending} /> : null}
-            {canResume ? <ActionTile icon="play" label="Resume plan" onPress={resume} disabled={actions.pending} /> : null}
+            {canPause ? (
+              <ActionTile
+                icon="pause"
+                label={pausing.pauseDisabledLabel ?? 'Pause plan'}
+                onPress={pause}
+                disabled={actions.pending || pausing.pauseDisabledLabel !== null}
+              />
+            ) : null}
+            {canResume && pausing.resumeOffered ? (
+              <ActionTile icon="play" label="Resume plan" onPress={resume} disabled={actions.pending} />
+            ) : null}
             {canSkip ? (
               <ActionTile icon="calendar-remove" label="Skip a meal" onPress={openSkip} disabled={actions.pending} />
             ) : null}
@@ -469,6 +570,7 @@ const styles = StyleSheet.create({
   linkText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.semibold},
   pressed: {opacity: 0.7},
   tiles: {flexDirection: 'row', gap: spacing.sm},
+  choices: {gap: spacing.sm, marginTop: spacing.sm},
   tile: {
     flex: 1,
     alignItems: 'center',

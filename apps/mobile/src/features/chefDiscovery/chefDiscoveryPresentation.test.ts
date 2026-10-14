@@ -1,6 +1,7 @@
 import type {NearbyKitchen, NearbyKitchenPage} from './api/nearbyChefDiscoveryApi';
 import type {NearbyDish} from '../home/api/homeFeedApi';
 import {
+  kitchenCardImageUrls,
   filterLoadedNearbyKitchens,
   flattenNearbyKitchenPages,
   formatKitchenDistance,
@@ -105,5 +106,19 @@ describe('P35 chef discovery presentation', () => {
       preparationTimeLabel: '30 min',
       startingPriceLabel: '₹80',
     });
+  });
+
+  it('leads the kitchen card with https kitchen photos, then dish photos, without duplicates', () => {
+    const kitchen1 = 'https://media.craves.test/kitchens/k/kitchen/1.jpg';
+    const kitchen2 = 'https://media.craves.test/kitchens/k/kitchen/2.jpg';
+    const dish = 'https://media.craves.test/dishes/d.jpg';
+
+    expect(kitchenCardImageUrls([kitchen1, 'http://insecure.test/x.jpg', kitchen2], [dish, kitchen1])).toEqual([
+      kitchen1,
+      kitchen2,
+      dish,
+    ]);
+    expect(kitchenCardImageUrls(undefined, [dish])).toEqual([dish]);
+    expect(kitchenCardImageUrls(null, [])).toEqual([]);
   });
 });

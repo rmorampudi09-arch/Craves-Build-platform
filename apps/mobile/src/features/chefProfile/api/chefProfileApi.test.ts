@@ -67,6 +67,16 @@ describe('chefProfileApi parsing', () => {
     expect(parsed).not.toHaveProperty('cuisines');
     expect(parsed).not.toHaveProperty('socialLinks');
     expect(parsed).not.toHaveProperty('chefPhotoUrl');
+    expect(parsed).not.toHaveProperty('kitchenPhotoUrls');
+  });
+
+  it('reads the kitchen photo slots in order and keeps only https photos', () => {
+    expect(
+      parseChefKitchenProfile(
+        kitchen({kitchenPhotoUrls: ['https://cdn.example.test/1.jpg', 'http://insecure.test/x.jpg', 'https://cdn.example.test/2.jpg']}),
+      )?.kitchenPhotoUrls,
+    ).toEqual(['https://cdn.example.test/1.jpg', 'https://cdn.example.test/2.jpg']);
+    expect(parseChefKitchenProfile(kitchen({kitchenPhotoUrls: []}))?.kitchenPhotoUrls).toEqual([]);
   });
 
   it('reads the photo, cuisine, area and link fields once the server sends them', () => {
@@ -184,5 +194,20 @@ describe('chefProfileApi photos', () => {
 
     await expect(chefProfileApi.deletePhoto('KITCHEN')).resolves.toMatchObject({kitchenPhotoUrl: null});
     expect(httpClient.delete).toHaveBeenCalledWith('/api/v1/kitchens/me/photos/KITCHEN', {signal: undefined});
+  });
+
+  it('saves a face with PUT /api/v1/kitchens/me/chef-avatar', async () => {
+    (httpClient.put as jest.Mock).mockResolvedValue(
+      kitchen({chefPhotoUrl: 'https://media.example.test/public/chef-avatars/chef-avatar-04.jpg'}),
+    );
+
+    await expect(chefProfileApi.setAvatar('chef-avatar-04')).resolves.toMatchObject({
+      chefPhotoUrl: 'https://media.example.test/public/chef-avatars/chef-avatar-04.jpg',
+    });
+    expect(httpClient.put).toHaveBeenCalledWith(
+      '/api/v1/kitchens/me/chef-avatar',
+      {avatarId: 'chef-avatar-04'},
+      {signal: undefined},
+    );
   });
 });

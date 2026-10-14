@@ -79,6 +79,7 @@ const monthly: PublicSubscriptionPlan = {
 };
 const summary: PlanScheduleSummary = {
   mealCount: 5,
+  weekly: true,
   slotLabels: ['Lunch'],
   daysLabel: 'Mon – Fri',
   timeLabel: '12:30 PM',
@@ -307,7 +308,7 @@ describe('MealPlansScreen', () => {
     given({covers: {[weekly.id]: {summary, kitchenName: "Lakshmi's Kitchen"}}});
     const shown = texts(renderList());
     expect(shown).toEqual(expect.arrayContaining(['5 meals · Lunch', "By Lakshmi's Kitchen"]));
-    expect(shown).toEqual(expect.arrayContaining(['Monthly Dinner Plan', '₹5,200', ' / month']));
+    expect(shown).toEqual(expect.arrayContaining(['Monthly Dinner Plan', '₹5,200', ' / 28 days']));
     expect(shown.filter(text => text.includes('meals ·'))).toHaveLength(1);
   });
 
@@ -561,7 +562,7 @@ describe('MealPlanPaymentScreen', () => {
     } as never);
     const shown = texts(renderPayment({planId: weekly.id, subscriptionId: 'sub-1'}));
     expect(shown).toEqual(
-      expect.arrayContaining(['Old Lunch Plan', 'Monthly', '₹1,250', ' / month', 'Wed, 14 Oct 2026', 'Every month']),
+      expect.arrayContaining(['Old Lunch Plan', 'Monthly', '₹1,250', ' / 28 days', 'Wed, 14 Oct 2026', 'Every 28 days']),
     );
   });
 });

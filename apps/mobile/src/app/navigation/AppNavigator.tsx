@@ -49,6 +49,7 @@ import {StartupErrorScreen} from '../../features/auth/screens/StartupErrorScreen
 import {AccountRouterScreen} from '../../features/auth/screens/AccountRouterScreen';
 import {AuthVideoBackground} from '../../features/auth/components/AuthVideoBackground';
 import {useFonts} from 'expo-font';
+import {useIosFonts} from '../../design/iosType';
 import {loginFontAssets} from '../../features/auth/components/loginVisuals';
 import type {
   AccountResolution,
@@ -120,9 +121,10 @@ function CustomerAccountNavigator({
   resolution: Extract<AccountResolution, {flow: 'CUSTOMER'}>;
 }) {
   const screenOptions = useAuthStackScreenOptions();
+  const fontsReady = useIosFonts();
 
   if (resolution.onboardingStatus === 'READY') {
-    return <CustomerRootNavigator />;
+    return fontsReady ? <CustomerRootNavigator /> : null;
   }
 
   return (
@@ -277,9 +279,11 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
       navigationRef.dispatch(
         CommonActions.navigate({
           name: 'Orders',
+          // initial: false keeps My Orders under the order, so Back and the tab return to the list.
           params: {
             screen: 'CustomerOrderDetail',
             params: {orderId: destination.orderId},
+            initial: false,
           },
         }),
       );
@@ -291,6 +295,7 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
           params: {
             screen: 'CustomerOrderTracking',
             params: {orderId: destination.orderId},
+            initial: false,
           },
         }),
       );

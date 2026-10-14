@@ -28,6 +28,7 @@ import {
 } from '../../../shared/components';
 import {
   billingUnit,
+  weeksPerBill,
   type BillingUnit,
   type PlanScheduleSummary,
 } from '../../mealPlans/domain/mealPlanSchedule';
@@ -62,12 +63,14 @@ type Filter = 'all' | BillingUnit;
 const FILTERS: {key: Filter; label: string}[] = [
   {key: 'all', label: 'All'},
   {key: 'week', label: 'Weekly'},
-  {key: 'month', label: 'Monthly'},
+  {key: '14 days', label: '14 days'},
+  {key: '28 days', label: 'Monthly'},
 ];
 const BANNER_IMAGE = require('../../../assets/home/home-kitchen-picks.jpg');
 
-function mealMeta(summary: PlanScheduleSummary): string {
-  const meals = `${summary.mealCount} ${summary.mealCount === 1 ? 'meal' : 'meals'}`;
+function mealMeta(summary: PlanScheduleSummary, unit: BillingUnit): string {
+  const count = summary.weekly ? summary.mealCount * weeksPerBill(unit) : summary.mealCount;
+  const meals = `${count} ${count === 1 ? 'meal' : 'meals'}`;
   return [meals, summary.slotLabels.join(', ')].filter(Boolean).join(' · ');
 }
 
@@ -121,7 +124,7 @@ function PlanCard({
           <View style={styles.metaRow}>
             <FoodTypePill foodType={summary.foodType} />
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
-              {mealMeta(summary)}
+              {mealMeta(summary, unit)}
             </Text>
           </View>
         ) : null}

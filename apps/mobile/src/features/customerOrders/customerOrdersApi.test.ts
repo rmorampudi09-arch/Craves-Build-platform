@@ -84,7 +84,8 @@ describe('P52 customer orders API', () => {
     expect(result).not.toBeNull();
     expect(result?.[0]).not.toHaveProperty('customerIdentityId');
     expect(result?.[0].deliveryAddress).not.toHaveProperty('contactPhoneNumber');
-    expect(result?.[0].deliveryAddress).not.toHaveProperty('latitude');
+    // The customer's own map pin stays: the order screen shows it on the delivery map.
+    expect(result?.[0].deliveryAddress).toMatchObject({latitude: null, longitude: null});
     expect(result?.[0].grandTotal).toEqual({amount: '229', currency: 'INR'});
   });
 

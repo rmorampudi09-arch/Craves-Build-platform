@@ -50,7 +50,8 @@ describe('P111 process restoration policy', () => {
       },
     ]);
 
-    expect(captureProcessRestorationSnapshot(root, 'CUSTOMER')).toEqual({
+    const snapshot = captureProcessRestorationSnapshot(root, 'CUSTOMER');
+    expect(snapshot).toEqual({
       version: 1,
       role: 'CUSTOMER',
       target: {
@@ -58,6 +59,11 @@ describe('P111 process restoration policy', () => {
         tab: 'Orders',
         route: {screen: 'CustomerOrderDetail', orderId: 'order-123'},
       },
+    });
+    // My Orders stays beneath the restored order, so Back and the Orders tab return to the list.
+    expect(toRestorationNavigatePayload(snapshot!)).toEqual({
+      name: 'Orders',
+      params: {screen: 'CustomerOrderDetail', params: {orderId: 'order-123'}, initial: false},
     });
   });
 
@@ -95,7 +101,7 @@ describe('P111 process restoration policy', () => {
       expect(JSON.stringify(snapshot)).not.toContain('plan-1');
       expect(toRestorationNavigatePayload(snapshot!)).toEqual({
         name: tab,
-        params: {screen: 'CustomerSettingsSubscription'},
+        params: {screen: 'CustomerSettingsSubscription', initial: false},
       });
     },
   );

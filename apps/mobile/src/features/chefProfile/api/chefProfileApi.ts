@@ -42,6 +42,8 @@ export interface ChefKitchenProfile {
   // The fields below are undefined until the server sends them; a screen shows its UI only when they are present.
   chefPhotoUrl?: string | null;
   kitchenPhotoUrl?: string | null;
+  /** Filled kitchen photo slots in order (slot 1 is kitchenPhotoUrl); chefs can fill an empty slot but never replace one. */
+  kitchenPhotoUrls?: string[];
   cuisines?: string[];
   serviceAreas?: string[];
   socialLinks?: ChefKitchenSocialLinks;
@@ -226,6 +228,9 @@ export function parseChefKitchenProfile(value: unknown): ChefKitchenProfile | nu
     // Spread only what the server sent, so a screen can tell "not published yet" from "empty".
     ...(raw.chefPhotoUrl !== undefined ? {chefPhotoUrl: photoUrl(raw.chefPhotoUrl)} : {}),
     ...(raw.kitchenPhotoUrl !== undefined ? {kitchenPhotoUrl: photoUrl(raw.kitchenPhotoUrl)} : {}),
+    ...(Array.isArray(raw.kitchenPhotoUrls)
+      ? {kitchenPhotoUrls: raw.kitchenPhotoUrls.map(photoUrl).filter((url): url is string => typeof url === 'string')}
+      : {}),
     ...(cuisines ? {cuisines} : {}),
     ...(serviceAreas ? {serviceAreas} : {}),
     ...(links ? {socialLinks: links} : {}),
@@ -318,5 +323,10 @@ export const chefProfileApi = {
 
   async deletePhoto(kind: ChefKitchenPhotoKind, signal?: AbortSignal): Promise<ChefKitchenProfile> {
     return parseKitchenResponse(await httpClient.delete<unknown>(`/api/v1/kitchens/me/photos/${kind}`, {signal}));
+  },
+
+  /** Picks one of the 18 drawn faces as the chef's public picture; the response is the kitchen with its new picture link. */
+  async setAvatar(avatarId: string, signal?: AbortSignal): Promise<ChefKitchenProfile> {
+    return parseKitchenResponse(await httpClient.put<unknown>('/api/v1/kitchens/me/chef-avatar', {avatarId}, {signal}));
   },
 };

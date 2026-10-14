@@ -63,6 +63,26 @@ export type PublicSubscriptionPolicy = z.infer<
   typeof publicSubscriptionPolicySchema
 >;
 
+/** A declined day or paused days: a refund request or the days at the end, chosen once before the deadline. */
+export const dayCreditSchema = z.object({
+  id: uuid,
+  kind: z.string().min(1).max(20),
+  firstDate: localDate,
+  lastDate: localDate,
+  mealSlotCode: z.string().min(1).max(40).nullable().optional().transform(value => value ?? null),
+  days: z.number().int().positive().nullable().optional().transform(value => value ?? null),
+  status: z.string().min(1).max(30),
+  // Empty until finance prices the refund.
+  refundAmount: moneyValue.nullable().optional().transform(value => value ?? null),
+  currency: z.string().length(3).nullable().optional().transform(value => value ?? null),
+  choiceDeadline: instant,
+  extendAvailable: z.boolean(),
+});
+
+export type DayCredit = z.infer<typeof dayCreditSchema>;
+
+export type DayCreditChoice = 'REFUND' | 'EXTEND';
+
 export const customerSubscriptionSchema = z.object({
   id: uuid,
   planId: uuid,
@@ -81,6 +101,12 @@ export const customerSubscriptionSchema = z.object({
   currency: z.string().length(3).nullable().optional(),
   nextBillingDate: localDate.nullable().optional(),
   planImageUrl: z.string().min(1).nullable().optional(),
+  // Pause allowance per bill (1 weekly, 3 for 14 days, 7 for 28 days); absent on older servers.
+  pauseDaysPerBill: z.number().int().nonnegative().nullable().optional(),
+  pauseDaysLeft: z.number().int().nonnegative().nullable().optional(),
+  pauseAutoResumeDate: localDate.nullable().optional(),
+  // Refund-or-extend choices; absent on older servers and empty while refunds are switched off.
+  dayCredits: z.array(dayCreditSchema).optional(),
 });
 
 export type CustomerSubscription = z.infer<typeof customerSubscriptionSchema>;
@@ -298,6 +324,24 @@ export const customerSubscriptionApi = {
       reason?.trim() ? {reason: reason.trim()} : undefined,
     );
     return parseOne(customerSubscriptionSchema, response, 'Cancelled subscription');
+  },
+
+  async chooseDayCredit(
+    subscriptionId: string,
+    creditId: string,
+    choice: DayCreditChoice,
+  ): Promise<DayCredit> {
+    requireUuid(subscriptionId, 'Subscription');
+    requireUuid(creditId, 'Day credit');
+    const response = await httpClient.post<unknown>(
+      `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/day-credits/${encodeURIComponent(creditId)}/choice`,
+      {choice},
+    );
+    const parsed = parseOne(dayCreditSchema, response, 'Day credit choice');
+    if (parsed.id !== creditId) {
+      throw contractError('Day credit choice');
+    }
+    return parsed;
   },
 
   async skip(

@@ -248,6 +248,15 @@ CRAVES_MEDIA_PUBLIC_BASE_URL
 
 `CRAVES_MEDIA_PUBLIC_BASE_URL` is the address customers load dish photos from. In production it is `https://craves.in/media`, the cached Front Door route created by `azure-pipelines-media-cdn.yml`. Left empty, photo links point straight at blob storage. Uploads larger than 1600 px or 400 KB are shrunk (opaque PNGs become JPEGs) and stored with a one-year immutable `Cache-Control`. On start, photos whose links are not under this address are copied once, shrunk, and their links rewritten.
 
+Kitchen photos (approved registration photos are copied into the kitchen's two photo slots):
+
+```text
+CRAVES_USER_CHEF_INTERNAL_BASE_URL   user-chef-service internal address; blank turns the import off
+CRAVES_USER_CHEF_INTERNAL_SECRET     optional; defaults to CRAVES_INTERNAL_SERVICE_SECRET
+```
+
+Each kitchen is imported once (`kitchen_photos_imported_at`): after the chef saves the kitchen, and at start-up for every kitchen not imported yet (log line `kitchen photo backfill imported N of M`). Registration photos replace the slots. Chefs can fill an empty slot but never replace or remove a kitchen photo (`409 KITCHEN_PHOTOS_LOCKED`); support empties a slot with `DELETE /api/v1/catalog/internal/kitchens/{kitchenId}/photos/{slot}` and the `X-Craves-Internal-Key` header.
+
 Optional discovery configuration:
 
 ```text

@@ -53,4 +53,12 @@ class MediaStorageServiceTest {
 
         assertEquals("https://media.craves.example/public/chef-avatars/chef-avatar-04.jpg", storage.chefAvatarUrl("chef-avatar-04"));
     }
+
+    @Test void everyStoredPhotoIsCleanedAndAnUnreadableOneIsA400() {
+        byte[] broken = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE1, 0x7F, 0x7F, 1, 2};
+        in.craves.catalog.exception.ApiException error = org.junit.jupiter.api.Assertions.assertThrows(
+            in.craves.catalog.exception.ApiException.class, () -> MediaStorageService.publishable(broken, "image/jpeg"));
+        org.junit.jupiter.api.Assertions.assertEquals(400, error.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("PHOTO_UNREADABLE", error.getCode());
+    }
 }

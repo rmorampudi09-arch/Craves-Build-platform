@@ -88,6 +88,8 @@ public final class ApiDtos {
         Instant updatedAt,
         String chefPhotoUrl,
         String kitchenPhotoUrl,
+        // Kitchen photo slots 1 and 2 that are set, in slot order; never null.
+        List<String> kitchenPhotoUrls,
         List<String> cuisines,
         List<String> serviceAreas,
         SocialLinks socialLinks,
@@ -95,11 +97,15 @@ public final class ApiDtos {
         @JsonInclude(JsonInclude.Include.NON_NULL) Boolean autoAcceptOrders,
         @JsonInclude(JsonInclude.Include.NON_NULL) Integer defaultPrepMinutes
     ) {
+        public KitchenProfileResponse {
+        kitchenPhotoUrls = kitchenPhotoUrls == null ? List.of() : List.copyOf(kitchenPhotoUrls);
+        }
+
         public KitchenProfileResponse withoutChefSettings() {
             return new KitchenProfileResponse(
                 id, identityId, kitchenName, displayName, description, phoneNumber, email, addressLine1, addressLine2, landmark,
                 areaName, city, state, postalCode, latitude, longitude, status, createdAt, updatedAt,
-                chefPhotoUrl, kitchenPhotoUrl, cuisines, serviceAreas, socialLinks, null, null
+                chefPhotoUrl, kitchenPhotoUrl, kitchenPhotoUrls, cuisines, serviceAreas, socialLinks, null, null
             );
         }
     }
@@ -177,8 +183,12 @@ public final class ApiDtos {
         BigDecimal longitude,
         BigDecimal distanceKm,
         long activeMenuItemCount,
-        String chefPhotoUrl
+        String chefPhotoUrl,
+        List<String> kitchenPhotoUrls
     ) {
+        public PublicKitchenSummaryResponse {
+        kitchenPhotoUrls = kitchenPhotoUrls == null ? List.of() : List.copyOf(kitchenPhotoUrls);
+        }
     }
 
     public record DiscoveryRadiusResponse(

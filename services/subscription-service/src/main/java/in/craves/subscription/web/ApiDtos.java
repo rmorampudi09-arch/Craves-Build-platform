@@ -103,7 +103,10 @@ public final class ApiDtos {
         BigDecimal amount,
         String currency,
         LocalDate nextBillingDate,
-        String planImageUrl
+        String planImageUrl,
+        Integer pauseDaysPerBill,
+        Integer pauseDaysLeft,
+        LocalDate pauseAutoResumeDate
     ) {
     }
 }

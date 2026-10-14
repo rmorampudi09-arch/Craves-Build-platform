@@ -78,8 +78,10 @@ public class SubscriptionBillingService {
 
     static LocalDate cycleEnd(LocalDate cycleStart, String billingPeriod) {
         return switch (billingPeriod.toUpperCase(Locale.ROOT)) {
-            case "WEEKLY" -> cycleStart.plusWeeks(1);
-            case "MONTHLY" -> cycleStart.plusMonths(1);
+            // Every bill is whole repeats of the chef's week, so a month is 28 days.
+            case "WEEKLY" -> cycleStart.plusDays(7);
+            case "FORTNIGHTLY" -> cycleStart.plusDays(14);
+            case "MONTHLY" -> cycleStart.plusDays(28);
             default -> throw new IllegalArgumentException("Unsupported billing period " + billingPeriod);
         };
     }

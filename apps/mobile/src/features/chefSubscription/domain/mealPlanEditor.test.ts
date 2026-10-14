@@ -5,6 +5,10 @@ import {
   copyDayToWeekdays,
   dayRangeLabel,
   daysWithMeals,
+  editorScheduleKind,
+  initialSlots,
+  repeatsLabel,
+  WEEK_ORDER,
   freeSlotsForDay,
   groupMealDays,
   otherWeekdaysHaveMeals,
@@ -41,7 +45,6 @@ describe('slotsToScheduleRequest', () => {
         slot({day: 2, slot: 'LUNCH'}),
         slot({day: 1, slot: 'LUNCH', quantity: 2}),
       ],
-      'WEEKLY',
       24,
     );
 
@@ -57,18 +60,17 @@ describe('slotsToScheduleRequest', () => {
     });
   });
 
-  it('uses dayOfMonth for monthly plans', () => {
-    const request = slotsToScheduleRequest([slot({day: 5, slot: 'LUNCH'})], 'MONTHLY', 48);
+  it('always sends one week, whatever the bill length', () => {
+    const request = slotsToScheduleRequest([slot({day: 7, slot: 'LUNCH'})], 48);
 
-    expect(request.recurrenceType).toBe('MONTHLY');
+    expect(request.recurrenceType).toBe('WEEKLY');
     expect(request.generationLeadHours).toBe(48);
-    expect(request.items[0]).toMatchObject({isoDayOfWeek: null, dayOfMonth: 5, sequenceNumber: 1});
+    expect(request.items[0]).toMatchObject({isoDayOfWeek: 7, dayOfMonth: null, sequenceNumber: 1});
   });
 
   it('leaves out meals that have no dish yet', () => {
     const request = slotsToScheduleRequest(
       [slot({day: 1, slot: 'LUNCH', menuItemId: null}), slot({day: 1, slot: 'DINNER'})],
-      'WEEKLY',
       24,
     );
 
@@ -91,7 +93,7 @@ describe('scheduleToSlots', () => {
       [1, 'DINNER', '19:30'],
       [3, 'BREAKFAST', '08:00'],
     ]);
-    expect(slotsToScheduleRequest(slots, 'WEEKLY', 12).items).toEqual(
+    expect(slotsToScheduleRequest(slots, 12).items).toEqual(
       items.map(({id: _id, ...item}) => ({...item, serviceTime: item.serviceTime.slice(0, 5)})),
     );
   });
@@ -231,10 +233,56 @@ describe('groupMealDays', () => {
   });
 });
 
+describe('week cycle', () => {
+  const monthlySchedule = {
+    recurrenceType: 'MONTHLY',
+    items: [{id: '1', menuItemId: DISH_A, quantity: 1, isoDayOfWeek: null, dayOfMonth: 5, mealSlotCode: 'LUNCH', serviceTime: '12:30:00', sequenceNumber: 1}],
+  } as unknown as ChefMealSchedule;
+  const weeklySchedule = {
+    recurrenceType: 'WEEKLY',
+    items: [{id: '1', menuItemId: DISH_A, quantity: 1, isoDayOfWeek: 7, dayOfMonth: null, mealSlotCode: 'LUNCH', serviceTime: '12:30:00', sequenceNumber: 1}],
+  } as unknown as ChefMealSchedule;
+
+  it('starts the week on Sunday', () => {
+    expect(WEEK_ORDER).toEqual([7, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it('says how often the week repeats in each bill', () => {
+    expect(repeatsLabel('WEEKLY')).toBe('Customers get this week each bill.');
+    expect(repeatsLabel('FORTNIGHTLY')).toBe('This week repeats 2 times in each 14-day bill.');
+    expect(repeatsLabel('MONTHLY')).toBe('This week repeats 4 times in each 28-day bill.');
+  });
+
+  it('liveDatePlanKeepsDates', () => {
+    expect(editorScheduleKind(false, monthlySchedule)).toBe('MONTHLY');
+    expect(initialSlots(false, monthlySchedule)).toHaveLength(1);
+  });
+
+  it('editableDatePlanStartsEmpty', () => {
+    expect(editorScheduleKind(true, monthlySchedule)).toBe('WEEKLY');
+    expect(initialSlots(true, monthlySchedule)).toEqual([]);
+  });
+
+  it('keeps a weekly schedule when editing', () => {
+    expect(editorScheduleKind(true, weeklySchedule)).toBe('WEEKLY');
+    expect(initialSlots(true, weeklySchedule)).toHaveLength(1);
+    expect(editorScheduleKind(true, undefined)).toBe('WEEKLY');
+    expect(initialSlots(true, undefined)).toEqual([]);
+  });
+
+  it('groups review days Sunday first', () => {
+    const groups = groupMealDays([slot({day: 1, slot: 'LUNCH', menuItemId: DISH_B}), slot({day: 7, slot: 'LUNCH'})]);
+    expect(groups.map(group => group.days)).toEqual([[7], [1]]);
+  });
+});
+
 describe('dayRangeLabel', () => {
   it('writes runs of days the way the board does', () => {
     expect(dayRangeLabel('WEEKLY', [3, 4, 5])).toBe('Wed – Fri');
-    expect(dayRangeLabel('WEEKLY', [1, 3, 4, 5, 7])).toBe('Mon, Wed – Fri, Sun');
+    // The week starts on Sunday, so Sunday and Monday make a run and Saturday and Sunday don't.
+    expect(dayRangeLabel('WEEKLY', [7, 1, 2])).toBe('Sun – Tue');
+    expect(dayRangeLabel('WEEKLY', [6, 7])).toBe('Sun, Sat');
+    expect(dayRangeLabel('WEEKLY', [1, 3, 4, 5, 7])).toBe('Sun – Mon, Wed – Fri');
     expect(dayRangeLabel('WEEKLY', [2])).toBe('Tue');
     expect(dayRangeLabel('MONTHLY', [1, 2, 3, 15])).toBe('Day 1 – 3, 15');
   });

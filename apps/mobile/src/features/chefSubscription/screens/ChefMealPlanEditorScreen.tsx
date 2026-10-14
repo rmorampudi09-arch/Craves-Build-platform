@@ -39,7 +39,7 @@ import {
 } from '../../chefShell/components/ui';
 import {formatRupeesExact} from '../../chefShell/domain/chefFormat';
 import {RadioMark} from '../../customerSubscription/components/MealPlanUi';
-import {formatServiceTime, mealSlotLabel} from '../../mealPlans/domain/mealPlanSchedule';
+import {billingUnit, formatServiceTime, mealSlotLabel} from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
 import {
   chefSubscriptionApi,
@@ -54,12 +54,14 @@ import {
   dayName,
   dayRangeLabel,
   daysWithMeals,
+  editorScheduleKind,
   freeSlotsForDay,
   groupMealDays,
+  initialSlots,
   LEAD_HOUR_OPTIONS,
   otherWeekdaysHaveMeals,
   removeSlot,
-  scheduleToSlots,
+  repeatsLabel,
   setSlotDish,
   setSlotQuantity,
   setSlotTime,
@@ -67,6 +69,7 @@ import {
   stepWithErrors,
   TIME_OPTIONS,
   validateMealPlanForm,
+  WEEK_ORDER,
   WEEKDAYS_SHORT,
   type BillingPeriod,
   type EditorSlot,
@@ -210,11 +213,12 @@ function MealPlanEditor({
     amount: plan?.amount ?? '',
   });
   const [period, setPeriod] = React.useState<BillingPeriod>(plan?.billingPeriod ?? 'WEEKLY');
+  // Every bill repeats one week; only a live plan set up by date still shows its dates.
+  const kind = editorScheduleKind(editable, schedule ?? undefined);
+  const datePlanReset = editable && schedule?.recurrenceType === 'MONTHLY';
   const [leadHours, setLeadHours] = React.useState(schedule?.generationLeadHours ?? 24);
-  const [slots, setSlots] = React.useState<EditorSlot[]>(() =>
-    schedule && schedule.recurrenceType === period ? scheduleToSlots(schedule) : [],
-  );
-  const [day, setDay] = React.useState(() => slots[0]?.day ?? 1);
+  const [slots, setSlots] = React.useState<EditorSlot[]>(() => initialSlots(editable, schedule ?? undefined));
+  const [day, setDay] = React.useState(() => slots[0]?.day ?? WEEK_ORDER[0]);
   const [photo, setPhoto] = React.useState<ImagePicker.ImagePickerAsset | null>(null);
   const [photoError, setPhotoError] = React.useState<string | null>(null);
   const [attempt, setAttempt] = React.useState<'draft' | 'submit' | null>(null);
@@ -227,7 +231,6 @@ function MealPlanEditor({
   const [hasServerSchedule, setHasServerSchedule] = React.useState(schedule !== null);
   const [scheduleNote, setScheduleNote] = React.useState(false);
   const [pendingLeave, setPendingLeave] = React.useState<unknown>(null);
-  const [pendingPeriod, setPendingPeriod] = React.useState<BillingPeriod | null>(null);
   const [removing, setRemoving] = React.useState<EditorSlot | null>(null);
   const [copying, setCopying] = React.useState(false);
   // State lags a frame behind a tap; the lock keeps a double tap to one request.
@@ -279,18 +282,10 @@ function MealPlanEditor({
     setDirty(true);
   };
 
+  // The week is the same for every bill length, so changing it keeps the meals.
   const changePeriod = (next: BillingPeriod) => {
     if (next === period) return;
-    if (slots.length === 0) {
-      applyPeriod(next);
-      return;
-    }
-    setPendingPeriod(next);
-  };
-  const applyPeriod = (next: BillingPeriod) => {
     setPeriod(next);
-    setSlots([]);
-    setDay(1);
     setDirty(true);
   };
 
@@ -389,7 +384,7 @@ function MealPlanEditor({
       id = saved.id;
       setSavedPlanId(id);
       if (hasDishes) {
-        await chefSubscriptionApi.putSchedule(id, slotsToScheduleRequest(slots, period, leadHours));
+        await chefSubscriptionApi.putSchedule(id, slotsToScheduleRequest(slots, leadHours));
         setHasServerSchedule(true);
       }
       setDirty(false);
@@ -437,9 +432,9 @@ function MealPlanEditor({
   };
 
   const photoUri = photo?.uri ?? (photoSupported ? resolveApiImageUrl(plan?.imageUrl) : null);
-  const unit = period === 'MONTHLY' ? 'month' : 'week';
+  const unit = billingUnit(period);
   const status = plan ? chefPlanStatusPresentation(plan.status) : null;
-  const dayLong = dayName(period, day, 'long');
+  const dayLong = dayName(kind, day, 'long');
 
   const details = (
     <>
@@ -493,6 +488,7 @@ function MealPlanEditor({
         <GroupLabel label="How often" required />
         <View style={styles.chips}>
           <OptionChip disabled={locked} label="Weekly" onPress={() => changePeriod('WEEKLY')} selected={period === 'WEEKLY'} />
+          <OptionChip disabled={locked} label="14 days" onPress={() => changePeriod('FORTNIGHTLY')} selected={period === 'FORTNIGHTLY'} />
           <OptionChip disabled={locked} label="Monthly" onPress={() => changePeriod('MONTHLY')} selected={period === 'MONTHLY'} />
         </View>
       </View>
@@ -547,15 +543,20 @@ function MealPlanEditor({
 
   const meals = (
     <>
-      {period === 'WEEKLY' ? (
+      {datePlanReset ? (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+          This plan was set up by date. Set up one week; it repeats every week.
+        </Text>
+      ) : null}
+      {kind === 'WEEKLY' ? (
         <View accessibilityRole="tablist" style={styles.days}>
-          {WEEKDAYS_SHORT.map((label, index) => (
+          {WEEK_ORDER.map(value => (
             <DayCell
-              hasMeals={mealDays.has(index + 1)}
-              key={label}
-              label={label}
-              onPress={() => setDay(index + 1)}
-              selected={day === index + 1}
+              hasMeals={mealDays.has(value)}
+              key={value}
+              label={WEEKDAYS_SHORT[value - 1]}
+              onPress={() => setDay(value)}
+              selected={day === value}
               style={styles.weekDay}
             />
           ))}
@@ -584,7 +585,7 @@ function MealPlanEditor({
       {scheduleNote && scheduleKept ? <FieldError message="Add at least one meal to save schedule changes." /> : null}
       {missingDishDays.length > 0 ? (
         <FieldError
-          message={`Select a dish for every meal: ${missingDishDays.map(value => dayName(period, value)).join(', ')}.`}
+          message={`Select a dish for every meal: ${missingDishDays.map(value => dayName(kind, value)).join(', ')}.`}
         />
       ) : null}
 
@@ -611,7 +612,7 @@ function MealPlanEditor({
 
       {editable && freeSlots.length > 0 ? (
         <ChefActionButton
-          accessibilityLabel={`Add meal slot for ${dayName(period, day)}`}
+          accessibilityLabel={`Add meal slot for ${dayName(kind, day)}`}
           disabled={locked}
           icon="plus"
           label={addMealLabel(freeSlots)}
@@ -619,7 +620,7 @@ function MealPlanEditor({
           tone="neutral"
         />
       ) : null}
-      {editable && period === 'WEEKLY' && daySlots.length > 0 ? (
+      {editable && kind === 'WEEKLY' && daySlots.length > 0 ? (
         <ChefActionButton
           disabled={locked}
           icon="copy"
@@ -636,7 +637,7 @@ function MealPlanEditor({
     </>
   );
 
-  const reviewItems = slotsToScheduleRequest(slots, period, leadHours).items;
+  const reviewItems = kind === 'WEEKLY' ? slotsToScheduleRequest(slots, leadHours).items : schedule?.items ?? [];
   const review = (
     <>
       <ChefCard>
@@ -651,6 +652,11 @@ function MealPlanEditor({
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
               {chefPlanMetaLine({billingPeriod: period}, reviewItems)}
             </Text>
+            {kind === 'WEEKLY' ? (
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
+                {repeatsLabel(period)}
+              </Text>
+            ) : null}
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.summaryPrice}>
               {chefPlanPriceLabel({amount: form.amount.trim(), currency: 'INR', billingPeriod: period})}
             </Text>
@@ -665,11 +671,11 @@ function MealPlanEditor({
           </Text>
           <EditLink label="Edit meals" onPress={() => setStep(2)} />
         </View>
-        {groupMealDays(slots).flatMap(group =>
+        {groupMealDays(slots, kind).flatMap(group =>
           group.meals.map(meal => (
             <View key={`${group.days[0]}-${meal.slot}`} style={styles.reviewRow}>
               <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.reviewTitle}>
-                {`${dayRangeLabel(period, group.days)} · ${mealSlotLabel(meal.slot)} ${formatServiceTime(meal.time)}`}
+                {`${dayRangeLabel(kind, group.days)} · ${mealSlotLabel(meal.slot)} ${formatServiceTime(meal.time)}`}
               </Text>
               <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
                 {meal.menuItemId ? dishName(meal.menuItemId) : ''}
@@ -865,7 +871,7 @@ function MealPlanEditor({
           )
         ) : null}
       </ChefSheet>
-      <ChefSheet onClose={() => setSheet(null)} title={`Add a meal for ${dayName(period, day)}`} visible={sheet?.kind === 'add'}>
+      <ChefSheet onClose={() => setSheet(null)} title={`Add a meal for ${dayName(kind, day)}`} visible={sheet?.kind === 'add'}>
         {freeSlots.map(code => (
           <SheetRow
             key={code}
@@ -912,7 +918,7 @@ function MealPlanEditor({
         }}
         title={
           removing
-            ? `Remove ${mealSlotLabel(removing.slot).toLowerCase()} on ${period === 'WEEKLY' ? dayName(period, removing.day, 'long') : `day ${removing.day}`}?`
+            ? `Remove ${mealSlotLabel(removing.slot).toLowerCase()} on ${kind === 'WEEKLY' ? dayName(kind, removing.day, 'long') : `day ${removing.day}`}?`
             : 'Remove this meal?'
         }
         tone="danger"
@@ -925,18 +931,6 @@ function MealPlanEditor({
         onConfirm={copyToWeekdays}
         title={`Copy ${dayLong} to all weekdays?`}
         visible={copying}
-      />
-      <ConfirmDialog
-        confirmLabel="Change"
-        message="Changing how often clears the meals you planned."
-        onCancel={() => setPendingPeriod(null)}
-        onConfirm={() => {
-          if (pendingPeriod) applyPeriod(pendingPeriod);
-          setPendingPeriod(null);
-        }}
-        title="Change how often?"
-        tone="danger"
-        visible={pendingPeriod !== null}
       />
     </ChefScreen>
   );

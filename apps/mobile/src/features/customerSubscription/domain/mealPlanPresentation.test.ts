@@ -13,6 +13,7 @@ import {
   occurrenceDishNames,
   occurrenceStatusPresentation,
   orderTrackerStep,
+  pauseInfo,
   planRules,
   resumeDateFor,
   shortSubscriptionId,
@@ -412,5 +413,42 @@ describe('orderTrackerStep', () => {
     ['REFUNDED', null],
   ])('%s -> %s', (status, step) => {
     expect(orderTrackerStep(status)).toBe(step);
+  });
+});
+
+describe('pauseInfo', () => {
+  const OLD_MESSAGE = 'Upcoming meals stop until you resume the plan.';
+
+  it('pauseInfoAbsentKeepsOldBehaviour', () => {
+    expect(pauseInfo({status: 'ACTIVE'}, '2026-10-20')).toEqual({
+      pauseDisabledLabel: null,
+      pauseMessage: OLD_MESSAGE,
+      restartNote: null,
+      resumeOffered: true,
+    });
+  });
+
+  it('says how many pause days are left in this bill', () => {
+    expect(pauseInfo({status: 'ACTIVE', pauseDaysLeft: 3}, '2026-10-20').pauseMessage).toBe(
+      'You can pause up to 3 more days this bill. Your plan restarts by itself after that.',
+    );
+    expect(pauseInfo({status: 'ACTIVE', pauseDaysLeft: 1}, '2026-10-20').pauseMessage).toBe(
+      'You can pause up to 1 more day this bill. Your plan restarts by itself after that.',
+    );
+  });
+
+  it('turns Pause off when no pause days are left', () => {
+    expect(pauseInfo({status: 'ACTIVE', pauseDaysLeft: 0}, '2026-10-20').pauseDisabledLabel).toBe(
+      'No pause days left this bill',
+    );
+  });
+
+  it('shows the automatic restart and only offers an earlier resume', () => {
+    const paused = {status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: '2026-10-27'};
+    const same = pauseInfo(paused, '2026-10-27');
+    expect(same.resumeOffered).toBe(false);
+    expect(same.restartNote).toBe('Restarts on Tue, 27 Oct 2026');
+    expect(same.pauseDisabledLabel).toBeNull();
+    expect(pauseInfo(paused, '2026-10-24').resumeOffered).toBe(true);
   });
 });

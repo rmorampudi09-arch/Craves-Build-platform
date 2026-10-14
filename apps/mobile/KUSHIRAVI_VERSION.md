@@ -19,6 +19,29 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.34.1 - Outfit font, iPhone text sizes, order screens, with the 1.34.0 meal plans, 2026-10-14
+
+- Joins the two lines that were built separately: 1.34.0 (meal plans, versionCode 80) and
+  1.33.0-1.33.6 (order screens and type, versionCodes 73-79).
+- Order screens (1.33.0): My Orders cards, Order details with a map that stays blurred under
+  Awaiting chef / Chef accepted / Ready for pickup and opens after pickup, Track delivery with the
+  map on top. The delivery partner's pin needs `courierLocation` from the server (not sent yet).
+- My Orders stays under an order opened from a notification, after payment, or when the app
+  reopens on it (1.33.2-1.33.3).
+- Outfit is the app font everywhere (1.33.6, picked from the font demo), with real 400/600/700
+  weights; type tokens use iPhone sizes: 34/28/20/17/17/15/12 (1.33.5).
+
+### Version 1.34.0 - Meal plans: one repeating week, 14-day bills, pause days per bill, 2026-10-14
+
+- Chefs set up one week (Sun–Sat) for every plan; it repeats once in a weekly bill, twice in a 14-day
+  bill and four times in a monthly (28-day) bill. The 28-date picker is gone; a draft set up by date
+  starts again as one empty week, a live date plan still shows its dates read-only.
+- New bill length "14 days" (FORTNIGHTLY); monthly prices read "/ 28 days". Plan lists, detail and
+  payment count meals per bill (Mon–Fri lunch on a 28-day bill = 20 lunches); weekdays list Sunday first.
+- My meal plan: pause shows the pause days left this bill (weekly 1, 14-day 3, monthly 7), Pause is off
+  when none are left, and a paused plan shows "Restarts on <date>". Needs subscription-service
+  feat/meal-plan-week-cycle (V19); against an older server the app behaves as before.
+- versionCode 80 skips 72–79, which builds on other branches (1.32.x–1.33.x) already use.
 ### Version 1.33.1 - Chef picture on every kitchen avatar, 2026-10-14
 
 - On top of 1.33.0 (order screens redesign, which already shows the chef's face on the Orders cards

@@ -1,7 +1,9 @@
 import {
+  billingPeriodLabel,
   billingUnit,
   dayLabel,
   formatMealCount,
+  weeksPerBill,
   formatServiceTime,
   mealSlotLabel,
   sortScheduleItems,
@@ -29,10 +31,25 @@ function weekdays(days: number[], over: Partial<ScheduleItemLike> = {}) {
 }
 
 describe('billingUnit', () => {
-  it('maps MONTHLY to month and everything else to week', () => {
-    expect(billingUnit('MONTHLY')).toBe('month');
+  it('names every bill by its length in days, weekly and unknown periods as a week', () => {
+    expect(billingUnit('MONTHLY')).toBe('28 days');
+    expect(billingUnit('FORTNIGHTLY')).toBe('14 days');
     expect(billingUnit('WEEKLY')).toBe('week');
     expect(billingUnit('anything')).toBe('week');
+  });
+});
+
+describe('billingPeriodLabel', () => {
+  it('reads Weekly, 14 days or Monthly', () => {
+    expect(billingPeriodLabel('WEEKLY')).toBe('Weekly');
+    expect(billingPeriodLabel('FORTNIGHTLY')).toBe('14 days');
+    expect(billingPeriodLabel('MONTHLY')).toBe('Monthly');
+  });
+});
+
+describe('weeksPerBill', () => {
+  it('repeats the week 1, 2 or 4 times', () => {
+    expect([weeksPerBill('week'), weeksPerBill('14 days'), weeksPerBill('28 days')]).toEqual([1, 2, 4]);
   });
 });
 
@@ -76,6 +93,10 @@ describe('dayLabel', () => {
 });
 
 describe('sortScheduleItems', () => {
+  it('starts the week on Sunday', () => {
+    expect(sortScheduleItems(weekdays([1, 7, 6])).map(i => i.isoDayOfWeek)).toEqual([7, 1, 6]);
+  });
+
   it('sorts by day then sequence number without mutating the input', () => {
     const input = [
       item({menuItemId: 'c', isoDayOfWeek: 2, sequenceNumber: 1}),
@@ -99,6 +120,7 @@ describe('summarizeSchedule', () => {
   it('summarizes an empty schedule', () => {
     expect(summarizeSchedule([])).toEqual({
       mealCount: 0,
+      weekly: false,
       slotLabels: [],
       daysLabel: null,
       timeLabel: null,
@@ -113,6 +135,7 @@ describe('summarizeSchedule', () => {
     const summary = summarizeSchedule(items);
     expect(summary).toEqual({
       mealCount: 5,
+      weekly: true,
       slotLabels: ['Lunch'],
       daysLabel: 'Mon – Fri',
       timeLabel: '12:30 PM',
@@ -185,6 +208,7 @@ describe('summarizeSchedule', () => {
 
 describe('formatMealCount', () => {
   const base = {
+    weekly: false,
     slotLabels: ['Lunch'],
     daysLabel: null,
     timeLabel: null,
@@ -194,10 +218,17 @@ describe('formatMealCount', () => {
 
   it('uses the slot name for one slot and handles the singular', () => {
     expect(formatMealCount({...base, mealCount: 1}, 'week')).toBe('1 lunch');
-    expect(formatMealCount({...base, mealCount: 5}, 'month')).toBe('5 lunches');
+    expect(formatMealCount({...base, mealCount: 5}, '28 days')).toBe('5 lunches');
     expect(
       formatMealCount({...base, mealCount: 4, slotLabels: ['Dinner']}, 'week'),
     ).toBe('4 dinners');
+  });
+
+  it('counts every repeat of a weekday menu in the bill', () => {
+    const monFriLunch = summarizeSchedule(weekdays([1, 2, 3, 4, 5]));
+    expect(formatMealCount(monFriLunch, '28 days')).toBe('20 lunches');
+    expect(formatMealCount(monFriLunch, '14 days')).toBe('10 lunches');
+    expect(formatMealCount(monFriLunch, 'week')).toBe('5 lunches');
   });
 
   it('falls back to meals for several slots or none', () => {

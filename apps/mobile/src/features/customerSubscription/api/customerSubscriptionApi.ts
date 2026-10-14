@@ -81,6 +81,10 @@ export const customerSubscriptionSchema = z.object({
   currency: z.string().length(3).nullable().optional(),
   nextBillingDate: localDate.nullable().optional(),
   planImageUrl: z.string().min(1).nullable().optional(),
+  // Pause allowance per bill (1 weekly, 3 for 14 days, 7 for 28 days); absent on older servers.
+  pauseDaysPerBill: z.number().int().nonnegative().nullable().optional(),
+  pauseDaysLeft: z.number().int().nonnegative().nullable().optional(),
+  pauseAutoResumeDate: localDate.nullable().optional(),
 });
 
 export type CustomerSubscription = z.infer<typeof customerSubscriptionSchema>;

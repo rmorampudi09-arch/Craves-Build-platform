@@ -5,10 +5,12 @@ import in.craves.userchef.onboarding.ChefOnboardingDtos.Details;
 import in.craves.userchef.onboarding.ChefOnboardingDtos.ProofKind;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
+import in.craves.userchef.web.ApiDtos.Utm;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.util.StringUtils;
 
@@ -87,6 +89,15 @@ public final class ChefOnboardingPolicy {
             throw ApiException.badRequest("FSSAI_NUMBER_INVALID","Enter the 14-digit FSSAI registration or licence number.");
         if (d.language() == null || !LANGUAGES.contains(d.language()))
             throw ApiException.badRequest("LANGUAGE_INVALID","Choose a supported language.");
+    }
+    /** Keeps only short plain utm values, lowercased; anything else is dropped so a bad link never blocks a save. */
+    public static Utm utm(Utm link) {
+        return link == null ? new Utm(null,null,null,null)
+            : new Utm(utmValue(link.source()),utmValue(link.medium()),utmValue(link.campaign()),utmValue(link.content()));
+    }
+    private static String utmValue(String value) {
+        String text = value == null ? "" : value.strip().toLowerCase(Locale.ROOT);
+        return text.matches("[a-z0-9_.-]{1,64}") ? text : null;
     }
     /** True once the applicant has had their 18th birthday on {@code today} (29 February birthdays count from 1 March). */
     public static boolean adult(LocalDate dateOfBirth, LocalDate today) {

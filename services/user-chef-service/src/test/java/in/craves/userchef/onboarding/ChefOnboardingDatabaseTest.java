@@ -7,6 +7,7 @@ import in.craves.userchef.security.CurrentUser;
 import in.craves.userchef.service.*;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
 import in.craves.userchef.web.ApiDtos.ChefApplicationStatus;
+import in.craves.userchef.web.ApiDtos.Utm;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -74,7 +75,7 @@ class ChefOnboardingDatabaseTest {
     }
     State save(ProofKind proof,String licence) {
         var version=service.mine(user).version();
-        return run(()->service.save(user,new SaveRequest(version,ChefOnboardingPolicyTest.details(proof,licence))));
+        return run(()->service.save(user,new SaveRequest(version,ChefOnboardingPolicyTest.details(proof,licence),null)));
     }
     void upload(KycDocumentType type) {
         run(()->applications.uploadDocument(user,type,new MockMultipartFile("file","photo.jpg","image/jpeg",new byte[]{1,2,3,4})));
@@ -134,7 +135,7 @@ class ChefOnboardingDatabaseTest {
         save(ProofKind.PAN,null);
         long staleVersion=service.mine(user).version();
         save(ProofKind.PAN,null);
-        assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(staleVersion,ChefOnboardingPolicyTest.details(ProofKind.PAN,null)))));
+        assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(staleVersion,ChefOnboardingPolicyTest.details(ProofKind.PAN,null),null))));
         upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertThrows(ApiException.class,()->save(ProofKind.AADHAAR,null));
         assertEquals(ProofKind.PAN,service.mine(user).details().proofKind());
@@ -241,10 +242,26 @@ class ChefOnboardingDatabaseTest {
     }
     @Test void partialBasicDraftSavesWithoutVerifyingEmailOrCreatingApplication() {
         Details partial=new Details("", "Only", "",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en",null);
-        State first=run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
+        State first=run(()->service.saveDraft(user,new SaveRequest(0L,partial,null)));
         assertEquals("personal",first.resumeStep());assertNull(first.application().id());
         assertEquals("Only",service.mine(user).details().firstName());
-        assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(first.version(),partial))));
+        assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(first.version(),partial,null))));
+    }
+    @Test void firstDraftSaveKeepsTheMarketingLinkAndTheApplicationCopiesIt() {
+        Details partial=new Details("", "Only", "",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en",null);
+        var dm=new Utm("instagram","dm","chef_acq","reel_42");
+        State first=run(()->service.saveDraft(user,new SaveRequest(0L,partial,new Utm("Instagram","dm","chef_acq","reel_42"))));
+        assertNull(first.application().id());
+        assertEquals("instagram",jdbc.queryForObject("SELECT utm_source FROM chef_onboarding_draft WHERE identity_id=?",String.class,user.identityId()));
+        // A later link never replaces the first touch.
+        State saved=run(()->service.save(user,new SaveRequest(first.version(),ChefOnboardingPolicyTest.details(ProofKind.PAN,null),new Utm("facebook","ad","other","x"))));
+        assertEquals(dm,saved.application().utm());
+        assertEquals(dm,applications.getApplicationForAdmin(admin,saved.application().id()).utm());
+        run(()->service.save(user,new SaveRequest(saved.version(),ChefOnboardingPolicyTest.details(ProofKind.PAN,null),new Utm("facebook",null,null,null))));
+        assertEquals(dm,service.mine(user).application().utm());
+    }
+    @Test void applicationWithoutAMarketingLinkHasNoSource() {
+        assertNull(save(ProofKind.PAN,null).application().utm());
     }
     @Test void termsAndBankEnrollmentAreRequiredByServerAndCorrectionKeepsDecisionHistory() {
         save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
@@ -313,7 +330,7 @@ class ChefOnboardingDatabaseTest {
         java.util.function.Function<Boolean,Details> withBack=back->new Details(base.email(),base.firstName(),base.lastName(),base.dateOfBirth(),
             base.kitchenName(),base.kitchenDescription(),base.addressLine1(),null,null,base.city(),base.state(),base.postalCode(),
             base.latitude(),base.longitude(),base.proofKind(),base.otherGovernmentId(),base.fssaiNumber(),base.language(),back);
-        run(()->service.save(user,new SaveRequest(0L,withBack.apply(false))));
+        run(()->service.save(user,new SaveRequest(0L,withBack.apply(false),null)));
         photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals(Boolean.FALSE,service.mine(user).details().proofHasBack());
         assertEquals("review",service.mine(user).resumeStep());
@@ -321,7 +338,7 @@ class ChefOnboardingDatabaseTest {
         var minor=new Details(base.email(),base.firstName(),base.lastName(),java.time.LocalDate.now().minusYears(16),base.kitchenName(),
             null,base.addressLine1(),null,null,base.city(),base.state(),base.postalCode(),base.latitude(),base.longitude(),
             base.proofKind(),base.otherGovernmentId(),base.fssaiNumber(),base.language(),false);
-        var error=assertThrows(ApiException.class,()->run(()->service.saveDraft(user,new SaveRequest(service.mine(user).version(),minor))));
+        var error=assertThrows(ApiException.class,()->run(()->service.saveDraft(user,new SaveRequest(service.mine(user).version(),minor,null))));
         assertEquals("APPLICANT_UNDER_18",error.getCode());
     }
     @Test void mapPinWithSevenDecimalsSubmitsAndReachesAdminPendingQueue() {
@@ -330,7 +347,7 @@ class ChefOnboardingDatabaseTest {
             base.kitchenDescription(),base.addressLine1(),null,null,base.city(),base.state(),base.postalCode(),
             new BigDecimal("17.4398715"),new BigDecimal("78.4482946"),base.proofKind(),base.otherGovernmentId(),
             base.fssaiNumber(),base.language(),null);
-        run(()->service.save(user,new SaveRequest(0L,pinned)));
+        run(()->service.save(user,new SaveRequest(0L,pinned,null)));
         photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
         assertEquals(0,new BigDecimal("17.439872").compareTo(service.mine(user).details().latitude()));
         var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));

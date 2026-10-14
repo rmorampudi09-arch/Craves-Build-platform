@@ -3,6 +3,7 @@ package in.craves.userchef.onboarding;
 import in.craves.userchef.exception.ApiException;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
+import in.craves.userchef.web.ApiDtos.Utm;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -78,5 +79,11 @@ class ChefOnboardingPolicyTest {
         assertTrue(ChefOnboardingContentService.validVideoSignature("video/webm",new byte[]{0x1a,0x45,(byte)0xdf,(byte)0xa3}));
         assertThrows(ApiException.class,()->ChefOnboardingService.requireEditor(
             new in.craves.userchef.security.CurrentUser(UUID.randomUUID(),"test","9000000000",List.of("CUSTOMER"))));
+    }
+    @Test void utmKeepsShortPlainValuesLowercasedAndDropsTheRest() {
+        assertEquals(new Utm("instagram","dm",null,null),ChefOnboardingPolicy.utm(new Utm(" Instagram ","dm","chef acq","x".repeat(65))));
+        assertEquals(new Utm(null,null,"chef_acq","reel-2026.10"),ChefOnboardingPolicy.utm(new Utm("<b>","",  "chef_acq","reel-2026.10")));
+        assertEquals("x".repeat(64),ChefOnboardingPolicy.utm(new Utm("x".repeat(64),null,null,null)).source());
+        assertEquals(new Utm(null,null,null,null),ChefOnboardingPolicy.utm(null));
     }
 }

@@ -142,14 +142,26 @@ public class ChefOnboardingService {
             }
         }
         if(existing==null) {
-            jdbc.update("INSERT INTO chef_onboarding_draft(identity_id,application_id,details) VALUES (?,?,?::jsonb)",
-                user.identityId(),applicationId,encode(details));
+            var utm=ChefOnboardingPolicy.utm(request.utm());
+            jdbc.update("""
+                INSERT INTO chef_onboarding_draft(identity_id,application_id,details,utm_source,utm_medium,utm_campaign,utm_content)
+                VALUES (?,?,?::jsonb,?,?,?,?)
+                """,user.identityId(),applicationId,encode(details),utm.source(),utm.medium(),utm.campaign(),utm.content());
         } else {
             jdbc.update("""
                 UPDATE chef_onboarding_draft SET details=?::jsonb,application_id=?,submitted=false,
                     version=version+1,updated_at=now() WHERE identity_id=?
                 """,encode(details),applicationId,user.identityId());
         }
+        // The application, created after the first save, takes the draft's first-touch link once.
+        if(applicationId!=null)
+            jdbc.update("""
+                UPDATE chef_application a SET utm_source=d.utm_source,utm_medium=d.utm_medium,
+                    utm_campaign=d.utm_campaign,utm_content=d.utm_content
+                FROM chef_onboarding_draft d WHERE d.identity_id=? AND a.id=d.application_id
+                    AND COALESCE(a.utm_source,a.utm_medium,a.utm_campaign,a.utm_content) IS NULL
+                    AND COALESCE(d.utm_source,d.utm_medium,d.utm_campaign,d.utm_content) IS NOT NULL
+                """,user.identityId());
         audit(user.identityId(),user.identityId(),"DRAFT_SAVED",null);
         return mine(user);
     }

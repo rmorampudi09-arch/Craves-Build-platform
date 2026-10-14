@@ -153,6 +153,6 @@ class ChefApplicationReadinessTest {
             user.identityId(), user.phoneNumber(), "chef@example.test", "Test", "Chef", "Test road", null, null,
             "Hyderabad", "Telangana", "500081", null, null, status, null,
             status == ChefApplicationStatus.NOT_SUBMITTED ? null : saved, null, null, List.of(),
-            status == ChefApplicationStatus.NOT_SUBMITTED ? null : "CRV-10001");
+            status == ChefApplicationStatus.NOT_SUBMITTED ? null : "CRV-10001", null);
     }
 }

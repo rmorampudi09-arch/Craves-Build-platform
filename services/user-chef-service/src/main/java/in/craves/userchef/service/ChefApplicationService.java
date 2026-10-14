@@ -9,6 +9,7 @@ import in.craves.userchef.web.ApiDtos.ChefApplicationResponse;
 import in.craves.userchef.web.ApiDtos.ChefApplicationStatus;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
+import in.craves.userchef.web.ApiDtos.Utm;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -64,7 +65,7 @@ public class ChefApplicationService {
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
         List<ChefApplicationResponse> rows = findApplications("WHERE identity_id = ?", user.identityId());
         if (rows.isEmpty()) {
-            return new ChefApplicationResponse(null, user.identityId(), user.phoneNumber(), null, null, null, null, null, null, null, null, null, null, null, ChefApplicationStatus.NOT_SUBMITTED, null, null, null, null, List.of(), null);
+            return new ChefApplicationResponse(null, user.identityId(), user.phoneNumber(), null, null, null, null, null, null, null, null, null, null, null, ChefApplicationStatus.NOT_SUBMITTED, null, null, null, null, List.of(), null, null);
         }
         return rows.getFirst();
     }
@@ -363,7 +364,8 @@ public class ChefApplicationService {
             ChefApplicationStatus.valueOf(rs.getString("status")), rs.getString("rejection_reason"),
             instant(rs, "submitted_at"), instant(rs, "reviewed_at"),
             rs.getObject("reviewed_by_identity_id", UUID.class), listLegacyDocuments(applicationId),
-            rs.getString("reference_code")
+            rs.getString("reference_code"),
+            Utm.of(rs.getString("utm_source"), rs.getString("utm_medium"), rs.getString("utm_campaign"), rs.getString("utm_content"))
         );
     }
 

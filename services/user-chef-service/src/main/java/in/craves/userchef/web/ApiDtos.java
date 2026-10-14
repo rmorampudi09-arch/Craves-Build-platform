@@ -168,8 +168,17 @@ public final class ApiDtos {
         UUID reviewedByIdentityId,
         List<KycDocumentResponse> documents,
         /** Short human-friendly reference such as CRV-10001; null before an application row exists. */
-        String referenceCode
+        String referenceCode,
+        /** First-touch marketing link that brought the applicant; null when none was recorded. */
+        Utm utm
     ) {
+    }
+
+    /** utm_source, utm_medium, utm_campaign and utm_content of a marketing link. */
+    public record Utm(String source, String medium, String campaign, String content) {
+        public static Utm of(String source, String medium, String campaign, String content) {
+            return source == null && medium == null && campaign == null && content == null ? null : new Utm(source, medium, campaign, content);
+        }
     }
 
     public record AdminDecisionRequest(String reason) {

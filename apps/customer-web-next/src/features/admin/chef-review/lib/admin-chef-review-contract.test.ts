@@ -54,3 +54,10 @@ test("admin review accepts documents up to the 10 MB upload limit", () => {
   assert.ok(parseAdminChefApplication(sized(10 * 1024 * 1024)));
   assert.equal(parseAdminChefApplication(sized(10 * 1024 * 1024 + 1)), null);
 });
+
+test("admin review keeps valid utm values and drops the rest", () => {
+  assert.deepEqual(parseAdminChefApplication({ ...application, utm: { source: "instagram", medium: "dm", campaign: "chef_acq", content: "<script>" } })?.utm,
+    { source: "instagram", medium: "dm", campaign: "chef_acq", content: null });
+  assert.equal(parseAdminChefApplication({ ...application, utm: { source: null, medium: null, campaign: null, content: null } })?.utm, null);
+  assert.equal(parseAdminChefApplication(application)?.utm, null);
+});

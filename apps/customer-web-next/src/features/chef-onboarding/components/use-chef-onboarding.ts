@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
 import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/features/auth/api/sessionFetch";
 import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
+import { firstTouchUtm, type ChefUtm } from "@/features/chef-onboarding/lib/chef-application-utm";
 import { bankStatusSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
 import {
@@ -156,6 +157,11 @@ export function useChefOnboarding() {
   useEffect(() => {
     requestedStep.current = urlStep;
   }, [urlStep]);
+  // Read once, before ?step= navigation replaces the landing URL.
+  const utm = useRef<ChefUtm | null>(null);
+  useEffect(() => {
+    utm.current = firstTouchUtm(window.location.search, () => window.sessionStorage);
+  }, []);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -348,6 +354,7 @@ export function useChefOnboarding() {
       await chefOnboardingApi("/api/chef/onboarding", partial ? "PATCH" : "PUT", {
         expectedVersion: existing.version,
         details: {...currentDetails.current,dateOfBirth:currentDetails.current.dateOfBirth || null},
+        utm: utm.current,
       }),
     );
     if (!current())

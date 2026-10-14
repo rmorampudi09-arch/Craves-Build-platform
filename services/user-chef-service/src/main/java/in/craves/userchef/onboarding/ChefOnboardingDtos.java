@@ -2,6 +2,7 @@ package in.craves.userchef.onboarding;
 
 import in.craves.userchef.web.ApiDtos.ChefApplicationResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
+import in.craves.userchef.web.ApiDtos.Utm;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,7 +21,8 @@ public final class ChefOnboardingDtos {
         /** Other government ID only: false means the document has no back side. Null keeps the back side required. */
         Boolean proofHasBack
     ) {}
-    public record SaveRequest(Long expectedVersion, Details details) {}
+    /** utm: the marketing link the applicant arrived from; only the first save of a draft keeps it. */
+    public record SaveRequest(Long expectedVersion, Details details, Utm utm) {}
     public record State(
         boolean enabled, boolean legacy, long version, String resumeStep, boolean submitted,
         String phoneNumber, Details details, ChefApplicationResponse application,

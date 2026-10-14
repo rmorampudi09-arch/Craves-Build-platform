@@ -177,7 +177,7 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   return <div className="space-y-6">
     <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">{item.referenceCode ? `${item.referenceCode} · ` : ""}{item.status}</p><h2 className="mt-2 text-3xl font-bold">{item.firstName} {item.lastName}</h2><p className="mt-2 text-sm text-slate-600">{item.email} · {item.phoneNumber}</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">{item.referenceCode ? `${item.referenceCode} · ` : ""}{item.status}</p><h2 className="mt-2 text-3xl font-bold">{item.firstName} {item.lastName}</h2><p className="mt-2 text-sm text-slate-600">{item.email} · {item.phoneNumber}</p><p className="mt-1 text-sm text-slate-600">Source: {item.utm ? [item.utm.source, item.utm.medium, item.utm.campaign, item.utm.content].filter(Boolean).join(" · ") : "Not recorded"}</p></div>
         <span className="text-sm text-slate-500">Submitted {new Date(item.submittedAt).toLocaleString("en-IN")}</span>
       </div>
       <p className="mt-5 text-sm leading-6">{item.addressLine1}{item.addressLine2 ? `, ${item.addressLine2}` : ""}{item.landmark ? `, ${item.landmark}` : ""}<br />{item.city}, {item.state} {item.postalCode ?? ""}</p>

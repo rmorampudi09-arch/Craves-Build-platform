@@ -2,6 +2,7 @@
 import type {StatusChipTone} from '../../chefShell/components/ui/StatusChip';
 import {formatPlanPrice} from '../../customerSubscription/domain/mealPlanPresentation';
 import {
+  billingPeriodLabel,
   billingUnit,
   summarizeSchedule,
   type ScheduleItemLike,
@@ -54,7 +55,7 @@ export function chefPlanMetaLine(
   plan: Pick<ChefMealPlan, 'billingPeriod'>,
   items: readonly ScheduleItemLike[] | undefined,
 ): string {
-  const parts = [billingUnit(plan.billingPeriod) === 'month' ? 'Monthly' : 'Weekly'];
+  const parts: string[] = [billingPeriodLabel(plan.billingPeriod)];
   if (items && items.length > 0) {
     const summary = summarizeSchedule(items);
     parts.push(summary.slotLabels.join(', '));

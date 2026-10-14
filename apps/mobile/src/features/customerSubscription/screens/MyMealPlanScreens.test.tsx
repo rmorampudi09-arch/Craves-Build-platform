@@ -267,6 +267,30 @@ describe('MyMealPlanScreen', () => {
     expect(actions.resume).toHaveBeenCalledWith(todayIso(tomorrow));
   });
 
+  it('turns Pause off when the bill has no pause days left', () => {
+    given({sub: subscription({pauseDaysPerBill: 1, pauseDaysLeft: 0})});
+    const root = renderPlan();
+    expect(byLabel(root, 'Pause plan')).toBeUndefined();
+    expect(byLabel(root, 'No pause days left this bill').props.disabled).toBe(true);
+  });
+
+  it('shows the automatic restart and hides a resume that would come later', () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const restart = todayIso(tomorrow);
+    given({sub: subscription({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: restart})});
+    const root = renderPlan();
+    expect(texts(root)).toContain(`Restarts on ${formatMealPlanDate(restart, 'long')}`);
+    expect(byLabel(root, 'Resume plan')).toBeUndefined();
+  });
+
+  it('offers Resume when the automatic restart never happened', () => {
+    given({sub: subscription({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: '2026-01-01'})});
+    const root = renderPlan();
+    expect(texts(root).some(text => text.startsWith('Restarts on'))).toBe(false);
+    expect(byLabel(root, 'Resume plan')).toBeDefined();
+  });
+
   it('skips a date picked from the sheet', async () => {
     const later = occurrence({id: 'occ-2', serviceDate: '2099-01-02', serviceAt: '2099-01-02T07:00:00Z'});
     given({occurrences: [later]});

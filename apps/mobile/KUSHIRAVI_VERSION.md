@@ -19,6 +19,18 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.34.0 - Meal plans: one repeating week, 14-day bills, pause days per bill, 2026-10-14
+
+- Chefs set up one week (Sun–Sat) for every plan; it repeats once in a weekly bill, twice in a 14-day
+  bill and four times in a monthly (28-day) bill. The 28-date picker is gone; a draft set up by date
+  starts again as one empty week, a live date plan still shows its dates read-only.
+- New bill length "14 days" (FORTNIGHTLY); monthly prices read "/ 28 days". Plan lists, detail and
+  payment count meals per bill (Mon–Fri lunch on a 28-day bill = 20 lunches); weekdays list Sunday first.
+- My meal plan: pause shows the pause days left this bill (weekly 1, 14-day 3, monthly 7), Pause is off
+  when none are left, and a paused plan shows "Restarts on <date>". Needs subscription-service
+  feat/meal-plan-week-cycle (V19); against an older server the app behaves as before.
+- versionCode 80 skips 72–79, which builds on other branches (1.32.x–1.33.x) already use.
+
 ### Version 1.31.1 - Ask Craves support chat for chefs and customers, 2026-10-13
 
 - Chef Help & support "Chat with us" and the order page "Problem with this order?" open the Ask

@@ -11,7 +11,7 @@ export const chefMealPlanSchema = z.object({
   planCode: z.string().min(1).max(80),
   name: z.string().min(1).max(160),
   description: z.string().max(2000).nullable().optional().transform(value => value ?? null),
-  billingPeriod: z.enum(['WEEKLY', 'MONTHLY']),
+  billingPeriod: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY']),
   amount: decimal,
   currency: z.string().length(3),
   status: z.enum(['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'INACTIVE']),
@@ -142,7 +142,7 @@ export type ChefCapacitySummary = z.infer<typeof chefCapacitySummarySchema>;
 export interface ChefMealPlanInput {
   name: string;
   description: string | null;
-  billingPeriod: 'WEEKLY' | 'MONTHLY';
+  billingPeriod: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY';
   amount: number;
   currency: 'INR';
 }

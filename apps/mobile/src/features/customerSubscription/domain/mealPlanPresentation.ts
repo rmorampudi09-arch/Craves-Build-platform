@@ -9,6 +9,7 @@ import {
 import type {IconName} from '../../../shared/components/Icon';
 import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import type {
+  CustomerSubscription,
   CustomerSubscriptionOccurrence,
   PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
@@ -314,4 +315,33 @@ export function firstScheduledItem<T extends ScheduleItemLike>(
     sorted[0] ??
     null
   );
+}
+
+export interface PauseInfo {
+  pauseDisabledLabel: string | null;
+  pauseMessage: string;
+  restartNote: string | null;
+  resumeOffered: boolean;
+}
+
+/** Pause and resume copy from the bill's pause allowance; an older server sends none, so nothing changes. */
+export function pauseInfo(
+  subscription: Pick<CustomerSubscription, 'status' | 'pauseDaysLeft' | 'pauseAutoResumeDate'>,
+  resumeDate: string,
+  today: string,
+): PauseInfo {
+  const left = subscription.pauseDaysLeft;
+  // An overdue restart (switched off or failed) is ignored, so the customer can always resume.
+  const autoDate = subscription.pauseAutoResumeDate && subscription.pauseAutoResumeDate >= today ? subscription.pauseAutoResumeDate : null;
+  const paused = subscription.status === 'PAUSED';
+  return {
+    pauseDisabledLabel: !paused && left === 0 ? 'No pause days left this bill' : null,
+    pauseMessage:
+      typeof left === 'number' && left > 0
+        ? `You can pause up to ${left} more ${left === 1 ? 'day' : 'days'} this bill. Your plan restarts by itself after that.`
+        : 'Upcoming meals stop until you resume the plan.',
+    restartNote: paused && autoDate ? `Restarts on ${formatMealPlanDate(autoDate, 'long')}` : null,
+    // Resuming on or after the automatic restart would change nothing, so it is not offered.
+    resumeOffered: !(autoDate && resumeDate >= autoDate),
+  };
 }

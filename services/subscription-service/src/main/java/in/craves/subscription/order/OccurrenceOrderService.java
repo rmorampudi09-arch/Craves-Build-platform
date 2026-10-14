@@ -2,10 +2,7 @@ package in.craves.subscription.order;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import in.craves.subscription.billing.SubscriptionBillingRepository;
-import in.craves.subscription.occurrence.OccurrenceGeneratorService;
-import in.craves.subscription.occurrence.OccurrenceRepository;
-import in.craves.subscription.occurrence.OccurrenceRepository.ActiveSchedule;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.order.OccurrenceOrderModels.OrderItem;
 import in.craves.subscription.order.OccurrenceOrderModels.OrderRequestedData;
 import in.craves.subscription.order.OccurrenceOrderRepository.DeclinedMeal;
@@ -25,34 +22,28 @@ public class OccurrenceOrderService {
     private final OccurrenceOrderProperties properties;
     private final OccurrenceOrderRepository repository;
     private final ObjectMapper objectMapper;
-    private final SubscriptionBillingRepository billingRepository;
-    private final OccurrenceRepository occurrenceRepository;
+    private final DayCreditService dayCreditService;
 
     public OccurrenceOrderService(
         OccurrenceOrderProperties properties,
         OccurrenceOrderRepository repository,
         ObjectMapper objectMapper,
-        SubscriptionBillingRepository billingRepository,
-        OccurrenceRepository occurrenceRepository
+        DayCreditService dayCreditService
     ) {
         this.properties = properties;
         this.repository = repository;
         this.objectMapper = objectMapper;
-        this.billingRepository = billingRepository;
-        this.occurrenceRepository = occurrenceRepository;
+        this.dayCreditService = dayCreditService;
     }
 
-    /** The chef declined (or never accepted) this meal: the day is added to the end of the plan. */
+    /** The chef declined (or never accepted) this meal: the day is added to the end of the plan, or offered as a choice. */
     @Transactional
     public void orderDeclined(UUID occurrenceId, UUID orderId) {
         DeclinedMeal meal = repository.markOrderDeclined(occurrenceId, orderId);
         if (meal == null) {
             return;
         }
-        ActiveSchedule schedule = occurrenceRepository.findActiveSchedule(meal.planId()).orElse(null);
-        billingRepository.applyDeclineCredit(meal.subscriptionId(), date -> schedule != null
-            && OccurrenceGeneratorService.matchingItems(schedule, date).stream()
-                .anyMatch(item -> meal.mealSlotCode().equals(item.mealSlotCode())));
+        dayCreditService.declined(meal.subscriptionId(), meal.planId(), meal.serviceDate(), meal.mealSlotCode());
     }
 
     public DispatchSummary queueDueOccurrences() {

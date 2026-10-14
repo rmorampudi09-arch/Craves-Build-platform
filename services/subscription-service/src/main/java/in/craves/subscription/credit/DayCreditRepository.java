@@ -98,6 +98,23 @@ public class DayCreditRepository {
         );
     }
 
+    /** A day the customer paid money for: a PAID invoice with an amount covers it (not only a free extra day). */
+    public boolean paidDay(UUID subscriptionId, LocalDate date) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM subscription_schema.subscription_invoice WHERE subscription_id = ? AND status = 'PAID'"
+                + " AND amount > 0 AND cycle_start <= ? AND cycle_end > ?)",
+            Boolean.class, subscriptionId, Date.valueOf(date), Date.valueOf(date)
+        ));
+    }
+
+    /** Days can be added at the end only while the plan is running. */
+    public boolean planRunning(UUID subscriptionId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM subscription_schema.customer_subscription WHERE id = ? AND status IN ('ACTIVE', 'PAUSED'))",
+            Boolean.class, subscriptionId
+        ));
+    }
+
     private DayCredit map(ResultSet rs, int row) throws SQLException {
         return new DayCredit(
             rs.getObject("id", UUID.class),

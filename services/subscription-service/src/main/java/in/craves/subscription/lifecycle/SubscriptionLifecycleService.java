@@ -1,8 +1,8 @@
 package in.craves.subscription.lifecycle;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
-import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.AdminSubscriptionPage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.CustomerOccurrenceResponse;
@@ -49,7 +49,7 @@ public class SubscriptionLifecycleService {
     private final SubscriptionRepository subscriptionRepository;
     private final CapacityService capacityService;
     private final SubscriptionBillingProperties billing;
-    private final SubscriptionBillingRepository billingRepository;
+    private final DayCreditService dayCreditService;
     private final Clock clock;
 
     @Autowired
@@ -59,9 +59,9 @@ public class SubscriptionLifecycleService {
         SubscriptionRepository subscriptionRepository,
         CapacityService capacityService,
         SubscriptionBillingProperties billing,
-        SubscriptionBillingRepository billingRepository
+        DayCreditService dayCreditService
     ) {
-        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, billing, billingRepository, Clock.systemUTC());
+        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, billing, dayCreditService, Clock.systemUTC());
     }
 
     SubscriptionLifecycleService(
@@ -70,7 +70,7 @@ public class SubscriptionLifecycleService {
         SubscriptionRepository subscriptionRepository,
         CapacityService capacityService,
         SubscriptionBillingProperties billing,
-        SubscriptionBillingRepository billingRepository,
+        DayCreditService dayCreditService,
         Clock clock
     ) {
         this.lifecycleRepository = lifecycleRepository;
@@ -78,7 +78,7 @@ public class SubscriptionLifecycleService {
         this.subscriptionRepository = subscriptionRepository;
         this.capacityService = capacityService;
         this.billing = billing;
-        this.billingRepository = billingRepository;
+        this.dayCreditService = dayCreditService;
         this.clock = clock;
     }
 
@@ -178,7 +178,7 @@ public class SubscriptionLifecycleService {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before resume could be applied");
         }
         lifecycleRepository.closePause(subscriptionId, request.resumeDate());
-        billingRepository.applyPauseCredit(subscriptionId, request.resumeDate());
+        dayCreditService.creditPausedDays(subscriptionId, request.resumeDate());
         return current(subscriptionId);
     }
 
@@ -195,7 +195,7 @@ public class SubscriptionLifecycleService {
             capacityService.restoreForAutoResume(requireSubscription(subscriptionId));
         }
         lifecycleRepository.closePause(subscriptionId, resumeDate);
-        billingRepository.applyPauseCredit(subscriptionId, resumeDate);
+        dayCreditService.creditPausedDays(subscriptionId, resumeDate);
         return true;
     }
 

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
+import in.craves.subscription.credit.DayCreditRepository;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.occurrence.OccurrenceRepository;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -50,7 +52,8 @@ class ChefDispatchAndDeclineDatabaseTest {
         db.update("INSERT INTO subscription_schema.customer_subscription(id,customer_identity_id,plan_id,chef_identity_id,status,start_date,next_billing_date,delivery_address_id) VALUES (?,?,?,?,'ACTIVE',?,?,?)",subscription,customer,plan,chef,d("10-03"),d("10-10"),address);
         db.update("INSERT INTO subscription_schema.subscription_invoice(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,cycle_start,cycle_end,amount,currency,status) VALUES (?,?,?,?,?,?,?,300,'INR','PAID')",UUID.randomUUID(),subscription,plan,customer,chef,d("10-03"),d("10-10"));
         repository=new OccurrenceOrderRepository(db);
-        service=new OccurrenceOrderService(new OccurrenceOrderProperties(),repository,new ObjectMapper(),new SubscriptionBillingRepository(db),new OccurrenceRepository(db));
+        service=new OccurrenceOrderService(new OccurrenceOrderProperties(),repository,new ObjectMapper(),
+            new DayCreditService(new DayCreditRepository(db),new SubscriptionBillingRepository(db),new OccurrenceRepository(db),false,java.time.Clock.systemUTC()));
     }
     UUID meal(LocalDate date,String slot,Instant serviceAt,String status,UUID orderId){
         UUID id=UUID.randomUUID();

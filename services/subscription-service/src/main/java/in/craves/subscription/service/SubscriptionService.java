@@ -4,7 +4,9 @@ import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.PauseAllowance.PauseStatus;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleService;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.plan.PlanImageRepository.PlanImage;
 import in.craves.subscription.repository.SubscriptionRepository;
@@ -202,7 +204,11 @@ public class SubscriptionService {
                 LocalDate resumeDate = subscription.nextServiceDate() == null
                     ? LocalDate.now(BUSINESS_ZONE)
                     : subscription.nextServiceDate().isBefore(LocalDate.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : subscription.nextServiceDate();
-                capacityService.reacquireForResume(subscription, resumeDate);
+                // A customer pause keeps the chef's spot; only an admin pause (or one from before that rule) released it.
+                if (!capacityService.hasCommittedCapacity(subscription.id())) {
+                    capacityService.reacquireForResume(subscription, resumeDate);
+                }
+                lifecycleRepository.closePause(subscription.id(), resumeDate);
                 // Before the status update so the returned subscription already shows the moved billing date.
                 billingRepository.applyPauseCredit(subscription.id(), resumeDate);
             } else {
@@ -267,13 +273,15 @@ public class SubscriptionService {
     }
 
     private CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        PauseStatus pause = SubscriptionLifecycleService.pauseStatus(lifecycleRepository, subscription, today);
         return new CustomerSubscriptionResponse(
             subscription.id(), subscription.planId(), subscription.status(), subscription.startDate(),
             subscription.endDate(), subscription.nextServiceDate(), subscription.deliveryAddressId(),
             subscription.notes(), subscription.createdAt(), subscription.updatedAt(),
             subscription.planName(), subscription.billingPeriod(), subscription.amount(), subscription.currency(),
-            nextChargeDate(subscription.nextBillingDate(), billing, LocalDate.now(BUSINESS_ZONE)),
-            subscription.planImageUrl()
+            nextChargeDate(subscription.nextBillingDate(), billing, today),
+            subscription.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate()
         );
     }
 

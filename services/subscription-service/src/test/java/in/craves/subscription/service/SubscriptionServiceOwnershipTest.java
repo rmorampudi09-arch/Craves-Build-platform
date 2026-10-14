@@ -3,6 +3,7 @@ package in.craves.subscription.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,6 +14,7 @@ import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -189,6 +191,8 @@ class SubscriptionServiceOwnershipTest {
             "/api/v1/subscriptions/plans/44444444-4444-4444-8444-444444444444/image?v=1790000000"
         );
         when(repository.findSubscriptionById(subscriptionId)).thenReturn(Optional.of(stored));
+        when(lifecycleRepository.currentBillStart(eq(subscriptionId), any())).thenReturn(LocalDate.now());
+        when(lifecycleRepository.pauseUsage(subscriptionId)).thenReturn(new PauseUsage(null, 0, null, null));
 
         CustomerSubscriptionResponse response = service.getMine(subscriptionId, customer);
 

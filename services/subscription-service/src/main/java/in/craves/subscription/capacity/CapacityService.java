@@ -259,6 +259,11 @@ public class CapacityService {
             "Expired enrollment hold was reacquired before activation", null, Map.of("status", "COMMITTED"));
     }
 
+    /** A customer pause keeps the chef's spot; pauses from before that rule (or admin pauses) released it. */
+    public boolean hasCommittedCapacity(UUID subscriptionId) {
+        return repository.listActiveEntitlements(subscriptionId).stream().anyMatch(value -> "COMMITTED".equals(value.status()));
+    }
+
     @Transactional
     public void releaseForPauseOrTerminal(SubscriptionResponse subscription, LocalDate effectiveDate, String reason) {
         UUID chef = subscription.chefIdentityId();

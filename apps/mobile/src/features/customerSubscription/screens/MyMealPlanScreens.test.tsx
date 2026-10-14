@@ -275,10 +275,20 @@ describe('MyMealPlanScreen', () => {
   });
 
   it('shows the automatic restart and hides a resume that would come later', () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const restart = todayIso(tomorrow);
+    given({sub: subscription({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: restart})});
+    const root = renderPlan();
+    expect(texts(root)).toContain(`Restarts on ${formatMealPlanDate(restart, 'long')}`);
+    expect(byLabel(root, 'Resume plan')).toBeUndefined();
+  });
+
+  it('offers Resume when the automatic restart never happened', () => {
     given({sub: subscription({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: '2026-01-01'})});
     const root = renderPlan();
-    expect(texts(root)).toContain('Restarts on Thu, 1 Jan 2026');
-    expect(byLabel(root, 'Resume plan')).toBeUndefined();
+    expect(texts(root).some(text => text.startsWith('Restarts on'))).toBe(false);
+    expect(byLabel(root, 'Resume plan')).toBeDefined();
   });
 
   it('skips a date picked from the sheet', async () => {

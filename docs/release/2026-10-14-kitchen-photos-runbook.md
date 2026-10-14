@@ -1,7 +1,7 @@
 # Kitchen photos release runbook (2026-10-14)
 
 Ships: user-chef-service (new internal route, no migration) and catalog-service (migration V10, kitchen photo slots,
-lock, import). No gateway (APIM) change: the routes the apps use already exist. Run everything in Azure Cloud Shell
+lock, import). No new gateway (APIM) routes; the chef photo upload route must already be live (checked in step 1). Run everything in Azure Cloud Shell
 (Bash), one line at a time. Commands that change production are marked **(Enter is yours)**.
 
 ## 0. Variables and code
@@ -19,13 +19,22 @@ for a in $USERCHEF_APP $CATALOG_APP; do echo "$a $(az containerapp show -g $RG -
 
 ## 1. Settings check (read-only)
 
+The chef photo upload route must reach catalog through the gateway (published by the 10-13 runbook Step 6):
+```bash
+curl -s -o /dev/null -w '%{http_code}
+' -X POST "https://api.craves.in/api/v1/kitchens/me/photos?kind=KITCHEN"
+```
+Expect `403` (it reached catalog, which refuses a request without sign-in; checked 14 Oct). `404` means the gateway
+lacks the route: run 10-13 Step 6 first.
+
 Catalog needs user-chef's internal address (order-service already has it) and the same internal secret user-chef
 checks. Catalog falls back to its own `CRAVES_INTERNAL_SERVICE_SECRET`, so first confirm the two apps hold the same
-value. This prints hashes only, never the secret:
+secret. This prints the Key Vault reference or a short hash, never the secret:
 ```bash
-for a in $USERCHEF_APP $CATALOG_APP; do r=$(az containerapp show -g $RG -n $a --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'] | [0]" -o json); s=$(echo "$r" | jq -r '.secretRef // empty'); v=$( [ -n "$s" ] && az containerapp secret show -g $RG -n $a --secret-name "$s" --query value -o tsv || echo "$r" | jq -r '.value // empty'); echo "$a $(printf %s "$v" | sha256sum | cut -c1-12)"; done; unset r s v
+for a in $USERCHEF_APP $CATALOG_APP; do s=$(az containerapp show -g $RG -n $a --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'].secretRef | [0]" -o tsv); kv=$( [ -n "$s" ] && az containerapp show -g $RG -n $a --query "properties.configuration.secrets[?name=='$s'].keyVaultUrl | [0]" -o tsv); if [ -n "$kv" ]; then echo "$a keyvault $kv"; else v=$( [ -n "$s" ] && az containerapp secret show -g $RG -n $a --secret-name "$s" --query value -o tsv || az containerapp show -g $RG -n $a --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'].value | [0]" -o tsv); [ -n "$v" ] && echo "$a value $(printf %s "$v" | sha256sum | cut -c1-12)" || echo "$a EMPTY"; fi; done; unset s kv v
 ```
-Same hash on both lines: nothing to add. Different or empty: stop and send the two lines to Claude.
+Both lines must match after the app name (`keyvault <same URL>`, or `value <same hash>`). `EMPTY`, a mismatch, or one
+Key Vault and one value: stop and send the two lines to Claude.
 ```bash
 az containerapp show -g $RG -n $ORDER_APP --query "properties.template.containers[0].env[?name=='CRAVES_USER_CHEF_INTERNAL_BASE_URL'].[value,secretRef]" -o tsv
 ```
@@ -77,9 +86,10 @@ null (public privacy stays on).
 
 ## 4. Support: let a chef replace a kitchen photo
 
-The chef cannot replace a photo. Support empties the slot, then the chef adds a new photo in the app.
+The chef cannot replace a photo. Support empties the slot, then the chef adds a new photo in the app. Load the
+catalog internal key (Key Vault or plain secret) without printing it:
 ```bash
-export CATALOG_FQDN=$(az containerapp show -g $RG -n $CATALOG_APP --query properties.configuration.ingress.fqdn -o tsv); K=$(az containerapp secret show -g $RG -n $CATALOG_APP --secret-name $(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'].secretRef | [0]" -o tsv) --query value -o tsv)
+export CATALOG_FQDN=$(az containerapp show -g $RG -n $CATALOG_APP --query properties.configuration.ingress.fqdn -o tsv); s=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.template.containers[0].env[?name=='CRAVES_INTERNAL_SERVICE_SECRET'].secretRef | [0]" -o tsv); kv=$(az containerapp show -g $RG -n $CATALOG_APP --query "properties.configuration.secrets[?name=='$s'].keyVaultUrl | [0]" -o tsv); K=$( [ -n "$kv" ] && az keyvault secret show --id "$kv" --query value -o tsv || az containerapp secret show -g $RG -n $CATALOG_APP --secret-name "$s" --query value -o tsv); [ -n "$K" ] && echo "key loaded" || echo "NO KEY: stop"; unset s kv
 ```
 **(Enter is yours)** slot 1 = overall kitchen, 2 = cooking setup:
 ```bash

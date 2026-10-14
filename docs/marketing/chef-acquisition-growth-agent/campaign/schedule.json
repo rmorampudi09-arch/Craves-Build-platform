@@ -29,6 +29,20 @@
    ]
   },
   {
+   "slot": "2026-10-15T01:30",
+   "items": [
+    {
+     "type": "reel",
+     "piece": "reel-how-it-works",
+     "files": [
+      "reels/reel-how-it-works.mp4"
+     ],
+     "caption": "Craves home chef avvadaniki 5 steps: phone number tho sign in, rendu kitchen photos, ID proof + 14-digit FSSAI number, Craves team review, approve ayyaka mee menu, mee prices.\nFSSAI inka leda? Application lo 'Don't have FSSAI?' guide undi. Approve ayyaka packaging materials free. Customers kosam Craves launching soon, chefs mundu join avutunnaru.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#Hyderabad #HyderabadFood #HyderabadHomeChef #HomeChef #HomeChefs #HomeKitchen #HomemadeFood #IntiVantalu #ManaVantalu #Craves",
+     "thumb_offset": 2000
+    }
+   ]
+  },
+  {
    "slot": "2026-10-15T11:23",
    "items": [
     {
@@ -79,6 +93,15 @@
       "ST3/ST3-04.jpg",
       "ST3/ST3-05.jpg"
      ]
+    },
+    {
+     "type": "reel",
+     "piece": "reel-fssai",
+     "files": [
+      "reels/reel-fssai.mp4"
+     ],
+     "caption": "FSSAI says: 1 Apr 2026 nunchi Rs 1.5 crore turnover varaku registration saripotundi, licence kaadu, renewal ledu (FSSAI press release, 13 Mar 2026). Annual fee matram undi: foscos.fssai.gov.in lo check cheyyandi.\nCraves ki mee 14-digit FSSAI number kavali. Inka raleda? Application start chesi save cheyyandi, 'Request a call from Craves' kuda undi.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #IntiVantalu #ManaVantalu #TeluguFood #HyderabadFood #Craves",
+     "thumb_offset": 2000
     }
    ]
   },
@@ -107,6 +130,15 @@
       "ST6/ST6-03.jpg",
       "ST6/ST6-04.jpg"
      ]
+    },
+    {
+     "type": "reel",
+     "piece": "reel-packaging",
+     "files": [
+      "reels/reel-packaging.mp4"
+     ],
+     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nFood ready ayyaka, mee kitchen nunchi pickup Craves arrange chestundi. Customers: launching soon. Chefs: joining first.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #IntiVantalu #ManaVantalu #Craves",
+     "thumb_offset": 2000
     }
    ]
   },

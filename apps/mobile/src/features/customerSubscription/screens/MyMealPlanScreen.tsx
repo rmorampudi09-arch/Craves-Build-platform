@@ -254,7 +254,7 @@ export function MyMealPlanScreen({navigation, route}: Props) {
 
   const earliestTime = scheduleItems.map(item => item.serviceTime).sort()[0] ?? null;
   const resumeDate = resumeDateFor(now, policy?.resumeLeadMinutes ?? 0, earliestTime);
-  const pausing = pauseInfo(subscription, resumeDate);
+  const pausing = pauseInfo(subscription, resumeDate, today);
   const pause = () => confirm('Pause your plan?', pausing.pauseMessage, 'Pause plan', actions.pause);
   const resume = () => {
     confirm(

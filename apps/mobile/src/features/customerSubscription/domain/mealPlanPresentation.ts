@@ -328,9 +328,11 @@ export interface PauseInfo {
 export function pauseInfo(
   subscription: Pick<CustomerSubscription, 'status' | 'pauseDaysLeft' | 'pauseAutoResumeDate'>,
   resumeDate: string,
+  today: string,
 ): PauseInfo {
   const left = subscription.pauseDaysLeft;
-  const autoDate = subscription.pauseAutoResumeDate ?? null;
+  // An overdue restart (switched off or failed) is ignored, so the customer can always resume.
+  const autoDate = subscription.pauseAutoResumeDate && subscription.pauseAutoResumeDate >= today ? subscription.pauseAutoResumeDate : null;
   const paused = subscription.status === 'PAUSED';
   return {
     pauseDisabledLabel: !paused && left === 0 ? 'No pause days left this bill' : null,

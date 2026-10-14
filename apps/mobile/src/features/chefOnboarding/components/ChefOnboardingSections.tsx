@@ -528,7 +528,7 @@ export function ChefKitchenDetails({flow}: Props) {
         </View>
       </Card>
 
-      <Card done={photosDone} icon="camera" subtitle="Two clear photos of where you cook." title="Kitchen photos">
+      <Card done={photosDone} icon="camera" subtitle="Two clear photos of where you cook. Customers see them on your kitchen page." title="Kitchen photos">
         <View style={ui.fields}>
           {missing.length && !photosDone ? (
             <View style={styles.requires}>

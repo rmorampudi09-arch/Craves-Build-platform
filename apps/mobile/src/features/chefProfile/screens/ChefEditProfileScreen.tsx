@@ -191,8 +191,13 @@ export function ChefEditProfileScreen() {
         toast.show(done);
       }
     } catch (error) {
+      const locked = toAppApiError(error).code === 'KITCHEN_PHOTOS_LOCKED';
+      if (locked) {
+        // The tiles were out of date (photos arrived from the application or another device): show what the server holds.
+        query.refetch().catch(() => undefined);
+      }
       toast.show(
-        toAppApiError(error).code === 'KITCHEN_PHOTOS_LOCKED'
+        locked
           ? KITCHEN_PHOTOS_LOCKED_MESSAGE
           : isRouteNotPublished(error)
           ? 'Photos are coming soon.'
@@ -302,7 +307,13 @@ export function ChefEditProfileScreen() {
                     icon="store"
                     key={slot}
                     label={slot === 0 ? 'Overall kitchen' : 'Cooking setup'}
-                    onPress={() => (url ? toast.show(KITCHEN_PHOTOS_LOCKED_MESSAGE) : setPhotoSheet('KITCHEN'))}
+                    onPress={() =>
+                      url
+                        ? toast.show(KITCHEN_PHOTOS_LOCKED_MESSAGE)
+                        : slot !== nextEmptySlot
+                          ? toast.show('Add the overall kitchen photo first.') // the server fills slot 1 before slot 2
+                          : setPhotoSheet('KITCHEN')
+                    }
                     url={url}
                   />
                 ))}

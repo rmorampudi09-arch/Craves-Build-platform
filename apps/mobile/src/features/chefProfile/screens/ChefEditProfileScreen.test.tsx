@@ -382,6 +382,25 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     expect(mockApi.uploadPhoto).not.toHaveBeenCalled();
   });
 
+  it('asks for the overall kitchen photo first, so a photo never lands under the wrong label', async () => {
+    await mount({...PUBLISHED, kitchenPhotoUrl: null, kitchenPhotoUrls: []});
+    await ui.press('Cooking setup');
+    await ui.settle();
+    expect(ui.has('Add the overall kitchen photo first.')).toBe(true);
+    expect(ui.has('Take a photo')).toBe(false);
+  });
+
+  it('reads the kitchen again after the server says the photos are locked, so the tiles show what it holds', async () => {
+    mockPickPhoto.mockResolvedValue({photo: {uri: 'file:///k.jpg', fileName: 'k.jpg', mimeType: 'image/jpeg'}});
+    mockApi.uploadPhoto.mockRejectedValue(new AppApiError('KITCHEN_PHOTOS_LOCKED', 'locked', 409));
+    await mount(PUBLISHED);
+    const readsBefore = mockApi.getKitchen.mock.calls.length;
+    await ui.press('Cooking setup');
+    await ui.press('Take a photo');
+    await ui.settle();
+    expect(mockApi.getKitchen.mock.calls.length).toBeGreaterThan(readsBefore);
+  });
+
   it('shows the support message when the server says kitchen photos are locked', async () => {
     mockPickPhoto.mockResolvedValue({photo: {uri: 'file:///k.jpg', fileName: 'k.jpg', mimeType: 'image/jpeg'}});
     mockApi.uploadPhoto.mockRejectedValue(new AppApiError('KITCHEN_PHOTOS_LOCKED', 'locked', 409));

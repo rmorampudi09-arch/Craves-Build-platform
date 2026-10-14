@@ -18,6 +18,7 @@ You don't need to code. Version 1 runs inside one Claude Project and takes about
 | [results.csv](results.csv) | The results log. Header plus two baseline rows for the existing feed posts. |
 | [prompts.md](prompts.md) | The five step prompts (SCOUT, WRITE, BUILD, TALK, LEARN), plus LEARN with an automatic Windsor.ai pull. |
 | [week-1.md](week-1.md) | First-week pack: baseline, profile fix, 3 written reels, TALK copy, reply bank, dated checklist. |
+| [campaign/campaign.md](campaign/campaign.md) | The live full-scale campaign (14 to 28 Oct 2026): what Claude publishes on schedule, what the team does, the images, copy and schedule. |
 
 ## What you need
 

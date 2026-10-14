@@ -26,7 +26,7 @@ import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.34.4';
+export const CHEF_APP_VERSION = '1.34.5';
 
 /** The line under Opening hours: where the kitchen is right now, with today's hours. */
 function hoursLine(status: KitchenOpenState['status'], hoursToday: string | null): string | undefined {
@@ -166,21 +166,21 @@ export function ChefProfileScreen() {
         <ListRow icon="store" iconTone="red" onPress={open('ChefEditProfile')} subtitle="Name, about, address, photos" title="Kitchen details" />
         <ListRow
           icon="clock"
-          iconTone="green"
+          iconTone="red"
           onPress={open('ChefKitchenSchedule')}
           subtitle={hoursLine(kitchenState.status, kitchenState.hoursToday)}
           title="Opening hours"
         />
         <ListRow
           icon="shield"
-          iconTone="blue"
+          iconTone="red"
           onPress={open('ChefBusinessInformation')}
           subtitle={approved ? ['Verified', onboarding ? documentsSummary(onboarding) : ''].filter(Boolean).join(' · ') : 'See your documents'}
           title="Documents & verification"
         />
         <ListRow
           icon="star"
-          iconTone="amber"
+          iconTone="red"
           onPress={open('ChefReviews')}
           subtitle={hasRating ? `${rating.toFixed(1)} average · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}` : 'What customers say'}
           title="Reviews"

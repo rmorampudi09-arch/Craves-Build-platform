@@ -3,18 +3,20 @@ import {BackHandler} from 'react-native';
 import {useFocusEffect, useNavigation, useRoute, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 
 /**
- * Back for Payout history and Bank account, which live in the Profile stack. Opened from the Earnings tab
- * (`from: 'earnings'`), Back goes to Earnings and leaves Profile as it was, instead of dropping the chef on Profile.
+ * Back for Payout history and Bank account, which live in the Profile stack. Opened from the Earnings or Home tab
+ * (`from: 'earnings' | 'home'`), Back goes to that tab and leaves Profile as it was, instead of dropping the chef on Profile.
  */
 export function useChefSubScreenBack() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
-  const fromEarnings = (route.params as {from?: string} | undefined)?.from === 'earnings';
+  const from = (route.params as {from?: string} | undefined)?.from;
+  const fromEarnings = from === 'earnings';
   const goBack = React.useCallback(() => {
     // Switch tab first so the Profile screen is not seen sliding away.
-    if (fromEarnings) navigation.navigate('Earnings');
+    if (from === 'earnings') navigation.navigate('Earnings');
+    if (from === 'home') navigation.navigate('Dashboard');
     navigation.goBack();
-  }, [fromEarnings, navigation]);
+  }, [from, navigation]);
   return {goBack, fromEarnings};
 }
 

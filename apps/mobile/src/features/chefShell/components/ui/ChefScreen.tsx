@@ -1,5 +1,5 @@
 import React from 'react';
-import {RefreshControl, ScrollView, StatusBar, StyleSheet, View} from 'react-native';
+import {KeyboardAvoidingView, RefreshControl, ScrollView, StatusBar, StyleSheet, View} from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {borderWidth, colors, spacing} from '../../../../design/tokens';
 import {getBottomActionPadding} from '../../../../design/responsive';
@@ -40,32 +40,35 @@ export function ChefScreen({
     <SafeAreaView edges={['top']} style={styles.screen} testID={testID}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
       {header}
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {paddingBottom: withTabBar ? spacing.xxl : spacing.lg + (footer ? 0 : bottomInset)},
-          ]}
-          keyboardShouldPersistTaps="handled"
-          refreshControl={
-            onRefresh ? (
-              <RefreshControl
-                colors={[colors.flameRed]}
-                onRefresh={onRefresh}
-                refreshing={refreshing}
-              />
-            ) : undefined
-          }
-          showsVerticalScrollIndicator={false}
-          style={styles.flex}>
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={styles.flex}>{children}</View>
-      )}
-      {footer ? (
-        <View style={[styles.dock, {paddingBottom: getBottomActionPadding(bottomInset)}]}>{footer}</View>
-      ) : null}
+      {/* Edge-to-edge Android no longer shrinks the window for the keyboard, so the screen makes room itself. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        {scroll ? (
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              {paddingBottom: withTabBar ? spacing.xxl : spacing.lg + (footer ? 0 : bottomInset)},
+            ]}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl
+                  colors={[colors.flameRed]}
+                  onRefresh={onRefresh}
+                  refreshing={refreshing}
+                />
+              ) : undefined
+            }
+            showsVerticalScrollIndicator={false}
+            style={styles.flex}>
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={styles.flex}>{children}</View>
+        )}
+        {footer ? (
+          <View style={[styles.dock, {paddingBottom: getBottomActionPadding(bottomInset)}]}>{footer}</View>
+        ) : null}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

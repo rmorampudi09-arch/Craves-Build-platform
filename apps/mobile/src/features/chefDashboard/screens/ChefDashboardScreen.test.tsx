@@ -38,11 +38,12 @@ jest.mock('../../chefProfile/state/useKitchenOpenState', () => ({useKitchenOpenS
 jest.mock('../../reviews/query/useChefReviewPreview', () => ({useChefReviewPreview: () => mockReviews}));
 jest.mock('../../chefOrders/state/useChefNewOrderActions', () => ({useChefNewOrderActions: () => mockNewActions}));
 jest.mock('../../chefOrders/state/useChefPreparingOrderActions', () => ({useChefPreparingOrderActions: () => mockPrepActions}));
+jest.mock('../../chefBankOnboarding/state/useChefBankStatus', () => ({useChefBankStatus: () => ({bank: null})}));
 
-const NEW_ID = '00000000-0000-4000-8000-0000000df94b';
-const NEW_ID_2 = '00000000-0000-4000-8000-0000009b2e1c';
-const COOK_ID = '00000000-0000-4000-8000-0000000a21c7';
-const READY_ID = '00000000-0000-4000-8000-00000000e7cd';
+const NEW_ID = '000df94b-0000-4000-8000-0000000df94b';
+const NEW_ID_2 = '009b2e1c-0000-4000-8000-0000009b2e1c';
+const COOK_ID = '000a21c7-0000-4000-8000-0000000a21c7';
+const READY_ID = '0000e7cd-0000-4000-8000-00000000e7cd';
 const ITEM = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 
 const pendingOrder: ChefOperationalOrder = {
@@ -164,12 +165,12 @@ describe('Home: new orders', () => {
     mockModel = baseModel({pendingOrders: [pendingOrder, {...pendingOrder, id: NEW_ID_2}]});
     await mount();
     expect(hasText('Needs you now')).toBe(true);
-    expect(hasText('#DF94B')).toBe(true);
-    expect(hasText('#B2E1C')).toBe(false);
+    expect(hasText('#000DF94B')).toBe(true);
+    expect(hasText('#009B2E1C')).toBe(false);
     expect(hasText('₹220')).toBe(true);
     expect(hasText(/^Priya S\. · KPHB Colony · /)).toBe(true);
     expect(pressables('Accept · ready in 20 min')).toHaveLength(1);
-    expect(pressables('Reject order #DF94B')).toHaveLength(1);
+    expect(pressables('Reject order #000DF94B')).toHaveLength(1);
     await press('2 new orders');
     expect(mockNavigate).toHaveBeenCalledWith('Orders', {screen: 'ChefOrdersNew'});
   });
@@ -192,12 +193,12 @@ describe('Home: new orders', () => {
     mockNewActions = {...mockNewActions, actionStateByOrder: {[NEW_ID]: 'accepting'}};
     await mount();
     expect(pressables('Accept · ready in 20 min')[0].props.disabled).toBe(true);
-    expect(pressables('Reject order #DF94B')[0].props.disabled).toBe(true);
+    expect(pressables('Reject order #000DF94B')[0].props.disabled).toBe(true);
   });
 
   it('opens the order when the card is tapped', async () => {
     await mount();
-    await press('Order #DF94B, ₹220, Priya S., 3 items');
+    await press('Order #000DF94B, ₹220, Priya S., 3 items');
     expect(mockNavigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: NEW_ID});
   });
 
@@ -205,9 +206,9 @@ describe('Home: new orders', () => {
     const reject = jest.fn(async () => ({}));
     mockNewActions = {...mockNewActions, reject};
     await mount();
-    await press('Reject order #DF94B');
+    await press('Reject order #000DF94B');
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(hasText('Reject #DF94B?')).toBe(true);
+    expect(hasText('Reject #000DF94B?')).toBe(true);
     expect(pressables('Reject order')[0].props.disabled).toBe(true);
     await press('Closing soon');
     await press('Reject order');
@@ -219,12 +220,12 @@ describe('Home: new orders', () => {
   it('says the customer gets a full refund for a paid order, and where a meal-plan day goes otherwise', async () => {
     mockModel = baseModel({pendingOrders: [{...pendingOrder, checkoutId: NEW_ID_2}]});
     await mount();
-    await press('Reject order #DF94B');
+    await press('Reject order #000DF94B');
     expect(hasText('The customer is told right away and gets a full refund.')).toBe(true);
     act(() => tree.unmount());
     mockModel = baseModel({pendingOrders: [{...pendingOrder, checkoutId: undefined}]});
     await mount();
-    await press('Reject order #DF94B');
+    await press('Reject order #000DF94B');
     expect(hasText('The customer is told right away. This meal-plan day moves to the end of their plan.')).toBe(true);
   });
 
@@ -234,11 +235,11 @@ describe('Home: new orders', () => {
     });
     mockNewActions = {...mockNewActions, reject};
     await mount();
-    await press('Reject order #DF94B');
+    await press('Reject order #000DF94B');
     await press('Closing soon');
     await press('Reject order');
     expect(reject).toHaveBeenCalledTimes(1);
-    expect(hasText('Reject #DF94B?')).toBe(true);
+    expect(hasText('Reject #000DF94B?')).toBe(true);
 
     reject.mockImplementationOnce(async () => {
       throw new AppApiError('CHEF_ORDER_NOT_ACTIONABLE', 'This order is now Rejected.', 409);
@@ -254,11 +255,11 @@ describe('Home: new orders', () => {
     });
     mockNewActions = {...mockNewActions, reject};
     await mount();
-    await press('Reject order #DF94B');
+    await press('Reject order #000DF94B');
     await press('Closing soon');
     await press('Reject order');
     expect(reject).toHaveBeenCalledTimes(1);
-    expect(hasText('Reject #DF94B?')).toBe(true);
+    expect(hasText('Reject #000DF94B?')).toBe(true);
   });
 
   it('shows the response countdown and the customer note only when the order carries them', async () => {
@@ -452,17 +453,17 @@ describe('Home: kitchen, today and balance', () => {
   it('lists cooking and ready orders; Mark ready asks before it changes anything', async () => {
     await mount();
     expect(hasText('In the kitchen')).toBe(true);
-    expect(hasText('#A21C7 · Preparing')).toBe(true);
-    expect(hasText('#0E7CD · Ready')).toBe(true);
+    expect(hasText('#000A21C7 · Preparing')).toBe(true);
+    expect(hasText('#0000E7CD · Ready')).toBe(true);
     expect(hasText('Waiting for pickup')).toBe(true);
 
-    await press('Mark #A21C7 ready');
+    await press('Mark #000A21C7 ready');
     expect(mockMarkReady).not.toHaveBeenCalled();
-    expect(hasText('Is #A21C7 packed and ready?')).toBe(true);
+    expect(hasText('Is #000A21C7 packed and ready?')).toBe(true);
     await press('Not yet');
     expect(mockMarkReady).not.toHaveBeenCalled();
 
-    await press('Mark #A21C7 ready');
+    await press('Mark #000A21C7 ready');
     await press("Yes, it's ready");
     expect(mockMarkReady).toHaveBeenCalledTimes(1);
     expect(mockMarkReady).toHaveBeenCalledWith(COOK_ID);

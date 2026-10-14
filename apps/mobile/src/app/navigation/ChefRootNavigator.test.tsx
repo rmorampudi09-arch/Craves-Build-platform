@@ -161,15 +161,16 @@ describe('ChefRootNavigator', () => {
     expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
   });
 
-  it('opens a Profile sub-screen from Home with Profile home beneath it, so Back and the Profile tab work', () => {
+  it('opens a Profile sub-screen from Home as a full page with Profile home beneath it, so Back works', () => {
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefKitchenSchedule', initial: false}});
     expect(allText()).toContain('SCREEN:ChefKitchenScheduleScreen');
+    // A sub-page is a full page: no menu bar under its buttons.
+    expect(tab('Home')).toBeUndefined();
     act(() => navigationRef.goBack());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');
+    expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
     act(() => tab('Home').props.onPress());
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews', initial: false}});
-    act(() => tab('Home').props.onPress());
-    act(() => tab('Profile').props.onPress());
     expect(allText()).toContain('SCREEN:ChefReviewsScreen');
     act(() => navigationRef.goBack());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');

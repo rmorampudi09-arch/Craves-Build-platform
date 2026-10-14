@@ -65,7 +65,7 @@ function ComingSoonField({label}: {label: string}) {
   return (
     <View style={styles.soon}>
       <GroupLabel label={label} />
-      <StatusChip label="Coming soon" tone="info" />
+      <StatusChip label="Coming soon" tone="soon" />
     </View>
   );
 }

@@ -164,7 +164,7 @@ export function ChefBusinessInformationScreen() {
                     {rows.map(row => (
                       <ListRow
                         icon={row.icon}
-                        iconTone="blue"
+                        iconTone="red"
                         key={row.title}
                         onPress={row.previewId ? () => {
                           openDocument(row.previewId as string).catch(() => undefined);
@@ -177,7 +177,9 @@ export function ChefBusinessInformationScreen() {
                   </ListGroup>
                 ) : null}
                 <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.note}>
-                  Tap a document to view it. To change an approved document, contact support. Craves checks it again before the change goes live.
+                  {rows.length > 0
+                    ? 'Tap a document to view it. To change an approved document, contact support. Craves checks it again before the change goes live.'
+                    : 'Your documents were checked when you joined Craves. Upload one here to keep a copy in the app.'}
                 </Text>
                 <ChefActionButton icon="upload" label="Upload another document" onPress={() => setSheet(true)} tone="neutral" />
                 <ChefActionButton

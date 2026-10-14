@@ -38,7 +38,7 @@ export function PhotoTile({label, icon, url, busy = false, onPress}: PhotoTilePr
       <Text allowFontScaling={textDefaults.allowFontScaling} numberOfLines={1} style={[styles.tileLabel, url ? styles.tileLabelOnPhoto : null]}>
         {label}
       </Text>
-      {url === undefined ? <StatusChip label="Coming soon" tone="info" /> : null}
+      {url === undefined ? <StatusChip label="Coming soon" tone="soon" /> : null}
       {busy ? (
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.saving}>
           Saving…

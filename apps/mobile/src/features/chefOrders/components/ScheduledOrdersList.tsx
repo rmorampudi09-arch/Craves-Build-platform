@@ -190,7 +190,7 @@ export function ScheduledOrdersList({queue, orders, onOpenOrder, onSeeNew}: Sche
                 <ListRow
                   accessibilityLabel={`Scheduled order ${shortOrderNumber(item.orderId)}, ${when}, confirmed`}
                   icon="calendar-check"
-                  iconTone="blue"
+                  iconTone="red"
                   key={`${item.scheduleRequestId}:${item.orderId}`}
                   onPress={() => onOpenOrder(item.orderId)}
                   right={<StatusChip label="Confirmed" tone="info" />}

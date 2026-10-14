@@ -3,7 +3,7 @@ import {StyleProp, StyleSheet, ViewStyle} from 'react-native';
 import {colors} from '../../../../design/tokens';
 import {Badge, type BadgeProps} from '../../../../shared/components/Badge';
 
-export type StatusChipTone = 'new' | 'cooking' | 'ready' | 'done' | 'info' | 'draft' | 'cancelled';
+export type StatusChipTone = 'new' | 'cooking' | 'ready' | 'done' | 'info' | 'draft' | 'cancelled' | 'soon';
 
 // Chips on a white screen keep a soft tint; done/draft are outlined white, never grey.
 const styles = StyleSheet.create({
@@ -16,6 +16,7 @@ const TONES: Record<StatusChipTone, {tone: NonNullable<BadgeProps['tone']>; styl
   cooking: {tone: 'warning'},
   ready: {tone: 'success'},
   info: {tone: 'info'},
+  soon: {tone: 'neutral'},
   cancelled: {tone: 'error'},
   done: {tone: 'neutral', style: styles.done},
   draft: {tone: 'neutral', style: styles.draft},

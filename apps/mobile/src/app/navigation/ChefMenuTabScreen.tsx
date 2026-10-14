@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text} from 'react-native';
 import {
   useNavigation,
   useRoute,
@@ -9,7 +9,6 @@ import {
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {
-  borderWidth,
   colors,
   fontWeight,
   iconSize,
@@ -21,6 +20,7 @@ import {
 import {ChefMenuScreen} from '../../features/chefMenu/screens/ChefMenuScreen';
 import {useChefMenuModel} from '../../features/chefMenu/state/useChefMenuModel';
 import {ChefScreen, ChefTopBar} from '../../features/chefShell/components/ui';
+import {UnderlineTabs} from '../../shared/components/UnderlineTabs';
 import {useChefMealPlansQuery} from '../../features/chefSubscription/query/chefMealPlanQueries';
 import {ChefMealPlansScreen} from '../../features/chefSubscription/screens/ChefMealPlansScreen';
 import {Icon} from '../../shared/components/Icon';
@@ -81,28 +81,12 @@ export function ChefMenuTabScreen() {
             showBell={false}
             title="Menu"
           />
-          <View accessibilityRole="tablist" style={styles.toggle}>
-            {options.map(option => {
-              const on = option.value === segment;
-              return (
-                <Pressable
-                  accessibilityLabel={option.label}
-                  accessibilityRole="tab"
-                  accessibilityState={{selected: on}}
-                  hitSlop={{top: 4, bottom: 4}}
-                  key={option.value}
-                  onPress={() => setSegment(option.value)}
-                  style={[styles.segment, on && styles.segmentOn]}>
-                  <Text
-                    allowFontScaling={textDefaults.allowFontScaling}
-                    numberOfLines={1}
-                    style={[styles.segmentText, on && styles.segmentTextOn]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <UnderlineTabs
+            fill
+            onSelect={setSegment}
+            selected={segment}
+            tabs={options.map(option => ({key: option.value, label: option.label}))}
+          />
         </>
       }
       scroll={false}
@@ -124,18 +108,4 @@ const styles = StyleSheet.create({
   },
   addText: {color: colors.white, fontSize: typography.body, fontWeight: fontWeight.bold},
   pressed: {opacity: 0.85},
-  // The track is a control, not a page: a soft tile colour, with the chosen side lifted in white.
-  toggle: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    padding: spacing.xxs,
-    borderRadius: radius.md - 2,
-    backgroundColor: colors.iconSurface,
-  },
-  segment: {flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xs, borderRadius: radius.sm - 1},
-  segmentOn: {backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.border},
-  segmentText: {color: colors.textSecondary, fontSize: typography.body, fontWeight: fontWeight.bold},
-  segmentTextOn: {color: colors.textPrimary},
 });

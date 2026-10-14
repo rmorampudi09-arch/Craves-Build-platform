@@ -181,7 +181,7 @@ export type ChefProfileStackParamList = {
   ChefScheduledOrders: undefined;
   ChefReviews: undefined;
   ChefSecurity: undefined;
-  ChefBankAccount: {from?: 'earnings'} | undefined;
+  ChefBankAccount: {from?: 'earnings' | 'home'} | undefined;
   ChefEditProfile: undefined;
 };
 

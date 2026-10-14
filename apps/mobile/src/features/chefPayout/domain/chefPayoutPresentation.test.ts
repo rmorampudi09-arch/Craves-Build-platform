@@ -24,7 +24,7 @@ const bank = (state: ChefBankState): ChefBankStatus => ({state}) as ChefBankStat
 
 describe('payoutStatusView', () => {
   it.each([
-    ['RESERVED', 'Asked'],
+    ['RESERVED', 'Requested'],
     ['SUBMITTING', 'Sending'],
     ['PROCESSING', 'With the bank'],
     ['PAID', 'Paid'],

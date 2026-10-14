@@ -4,7 +4,7 @@ import {useNavigation, type NavigationProp, type ParamListBase} from '@react-nav
 import {colors, fontWeight, spacing, textDefaults, typography} from '../../../design/tokens';
 import type {IconName} from '../../../shared/components/Icon';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
-import {SegmentedControl} from '../../../shared/components/SegmentedControl';
+import {UnderlineTabs} from '../../../shared/components/UnderlineTabs';
 import {
   ChefActionButton,
   ChefCard,
@@ -111,20 +111,24 @@ export function ChefPayoutHistoryScreen() {
   return (
     <>
       <ChefScreen
-        header={<ChefTopBar onBack={goBack} showBell={false} title="Payout history" />}
+        header={
+          <>
+            <ChefTopBar onBack={goBack} showBell={false} title="Payout history" />
+            <UnderlineTabs
+              accessibilityLabel="Show"
+              fill
+              onSelect={setTab}
+              selected={tab}
+              tabs={[
+                {key: 'payouts', label: 'Payouts'},
+                {key: 'earnings', label: 'Order earnings'},
+              ]}
+            />
+          </>
+        }
         onRefresh={retry}
         refreshing={data.isRefreshing}
         withTabBar>
-        <SegmentedControl
-          accessibilityLabel="Show"
-          onChange={setTab}
-          options={[
-            {value: 'payouts', label: 'Payouts'},
-            {value: 'earnings', label: 'Order earnings'},
-          ]}
-          value={tab}
-        />
-
         {tab === 'payouts' ? (
           data.balanceStatus === 'pending' ? (
             <LoadingIndicator label="Loading your payouts" />
@@ -146,14 +150,14 @@ export function ChefPayoutHistoryScreen() {
                   {group.items.map(payout => {
                     const view = payoutStatusView(payout.status);
                     const amount = formatRupees(Number(payout.amount), {paise: true});
-                    const subtitle = [`Asked ${asked(payout.createdAt)}`, payout.transferReference ? `Bank ref ${payout.transferReference}` : null]
+                    const subtitle = [`Requested ${asked(payout.createdAt)}`, payout.transferReference ? `Bank ref ${payout.transferReference}` : null]
                       .filter(Boolean)
                       .join('\n');
-                    const look = STATUS_ICONS[view.label] ?? {icon: 'wallet' as IconName, tone: 'blue' as const};
+                    const look = STATUS_ICONS[view.label] ?? {icon: 'wallet' as IconName, tone: 'red' as const};
                     return (
                       <ListRow
                         key={payout.id}
-                        accessibilityLabel={`${amount}, ${view.label}, Asked ${asked(payout.createdAt)}`}
+                        accessibilityLabel={`${amount}, ${view.label}, Requested ${asked(payout.createdAt)}`}
                         icon={look.icon}
                         iconTone={look.tone}
                         onPress={() => setOpened(payout)}
@@ -212,7 +216,7 @@ export function ChefPayoutHistoryScreen() {
             <ChefCard style={styles.card}>
               <DetailRow label="Amount" value={formatRupees(Number(opened.amount), {paise: true})} />
               <DetailRow label="Status" value={<StatusChip label={openedView.label} tone={openedView.tone} />} />
-              <DetailRow label="Asked" value={asked(opened.createdAt)} />
+              <DetailRow label="Requested" value={asked(opened.createdAt)} />
               {opened.transferReference ? <DetailRow label="Bank reference" value={opened.transferReference} /> : null}
             </ChefCard>
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>

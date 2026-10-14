@@ -181,7 +181,7 @@ describe('ChefSupportTicketScreen', () => {
     expect(mockCases.create).toHaveBeenCalledWith({
       contextRole: 'CHEF',
       orderId: ORDER_ID,
-      subject: 'Problem with an order · #79F4F',
+      subject: 'Problem with an order · #44444444',
       message: 'The customer says it was cold.',
     });
   });

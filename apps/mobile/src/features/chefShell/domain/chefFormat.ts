@@ -1,9 +1,9 @@
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/** `#` + last 5 characters of the id without dashes, uppercase. The one order number every chef screen shows. */
+/** `#` + first 8 characters of the id without dashes, uppercase: the same number the customer and support see. */
 export function shortOrderNumber(id: string): string {
-  return `#${id.replace(/-/g, '').slice(-5).toUpperCase()}`;
+  return `#${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
 
 /** en-IN grouping (12,34,567) done by hand: Hermes does not always ship the en-IN locale. */

@@ -3,7 +3,8 @@ import type {StatusChipTone} from '../../chefShell/components/ui';
 import {formatRelativeTime, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 
 /** `#01042`: the last 5 characters of the long case number, in the same short style as order numbers. */
-export const ticketNumber = (supportCase: SupportCaseSummary) => shortOrderNumber(supportCase.caseNumber);
+// Case numbers are "CRV-000…0987": the end is what tells them apart, unlike order ids.
+export const ticketNumber = (supportCase: SupportCaseSummary) => `#${supportCase.caseNumber.replace(/-/g, '').slice(-5).toUpperCase()}`;
 
 const STATUS: Record<SupportCaseStatus, {label: string; tone: StatusChipTone}> = {
   OPEN: {label: 'Open', tone: 'info'},

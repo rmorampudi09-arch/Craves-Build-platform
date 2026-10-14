@@ -1,4 +1,4 @@
-import {colors} from '../../design/tokens';
+import {bottomMenu, colors} from '../../design/tokens';
 import {
   CHEF_ORDER_ROUTES,
   CHEF_TAB_ACTIVE_COLOR,
@@ -33,7 +33,7 @@ describe('chefTabs', () => {
 
   it('uses a red active tab and dark label ink on the light tab bar', () => {
     expect(CHEF_TAB_ACTIVE_COLOR).toBe(colors.flameRedAccessible);
-    expect(CHEF_TAB_INACTIVE_COLOR).toBe(colors.textPrimary);
+    expect(CHEF_TAB_INACTIVE_COLOR).toBe(bottomMenu.inactiveColor);
   });
 
   it('preserves each Chef tab instead of popping it on blur', () => {

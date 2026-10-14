@@ -32,7 +32,7 @@ import {
 export const PREFERENCE_SAVE_FAILED = "We couldn't save that. Please try again.";
 const COOKING_TIMES = [10, 15, 20, 25, 30, 40, 45, 60];
 
-const comingSoonChip = <StatusChip label="Coming soon" tone="info" />;
+const comingSoonChip = <StatusChip label="Coming soon" tone="soon" />;
 
 export function ChefAppPreferencesScreen() {
   const navigation = useNavigation();

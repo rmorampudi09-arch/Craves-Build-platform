@@ -24,7 +24,7 @@ export function ComingSoon({title, message}: {title: string; message: string}) {
             {message}
           </Text>
           <View style={styles.chip}>
-            <StatusChip label="Coming soon" tone="info" />
+            <StatusChip label="Coming soon" tone="soon" />
           </View>
         </View>
       </View>

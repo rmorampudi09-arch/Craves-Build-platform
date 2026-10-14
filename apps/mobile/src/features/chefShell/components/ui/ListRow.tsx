@@ -31,11 +31,11 @@ export interface ListRowProps {
 }
 
 const TONES: Record<ListRowIconTone, {background: string; foreground: string}> = {
-  neutral: {background: colors.iconSurface, foreground: colors.textPrimary},
+  neutral: {background: colors.iconSurface, foreground: colors.flameRedAccessible},
   red: {background: colors.errorSoft, foreground: colors.flameRedAccessible},
   green: {background: colors.successSoft, foreground: colors.successText},
   amber: {background: colors.warningSoft, foreground: colors.warningText},
-  blue: {background: colors.infoSoft, foreground: colors.infoText},
+  blue: {background: colors.errorSoft, foreground: colors.flameRedAccessible},
 };
 
 export function ListRow({

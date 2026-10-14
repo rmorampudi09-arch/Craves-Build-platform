@@ -71,7 +71,7 @@ describe('Chef UI kit', () => {
   it('OrderCard shows the short number, quantity, note, money and truncates a long dish name', () => {
     mount(<OrderCard order={order} actions={<Text>ACTIONS</Text>} />);
     const text = allText();
-    expect(text).toContain('#DF94B');
+    expect(text).toContain('#11111111');
     expect(text).toContain('2×');
     expect(text).toContain('1×');
     expect(text.some(t => t.includes('Less spicy please'))).toBe(true);
@@ -100,7 +100,7 @@ describe('Chef UI kit', () => {
   it('OrderCard keeps the action buttons outside the tappable summary', () => {
     const onPress = jest.fn();
     mount(<OrderCard order={order} onPress={onPress} actions={<Text accessibilityLabel="Accept">Accept</Text>} />);
-    const summary = roleButtons().find(n => String(n.props.accessibilityLabel).includes('#DF94B'));
+    const summary = roleButtons().find(n => String(n.props.accessibilityLabel).includes('#11111111'));
     expect(summary).toBeDefined();
     expect(summary!.findAll(n => n.props.accessibilityLabel === 'Accept')).toHaveLength(0);
     act(() => summary!.props.onPress());
@@ -212,11 +212,11 @@ describe('Chef UI kit', () => {
   it('ChefSheet closes from the Android back button and the scrim', () => {
     const onClose = jest.fn();
     mount(
-      <ChefSheet visible title="Reject #DF94B?" onClose={onClose}>
+      <ChefSheet visible title="Reject #11111111?" onClose={onClose}>
         <Text>reasons</Text>
       </ChefSheet>,
     );
-    expect(allText()).toEqual(expect.arrayContaining(['Reject #DF94B?', 'reasons']));
+    expect(allText()).toEqual(expect.arrayContaining(['Reject #11111111?', 'reasons']));
     act(() => tree.root.findByType(Modal).props.onRequestClose());
     act(() => pressables('Close')[0].props.onPress());
     expect(onClose).toHaveBeenCalledTimes(2);

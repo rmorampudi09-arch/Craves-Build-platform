@@ -301,6 +301,21 @@ export function MyMealPlanScreen({navigation, route}: Props) {
       .chooseDayCredit(creditId, choice)
       .catch(error => Alert.alert('Choice not saved', toAppApiError(error).message));
   };
+  // A choice can't be changed later, so the card's buttons ask first (the prompt after Resume is already a question).
+  const confirmChoice = (credit: DayCredit, choice: DayCreditChoice) => {
+    const card = dayCreditCard(credit, today);
+    const label = choice === 'REFUND' ? card.refundLabel : card.extendLabel;
+    Alert.alert(
+      `${label}?`,
+      choice === 'REFUND'
+        ? "The refund goes back to the UPI or card you paid with. You can't change this later."
+        : "Your plan runs longer by these days. You can't change this later.",
+      [
+        {text: 'Not now', style: 'cancel'},
+        {text: label, onPress: () => choose(credit.id, choice)},
+      ],
+    );
+  };
   const offerChoice = (credit: DayCredit) => {
     const card = dayCreditCard(credit, today);
     Alert.alert(card.title, card.note ?? '', [
@@ -443,7 +458,7 @@ export function MyMealPlanScreen({navigation, route}: Props) {
             credit={credit}
             today={today}
             busy={actions.pending}
-            onChoose={choice => choose(credit.id, choice)}
+            onChoose={choice => confirmChoice(credit, choice)}
           />
         ))}
 

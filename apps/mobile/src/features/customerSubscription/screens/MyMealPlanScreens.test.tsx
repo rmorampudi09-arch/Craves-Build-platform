@@ -355,7 +355,11 @@ describe('MyMealPlanScreen refund-or-extend choices', () => {
   it('refundButtonCallsChoose', async () => {
     given({sub: subscription({dayCredits: [decline()]})});
     const root = renderPlan();
-    await act(async () => byLabel(root, 'Get a refund').props.onPress());
+    act(() => byLabel(root, 'Get a refund').props.onPress());
+    // A choice can't be changed later, so it is confirmed first.
+    expect(actions.chooseDayCredit).not.toHaveBeenCalled();
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Get a refund?');
+    await pressAlert('Get a refund');
     expect(actions.chooseDayCredit).toHaveBeenCalledWith(declineId, 'REFUND');
   });
 
@@ -365,7 +369,9 @@ describe('MyMealPlanScreen refund-or-extend choices', () => {
       new AppApiError('DAY_CREDIT_ALREADY_SETTLED', 'This day has already been settled.'),
     );
     const root = renderPlan();
-    await act(async () => byLabel(root, 'Add 1 day at the end').props.onPress());
+    act(() => byLabel(root, 'Add 1 day at the end').props.onPress());
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Add 1 day at the end?');
+    await pressAlert('Add 1 day at the end');
     expect(actions.chooseDayCredit).toHaveBeenCalledWith(declineId, 'EXTEND');
     expect(Alert.alert).toHaveBeenLastCalledWith('Choice not saved', 'This day has already been settled.');
   });

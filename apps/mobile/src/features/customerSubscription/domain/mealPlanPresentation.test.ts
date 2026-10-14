@@ -14,6 +14,7 @@ import {
   nextOccurrence,
   occurrenceDishNames,
   occurrenceStatusPresentation,
+  occurrenceTimeLabel,
   orderTrackerStep,
   pauseInfo,
   pendingDayCredits,
@@ -484,7 +485,7 @@ describe('dayCreditCard', () => {
       title: "Your chef couldn't make Lunch on Wed, 14 Oct",
       refundLabel: 'Get a refund',
       extendLabel: 'Add 1 day at the end',
-      note: "If you don't choose by Fri, 16 Oct, we'll add it at the end.",
+      note: `If you don't choose by ${occurrenceTimeLabel('2026-10-16T06:00:00Z')} on Fri, 16 Oct, we'll add it at the end.`,
       settledLine: null,
       pending: true,
       extendAvailable: true,
@@ -503,7 +504,7 @@ describe('dayCreditCard', () => {
 
   it('says a refund is requested at the deadline when the plan has ended', () => {
     expect(dayCreditCard({...decline, extendAvailable: false}, '2026-10-14').note).toBe(
-      "If you don't choose by Fri, 16 Oct, we'll request a refund.",
+      `If you don't choose by ${occurrenceTimeLabel('2026-10-16T06:00:00Z')} on Fri, 16 Oct, we'll request a refund.`,
     );
   });
 

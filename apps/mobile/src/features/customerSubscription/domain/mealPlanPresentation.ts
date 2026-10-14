@@ -383,8 +383,11 @@ export function dayCreditCard(credit: DayCredit, today: string): DayCreditCard {
     refundLabel:
       credit.refundAmount === null ? 'Get a refund' : `Refund ${formatPlanPrice(credit.refundAmount, credit.currency ?? 'INR')}`,
     extendLabel: `Add ${dayCount(days)} at the end`,
-    // Once the deadline day has passed the server settles it on its next sweep, so no date is promised.
-    note: pending && deadline >= today ? `If you don't choose by ${formatMealPlanDate(deadline, 'short')}, ${fallback}.` : null,
+    // The server settles it at the exact deadline, so the time is shown; once that day has passed, nothing is promised.
+    note:
+      pending && deadline >= today
+        ? `If you don't choose by ${occurrenceTimeLabel(credit.choiceDeadline)} on ${formatMealPlanDate(deadline, 'short')}, ${fallback}.`
+        : null,
     settledLine,
     pending,
     extendAvailable: credit.extendAvailable,

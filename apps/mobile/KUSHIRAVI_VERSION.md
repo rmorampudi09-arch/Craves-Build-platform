@@ -19,6 +19,16 @@ This branch contains the local KUSHIRAVI Android app build line. Version 1 remai
 
 ## Version Checkpoints
 
+### Version 1.34.4 - Meal plans: choose a refund or an extra day, 2026-10-15
+
+- My Meal Plan shows a card for each chef-declined day ("Your chef couldn't make Lunch on Wed, 14 Oct") and for paused
+  days ("You paused 3 days"), with "Get a refund" (or "Refund ₹X" once finance prices it) and "Add N day(s) at the end".
+  Small print: "If you don't choose by <date>, we'll add it at the end." Once chosen the card shows the outcome.
+- Right after Resume, a new pause choice opens as a prompt with Later / Get a refund / Add N days at the end.
+- Needs subscription-service feat/meal-plan-refund-choice (V20). The server ships the refunds switch off, so it sends
+  `dayCredits: []` (older servers send nothing) and the app looks exactly as before until finance turns refunds on.
+- versionCode 84 on top of 1.34.3 (83, kitchen photos), as decided on 14 Oct.
+
 ### Version 1.34.3 - Kitchen photos, on top of 1.34.2, 2026-10-14
 
 - Customers: the kitchen page header plays the chef's kitchen photos as a slideshow (it stays empty when there are

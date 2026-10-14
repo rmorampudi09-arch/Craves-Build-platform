@@ -160,7 +160,7 @@ Every reel follows the rules in [project-instructions.md](project-instructions.m
 
 ### Reel 1: "Kitchens first. Customers soon."
 
-**Idea (one):** Craves is launching soon for customers, and home chefs are joining first. Set up your kitchen before customers open and be one of the first home chefs in your area. One supporting line only: your menu, your prices. "Orders ring on your phone", "Craves arranges pickup" and "earnings settled daily or weekly, your choice" (S18) and "Craves sends you packaging materials, free" (S21) each get their own reel in week 2.
+**Idea (one):** Craves is launching soon for customers, and home chefs are joining first. Set up your kitchen before customers open and be one of the first home chefs in your area. One supporting line only: your menu, your prices. "Orders ring on your phone", "Craves arranges pickup" and "earnings settled daily or weekly, your choice" (S18) and "once approved, Craves sends you packaging materials, free" (S21) each get their own reel in week 2.
 
 **Why it should work:** It borrows the question hook of our best post (11 Oct carousel) but makes it more specific (one dish, people waiting for it). Hook type: `question`. The honest launch line sits right next to the brand line, so nobody who leaves early thinks orders are coming now (ASCI 1.4). It also gives a true reason to act now.
 
@@ -480,7 +480,7 @@ Public replies never contain the word "chef" (not even inside a link), because o
 **"Do I have to deliver?" / "How does pickup work?"**
 - Tenglish: Food ready ayyaka, mee kitchen nunchi pickup Craves arrange chestundi.
 - English: When the food is ready, Craves arranges pickup from your kitchen.
-- If they ask about packaging: "Craves sends you packaging materials, free." (Tenglish: "Packaging materials Craves free ga pampistundi.") (S21)
+- If they ask about packaging: "Once you're approved, Craves sends you packaging materials, free." (Tenglish: "Approve ayyaka, packaging materials Craves free ga pampistundi.") (S21)
 - If they ask who pays for delivery: [CONFIRM WITH OWNER: approved answer on delivery costs for chefs]
 
 **"What does Craves charge?" / "What's the commission?"**
@@ -561,7 +561,7 @@ Times are IST. Posting times are tests: log them in `post_time_ist`.
 - [ ] Walk through https://craves.in/chef/application once on a phone with a team test number, for the Reel 1 and Reel 3 screen shots. Use placeholder details, never upload a real ID, and do not submit. Tell whoever counts applications about the test draft, so it is left out of the counts.
 - [ ] Name the people: [CONFIRM WITH OWNER: native Telugu reader], [CONFIRM WITH OWNER: Hindi/Dakhini reader], [CONFIRM WITH OWNER: who answers DMs in the first hour after each post], [CONFIRM WITH OWNER: who builds Reel 2 in Claude Code]. Get written consent from the kitchen owner and each voiceover speaker (section 3).
 - [ ] Agree which admin sends you the daily count of submitted Hyderabad applications (from `/admin/analytics` on admin.craves.in, chefs dataset, or the chef reviews list). Marketing does not get Admin Explorer access.
-- [ ] Ask the owner for the answers still open in this pack: can we say applying is free; delivery costs for chefs; what customers can see of a kitchen's location; review turnaround (only if we want to state one); a customer launch date (only if it may be shared); may we delete our old reply to the spam comment; submitted applications 12 to 18 Oct; the four people above; and where signed consent forms are kept. Already decided on 14 Oct: Craves sends packaging materials free; the application is live, the fee is not disclosed, earnings are settled daily or weekly or with one tap, Hyderabad only, the 11 to 13 Oct posts were boosted.
+- [ ] Ask the owner for the answers still open in this pack: can we say applying is free; delivery costs for chefs; what customers can see of a kitchen's location; review turnaround (only if we want to state one); a customer launch date (only if it may be shared); may we delete our old reply to the spam comment; submitted applications 12 to 18 Oct; the four people above; and where signed consent forms are kept. Already decided on 14 Oct: once approved, chefs get packaging materials free; the application is live, the fee is not disclosed, earnings are settled daily or weekly or with one tap, Hyderabad only, the 11 to 13 Oct posts were boosted.
 
 ### Mon 19 Oct: SCOUT + WRITE (30 min)
 

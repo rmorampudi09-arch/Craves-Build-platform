@@ -158,7 +158,7 @@ Things to know:
 | Is the chef application live? | Yes, on craves.in. So the documents list, the save-and-finish-later step, the CRV reference and the "Don't have FSSAI?" guide with "Request a call from Craves" are all SAFE (brand.md S8, S9, S15, S17, S20). |
 | What do we say about the fee? | Nothing. Never state the fee or a percentage (N16). Say instead how earnings are settled: daily or weekly, the chef's choice, or with one tap to their bank (S18). |
 | Bangalore? | Hyderabad only for now, Bangalore later (N17). |
-| Packaging? | Craves sends packaging materials to chefs, free (S21). |
+| Packaging? | Once a chef is approved, Craves sends packaging materials, free, no other conditions (S21). |
 | Were the 11 to 13 Oct posts boosted? | Yes. The organic baseline is the posts' own reach (71 and 48). |
 
 ## Open questions for the owner

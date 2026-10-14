@@ -75,7 +75,7 @@ Say these freely, with one condition: any line that mentions orders, customers o
 - Craves arranges pickup from your kitchen.
 - Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap.
 - No FSSAI yet? The application has a "Don't have FSSAI?" guide and a "Request a call from Craves" option.
-- Craves sends you packaging materials, free.
+- Once you're approved, Craves sends you packaging materials, free.
 - Customers open soon. Chefs are joining first. Be one of the first home chefs on Craves in your area and set up your kitchen before customers open.
 - Questions about the home-chef programme: contact@craves.in.
 
@@ -113,7 +113,7 @@ Say these freely, with one condition: any line that mentions orders, customers o
 | S18 | Your earnings are settled daily or weekly, your choice. Or send your balance to your bank with one tap. | SAFE | Owner decision, 14 Oct 2026. The chef finance page has a "Send Rs X to my bank" button, usable once a day (`chef-withdrawal-panel.tsx`), so never say "as many times as you like". The one-tap button exists today. The daily or weekly choice ships later with the RazorpayX payout work. This is about how money is paid, never how much (N1), and it counts as mentioning orders, so pair it with S11. Was C2. |
 | S19 | Bank details are not needed to submit the application. | SAFE | "You can add bank details later. They aren't needed to submit your application for review." (`chef-onboarding-sections.tsx`). Was C7. |
 | S20 | You need a phone number and an email you can open: the form sends a code to each. | SAFE | Basic details verify the email with a code (`docs/modules/chef-onboarding-v2/README.md`, `chef-onboarding-flow.ts`). Was C8. |
-| S21 | Craves sends you packaging materials, free. | SAFE | Owner decision, 14 Oct 2026. Never add a quantity, brand or delivery time. If the owner later attaches a condition (for example, only after approval), say it in the same line (ASCI 1.4). |
+| S21 | Once you're approved as a Craves home chef, Craves sends you packaging materials, free. | SAFE | Owner decision, 14 Oct 2026: free, no conditions beyond approval. Never add a quantity, brand or delivery time. |
 
 ### CHECK FIRST
 

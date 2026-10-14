@@ -6,7 +6,8 @@ This release builds on release 1 (#505, V19, `docs/runbooks/2026-10-14-meal-plan
 
 ## What changes
 
-- **V20** (`SET LOCAL lock_timeout = '5s'`) adds the table `subscription_schema.subscription_day_credit` (one row per choice) and a partial index on pending deadlines. It is additive, so the previous image runs fine on it.
+- **V20** (`SET LOCAL lock_timeout = '5s'`) adds the table `subscription_schema.subscription_day_credit` (one row per choice), a partial index on pending deadlines, and `customer_subscription.pause_credited_until`. It is additive, so the previous image runs fine on it.
+- **Fix, switch on or off:** a customer who pauses again before the plan's restart date (after resuming) no longer has the days before that restart credited twice. Each resume records `pause_credited_until`; the next resume counts paused days only from there.
 - **Switch** `CRAVES_SUBSCRIPTION_REFUND_CHOICE_ENABLED`, default **false**. While it is off:
   - a chef-declined day and the paid days of a pause are added at the end exactly as before (same code path);
   - no choice row is written;
@@ -37,12 +38,16 @@ This release builds on release 1 (#505, V19, `docs/runbooks/2026-10-14-meal-plan
 
 ## Turning refunds on (the finance release)
 
-Only once finance can price and pay refunds:
+Only once finance can price and pay refunds, and only after these are true:
+
+- **App 1.34.4 or later is on customers' phones.** Older apps never show a choice, so every choice would quietly settle as days at the end after 48 hours.
+- **Decide when paid paused days are given back** (found in the final review, not built): with the switch on, a resume no longer lays the paused paid days out at once. `next_billing_date` stays at the resume date, so when the paid bill ran out during the pause, the next bill is raised right away and the paid days (if the customer picks days, or the deadline does) come after that bill. Days and money still add up, but the customer pays again before eating their paid days. Either lay the paused days out at resume as today and make Refund remove the part not yet started, or say in the app that meals restart with the next bill.
+- **Decide what cancelling a paused plan gives back** (old behaviour, unchanged here): cancelling while paused credits nothing for the paused paid days. Once refunds exist, customers will expect one.
 
 1. **APIM:** `CONFIRM_APIM_WRITE=true APIM=apim-craves-prodlow-kmqgfy bash scripts/apim/configure-subscription-backoffice-apim.sh`, then `APIM=apim-craves-prodlow-kmqgfy bash scripts/apim/status-subscription-backoffice-apim.sh`. The script's default APIM name (`l3ing6`) does not exist; always pass `kmqgfy`.
 2. **Order-service text:** the customer notification in `ChefAcceptanceResolutionService` ("Your chef couldn't make this meal, so we've added a day to the end of your meal plan.") must become "Your chef couldn't make this meal. Open your meal plan to choose a refund or an extra day at the end." and open My Meal Plan. Deploy order-service with it.
 3. **Switch:** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-subscription-service-p --set-env-vars CRAVES_SUBSCRIPTION_REFUND_CHOICE_ENABLED=true`
-4. **Daily finance query** (read-only, `craves_business_db`): refund requests to price and pay.
+4. **Daily finance query** (read-only, `craves_business_db`): refund requests to price and pay. Keep running it even if the switch is later turned off: the deadline sweep still saves refund requests for plans that have ended.
 
 ```sql
 SELECT c.id, c.subscription_id, c.kind, c.first_date, c.last_date, c.days, c.chosen_by, c.chosen_at

@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS subscription_schema.subscription_day_credit (
     CONSTRAINT uq_day_credit_subscription_kind_first_date UNIQUE (subscription_id, kind, first_date)
 );
 
+-- Paused days are credited up to (not including) this date: a pause started before an earlier restart date never
+-- has those days credited, or offered as a refund, a second time.
+ALTER TABLE subscription_schema.customer_subscription ADD COLUMN IF NOT EXISTS pause_credited_until DATE;
+
 CREATE INDEX IF NOT EXISTS ix_day_credit_pending_deadline
     ON subscription_schema.subscription_day_credit (choice_deadline)
     WHERE status = 'PENDING_CHOICE';

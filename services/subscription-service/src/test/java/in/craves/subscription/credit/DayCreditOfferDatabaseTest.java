@@ -137,6 +137,31 @@ class DayCreditOfferDatabaseTest {
         assertEquals(List.of(),choices());
     }
 
+    // Paused on 10-06, resumed for 10-08, then paused again on 10-06 (before the restart) and resumed for 10-10:
+    // 10-06 to 10-09 had no meals, 4 paid days in all, and 10-06/10-07 were already credited by the first resume.
+    void pauseResumePauseAgain(boolean enabled){
+        pausedOn("2026-10-06T04:00:00Z");
+        tx.executeWithoutResult(s->dayCredits(enabled).creditPausedDays(subscription,d("10-08")));
+        pausedOn("2026-10-06T08:00:00Z");
+        tx.executeWithoutResult(s->dayCredits(enabled).creditPausedDays(subscription,d("10-10")));
+    }
+
+    @Test void pausingAgainBeforeTheRestartOffersOnlyTheNewDays() {
+        pauseResumePauseAgain(true);
+
+        assertEquals(List.of(),endCredits(),"no days are added at the end while the choices are open");
+        assertEquals(List.of(List.of(d("10-08"),d("10-09"),2),List.of(d("10-06"),d("10-07"),2)),
+            choices().stream().map(c->List.<Object>of(c.firstDate(),c.lastDate(),c.days())).toList());
+    }
+
+    @Test void pausingAgainBeforeTheRestartIsNotCreditedTwice() {
+        pauseResumePauseAgain(false);
+
+        // 2 + 2 paid days, laid out once at the end.
+        assertEquals(List.of("PAUSE_CREDIT 2026-10-10..2026-10-14 0.00"),endCredits());
+        assertEquals(d("10-14"),nextBilling());
+    }
+
     // Customer choices and the 48-hour deadline.
     CurrentUser owner(){return new CurrentUser(customer,"firebase-customer","+919999999999",List.of("CUSTOMER"));}
     UUID pendingDecline(){decline(true,d("10-08"));return choices().get(0).id();}

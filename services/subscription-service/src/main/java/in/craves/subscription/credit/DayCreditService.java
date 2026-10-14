@@ -109,8 +109,8 @@ public class DayCreditService {
         if (days > 0 && repository.insertPending(
             subscriptionId, "PAUSE", deferred.pausedOn(), resumeOn.minusDays(1), null, days, deadline()
         ).isEmpty()) {
-            // A choice already exists for a pause from that day (paused again the same day): never drop paid days.
-            billingRepository.applyEndCredit(subscriptionId, "PAUSE_CREDIT", start -> days, "Pause credit");
+            // Paused days never overlap an earlier resume's (pause_credited_until), so this is the same days again.
+            LOGGER.warn("Pause choice already exists subscriptionId={} pausedOn={}", subscriptionId, deferred.pausedOn());
         }
     }
 

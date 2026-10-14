@@ -174,6 +174,13 @@ public class SubscriptionBillingRepository {
             LocalDate.class, subscriptionId, pauseDate, resumeOn
         );
         LocalDate pausedOn = lastMealSent == null ? pauseDate : lastMealSent.plusDays(1);
+        // Paused again before an earlier restart date: those days were already credited by that resume.
+        LocalDate creditedUntil = jdbcTemplate.queryForObject(
+            "SELECT pause_credited_until FROM subscription_schema.customer_subscription WHERE id = ?", LocalDate.class, subscriptionId
+        );
+        if (creditedUntil != null && creditedUntil.isAfter(pausedOn)) {
+            pausedOn = creditedUntil;
+        }
 
         List<InvoiceState> unpaid = jdbcTemplate.query(
             "SELECT id, status FROM subscription_schema.subscription_invoice WHERE subscription_id = ? AND status <> 'PAID' " +
@@ -291,8 +298,8 @@ public class SubscriptionBillingRepository {
             creditHistory(invoiceId, null, "Pause credit: " + credit.creditDays() + " paid days carried forward");
         }
         jdbcTemplate.update(
-            "UPDATE subscription_schema.customer_subscription SET next_billing_date = ?, updated_at = now() WHERE id = ?",
-            credit.nextBillingDate(), subscriptionId
+            "UPDATE subscription_schema.customer_subscription SET next_billing_date = ?, pause_credited_until = ?, updated_at = now() WHERE id = ?",
+            credit.nextBillingDate(), resumeOn, subscriptionId
         );
         return new Resumed(credit, pausedOn, pausedPaidDays);
     }

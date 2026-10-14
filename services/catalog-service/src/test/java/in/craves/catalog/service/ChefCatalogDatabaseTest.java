@@ -50,6 +50,7 @@ class ChefCatalogDatabaseTest {
         media=mock(MediaStorageService.class);
         when(media.uploadKitchenImage(any(),any(),any())).thenAnswer(i->{String blob="public/kitchens/"+i.getArgument(0)+"/"+i.getArgument(1).toString().toLowerCase()+"/"+UUID.randomUUID();return new StoredMedia("media",blob,"image/png",1,"https://media.example/"+blob);});
         when(media.uploadMenuImage(any(),any(),any())).thenAnswer(i->{String blob="public/dishes/"+UUID.randomUUID();return new StoredMedia("media",blob,"image/png",1,"https://media.example/"+blob);});
+        when(media.chefAvatarUrl(any())).thenAnswer(i->"https://media.example/public/chef-avatars/"+i.getArgument(0)+".jpg");
         finance=mock(CatalogFinanceEligibility.class);
         when(finance.current()).thenReturn(new CatalogFinanceEligibility.Snapshot(UUID.randomUUID(),Instant.now(),true,UUID.randomUUID(),1,UUID.randomUUID().toString().replace("-","").repeat(2),List.of(chef,otherChef)));
         catalog=new CatalogService(jdbc,media,new CatalogDiscoveryProperties(),finance);
@@ -74,7 +75,7 @@ class ChefCatalogDatabaseTest {
 
     @Test void oldShapePutKeepsStoredCuisinesAreasSocialLinksPhotosAndSettings() throws Exception {
         catalog.upsertMyKitchen(owner,request("Chef kitchen",List.of("North Indian","Hyderabadi"),List.of("Gachibowli","Madhapur"),new SocialLinks("https://instagram.com/chef",null,null,"https://chef.example")));
-        catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.CHEF,file);
+        catalog.setChefAvatar(owner,"chef-avatar-01");
         catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
         catalog.updateKitchenSettings(owner,new KitchenSettings(true,30));
         var before=catalog.getMyKitchen(owner);
@@ -155,7 +156,7 @@ class ChefCatalogDatabaseTest {
         assertNull(withKitchenPhoto.chefPhotoUrl());
         assertEquals(withKitchenPhoto.kitchenPhotoUrl(),catalog.getMyKitchen(owner).kitchenPhotoUrl());
 
-        var both=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.CHEF,file);
+        var both=catalog.setChefAvatar(owner,"chef-avatar-01");
         assertNotNull(both.chefPhotoUrl()); assertEquals(withKitchenPhoto.kitchenPhotoUrl(),both.kitchenPhotoUrl());
 
         var replaced=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
@@ -173,11 +174,45 @@ class ChefCatalogDatabaseTest {
     }
 
     @Test void photoRoutesAreChefOnlyAndNeedAKitchen() {
-        assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),KitchenPhotoKind.CHEF,file)).getCode());
+        assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),KitchenPhotoKind.KITCHEN,file)).getCode());
         assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.deleteKitchenPhoto(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),KitchenPhotoKind.CHEF)).getCode());
         var newcomer=new CravesPrincipal(UUID.randomUUID(),"",Set.of("CHEF"));
-        assertEquals("KITCHEN_PROFILE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(newcomer,KitchenPhotoKind.CHEF,file)).getCode());
+        assertEquals("KITCHEN_PROFILE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(newcomer,KitchenPhotoKind.KITCHEN,file)).getCode());
         verify(media,never()).uploadKitchenImage(any(),any(),any());
+    }
+
+    @Test void aChefPicksASharedFaceAndCanSwitchIt() {
+        assertEquals("https://media.example/public/chef-avatars/chef-avatar-04.jpg",catalog.setChefAvatar(owner,"chef-avatar-04").chefPhotoUrl());
+        assertEquals("https://media.example/public/chef-avatars/chef-avatar-17.jpg",catalog.setChefAvatar(owner,"chef-avatar-17").chefPhotoUrl());
+        verify(media).deleteByPublicUrl("https://media.example/public/chef-avatars/chef-avatar-04.jpg"); // MediaStorageService ignores shared faces
+        assertNull(catalog.getMyKitchen(stranger).chefPhotoUrl());
+    }
+
+    /** The nearby list needs PostGIS, so it only runs in the CI service container. */
+    @Test void bothCustomerKitchenListsCarryTheChefPicture() {
+        String face="https://media.example/public/chef-avatars/chef-avatar-04.jpg";
+        catalog.setChefAvatar(owner,"chef-avatar-04");
+        var nearbyFaces=new HashMap<UUID,String>(); var cityFaces=new HashMap<UUID,String>(); var distanceFaces=new HashMap<UUID,String>();
+        new NearbyDiscoveryService(jdbc,new CatalogDiscoveryProperties(),finance).discoverKitchens(latitude,longitude,1000,0,10).kitchens().forEach(k->nearbyFaces.put(k.id(),k.chefPhotoUrl()));
+        catalog.discoverKitchens(null,null,"Hyderabad",null,null).kitchens().forEach(k->cityFaces.put(k.id(),k.chefPhotoUrl()));
+        catalog.discoverKitchens(latitude,longitude,"Hyderabad",null,null).kitchens().forEach(k->distanceFaces.put(k.id(),k.chefPhotoUrl()));
+        for (var faces : List.of(nearbyFaces,cityFaces,distanceFaces)) {
+            assertEquals(face,faces.get(kitchen));
+            assertTrue(faces.containsKey(otherKitchen)); assertNull(faces.get(otherKitchen)); // a chef who has not picked a face has none
+        }
+    }
+
+    @Test void unknownFacesRoleAndKitchenAreChecked() {
+        assertEquals("CHEF_AVATAR_UNKNOWN",rejected(()->catalog.setChefAvatar(owner,"chef-avatar-19")).getCode());
+        assertEquals("CHEF_AVATAR_UNKNOWN",rejected(()->catalog.setChefAvatar(owner,"../kitchens/x")).getCode());
+        assertNull(catalog.getMyKitchen(owner).chefPhotoUrl());
+        assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.setChefAvatar(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),"chef-avatar-01")).getCode());
+        assertEquals("KITCHEN_PROFILE_REQUIRED",rejected(()->catalog.setChefAvatar(new CravesPrincipal(UUID.randomUUID(),"",Set.of("CHEF")),"chef-avatar-01")).getCode());
+    }
+
+    @Test void realChefPhotosAreRefused() {
+        assertEquals("CHEF_PHOTO_UPLOAD_DISABLED",rejected(()->catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.CHEF,file)).getCode());
+        verify(media,never()).uploadKitchenImage(any(),eq(KitchenPhotoKind.CHEF),any());
     }
 
     // ---- chef settings ----

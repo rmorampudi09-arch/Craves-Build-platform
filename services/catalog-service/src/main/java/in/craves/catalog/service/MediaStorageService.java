@@ -31,6 +31,8 @@ public class MediaStorageService {
     private static final Logger log = LoggerFactory.getLogger(MediaStorageService.class);
     // Redirects are not followed: only the exact Azure Blob URL stored for the photo is read.
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NEVER).build();
+    /** Drawn faces chefs pick instead of a real photo: one file per face, shared by every chef who picked it. */
+    public static final String CHEF_AVATAR_FOLDER = "public/chef-avatars/";
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
         "image/jpeg",
         "image/png",
@@ -69,11 +71,16 @@ public class MediaStorageService {
         return store(blobName, data, file.getContentType());
     }
 
+    public String chefAvatarUrl(String avatarId) {
+        return publicBaseUrl() + "/" + CHEF_AVATAR_FOLDER + avatarId + ".jpg";
+    }
+
     /** Best effort: removes the blob a public photo URL of this store points at; anything else is ignored. */
     public void deleteByPublicUrl(String url) {
         try {
             String prefix = publicBaseUrl() + "/";
-            if (url != null && url.startsWith(prefix)) deleteQuietly(url.substring(prefix.length()));
+            // Shared by every chef who picked that face, so switching faces must never delete the file.
+            if (url != null && url.startsWith(prefix) && !url.startsWith(prefix + CHEF_AVATAR_FOLDER)) deleteQuietly(url.substring(prefix.length()));
         } catch (RuntimeException ex) {
             log.warn("Photo blob could not be removed: {}", ex.getClass().getSimpleName());
         }

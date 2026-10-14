@@ -5,6 +5,7 @@ import in.craves.catalog.service.BulkMenuAvailabilityService;
 import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.DiscoveryCacheService;
 import in.craves.catalog.web.ApiDtos.AvailabilityRequest;
+import in.craves.catalog.web.ApiDtos.ChefAvatarRequest;
 import in.craves.catalog.web.ApiDtos.KitchenPhotoKind;
 import in.craves.catalog.web.ApiDtos.KitchenProfileRequest;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
@@ -73,12 +74,24 @@ public class KitchenController {
         return catalogService.uploadKitchenPhoto(principal, kind, file);
     }
 
+    @PutMapping("/chef-avatar")
+    public KitchenProfileResponse setChefAvatar(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody ChefAvatarRequest request
+    ) {
+        KitchenProfileResponse response = catalogService.setChefAvatar(principal, request.avatarId());
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
     @DeleteMapping("/photos/{kind}")
     public KitchenProfileResponse deletePhoto(
         @AuthenticationPrincipal CravesPrincipal principal,
         @PathVariable KitchenPhotoKind kind
     ) {
-        return catalogService.deleteKitchenPhoto(principal, kind);
+        KitchenProfileResponse response = catalogService.deleteKitchenPhoto(principal, kind);
+        if (kind == KitchenPhotoKind.CHEF) discoveryCacheService.invalidateAllDiscovery();
+        return response;
     }
 
     @GetMapping("/settings")

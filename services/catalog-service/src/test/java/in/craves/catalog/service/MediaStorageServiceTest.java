@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,5 +34,23 @@ class MediaStorageServiceTest {
         storage.deleteByPublicUrl("https://elsewhere.example/public/kitchens/k1/chef/abc-me.png");
         storage.deleteByPublicUrl(null);
         verify(storage, times(1)).deleteQuietly(anyString());
+    }
+
+    @Test void sharedChefAvatarsAreNeverDeleted() {
+        var properties = new CatalogStorageProperties();
+        properties.setPublicMediaBaseUrl("https://media.craves.example/");
+        var storage = spy(new MediaStorageService(properties));
+        doNothing().when(storage).deleteQuietly(anyString());
+
+        storage.deleteByPublicUrl("https://media.craves.example/public/chef-avatars/chef-avatar-04.jpg");
+        verify(storage, never()).deleteQuietly(anyString());
+    }
+
+    @Test void chefAvatarUrlUsesThePublicMediaBase() {
+        var properties = new CatalogStorageProperties();
+        properties.setPublicMediaBaseUrl("https://media.craves.example/");
+        var storage = new MediaStorageService(properties);
+
+        assertEquals("https://media.craves.example/public/chef-avatars/chef-avatar-04.jpg", storage.chefAvatarUrl("chef-avatar-04"));
     }
 }

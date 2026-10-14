@@ -130,6 +130,28 @@ class KitchenControllerChefApiTest {
     }
 
     @Test
+    void chefAvatarPutPassesTheIdAndClearsTheDiscoveryCache() throws Exception {
+        when(catalog.setChefAvatar(chef, "chef-avatar-04")).thenReturn(kitchen());
+        mvc.perform(put("/api/v1/kitchens/me/chef-avatar").accept(MediaType.APPLICATION_JSON).contentType(MediaType.APPLICATION_JSON).content("{\"avatarId\":\"chef-avatar-04\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.chefPhotoUrl").value("https://cdn.example/chef.jpg"));
+        verify(cache).invalidateAllDiscovery();
+    }
+
+    @Test
+    void chefAvatarPutRejectsABlankId() throws Exception {
+        mvc.perform(put("/api/v1/kitchens/me/chef-avatar").contentType(MediaType.APPLICATION_JSON).content("{\"avatarId\":\" \"}"))
+            .andExpect(status().isBadRequest());
+        verify(catalog, never()).setChefAvatar(any(), any());
+    }
+
+    @Test
+    void removingTheChefPhotoClearsTheDiscoveryCache() throws Exception {
+        when(catalog.deleteKitchenPhoto(chef, KitchenPhotoKind.CHEF)).thenReturn(kitchen());
+        mvc.perform(delete("/api/v1/kitchens/me/photos/CHEF")).andExpect(status().isOk());
+        verify(cache).invalidateAllDiscovery();
+    }
+
+    @Test
     void settingsReadAndWriteTheTwoFieldsAndKeepAnExplicitNull() throws Exception {
         when(catalog.getKitchenSettings(chef)).thenReturn(new KitchenSettings(false, null));
         mvc.perform(get("/api/v1/kitchens/me/settings").accept(MediaType.APPLICATION_JSON))

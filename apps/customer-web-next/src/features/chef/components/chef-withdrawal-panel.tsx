@@ -3,23 +3,12 @@ import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefAccountingBreakdown } from "@/features/chef/components/chef-accounting-breakdown";
 import { AlertTriangle, ChevronDown, Info, RefreshCw } from "lucide-react";
-import { ChefFlash, ChefNotice, ChefPill, ChefSection, dateTime, formatInr, type ChefTone } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefNotice, ChefPill, ChefSection, dateTime, formatInr } from "@/features/chef/components/chef-ui";
+import { payoutStatusView } from "@/features/chef/lib/chef-payout-presentation";
 import { ChefBalanceSkeleton } from "@/features/chef/components/chef-loading";
 
 import { useEffect, useRef, useState } from "react";
 import { chefBalanceSchema, payoutSchema, type ChefBalance } from "@/features/admin/finance/lib/finance-contract";
-
-const PAYOUT_STATE: Record<ChefBalance["recentPayouts"][number]["status"], { label: string; tone: ChefTone }> = {
-  RESERVED: { label: "Asked", tone: "active" },
-  SUBMITTING: { label: "Sending", tone: "active" },
-  PROCESSING: { label: "With the bank", tone: "warning" },
-  UNKNOWN: { label: "Checking with bank", tone: "warning" },
-  PAID: { label: "Paid", tone: "success" },
-  FAILED: { label: "Didn’t go through", tone: "danger" },
-  REVERSED: { label: "Returned by bank", tone: "danger" },
-  REVIEW_REQUIRED: { label: "Craves is checking", tone: "warning" },
-  CANCELLED: { label: "Cancelled", tone: "muted" },
-};
 
 export function ChefWithdrawalPanel() {
   const [balance, setBalance] = useState<ChefBalance | null>(null);const [busy, setBusy] = useState(false);
@@ -68,7 +57,7 @@ export function ChefWithdrawalPanel() {
 
     {balance ? <ChefSection title="Money sent to your bank" flush labelledBy="chef-payouts" note={lastPayout ? undefined : "Each time you ask, it shows here with what the bank did."}>
       {balance.recentPayouts.length === 0 ? null : <ul className="chef-list border-t border-[#E3E6EA]">{balance.recentPayouts.map(row => {
-        const state = PAYOUT_STATE[row.status];
+        const state = payoutStatusView(row.status);
         return <li key={row.id} className="chef-row">
           <span className="chef-row-main">
             <span className="chef-row-title block">{dateTime(row.createdAt)}</span>

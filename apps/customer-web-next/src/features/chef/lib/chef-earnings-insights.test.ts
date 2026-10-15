@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { ChefEarning } from "./chef-earnings-contract.ts";
 import type { ChefOrder, ChefOrderStatus } from "./chef-order-contract.ts";
@@ -262,6 +263,9 @@ test("a day's orders and how far back the orders reach", () => {
 test("payout history words and India-month groups", () => {
   assert.equal(payoutStatusView("PAID").label, "Paid");
   assert.equal(payoutStatusView("PENDING_APPROVAL").label, "Craves is checking");
+  assert.equal(payoutStatusView("RESERVED").label, "Requested");
+  // Balance & payouts shows the same words as Payout history.
+  assert.match(readFileSync(new URL("../components/chef-withdrawal-panel.tsx", import.meta.url), "utf8"), /const state = payoutStatusView\(row\.status\);/);
   const rows = [
     "2026-10-02T10:00:00Z",
     "2026-09-30T19:00:00Z",

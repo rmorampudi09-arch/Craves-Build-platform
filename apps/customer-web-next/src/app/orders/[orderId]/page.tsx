@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
-import { CustomerOrderStatus } from "@/features/orders/components/CustomerOrderStatus";
 import { isUuid } from "@/shared/lib/server-api";
+import { OrderDetailsPage } from "./order-details-page";
 
 export const metadata = {
-  title: "Order status | Craves",
+  title: "Order details | Craves",
   robots: { index: false, follow: false },
 };
 
@@ -14,5 +14,5 @@ export default async function OrderStatusPage({
 }) {
   const { orderId } = await params;
   if (!isUuid(orderId)) notFound();
-  return <CustomerOrderStatus orderId={orderId} />;
+  return <OrderDetailsPage orderId={orderId} />;
 }

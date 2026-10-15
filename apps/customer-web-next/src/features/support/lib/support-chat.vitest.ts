@@ -20,10 +20,12 @@ it("sends the conversation without the greeting, shows typing, the reply, Sent a
   type("My payout is missing");
   expect(screen.getByText(/Sending$/)).toBeTruthy();
   expect(screen.getByText("Craves Assistant is typing")).toBeTruthy();
-  answer(Response.json({ reply: "I've raised this with our team.", supportCase: { id: "c1", caseNumber: "SUP-1042" } }));
+  answer(Response.json({ reply: "I've raised this with our team.", supportCase: { id: "5c000000-0000-4000-8000-000000000001", caseNumber: "CRV-2026-01042" } }));
   expect(await screen.findByText("I've raised this with our team.")).toBeTruthy();
   expect(screen.getByText(/ Sent$/)).toBeTruthy();
-  expect(screen.getByRole("status").textContent).toContain("Ticket SUP-1042 created — our team will reply in your notifications");
+  // The same short number as the chef's ticket list, where the reply arrives.
+  expect(screen.getByRole("status").textContent).toContain("Ticket #01042 created — see it in Help & support");
+  expect(screen.getByRole("link", { name: "Help & support" }).getAttribute("href")).toBe("/chef/support/tickets/5c000000-0000-4000-8000-000000000001");
   const [url, init] = fetch.mock.calls[0];
   expect(url).toBe("/api/support/chat");
   expect(JSON.parse(init.body)).toEqual({

@@ -253,7 +253,7 @@ function buildTopKitchenCards(
 
     cards.push({
       kitchenId: kitchen.id,
-      kitchenName: kitchen.displayName?.trim() || kitchen.kitchenName,
+      kitchenName: kitchen.kitchenName.trim() || kitchen.displayName?.trim() || kitchen.kitchenName,
       biography:
         kitchen.description?.trim() ||
         'Home-cooked meals prepared with care.',
@@ -673,8 +673,6 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    borderWidth: 3,
-    borderColor: colors.white,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',

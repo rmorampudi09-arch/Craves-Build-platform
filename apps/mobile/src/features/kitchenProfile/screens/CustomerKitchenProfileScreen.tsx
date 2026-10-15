@@ -937,8 +937,6 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     marginTop: -AVATAR_SIZE / 2,
     borderRadius: radius.pill,
-    borderWidth: 4,
-    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

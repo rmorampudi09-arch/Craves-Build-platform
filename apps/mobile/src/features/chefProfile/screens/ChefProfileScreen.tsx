@@ -162,7 +162,7 @@ export function ChefProfileScreen() {
       </ChefCard>
 
       <SectionHeader title="Kitchen" />
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow icon="store" iconTone="red" onPress={open('ChefEditProfile')} subtitle="Name, about, address, photos" title="Kitchen details" />
         <ListRow
           icon="clock"
@@ -188,20 +188,20 @@ export function ChefProfileScreen() {
       </ListGroup>
 
       <SectionHeader title="Money" />
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow icon="bank" onPress={open('ChefBankAccount')} subtitle={bankLine} title="Bank account" />
         <ListRow icon="receipt" onPress={open('ChefPayoutHistory')} title="Payout history" />
       </ListGroup>
 
       <SectionHeader title="More" />
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow icon="gift" onPress={open('ChefReferral')} subtitle="Earn when chefs you invite start cooking" title="Refer a chef" />
         <ListRow icon="filter" onPress={open('ChefAppPreferences')} subtitle="Notifications, orders, language" title="Preferences" />
         <ListRow icon="headset" onPress={open('ChefSupport')} title="Help & support" />
         <ListRow icon="lock" onPress={open('ChefSecurity')} title="Login & security" />
       </ListGroup>
 
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow
           icon="renew"
           onPress={() => {

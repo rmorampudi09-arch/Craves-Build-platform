@@ -49,7 +49,6 @@ type ProfileNavigation = NativeStackNavigationProp<
 interface ProfileMenuRowProps {
   row: CustomerProfileMenuRowModel;
   disabled?: boolean;
-  last?: boolean;
   onPress: () => void;
 }
 
@@ -65,7 +64,7 @@ function ProfileSkeleton() {
   );
 }
 
-function ProfileMenuRow({row, disabled = false, last = false, onPress}: ProfileMenuRowProps) {
+function ProfileMenuRow({row, disabled = false, onPress}: ProfileMenuRowProps) {
   return (
     <Pressable
       accessibilityLabel={row.title}
@@ -76,7 +75,6 @@ function ProfileMenuRow({row, disabled = false, last = false, onPress}: ProfileM
       onPress={onPress}
       style={({pressed}) => [
         styles.menuRow,
-        !last && styles.menuRowDivider,
         pressed && !disabled && styles.menuRowPressed,
         disabled && styles.menuRowDisabled,
       ]}>
@@ -133,11 +131,10 @@ function ProfileReadyContent({
       </Pressable>
 
       <View style={styles.menuCard}>
-        {CUSTOMER_PROFILE_MENU_ROWS.map((row, index) => (
+        {CUSTOMER_PROFILE_MENU_ROWS.map(row => (
           <ProfileMenuRow
             key={row.id}
             row={row}
-            last={index === CUSTOMER_PROFILE_MENU_ROWS.length - 1}
             disabled={
               (loggingOut && row.id === 'logout') ||
               (switchingRole && row.id === 'switch-chef')
@@ -454,10 +451,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-  },
-  menuRowDivider: {
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
   },
   menuRowPressed: {backgroundColor: colors.surfaceMuted},
   menuRowDisabled: {opacity: 0.5},

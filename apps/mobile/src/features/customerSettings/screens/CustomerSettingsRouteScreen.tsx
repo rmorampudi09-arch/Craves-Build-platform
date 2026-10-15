@@ -82,14 +82,12 @@ export function CustomerSettingsRouteScreen() {
                 subtitle="Sign out of this device"
                 onPress={() => navigation.navigate('CustomerSettingsPrivacySecurity')}
               />
-              <View style={styles.divider} />
               <SettingsRow
                 icon="location"
                 title="Saved addresses"
                 subtitle="Home, Work and others"
                 onPress={() => navigation.navigate('CustomerAddresses')}
               />
-              <View style={styles.divider} />
               <SettingsRow
                 icon="bell"
                 title="Notifications"
@@ -105,19 +103,16 @@ export function CustomerSettingsRouteScreen() {
                 title="Help & support"
                 onPress={() => navigation.navigate('CustomerSettingsSupport')}
               />
-              <View style={styles.divider} />
               <SettingsRow
                 icon="document"
                 title="Terms & conditions"
                 onPress={() => navigation.navigate('CustomerSettingsLegal', {document: 'terms'})}
               />
-              <View style={styles.divider} />
               <SettingsRow
                 icon="shield"
                 title="Privacy policy"
                 onPress={() => navigation.navigate('CustomerSettingsLegal', {document: 'privacy'})}
               />
-              <View style={styles.divider} />
               <SettingsRow
                 icon="info"
                 title="About Craves"
@@ -230,11 +225,6 @@ const styles = StyleSheet.create({
   rowValue: {
     color: colors.textSecondary,
     fontSize: typography.small,
-  },
-  divider: {
-    height: borderWidth.standard,
-    marginLeft: 72,
-    backgroundColor: colors.border,
   },
   logoutButton: {
     minHeight: touchTarget.comfortable,

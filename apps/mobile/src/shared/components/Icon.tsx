@@ -107,7 +107,7 @@ const GLYPHS: Record<IconName, string> = {
   clock: 'clock',
   trash: 'trash-can',
   delivery: 'truck-delivery',
-  settings: 'cog-outline',
+  settings: 'cog',
   wallet: 'wallet-outline',
   crown: 'crown-outline',
   gift: 'gift-outline',

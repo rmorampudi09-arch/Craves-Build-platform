@@ -62,7 +62,7 @@ export function CustomerOrderCard({
           <Text numberOfLines={1} style={styles.kitchenName}>
             {order.kitchenName}
           </Text>
-          <Text numberOfLines={1} style={styles.meta}>
+          <Text numberOfLines={2} style={styles.meta}>
             {formatCustomerOrderCreatedAt(order.createdAt)} · #
             {getCustomerOrderDisplayReference(order.id)}
           </Text>

@@ -51,11 +51,6 @@ export function LiveOrderBubble({
         )
       }
       style={({pressed}) => [styles.bubbleRow, pressed && styles.pressed]}>
-      <View style={styles.chip}>
-        <Text numberOfLines={1} style={styles.chipText}>
-          {order.status}
-        </Text>
-      </View>
       <View style={styles.ring}>
         <View ref={circleRef} collapsable={false} style={styles.circle}>
           <MaterialDesignIcons color={colors.white} name="moped" size={28} />
@@ -311,19 +306,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  chip: {
-    height: 34,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    ...elevation.card,
-  },
-  chipText: {
-    color: colors.textPrimary,
-    fontSize: typography.tiny + 2,
-    fontWeight: fontWeight.bold,
   },
   ring: {
     padding: 3,

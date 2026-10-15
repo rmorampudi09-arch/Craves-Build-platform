@@ -31,7 +31,7 @@ export type Dish = {
   ingredients?: string[];
   serves?: string;
   originalPrice?: number;
-  spiceLevel?: "Mild" | "Medium" | "Hot";
+  spiceLevel?: "Mild" | "Medium" | "Spicy";
   reviewCount?: number;
   reviews?: { name: string; rating: number; daysAgo: number; text: string }[];
   kitchenId?: string;
@@ -44,7 +44,7 @@ export type Dish = {
 
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 const DISCOVERY_PAGE_SIZE = 50;
-const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v1";
+const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v2";
 
 type DishDiscoveryCursor = {
   latitude: number;
@@ -127,7 +127,7 @@ function hydrateDiscoverySnapshot(): void {
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
 ): Dish["spiceLevel"] {
-  if (value === "SPICY") return "Hot";
+  if (value === "SPICY") return "Spicy";
   if (value === "MEDIUM") return "Medium";
   if (value === "MILD") return "Mild";
   return undefined;
@@ -422,10 +422,6 @@ export async function loadDish(id: string): Promise<Dish> {
   }
   if (!isPublicDetail(body)) throw new Error("Craves returned an invalid dish response.");
   return remember(mapDetail(body));
-}
-
-export function getDiscoveryRadiusMeters(): number {
-  return discoveryRadiusMeters;
 }
 
 export function allDishes(): Dish[] {

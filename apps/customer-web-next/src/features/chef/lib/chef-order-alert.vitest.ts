@@ -22,8 +22,8 @@ function order(id: string, status: ChefOrder["status"], updatedAt = "2026-10-10T
     createdAt: "2026-10-10T08:01:00Z", updatedAt,
   };
 }
-const A = "0bde0000-0000-4000-8000-000000000101";
-const B = "0bde0000-0000-4000-8000-000000000102";
+const A = "0bde0101-0000-4000-8000-000000000101";
+const B = "0bde0102-0000-4000-8000-000000000102";
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -109,7 +109,7 @@ describe("order watcher on pages without an order list", () => {
       ? Response.json([order(A, "CHEF_ACCEPTANCE_PENDING"), order(B, "CHEF_ACCEPTANCE_PENDING")])
       : Response.json({}, { status: 404 }));
     await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
-    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^New order 000102\. 2 Rasmalai 4 pieces\.$/));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^New order 0BDE0102\. 2 Rasmalai 4 pieces\.$/));
     expect(screen.getByRole("link", { name: /2 new orders waiting/ }).getAttribute("href")).toBe("/chef");
   });
 });
@@ -177,7 +177,7 @@ describe("Orders screen", () => {
 
   it("never moves the chef off the tab they chose when new orders arrive", async () => {
     render(createElement(ChefOrderInbox));
-    await screen.findByRole("heading", { name: /Order #000101/ });
+    await screen.findByRole("heading", { name: /Order #0BDE0101/ });
     await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
     list = [order(C, "CHEF_ACCEPTANCE_PENDING"), ...list];
@@ -188,10 +188,10 @@ describe("Orders screen", () => {
 
   it("says what happened after Accept, follows the order to Cooking and keeps focus on it", async () => {
     render(createElement(ChefOrderInbox));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose another time" }));
     fireEvent.click(screen.getByText("45"));
     fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
-    await screen.findByText("Order #000101 accepted. Start cooking: ready in about 45 min.");
+    await screen.findByText("Order #0BDE0101 accepted. Start cooking: ready in about 45 min.");
     expect(screen.getByRole("button", { name: /^Cooking/ }).getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => expect(document.activeElement?.id).toBe(`chef-order-${A}`));
     expect(screen.getByRole("button", { name: "Food is ready for pickup" })).toBeTruthy();

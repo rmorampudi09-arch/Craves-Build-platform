@@ -5,6 +5,8 @@ import { isSameOrigin } from "@/shared/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput } from "@/features/chef/lib/chef-menu-contract";
 import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
+import { upstreamFailure } from "@/shared/lib/feature-availability";
+import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -37,4 +39,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ men
     const response = NextResponse.json(item); response.headers.set("Cache-Control", "no-store"); return response;
   } catch (error) { const timedOut = error instanceof Error && error.name === "AbortError"; return NextResponse.json({ code: timedOut ? "MENU_TIMEOUT" : "MENU_UNAVAILABLE" }, { status: timedOut ? 504 : 503 }); }
   finally { clearTimeout(timeout); }
+}
+
+/** Archives the dish (catalog answers 204). Not on the gateway yet: a bare 404 becomes FEATURE_NOT_AVAILABLE. */
+export async function DELETE(request: NextRequest, context: { params: Promise<{ menuItemId: string }> }) {
+  const headers = { "Cache-Control": "no-store" };
+  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403, headers });
+  const { menuItemId } = await context.params;
+  if (!isUuid(menuItemId)) return NextResponse.json({ code: "INVALID_MENU_ITEM_ID" }, { status: 400, headers });
+  try {
+    const upstream = await authenticatedApiFetch(request, `/kitchens/me/menu-items/${menuItemId}`, { method: "DELETE" });
+    if (upstream.ok) return new NextResponse(null, { status: 204, headers });
+    const { status, code } = upstreamFailure(upstream.status, await upstream.json().catch(() => null), "MENU_ITEM_DELETE_FAILED");
+    return NextResponse.json({ code }, { status, headers });
+  } catch (error) {
+    return error instanceof SessionRequiredError
+      ? NextResponse.json({ code: "SESSION_EXPIRED" }, { status: 401, headers })
+      : NextResponse.json({ code: "MENU_UNAVAILABLE" }, { status: 503, headers });
+  }
 }

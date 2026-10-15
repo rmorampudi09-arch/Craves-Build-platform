@@ -28,8 +28,7 @@ describe("loading states", () => {
     expect(chefLoadingShapeFor("/chef/finance")).toBe("money");
     expect(chefLoadingShapeFor("/chef/bank")).toBe("bank");
     expect(chefLoadingShapeFor("/chef/statements")).toBe("statements");
-    // Meal plans are a "coming soon" card for now, not the plan manager.
-    expect(chefLoadingShapeFor("/chef/meal-plans")).toBe("soon");
+    expect(chefLoadingShapeFor("/chef/meal-plans")).toBe("plans");
     expect(chefLoadingShapeFor("/chef/profile")).toBe("more");
     expect(chefLoadingShapeFor("/chef/capacity")).toBe("form");
     expect(chefLoadingShapeFor(null)).toBe("form");

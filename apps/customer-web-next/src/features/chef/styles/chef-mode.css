@@ -40,6 +40,15 @@
   caret-color: var(--chef-action);
 }
 
+/* A sheet or dialog body: sheets open on <body>, outside the chef page, so their body takes the
+ * chef theme with this class next to chef-panel-theme, without the page's full height, tab-bar
+ * padding or background. */
+.chef-panel-theme.chef-sheet-theme {
+  min-height: 0;
+  padding-bottom: 0;
+  background: transparent !important;
+}
+
 /*
  * The customer theme styles every <button> outside any cascade layer, which beats
  * Tailwind utilities. Inside Chef Mode, a button that names its own background,
@@ -901,11 +910,6 @@ html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
   .chef-skeleton { animation: none; }
 }
 
-/* The shared notifications screen sits under the Chef Mode header with the chef page title. */
-.chef-notifications [data-craves-auto-hide-header] { display: none; }
-.chef-notifications .min-h-screen { min-height: 0; background: transparent; padding-bottom: 0; }
-.chef-notifications .min-h-screen > main { max-width: none; padding: 0; }
-body .chef-notifications [aria-label="Notification filters"] button { border-color: transparent !important; box-shadow: none; }
 /* Help chat: fills the screen under the title, so the message box stays above the tab bar. */
 .chef-support-chat {
   display: flex;

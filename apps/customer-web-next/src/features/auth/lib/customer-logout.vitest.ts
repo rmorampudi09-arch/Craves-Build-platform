@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearSession, getSession, getAddress, saveAddress, setSessionIdentity } from "../api/cravesAuth";
 
+// Logout also ends the Firebase sign-in, as the app does; Firebase is mocked.
+const firebase = vi.hoisted(() => ({ auth: {}, signOut: vi.fn(async () => undefined) }));
+vi.mock("firebase/auth", () => ({ signOut: firebase.signOut }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: firebase.auth }) }));
+
 const identity = { id: "11111111-1111-4111-8111-111111111111", phoneNumber: "+10000000000", email: null,
   emailVerified: false, displayName: "Fixture", status: "ACTIVE", roles: ["CUSTOMER"] };
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); firebase.signOut.mockClear(); });
 describe("customer logout receipt handling", () => {
   for (const state of ["unavailable", "network", "false", "invalid"]) it(`does not falsely clear the session for ${state}`, async () => {
     setSessionIdentity(identity); saveAddress({ hno: "Fixture", city: "Fixture", mandal: "Fixture", district: "Fixture" });
@@ -15,10 +20,12 @@ describe("customer logout receipt handling", () => {
     });
     await expect(clearSession()).rejects.toThrow("You are still signed in");
     expect(getSession()?.id).toBe(identity.id); expect(getAddress()).not.toBeNull();
+    expect(firebase.signOut).not.toHaveBeenCalled();
   });
   it("clears local identity and selected location after confirmed revocation", async () => {
     setSessionIdentity(identity); saveAddress({ hno: "Fixture", city: "Fixture", mandal: "Fixture", district: "Fixture" });
     vi.stubGlobal("fetch", async () => Response.json({ signedOut: true }));
     await clearSession(); expect(getSession()).toBeNull(); expect(getAddress()).toBeNull();
+    expect(firebase.signOut).toHaveBeenCalledExactlyOnceWith(firebase.auth);
   });
 });

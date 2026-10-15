@@ -10,8 +10,8 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   AUTHENTICATION_REQUIRED: "You are signed out. Sign in again to continue.",
   SESSION_EXPIRED: "Your session expired. Sign in again to continue.",
   // The app already re-reads chef access once by itself, so what remains is almost always Craves' side.
-  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Get help.",
-  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Get help.",
+  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.",
+  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.",
   // Kitchen
   KITCHEN_PROFILE_REQUIRED: "Set up your kitchen before adding or managing dishes.",
   KITCHEN_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",

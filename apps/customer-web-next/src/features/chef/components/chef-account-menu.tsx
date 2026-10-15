@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
-import { ArrowLeftRight, LifeBuoy, LogOut, RefreshCw, UserRound } from "lucide-react";
+import { ArrowLeftRight, LifeBuoy, Lock, LogOut, RefreshCw, UserRound } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/ui/overlays/dropdown-menu";
+import { useChefWorkspace } from "@/features/chef/components/chef-workspace-navigation";
 import { clearChefMode } from "@/features/chef/lib/chef-mode";
 import { getChefName, subscribeChefName, type ChefName } from "@/features/chef/lib/chef-name";
 import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
@@ -94,6 +95,8 @@ export function ChefAccountMenu() {
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   const chef = useSyncExternalStore(subscribeChefName, () => getChefName(user?.id), () => null);
   const { busy, error, signOut } = useChefSignOut();
+  // Applicants have no chef pages yet: their menu keeps only switching and signing out.
+  const { workspace } = useChefWorkspace();
   if (!user) return null;
   const letters = initials(chef);
   return (
@@ -113,6 +116,22 @@ export function ChefAccountMenu() {
           <p className="truncate text-sm font-bold">{chef?.firstName || "Your chef account"}</p>
           <p className="truncate text-xs text-[#6B6B6B]">Craves chef</p>
         </div>
+        {workspace ? (
+          <>
+            <DropdownMenuItem className={ITEM} asChild>
+              <Link href="/chef/support">
+                <LifeBuoy aria-hidden="true" />
+                Help & support
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem className={ITEM} asChild>
+              <Link href="/chef/security">
+                <Lock aria-hidden="true" />
+                Login & security
+              </Link>
+            </DropdownMenuItem>
+          </>
+        ) : null}
         <DropdownMenuItem className={ITEM} onSelect={switchToCustomerApp}>
           <ArrowLeftRight aria-hidden="true" />
           Switch to customer app

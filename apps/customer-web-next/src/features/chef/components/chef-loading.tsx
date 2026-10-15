@@ -34,11 +34,10 @@ const ROUTE_SHAPES: ReadonlyArray<readonly [RegExp, ChefLoadingShape]> = [
   [/^\/chef\/statements\/?$/, "statements"],
   [/^\/chef\/operations\/?$/, "checklist"],
   [/^\/chef\/kitchen\/?$/, "kitchen"],
-  // Meal plans are a "coming soon" page for now: a Back link and one card.
-  [/^\/chef\/meal-plans\/?$/, "soon"],
+  [/^\/chef\/meal-plans\/?$/, "plans"],
   [/^\/chef\/notifications\/?$/, "notifications"],
   [/^\/chef\/profile\/?$/, "more"],
-  [/^\/chef\/support\/?$/, "chat"],
+  [/^\/chef\/support\/chat\/?$/, "chat"],
 ];
 
 export function chefLoadingShapeFor(pathname: string | null): ChefLoadingShape {
@@ -46,8 +45,8 @@ export function chefLoadingShapeFor(pathname: string | null): ChefLoadingShape {
 }
 
 /** Pages whose header has a Back link above the title, a button beside it, or no line under it. */
-const HEAD_BACK = new Set<ChefLoadingShape>(["order", "money", "bank", "statements", "checklist", "kitchen", "soon", "form", "notifications", "chat"]);
-const HEAD_ACTION = new Set<ChefLoadingShape>(["orders", "order", "menu", "earnings"]);
+const HEAD_BACK = new Set<ChefLoadingShape>(["order", "money", "bank", "statements", "checklist", "kitchen", "plans", "soon", "form", "notifications", "chat"]);
+const HEAD_ACTION = new Set<ChefLoadingShape>(["orders", "order", "menu", "earnings", "plans"]);
 const HEAD_TITLE_ONLY = new Set<ChefLoadingShape>(["bank", "checklist", "soon", "notifications"]);
 
 const bar = (className: string) => <ChefSkeleton className={className} />;

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, X } from "lucide-react";
+import { formatRelativeTime } from "@/shared/lib/relative-time";
 
 /** ₹1,234.50 — amounts arrive as numbers or as decimal strings ("2384.76") from finance. */
 export function formatInr(
@@ -22,16 +23,9 @@ export function formatInr(
   }
 }
 
-/** "Just now", "12 min ago", "3 h ago", then a short date in India time. */
+/** The app's words, as on chef tickets and notifications: "Just now", "12 min ago", "3 hr ago", "Yesterday", "13 Oct". */
 export function timeAgo(iso: string, now: number = Date.now()): string {
-  const at = new Date(iso).getTime();
-  if (!Number.isFinite(at)) return "";
-  const minutes = Math.round((now - at) / 60_000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(at);
+  return formatRelativeTime(iso, new Date(now));
 }
 
 /** 1:31 pm in India time. */

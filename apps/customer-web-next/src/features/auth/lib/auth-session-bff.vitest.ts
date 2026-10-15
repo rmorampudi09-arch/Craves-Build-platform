@@ -65,4 +65,12 @@ describe("Admin sign-in through the actual bounded request reader", () => {
     expect((await response.json()).code).toBe("SIGN_IN_FAILED");
     expect(response.headers.has("set-cookie")).toBe(false);
   });
+  it("passes on only the missing-phone code, which sends email sign-in to phone OTP", async () => {
+    vi.stubEnv("CRAVES_API_BASE_URL", "https://api.example.test/api/v1");
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "PHONE_NUMBER_MISSING", message: "Firebase token does not contain a verified phone number" }, { status: 401 })));
+    const response = await POST(request({ firebaseIdToken }));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ code: "PHONE_NUMBER_MISSING", message: "The OTP session could not be verified. Please request a new OTP." });
+    expect(response.headers.has("set-cookie")).toBe(false);
+  });
 });

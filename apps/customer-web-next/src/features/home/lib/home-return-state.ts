@@ -1,17 +1,21 @@
+import { SPICE_LEVELS, type SpiceLevel } from "@/shared/lib/spice-level";
+
 export type HomeDishSort =
   | "recommended"
   | "price-low-high"
   | "price-high-low"
-  | "quickest";
+  | "quickest"
+  | "name-a-z";
 
 /** Narrowing filters on Home's dish list; "any" means off. */
 export type HomeDishFilters = {
   price: "any" | "under-150" | "150-300" | "over-300";
   ready: "any" | "30" | "45";
   distance: "any" | "3" | "5";
+  spice: "any" | SpiceLevel;
 };
 
-export const DEFAULT_DISH_FILTERS: HomeDishFilters = { price: "any", ready: "any", distance: "any" };
+export const DEFAULT_DISH_FILTERS: HomeDishFilters = { price: "any", ready: "any", distance: "any", spice: "any" };
 
 export type HomeFoodPreference = "all" | "veg" | "non-veg" | "egg";
 
@@ -33,11 +37,13 @@ const HOME_DISH_SORTS = new Set<HomeDishSort>([
   "price-low-high",
   "price-high-low",
   "quickest",
+  "name-a-z",
 ]);
 const FILTER_VALUES: { [Key in keyof HomeDishFilters]: readonly HomeDishFilters[Key][] } = {
   price: ["any", "under-150", "150-300", "over-300"],
   ready: ["any", "30", "45"],
   distance: ["any", "3", "5"],
+  spice: ["any", ...SPICE_LEVELS],
 };
 
 /** Anything unknown (an older saved state, a hand-edited one) falls back to "any". */
@@ -47,7 +53,7 @@ function parseDishFilters(value: unknown): HomeDishFilters {
     (FILTER_VALUES[key] as readonly unknown[]).includes(raw[key])
       ? (raw[key] as HomeDishFilters[Key])
       : DEFAULT_DISH_FILTERS[key];
-  return { price: pick("price"), ready: pick("ready"), distance: pick("distance") };
+  return { price: pick("price"), ready: pick("ready"), distance: pick("distance"), spice: pick("spice") };
 }
 const HOME_FOOD_PREFERENCES = new Set<HomeFoodPreference>([
   "all",

@@ -11,18 +11,13 @@ import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
 import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { CodeSlots, type CodeSlotsStatus } from "@/shared/ui/forms/code-slots";
 import { markCustomerModeVerified } from "@/features/chef/lib/chef-mode";
+import { CARD, FIELD, SECONDARY_BUTTON, TEXT_BUTTON } from "@/features/sign-in/components/auth-form-classes";
+import { EmailSignInForm } from "@/features/sign-in/components/email-sign-in-form";
 
 type Stage = "phone" | "otp" | "creating-session" | "done";
 type RecaptchaMode = "visible" | "invisible";
 
 const RESEND_DELAY_SECONDS = 30;
-// Unlayered theme rules style every <button>; ! keeps these neutral actions on the brand palette.
-const SECONDARY_BUTTON =
-  "min-h-12 w-full rounded-full !border !border-[#E5E7EB] !bg-white px-5 font-semibold !text-[#1A1A1A] disabled:opacity-50";
-const TEXT_BUTTON =
-  "min-h-11 shrink-0 rounded-full !border-0 !bg-transparent px-3 text-sm font-semibold !text-[#C4200F] !shadow-none hover:underline disabled:opacity-50";
-const FIELD =
-  "min-h-12 w-full rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10";
 
 /** The 10 national digits of a typed, pasted or autofilled number: "+91 98765 43210", "09876543210", "(98765) 43210". */
 function nationalDigits(value: string): string {
@@ -46,7 +41,7 @@ function phoneProblem(e164: string, indian: boolean): string {
 }
 
 /**
- * Phone OTP sign-in shared by /sign-in, the admin portal and Chef Mode.
+ * Phone OTP sign-in shared by /sign-in, the admin portal and Chef Mode; customers and chefs can switch to email & password.
  * centralOtp=false: this host has no central MSG91 OTP (admin portal), so sign in with Firebase phone auth.
  */
 export function PhoneAuthForm({
@@ -56,6 +51,7 @@ export function PhoneAuthForm({
   initialPhone,
   onSignedIn,
   heading,
+  email = false,
 }: {
   returnTo?: string;
   centralOtp?: boolean;
@@ -67,9 +63,13 @@ export function PhoneAuthForm({
   onSignedIn?: (identity: CravesIdentity) => Promise<void> | void;
   /** Replaces the title and line under it, for example when switching over from Chef Mode. */
   heading?: { title: string; text: string };
+  /** Opens on email & password (the landing popup's link). */
+  email?: boolean;
 }) {
   const destination = safeReturnPath(returnTo);
   const chefJourney = destination.startsWith("/chef");
+  // The admin portal (anyCountry) signs in by phone only.
+  const [method, setMethod] = useState<"phone" | "email">(email && !anyCountry ? "email" : "phone");
   // E.164 (+919876543210); the +91 field edits only the national digits after the prefix.
   const [phone, setPhone] = useState(initialPhone ?? "+91");
   const [phoneError, setPhoneError] = useState("");
@@ -82,10 +82,13 @@ export function PhoneAuthForm({
     "Use your mobile number to receive a one-time password.",
   );
   const [busy, setBusy] = useState(false);
+  // Why email sign-in sent the person back here; an alert, so it is read out as the phone view appears.
+  const [notice, setNotice] = useState("");
   const [resendIn, setResendIn] = useState(0);
   const confirmation = useRef<PhoneConfirmation | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
   const phoneInput = useRef<HTMLInputElement>(null);
+  const sendButton = useRef<HTMLButtonElement>(null);
 
   const clearVerifier = useCallback(() => {
     verifier.current?.clear();
@@ -162,6 +165,7 @@ export function PhoneAuthForm({
       clearVerifier();
       setOtp("");
       setStage("otp");
+      setNotice("");
       setOtpStatus("idle");
       setResendIn(RESEND_DELAY_SECONDS);
       setMessage(
@@ -221,17 +225,9 @@ export function PhoneAuthForm({
       if (!response.ok) throw new Error(body.message ?? "We couldn’t sign you in. Check the code and try again, or request a new code.");
       setStage("done");
       setOtpStatus("success");
-      // A customer OTP opens the customer app on this device; Chef Mode keeps its own check.
-      if (!chefJourney && body.identity?.id) markCustomerModeVerified(body.identity.id);
       setMessage(chefJourney ? "Verified. Opening your kitchen…" : "Signed in successfully.");
       // No wait: the next page starts loading now and the accepted wave plays meanwhile.
-      if (onSignedIn) {
-        if (!body.identity?.id) throw new Error("Sign-in failed. Please try again.");
-        await onSignedIn(body.identity);
-      } else {
-        // Replace, so Back from the signed-in page never returns to this OTP form.
-        window.location.replace(destination);
-      }
+      await openSignedIn(body.identity);
     } catch (error) {
       setStage("otp");
       setOtpStatus("error");
@@ -242,6 +238,26 @@ export function PhoneAuthForm({
       verifying.current = false;
       setBusy(false);
     }
+  }
+
+  /** Once the session exists, after an OTP or email & password. */
+  async function openSignedIn(identity: CravesIdentity | undefined) {
+    // A customer sign-in opens the customer app on this device; Chef Mode keeps its own check.
+    if (!chefJourney && identity?.id) markCustomerModeVerified(identity.id);
+    if (onSignedIn) {
+      if (!identity?.id) throw new Error("Sign-in failed. Please try again.");
+      await onSignedIn(identity);
+    } else {
+      // Replace, so Back from the signed-in page never returns to this sign-in form.
+      window.location.replace(destination);
+    }
+  }
+
+  function backToPhone(reason?: string) {
+    setMethod("phone");
+    setNotice(reason ?? "");
+    // A prefilled number has no field, so Send OTP takes focus instead.
+    requestAnimationFrame(() => (phoneInput.current ?? sendButton.current)?.focus());
   }
 
   function useAnotherNumber() {
@@ -282,9 +298,12 @@ export function PhoneAuthForm({
   }
 
   const otpStage = stage !== "phone";
+  const phoneHelp = [phoneError && "phone-error", notice && "phone-notice"].filter(Boolean).join(" ") || undefined;
+
+  if (method === "email") return <EmailSignInForm chef={chefJourney} onSignedIn={openSignedIn} onUsePhone={backToPhone} />;
 
   return (
-    <section className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:p-8">
+    <section className={CARD}>
       {chefJourney ? null : (
         <p className="text-sm font-semibold text-[#C4200F]">Secure Craves access</p>
       )}
@@ -401,7 +420,7 @@ export function PhoneAuthForm({
                   value={groupDigits(phone.slice(3))}
                   onChange={changeNationalNumber}
                   aria-invalid={phoneError ? true : undefined}
-                  aria-describedby={phoneError ? "phone-error" : undefined}
+                  aria-describedby={phoneHelp}
                   required
                 />
               </div>
@@ -418,7 +437,7 @@ export function PhoneAuthForm({
                 autoComplete="tel"
                 inputMode="tel"
                 aria-invalid={phoneError ? true : undefined}
-                aria-describedby={phoneError ? "phone-error" : undefined}
+                aria-describedby={phoneHelp}
                 required
               />
             )}
@@ -427,6 +446,11 @@ export function PhoneAuthForm({
         {!otpStage && phoneError ? (
           <p id="phone-error" role="alert" className="text-left text-sm font-medium text-[#C4200F]">
             {phoneError}
+          </p>
+        ) : null}
+        {!otpStage && notice ? (
+          <p id="phone-notice" role="alert" className="text-left text-sm font-medium text-[#1A1A1A]">
+            {notice}
           </p>
         ) : null}
 
@@ -462,9 +486,19 @@ export function PhoneAuthForm({
             </button>
           </>
         ) : (
-          <button className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
-            {busy ? "Requesting OTP…" : "Send OTP"}
-          </button>
+          <>
+            <button ref={sendButton} className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
+              {busy ? "Requesting OTP…" : "Send OTP"}
+            </button>
+            {anyCountry ? null : (
+              <>
+                <p className="flex items-center gap-3 text-sm text-[#6B6B6B] before:h-px before:flex-1 before:bg-[#E5E7EB] after:h-px after:flex-1 after:bg-[#E5E7EB]">or</p>
+                <button type="button" className={SECONDARY_BUTTON} disabled={busy} onClick={() => setMethod("email")}>
+                  Use email &amp; password
+                </button>
+              </>
+            )}
+          </>
         )}
       </form>
 

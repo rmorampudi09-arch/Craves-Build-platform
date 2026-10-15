@@ -86,12 +86,12 @@ it("goes straight in on a device that already verified Chef Mode, even in a new 
   expect(screen.queryByRole("button", { name: "Send OTP" })).toBeNull();
   expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
   expect(isChefModeTab(customer.id)).toBe(true);
-  // Access was confirmed here, so the kitchen page renders at once without checking it again.
+  // Access was confirmed here, so the kitchen page opens without checking it again: its only read is the kitchen, for the chef picture.
   cleanup();
   const requests = fetcher.mock.calls.length;
   render(createElement(ChefAccessBoundary, null, createElement("p", null, "Kitchen")));
-  expect(screen.getByText("Kitchen")).toBeTruthy();
-  expect(fetcher.mock.calls.length).toBe(requests);
+  expect(await screen.findByText("Kitchen")).toBeTruthy();
+  expect(fetcher.mock.calls.slice(requests).map(([url]) => url)).toEqual(["/api/chef/kitchen"]);
 });
 
 it("sends an approved account whose session still lacks CHEF to the status page, never back to /chef", async () => {

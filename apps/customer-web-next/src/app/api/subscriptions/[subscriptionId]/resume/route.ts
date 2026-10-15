@@ -2,6 +2,7 @@ import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseCustomerSubscription } from "@/features/meal-plans/lib/subscription-contract";
 import { isSameOrigin } from "@/shared/lib/request-security";
+import { upstreamFailure } from "@/shared/lib/feature-availability";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -23,7 +24,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeDate, reason }),
     });
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return NextResponse.json({ code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 409 ? "SUBSCRIPTION_RESUME_CONFLICT" : "SUBSCRIPTION_RESUME_FAILED" }, { status: upstream.status });
+    if (!upstream.ok) {
+      const failure = upstreamFailure(upstream.status, body, upstream.status === 409 ? "SUBSCRIPTION_RESUME_CONFLICT" : "SUBSCRIPTION_RESUME_FAILED");
+      return NextResponse.json({ code: failure.code }, { status: failure.status });
+    }
     const subscription = parseCustomerSubscription(body);
     return subscription ? NextResponse.json(subscription, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_SUBSCRIPTION_RESPONSE" }, { status: 502 });
   } catch (error) {

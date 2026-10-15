@@ -15,6 +15,7 @@ import {
 import { AnimateCount } from "@/shared/ui/AnimateCount";
 import { ease } from "@/shared/lib/motion";
 import glass from "@/features/home/screens/HomeReference.module.css";
+import { LiveOrderBubble } from "@/features/customer-shell/components/LiveOrderBubble";
 import {
   cartCount,
   cartCurrency,
@@ -307,6 +308,7 @@ export function BottomNav() {
           </AnimatePresence>
         </div>
       </nav>
+      <LiveOrderBubble pathname={pathname} />
     </>
   );
 }

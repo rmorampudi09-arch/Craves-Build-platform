@@ -17,7 +17,7 @@ export const metadata = {
 };
 
 export default async function SignInPage({ searchParams }: {
-  searchParams: Promise<{ returnTo?: string; access?: string; confirm?: string; from?: string }>;
+  searchParams: Promise<{ returnTo?: string; access?: string; confirm?: string; from?: string; method?: string }>;
 }) {
   const query = await searchParams;
   const destination = safeReturnPath(query.returnTo);
@@ -55,7 +55,7 @@ export default async function SignInPage({ searchParams }: {
     </section>
   </div></main>;
   // confirm=customer: a chef switching to the customer app confirms with an OTP first.
-  if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><CustomerSignIn returnTo={returnTo} centralOtp={centralOtp} confirm={query.confirm === "customer"}/></div></main>;
+  if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><CustomerSignIn returnTo={returnTo} centralOtp={centralOtp} confirm={query.confirm === "customer"} email={query.method === "email"}/></div></main>;
 
   return <main className="cr-admin cr-login">
     <section className="cr-login-story" aria-labelledby="cr-login-title">

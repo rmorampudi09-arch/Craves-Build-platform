@@ -372,7 +372,7 @@ export function ChefModeDashboard() {
                 <p className="font-semibold">Your orders couldn’t load</p>
                 <p className="mt-1 text-[#6B6B6B]">
                   Craves couldn’t confirm your chef access just now, so new orders won’t show or ring. We already tried
-                  again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Get help. You don’t
+                  again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Help & support. You don’t
                   need to sign in again.
                 </p>
               </>
@@ -392,6 +392,7 @@ export function ChefModeDashboard() {
           <ChefKitchenSwitch
             kitchen={snapshot.kitchen}
             onChange={(kitchen) => setSnapshot((current) => ({ ...current, kitchen }))}
+            cookingCount={stats.cookingCount}
           />
         ) : null}
 

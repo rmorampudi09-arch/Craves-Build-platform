@@ -2,9 +2,14 @@ export type PublicSubscriptionSchedule = {
   planId: string;
   recurrenceType: "WEEKLY" | "MONTHLY";
   timezone: string;
+  /** Added by the BFF from the catalog: the kitchen cooking this plan. */
+  kitchenId?: string | null;
   items: Array<{
     menuItemId: string;
     itemName?: string | null;
+    /** Added by the BFF from the catalog. */
+    foodType?: "VEG" | "NON_VEG" | "EGG" | null;
+    imageUrl?: string | null;
     quantity: number;
     isoDayOfWeek: number | null;
     dayOfMonth: number | null;

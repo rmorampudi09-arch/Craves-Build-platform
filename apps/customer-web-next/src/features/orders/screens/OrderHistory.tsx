@@ -15,7 +15,10 @@ import {
   parseCustomerOrders,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
+import { YourUsualRail } from "@/features/orders/components/YourUsualRail";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { addToCart, CartKeptError, loadCart } from "@/features/cart/api/cravesCart";
 import { loadKitchenMenu } from "@/features/dish/api/dishes";
@@ -121,21 +124,10 @@ export async function reorderIntoCart(order: CustomerOrder): Promise<{ added: nu
   return { added, note };
 }
 
-function CutleryIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-6 w-6"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <rect x="3.5" y="2.25" width="1.6" height="5.6" rx="0.8" />
-      <rect x="6.2" y="2.25" width="1.6" height="5.6" rx="0.8" />
-      <rect x="8.9" y="2.25" width="1.6" height="5.6" rx="0.8" />
-      <path d="M3.5 6.6h7v1.55a3.5 3.5 0 0 1-2.65 3.4V21a.85.85 0 0 1-1.7 0v-9.45A3.5 3.5 0 0 1 3.5 8.15V6.6Z" />
-      <path d="M16.8 2.25c-2.05 0-3.7 1.85-3.7 4.15 0 1.9 1.12 3.5 2.85 4v10.55a.85.85 0 0 0 1.7 0V10.4c1.73-.5 2.85-2.1 2.85-4 0-2.3-1.65-4.15-3.7-4.15Z" />
-    </svg>
-  );
+/** The chef's picture on an order card; one profile read per kitchen, shared by its cards. */
+function OrderChefFace({ kitchenId }: { kitchenId: string }) {
+  const { profile } = useKitchenProfile(kitchenId);
+  return <ChefFace photoUrl={profile?.chefPhotoUrl} size={48} />;
 }
 
 export default function OrdersPage() {
@@ -291,6 +283,8 @@ export default function OrdersPage() {
       </AutoHideCustomerHeader>
 
       <main className="mx-auto max-w-4xl px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
+        {/* Repeat baskets come from delivered orders: none delivered, nothing to ask for. */}
+        {!loading && orders.some((order) => order.status === "DELIVERED") ? <YourUsualRail /> : null}
         <section aria-live="polite">
           {loading ? (
             <CustomerSectionSkeleton variant="orders" label="Loading your orders" />
@@ -353,18 +347,16 @@ export default function OrdersPage() {
                           className="relative rounded-2xl border border-[#D8DADD] bg-white p-4 shadow-[0_3px_10px_rgba(0,0,0,0.07)] transition-[border-color,box-shadow] duration-200 hover:border-[#C9CCD0] hover:shadow-[0_4px_14px_rgba(0,0,0,0.09)] md:p-5"
                         >
                           <div className="flex items-start gap-3.5">
-                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
-                              <CutleryIcon />
-                            </span>
+                            <OrderChefFace kitchenId={order.kitchenId} />
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <h3 className="truncate text-base font-semibold text-[#1A1A1A]">
-                                    {/* The whole card opens the order; its ::after covers the card. */}
+                                    {/* The whole card opens the order, like the app; tracking is one tap on from there. Its ::after covers the card. */}
                                     <Link
-                                      to={active ? `/orders/${order.id}/tracking` : `/orders/${order.id}`}
-                                      aria-label={`${active ? "Track order" : "View order"} from ${order.kitchenName}`}
+                                      to={`/orders/${order.id}`}
+                                      aria-label={`View order from ${order.kitchenName}`}
                                       className="after:absolute after:inset-0 after:rounded-2xl"
                                     >
                                       {order.kitchenName}

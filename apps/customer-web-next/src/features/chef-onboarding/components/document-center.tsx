@@ -7,6 +7,7 @@ import { documentCapabilitiesSchema, documentEmailSchema, documentError, documen
 import { readDocumentBytes } from "@/shared/lib/document-transport";
 import { ChefChoiceChips, ChefEmpty, ChefFlash, ChefNotice, ChefPill, ChefSection, dateTime, type ChefTone } from "@/features/chef/components/chef-ui";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel, type StatementPreset } from "@/features/chef/lib/statement-periods";
 
 type OrderOption = { id: string; kitchenName: string; currency: string };
@@ -249,7 +250,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
     <section className="mt-6 rounded-2xl border border-border bg-white p-5 text-ink shadow-sm md:p-6" aria-label="Order PDF documents">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 font-display text-xl font-bold"><FileText className="h-5 w-5" aria-hidden="true" />Receipts and order documents</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Generate a private PDF from your saved records. Email copies go only to your verified account email. These documents are not GST tax invoices.</p></div><button className={button} type="button" disabled={busy || !capabilities?.enabled} onClick={() => void action(refresh)}><RefreshCw className="h-4 w-4" aria-hidden="true" />Refresh</button></div>
       <form className="mt-5 grid gap-4 md:grid-cols-3" onSubmit={(event) => { event.preventDefault(); void action(generate); }}>
-        <label className="text-sm font-medium">Order<select className={input} value={orderId} onChange={(event) => setSelectedOrder(event.target.value)} disabled={busy}>{orders.map((order) => <option key={order.id} value={order.id}>{order.kitchenName} · {order.id.slice(-8).toUpperCase()}</option>)}</select></label>
+        <label className="text-sm font-medium">Order<select className={input} value={orderId} onChange={(event) => setSelectedOrder(event.target.value)} disabled={busy}>{orders.map((order) => <option key={order.id} value={order.id}>{order.kitchenName} · #{shortOrderNumber(order.id)}</option>)}</select></label>
         <label className="text-sm font-medium">Document type<select className={input} value={type} onChange={(event) => setType(event.target.value as DocumentType)} disabled={busy}>{types.map((kind) => <option key={kind} value={kind}>{documentLabels[kind]}</option>)}</select></label>
         <label className="text-sm font-medium">Timezone<input className={input} value={timezone} onChange={(event) => setTimezone(event.target.value)} maxLength={80} required disabled={busy} /></label>
         <div className="flex items-end"><button className={`${button} w-full`} type="submit" disabled={busy || !capabilities?.enabled}>{busy ? "Working…" : "Generate PDF"}</button></div>

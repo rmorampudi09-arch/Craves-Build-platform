@@ -49,5 +49,5 @@ it("lists an unpaid checkout older than 30 minutes under past orders as payment 
   expect(within(past).queryByText(/total paid/)).toBeNull();
 
   const inProgress = screen.getByRole("region", { name: "In progress" });
-  expect(within(inProgress).getByRole("link", { name: /Lakshmi's Kitchen/ }).getAttribute("href")).toBe(`/orders/${COOKING}/tracking`);
+  expect(within(inProgress).getByRole("link", { name: /Lakshmi's Kitchen/ }).getAttribute("href")).toBe(`/orders/${COOKING}`);
 });

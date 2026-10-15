@@ -1,23 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
+import { KitchenFilterBar } from "@/features/chefs/components/KitchenFilterBar";
+import { DEFAULT_KITCHEN_VIEW, sortKitchens, type KitchenView } from "@/features/chefs/lib/kitchen-filters";
 import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
+import { KitchenDiscoverCard } from "@/features/chefs/components/KitchenDiscoverCard";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
+import { SPICE_LEVEL_LABELS } from "@/shared/lib/spice-level";
 import {
   cartCount,
   loadCart,
   subscribeCart,
 } from "@/features/cart/api/cravesCart";
-import { discoverDishes } from "@/features/dish/api/dishes";
+import { discoverDishes, type Dish } from "@/features/dish/api/dishes";
 import { discoverKitchens } from "@/features/chefs/api/kitchens";
 import {
   clearSession,
@@ -54,24 +58,28 @@ export function AllChefsPage() {
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
-  const [dishImagesByKitchen, setDishImagesByKitchen] = useState<Record<string, string[]>>({});
+  const [dishes, setDishes] = useState<Dish[]>([]);
   const [state, setState] = useState<DiscoveryState>("loading");
   const [message, setMessage] = useState("Loading home chefs near your delivery address…");
   const [searchTerm, setSearchTerm] = useState("");
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [view, setView] = useState<KitchenView>(DEFAULT_KITCHEN_VIEW);
+  // Only the latest load may fill the list: an older one (say, before a spice change) lands late.
+  const latestRefresh = useRef(0);
 
-  const refresh = useCallback(async (nextAddress: CravesAddress | null) => {
+  const refresh = useCallback(async (nextAddress: CravesAddress | null, spice: KitchenView["spice"] = "any") => {
+    const request = ++latestRefresh.current;
     if (
       typeof nextAddress?.lat !== "number" ||
       typeof nextAddress.lng !== "number"
     ) {
       setKitchens([]);
-      setDishImagesByKitchen({});
+      setDishes([]);
       setState("address-required");
       setMessage(
-        "Choose a default delivery address to see all active home chefs within 50 km.",
+        "Choose a default delivery address to see all active home chefs within 10 km.",
       );
       return;
     }
@@ -86,6 +94,7 @@ export function AllChefsPage() {
           nextAddress.lat,
           nextAddress.lng,
           DEFAULT_DISCOVERY_RADIUS_METERS,
+          spice === "any" ? undefined : spice,
         ),
         discoverDishes(
           nextAddress.lat,
@@ -93,33 +102,26 @@ export function AllChefsPage() {
           DEFAULT_DISCOVERY_RADIUS_METERS,
         ),
       ]);
+      if (request !== latestRefresh.current) return;
 
       if (kitchenResult.status !== "fulfilled") {
         throw kitchenResult.reason;
       }
 
-      const previews: Record<string, string[]> = {};
-      if (dishResult.status === "fulfilled") {
-        for (const dish of dishResult.value) {
-          if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
-          const current = previews[dish.kitchenId] ?? [];
-          if (!current.includes(dish.img) && current.length < 5) {
-            previews[dish.kitchenId] = [...current, dish.img];
-          }
-        }
-      }
-
-      setDishImagesByKitchen(previews);
+      // Without dishes the cards still show, just without dish photos, prep time or prices.
+      setDishes(dishResult.status === "fulfilled" ? dishResult.value : []);
       setKitchens(kitchenResult.value.kitchens);
       setState("ready");
       setMessage(
         kitchenResult.value.kitchens.length > 0
-          ? "Showing active home chefs within 50 km of your delivery address."
-          : "No active home chefs are available within 50 km of your delivery address yet.",
+          ? "Showing active home chefs within 10 km of your delivery address."
+          : spice !== "any"
+            ? `No home chefs near you are cooking ${SPICE_LEVEL_LABELS[spice].toLowerCase()} dishes right now. Clear the spice filter to see every chef.`
+            : "No active home chefs are available within 10 km of your delivery address yet.",
       );
     } catch (error) {
       setKitchens([]);
-      setDishImagesByKitchen({});
+      setDishes([]);
       setState("error");
       setMessage(
         error instanceof Error
@@ -197,6 +199,11 @@ export function AllChefsPage() {
     );
   }, [kitchens, searchTerm]);
 
+  const changeView = (next: KitchenView) => {
+    setView(next);
+    if (next.spice !== view.spice) void refresh(address, next.spice);
+  };
+
   const openAddressManager = useCallback(() => {
     rememberReturnRoute("/addresses", "/chefs");
     navigate({ to: "/addresses" });
@@ -234,17 +241,24 @@ export function AllChefsPage() {
       />
 
       <main>
+        {/* Spice reloads from the address, so the filters wait for it. */}
+        {!address || state === "address-required" ? null : (
+          <div className="mx-auto max-w-[88rem] px-4 pt-3 md:px-7 md:pt-4 lg:px-10">
+            <KitchenFilterBar view={view} onViewChange={changeView} />
+          </div>
+        )}
         <KitchensGrid
-          kitchens={filteredKitchens}
+          kitchens={sortKitchens(filteredKitchens, view.sort)}
           searchTerm={searchTerm}
           state={state}
           message={message}
           onSelectKitchen={(kitchen) =>
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } })
           }
-          onRetry={() => void refresh(address)}
+          onRetry={() => void refresh(address, view.spice)}
           onManageAddress={openAddressManager}
-          dishImagesByKitchen={dishImagesByKitchen}
+          dishes={dishes}
+          renderKitchen={(kitchen, summary, open) => <KitchenDiscoverCard kitchen={kitchen} summary={summary} onOpen={open} />}
         />
       </main>
 

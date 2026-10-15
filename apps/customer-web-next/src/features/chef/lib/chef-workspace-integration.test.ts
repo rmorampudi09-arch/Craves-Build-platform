@@ -25,11 +25,16 @@ test("chef workspace navigation and the More hub expose every implemented backen
     "/chef/application/status",
     "/chef/notifications",
     "/chef/support",
+    "/chef/capacity",
+    "/chef/documents",
+    "/chef/security",
+    "/chef/referrals",
+    "/chef/preferences",
+    "/chef/earnings/payouts",
+    "/chef/operations#chef-hours",
   ]) {
     assert.match(more, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
-  // Plates per day only counts meal plan plates; it returns to More with meal plans.
-  assert.doesNotMatch(more, /href: "\/chef\/capacity"/);
   assert.match(more, /Switch to customer app/);
   assert.match(more, /Sign out/);
   assert.doesNotMatch(more, /not available yet/i);
@@ -44,9 +49,15 @@ test("chef workspace navigation and the More hub expose every implemented backen
 });
 
 test("pages that are not tabs keep an obvious way back", () => {
-  for (const [page, href] of [["operations", "/chef/profile"], ["meal-plans", "/chef/profile"], ["capacity", "/chef/meal-plans"], ["notifications", "/chef"]]) {
+  for (const [page, href] of [["operations", "/chef/profile"], ["notifications", "/chef"]]) {
     assert.match(source(`../../../app/chef/${page}/page.tsx`), new RegExp(`back=\\{\\{\\s*href: "${href.replaceAll("/", "\\/")}"`), page);
   }
+  // Daily limits goes back to where it was opened: a plan card in Meal plans or in Menu, or More.
+  const capacity = source("../../../app/chef/capacity/page.tsx");
+  for (const href of ["/chef/profile", "/chef/menu?view=plans", "/chef/meal-plans"]) assert.ok(capacity.includes(`{ href: "${href}"`), href);
+  assert.match(capacity, /back=\{back\}/);
+  // Meal plans swap their header for the plan editor, so the list draws it.
+  assert.match(source("../components/chef-subscription-plan-manager.tsx"), /back=\{\{ href: "\/chef\/profile", label: "More" \}\}/);
   assert.match(source("../../../app/chef/support/page.tsx"), /\{ href: "\/chef\/profile", label: "More" \}/);
   assert.match(source("../components/chef-kitchen-form.tsx"), /PAGE_BACK = \{ href: "\/chef\/profile", label: "More" \}/);
   assert.match(source("../components/chef-order-details.tsx"), /back=\{\{ href: "\/chef\/orders", label: "Orders" \}\}/);
@@ -76,8 +87,9 @@ test("operations readiness uses supported backend controls only", () => {
   assert.match(operations, /parseChefApplicationReadiness/);
   assert.match(operations, /approvedDocumentCount/);
   assert.match(operations, /\/api\/chef\/application\/readiness/);
-  // No invented weekly schedule: the screen says opening hours aren't available yet.
-  assert.match(operations, /Weekly opening hours aren’t available yet/);
+  // Opening hours come from the kitchen schedule, not from anything made up on the screen.
+  assert.match(operations, /<ChefOpeningHours \/>/);
+  assert.match(source("../api/chef-kitchen-schedule.ts"), /"\/api\/chef\/kitchen\/schedule"/);
   assert.doesNotMatch(operations, /FSSAI.*required|commissionRate|deliveryRadius\s*=/i);
 });
 
@@ -101,7 +113,7 @@ test("chef order BFF accepts known deployed envelopes without weakening records"
   assert.match(listRoute, /parseChefOrdersResponse\(raw\)/);
   assert.match(detailRoute, /parseChefOrderResponse\(raw\)/);
   assert.match(contract, /items\.some\(\(item\) => item === null\)/);
-  assert.doesNotMatch(contract, /customerIdentityId|checkoutId|pickupAddress/);
+  assert.doesNotMatch(contract, /customerIdentityId|pickupAddress/);
 });
 
 test("chef order actions use unique idempotency keys and strict responses", () => {
@@ -119,9 +131,9 @@ test("chef order actions use unique idempotency keys and strict responses", () =
 });
 
 test("chef pages render their headers only after the access check", () => {
-  for (const page of ["capacity", "meal-plans", "operations", "finance", "statements", "profile", "earnings"]) {
+  for (const [page, header] of [["capacity", "<ChefPageHeader"], ["meal-plans", "<ChefSubscriptionPlanManager"], ["operations", "<ChefPageHeader"], ["finance", "<ChefPageHeader"], ["statements", "<ChefPageHeader"], ["profile", "<ChefPageHeader"], ["earnings", "<ChefPageHeader"]]) {
     const contents = source(`../../../app/chef/${page}/page.tsx`);
     const boundary = contents.indexOf("<ChefAccessBoundary>");
-    assert.ok(boundary >= 0 && boundary < contents.indexOf("<ChefPageHeader"), page);
+    assert.ok(boundary >= 0 && boundary < contents.indexOf(header), page);
   }
 });

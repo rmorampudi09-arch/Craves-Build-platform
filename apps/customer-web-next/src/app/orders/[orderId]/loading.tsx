@@ -4,7 +4,7 @@ import { CustomerRouteSkeleton } from "@/shared/components/loading/CustomerPageS
 export default function Loading() {
   return (
     <CustomerRouteSkeleton
-      title="Order status"
+      title="Order details"
       backHref="/orders"
       backLabel="Back to orders"
       variant="order"

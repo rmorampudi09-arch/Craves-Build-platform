@@ -45,6 +45,7 @@ beforeEach(() => {
     if (url === "/api/auth/logout") { me = null; return Response.json({ signedOut: true }); }
     if (url === "/api/chef/application") return Response.json({ firstName: "Asha", lastName: "Rao", status: "APPROVED", documents: [] });
     if (url === "/api/chef/kitchen") return Response.json({ kitchenName: "Asha's Kitchen" });
+    if (url.startsWith("/api/notifications/in-app/page")) return Response.json({ notices: [], nextCursor: null, hasMore: false });
     if (url.startsWith("/api/notifications/in-app")) return Response.json([]);
     return Response.json({}, { status: 404 });
   }));
@@ -166,12 +167,15 @@ describe("More hub", () => {
   it("lists every chef page that is not a tab", async () => {
     render(createElement(ChefMorePage));
     await screen.findByRole("heading", { name: "Asha Rao" });
+    // One read of the links: a name query per row is too slow for this long list.
+    const links = screen.getAllByRole("link").map((link) => [link.querySelector(".chef-row-title")?.textContent, link.getAttribute("href")]);
     for (const [label, href] of [
-      ["Kitchen details", "/chef/kitchen"], ["Meal plans", "/chef/meal-plans"],
-      ["Can customers find you\\?", "/chef/operations"], ["Earnings", "/chef/earnings"],
-      ["Balance & payouts", "/chef/finance"], ["Edit bank account details", "/chef/bank"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
-      ["Notifications", "/chef/notifications"], ["Get help", "/chef/support"],
-    ]) expect(screen.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href")).toBe(href);
+      ["Kitchen details", "/chef/kitchen"], ["Can customers find you?", "/chef/operations"], ["Opening hours", "/chef/operations#chef-hours"], ["Daily limits", "/chef/capacity"],
+      ["Meal plans", "/chef/meal-plans"], ["Documents", "/chef/documents"], ["Earnings", "/chef/earnings"],
+      ["Balance & payouts", "/chef/finance"], ["Payout history", "/chef/earnings/payouts"], ["Edit bank account details", "/chef/bank"],
+      ["Statements", "/chef/statements"], ["Refer a chef", "/chef/referrals"], ["Preferences", "/chef/preferences"], ["Your application", "/chef/application/status"],
+      ["Notifications", "/chef/notifications"], ["Help & support", "/chef/support"], ["Login & security", "/chef/security"],
+    ]) expect(links.find(([title]) => title === label)?.[1], label).toBe(href);
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 
@@ -212,12 +216,12 @@ describe("More hub", () => {
 });
 
 describe("Chef notifications", () => {
-  it("shows the shared notifications inside Chef Mode and goes back to the chef home", async () => {
+  it("shows the chef's notifications inside Chef Mode and goes back to the chef home", async () => {
     vi.mocked(usePathname).mockReturnValue("/chef/notifications");
     render(createElement(ChefNotificationsPage));
-    fireEvent.click(await screen.findByRole("link", { name: "Back to home" }));
-    expect(mocks.push).toHaveBeenCalledWith("/chef");
-    expect(mocks.push).not.toHaveBeenCalledWith("/home");
+    expect(await screen.findByText("No notifications yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/chef");
+    expect(screen.queryByRole("link", { name: "Back to home" })).toBeNull();
   });
 });
 

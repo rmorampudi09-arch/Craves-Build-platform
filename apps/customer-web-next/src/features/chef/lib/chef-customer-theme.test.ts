@@ -111,6 +111,15 @@ for (const width of [390, 768, 1440]) {
   });
 }
 
+test("a sheet body takes the chef theme without the page's full height, tab-bar padding or background", () => {
+  const sheet = navigationStyles(".chef-panel-theme.chef-sheet-theme", 390);
+  assert.equal(sheet.get("min-height"), "0");
+  assert.equal(sheet.get("padding-bottom"), "0");
+  assert.equal(sheet.get("background"), "transparent");
+  const dailyLimits = readFileSync(new URL("../components/chef-daily-limits.tsx", import.meta.url), "utf8");
+  assert.equal(dailyLimits.match(/className="chef-panel-theme chef-sheet-theme"/g)?.length, 2);
+});
+
 test("action messages leave by themselves after 3.5 s, wait while held, and skip the slide for reduced motion", () => {
   const rules = new Map<string, string>();
   chefTheme.walkRules(rule => rule.walkDecls(declaration => {

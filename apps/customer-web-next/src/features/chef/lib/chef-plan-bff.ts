@@ -1,7 +1,9 @@
 // Server side of the meal-plan and daily-limit BFF routes.
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { FEATURE_NOT_AVAILABLE, upstreamFailure } from "@/shared/lib/feature-availability";
-import { SessionRequiredError } from "@/shared/lib/server-api";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
+import { isSameOrigin } from "@/shared/lib/request-security";
+import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 import { chefUpstream } from "./chef-errors";
 
 export const NO_STORE = { "Cache-Control": "no-store" };
@@ -33,4 +35,33 @@ export function planUnreachable(error: unknown, code: string) {
   return error instanceof Error && error.name === "AbortError"
     ? planReply(504, { code: "MEAL_PLAN_TIMEOUT" })
     : planReply(503, { code });
+}
+
+/** One daily-limit PUT: checked input in, the saved rule or date change checked on the way back. */
+export async function capacityPut<T>(
+  request: NextRequest,
+  path: string,
+  parseInput: (value: unknown) => T | null,
+  parseSaved: (value: unknown) => unknown,
+  invalidCode: string,
+  failureCode: string,
+) {
+  const bounded = await boundBffRequest(request);
+  if (bounded instanceof NextResponse) return bounded;
+  if (!isSameOrigin(bounded)) return planReply(403, { code: "ORIGIN_REJECTED" });
+  const input = parseInput(await bounded.json().catch(() => null));
+  if (!input) return planReply(400, { code: invalidCode });
+  try {
+    const upstream = await authenticatedApiFetch(bounded, path, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await upstream.json().catch(() => null);
+    if (!upstream.ok) return planFailure(upstream.status, body, failureCode);
+    const saved = parseSaved(body);
+    return saved ? planReply(200, saved) : planReply(502, { code: "INVALID_CAPACITY_RESPONSE" });
+  } catch (error) {
+    return planUnreachable(error, "CAPACITY_UNAVAILABLE");
+  }
 }

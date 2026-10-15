@@ -1,10 +1,11 @@
 "use client";
-// Browser calls for the chef's meal plans. Failures throw ChefError; its ref is FEATURE_NOT_AVAILABLE
+// Browser calls for the chef's meal plans and daily limits. Failures throw ChefError; its ref is FEATURE_NOT_AVAILABLE
 // when the backend route isn't live yet (show Coming soon).
 import { sessionFetch } from "@/shared/lib/session-fetch";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError } from "@/features/chef/lib/chef-errors";
 import { parseChefMenuItems } from "@/features/chef/lib/chef-menu-contract";
+import { parseChefCapacitySummary } from "@/features/chef/lib/chef-subscription-capacity-contract";
 import {
   parseChefMealPlan,
   parseChefMealPlans,
@@ -105,4 +106,23 @@ export const submitMealPlan = (planId: string, note: string) =>
     parseChefMealPlan,
     "The meal plan could not be sent. Try again.",
     send("POST", { note: note.trim() || null }),
+  );
+
+export const loadCapacity = () =>
+  call(
+    "/api/chef/subscription-capacity",
+    parseChefCapacitySummary,
+    "Your daily limits couldn’t load.",
+  );
+
+/** One daily-limit PUT; the BFF checks what Craves saved. */
+export const saveCapacity = (
+  path: "rules/slots" | "rules/menu-items" | "overrides/slots" | "overrides/menu-items",
+  body: unknown,
+) =>
+  call(
+    `/api/chef/subscription-capacity/${path}`,
+    (value) => value ?? null,
+    "We couldn’t save your limits. Try again.",
+    send("PUT", body),
   );

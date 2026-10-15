@@ -1,7 +1,7 @@
-import { chefUpstream } from "@/features/chef/lib/chef-errors";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { authenticatedApiFetch } from "@/shared/lib/server-api";
+import { planFailure, planReply, planUnreachable } from "@/features/chef/lib/chef-plan-bff";
 import { parseChefCapacitySummary } from "@/features/chef/lib/chef-subscription-capacity-contract";
-import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -9,23 +9,10 @@ export async function GET(request: NextRequest) {
   try {
     const upstream = await authenticatedApiFetch(request, "/chef/subscription-capacity");
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) {
-      return NextResponse.json(
-        {
-          code: upstream.status === 401 ? "SESSION_EXPIRED" : upstream.status === 403 ? "CHEF_ACCESS_REQUIRED" : "CAPACITY_REQUEST_FAILED",
-          message: upstream.status === 403 ? "An approved chef account is required to manage capacity." : "Subscription capacity is temporarily unavailable.",
-          ...chefUpstream(body),
-        },
-        { status: upstream.status },
-      );
-    }
+    if (!upstream.ok) return planFailure(upstream.status, body, "CAPACITY_REQUEST_FAILED");
     const summary = parseChefCapacitySummary(body);
-    return summary
-      ? NextResponse.json(summary, { headers: { "Cache-Control": "no-store" } })
-      : NextResponse.json({ code: "INVALID_CAPACITY_RESPONSE" }, { status: 502 });
+    return summary ? planReply(200, summary) : planReply(502, { code: "INVALID_CAPACITY_RESPONSE" });
   } catch (error) {
-    if (error instanceof SessionRequiredError) return NextResponse.json({ code: "SESSION_EXPIRED" }, { status: 401 });
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return NextResponse.json({ code: timedOut ? "CAPACITY_TIMEOUT" : "CAPACITY_UNAVAILABLE" }, { status: timedOut ? 504 : 503 });
+    return planUnreachable(error, "CAPACITY_UNAVAILABLE");
   }
 }

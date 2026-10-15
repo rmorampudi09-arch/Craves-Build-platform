@@ -146,7 +146,7 @@ function optionalText(value: unknown, maximum = 1000): string | null | undefined
   return normalized && normalized.length <= maximum ? normalized : undefined;
 }
 
-function parseSlotRule(value: unknown): ChefCapacitySlotRule | null {
+export function parseSlotRule(value: unknown): ChefCapacitySlotRule | null {
   const raw = object(value);
   if (!raw) return null;
   const id = uuid(raw.id);
@@ -171,7 +171,7 @@ function parseSlotRule(value: unknown): ChefCapacitySlotRule | null {
   };
 }
 
-function parseMenuRule(value: unknown): ChefCapacityMenuRule | null {
+export function parseMenuRule(value: unknown): ChefCapacityMenuRule | null {
   const raw = object(value);
   if (!raw) return null;
   const id = uuid(raw.id), chefIdentityId = uuid(raw.chefIdentityId), menuItemId = uuid(raw.menuItemId);
@@ -189,7 +189,7 @@ function parseMenuRule(value: unknown): ChefCapacityMenuRule | null {
     version, updatedAt };
 }
 
-function parseDateOverride(value: unknown): ChefCapacityDateOverride | null {
+export function parseDateOverride(value: unknown): ChefCapacityDateOverride | null {
   const raw = object(value);
   if (!raw) return null;
   const id = uuid(raw.id), chefIdentityId = uuid(raw.chefIdentityId), serviceDate = date(raw.serviceDate);
@@ -204,7 +204,7 @@ function parseDateOverride(value: unknown): ChefCapacityDateOverride | null {
     closed: raw.closed, reason, heldUnits, committedUnits, deficitUnits, updatedAt };
 }
 
-function parseMenuDateOverride(value: unknown): ChefCapacityMenuDateOverride | null {
+export function parseMenuDateOverride(value: unknown): ChefCapacityMenuDateOverride | null {
   const raw = object(value);
   if (!raw) return null;
   const id = uuid(raw.id), chefIdentityId = uuid(raw.chefIdentityId), menuItemId = uuid(raw.menuItemId);

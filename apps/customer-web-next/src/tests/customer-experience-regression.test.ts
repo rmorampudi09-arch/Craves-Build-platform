@@ -241,7 +241,7 @@ test("every page loads in its own shape under its own header, and quick loads sh
   assert.match(boundary, /<ChefLoading shape=\{loadingShape\}/);
   assert.doesNotMatch(boundary, /animate-pulse/);
   assert.match(source("../features/chef/components/chef-subscription-plan-manager.tsx"), /<ChefLoading shape="plans"/);
-  assert.match(source("../features/chef/components/chef-capacity-quick-setup.tsx"), /if \(message === LOADING_PLATES\) return <ChefLoading/);
+  assert.match(source("../features/chef/components/chef-daily-limits.tsx"), /if \(!data\)\s+return <ChefLoading/);
   assert.doesNotMatch(source("../features/chef-onboarding/styles/chef-onboarding.css"), /#f2d3cf/i);
 });
 

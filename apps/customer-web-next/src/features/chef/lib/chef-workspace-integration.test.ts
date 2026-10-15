@@ -25,11 +25,15 @@ test("chef workspace navigation and the More hub expose every implemented backen
     "/chef/application/status",
     "/chef/notifications",
     "/chef/support",
+    "/chef/capacity",
+    "/chef/documents",
+    "/chef/security",
+    "/chef/referrals",
+    "/chef/preferences",
+    "/chef/earnings/payouts",
   ]) {
     assert.match(more, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
-  // Plates per day only counts meal plan plates; it returns to More with meal plans.
-  assert.doesNotMatch(more, /href: "\/chef\/capacity"/);
   assert.match(more, /Switch to customer app/);
   assert.match(more, /Sign out/);
   assert.doesNotMatch(more, /not available yet/i);

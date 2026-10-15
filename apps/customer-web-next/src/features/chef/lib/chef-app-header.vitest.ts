@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Disposable identity and responses; no production API is called.
 import { createElement } from "react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefAppHeader } from "../components/chef-app-header";
 import { markChefModeVerified } from "./chef-mode";
@@ -46,5 +46,12 @@ describe("chef header bell", () => {
     render(createElement(ChefAppHeader));
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/notifications/in-app/unread-count?role=CHEF", expect.anything()));
     expect(screen.getByRole("link", { name: "Notifications" }).textContent).toBe("");
+  });
+
+  it("links Help & support and Login & security from the account menu", async () => {
+    render(createElement(ChefAppHeader));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Account menu" }), { key: "Enter" });
+    expect((await screen.findByText("Help & support")).closest("a")!.getAttribute("href")).toBe("/chef/support");
+    expect(screen.getByText("Login & security").closest("a")!.getAttribute("href")).toBe("/chef/security");
   });
 });

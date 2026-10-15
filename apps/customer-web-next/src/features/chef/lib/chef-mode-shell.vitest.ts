@@ -167,12 +167,15 @@ describe("More hub", () => {
   it("lists every chef page that is not a tab", async () => {
     render(createElement(ChefMorePage));
     await screen.findByRole("heading", { name: "Asha Rao" });
+    // One read of the links: a name query per row is too slow for this long list.
+    const links = screen.getAllByRole("link").map((link) => [link.querySelector(".chef-row-title")?.textContent, link.getAttribute("href")]);
     for (const [label, href] of [
-      ["Kitchen details", "/chef/kitchen"], ["Meal plans", "/chef/meal-plans"],
-      ["Can customers find you\\?", "/chef/operations"], ["Earnings", "/chef/earnings"],
-      ["Balance & payouts", "/chef/finance"], ["Edit bank account details", "/chef/bank"], ["Statements", "/chef/statements"], ["Your application", "/chef/application/status"],
-      ["Notifications", "/chef/notifications"], ["Get help", "/chef/support"],
-    ]) expect(screen.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href")).toBe(href);
+      ["Kitchen details", "/chef/kitchen"], ["Opening hours", "/chef/operations"], ["Daily limits", "/chef/capacity"],
+      ["Meal plans", "/chef/meal-plans"], ["Documents", "/chef/documents"], ["Earnings", "/chef/earnings"],
+      ["Balance & payouts", "/chef/finance"], ["Payout history", "/chef/earnings/payouts"], ["Edit bank account details", "/chef/bank"],
+      ["Statements", "/chef/statements"], ["Refer chefs", "/chef/referrals"], ["Preferences", "/chef/preferences"], ["Your application", "/chef/application/status"],
+      ["Notifications", "/chef/notifications"], ["Help & support", "/chef/support"], ["Login & security", "/chef/security"],
+    ]) expect(links.find(([title]) => title === label)?.[1], label).toBe(href);
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 

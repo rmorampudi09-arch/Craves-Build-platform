@@ -33,7 +33,8 @@ function KitchenPhotos({ name, photos }: { name: string; photos: string[] }) {
     return () => window.clearInterval(timer);
   }, [count, paused, reduceMotion]);
 
-  if (!count) return <div className="h-24 bg-[#F1F3F5] sm:h-28" />;
+  // No photos: a plain band just tall enough that the chef face starts below Back and the heart.
+  if (!count) return <div className="h-28 bg-[#F1F3F5]" />;
 
   const firstDot = Math.max(0, Math.min(current - 2, count - DOTS));
   return (

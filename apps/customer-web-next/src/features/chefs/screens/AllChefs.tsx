@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
+import { KitchenFilterBar } from "@/features/chefs/components/KitchenFilterBar";
+import { DEFAULT_KITCHEN_VIEW, sortKitchens, type KitchenView } from "@/features/chefs/lib/kitchen-filters";
 import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
@@ -12,6 +14,7 @@ import { KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
+import { SPICE_LEVEL_LABELS } from "@/shared/lib/spice-level";
 import {
   cartCount,
   loadCart,
@@ -61,8 +64,12 @@ export function AllChefsPage() {
   const [cartItemCount, setCartItemCount] = useState(() => cartCount());
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [view, setView] = useState<KitchenView>(DEFAULT_KITCHEN_VIEW);
+  // Only the latest load may fill the list: an older one (say, before a spice change) lands late.
+  const latestRefresh = useRef(0);
 
-  const refresh = useCallback(async (nextAddress: CravesAddress | null) => {
+  const refresh = useCallback(async (nextAddress: CravesAddress | null, spice: KitchenView["spice"] = "any") => {
+    const request = ++latestRefresh.current;
     if (
       typeof nextAddress?.lat !== "number" ||
       typeof nextAddress.lng !== "number"
@@ -86,6 +93,7 @@ export function AllChefsPage() {
           nextAddress.lat,
           nextAddress.lng,
           DEFAULT_DISCOVERY_RADIUS_METERS,
+          spice === "any" ? undefined : spice,
         ),
         discoverDishes(
           nextAddress.lat,
@@ -93,6 +101,7 @@ export function AllChefsPage() {
           DEFAULT_DISCOVERY_RADIUS_METERS,
         ),
       ]);
+      if (request !== latestRefresh.current) return;
 
       if (kitchenResult.status !== "fulfilled") {
         throw kitchenResult.reason;
@@ -115,7 +124,9 @@ export function AllChefsPage() {
       setMessage(
         kitchenResult.value.kitchens.length > 0
           ? "Showing active home chefs within 50 km of your delivery address."
-          : "No active home chefs are available within 50 km of your delivery address yet.",
+          : spice !== "any"
+            ? `No home chefs near you are cooking ${SPICE_LEVEL_LABELS[spice].toLowerCase()} dishes right now. Clear the spice filter to see every chef.`
+            : "No active home chefs are available within 50 km of your delivery address yet.",
       );
     } catch (error) {
       setKitchens([]);
@@ -197,6 +208,11 @@ export function AllChefsPage() {
     );
   }, [kitchens, searchTerm]);
 
+  const changeView = (next: KitchenView) => {
+    setView(next);
+    if (next.spice !== view.spice) void refresh(address, next.spice);
+  };
+
   const openAddressManager = useCallback(() => {
     rememberReturnRoute("/addresses", "/chefs");
     navigate({ to: "/addresses" });
@@ -234,15 +250,20 @@ export function AllChefsPage() {
       />
 
       <main>
+        {state === "address-required" ? null : (
+          <div className="mx-auto max-w-[88rem] px-4 pt-3 md:px-7 md:pt-4 lg:px-10">
+            <KitchenFilterBar view={view} onViewChange={changeView} />
+          </div>
+        )}
         <KitchensGrid
-          kitchens={filteredKitchens}
+          kitchens={sortKitchens(filteredKitchens, view.sort)}
           searchTerm={searchTerm}
           state={state}
           message={message}
           onSelectKitchen={(kitchen) =>
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } })
           }
-          onRetry={() => void refresh(address)}
+          onRetry={() => void refresh(address, view.spice)}
           onManageAddress={openAddressManager}
           dishImagesByKitchen={dishImagesByKitchen}
         />

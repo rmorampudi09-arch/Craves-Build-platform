@@ -19,6 +19,8 @@ export type SubscriptionOccurrence = {
   serviceAt: string;
   status: "BILLING_PENDING" | "PAYMENT_PENDING" | "READY_FOR_ORDER" | "ORDER_REQUESTED" | "ORDER_CREATED" | "SKIPPED" | "CANCELLED" | "FAILED";
   items: Array<{ menuItemId: string; quantity: number; sequenceNumber: number }>;
+  /** The order placed for this meal, once there is one. */
+  orderId: string | null;
 };
 
 export type SubscriptionSkipRequest = {
@@ -99,8 +101,9 @@ export function parseSubscriptionOccurrence(value: unknown): SubscriptionOccurre
     if (typeof entry.menuItemId !== "string" || !UUID.test(entry.menuItemId) || !Number.isInteger(entry.quantity) || Number(entry.quantity) < 1 || !Number.isInteger(entry.sequenceNumber) || Number(entry.sequenceNumber) < 1) return null;
     return { menuItemId: entry.menuItemId, quantity: Number(entry.quantity), sequenceNumber: Number(entry.sequenceNumber) };
   });
-  if (items.some(item => item === null)) return null;
-  return { id: raw.id, serviceDate: raw.serviceDate, mealSlotCode: raw.mealSlotCode, serviceAt, status: raw.status as SubscriptionOccurrence["status"], items: items as SubscriptionOccurrence["items"] };
+  const orderId = raw.orderId == null ? null : raw.orderId;
+  if (items.some(item => item === null) || (orderId !== null && (typeof orderId !== "string" || !UUID.test(orderId)))) return null;
+  return { id: raw.id, serviceDate: raw.serviceDate, mealSlotCode: raw.mealSlotCode, serviceAt, status: raw.status as SubscriptionOccurrence["status"], items: items as SubscriptionOccurrence["items"], orderId: orderId as string | null };
 }
 
 export function parseSubscriptionOccurrences(value: unknown): SubscriptionOccurrence[] | null {

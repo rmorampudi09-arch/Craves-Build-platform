@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CustomerSubscription } from "@/features/meal-plans/lib/subscription-contract";
+import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
+import { indiaBusinessDate, parseCustomerSubscription, type CustomerSubscription, type DayCredit, type DayCreditChoice } from "@/features/meal-plans/lib/subscription-contract";
 import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
-import { changeDeadline, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, planDay } from "@/features/meal-plans/lib/meal-plan-copy";
-import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { changeDeadline, dayCreditCard, formatMoney, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
+import { billingUnit } from "@/features/meal-plans/lib/meal-plan-schedule";
+import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 type Action = "pause" | "resume" | "skip" | "cancel";
 
@@ -52,6 +55,22 @@ const ACTION_COPY: Record<Action, { title: string; confirm: string; busy: string
 };
 
 const LOADING_PLAN = "Loading your meal plan…";
+const CHOICE_ERRORS: Record<string, string> = {
+  DAY_CREDIT_ALREADY_SETTLED: "This day has already been settled.",
+  DAY_CREDIT_NOT_FOUND: "This choice is no longer available.",
+  REFUNDS_NOT_AVAILABLE: "Refunds aren’t available yet. You can add the days at the end instead.",
+  EXTEND_NOT_AVAILABLE: "This plan has ended, so days can’t be added. Choose a refund.",
+};
+const ENDED_LINES: Partial<Record<SubscriptionOccurrence["status"], string>> = {
+  SKIPPED: "You skipped this meal.",
+  CANCELLED: "This meal was cancelled.",
+  FAILED: "We couldn’t place the order for this meal.",
+};
+
+/** Locality and city, e.g. "Madhapur, Hyderabad"; the city alone when no area is known. */
+function areaLine(address: CustomerAddress): string {
+  return [...new Set([address.areaName ?? address.districtName, address.city].filter(Boolean))].join(", ");
+}
 
 export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string }) {
   const [item, setItem] = useState<CustomerSubscription | null>(null);
@@ -65,20 +84,28 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   const [reason, setReason] = useState("");
   const [sheetError, setSheetError] = useState("");
   const [typed, setTyped] = useState(false);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [meal, setMeal] = useState<SubscriptionOccurrence | null>(null);
+  const [pick, setPick] = useState<{ credit: DayCredit; choice: DayCreditChoice } | null>(null);
 
   const load = useCallback(async () => {
-    const subscriptionResponse = await fetch(`/api/subscriptions/${subscriptionId}`, { cache: "no-store" });
+    const subscriptionResponse = await sessionFetch(`/api/subscriptions/${subscriptionId}`, { cache: "no-store" });
     const subscriptionBody = await subscriptionResponse.json().catch(() => null);
     if (subscriptionResponse.status === 401) throw new Error("Your session expired. Sign in again.");
     if (!subscriptionResponse.ok) throw new Error(subscriptionResponse.status === 404 ? "We couldn’t find this meal plan." : "We couldn’t load your meal plan. Please try again.");
-    const current = subscriptionBody as CustomerSubscription;
+    const current = parseCustomerSubscription(subscriptionBody);
+    if (!current) throw new Error("We couldn’t load your meal plan. Please try again.");
     setItem(current);
 
-    const [policyResponse, scheduleResponse, occurrenceResponse] = await Promise.all([
+    const [policyResponse, scheduleResponse, occurrenceResponse, addressResponse] = await Promise.all([
       fetch(`/api/subscriptions/plans/${current.planId}/policy`, { cache: "no-store" }),
       fetch(`/api/subscriptions/plans/${current.planId}/schedule`, { cache: "no-store" }),
-      fetch(`/api/subscriptions/${subscriptionId}/occurrences?limit=100`, { cache: "no-store" }),
+      sessionFetch(`/api/subscriptions/${subscriptionId}/occurrences?limit=100`, { cache: "no-store" }),
+      // Only names the delivery area; the plan works without it.
+      sessionFetch("/api/customer/addresses", { cache: "no-store" }).catch(() => null),
     ]);
+    const addressBody = addressResponse?.ok ? await addressResponse.json().catch(() => null) : null;
+    setAddresses(Array.isArray(addressBody) ? addressBody as CustomerAddress[] : []);
 
     if (policyResponse.ok) setPolicy(await policyResponse.json() as SubscriptionPlanPolicy); else setPolicy(null);
     if (scheduleResponse.ok) setSchedule(await scheduleResponse.json() as PublicSubscriptionSchedule); else setSchedule(null);
@@ -90,7 +117,7 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
 
   function openSheet(action: Action) {
     setSheet({ action, step: 1 });
-    setSheetDate(action === "resume" ? item?.nextServiceDate || item?.startDate || "" : action === "skip" ? item?.nextServiceDate || "" : "");
+    setSheetDate(action === "resume" ? resumeDate : action === "skip" ? item?.nextServiceDate || "" : "");
     setReason("");
     setSheetError("");
     setTyped(false);
@@ -101,8 +128,8 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
     const note = reason.trim() || null;
     const request =
       action === "skip"
-        ? fetch(`/api/subscriptions/${subscriptionId}/skips`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serviceDate: sheetDate, reason: note }) })
-        : fetch(`/api/subscriptions/${subscriptionId}/${action}`, {
+        ? sessionFetch(`/api/subscriptions/${subscriptionId}/skips`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serviceDate: sheetDate, reason: note }) })
+        : sessionFetch(`/api/subscriptions/${subscriptionId}/${action}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(action === "resume" ? { resumeDate: sheetDate, reason: note } : { reason: note }),
@@ -113,6 +140,9 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
       const response = await request;
       if (!response.ok) {
         const day = sheetDate ? planDay(sheetDate) : "";
+        const { code } = await response.json().catch(() => ({})) as { code?: string };
+        if (code === "SUBSCRIPTION_PAUSE_ALLOWANCE_USED") throw new Error("You’ve used all your pause days for this bill. You can pause again on your next bill.");
+        if (code === "RESUME_AFTER_AUTO_RESTART") throw new Error(`Your plan restarts by itself${pausing?.autoDate ? ` on ${planDay(pausing.autoDate)}` : ""}. Choose that day or earlier.`);
         throw new Error(
           response.status !== 409
             ? `We couldn’t ${action === "skip" ? "skip that day" : `${action} your meal plan`}. Please try again.`
@@ -123,15 +153,41 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
                 : `It’s too late to ${action} before the next meal, or your plan just changed. Refresh and try again.`,
         );
       }
-      await load();
       setSheet(null);
-      setMessage(
+      await reloadAfter(
         action === "skip" ? `Skipped: ${planDay(sheetDate)}`
           : action === "resume" ? `Meal plan resumed. Meals restart ${planDay(sheetDate)}.`
             : action === "pause" ? "Meal plan paused." : "Meal plan cancelled.",
       );
     } catch (error) {
       setSheetError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The change is already saved, so a failed reload must not show as an error to retry.
+  async function reloadAfter(done: string) {
+    await load().then(() => setMessage(done), () => setMessage(`${done} Tap Refresh to see the latest.`));
+  }
+
+  // A choice can't be changed later, so the card's buttons ask first.
+  async function choose(credit: DayCredit, choice: DayCreditChoice) {
+    setBusy(true);
+    setSheetError("");
+    try {
+      const response = await sessionFetch(`/api/subscriptions/${subscriptionId}/day-credits/${credit.id}/choice`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ choice }),
+      });
+      if (!response.ok) {
+        const { code } = await response.json().catch(() => ({})) as { code?: string };
+        if (response.status === 409) void load().catch(() => undefined); // our copy of the choice is stale
+        throw new Error((code && CHOICE_ERRORS[code]) || "We couldn’t save your choice. Please try again.");
+      }
+      setPick(null);
+      await reloadAfter(choice === "REFUND" ? "Refund requested." : "Days added at the end of your plan.");
+    } catch (error) {
+      setSheetError(error instanceof Error ? error.message : "We couldn’t save your choice. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -148,9 +204,18 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
     return [...groups.entries()];
   }, [schedule]);
 
+  const today = indiaBusinessDate();
+  const resumeDate = resumeDateFor(new Date(), policy?.resumeLeadMinutes ?? 0, schedule?.items.map(entry => entry.serviceTime).sort()[0] ?? null);
+  const pausing = item ? pauseInfo(item, resumeDate, today) : null;
+
   if (!item && message === LOADING_PLAN) return <CustomerSectionSkeleton variant="plan-details" label={LOADING_PLAN} />;
-  if (!item) return <p role="status" className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">{message}</p>;
-  const today = new Date().toISOString().slice(0, 10);
+  if (!item || !pausing) return <p role="status" className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">{message}</p>;
+  const address = addresses.find(entry => entry.id === item.deliveryAddressId);
+  const pauseLine = pauseDaysLine(item);
+  const dishNames = new Map(schedule?.items.map(entry => [entry.menuItemId, entry.itemName ?? "Meal item"]));
+  const servings = meal?.items.reduce((sum, entry) => sum + entry.quantity, 0) ?? 0;
+  const pickView = pick ? dayCreditCard(pick.credit, today) : null;
+  const pickLabel = (pick?.choice === "REFUND" ? pickView?.refundLabel : pickView?.extendLabel) ?? "";
   const deadline = policy?.customerSkipEnabled ? changeDeadline(occurrences, policy.skipCutoffMinutes) : null;
   const paymentRequired = item.status === "PENDING_PAYMENT" || item.status === "PAYMENT_FAILED";
   const copy = sheet ? ACTION_COPY[sheet.action] : null;
@@ -163,29 +228,52 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   return <div className="space-y-4">
     <section className={card}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_PLAN_STATUS[item.status]}</span>
+        <div>
+          <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_PLAN_STATUS[item.status]}</span>
+          {item.amount !== null && item.currency && <p className="mt-2 text-[#1A1A1A]">
+            <strong className="text-xl">{formatMoney(item.amount, item.currency)}</strong>
+            {item.billingPeriod && <span className="text-sm text-[#6B6B6B]"> / {billingUnit(item.billingPeriod)}</span>}
+          </p>}
+          {pausing.restartNote && <p className="mt-2 text-sm font-semibold">{pausing.restartNote}</p>}
+        </div>
         <button type="button" onClick={() => void load()} className={quietButton}>Refresh</button>
       </div>
       <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
         <div><dt className="text-[#6B6B6B]">Started</dt><dd className="mt-0.5 font-semibold">{planDay(item.startDate)}</dd></div>
         <div><dt className="text-[#6B6B6B]">Next meal</dt><dd className="mt-0.5 font-semibold">{item.nextServiceDate ? planDay(item.nextServiceDate) : "Not scheduled"}</dd></div>
         <div><dt className="text-[#6B6B6B]">Ends</dt><dd className="mt-0.5 font-semibold">{item.endDate ? planDay(item.endDate) : "No end date"}</dd></div>
-        <div><dt className="text-[#6B6B6B]">Deliver to</dt><dd className="mt-0.5 font-semibold">{item.deliveryAddressId ? "Your saved address" : "Not set"}</dd></div>
+        {item.status === "ACTIVE" && item.nextBillingDate && <div><dt className="text-[#6B6B6B]">Renews</dt><dd className="mt-0.5 font-semibold">{planDay(item.nextBillingDate)}</dd></div>}
+        <div><dt className="text-[#6B6B6B]">Deliver to</dt><dd className="mt-0.5 font-semibold">{address ? areaLine(address) : item.deliveryAddressId ? "Your saved address" : "Not set"}</dd></div>
       </dl>
       {item.notes && <div className="mt-4 rounded-xl bg-[#F1F3F5] p-4 text-sm leading-6"><p className="font-semibold">Notes for the chef</p><p className="mt-1">{item.notes}</p></div>}
       {paymentRequired && <Link href={`/subscriptions/${item.id}/payment`} className="craves-primary-action mt-5">{item.status === "PAYMENT_FAILED" ? "Try payment again" : "Pay now"}</Link>}
       <p className="text-sm font-medium text-[#1A1A1A]" role="status">{message ? <span className="mt-4 block">{message}</span> : null}</p>
     </section>
 
+    {item.dayCredits.map(credit => {
+      const view = dayCreditCard(credit, today);
+      return <section key={credit.id} className={card}>
+        <h2 className="text-lg font-bold">{view.title}</h2>
+        {view.pending ? <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" disabled={busy} onClick={() => { setSheetError(""); setPick({ credit, choice: "REFUND" }); }} className={quietButton}>{view.refundLabel}</button>
+            {view.extendAvailable && <button type="button" disabled={busy} onClick={() => { setSheetError(""); setPick({ credit, choice: "EXTEND" }); }} className="craves-primary-action">{view.extendLabel}</button>}
+          </div>
+          {view.note && <p className="mt-3 text-sm text-[#6B6B6B]">{view.note}</p>}
+        </> : view.settledLine && <p className="mt-2 text-sm text-[#6B6B6B]">{view.settledLine}</p>}
+      </section>;
+    })}
+
     <section className={card}>
       <h2 className="text-lg font-bold">Manage meal plan</h2>
       {!policy ? <p className="mt-2 text-sm text-[#6B6B6B]">Plan changes aren’t available right now. Please try again later.</p> : <>
         {deadline && <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{deadline}</p>}
         <ul className="mt-3 space-y-1 text-sm text-[#6B6B6B]">{policyLines(policy).map(line => <li key={line}>{line}</li>)}</ul>
+        {pauseLine && <p className="mt-3 text-sm font-semibold text-[#1A1A1A]">{pauseLine}</p>}
         {(item.status === "ACTIVE" || item.status === "PAUSED") && <div className="mt-5 flex flex-wrap gap-2">
-          {item.status === "PAUSED" && policy.customerResumeEnabled && <button type="button" disabled={busy} onClick={() => openSheet("resume")} className="craves-primary-action">Resume meal plan</button>}
+          {item.status === "PAUSED" && policy.customerResumeEnabled && pausing.resumeOffered && <button type="button" disabled={busy} onClick={() => openSheet("resume")} className="craves-primary-action">Resume meal plan</button>}
           {item.status === "ACTIVE" && policy.customerSkipEnabled && <button type="button" disabled={busy} onClick={() => openSheet("skip")} className={quietButton}>Skip a day</button>}
-          {item.status === "ACTIVE" && policy.customerPauseEnabled && <button type="button" disabled={busy} onClick={() => openSheet("pause")} className={quietButton}>Pause</button>}
+          {item.status === "ACTIVE" && policy.customerPauseEnabled && <button type="button" disabled={busy || pausing.pauseDisabledLabel !== null} onClick={() => openSheet("pause")} className={`${quietButton} disabled:opacity-60`}>{pausing.pauseDisabledLabel ?? "Pause"}</button>}
           {policy.customerCancelEnabled && <button type="button" disabled={busy} onClick={() => openSheet("cancel")} className={`${quietButtonBase} !text-[#C4200F]`}>Cancel plan</button>}
         </div>}
         {references.length > 0 && <dl className="mt-5 space-y-1 text-xs text-[#6B6B6B]">
@@ -211,12 +299,14 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
 
     <section className={card}>
       <h2 className="text-lg font-bold">Your meals</h2>
-      {occurrences.length === 0 ? <p className="mt-2 text-sm text-[#6B6B6B]">Your meals will appear here once your plan starts.</p> : <ul className="mt-4 divide-y divide-[#E5E7EB]">{occurrences.map(occurrence => <li key={occurrence.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-        <div>
-          <p className="text-sm font-semibold">{planDay(occurrence.serviceDate)} · {formatSlot(occurrence.mealSlotCode)}</p>
-          <p className="mt-0.5 text-xs text-[#6B6B6B]">{mealClock.format(new Date(occurrence.serviceAt))} · {occurrence.items.length} item{occurrence.items.length === 1 ? "" : "s"}</p>
-        </div>
-        <span className="rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_STATUS[occurrence.status]}</span>
+      {occurrences.length === 0 ? <p className="mt-2 text-sm text-[#6B6B6B]">Your meals will appear here once your plan starts.</p> : <ul className="mt-4 divide-y divide-[#E5E7EB]">{occurrences.map(occurrence => <li key={occurrence.id}>
+        <button type="button" aria-haspopup="dialog" onClick={() => setMeal(occurrence)} className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl !border-0 !bg-transparent px-1 py-3 text-left !shadow-none hover:!bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30">
+          <span>
+            <span className="block text-sm font-semibold text-[#1A1A1A]">{planDay(occurrence.serviceDate)} · {formatSlot(occurrence.mealSlotCode)}</span>
+            <span className="mt-0.5 block text-xs text-[#6B6B6B]">{mealClock.format(new Date(occurrence.serviceAt))} · {occurrence.items.length} item{occurrence.items.length === 1 ? "" : "s"}</span>
+          </span>
+          <span className="rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_STATUS[occurrence.status]}</span>
+        </button>
       </li>)}</ul>}
     </section>
 
@@ -237,10 +327,10 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
         {sheet.step === 1 ? <>
           {needsDate && <label className="block font-semibold">
             {sheet.action === "skip" ? "Day to skip" : "Restart meals on"}
-            <input type="date" min={today} value={sheetDate} onChange={event => setSheetDate(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-base" />
+            <input type="date" min={sheet.action === "resume" ? resumeDate : today} max={sheet.action === "resume" ? pausing.autoDate ?? undefined : undefined} value={sheetDate} onChange={event => setSheetDate(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 text-base" />
           </label>}
           <p className={needsDate ? "mt-3 text-[#6B6B6B]" : "text-[#6B6B6B]"}>
-            {sheet.action === "pause" && `Meals stop until you resume the plan.${policy?.pauseCutoffMinutes ? ` A meal due in the next ${noticeLength(policy.pauseCutoffMinutes)} will still arrive.` : ""}`}
+            {sheet.action === "pause" && `${pausing.pauseMessage}${policy?.pauseCutoffMinutes ? ` A meal due in the next ${noticeLength(policy.pauseCutoffMinutes)} will still arrive.` : ""}`}
             {sheet.action === "resume" && (sheetDate ? `Meals restart on ${planDay(sheetDate)}.` : "Choose the day your meals should restart.")}
             {sheet.action === "skip" && (sheetDate ? `All meals on ${planDay(sheetDate)} are skipped. Your other days stay the same.` : "Choose the day you don’t need meals.")}
             {sheet.action === "cancel" && <>Meals that haven’t left the kitchen will stop. This can’t be undone. Refunds follow our <Link href="/refunds-cancellations" className="font-semibold text-[#1A1A1A] underline underline-offset-2">refund policy</Link>.</>}
@@ -250,6 +340,42 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
           <textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={1000} className="mt-2 min-h-24 w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-base font-normal" />
         </label>}
         {sheetError && <p role="alert" className="mt-3 rounded-xl bg-[#F1F3F5] p-3 font-medium text-[#C4200F]">{sheetError}</p>}
+      </div> : null}
+    </Sheet>
+
+    <Dialog
+      open={pick !== null}
+      onOpenChange={next => { if (!next) setPick(null); }}
+      busy={busy}
+      title={`${pickLabel}?`}
+      description={pick?.choice === "REFUND"
+        ? "The refund goes back to the UPI or card you paid with. You can’t change this later."
+        : "Your plan runs longer by these days. You can’t change this later."}
+      footer={pick ? <>
+        <button type="button" onClick={() => setPick(null)} disabled={busy} className={secondaryActionClass}>Not now</button>
+        <button type="button" disabled={busy} aria-busy={busy} onClick={() => void choose(pick.credit, pick.choice)} className="craves-primary-action w-full sm:w-auto">{busy ? "Saving…" : pickLabel}</button>
+      </> : null}
+    >
+      {sheetError && pick ? <p role="alert" className="mt-3 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">{sheetError}</p> : null}
+    </Dialog>
+
+    <Sheet
+      open={meal !== null}
+      onOpenChange={next => { if (!next) setMeal(null); }}
+      title={meal ? `${formatSlot(meal.mealSlotCode)}, ${planDay(meal.serviceDate)}` : ""}
+      footer={meal?.orderId && !ENDED_LINES[meal.status] ? <Link href={`/orders/${meal.orderId}`} className="craves-primary-action w-full sm:w-auto">Track order</Link> : null}
+    >
+      {meal ? <div className="mt-4 space-y-4 text-sm text-[#1A1A1A]">
+        <div>
+          <p className="text-base font-bold">{meal.items.map(entry => dishNames.get(entry.menuItemId) ?? "Meal item").join(" + ")}</p>
+          <p className="mt-1 text-[#6B6B6B]">{ENDED_LINES[meal.status] ?? MEAL_STATUS[meal.status]}</p>
+        </div>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <div><dt className="text-[#6B6B6B]">Date</dt><dd className="mt-0.5 font-semibold">{planDay(meal.serviceDate)}</dd></div>
+          <div><dt className="text-[#6B6B6B]">Time</dt><dd className="mt-0.5 font-semibold">{mealClock.format(new Date(meal.serviceAt))}</dd></div>
+          {address && <div><dt className="text-[#6B6B6B]">Delivery address</dt><dd className="mt-0.5 font-semibold">{areaLine(address)}</dd></div>}
+          <div><dt className="text-[#6B6B6B]">Quantity</dt><dd className="mt-0.5 font-semibold">{servings} serving{servings === 1 ? "" : "s"}</dd></div>
+        </dl>
       </div> : null}
     </Sheet>
   </div>;

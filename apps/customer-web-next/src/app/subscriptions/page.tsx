@@ -12,7 +12,7 @@ export default function SubscriptionsPage() {
     <ContextualBackBoundary destination="/subscriptions" fallback="/home">
       <MealPlanPage
         title="Your meal plans"
-        intro="Home-cooked meals on a schedule. Pay for a new plan, skip a day, pause or cancel here."
+        intro="Home-cooked meals on a schedule. Find a plan near you, then skip a day, pause or cancel here."
         back="/home"
         backLabel="Back to home"
       >

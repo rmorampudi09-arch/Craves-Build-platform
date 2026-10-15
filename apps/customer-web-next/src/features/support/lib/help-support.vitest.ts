@@ -4,7 +4,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...props }, children),
+  Link: ({ children, to, ...props }: { children: ReactNode; to: string }) =>
+    createElement("a", { href: to, ...props }, children),
 }));
 
 import { HelpSupport } from "@/features/support/screens/HelpSupport";
@@ -15,8 +16,14 @@ describe("Help & support", () => {
   it("offers chat, a call to the support line and an email", () => {
     render(createElement(HelpSupport));
     expect(screen.getByRole("link", { name: /^Chat/ }).getAttribute("href")).toBe("/support");
-    expect(screen.getByRole("link", { name: "Call: call Craves support on +91 83673 66787" }).getAttribute("href")).toBe("tel:+918367366787");
-    expect(screen.getByRole("link", { name: /^Email/ }).getAttribute("href")).toBe("mailto:support@craves.in?subject=Craves%20support");
+    expect(
+      screen
+        .getByRole("link", { name: "Call: call Craves support on +91 83673 66787" })
+        .getAttribute("href"),
+    ).toBe("tel:+918367366787");
+    expect(screen.getByRole("link", { name: /^Email/ }).getAttribute("href")).toBe(
+      "mailto:support@craves.in?subject=Craves%20support",
+    );
   });
 
   it("sends each common question to the page that answers it", () => {

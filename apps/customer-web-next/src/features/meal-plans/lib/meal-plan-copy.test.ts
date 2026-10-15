@@ -113,4 +113,7 @@ test("a settled choice shows its outcome instead of buttons", () => {
   assert.equal(dayCreditCard({ ...pausedDays, status: "EXTENDED" }, "2026-10-14").settledLine, "3 days added at the end.");
   assert.equal(dayCreditCard({ ...decline, status: "EXTENDED" }, "2026-10-14").settledLine, "1 day added at the end.");
   assert.equal(dayCreditCard({ ...decline, status: "REFUNDED" }, "2026-10-14").settledLine, "Refunded to the UPI or card you paid with.");
+  // Like the app: a failed refund keeps its card (title only), with no choice offered again.
+  const failed = dayCreditCard({ ...decline, status: "REFUND_FAILED" }, "2026-10-14");
+  assert.deepEqual([failed.pending, failed.note, failed.settledLine], [false, null, null]);
 });

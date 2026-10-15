@@ -13,6 +13,7 @@ import {
   billingPeriodLabel,
   billingUnit,
   mealsAndDays,
+  type BillingUnit,
   type MealPlanFoodType,
 } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { formatMoney } from "@/features/meal-plans/lib/meal-plan-copy";
@@ -20,6 +21,13 @@ import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPag
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 
 const LOAD_FAILED = "We couldn’t load meal plans. Please try again shortly.";
+type Filter = "all" | BillingUnit;
+const FILTERS: Array<{ key: Filter; label: string; empty: string }> = [
+  { key: "all", label: "All", empty: "No meal plans near you yet" },
+  { key: "week", label: "Weekly", empty: "No weekly meal plans near you yet" },
+  { key: "14 days", label: "14 days", empty: "No 14-day meal plans near you yet" },
+  { key: "28 days", label: "Monthly", empty: "No monthly meal plans near you yet" },
+];
 const FOOD_TYPE: Record<MealPlanFoodType, { label: string; dot: string }> = {
   VEG: { label: "Veg", dot: "bg-[#2E7D32]" },
   EGG: { label: "Egg", dot: "bg-[#D99A00]" },
@@ -106,6 +114,7 @@ export function SubscriptionPlanBrowser() {
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
 
   const load = useCallback(async () => {
     const address = getAddress();
@@ -128,7 +137,7 @@ export function SubscriptionPlanBrowser() {
         : null;
       if (!items) throw new Error(LOAD_FAILED);
       setPlans(items);
-      setMessage(items.length === 0 ? "No meal plans are available near you yet." : "");
+      setMessage(items.length === 0 ? FILTERS[0].empty : "");
     } catch {
       setPlans([]);
       setFailed(true);
@@ -157,7 +166,10 @@ export function SubscriptionPlanBrowser() {
 
   const query = search.trim().toLowerCase();
   // Matches the plan name or the kitchen; a kitchen name still loading simply doesn't match yet.
-  const visible = (plans ?? []).filter(
+  const ofLength = (plans ?? []).filter(
+    (plan) => filter === "all" || billingUnit(plan.billingPeriod) === filter,
+  );
+  const visible = ofLength.filter(
     (plan) =>
       !query ||
       `${plan.name}\n${covers.get(plan.id)?.kitchenName ?? ""}`.toLowerCase().includes(query),
@@ -198,9 +210,24 @@ export function SubscriptionPlanBrowser() {
               className="min-h-12 w-full rounded-full border border-[#E5E7EB] bg-white pl-12 pr-4 text-base text-[#1A1A1A]"
             />
           </label>
+          <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Bill length">
+            {FILTERS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={filter === option.key}
+                onClick={() => setFilter(option.key)}
+                className={`min-h-11 rounded-full border px-5 text-sm font-bold ${filter === option.key ? "border-[#1A1A1A] bg-[#1A1A1A] text-white" : "border-[#E5E7EB] bg-white text-[#1A1A1A]"}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           {visible.length === 0 ? (
             <p className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]" role="status">
-              No plans match “{search.trim()}”.
+              {ofLength.length === 0
+                ? FILTERS.find((option) => option.key === filter)?.empty
+                : `No plans match “${search.trim()}”.`}
             </p>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

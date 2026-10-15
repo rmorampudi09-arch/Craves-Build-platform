@@ -1,4 +1,5 @@
 import { MealPlanHowItWorks } from "@/features/meal-plans/components/meal-plan-how-it-works";
+import { PreviousPageBack } from "@/features/meal-plans/components/previous-page-back";
 import { MealPlanPage } from "../meal-plan-page";
 
 export const metadata = {
@@ -9,8 +10,10 @@ export const metadata = {
 
 export default function MealPlanHowItWorksPage() {
   return (
-    <MealPlanPage title="How meal plans work" back="/subscriptions" backLabel="Back to your meal plans">
-      <MealPlanHowItWorks />
-    </MealPlanPage>
+    <PreviousPageBack>
+      <MealPlanPage title="How meal plans work" back="/subscriptions" backLabel="Back to your meal plans">
+        <MealPlanHowItWorks />
+      </MealPlanPage>
+    </PreviousPageBack>
   );
 }

@@ -90,6 +90,15 @@ test("the pause allowance is read when the server sends it", () => {
   assert.equal(parseCustomerSubscription({ ...base, pauseDaysLeft: -1 })?.pauseDaysLeft, null);
 });
 
+test("the bill length, price and renewal date are read; an unreadable one is left out", () => {
+  const base = { id: "33333333-3333-4333-8333-333333333333", planId: plan.id, status: "ACTIVE", startDate: "2026-08-01", createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+  const parsed = parseCustomerSubscription({ ...base, billingPeriod: "FORTNIGHTLY", amount: 2400, currency: "INR", nextBillingDate: "2026-08-15" });
+  assert.deepEqual([parsed?.billingPeriod, parsed?.amount, parsed?.currency, parsed?.nextBillingDate], ["FORTNIGHTLY", 2400, "INR", "2026-08-15"]);
+  const broken = parseCustomerSubscription({ ...base, billingPeriod: "DAILY", amount: "", currency: "rupees", nextBillingDate: "soon" });
+  assert.deepEqual([broken?.billingPeriod, broken?.amount, broken?.currency, broken?.nextBillingDate], [null, null, null, null]);
+  assert.equal(parseCustomerSubscription({ ...base, amount: "1499.50" })?.amount, 1499.5);
+});
+
 const credit = {
   id: "88888888-8888-4888-8888-888888888888", kind: "DECLINE", firstDate: "2026-10-14", lastDate: "2026-10-14", mealSlotCode: "LUNCH", days: null,
   status: "PENDING_CHOICE", refundAmount: null, currency: "INR", choiceDeadline: "2026-10-16T06:00:00Z", extendAvailable: true,
@@ -98,6 +107,7 @@ const credit = {
 test("day credits parse, and one the web can't read is left out", () => {
   assert.deepEqual(parseDayCredit(credit), credit);
   assert.equal(parseDayCredit({ ...credit, refundAmount: "120.50" })?.refundAmount, 120.5);
+  assert.equal(parseDayCredit({ ...credit, status: "REFUND_FAILED" })?.status, "REFUND_FAILED");
   for (const broken of [{ ...credit, kind: "BONUS" }, { ...credit, status: "LOST" }, { ...credit, id: "x" }, { ...credit, lastDate: "2026-10-13" },
     { ...credit, extendAvailable: "yes" }, { ...credit, days: 0 }, { ...credit, refundAmount: -1 }, { ...credit, choiceDeadline: "soon" }]) {
     assert.equal(parseDayCredit(broken), null);

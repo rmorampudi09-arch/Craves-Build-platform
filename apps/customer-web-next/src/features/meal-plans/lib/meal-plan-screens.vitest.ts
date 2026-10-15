@@ -9,6 +9,7 @@ vi.mock("@/features/auth/api/cravesAuth", () => ({
 }));
 import { SubscriptionDetails } from "@/features/meal-plans/components/subscription-details";
 import { SubscriptionManager } from "@/features/meal-plans/components/subscription-manager";
+import { PreviousPageBack } from "@/features/meal-plans/components/previous-page-back";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const PLAN = "22222222-2222-4222-8222-222222222222";
@@ -197,6 +198,15 @@ describe("meal plan page", () => {
     await settle();
   });
 
+  it("shows the bill's price, length and renewal date", async () => {
+    current = subscription({ billingPeriod: "FORTNIGHTLY", amount: 2400, currency: "INR", nextBillingDate: "2026-10-19" });
+    render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    expect(await screen.findByText("₹2,400")).toBeTruthy();
+    expect(screen.getByText("/ 14 days")).toBeTruthy();
+    expect(screen.getByText("Renews").nextElementSibling?.textContent).toBe("Mon 19 Oct");
+    await settle();
+  });
+
   it("opens a meal with its date, time, address, quantity and Track order", async () => {
     render(createElement(SubscriptionDetails, { subscriptionId: ID }));
     fireEvent.click(await screen.findByRole("button", { name: /Mon 12 Oct · Lunch/ }));
@@ -226,6 +236,24 @@ describe("meal plans list", () => {
     expect(screen.getByRole("link", { name: /How meal plans work/ }).getAttribute("href")).toBe(
       "/subscriptions/how-it-works",
     );
+    await settle();
+  });
+
+  it("shows each running plan's bill length and renewal date", async () => {
+    mine = [subscription({ billingPeriod: "FORTNIGHTLY", nextBillingDate: "2026-10-19" })];
+    render(createElement(SubscriptionManager));
+    expect(await screen.findByText("14 days · Renews Mon 19 Oct · Next meal Mon 12 Oct")).toBeTruthy();
+    await settle();
+  });
+
+  it("filters Explore by bill length with the app's empty copy", async () => {
+    render(createElement(SubscriptionManager));
+    fireEvent.click(await screen.findByRole("button", { name: "14 days" }));
+    expect(screen.getByRole("button", { name: "14 days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("heading", { name: "Fortnight tiffin" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Weekly thali" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Monthly" }));
+    expect(screen.getByText("No monthly meal plans near you yet")).toBeTruthy();
     await settle();
   });
 
@@ -270,11 +298,41 @@ describe("refund or extra days", () => {
     await settle();
   });
 
+  it("closes the choice once it is saved, even when the plan can't reload", async () => {
+    current = subscription({ dayCredits: [credit] });
+    render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add 3 days at the end" }));
+    const saved = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) =>
+      (init?.method ?? "GET") === "GET" ? Response.json({}, { status: 503 }) : saved(url, init));
+    const dialog = screen.getByRole("dialog", { name: "Add 3 days at the end?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add 3 days at the end" }));
+    expect(await screen.findByText("Days added at the end of your plan. Tap Refresh to see the latest.")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    await settle();
+  });
+
   it("offers only a refund once the plan can't run longer", async () => {
     current = subscription({ dayCredits: [{ ...credit, extendAvailable: false }] });
     render(createElement(SubscriptionDetails, { subscriptionId: ID }));
     expect(await screen.findByRole("button", { name: "Get a refund (₹360)" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add 3 days at the end" })).toBeNull();
     await settle();
+  });
+});
+
+describe("how it works back link", () => {
+  it("goes back to the Craves page the customer came from, else follows the link", () => {
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
+    render(createElement(PreviousPageBack, null, createElement("a", { href: "#plans", "aria-label": "Back to your meal plans" }, "Back")));
+    const link = screen.getByRole("link", { name: "Back to your meal plans" });
+    expect(fireEvent.click(link)).toBe(true);
+    vi.stubGlobal("navigation", { currentEntry: { index: 0 } });
+    expect(fireEvent.click(link)).toBe(true);
+    vi.stubGlobal("navigation", { currentEntry: { index: 1 } });
+    expect(fireEvent.click(link, { ctrlKey: true })).toBe(true);
+    expect(fireEvent.click(link)).toBe(false);
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
   });
 });

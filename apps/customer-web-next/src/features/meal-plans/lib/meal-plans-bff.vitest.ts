@@ -100,6 +100,14 @@ describe("meal plan list BFF", () => {
     );
   });
 
+  it("refuses a missing, empty or out-of-range location before the backend", async () => {
+    for (const query of ["latitude=17.4", "latitude=&longitude=", "latitude=91&longitude=78.4", "latitude=17.4&longitude=-181", "latitude=x&longitude=78.4"]) {
+      const response = await listPlans(new NextRequest(`https://craves.in/api/subscriptions/plans?${query}`));
+      expect([query, response.status, (await response.json()).code]).toEqual([query, 400, "INVALID_LOCATION"]);
+    }
+    expect(publicUpstream).not.toHaveBeenCalled();
+  });
+
   it("answers 502 only when the list itself is not a list", async () => {
     publicUpstream.mockResolvedValue(Response.json({ plans: [plan] }));
     const response = await listPlans(new NextRequest("https://craves.in/api/subscriptions/plans"));

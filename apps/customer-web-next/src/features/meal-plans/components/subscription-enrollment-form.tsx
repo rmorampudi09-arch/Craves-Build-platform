@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import {
+  indiaBusinessDate,
   parseCustomerSubscription,
   type PublicSubscriptionPlan,
 } from "@/features/meal-plans/lib/subscription-contract";
@@ -32,7 +33,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const [message, setMessage] = useState(LOADING_PLAN);
   const [busy, setBusy] = useState(false);
   const idempotencyKey = useRef("");
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => indiaBusinessDate(), []);
 
   useEffect(() => {
     let active = true;

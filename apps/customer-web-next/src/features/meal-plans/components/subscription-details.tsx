@@ -6,7 +6,8 @@ import type { CustomerAddress } from "@/features/addresses/lib/address-contract"
 import { indiaBusinessDate, parseCustomerSubscription, type CustomerSubscription, type DayCredit, type DayCreditChoice } from "@/features/meal-plans/lib/subscription-contract";
 import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
-import { changeDeadline, dayCreditCard, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
+import { changeDeadline, dayCreditCard, formatMoney, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
+import { billingUnit } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
@@ -152,9 +153,8 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
                 : `It’s too late to ${action} before the next meal, or your plan just changed. Refresh and try again.`,
         );
       }
-      await load();
       setSheet(null);
-      setMessage(
+      await reloadAfter(
         action === "skip" ? `Skipped: ${planDay(sheetDate)}`
           : action === "resume" ? `Meal plan resumed. Meals restart ${planDay(sheetDate)}.`
             : action === "pause" ? "Meal plan paused." : "Meal plan cancelled.",
@@ -164,6 +164,11 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
     } finally {
       setBusy(false);
     }
+  }
+
+  // The change is already saved, so a failed reload must not show as an error to retry.
+  async function reloadAfter(done: string) {
+    await load().then(() => setMessage(done), () => setMessage(`${done} Tap Refresh to see the latest.`));
   }
 
   // A choice can't be changed later, so the card's buttons ask first.
@@ -179,9 +184,8 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
         if (response.status === 409) void load().catch(() => undefined); // our copy of the choice is stale
         throw new Error((code && CHOICE_ERRORS[code]) || "We couldn’t save your choice. Please try again.");
       }
-      await load();
       setPick(null);
-      setMessage(choice === "REFUND" ? "Refund requested." : "Days added at the end of your plan.");
+      await reloadAfter(choice === "REFUND" ? "Refund requested." : "Days added at the end of your plan.");
     } catch (error) {
       setSheetError(error instanceof Error ? error.message : "We couldn’t save your choice. Please try again.");
     } finally {
@@ -226,6 +230,10 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_PLAN_STATUS[item.status]}</span>
+          {item.amount !== null && item.currency && <p className="mt-2 text-[#1A1A1A]">
+            <strong className="text-xl">{formatMoney(item.amount, item.currency)}</strong>
+            {item.billingPeriod && <span className="text-sm text-[#6B6B6B]"> / {billingUnit(item.billingPeriod)}</span>}
+          </p>}
           {pausing.restartNote && <p className="mt-2 text-sm font-semibold">{pausing.restartNote}</p>}
         </div>
         <button type="button" onClick={() => void load()} className={quietButton}>Refresh</button>
@@ -234,6 +242,7 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
         <div><dt className="text-[#6B6B6B]">Started</dt><dd className="mt-0.5 font-semibold">{planDay(item.startDate)}</dd></div>
         <div><dt className="text-[#6B6B6B]">Next meal</dt><dd className="mt-0.5 font-semibold">{item.nextServiceDate ? planDay(item.nextServiceDate) : "Not scheduled"}</dd></div>
         <div><dt className="text-[#6B6B6B]">Ends</dt><dd className="mt-0.5 font-semibold">{item.endDate ? planDay(item.endDate) : "No end date"}</dd></div>
+        {item.status === "ACTIVE" && item.nextBillingDate && <div><dt className="text-[#6B6B6B]">Renews</dt><dd className="mt-0.5 font-semibold">{planDay(item.nextBillingDate)}</dd></div>}
         <div><dt className="text-[#6B6B6B]">Deliver to</dt><dd className="mt-0.5 font-semibold">{address ? areaLine(address) : item.deliveryAddressId ? "Your saved address" : "Not set"}</dd></div>
       </dl>
       {item.notes && <div className="mt-4 rounded-xl bg-[#F1F3F5] p-4 text-sm leading-6"><p className="font-semibold">Notes for the chef</p><p className="mt-1">{item.notes}</p></div>}

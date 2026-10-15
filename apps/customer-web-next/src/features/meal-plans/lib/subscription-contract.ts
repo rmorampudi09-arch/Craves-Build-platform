@@ -31,6 +31,11 @@ export type CustomerSubscription = {
   updatedAt: string;
   /** The subscription's own plan name, so a plan closed to new subscribers keeps its name. */
   planName: string | null;
+  /** The bill as booked; null from an older server. */
+  billingPeriod: PublicSubscriptionPlan["billingPeriod"] | null;
+  amount: number | null;
+  currency: string | null;
+  nextBillingDate: string | null;
   /** Pause allowance per paid bill (1 weekly, 3 for 14 days, 7 monthly); null from an older server. */
   pauseDaysPerBill: number | null;
   pauseDaysLeft: number | null;
@@ -48,7 +53,7 @@ export type DayCredit = {
   lastDate: string;
   mealSlotCode: string | null;
   days: number | null;
-  status: "PENDING_CHOICE" | "EXTENDED" | "REFUND_REQUESTED" | "REFUNDED";
+  status: "PENDING_CHOICE" | "EXTENDED" | "REFUND_REQUESTED" | "REFUNDED" | "REFUND_FAILED";
   /** Empty until finance prices the refund. */
   refundAmount: number | null;
   currency: string | null;
@@ -69,7 +74,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const CURRENCY = /^[A-Z]{3}$/;
 const PLAN_PERIODS = new Set(["WEEKLY", "FORTNIGHTLY", "MONTHLY"]);
 const SUBSCRIPTION_STATUSES = new Set(["PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"]);
-const CREDIT_STATUSES = new Set(["PENDING_CHOICE", "EXTENDED", "REFUND_REQUESTED", "REFUNDED"]);
+const CREDIT_STATUSES = new Set(["PENDING_CHOICE", "EXTENDED", "REFUND_REQUESTED", "REFUNDED", "REFUND_FAILED"]);
 const SLOT = /^[A-Z0-9][A-Z0-9_-]{0,39}$/;
 
 function text(value: unknown, max: number): string | null {
@@ -147,7 +152,12 @@ export function parseCustomerSubscription(value: unknown): CustomerSubscription 
   const startDate = dateOnly(raw.startDate); const createdAt = instant(raw.createdAt); const updatedAt = instant(raw.updatedAt);
   const deliveryAddressId = optionalText(raw.deliveryAddressId, 64);
   if (!id || !UUID.test(id) || !planId || !UUID.test(planId) || !status || !SUBSCRIPTION_STATUSES.has(status) || !startDate || !createdAt || !updatedAt || (deliveryAddressId && !UUID.test(deliveryAddressId))) return null;
+  // The bill fields only add the price line, so an unreadable one is left out rather than failing the plan.
+  const billingPeriod = typeof raw.billingPeriod === "string" && PLAN_PERIODS.has(raw.billingPeriod) ? raw.billingPeriod as PublicSubscriptionPlan["billingPeriod"] : null;
+  const amount = typeof raw.amount === "number" ? raw.amount : typeof raw.amount === "string" && raw.amount.trim() ? Number(raw.amount) : NaN;
+  const currency = typeof raw.currency === "string" && CURRENCY.test(raw.currency) ? raw.currency : null;
   return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt, planName: optionalText(raw.planName, 160),
+    billingPeriod, amount: Number.isFinite(amount) && amount >= 0 ? amount : null, currency, nextBillingDate: raw.nextBillingDate == null ? null : dateOnly(raw.nextBillingDate),
     pauseDaysPerBill: count(raw.pauseDaysPerBill), pauseDaysLeft: count(raw.pauseDaysLeft), pauseAutoResumeDate: raw.pauseAutoResumeDate == null ? null : dateOnly(raw.pauseAutoResumeDate),
     // A choice the web can't read is left out; the server still settles it at the deadline.
     dayCredits: Array.isArray(raw.dayCredits) ? raw.dayCredits.slice(0, 100).map(parseDayCredit).filter(credit => credit !== null) : [] };

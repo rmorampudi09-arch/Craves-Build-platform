@@ -15,6 +15,7 @@ import {
   pauseInfo,
   planDay,
 } from "@/features/meal-plans/lib/meal-plan-copy";
+import { billingPeriodLabel } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { SubscriptionPlanBrowser } from "@/features/meal-plans/components/subscription-plan-browser";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
@@ -134,6 +135,10 @@ export function SubscriptionManager() {
                 const paymentRequired =
                   item.status === "PENDING_PAYMENT" || item.status === "PAYMENT_FAILED";
                 const restart = pauseInfo(item, today, today).restartNote;
+                const when =
+                  item.status === "ACTIVE" && item.nextBillingDate
+                    ? `Renews ${planDay(item.nextBillingDate)}`
+                    : (restart ?? `Starts ${planDay(item.startDate)}`);
                 const pauseLine = pauseDaysLine(item);
                 return (
                   <li
@@ -149,10 +154,15 @@ export function SubscriptionManager() {
                           {planNames.get(item.planId) ?? item.planName ?? "Meal plan"}
                         </h2>
                         <p className="mt-1 text-sm text-[#6B6B6B]">
-                          {restart ?? `Starts ${planDay(item.startDate)}`}
-                          {item.nextServiceDate && !restart
-                            ? ` · Next meal ${planDay(item.nextServiceDate)}`
-                            : ""}
+                          {[
+                            item.billingPeriod ? billingPeriodLabel(item.billingPeriod) : null,
+                            when,
+                            item.nextServiceDate && !restart
+                              ? `Next meal ${planDay(item.nextServiceDate)}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                         {pauseLine ? (
                           <p className="mt-1 text-sm text-[#6B6B6B]">{pauseLine}</p>

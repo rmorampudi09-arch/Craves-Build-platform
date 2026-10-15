@@ -9,6 +9,7 @@ import {
   MEAL_PLAN_STATUS,
   planDay,
 } from "@/features/meal-plans/lib/meal-plan-copy";
+import { billingPeriodLabel } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 
@@ -101,8 +102,13 @@ export function MealPlanHistory() {
                     {item.planName ?? "Meal plan"}
                   </span>
                   <span className="block text-sm text-[#6B6B6B]">
-                    Started {planDay(item.startDate)}
-                    {item.endDate ? ` · Ended ${planDay(item.endDate)}` : ""}
+                    {[
+                      item.billingPeriod ? billingPeriodLabel(item.billingPeriod) : null,
+                      `Started ${planDay(item.startDate)}`,
+                      item.endDate ? `Ended ${planDay(item.endDate)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </span>
                 <span className="shrink-0 rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">

@@ -21,7 +21,7 @@ const BASICS: Step[] = [
   {
     icon: Wallet,
     title: "Pay once per bill",
-    body: "You pay for the whole bill before it starts.",
+    body: "You pay for the whole bill before it starts. My plans shows the date your next bill renews.",
   },
   {
     icon: ChefHat,
@@ -98,6 +98,7 @@ export function MealPlanHowItWorks() {
       <p className="text-sm leading-6 text-[#6B6B6B]">
         Homemade meals from one chef, on the days you pick, paid once per bill.
       </p>
+      <h2 className="sr-only">The basics</h2>
       <StepList steps={BASICS} />
       <h2 className="pt-2 text-lg font-bold text-[#1A1A1A]">Your controls</h2>
       <StepList steps={CONTROLS} />

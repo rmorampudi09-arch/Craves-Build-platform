@@ -9,6 +9,7 @@ import {
   type SubscriptionPaymentStatus,
 } from "@/features/meal-plans/lib/subscription-payment-contract";
 import { MEAL_PLAN_STATUS, planDay } from "@/features/meal-plans/lib/meal-plan-copy";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 const PAYMENT_STATUS: Record<SubscriptionPaymentStatus, string> = {
   PAYMENT_REQUESTED: "Waiting for payment",
@@ -79,7 +80,7 @@ function responseMessage(body: unknown, fallback: string): string {
 }
 
 async function loadSubscription(subscriptionId: string): Promise<CustomerSubscription> {
-  const response = await fetch(`/api/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+  const response = await sessionFetch(`/api/subscriptions/${encodeURIComponent(subscriptionId)}`, {
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -94,7 +95,7 @@ async function loadSubscription(subscriptionId: string): Promise<CustomerSubscri
 }
 
 async function loadPayment(subscriptionId: string): Promise<SubscriptionPayment | null> {
-  const response = await fetch(`/api/subscription-payments/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+  const response = await sessionFetch(`/api/subscription-payments/subscriptions/${encodeURIComponent(subscriptionId)}`, {
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -232,7 +233,7 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
         return;
       }
 
-      const response = await fetch(
+      const response = await sessionFetch(
         `/api/subscription-payments/invoices/${encodeURIComponent(currentPayment.invoiceId)}/orders`,
         {
           method: "POST",
@@ -294,7 +295,7 @@ export function SubscriptionRazorpayPayment({ subscriptionId }: { subscriptionId
         setMessage("Payment cancelled. You haven’t been charged.");
         return;
       }
-      const verificationResponse = await fetch(`/api/subscription-payments/invoices/${encodeURIComponent(ordered.invoiceId)}/verify`, {
+      const verificationResponse = await sessionFetch(`/api/subscription-payments/invoices/${encodeURIComponent(ordered.invoiceId)}/verify`, {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId, providerOrderId: result.razorpay_order_id,
           providerPaymentId: result.razorpay_payment_id, providerSignature: result.razorpay_signature }),

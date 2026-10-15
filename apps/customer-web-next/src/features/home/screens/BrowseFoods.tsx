@@ -31,7 +31,6 @@ import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
 import { ALL_DISHES_CATEGORY } from "@/features/home/lib/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
-  formatDiscoveryRadius,
 } from "@/features/home/lib/catalog-discovery-policy";
 import { type NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import {
@@ -64,7 +63,6 @@ import {
 import {
   allDishes,
   discoverDishes,
-  getDiscoveryRadiusMeters,
   hasMoreDiscoveredDishes,
   loadKitchenMenu,
   loadMoreDiscoveredDishes,
@@ -73,7 +71,6 @@ import {
 import {
   allKitchens,
   discoverKitchens,
-  getKitchenDiscoveryRadiusMeters,
 } from "@/features/chefs/api/kitchens";
 import {
   clearSession,
@@ -258,15 +255,6 @@ function BrowseFoodsPage() {
       ? "Fresh homemade food available near your default delivery address."
       : "Loading your default delivery address…",
   );
-  const [radiusLabel, setRadiusLabel] = useState<string | null>(() => {
-    if (initialCache.kitchens.length > 0) {
-      return formatDiscoveryRadius(getKitchenDiscoveryRadiusMeters());
-    }
-    if (initialCache.dishes.length > 0) {
-      return formatDiscoveryRadius(getDiscoveryRadiusMeters());
-    }
-    return null;
-  });
   // After a full page load has hydrated the empty Home, paint the cached Home before the first
   // frame, so a reload shows your address, cart and dishes at once (the network then refreshes).
   const startedEmpty = useRef(hydrating);
@@ -287,7 +275,6 @@ function BrowseFoodsPage() {
     setKitchenDiscoveryVerified(true);
     setDiscoveryState("ready");
     setCatalogMessage("Fresh homemade food available near your default delivery address.");
-    setRadiusLabel(formatDiscoveryRadius(cachedKitchens.length > 0 ? getKitchenDiscoveryRadiusMeters() : getDiscoveryRadiusMeters()));
   }, []);
 
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -317,7 +304,6 @@ function BrowseFoodsPage() {
       setKitchens([]);
       setKitchenDiscoveryVerified(false);
       setNearbyDishes([]);
-      setRadiusLabel(null);
       setDiscoveryState("address-required");
       setCatalogMessage(
         "Choose a default delivery address so Craves can show nearby home kitchens.",
@@ -331,7 +317,6 @@ function BrowseFoodsPage() {
       setKitchens([]);
       setKitchenDiscoveryVerified(false);
       setNearbyDishes([]);
-      setRadiusLabel(null);
       setDiscoveryState("loading");
       setCatalogMessage("Loading food near your default delivery address…");
     }
@@ -363,14 +348,6 @@ function BrowseFoodsPage() {
       setNearbyDishes(loadedDishes);
     } else if (!preserveExisting) {
       setNearbyDishes([]);
-    }
-
-    if (kitchenResult.status === "fulfilled") {
-      setRadiusLabel(formatDiscoveryRadius(kitchenResult.value.radiusMeters));
-    } else if (dishResult.status === "fulfilled") {
-      setRadiusLabel(formatDiscoveryRadius(getDiscoveryRadiusMeters()));
-    } else if (!preserveExisting) {
-      setRadiusLabel(null);
     }
 
     if (kitchenResult.status === "rejected" && dishResult.status === "rejected") {
@@ -676,7 +653,6 @@ function BrowseFoodsPage() {
         setKitchens([]);
         setKitchenDiscoveryVerified(false);
         setNearbyDishes([]);
-        setRadiusLabel(null);
         setDiscoveryState("error");
         setDefaultAddressResolved(true);
         setCatalogMessage(
@@ -896,13 +872,7 @@ function BrowseFoodsPage() {
           onClose={dismissCartAvailability}
         />
 
-        <WelcomeBanner
-          dishCount={nearbyDishes.length}
-          radiusLabel={radiusLabel}
-          defaultAddressLabel={locationLabel}
-          hasDefaultAddress={Boolean(address?.lat != null && address?.lng != null)}
-          onManageDefaultAddress={openAddressManager}
-        />
+        <WelcomeBanner onOpenSearch={openSearchOnTap} />
 
         <HomeCategoryRail
           selected={homeCategory}

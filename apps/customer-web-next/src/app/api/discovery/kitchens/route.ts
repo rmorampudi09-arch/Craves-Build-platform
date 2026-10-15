@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseKitchenDiscovery } from "@/features/home/lib/discovery-contract";
 import { publicApiFetch } from "@/shared/lib/public-api";
 import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
+import { SPICE_LEVELS, type SpiceLevel } from "@/shared/lib/spice-level";
 
-const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size"]);
+const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size", "spiceLevel"]);
 const NO_STORE = { "Cache-Control": "no-store" };
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
@@ -30,6 +31,8 @@ export async function GET(request: NextRequest) {
   const radiusMeters = integer(params.get("radiusMeters"), DEFAULT_DISCOVERY_RADIUS_METERS);
   const page = integer(params.get("page"), 0);
   const size = integer(params.get("size"), 20);
+  // Kitchens with at least one dish at this spice level (the Chefs tab filter).
+  const spiceLevel = params.get("spiceLevel");
   if (
     invalidQuery
     || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
@@ -37,6 +40,7 @@ export async function GET(request: NextRequest) {
     || !Number.isSafeInteger(radiusMeters) || radiusMeters < 1 || radiusMeters > MAX_DISCOVERY_RADIUS_METERS
     || !Number.isSafeInteger(page) || page < 0 || page > 1_000
     || !Number.isSafeInteger(size) || size < 1 || size > 50
+    || (spiceLevel !== null && !SPICE_LEVELS.includes(spiceLevel as SpiceLevel))
   ) {
     return NextResponse.json(
       { error: "INVALID_LOCATION", message: "Valid latitude, longitude and discovery bounds are required." },
@@ -44,6 +48,7 @@ export async function GET(request: NextRequest) {
     );
   }
   const query = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: String(page), size: String(size) });
+  if (spiceLevel) query.set("spiceLevel", spiceLevel);
   try {
     const upstream = await publicApiFetch(`/discovery/kitchens?${query}`); const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: upstream.status, headers: NO_STORE });

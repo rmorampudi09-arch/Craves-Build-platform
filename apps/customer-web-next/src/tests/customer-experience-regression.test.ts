@@ -22,8 +22,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   const header = source("../features/home/components/BrowseHeader.tsx");
   const skeleton = source("../shared/components/loading/CustomerPageSkeleton.tsx");
 
-  assert.match(banner, /\/home\/cravings\/craves-home-banner\.webp/);
-  assert.match(banner, /unoptimized/);
+  assert.match(banner, /fetchHomeBanners\(\)/);
+  assert.match(banner, /snap-x snap-mandatory/);
   assert.match(home, /CustomerPageSkeleton/);
   assert.match(home, /loadMoreDiscoveredDishes/);
   assert.match(home, /hasMoreDiscoveredDishes/);

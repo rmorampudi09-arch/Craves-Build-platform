@@ -31,7 +31,7 @@ export type Dish = {
   ingredients?: string[];
   serves?: string;
   originalPrice?: number;
-  spiceLevel?: "Mild" | "Medium" | "Hot";
+  spiceLevel?: "Mild" | "Medium" | "Spicy";
   reviewCount?: number;
   reviews?: { name: string; rating: number; daysAgo: number; text: string }[];
   kitchenId?: string;
@@ -127,7 +127,7 @@ function hydrateDiscoverySnapshot(): void {
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
 ): Dish["spiceLevel"] {
-  if (value === "SPICY") return "Hot";
+  if (value === "SPICY") return "Spicy";
   if (value === "MEDIUM") return "Medium";
   if (value === "MILD") return "Mild";
   return undefined;

@@ -7,6 +7,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, ChevronRight, Clock3, LifeBuoy, MapPin, RefreshCw } from "lucide-react";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
+import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
 import {
   formatOrderStatus,
   isAbandonedUnpaidOrder,
@@ -456,6 +457,8 @@ export function CustomerOrderStatus({
                     : `Updates every 30 seconds${checkedAt ? ` · last checked ${clock.format(checkedAt)}` : ""}`}
               </p>
             </section>
+
+            {delivered ? <OrderReviewCard orderId={order.id} /> : null}
 
             {journey.kind === "KITCHEN" ? (
               <OrderMap

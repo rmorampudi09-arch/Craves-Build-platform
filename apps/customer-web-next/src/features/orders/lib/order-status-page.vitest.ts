@@ -132,10 +132,13 @@ describe("order status after payment", () => {
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     expect((await screen.findByRole("link", { name: "Order again" })).getAttribute("href")).toBe(`/kitchen/${fixture.kitchen}`);
     expect(screen.queryByRole("link", { name: "Track order" })).toBeNull();
+    // Only a delivered order can be rated.
+    expect(screen.getByRole("heading", { name: "How was your order?" })).toBeTruthy();
     cleanup();
     serve(order("CHEF_REJECTED"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     expect(await screen.findByRole("heading", { name: /couldn’t take this order/ })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "How was your order?" })).toBeNull();
     expect(screen.getByRole("link", { name: "Browse dishes" }).getAttribute("href")).toBe("/home");
   });
 

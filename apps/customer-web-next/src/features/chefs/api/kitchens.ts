@@ -14,7 +14,7 @@ export type KitchenDiscoveryResult = {
 };
 
 const KITCHEN_DISCOVERY_SNAPSHOT_KEY =
-  "craves.customer.kitchen-discovery.snapshot.v1";
+  "craves.customer.kitchen-discovery.snapshot.v2";
 
 let discoveredKitchens: NearbyKitchen[] = [];
 let kitchenDiscoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;

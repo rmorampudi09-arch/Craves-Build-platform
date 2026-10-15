@@ -44,7 +44,7 @@ export type Dish = {
 
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 const DISCOVERY_PAGE_SIZE = 50;
-const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v1";
+const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v2";
 
 type DishDiscoveryCursor = {
   latitude: number;

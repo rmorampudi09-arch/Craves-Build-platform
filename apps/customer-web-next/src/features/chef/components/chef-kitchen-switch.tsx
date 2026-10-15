@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock3, LifeBuoy, Pause, Play, Store } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
+import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import {
   changeKitchenSchedule,
   scheduleUpdate,
@@ -114,9 +115,12 @@ function useMinuteClock(): Date {
 export function ChefKitchenSwitch({
   kitchen,
   onChange,
+  cookingCount = 0,
 }: {
   kitchen: ChefKitchen;
   onChange(kitchen: ChefKitchen): void;
+  /** Orders being cooked now (accepted and preparing): closing asks first while there are any. */
+  cookingCount?: number;
 }) {
   const view = useKitchenSchedule();
   // Without the schedule (still loading, not live yet, or failed) the switch works as open/closed only.
@@ -128,6 +132,7 @@ export function ChefKitchenSwitch({
   const [error, setError] = useState<{ text: string; kitchenLink: boolean } | null>(null);
   const [done, setDone] = useState("");
   const [pausing, setPausing] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [choice, setChoice] = useState<PauseChoice>("60");
   const suspended = state.status === "suspended";
   const option = PAUSES.find((candidate) => candidate.value === choice) ?? PAUSES[1];
@@ -139,7 +144,7 @@ export function ChefKitchenSwitch({
   async function run(
     action: () => Promise<void>,
     success: string,
-    kitchenLink = false,
+    kitchenLink = () => false,
   ): Promise<boolean> {
     if (busy) return false;
     setBusy(true);
@@ -150,7 +155,7 @@ export function ChefKitchenSwitch({
       setDone(success);
       return true;
     } catch (caught) {
-      setError({ text: chefErrorText(caught, KITCHEN_UPDATE_FAILED), kitchenLink });
+      setError({ text: chefErrorText(caught, KITCHEN_UPDATE_FAILED), kitchenLink: kitchenLink() });
       return false;
     } finally {
       setBusy(false);
@@ -159,6 +164,8 @@ export function ChefKitchenSwitch({
 
   function setOpen(next: boolean) {
     if (suspended) return;
+    // Only a refused kitchen save points to Kitchen details, where its address and phone are fixed.
+    let kitchenRefused = false;
     void run(
       async () => {
         // Start from the kitchen as saved now: the page may have been open for hours, and an
@@ -171,7 +178,7 @@ export function ChefKitchenSwitch({
           throw chefApiError(latestResponse, null, "We couldn’t check your kitchen. Try again.");
         if (latest.status === "SUSPENDED") {
           onChange(latest);
-          return;
+          throw new Error("Craves has paused your kitchen, so you can’t open or close it.");
         }
         const target = next ? "ACTIVE" : "INACTIVE";
         if (latest.status === target) onChange(latest);
@@ -183,6 +190,7 @@ export function ChefKitchenSwitch({
           });
           const body = await response.json().catch(() => null);
           if (!response.ok) {
+            kitchenRefused = true;
             throw chefApiError(
               response,
               body,
@@ -213,7 +221,7 @@ export function ChefKitchenSwitch({
         }
       },
       next ? "Your kitchen is open" : "Your kitchen is closed",
-      true,
+      () => kitchenRefused,
     );
   }
 
@@ -263,15 +271,27 @@ export function ChefKitchenSwitch({
           </h2>
           <p className="chef-section-note mt-0.5 !text-[0.9375rem]">{copy.detail}</p>
         </div>
-        <AppleSwitch
-          checked={state.takingOrders}
-          disabled={suspended}
-          aria-disabled={busy || undefined}
-          onCheckedChange={(next) => setOpen(next)}
-          size="lg"
-          tone="go"
-          aria-label="Taking orders"
-        />
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <AppleSwitch
+            id="chef-taking-orders"
+            checked={state.takingOrders}
+            disabled={suspended}
+            aria-disabled={busy || undefined}
+            onCheckedChange={(next) =>
+              !next && cookingCount > 0 ? setConfirmClose(true) : setOpen(next)
+            }
+            size="lg"
+            tone="go"
+            aria-labelledby="chef-taking-orders-label"
+          />
+          <label
+            id="chef-taking-orders-label"
+            htmlFor="chef-taking-orders"
+            className="text-[0.75rem] font-semibold text-[#6B6B6B]"
+          >
+            Taking orders
+          </label>
+        </div>
       </div>
       {suspended ? (
         <Link href="/chef/support" className="chef-btn is-small mt-3">
@@ -352,6 +372,33 @@ export function ChefKitchenSwitch({
           ) : null}
         </p>
       ) : null}
+      <Dialog
+        open={confirmClose}
+        onOpenChange={setConfirmClose}
+        title="Close your kitchen?"
+        description={`${cookingCount} ${cookingCount === 1 ? "order is still cooking. It carries" : "orders are still cooking. They carry"} on, but you won’t get new orders until you open the kitchen again.`}
+        footer={
+          <>
+            <button
+              type="button"
+              className={secondaryActionClass}
+              onClick={() => setConfirmClose(false)}
+            >
+              Keep open
+            </button>
+            <button
+              type="button"
+              className="craves-primary-action w-full sm:w-auto"
+              onClick={() => {
+                setConfirmClose(false);
+                setOpen(false);
+              }}
+            >
+              Close kitchen
+            </button>
+          </>
+        }
+      />
     </section>
   );
 }

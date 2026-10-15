@@ -130,12 +130,23 @@ describe("Opening hours", () => {
     expect(await screen.findByText("Opening hours are on their way")).toBeTruthy();
   });
 
-  it("offers Try again when the schedule can't load", async () => {
-    fetcher.mockImplementationOnce(async () =>
-      Response.json({ code: "KITCHEN_SCHEDULE_UNAVAILABLE" }, { status: 503 }),
-    );
+  it("offers Try again when the schedule can't load, and shows it loading again", async () => {
+    let release!: () => void;
+    fetcher
+      .mockImplementationOnce(async () =>
+        Response.json({ code: "KITCHEN_SCHEDULE_UNAVAILABLE" }, { status: 503 }),
+      )
+      .mockImplementationOnce(async () => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return Response.json(schedule);
+      });
     render(createElement(ChefOpeningHours));
     fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(document.querySelector('[aria-busy="true"]')).toBeTruthy();
+    release();
     expect(await screen.findByRole("button", { name: /^Monday/ })).toBeTruthy();
   });
 });

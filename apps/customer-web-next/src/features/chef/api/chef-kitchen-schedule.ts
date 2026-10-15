@@ -81,10 +81,12 @@ export type KitchenScheduleView =
 
 const LOADING: KitchenScheduleView = { state: "loading" };
 let view: KitchenScheduleView = LOADING;
+let published = 0;
 let reading: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
 function publish(next: KitchenScheduleView) {
+  published += 1;
   view = next;
   listeners.forEach((listener) => listener());
 }
@@ -100,11 +102,19 @@ function subscribe(listener: () => void) {
 
 /** Reads the schedule again for every screen showing it; one read at a time. */
 export function reloadKitchenSchedule(): Promise<void> {
-  reading ??= fetchKitchenSchedule()
+  if (reading) return reading;
+  // Try again after an error shows the read under way.
+  if (view.state === "error") publish(LOADING);
+  const since = published;
+  // A save published while this read was out is newer than what it brings back.
+  const settle = (next: KitchenScheduleView) => {
+    if (published === since) publish(next);
+  };
+  reading = fetchKitchenSchedule()
     .then(
-      (schedule) => publish({ state: "ready", schedule }),
+      (schedule) => settle({ state: "ready", schedule }),
       (error: unknown) =>
-        publish(
+        settle(
           isComingSoon(error)
             ? { state: "soon" }
             : {

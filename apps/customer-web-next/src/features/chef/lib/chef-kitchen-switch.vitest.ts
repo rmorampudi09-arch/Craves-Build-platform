@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 // Synthetic ids; the BFF is a fetch stub.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import { createElement, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { reloadKitchenSchedule } from "../api/chef-kitchen-schedule";
 import { ChefKitchenSwitch } from "../components/chef-kitchen-switch";
 import type { ChefKitchen } from "./chef-kitchen-types";
 
@@ -38,25 +40,46 @@ const base = {
 };
 let saved: ChefKitchen;
 let schedule: typeof base | null;
+/** Answers for the next kitchen or schedule PUT instead of saving it. */
+let refuse: { url: string; status: number; body: unknown } | null;
+/** Holds back the answer to the next schedule read until it settles. */
+let hold: Promise<void> | null;
 let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;
 const writes = () =>
   fetcher.mock.calls
     .filter(([, init]) => init?.method === "PUT")
     .map(([url, init]) => [url, JSON.parse(String(init?.body))]);
 
-function Host() {
+function Host({ cookingCount }: { cookingCount?: number }) {
   const [current, setCurrent] = useState(saved);
-  return createElement(ChefKitchenSwitch, { kitchen: current, onChange: setCurrent });
+  return createElement(ChefKitchenSwitch, { kitchen: current, onChange: setCurrent, cookingCount });
 }
 
+beforeAll(() => {
+  MotionGlobalConfig.skipAnimations = true;
+});
+afterAll(() => {
+  MotionGlobalConfig.skipAnimations = false;
+});
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   saved = kitchen;
   schedule = base;
+  refuse = null;
+  hold = null;
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })),
+  );
   fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : null;
+    if (init?.method === "PUT" && refuse?.url === url) {
+      const { status, body: answer } = refuse;
+      refuse = null;
+      return Response.json(answer, { status });
+    }
     if (url === "/api/chef/kitchen") {
       if (init?.method === "PUT") saved = { ...saved, status: body.status };
       return Response.json(saved);
@@ -64,7 +87,11 @@ beforeEach(() => {
     if (url === "/api/chef/kitchen/schedule") {
       if (!schedule) return Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 });
       if (init?.method === "PUT") schedule = { ...schedule, ...body };
-      return Response.json(schedule);
+      const answer = schedule;
+      const held = hold;
+      hold = null;
+      await held;
+      return Response.json(answer);
     }
     throw new Error(`Unexpected route ${url}`);
   });
@@ -81,6 +108,7 @@ describe("Kitchen status", () => {
     render(createElement(Host));
     expect(await screen.findByRole("heading", { name: "Open · taking orders" })).toBeTruthy();
     expect(screen.getByText("Today 11:00 AM – 10:00 PM")).toBeTruthy();
+    expect(screen.getByText("Taking orders").tagName).toBe("LABEL");
     fireEvent.click(screen.getByRole("button", { name: "Pause new orders" }));
     fireEvent.click(screen.getByRole("radio", { name: "2 hours" }));
     expect(screen.getByText(/Customers see “Opens again at 1:30 PM”/)).toBeTruthy();
@@ -183,5 +211,67 @@ describe("Kitchen status", () => {
       ],
     ]);
     expect(screen.queryByRole("button", { name: "Pause new orders" })).toBeNull();
+  });
+
+  it("asks before closing while orders are still cooking", async () => {
+    render(createElement(Host, { cookingCount: 2 }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Taking orders" }));
+    const dialog = await screen.findByRole("dialog", { name: "Close your kitchen?" });
+    expect(dialog.textContent).toContain(
+      "2 orders are still cooking. They carry on, but you won’t get new orders until you open the kitchen again.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Keep open" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(writes()).toEqual([]);
+    fireEvent.click(screen.getByRole("switch", { name: "Taking orders" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Close kitchen" }));
+    expect(await screen.findByRole("heading", { name: "Closed" })).toBeTruthy();
+    expect(writes()).toEqual([["/api/chef/kitchen", expect.objectContaining({ status: "INACTIVE" })]]);
+  });
+
+  it("says so, and announces nothing, when Craves paused the kitchen meanwhile", async () => {
+    render(createElement(Host));
+    await screen.findByRole("heading", { name: "Open · taking orders" });
+    saved = { ...kitchen, status: "SUSPENDED" };
+    fireEvent.click(screen.getByRole("switch", { name: "Taking orders" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Craves has paused your kitchen, so you can’t open or close it.",
+    );
+    expect(screen.getByRole("heading", { name: "Paused by Craves" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("");
+    expect(writes()).toEqual([]);
+  });
+
+  it("points to Kitchen details only when the kitchen itself was refused", async () => {
+    saved = { ...kitchen, status: "INACTIVE" };
+    schedule = { ...base, acceptingOrders: false };
+    refuse = { url: "/api/chef/kitchen/schedule", status: 503, body: { code: "UPSTREAM_UNAVAILABLE" } };
+    render(createElement(Host));
+    fireEvent.click(await screen.findByRole("switch", { name: "Taking orders" }));
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("link", { name: "Check kitchen details" })).toBeNull();
+    cleanup();
+
+    saved = { ...kitchen, status: "INACTIVE" };
+    refuse = { url: "/api/chef/kitchen", status: 400, body: { code: "VALIDATION_FAILED" } };
+    render(createElement(Host));
+    fireEvent.click(await screen.findByRole("switch", { name: "Taking orders" }));
+    expect(await screen.findByRole("link", { name: "Check kitchen details" })).toBeTruthy();
+  });
+
+  it("keeps a save made while an older read of the schedule was still out", async () => {
+    schedule = { ...base, pausedUntil: "2026-10-15T08:00:00Z", pauseReason: "Paused by chef" };
+    render(createElement(Host));
+    await screen.findByRole("heading", { name: "Paused · back at 1:30 PM" });
+    let release!: () => void;
+    hold = new Promise((resolve) => {
+      release = resolve;
+    });
+    const reload = reloadKitchenSchedule();
+    fireEvent.click(screen.getByRole("button", { name: "Resume now" }));
+    expect(await screen.findByRole("heading", { name: "Open · taking orders" })).toBeTruthy();
+    release();
+    await reload;
+    expect(screen.getByRole("heading", { name: "Open · taking orders" })).toBeTruthy();
   });
 });

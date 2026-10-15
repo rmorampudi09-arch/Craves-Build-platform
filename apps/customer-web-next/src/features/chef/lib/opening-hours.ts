@@ -194,6 +194,8 @@ export function kitchenOpenState(
   const today = schedule && at ? rangesForDay(schedule.weeklyWindows, at.day) : [];
   const next = at ? today.find((range) => range.opensAt > at.time) : undefined;
   // A day without hours is closed once the week has any: that is how the server decides.
+  // shortcut: today's special day is not read (nor is it in the app), so it shows the weekly hours although the server
+  // goes by the special day (e.g. Closed all day); load today's override with the schedule if chefs trip on it.
   const outsideHours =
     !!at &&
     !!schedule?.weeklyWindows.length &&

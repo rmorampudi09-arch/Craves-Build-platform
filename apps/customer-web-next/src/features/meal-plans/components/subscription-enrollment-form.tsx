@@ -11,6 +11,7 @@ import {
 import { billingPeriodLabel } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -40,7 +41,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
         if (!response.ok) throw new Error("We couldn’t load this meal plan. Please try again shortly.");
         return response.json();
       }),
-      fetch("/api/customer/addresses", { cache: "no-store" }).then(async response => {
+      sessionFetch("/api/customer/addresses", { cache: "no-store" }).then(async response => {
         if (response.status === 401) throw new Error("Your session expired. Sign in again.");
         if (!response.ok) throw new Error("We couldn’t load your saved addresses. Please try again.");
         return response.json();
@@ -75,7 +76,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/subscriptions", {
+      const response = await sessionFetch("/api/subscriptions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,6 +91,9 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
       });
       const body = await response.json().catch(() => null);
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
+      if ((body as { code?: unknown } | null)?.code === "DELIVERY_ADDRESS_OUT_OF_RANGE") {
+        throw new Error("This chef delivers meal plans within 10 km of their kitchen. Choose a saved address closer to the chef.");
+      }
       if (response.status === 409) {
         throw new Error("We already received this request. Refresh the page before trying again.");
       }

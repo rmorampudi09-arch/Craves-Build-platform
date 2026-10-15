@@ -1,4 +1,4 @@
-import type { CustomerSubscriptionStatus } from "./subscription-contract.ts";
+import { indiaBusinessDate, type CustomerSubscription, type CustomerSubscriptionStatus } from "./subscription-contract.ts";
 import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
 
 /** Customer words for meal plans; never the raw enums or minute counts. */
@@ -69,4 +69,61 @@ export function changeDeadline(
   const closesDay = relativeDay(isoDay.format(next.closes), now);
   const when = closesDay === "today" || closesDay === "tomorrow" ? closesDay : `on ${closesDay}`;
   return `Changes for ${relativeDay(next.meal.serviceDate, now)} close at ${clock.format(next.closes)} ${when}.`;
+}
+
+/** Ended and cancelled plans live in History; every other plan is on My plans. */
+export function isPastSubscription(status: CustomerSubscriptionStatus): boolean {
+  return status === "EXPIRED" || status === "CANCELLED";
+}
+
+/**
+ * First day from tomorrow (India) whose meal is more than `leadMinutes` away, the rule the server
+ * enforces on resume. Without a service time: tomorrow, plus a day per full day of lead.
+ */
+export function resumeDateFor(now: Date, leadMinutes: number, serviceTime: string | null): string {
+  const tomorrow = Date.parse(`${indiaBusinessDate(now)}T00:00:00Z`) + 86_400_000;
+  const dates = Array.from({ length: 30 }, (_, index) => new Date(tomorrow + index * 86_400_000).toISOString().slice(0, 10));
+  const time = serviceTime ? /^(\d{2}):(\d{2})/.exec(serviceTime) : null;
+  if (!time) return dates[Math.min(Math.floor(leadMinutes / 1440), dates.length - 1)];
+  return dates.find(day => Date.parse(`${day}T${time[1]}:${time[2]}:00+05:30`) - now.getTime() > leadMinutes * 60_000) ?? dates[dates.length - 1];
+}
+
+export type PauseInfo = {
+  pauseDisabledLabel: string | null;
+  pauseMessage: string;
+  restartNote: string | null;
+  resumeOffered: boolean;
+  /** The automatic restart still ahead; resuming later than it is refused. */
+  autoDate: string | null;
+};
+
+/** Pause and resume copy from the bill's pause allowance; an older server sends none, so nothing changes. */
+export function pauseInfo(
+  subscription: Pick<CustomerSubscription, "status" | "pauseDaysLeft" | "pauseAutoResumeDate">,
+  resumeDate: string,
+  today: string,
+): PauseInfo {
+  const left = subscription.pauseDaysLeft;
+  // An overdue restart (switched off or failed) is ignored, so the customer can always resume.
+  const autoDate = subscription.pauseAutoResumeDate && subscription.pauseAutoResumeDate >= today ? subscription.pauseAutoResumeDate : null;
+  const paused = subscription.status === "PAUSED";
+  return {
+    pauseDisabledLabel: !paused && left === 0 ? "No pause days left this bill" : null,
+    pauseMessage: typeof left === "number" && left > 0
+      ? `You can pause up to ${left} more ${left === 1 ? "day" : "days"} this bill. Your plan restarts by itself after that.`
+      : "Upcoming meals stop until you resume the plan.",
+    restartNote: paused && autoDate ? `Restarts on ${planDay(autoDate)}` : null,
+    // Resuming on or after the automatic restart would change nothing, so it is not offered.
+    resumeOffered: !(autoDate && resumeDate >= autoDate),
+    autoDate,
+  };
+}
+
+/** "2 pause days left this bill." under a running plan; null from an older server. */
+export function pauseDaysLine(subscription: Pick<CustomerSubscription, "status" | "pauseDaysLeft">): string | null {
+  const left = subscription.pauseDaysLeft;
+  if (typeof left !== "number" || (subscription.status !== "ACTIVE" && subscription.status !== "PAUSED")) return null;
+  return left === 0
+    ? "No pause days left this bill."
+    : `${left} pause ${left === 1 ? "day" : "days"} left this bill. Your plan restarts by itself after a pause.`;
 }

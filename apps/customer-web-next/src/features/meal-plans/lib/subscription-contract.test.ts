@@ -70,3 +70,22 @@ test("customer subscription keeps its own plan name for plans no longer listed",
   assert.equal(parsed?.planName, "Weekly thali");
   assert.equal(parseCustomerSubscription({ ...parsed, planName: undefined })?.planName, null);
 });
+
+test("plan photos are https only; the server's own image path resolves against the API base", () => {
+  const path = `/api/v1/subscriptions/plans/${plan.id}/image?v=1760000000`;
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: path }, "https://api.craves.in/api/v1")?.imageUrl, `https://api.craves.in${path}`);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: path })?.imageUrl, null);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "https://cdn.craves.in/p.jpg" })?.imageUrl, "https://cdn.craves.in/p.jpg");
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "http://cdn.craves.in/p.jpg" }, "https://api.craves.in/api/v1")?.imageUrl, null);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "javascript:alert(1)" }, "https://api.craves.in/api/v1")?.imageUrl, null);
+  assert.equal(parsePublicSubscriptionPlan(plan)?.imageUrl, null);
+});
+
+test("the pause allowance is read when the server sends it", () => {
+  const base = { id: "33333333-3333-4333-8333-333333333333", planId: plan.id, status: "PAUSED", startDate: "2026-08-01", createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+  const parsed = parseCustomerSubscription({ ...base, pauseDaysPerBill: 3, pauseDaysLeft: 0, pauseAutoResumeDate: "2026-08-10" });
+  assert.deepEqual([parsed?.pauseDaysPerBill, parsed?.pauseDaysLeft, parsed?.pauseAutoResumeDate], [3, 0, "2026-08-10"]);
+  const old = parseCustomerSubscription(base);
+  assert.deepEqual([old?.pauseDaysPerBill, old?.pauseDaysLeft, old?.pauseAutoResumeDate], [null, null, null]);
+  assert.equal(parseCustomerSubscription({ ...base, pauseDaysLeft: -1 })?.pauseDaysLeft, null);
+});

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parsePublicSubscriptionPlans } from "@/features/meal-plans/lib/subscription-contract";
 import { publicApiFetch } from "@/shared/lib/public-api";
+import { apiBaseUrl } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         { code: "SUBSCRIPTION_PLANS_UNAVAILABLE" },
         { status: upstream.status },
       );
-    const plans = parsePublicSubscriptionPlans(await upstream.json().catch(() => null));
+    const plans = parsePublicSubscriptionPlans(await upstream.json().catch(() => null), apiBaseUrl());
     if (!plans)
       return NextResponse.json({ code: "INVALID_SUBSCRIPTION_PLANS_RESPONSE" }, { status: 502 });
     return NextResponse.json(plans, {

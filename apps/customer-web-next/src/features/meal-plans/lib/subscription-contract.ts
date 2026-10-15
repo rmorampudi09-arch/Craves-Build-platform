@@ -6,6 +6,8 @@ export type PublicSubscriptionPlan = {
   billingPeriod: "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
   amount: number;
   currency: string;
+  /** https only: the BFF resolves the server's own image path. */
+  imageUrl: string | null;
 };
 
 export type CustomerSubscriptionStatus =
@@ -29,6 +31,11 @@ export type CustomerSubscription = {
   updatedAt: string;
   /** The subscription's own plan name, so a plan closed to new subscribers keeps its name. */
   planName: string | null;
+  /** Pause allowance per paid bill (1 weekly, 3 for 14 days, 7 monthly); null from an older server. */
+  pauseDaysPerBill: number | null;
+  pauseDaysLeft: number | null;
+  /** While paused: the day the plan restarts by itself. */
+  pauseAutoResumeDate: string | null;
 };
 
 export type CreateSubscriptionInput = {
@@ -51,6 +58,19 @@ function text(value: unknown, max: number): string | null {
 function optionalText(value: unknown, max: number): string | null { return value === null || value === undefined || value === "" ? null : text(value, max); }
 function dateOnly(value: unknown): string | null { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null; }
 function instant(value: unknown): string | null { return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null; }
+function count(value: unknown): number | null { return Number.isInteger(value) && Number(value) >= 0 ? Number(value) : null; }
+
+/** An https image, or the server's own "/api/..." image path resolved against the API base (BFF only). */
+function planImageUrl(value: unknown, apiBase?: string): string | null {
+  const raw = text(value, 2000);
+  if (!raw || !(raw.startsWith("https://") || (apiBase && raw.startsWith("/api/")))) return null;
+  try {
+    const url = new URL(raw, apiBase);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export function indiaBusinessDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -63,19 +83,19 @@ export function indiaBusinessDate(now = new Date()): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-export function parsePublicSubscriptionPlan(value: unknown): PublicSubscriptionPlan | null {
+export function parsePublicSubscriptionPlan(value: unknown, apiBase?: string): PublicSubscriptionPlan | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const id = text(raw.id, 64); const planCode = text(raw.planCode, 80); const name = text(raw.name, 160);
   const billingPeriod = text(raw.billingPeriod, 20); const amount = typeof raw.amount === "number" ? raw.amount : Number(raw.amount);
   const currency = text(raw.currency, 3)?.toUpperCase() ?? null;
   if (!id || !UUID.test(id) || !planCode || !name || !billingPeriod || !PLAN_PERIODS.has(billingPeriod) || !Number.isFinite(amount) || amount < 0 || !currency || !CURRENCY.test(currency)) return null;
-  return { id, planCode, name, description: optionalText(raw.description, 2000), billingPeriod: billingPeriod as PublicSubscriptionPlan["billingPeriod"], amount, currency };
+  return { id, planCode, name, description: optionalText(raw.description, 2000), billingPeriod: billingPeriod as PublicSubscriptionPlan["billingPeriod"], amount, currency, imageUrl: planImageUrl(raw.imageUrl, apiBase) };
 }
-export function parsePublicSubscriptionPlans(value: unknown): PublicSubscriptionPlan[] | null {
+export function parsePublicSubscriptionPlans(value: unknown, apiBase?: string): PublicSubscriptionPlan[] | null {
   if (!Array.isArray(value) || value.length > 500) return null;
   // One plan the web can't read is left out; it must never hide every other plan.
-  return value.map(parsePublicSubscriptionPlan).filter(plan => plan !== null);
+  return value.map(item => parsePublicSubscriptionPlan(item, apiBase)).filter(plan => plan !== null);
 }
 
 export function parseCustomerSubscription(value: unknown): CustomerSubscription | null {
@@ -85,7 +105,8 @@ export function parseCustomerSubscription(value: unknown): CustomerSubscription 
   const startDate = dateOnly(raw.startDate); const createdAt = instant(raw.createdAt); const updatedAt = instant(raw.updatedAt);
   const deliveryAddressId = optionalText(raw.deliveryAddressId, 64);
   if (!id || !UUID.test(id) || !planId || !UUID.test(planId) || !status || !SUBSCRIPTION_STATUSES.has(status) || !startDate || !createdAt || !updatedAt || (deliveryAddressId && !UUID.test(deliveryAddressId))) return null;
-  return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt, planName: optionalText(raw.planName, 160) };
+  return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt, planName: optionalText(raw.planName, 160),
+    pauseDaysPerBill: count(raw.pauseDaysPerBill), pauseDaysLeft: count(raw.pauseDaysLeft), pauseAutoResumeDate: raw.pauseAutoResumeDate == null ? null : dateOnly(raw.pauseAutoResumeDate) };
 }
 export function parseCustomerSubscriptions(value: unknown): CustomerSubscription[] | null {
   if (!Array.isArray(value) || value.length > 500) return null;

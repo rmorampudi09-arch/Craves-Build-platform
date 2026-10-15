@@ -101,7 +101,7 @@ function useMinuteClock(): Date {
       timer = window.setInterval(() => setNow(new Date()), 30_000);
     };
     document.addEventListener("visibilitychange", sync);
-    timer = window.setInterval(() => setNow(new Date()), 30_000);
+    if (!document.hidden) timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", sync);

@@ -149,6 +149,48 @@ test("the kitchen's state: Craves pause, chef closed, not taking orders, paused,
   );
 });
 
+test("today's special day goes before the week's hours, as the server decides", () => {
+  const closedAllDay = { closed: true, windows: [] };
+  const closed = kitchenOpenState("ACTIVE", schedule, now, closedAllDay);
+  assert.deepEqual(
+    [closed.status, closed.closedReason, closed.closedAllDay, closed.opensAt, closed.hoursToday],
+    ["closed", "outside-hours", true, null, null],
+  );
+  assert.equal(closed.takingOrders, true);
+  // 3:30 PM falls inside the special day's own hours, though the week has Thursday closed then.
+  const open = kitchenOpenState("ACTIVE", schedule, now, {
+    closed: false,
+    windows: [{ opensAt: "15:00", closesAt: "17:00" }],
+  });
+  assert.deepEqual(
+    [open.status, open.hoursToday, open.closedAllDay],
+    ["open", "3:00 PM – 5:00 PM", false],
+  );
+  const later = kitchenOpenState("ACTIVE", schedule, now, {
+    closed: false,
+    windows: [
+      { opensAt: "19:00", closesAt: "21:00" },
+      { opensAt: "16:00", closesAt: "17:00" },
+    ],
+  });
+  assert.deepEqual(
+    [later.closedReason, later.opensAt, later.hoursToday],
+    ["outside-hours", "4:00 PM", "4:00 PM – 9:00 PM"],
+  );
+  // A special day counts even when no weekly hours are set; not taking orders still comes first.
+  assert.equal(
+    kitchenOpenState("ACTIVE", { ...schedule, weeklyWindows: [] }, now, closedAllDay).status,
+    "closed",
+  );
+  const notTaking = kitchenOpenState(
+    "ACTIVE",
+    { ...schedule, acceptingOrders: false },
+    now,
+    closedAllDay,
+  );
+  assert.deepEqual([notTaking.closedReason, notTaking.closedAllDay], ["not-accepting", false]);
+});
+
 test("no hours at all means open whenever the kitchen is; a day without hours in a set week is closed", () => {
   assert.equal(kitchenOpenState("ACTIVE", { ...schedule, weeklyWindows: [] }, now).status, "open");
   assert.equal(kitchenOpenState("ACTIVE", null, now).status, "open");

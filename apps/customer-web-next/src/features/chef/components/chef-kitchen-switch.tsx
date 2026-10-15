@@ -7,6 +7,7 @@ import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import {
   changeKitchenSchedule,
+  fetchScheduleOverride,
   scheduleUpdate,
   useKitchenSchedule,
 } from "@/features/chef/api/chef-kitchen-schedule";
@@ -14,6 +15,7 @@ import { ChefChoiceChips } from "@/features/chef/components/chef-ui";
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
 import type { ChefKitchen, ChefKitchenInput } from "@/features/chef/lib/chef-kitchen-types";
+import type { ChefScheduleOverride } from "@/features/chef/lib/chef-schedule-contract";
 import {
   formatHoursTime,
   kitchenClock,
@@ -81,12 +83,17 @@ function kitchenStatusCopy(state: KitchenOpenState): { title: string; detail: st
             title: "Closed · not taking orders",
             detail: "Customers can’t order until you start taking orders again.",
           }
-        : state.closedReason === "outside-hours"
+        : state.closedAllDay
           ? {
-              title: state.opensAt ? `Closed · opens ${state.opensAt}` : "Closed",
-              detail: "Your kitchen opens again by its opening hours.",
+              title: "Closed all day",
+              detail: "Today is a special day in your opening hours.",
             }
-          : { title: "Closed", detail: "Customers can’t order until you open it." };
+          : state.closedReason === "outside-hours"
+            ? {
+                title: state.opensAt ? `Closed · opens ${state.opensAt}` : "Closed",
+                detail: "Your kitchen opens again by its opening hours.",
+              }
+            : { title: "Closed", detail: "Customers can’t order until you open it." };
   }
 }
 
@@ -111,6 +118,32 @@ function useMinuteClock(): Date {
   return now;
 }
 
+/**
+ * Today's special day for the kitchen's date, or null when there is none, it isn't read yet or can't be (the week's
+ * hours apply). It is read again whenever the schedule is, so a special day saved for today shows straight away.
+ */
+function useSpecialDay(
+  schedule: { timezoneId: string } | null,
+  date: string | null,
+): ChefScheduleOverride | null {
+  const [read, setRead] = useState<{ date: string; special: ChefScheduleOverride | null } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!schedule || !date) return;
+    let current = true;
+    void fetchScheduleOverride(date)
+      .catch(() => null)
+      .then((special) => {
+        if (current) setRead({ date, special });
+      });
+    return () => {
+      current = false;
+    };
+  }, [schedule, date]);
+  return read && read.date === date ? read.special : null;
+}
+
 /** Taking orders in one tap, a short pause, and why a closed kitchen is closed. */
 export function ChefKitchenSwitch({
   kitchen,
@@ -126,7 +159,8 @@ export function ChefKitchenSwitch({
   // Without the schedule (still loading, not live yet, or failed) the switch works as open/closed only.
   const schedule = view.state === "ready" ? view.schedule : null;
   const now = useMinuteClock();
-  const state = kitchenOpenState(kitchen.status, schedule, now);
+  const special = useSpecialDay(schedule, schedule && kitchenClock(now, schedule.timezoneId).date);
+  const state = kitchenOpenState(kitchen.status, schedule, now, special);
   const copy = kitchenStatusCopy(state);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; kitchenLink: boolean } | null>(null);

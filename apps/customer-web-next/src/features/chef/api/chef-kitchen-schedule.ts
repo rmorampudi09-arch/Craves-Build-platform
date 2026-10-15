@@ -66,11 +66,20 @@ export async function fetchScheduleOverride(date: string): Promise<ChefScheduleO
   }
 }
 
+/** Every screen showing the schedule reads it again after a special day changes: the kitchen's state goes by today's. */
+async function changeOverride<T>(saving: Promise<T>): Promise<T> {
+  const saved = await saving;
+  void reloadKitchenSchedule();
+  return saved;
+}
+
 export const saveScheduleOverride = (date: string, update: ChefOverrideUpdate) =>
-  call(overridePath(date), parseChefScheduleOverride, HOURS_SAVE_FAILED, put(update));
+  changeOverride(
+    call(overridePath(date), parseChefScheduleOverride, HOURS_SAVE_FAILED, put(update)),
+  );
 
 export const deleteScheduleOverride = (date: string) =>
-  call(overridePath(date), () => true, HOURS_SAVE_FAILED, { method: "DELETE" });
+  changeOverride(call(overridePath(date), () => true, HOURS_SAVE_FAILED, { method: "DELETE" }));
 
 /** What every screen showing the schedule sees: one read and one copy, so a pause on one shows on the other. */
 export type KitchenScheduleView =

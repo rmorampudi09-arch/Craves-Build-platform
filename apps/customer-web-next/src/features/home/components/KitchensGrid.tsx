@@ -15,6 +15,7 @@ import {
 
 import { formatDistance, type NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import styles from "@/features/home/screens/HomeReference.module.css";
+import { KitchenDiscoverCardSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
 import { summarizeKitchenDishes, type KitchenCardDish, type KitchenDishSummary } from "@/shared/lib/kitchen-dish-summary";
 import { FavoriteKitchenHeart } from "@/shared/ui/buttons/FavoriteKitchenHeart";
@@ -340,7 +341,7 @@ export function KitchensGrid({
             {/* As many placeholders as cards will show, so the list doesn't shrink when it loads. */}
             {Array.from({ length: limit ?? 6 }, (_, index) => (
               <div key={index} className={limit && index >= PHONE_LIMIT ? "max-sm:hidden" : undefined}>
-                <KitchenSkeleton />
+                {renderKitchen ? <KitchenDiscoverCardSkeleton /> : <KitchenSkeleton />}
               </div>
             ))}
           </div>

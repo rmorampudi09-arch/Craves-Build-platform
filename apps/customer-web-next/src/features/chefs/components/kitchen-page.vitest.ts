@@ -18,22 +18,30 @@ const header = (photos: string[], solid = false) => render(createElement(Kitchen
 const shown = () => screen.getAllByRole("img").map((img) => img.getAttribute("src"));
 
 beforeEach(() => { vi.stubGlobal("fetch", vi.fn(async () => Response.json({ items: [], nextCursor: null }))); });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks();
+  // jsdom has no element scrolling; tests that need it add their own.
+  delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo;
+});
 
 describe("KitchenHeader", () => {
-  it("shows the next photo every 4 seconds until paused", () => {
+  it("shows the next photo every 4 seconds, held by focus in the photos until Pause and Play are pressed", () => {
     vi.useFakeTimers();
     header([url("a"), url("b")]);
     expect(shown()).toEqual([url("a")]);
     act(() => { vi.advanceTimersByTime(4_000); });
     expect(shown()).toEqual([url("b")]);
-    fireEvent.click(screen.getByRole("button", { name: "Pause kitchen photos" }));
-    expect(vi.getTimerCount()).toBe(0);
-    fireEvent.click(screen.getByRole("button", { name: "Play kitchen photos" }));
-    expect(vi.getTimerCount()).toBe(1);
-    // The pointer that pressed Play is over the photos, which holds them.
+    const toggle = screen.getByRole("button", { name: "Pause kitchen photos" });
+    toggle.focus();
     act(() => { vi.advanceTimersByTime(4_000); });
     expect(shown()).toEqual([url("b")]);
+    fireEvent.click(toggle);
+    expect(vi.getTimerCount()).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "Play kitchen photos" }));
+    // Play moves the photos on again although focus is still on the button.
+    act(() => { vi.advanceTimersByTime(4_000); });
+    expect(shown()).toEqual([url("a")]);
   });
 
   it("holds the photo while the tab is hidden", () => {

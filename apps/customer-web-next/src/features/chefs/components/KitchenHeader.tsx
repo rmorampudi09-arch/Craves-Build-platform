@@ -14,7 +14,8 @@ const roundButton = "flex h-10 w-10 shrink-0 items-center justify-center rounded
 function KitchenPhotos({ name, photos }: { name: string; photos: string[] }) {
   // Moving photos can be paused (WCAG 2.2.2) and never move for reduced motion.
   const reduceMotion = useReducedMotion();
-  const [paused, setPaused] = useState(false);
+  // null until the button is used; after that the customer's Play or Pause alone decides (APG carousel).
+  const [paused, setPaused] = useState<boolean | null>(null);
   // A photo that fails to load leaves the slideshow instead of showing a broken image.
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const usable = useMemo(() => photos.filter((url) => !failed.has(url)), [photos, failed]);
@@ -26,8 +27,8 @@ function KitchenPhotos({ name, photos }: { name: string; photos: string[] }) {
   useEffect(() => {
     if (reduceMotion || paused || count < 2) return;
     const timer = window.setInterval(() => {
-      // A hidden tab, a pointer over the photos or keyboard focus in them holds the current one.
-      if (document.hidden || rootRef.current?.matches(":hover, :focus-within")) return;
+      // A hidden tab holds the current photo; so do a pointer over the photos or focus in them, until Play or Pause.
+      if (document.hidden || (paused === null && rootRef.current?.matches(":hover, :focus-within"))) return;
       setIndex((value) => (value + 1) % count);
     }, SLIDE_MS);
     return () => window.clearInterval(timer);
@@ -65,7 +66,7 @@ function KitchenPhotos({ name, photos }: { name: string; photos: string[] }) {
           {reduceMotion ? null : (
             <button
               type="button"
-              onClick={() => setPaused((value) => !value)}
+              onClick={() => setPaused(!paused)}
               aria-label={paused ? "Play kitchen photos" : "Pause kitchen photos"}
               className="flex h-8 w-8 items-center justify-center rounded-full !border-0 !bg-transparent !p-0 !min-h-0 !min-w-0 text-white !shadow-none"
             >

@@ -2,9 +2,12 @@
 export type KitchenCardDish = { kitchenId?: string; img: string; price: number; currency?: string; prepMinutes?: number };
 export type KitchenDishSummary = { imageUrls: string[]; preparationTimeLabel: string | null; startingPriceLabel: string };
 
+/** The site's en-IN currency format ("₹1,200"), paise only when there are any (as in the app). */
 export function formatDishPrice(price: number, currency = "INR"): string {
   const code = currency.trim().toUpperCase();
-  return code === "INR" ? `₹${price.toFixed(price % 1 === 0 ? 0 : 2)}` : `${code} ${price.toFixed(2)}`;
+  const digits = price % 1 === 0 ? 0 : 2;
+  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: code, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(price); }
+  catch { return `${code} ${price.toFixed(2)}`; }
 }
 
 /** "25 min" or "20–45 min" across the dishes' cooking times; null when none gave one. Not a delivery estimate. */

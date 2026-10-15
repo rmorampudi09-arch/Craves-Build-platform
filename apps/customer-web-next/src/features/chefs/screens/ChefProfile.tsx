@@ -1,5 +1,5 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
@@ -63,6 +63,8 @@ function ChefProfilePage() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [pastTitle, setPastTitle] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+  // A stable list, so the menu's grouping and scroll tracking are not redone on every render.
+  const dishes = useMemo(() => (chef ? getDishesByChef(chef.name) : []), [chef]);
 
   // The kitchen bar (h-16) turns white and shows the kitchen once its name has scrolled under the bar.
   useEffect(() => {
@@ -191,7 +193,6 @@ function ChefProfilePage() {
     );
   }
 
-  const dishes = getDishesByChef(chef.name);
   const name = chef.name;
   const location = profile ? kitchenLocation([profile.areaName, profile.city, profile.state]) : chef.location;
   const subtitle = [

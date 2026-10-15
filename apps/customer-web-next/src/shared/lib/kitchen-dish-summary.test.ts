@@ -5,10 +5,12 @@ import { formatDishPrice, formatPreparationTime, summarizeKitchenDishes } from "
 const A = "4b1c0000-0000-4000-8000-00000000000a";
 const B = "4b1c0000-0000-4000-8000-00000000000b";
 
-test("formats prices with the rupee sign, paise only when there are any", () => {
+test("formats prices like the rest of the site, paise only when there are any", () => {
   assert.equal(formatDishPrice(180), "₹180");
-  assert.equal(formatDishPrice(180.5, "inr"), "₹180.50");
-  assert.equal(formatDishPrice(12, "USD"), "USD 12.00");
+  assert.equal(formatDishPrice(1200), "₹1,200");
+  assert.equal(formatDishPrice(125000.5, "inr"), "₹1,25,000.50");
+  assert.equal(formatDishPrice(12, "USD"), "$12");
+  assert.equal(formatDishPrice(12, "X1"), "X1 12.00");
 });
 
 test("prep time is one value or the range, ignoring dishes without one", () => {

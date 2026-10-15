@@ -58,13 +58,15 @@ test("keeps fulfillment address but removes identity/internal fields", () => {
   assert.equal("pickupAddress" in (parsed ?? {}), false);
 });
 
-test("keeps the checkout (none for a meal-plan order) and the response deadline", () => {
+test("keeps the checkout (none for a meal-plan order), the response deadline and the customer's note", () => {
   assert.equal(parseChefOrder(order)?.checkoutId, order.checkoutId);
   assert.equal(parseChefOrder({ ...order, checkoutId: null })?.checkoutId, null);
   assert.equal(parseChefOrder({ ...order, checkoutId: "bad" })?.checkoutId, null);
   assert.equal(parseChefOrder(order)?.chefAcceptanceExpiresAt, null);
   assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "2026-07-30T00:10:00Z" })?.chefAcceptanceExpiresAt, "2026-07-30T00:10:00Z");
   assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "soon" })?.chefAcceptanceExpiresAt, null);
+  assert.equal(parseChefOrder({ ...order, customerNote: " Less spicy please " })?.customerNote, "Less spicy please");
+  assert.equal(parseChefOrder({ ...order, customerNote: "n".repeat(501) })?.customerNote, null);
 });
 
 test("keeps the delivery partner with an https photo only, and tells a missing hand-over apart from one still to do", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { declineConsequence, notPickedUpCase, pickupEtaLabel, respondCountdown } from "./chef-order-presentation.ts";
+import { acceptReadyMinutes, declineConsequence, notPickedUpCase, pickupEtaLabel, prepCountdown, respondCountdown } from "./chef-order-presentation.ts";
 
 const createdAt = "2026-10-10T08:00:00Z";
 const at = (iso: string) => Date.parse(iso);
@@ -61,4 +61,30 @@ test("pickup time reads as minutes to go, then as due now", () => {
   assert.equal(pickupEtaLabel("2026-10-10T08:05:30Z", now), "Arriving in 6 min");
   assert.equal(pickupEtaLabel("2026-10-10T08:00:00Z", now), "Should be here now");
   assert.equal(pickupEtaLabel(null, now), null);
+});
+
+test("cooking counts down from acceptance and then counts minutes late", () => {
+  const cooking = { status: "PREPARING" as const, prepTimeMinutes: 20, updatedAt: "2026-10-10T08:00:00Z" };
+  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:00:00Z")), { label: "Ready in 20 min", tone: "success", fill: 0 });
+  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:12:01Z")), { label: "Ready in 8 min", tone: "success", fill: 721 / 1200 });
+  assert.equal(prepCountdown(cooking, at("2026-10-10T08:19:59Z"))?.label, "Ready in 1 min");
+  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:20:10Z")), { label: "1 min late", tone: "danger", fill: 1 });
+  assert.equal(prepCountdown(cooking, at("2026-10-10T08:25:00Z"))?.label, "5 min late");
+  assert.equal(prepCountdown({ ...cooking, prepTimeMinutes: null }, at("2026-10-10T08:00:00Z")), null);
+  assert.equal(prepCountdown({ ...cooking, status: "READY_FOR_PICKUP" }, at("2026-10-10T08:00:00Z")), null);
+});
+
+test("one-tap accept promises the held time, else the slowest dish, else 15 minutes", () => {
+  const item = (menuItemId: string, itemName: string) => ({ id: menuItemId, menuItemId, itemName, category: null, foodType: null, unitPrice: 100, quantity: 1, lineTotal: 100 });
+  const dishes = [
+    { id: "dish-a", itemName: "Biryani", preparationTimeMinutes: 40 },
+    { id: "dish-b", itemName: "Raita", preparationTimeMinutes: null },
+    { id: "dish-c", itemName: "Kheer", preparationTimeMinutes: 25 },
+  ];
+  assert.equal(acceptReadyMinutes({ prepTimeMinutes: 30, items: [item("dish-a", "Biryani")] }, dishes), 30);
+  assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [item("dish-a", "Biryani"), item("dish-c", "Kheer")] }, dishes), 40);
+  assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [item("gone", " kheer ")] }, dishes), 25);
+  assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [item("dish-b", "Raita")] }, dishes), 15);
+  assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [] }, dishes), 15);
+  assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [item("dish-x", "Pot roast")] }, [{ id: "dish-x", itemName: "Pot roast", preparationTimeMinutes: 2_000 }]), 1_440);
 });

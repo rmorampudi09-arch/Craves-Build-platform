@@ -21,11 +21,14 @@ import {
   type ChefDeliveryPartner,
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
+import { parseChefMenuItems, type ChefMenuItem } from "@/features/chef/lib/chef-menu-contract";
 import {
   NOT_PICKED_UP_REASONS,
+  acceptReadyMinutes,
   declineConsequence,
   notPickedUpCase,
   pickupEtaLabel,
+  prepCountdown,
   respondCountdown,
   type Countdown,
 } from "@/features/chef/lib/chef-order-presentation";
@@ -33,7 +36,7 @@ import { FEATURE_NOT_AVAILABLE, isFeatureUnavailable } from "@/shared/lib/featur
 import { createSupportCase, SupportCaseError } from "@/shared/lib/support-cases-client";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
-import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 type DecisionStep = "choose" | "accept" | "decline";
 
@@ -78,6 +81,19 @@ function Frame({
       <div className="mt-3">{children}</div>
     </div>
   );
+}
+
+let dishesRequest: Promise<ChefMenuItem[]> | null = null;
+
+/** The chef's dishes, for the minutes one-tap Accept promises. Cards that open together share one read; a failed read counts as no dishes. */
+function loadDishes(): Promise<ChefMenuItem[]> {
+  dishesRequest ??= sessionFetch("/api/chef/menu", { cache: "no-store" })
+    .then(async (response) => (response.ok ? parseChefMenuItems(await response.json().catch(() => null)) : null) ?? [])
+    .catch(() => [])
+    .finally(() => {
+      dishesRequest = null;
+    });
+  return dishesRequest;
 }
 
 const TONE_COLOR = { danger: "var(--chef-error)", warning: "var(--chef-warning)", success: "var(--chef-success)" } as const;
@@ -261,11 +277,30 @@ export function ChefOrderActions({
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [handOverSoon, setHandOverSoon] = useState(false);
+  const [confirmReady, setConfirmReady] = useState(false);
+  const [dishes, setDishes] = useState<ChefMenuItem[] | null>(null);
   const stepRef = useRef<HTMLDivElement>(null);
   const stepChanged = useRef(false);
-  const expiresAt = order.status === "CHEF_ACCEPTANCE_PENDING" ? order.chefAcceptanceExpiresAt : null;
-  const now = useNow(Boolean(expiresAt) || (order.status === "READY_FOR_PICKUP" && Boolean(order.deliveryPartner?.pickupEtaAt)));
-  const clock = expiresAt ? <CountdownLine countdown={respondCountdown({ createdAt: order.createdAt, chefAcceptanceExpiresAt: expiresAt }, now)} /> : null;
+  const pending = order.status === "CHEF_ACCEPTANCE_PENDING";
+  const cooking = order.status === "CHEF_ACCEPTED" || order.status === "PREPARING";
+  const expiresAt = pending ? order.chefAcceptanceExpiresAt : null;
+  const now = useNow(Boolean(expiresAt) || (cooking && Boolean(order.prepTimeMinutes)) || (order.status === "READY_FOR_PICKUP" && Boolean(order.deliveryPartner?.pickupEtaAt)));
+  const countdown = expiresAt ? respondCountdown({ createdAt: order.createdAt, chefAcceptanceExpiresAt: expiresAt }, now) : prepCountdown(order, now);
+  const clock = countdown ? <CountdownLine countdown={countdown} /> : null;
+  // Null while the dishes load, so the one-tap button never promises a time it is about to change.
+  const readyMinutes = order.prepTimeMinutes ?? (dishes ? acceptReadyMinutes(order, dishes) : null);
+  const dishSummary = order.items.map((item) => `${item.quantity} × ${item.itemName}`).join(", ");
+
+  useEffect(() => {
+    if (!pending || order.prepTimeMinutes != null) return;
+    let live = true;
+    void loadDishes().then((items) => {
+      if (live) setDishes(items);
+    });
+    return () => {
+      live = false;
+    };
+  }, [pending, order.prepTimeMinutes]);
 
   // A new step replaces the buttons that were pressed: move focus to the new step's heading.
   useEffect(() => {
@@ -319,9 +354,9 @@ export function ChefOrderActions({
           ? "Food marked ready for pickup."
           : path === "handed-over"
             ? "Marked as handed over."
-          : path === "reject"
-            ? "Order declined. The customer will see that your kitchen couldn’t take it."
-            : "Order accepted. The customer sees your cooking time.",
+            : path === "reject"
+              ? "Order declined. The customer will see that your kitchen couldn’t take it."
+              : "Order accepted. The customer sees your cooking time.",
       );
     } catch (caught) {
       setError(chefErrorText(caught, "We couldn’t save your answer. Please try again."));
@@ -347,16 +382,27 @@ export function ChefOrderActions({
   let content: ReactNode;
   if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "choose") {
     content = (
-      <Frame inline={inline} title="Can you cook this now?" note="If you accept, you’ll choose how long it takes.">
+      <Frame inline={inline} title="Can you cook this now?">
         {clock}
         <div className="grid gap-2 sm:grid-cols-2">
-          <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-go is-tall">
-            <CheckCircle2 className="h-6 w-6" aria-hidden="true" /> Accept order
+          <button
+            type="button"
+            {...busyProps("accept")}
+            disabled={readyMinutes === null}
+            onClick={() => readyMinutes !== null && void act("accept", { prepTimeMinutes: readyMinutes, note: null, actionId: crypto.randomUUID() })}
+            className="chef-btn is-go is-tall"
+          >
+            {busyAction === "accept" || readyMinutes === null ? <LoaderCircle className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <CheckCircle2 className="h-6 w-6" aria-hidden="true" />}
+            {busyAction === "accept" ? "Saving…" : readyMinutes === null ? "Accept order" : `Accept · ready in ${readyMinutes} min`}
           </button>
           <button type="button" {...busyProps("")} onClick={() => goTo("decline")} className="chef-btn is-danger is-tall">
             <XCircle className="h-6 w-6" aria-hidden="true" /> Can’t take it
           </button>
         </div>
+        <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-small is-quiet mt-2">
+          Choose another time
+        </button>
+        {feedback}
       </Frame>
     );
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "accept") {
@@ -452,8 +498,9 @@ export function ChefOrderActions({
   } else if (order.status === "CHEF_ACCEPTED" || order.status === "PREPARING") {
     content = (
       <Frame inline={inline} title="Is everything packed?" note="Tap only when every item is cooked and packed.">
+        {clock}
         {feedback}
-        <button type="button" {...busyProps("ready-for-pickup")} onClick={() => void act("ready-for-pickup")} className="chef-btn is-go is-tall is-block mt-1">{busyAction ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <PackageCheck className="h-5 w-5" aria-hidden="true" />}{busyAction ? "Saving…" : "Food is ready for pickup"}</button>
+        <button type="button" {...busyProps("ready-for-pickup")} onClick={() => setConfirmReady(true)} className="chef-btn is-go is-tall is-block mt-1">{busyAction ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <PackageCheck className="h-5 w-5" aria-hidden="true" />}{busyAction ? "Saving…" : "Food is ready for pickup"}</button>
       </Frame>
     );
   } else if (order.status === "READY_FOR_PICKUP") {
@@ -494,6 +541,29 @@ export function ChefOrderActions({
       <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
+      <Dialog
+        open={confirmReady}
+        onOpenChange={setConfirmReady}
+        busy={busyAction === "ready-for-pickup"}
+        title={`Is #${shortOrderNumber(order.id)} packed and ready?`}
+        description={`${dishSummary}${dishSummary ? ". " : ""}The delivery partner is told to pick it up.`}
+        footer={
+          <>
+            <button type="button" onClick={() => setConfirmReady(false)} disabled={Boolean(busyAction)} className={secondaryActionClass}>Not yet</button>
+            <button
+              type="button"
+              aria-busy={busyAction === "ready-for-pickup" || undefined}
+              onClick={async () => {
+                await act("ready-for-pickup");
+                setConfirmReady(false);
+              }}
+              className="craves-primary-action w-full sm:w-auto"
+            >
+              {busyAction === "ready-for-pickup" ? "Saving…" : "Yes, it’s ready"}
+            </button>
+          </>
+        }
+      />
       {/* On an order card the list shows its own update notice, since the card moves on. */}
       {inline ? null : (
         <ChefFlash message={busyAction ? "" : message} announce={false} onClose={() => setMessage("")} />

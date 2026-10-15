@@ -30,6 +30,8 @@ import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate
 import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
+import { ChefOrderHistoryError, fetchChefOrderHistoryPage } from "@/features/chef/api/chef-order-history";
+import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 
 const newestFirst = (orders: ChefOrder[]) =>
   [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
@@ -47,6 +49,9 @@ const PREVIOUS = new Set([
   "DELIVERED",
 
 ]);
+
+/** Older orders for Done, a page at a time. "soon": the server has no paging yet, so Done keeps the recent orders only. */
+type History = { orders: ChefOrder[]; nextCursor: string | null; state: "loading" | "ready" | "failed" | "soon" };
 
 function statusesFor(view: InboxView): Set<string> | null {
   if (view === "NEEDS_ANSWER") return NEEDS_ANSWER;
@@ -96,6 +101,30 @@ export function ChefOrderInbox() {
     setLastUpdatedAt(new Date());
   });
 
+  const [history, setHistory] = useState<History | null>(null);
+  const loadHistory = useCallback(async (cursor: string | null) => {
+    setHistory((current) => ({ orders: current?.orders ?? [], nextCursor: cursor, state: "loading" }));
+    try {
+      const page = await fetchChefOrderHistoryPage({ cursor });
+      setHistory((current) => ({ orders: [...(current?.orders ?? []), ...page.orders], nextCursor: page.hasMore ? page.nextCursor : null, state: "ready" }));
+    } catch (caught) {
+      const soon = caught instanceof ChefOrderHistoryError && caught.code === FEATURE_NOT_AVAILABLE;
+      setHistory((current) => ({ orders: current?.orders ?? [], nextCursor: cursor, state: soon ? "soon" : "failed" }));
+    }
+  }, []);
+
+  // Older orders load only once the chef opens Done.
+  useEffect(() => {
+    if (view === "PREVIOUS" && !history) void loadHistory(null);
+  }, [view, history, loadHistory]);
+
+  // Done holds the recent orders and the older pages; the live copy wins when an order is in both.
+  const doneOrders = useMemo(() => {
+    const byId = new Map<string, ChefOrder>();
+    for (const order of [...(history?.orders ?? []), ...orders]) if (PREVIOUS.has(order.status)) byId.set(order.id, order);
+    return newestFirst([...byId.values()]);
+  }, [history, orders]);
+
   const [orderNotice, setOrderNotice] = useState("");
   function updateOrder(order: ChefOrder) {
     setOrders((current) => current.map((existing) => (existing.id === order.id ? order : existing)));
@@ -111,16 +140,17 @@ export function ChefOrderInbox() {
       NEEDS_ANSWER: orders.filter((order) => NEEDS_ANSWER.has(order.status)).length,
       IN_PROGRESS: orders.filter((order) => IN_PROGRESS.has(order.status)).length,
       READY: orders.filter((order) => READY.has(order.status)).length,
-      PREVIOUS: orders.filter((order) => PREVIOUS.has(order.status)).length,
+      PREVIOUS: doneOrders.length,
       ALL: orders.length,
     }),
-    [orders],
+    [doneOrders.length, orders],
   );
 
   const visibleOrders = useMemo(() => {
+    if (view === "PREVIOUS") return doneOrders;
     const statuses = statusesFor(view);
     return statuses ? orders.filter((order) => statuses.has(order.status)) : orders;
-  }, [orders, view]);
+  }, [doneOrders, orders, view]);
 
   // Opens on the most urgent tab once; later checks never move the chef off the tab they chose.
   const pickedView = useRef(false);
@@ -171,7 +201,7 @@ export function ChefOrderInbox() {
             }
           />
         </ChefSection>
-      ) : orders.length === 0 ? (
+      ) : orders.length === 0 && !history ? (
         <ChefSection>
           <ChefEmpty
             image={{
@@ -182,6 +212,7 @@ export function ChefOrderInbox() {
             }}
             title="No orders right now"
             text="When a customer orders from your kitchen it appears here, and you choose whether you can cook it."
+            action={<button type="button" onClick={() => setView("PREVIOUS")} className="chef-btn">See past orders</button>}
           />
         </ChefSection>
       ) : (
@@ -200,7 +231,7 @@ export function ChefOrderInbox() {
 
           <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
-          {visibleOrders.length === 0 ? (
+          {visibleOrders.length === 0 && view === "PREVIOUS" && history?.state === "loading" ? null : visibleOrders.length === 0 ? (
             <ChefSection>
               <ChefEmpty
                 icon={CheckCircle2}
@@ -252,6 +283,22 @@ export function ChefOrderInbox() {
               </ul>
             </ChefSection>
           )}
+          {view === "PREVIOUS" && history ? (
+            <div aria-live="polite" className="grid justify-items-center empty:hidden">
+              {history.state === "soon" ? (
+                <ChefNotice icon={Clock3}>Older orders are coming soon.</ChefNotice>
+              ) : history.state === "failed" ? (
+                <ChefNotice icon={AlertTriangle} tone="danger">
+                  <p>Older orders couldn’t load.</p>
+                  <button type="button" onClick={() => void loadHistory(history.nextCursor)} className="chef-btn is-small mt-2">Try again</button>
+                </ChefNotice>
+              ) : history.state === "loading" || history.nextCursor ? (
+                <button type="button" disabled={history.state === "loading"} aria-busy={history.state === "loading" || undefined} onClick={() => void loadHistory(history.nextCursor)} className="chef-btn">
+                  {history.state === "loading" ? "Loading older orders…" : "Load more"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null}
         </div>
       )}

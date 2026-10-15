@@ -9,11 +9,12 @@ import {
   ChevronRight,
   Clock3,
   CookingPot,
+  MessageSquareText,
   PackageCheck,
   Volume2,
   XCircle,
 } from "lucide-react";
-import { ChefFlash, ChefPill, chefOrderStatus, formatInr, timeAgo } from "@/features/chef/components/chef-ui";
+import { ChefFlash, ChefNotice, ChefPill, chefOrderStatus, formatInr, timeAgo } from "@/features/chef/components/chef-ui";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
 import { canSpeak, speakOrder } from "@/features/chef/lib/chef-order-alert";
 import { shortOrderNumber } from "@/shared/lib/order-number";
@@ -134,6 +135,15 @@ export function ChefOrderProgress({ status }: { status: string }) {
   );
 }
 
+/** What the customer wrote at checkout, in their words. */
+export function CustomerNote({ note }: { note: string }) {
+  return (
+    <ChefNotice icon={MessageSquareText}>
+      <p><span className="sr-only">Customer’s note: </span>“{note}”</p>
+    </ChefNotice>
+  );
+}
+
 /** One order on Home or in Orders: what to cook, big, and the next answer right on the card. */
 export function ChefOrderCard({ order, onUpdated }: { order: ChefOrder; onUpdated(order: ChefOrder): void }) {
   const status = chefOrderStatus(order.status);
@@ -167,6 +177,11 @@ export function ChefOrderCard({ order, onUpdated }: { order: ChefOrder; onUpdate
           </li>
         ))}
       </ul>
+      {order.customerNote ? (
+        <div className="mt-3">
+          <CustomerNote note={order.customerNote} />
+        </div>
+      ) : null}
       <div className="chef-order-card-tools">
         <HearOrderButton order={order} />
         <Link href={`/chef/orders/${order.id}`} className="chef-btn is-small is-quiet">

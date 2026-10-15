@@ -66,6 +66,8 @@ export type ChefOrder = {
   checkoutId?: string | null;
   /** The server's deadline to accept or decline a new order. */
   chefAcceptanceExpiresAt?: string | null;
+  /** What the customer wrote at checkout. */
+  customerNote?: string | null;
   deliveryPartner?: ChefDeliveryPartner | null;
   /** Null until the chef hands the order over; absent when the server has no hand-over yet, so the button stays hidden. */
   chefHandedOverAt?: string | null;
@@ -256,6 +258,7 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     updatedAt,
     checkoutId: isCanonicalUuid(raw.checkoutId) ? raw.checkoutId : null,
     chefAcceptanceExpiresAt: instant(raw.chefAcceptanceExpiresAt),
+    customerNote: optional(raw.customerNote, 500),
     deliveryPartner: parsePartner(raw.deliveryPartner),
     ...(raw.chefHandedOverAt === null || instant(raw.chefHandedOverAt) ? { chefHandedOverAt: instant(raw.chefHandedOverAt) } : {}),
   };

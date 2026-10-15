@@ -21,6 +21,32 @@ export function respondCountdown(
   };
 }
 
+/** "Ready in 8 min" from when the chef accepted (the order's last update, as the app), then "5 min late". */
+export function prepCountdown(order: Pick<ChefOrder, "status" | "prepTimeMinutes" | "updatedAt">, now: number): Countdown | null {
+  if ((order.status !== "CHEF_ACCEPTED" && order.status !== "PREPARING") || !order.prepTimeMinutes) return null;
+  const started = Date.parse(order.updatedAt);
+  if (Number.isNaN(started)) return null;
+  const due = started + order.prepTimeMinutes * 60_000;
+  return now > due
+    ? { label: `${Math.max(1, Math.round((now - due) / 60_000))} min late`, tone: "danger", fill: 1 }
+    : { label: `Ready in ${Math.max(1, Math.ceil((due - now) / 60_000))} min`, tone: "success", fill: Math.max(0, now - started) / (due - started) };
+}
+
+export const DEFAULT_PREP_MINUTES = 15;
+
+/** Minutes the one-tap Accept promises: the time the order already holds, else its slowest dish, else 15 (as the app). */
+export function acceptReadyMinutes(
+  order: Pick<ChefOrder, "prepTimeMinutes" | "items">,
+  dishes: readonly { id: string; itemName: string; preparationTimeMinutes: number | null }[],
+): number {
+  if (order.prepTimeMinutes != null) return order.prepTimeMinutes;
+  const byId = new Map(dishes.map((dish) => [dish.id, dish.preparationTimeMinutes]));
+  const byName = new Map(dishes.map((dish) => [dish.itemName.trim().toLowerCase(), dish.preparationTimeMinutes]));
+  const minutes = order.items.map((item) => byId.get(item.menuItemId) ?? byName.get(item.itemName.trim().toLowerCase()) ?? DEFAULT_PREP_MINUTES);
+  // The accept route takes 1 to 1,440 minutes.
+  return Math.min(1_440, minutes.length ? Math.max(...minutes) : DEFAULT_PREP_MINUTES);
+}
+
 /** What declining means for the customer: a paid order has a checkout; a meal-plan day has none, so nothing is refunded. */
 export function declineConsequence(order: Pick<ChefOrder, "checkoutId">): string {
   return order.checkoutId

@@ -8,6 +8,8 @@ import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
 import { changeDeadline, dayCreditCard, formatMoney, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
 import { billingUnit } from "@/features/meal-plans/lib/meal-plan-schedule";
+import { firstDishPhoto } from "@/features/meal-plans/api/plan-cover";
+import { PlanPhoto } from "@/features/meal-plans/components/plan-photo";
 import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
@@ -228,13 +230,16 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   return <div className="space-y-4">
     <section className={card}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_PLAN_STATUS[item.status]}</span>
-          {item.amount !== null && item.currency && <p className="mt-2 text-[#1A1A1A]">
-            <strong className="text-xl">{formatMoney(item.amount, item.currency)}</strong>
-            {item.billingPeriod && <span className="text-sm text-[#6B6B6B]"> / {billingUnit(item.billingPeriod)}</span>}
-          </p>}
-          {pausing.restartNote && <p className="mt-2 text-sm font-semibold">{pausing.restartNote}</p>}
+        <div className="flex min-w-0 items-start gap-3">
+          <PlanPhoto src={item.planImageUrl ?? (schedule ? firstDishPhoto(schedule.items) : null)} className="h-20 w-20" />
+          <div>
+            <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_PLAN_STATUS[item.status]}</span>
+            {item.amount !== null && item.currency && <p className="mt-2 text-[#1A1A1A]">
+              <strong className="text-xl">{formatMoney(item.amount, item.currency)}</strong>
+              {item.billingPeriod && <span className="text-sm text-[#6B6B6B]"> / {billingUnit(item.billingPeriod)}</span>}
+            </p>}
+            {pausing.restartNote && <p className="mt-2 text-sm font-semibold">{pausing.restartNote}</p>}
+          </div>
         </div>
         <button type="button" onClick={() => void load()} className={quietButton}>Refresh</button>
       </div>

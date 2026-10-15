@@ -82,6 +82,11 @@ test("plan photos are https only; the server's own image path goes through our i
   assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "http://cdn.craves.in/p.jpg" })?.imageUrl, null);
   assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "javascript:alert(1)" })?.imageUrl, null);
   assert.equal(parsePublicSubscriptionPlan(plan)?.imageUrl, null);
+  // A subscription carries its plan's photo the same way.
+  const subscription = { id: "33333333-3333-4333-8333-333333333333", planId: plan.id, status: "ACTIVE", startDate: "2026-08-01", createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+  assert.equal(parseCustomerSubscription({ ...subscription, planImageUrl: `/api/v1/subscriptions/plans/${plan.id}/image?v=1760000000` })?.planImageUrl, own);
+  assert.equal(parseCustomerSubscription({ ...subscription, planImageUrl: "http://cdn.craves.in/p.jpg" })?.planImageUrl, null);
+  assert.equal(parseCustomerSubscription(subscription)?.planImageUrl, null);
 });
 
 test("the pause allowance is read when the server sends it", () => {

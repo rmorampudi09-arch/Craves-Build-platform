@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Synthetic meal plans; no backend is contacted.
 import { createElement } from "react";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/features/auth/api/cravesAuth", () => ({
@@ -18,6 +18,8 @@ const ORDER = "44444444-4444-4444-8444-444444444444";
 const DISH = "55555555-5555-4555-8555-555555555555";
 const KITCHEN = "66666666-6666-4666-8666-666666666666";
 const ADDRESS = "77777777-7777-4777-8777-777777777777";
+const DISH_PHOTO = "https://cdn.craves.in/dal-rice.jpg";
+const PLAN_PHOTO = `/api/subscriptions/plans/${PLAN}/image?v=1760000000`;
 const policy = {
   customerPauseEnabled: true,
   customerResumeEnabled: true,
@@ -67,7 +69,7 @@ const schedule = {
     menuItemId: DISH,
     itemName: "Dal rice",
     foodType: "VEG",
-    imageUrl: null,
+    imageUrl: DISH_PHOTO,
     quantity: 1,
     isoDayOfWeek: day,
     dayOfMonth: null,
@@ -207,6 +209,17 @@ describe("meal plan page", () => {
     await settle();
   });
 
+  it("shows the plan photo, else its first dish's photo", async () => {
+    const dish = render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    await waitFor(() => expect(dish.container.querySelector("img")?.getAttribute("src")).toBe(DISH_PHOTO));
+    cleanup();
+    current = subscription({ planImageUrl: PLAN_PHOTO });
+    const own = render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    // next/image serves our own image route as an absolute URL.
+    await waitFor(() => expect(own.container.querySelector("img")?.getAttribute("src")).toContain(PLAN_PHOTO));
+    await settle();
+  });
+
   it("opens a meal with its date, time, address, quantity and Track order", async () => {
     render(createElement(SubscriptionDetails, { subscriptionId: ID }));
     fireEvent.click(await screen.findByRole("button", { name: /Mon 12 Oct · Lunch/ }));
@@ -243,6 +256,21 @@ describe("meal plans list", () => {
     mine = [subscription({ billingPeriod: "FORTNIGHTLY", nextBillingDate: "2026-10-19" })];
     render(createElement(SubscriptionManager));
     expect(await screen.findByText("14 days · Renews Mon 19 Oct · Next meal Mon 12 Oct")).toBeTruthy();
+    await settle();
+  });
+
+  it("shows each running plan's photo, else its first dish's photo like Explore", async () => {
+    mine = [
+      subscription({ planImageUrl: PLAN_PHOTO }),
+      subscription({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
+    ];
+    const { container } = render(createElement(SubscriptionManager));
+    await waitFor(() =>
+      expect([...container.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual([
+        expect.stringContaining(PLAN_PHOTO),
+        DISH_PHOTO,
+      ]),
+    );
     await settle();
   });
 

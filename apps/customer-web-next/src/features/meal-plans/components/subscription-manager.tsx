@@ -17,6 +17,8 @@ import {
 } from "@/features/meal-plans/lib/meal-plan-copy";
 import { billingPeriodLabel } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { SubscriptionPlanBrowser } from "@/features/meal-plans/components/subscription-plan-browser";
+import { PlanPhoto } from "@/features/meal-plans/components/plan-photo";
+import { getPlanCover } from "@/features/meal-plans/api/plan-cover";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/navigation/tabs";
@@ -36,6 +38,7 @@ export function SubscriptionManager() {
   const [error, setError] = useState("");
   const [planNames, setPlanNames] = useState<Map<string, string>>(() => new Map());
   const [chosenTab, setTab] = useState<Tab | null>(null);
+  const [dishPhotos, setDishPhotos] = useState<Map<string, string | null>>(() => new Map());
 
   const load = useCallback(async () => {
     setError("");
@@ -64,6 +67,24 @@ export function SubscriptionManager() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Like Explore, a plan without its own photo shows its first dish.
+  useEffect(() => {
+    let active = true;
+    for (const item of items ?? []) {
+      if (item.planImageUrl || isPastSubscription(item.status)) continue;
+      void getPlanCover(item.planId).then(
+        (cover) => {
+          if (active)
+            setDishPhotos((current) => new Map(current).set(item.planId, cover.dishImageUrl));
+        },
+        () => undefined,
+      );
+    }
+    return () => {
+      active = false;
+    };
+  }, [items]);
 
   if (items === null && !error)
     return <CustomerSectionSkeleton variant="plans" label="Loading your meal plans" />;
@@ -146,27 +167,33 @@ export function SubscriptionManager() {
                     className="rounded-2xl border border-[#E5E7EB] bg-white p-4 sm:p-5"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">
-                          {MEAL_PLAN_STATUS[item.status]}
-                        </span>
-                        <h2 className="mt-2 text-lg font-bold">
-                          {planNames.get(item.planId) ?? item.planName ?? "Meal plan"}
-                        </h2>
-                        <p className="mt-1 text-sm text-[#6B6B6B]">
-                          {[
-                            item.billingPeriod ? billingPeriodLabel(item.billingPeriod) : null,
-                            when,
-                            item.nextServiceDate && !restart
-                              ? `Next meal ${planDay(item.nextServiceDate)}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                        {pauseLine ? (
-                          <p className="mt-1 text-sm text-[#6B6B6B]">{pauseLine}</p>
-                        ) : null}
+                      <div className="flex min-w-0 items-start gap-3">
+                        <PlanPhoto
+                          src={item.planImageUrl ?? dishPhotos.get(item.planId) ?? null}
+                          className="h-[72px] w-[72px]"
+                        />
+                        <div className="min-w-0">
+                          <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">
+                            {MEAL_PLAN_STATUS[item.status]}
+                          </span>
+                          <h2 className="mt-2 text-lg font-bold">
+                            {planNames.get(item.planId) ?? item.planName ?? "Meal plan"}
+                          </h2>
+                          <p className="mt-1 text-sm text-[#6B6B6B]">
+                            {[
+                              item.billingPeriod ? billingPeriodLabel(item.billingPeriod) : null,
+                              when,
+                              item.nextServiceDate && !restart
+                                ? `Next meal ${planDay(item.nextServiceDate)}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                          {pauseLine ? (
+                            <p className="mt-1 text-sm text-[#6B6B6B]">{pauseLine}</p>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {paymentRequired ? (

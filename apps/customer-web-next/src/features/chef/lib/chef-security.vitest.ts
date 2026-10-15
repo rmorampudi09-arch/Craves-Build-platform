@@ -22,7 +22,7 @@ describe("Login & security", () => {
     expect(screen.getByText("+91 ••••• 43210 · used to log in")).toBeTruthy();
     expect(screen.getByText("Not added")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Add your email" }).getAttribute("href")).toBe("/chef/finance");
-    expect(screen.getByRole("link", { name: /Delete my account/ }).getAttribute("href")).toBe("/chef/support/new?topic=Delete%20my%20account");
+    expect(screen.getByRole("link", { name: /Delete my account/ }).getAttribute("href")).toBe("/chef/support/new?topic=Delete%20my%20account&from=/chef/security");
 
     act(() => setSessionIdentity({ ...chef, email: "asha@gmail.com", emailVerified: false }));
     expect(screen.getByText("a•••@gmail.com")).toBeTruthy();

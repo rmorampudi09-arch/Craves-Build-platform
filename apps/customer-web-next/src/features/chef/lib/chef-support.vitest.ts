@@ -76,6 +76,17 @@ describe("Help & support", () => {
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 
+  it("says there are no tickets yet and still offers Load more when a page held only customer tickets", async () => {
+    api.list
+      .mockResolvedValueOnce({ items: [CUSTOMER_TICKET], nextCursor: "next" })
+      .mockResolvedValueOnce({ items: [OLDER_TICKET], nextCursor: null });
+    render(createElement(ChefSupportHub));
+    expect(await screen.findByText("No tickets yet")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText(/Move my kitchen/)).toBeTruthy();
+    expect(screen.queryByText("No tickets yet")).toBeNull();
+  });
+
   it("opens each common topic as a new ticket and keeps the chat", async () => {
     api.list.mockResolvedValue({ items: [], nextCursor: null });
     render(createElement(ChefSupportHub));
@@ -122,8 +133,13 @@ describe("a ticket", () => {
     const replaceState = vi.spyOn(window.history, "replaceState");
     api.create.mockResolvedValue(thread(CHEF_TICKET, ["Please close my account"]));
     api.reply.mockResolvedValue(thread(CHEF_TICKET, ["Please close my account", "Done", "Thanks"]));
-    render(createElement(ChefSupportTicket, { topic: "Delete my account" }));
+    render(
+      createElement(ChefSupportTicket, { topic: "Delete my account", from: "/chef/security" }),
+    );
     expect(screen.getByRole("heading", { level: 1, name: "Chat with us" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Login & security" }).getAttribute("href")).toBe(
+      "/chef/security",
+    );
     fireEvent.change(screen.getByLabelText("Write your message"), {
       target: { value: "  Please close my account " },
     });
@@ -171,6 +187,17 @@ describe("a ticket", () => {
       "We couldn't send that. Your message is still here.",
     );
     expect((screen.getByLabelText("Write a reply") as HTMLTextAreaElement).value).toBe("Any news?");
+  });
+
+  it("does not open the same person's customer ticket", async () => {
+    api.get.mockResolvedValue(thread(CUSTOMER_TICKET, ["Where is my food?"]));
+    render(createElement(ChefSupportTicket, { caseId: CUSTOMER_TICKET.id }));
+    expect((await screen.findByRole("alert")).textContent).toContain("This ticket didn’t load");
+    expect(screen.queryByText("Where is my food?")).toBeNull();
+    expect(screen.queryByLabelText("Write a reply")).toBeNull();
+    expect(screen.getByRole("link", { name: "Help & support" }).getAttribute("href")).toBe(
+      "/chef/support",
+    );
   });
 
   it("takes no reply on a closed ticket and offers a new chat", async () => {

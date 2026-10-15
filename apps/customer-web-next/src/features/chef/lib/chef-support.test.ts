@@ -5,6 +5,7 @@ import {
   displayPhone,
   supportPhoneFrom,
   ticketSubject,
+  ticketBack,
   ticketSubtitle,
   ticketTopic,
 } from "./chef-support.ts";
@@ -62,8 +63,28 @@ test("a ticket's subject is its topic and order number, within the 160 character
 test("only known topics come from the address bar", () => {
   assert.equal(ticketTopic("Delete my account"), "Delete my account");
   assert.equal(ticketTopic("Update a document"), "Update a document");
+  assert.equal(ticketTopic("Update my documents"), "Update my documents");
   assert.equal(ticketTopic("Give me a refund"), null);
   assert.equal(ticketTopic(null), null);
+});
+
+test("Back returns to the page that opened the ticket, or to Help & support", () => {
+  assert.deepEqual(ticketBack("/chef/documents"), {
+    href: "/chef/documents",
+    label: "Documents & verification",
+  });
+  assert.deepEqual(ticketBack("/chef/security"), {
+    href: "/chef/security",
+    label: "Login & security",
+  });
+  for (const from of [
+    null,
+    "https://evil.example",
+    "//evil.example",
+    "constructor",
+    "/chef/orders",
+  ])
+    assert.deepEqual(ticketBack(from), { href: "/chef/support", label: "Help & support" });
 });
 
 test("the support number comes from onboarding, or falls back to today's number", () => {

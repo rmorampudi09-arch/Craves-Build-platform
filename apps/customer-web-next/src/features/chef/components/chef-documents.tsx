@@ -34,6 +34,7 @@ import {
 } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/shared/ui/overlays/dialog";
+import { secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 type Load = { state: "loading" } | { state: "error" } | { state: "none" } | { state: "ready"; onboarding: OnboardingState };
 
@@ -44,7 +45,11 @@ const KIND_ICON: Record<DocumentKind, ComponentType<{ className?: string }>> = {
   file: FileText,
 };
 const BANNER_ICON = { ok: ShieldCheck, wait: Clock3, problem: AlertTriangle };
-const UPDATE_TICKET = `/chef/support/new?topic=${encodeURIComponent("Update a document")}`;
+const ticketHref = (topic: string) =>
+  `/chef/support/new?topic=${encodeURIComponent(topic)}&from=/chef/documents`;
+// As in the app: the button asks to update a document, Contact support opens the general documents ticket.
+const UPDATE_TICKET = ticketHref("Update a document");
+const CONTACT_TICKET = ticketHref("Update my documents");
 const MAX_BYTES = 10 * 1024 * 1024;
 const PHOTO_TYPES = "image/jpeg,image/png";
 const UPLOAD_FAILED = "We could not upload that. Please try again.";
@@ -183,8 +188,8 @@ export function ChefDocuments() {
       {refreshing ? "Refreshing…" : "Refresh document status"}
     </button>
   );
-  const askToUpdate = (label: string) => (
-    <Link href={UPDATE_TICKET} className="chef-btn">
+  const supportLink = (label: string, href: string, className = "chef-btn") => (
+    <Link href={href} className={className}>
       <Headset className="h-5 w-5" aria-hidden="true" />
       {label}
     </Link>
@@ -213,7 +218,7 @@ export function ChefDocuments() {
         <ChefNotice icon={ShieldCheck}>
           Your documents were checked when you joined. To update them, contact support.
         </ChefNotice>
-        {askToUpdate("Contact support")}
+        {supportLink("Contact support", CONTACT_TICKET)}
       </>
     );
   } else {
@@ -253,7 +258,7 @@ export function ChefDocuments() {
                     {id ? (
                       <button
                         type="button"
-                        className="chef-row"
+                        className="chef-row !border-0"
                         aria-label={`${row.title}, ${row.chip.label}. Open the file`}
                         onClick={() => void openDocument(id)}
                       >
@@ -275,13 +280,20 @@ export function ChefDocuments() {
             : "Your documents were checked when you joined Craves. Upload one here to keep a copy."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <button type="button" className="chef-btn" onClick={() => setSheet(true)}>
+          <button
+            type="button"
+            className="chef-btn"
+            onClick={() => {
+              setUploadError("");
+              setSheet(true);
+            }}
+          >
             <Upload className="h-5 w-5" aria-hidden="true" />
             Upload another document
           </button>
           {refresh}
         </div>
-        {askToUpdate("Ask to update a document")}
+        {supportLink("Ask to update a document", UPDATE_TICKET)}
 
         <Dialog open={sheet} onOpenChange={(open) => !uploading && setSheet(open)}>
           <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl bg-white p-5 text-[#1A1A1A]">
@@ -292,20 +304,21 @@ export function ChefDocuments() {
             {approved ? (
               <div className="grid gap-3">
                 <p className="text-[0.875rem] leading-6 text-[#6B6B6B]">{APPROVED_NOTE}</p>
-                {askToUpdate("Contact support")}
+                {supportLink("Contact support", CONTACT_TICKET, `${secondaryActionClass} gap-2`)}
               </div>
             ) : null}
-            <div className="chef-list overflow-hidden rounded-xl border border-[#E3E6EA]">
+            {/* The dialog sits outside the chef theme, so it uses the shared overlay actions. */}
+            <div className="grid gap-2">
               {uploadChoices(onboarding).map((choice) => (
                 <button
                   key={choice.type}
                   type="button"
-                  className="chef-row"
+                  className={`${secondaryActionClass} gap-2`}
                   disabled={Boolean(uploading)}
                   onClick={() => pick(choice)}
                 >
-                  <span className="chef-row-main chef-row-title">{choice.title}</span>
-                  <Upload className="chef-chevron h-5 w-5" aria-hidden="true" />
+                  <Upload className="h-5 w-5" aria-hidden="true" />
+                  {choice.title}
                 </button>
               ))}
             </div>

@@ -159,7 +159,7 @@ export function SupportChat({ contextRole, orderId }: { contextRole: SupportChat
   const listRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(1);
-  const signInPath = `${contextRole === "CHEF" ? "/chef/support" : "/support"}${orderId ? `?orderId=${orderId}` : ""}`;
+  const signInPath = `${contextRole === "CHEF" ? "/chef/support/chat" : "/support"}${orderId ? `?orderId=${orderId}` : ""}`;
 
   // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect must not return one.
   const scrollToEnd = useCallback(() => { listRef.current?.lastElementChild?.scrollIntoView?.({ block: "end" }); }, []);

@@ -28,6 +28,7 @@ import {
   displayPhone,
   isTicketClosed,
   supportPhoneFrom,
+  ticketBack,
   ticketSubject,
   ticketSubtitle,
 } from "@/features/chef/lib/chef-support";
@@ -228,32 +229,36 @@ export function ChefSupportHub() {
                 Try again
               </button>
             </div>
-          ) : tickets.length === 0 && !cursor ? (
-            <ChefEmpty
-              icon={LifeBuoy}
-              title="No tickets yet"
-              text="When you write to Craves support, your chats are listed here."
-            />
           ) : (
             <>
-              <ul className="chef-list">
-                {tickets.map((ticket) => {
-                  const status = TICKET_STATUS[ticket.status];
-                  return (
-                    <li key={ticket.id}>
-                      <Link href={`/chef/support/tickets/${ticket.id}`} className="chef-row">
-                        <span className="chef-row-main">
-                          <span className="chef-row-title block">
-                            #{supportCaseNumber(ticket.caseNumber)} · {ticket.subject}
+              {tickets.length === 0 ? (
+                <ChefEmpty
+                  icon={LifeBuoy}
+                  title="No tickets yet"
+                  text="When you write to Craves support, your chats are listed here."
+                />
+              ) : (
+                <ul className="chef-list">
+                  {tickets.map((ticket) => {
+                    const status = TICKET_STATUS[ticket.status];
+                    return (
+                      <li key={ticket.id}>
+                        <Link href={`/chef/support/tickets/${ticket.id}`} className="chef-row">
+                          <span className="chef-row-main">
+                            <span className="chef-row-title block">
+                              #{supportCaseNumber(ticket.caseNumber)} · {ticket.subject}
+                            </span>
+                            <span className="chef-row-meta block">
+                              {ticketSubtitle(ticket, now)}
+                            </span>
                           </span>
-                          <span className="chef-row-meta block">{ticketSubtitle(ticket, now)}</span>
-                        </span>
-                        <ChefPill tone={status.tone}>{status.label}</ChefPill>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+                          <ChefPill tone={status.tone}>{status.label}</ChefPill>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
               {cursor ? (
                 <div className="p-4">
                   <button
@@ -285,10 +290,12 @@ export function ChefSupportTicket({
   caseId,
   topic = null,
   orderId = null,
+  from = null,
 }: {
   caseId?: string;
   topic?: string | null;
   orderId?: string | null;
+  from?: string | null;
 }) {
   const support = useSupportCall();
   const [ticket, setTicket] = useState<SupportCase | null>(null);
@@ -308,6 +315,8 @@ export function ChefSupportTicket({
     getSupportCase(caseId)
       .then((found) => {
         if (!active) return;
+        // The same person's customer tickets are not opened here, as in the app.
+        if (!isChefTicket(found)) return setState("error");
         setTicket(found);
         setState("ready");
       })
@@ -341,7 +350,7 @@ export function ChefSupportTicket({
           message,
         });
         setTicket(created);
-        // The address becomes the ticket's own, so a reload or a shared link opens it; Back still returns to Help & support.
+        // The address becomes the ticket's own, so a reload or a shared link opens it.
         window.history.replaceState(null, "", `/chef/support/tickets/${created.id}`);
       }
       setDraft("");
@@ -369,7 +378,7 @@ export function ChefSupportTicket({
         }
         subtitle={ticket ? ticket.subject : (topic ?? undefined)}
         action={status ? <ChefPill tone={status.tone}>{status.label}</ChefPill> : undefined}
-        back={{ href: "/chef/support", label: "Help & support" }}
+        back={ticketBack(from)}
       />
       <div className="chef-stack" aria-busy={state === "loading"}>
         {notPublished || state === "soon" ? (

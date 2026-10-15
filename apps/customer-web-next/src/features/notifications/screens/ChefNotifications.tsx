@@ -191,7 +191,7 @@ export default function ChefNotifications() {
         </button>
       </section>
     );
-  } else if (visible.length === 0 && !cursor) {
+  } else if (visible.length === 0) {
     body = (
       <section className="chef-section chef-empty">
         <span className="chef-empty-icon">
@@ -246,7 +246,7 @@ export default function ChefNotifications() {
                 )}
               </>
             );
-            const rowClass = `chef-row ${notice.readAt ? "" : "bg-[#F7F8FA]"}`;
+            const rowClass = `chef-row !border-0 ${notice.readAt ? "" : "bg-[#F7F8FA]"}`;
             return (
               <li key={notice.id}>
                 {href ? (

@@ -37,7 +37,7 @@ export function ChefSecurity() {
         </div>
       </ChefSection>
       <ChefSection flush>
-        <Link href={`/chef/support/new?topic=${encodeURIComponent("Delete my account")}`} className="chef-row">
+        <Link href={`/chef/support/new?topic=${encodeURIComponent("Delete my account")}&from=/chef/security`} className="chef-row">
           <span className="chef-row-icon"><Trash2 className="h-5 w-5 text-[#C4200F]" aria-hidden="true" /></span>
           <span className="chef-row-main">
             <span className="chef-row-title block !text-[#C4200F]">Delete my account</span>

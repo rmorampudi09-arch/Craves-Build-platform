@@ -114,7 +114,12 @@ describe("Chef notifications", () => {
         Response.json({ notices: [NEW_ORDER, PAYOUT], nextCursor: null, hasMore: false }),
     });
     render(createElement(ChefNotifications));
-    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("New order received")).toBeTruthy();
+    // A filter with nothing on the pages so far still says so, above Load more.
+    fireEvent.click(screen.getByRole("button", { name: "Reviews" }));
+    expect(screen.getByText("No Reviews notifications")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(await screen.findByText("Payout sent")).toBeTruthy();
     expect(screen.getAllByText("New order received")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();

@@ -11,15 +11,20 @@ export const metadata = {
 export default async function ChefSupportNewTicketPage({
   searchParams,
 }: {
-  searchParams: Promise<{ topic?: string | string[]; orderId?: string | string[] }>;
+  searchParams: Promise<{
+    topic?: string | string[];
+    orderId?: string | string[];
+    from?: string | string[];
+  }>;
 }) {
-  const { topic, orderId } = await searchParams;
+  const { topic, orderId, from } = await searchParams;
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
         <ChefSupportTicket
           topic={ticketTopic(typeof topic === "string" ? topic : null)}
           orderId={typeof orderId === "string" && isUuid(orderId) ? orderId : null}
+          from={typeof from === "string" ? from : null}
         />
       </ChefAccessBoundary>
     </main>

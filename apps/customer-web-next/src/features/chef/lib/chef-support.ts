@@ -13,10 +13,25 @@ export const SUPPORT_TOPICS = [
   "Update a document",
 ] as const;
 // Only these words become a subject from the address bar; other pages that open tickets send their own subject.
-const TICKET_TOPICS = new Set<string>([...SUPPORT_TOPICS, "Delete my account"]);
+const TICKET_TOPICS = new Set<string>([
+  ...SUPPORT_TOPICS,
+  "Update my documents",
+  "Delete my account",
+]);
 
 export function ticketTopic(value: string | null | undefined): string | null {
   return value && TICKET_TOPICS.has(value) ? value : null;
+}
+
+// Pages that open a ticket of their own get the chef back there, like the app's Back.
+const BACK_PAGES = new Map([
+  ["/chef/documents", "Documents & verification"],
+  ["/chef/security", "Login & security"],
+]);
+
+export function ticketBack(from: string | null | undefined): { href: string; label: string } {
+  const label = from ? BACK_PAGES.get(from) : undefined;
+  return from && label ? { href: from, label } : { href: "/chef/support", label: "Help & support" };
 }
 
 export const TICKET_STATUS: Record<

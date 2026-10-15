@@ -83,7 +83,7 @@ describe("Documents & verification", () => {
     expect(tab.opener).toBeNull();
     expect(
       screen.getByRole("link", { name: "Ask to update a document" }).getAttribute("href"),
-    ).toBe("/chef/support/new?topic=Update%20a%20document");
+    ).toBe("/chef/support/new?topic=Update%20a%20document&from=/chef/documents");
   });
 
   it("never opens a link that is not https", async () => {
@@ -157,6 +157,24 @@ describe("Documents & verification", () => {
         "This document is already approved and cannot be replaced.",
       ),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByText("Upload another document"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("sends an approved chef to support from the upload dialog", async () => {
+    respond({
+      "GET /api/chef/onboarding": () =>
+        Response.json({
+          ...onboarding,
+          application: { ...onboarding.application, status: "APPROVED" },
+        }),
+    });
+    render(createElement(ChefDocuments));
+    fireEvent.click(await screen.findByText("Upload another document"));
+    expect(screen.getByRole("link", { name: "Contact support" }).getAttribute("href")).toBe(
+      "/chef/support/new?topic=Update%20my%20documents&from=/chef/documents",
+    );
   });
 
   it("tells a chef with no application on file to contact support", async () => {
@@ -166,7 +184,7 @@ describe("Documents & verification", () => {
     render(createElement(ChefDocuments));
     expect(await screen.findByText(/Your documents were checked when you joined/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Contact support" }).getAttribute("href")).toBe(
-      "/chef/support/new?topic=Update%20a%20document",
+      "/chef/support/new?topic=Update%20my%20documents&from=/chef/documents",
     );
   });
 

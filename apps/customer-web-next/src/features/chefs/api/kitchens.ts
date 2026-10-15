@@ -142,11 +142,6 @@ export function allKitchens(): NearbyKitchen[] {
   );
 }
 
-export function getKitchenDiscoveryRadiusMeters(): number {
-  hydrateKitchenSnapshot();
-  return kitchenDiscoveryRadiusMeters;
-}
-
 export function clearKitchenDiscoveryCache(): void {
   discoveredKitchens = [];
   kitchenDiscoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;

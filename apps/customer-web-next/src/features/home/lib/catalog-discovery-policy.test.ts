@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   candidateDiscoveryRadii,
   DEFAULT_DISCOVERY_RADIUS_METERS,
-  formatDiscoveryRadius,
   MAX_DISCOVERY_RADIUS_METERS,
 } from "./catalog-discovery-policy.ts";
 
@@ -22,5 +21,4 @@ test("rejects discovery radii outside the customer browsing boundary", () => {
   assert.throws(() => candidateDiscoveryRadii(0));
   assert.throws(() => candidateDiscoveryRadii(10_001));
   assert.throws(() => candidateDiscoveryRadii(50_000));
-  assert.equal(formatDiscoveryRadius(10_000), "10 km");
 });

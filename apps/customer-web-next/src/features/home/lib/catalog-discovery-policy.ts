@@ -17,12 +17,3 @@ export function candidateDiscoveryRadii(
 
   return [requestedRadiusMeters];
 }
-
-export function formatDiscoveryRadius(radiusMeters: number): string {
-  if (radiusMeters < 1_000) return String(radiusMeters) + " m";
-  const kilometres = radiusMeters / 1_000;
-  return (
-    String(Number.isInteger(kilometres) ? kilometres : kilometres.toFixed(1)) +
-    " km"
-  );
-}

@@ -424,10 +424,6 @@ export async function loadDish(id: string): Promise<Dish> {
   return remember(mapDetail(body));
 }
 
-export function getDiscoveryRadiusMeters(): number {
-  return discoveryRadiusMeters;
-}
-
 export function allDishes(): Dish[] {
   hydrateDiscoverySnapshot();
   return discoveredDishes.filter(

@@ -13,9 +13,14 @@ import {
   MapPin,
   Store,
 } from "lucide-react";
+import { ChefKitchenError, saveChefAvatar } from "@/features/chef/api/chef-kitchen";
+import { ChefAvatarGrid } from "@/features/chef/components/chef-avatar";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
+import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { parseOnboardingState } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
-import { CHEF_KITCHEN_FIELD_LIMITS, missingKitchenPickupField } from "@/features/chef/lib/chef-kitchen-contract";
+import { CHEF_KITCHEN_FIELD_LIMITS, chefAvatarIdFromUrl, missingKitchenPickupField } from "@/features/chef/lib/chef-kitchen-contract";
 import type {
   ChefKitchen,
   ChefKitchenInput,
@@ -27,7 +32,7 @@ import { RequiredMark } from "@/shared/ui/forms/required-mark";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type FormState = Record<
-  keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status">,
+  keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status" | "cuisines" | "serviceAreas" | "socialLinks">,
   string
 > & {
   latitude: string;
@@ -54,6 +59,9 @@ const EMPTY: FormState = {
   longitude: "",
   status: "DRAFT",
 };
+
+const PHOTO_TILE =
+  "relative flex h-24 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border-2 border-dashed border-[#D0D5DB] bg-white px-1 text-center text-[0.8125rem] font-semibold text-[#6B6B6B] disabled:cursor-not-allowed";
 
 const INPUT_CLASS =
   "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:bg-[#F1F3F5]";
@@ -149,6 +157,10 @@ export function ChefKitchenForm() {
   const [message, setMessage] = useState("Loading your kitchen…");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photoSaving, setPhotoSaving] = useState<"CHEF" | "KITCHEN" | null>(null);
+  const [photoNote, setPhotoNote] = useState("");
+  const [faceSheet, setFaceSheet] = useState(false);
+  const [faceDraft, setFaceDraft] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const locationRequest = useRef(0);
   const [invalidField, setInvalidField] = useState<keyof FormState | null>(null);
@@ -397,6 +409,29 @@ export function ChefKitchenForm() {
     }
   }
 
+  /** Photos save the moment they are chosen, apart from the form, one at a time. */
+  async function savePhoto(kind: "CHEF" | "KITCHEN", work: () => Promise<ChefKitchen>, done: string) {
+    if (photoSaving) return;
+    setPhotoSaving(kind);
+    setPhotoNote("");
+    try {
+      setKitchen(await work());
+      setNotice(done);
+    } catch (error) {
+      const code = error instanceof ChefKitchenError ? error.code : "";
+      setPhotoNote(code === FEATURE_NOT_AVAILABLE ? "Photos are coming soon." : kind === "CHEF" ? "We couldn’t save your picture. Please try again." : "We couldn’t save that photo. Please try again.");
+    } finally {
+      setPhotoSaving(null);
+    }
+  }
+
+  function saveFace() {
+    const avatarId = faceDraft;
+    if (!avatarId) return;
+    setFaceSheet(false);
+    void savePhoto("CHEF", () => saveChefAvatar(avatarId), "Picture saved");
+  }
+
   const suspended = kitchen?.status === "SUSPENDED";
   const mapped = Boolean(form.latitude.trim()) && Boolean(form.longitude.trim());
 
@@ -438,7 +473,45 @@ export function ChefKitchenForm() {
               <Link href="/chef/menu" className="chef-btn">Go to my menu <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
           </ChefSection>
+          {kitchen ? (
+            <ChefSection title="Photos" labelledBy="kitchen-photos-title">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  className={PHOTO_TILE}
+                  disabled={kitchen.chefPhotoUrl === undefined || photoSaving !== null}
+                  aria-busy={photoSaving === "CHEF"}
+                  aria-label="Change your picture"
+                  onClick={() => {
+                    setFaceDraft(chefAvatarIdFromUrl(kitchen.chefPhotoUrl));
+                    setFaceSheet(true);
+                  }}
+                >
+                  <ChefFace photoUrl={kitchen.chefPhotoUrl} name={form.displayName} size={44} />
+                  Your picture
+                  {kitchen.chefPhotoUrl === undefined ? <ChefPill>Coming soon</ChefPill> : null}
+                  {photoSaving === "CHEF" ? <span className="absolute top-1 text-xs">Saving…</span> : null}
+                </button>
+              </div>
+              <p aria-live="polite" className="mt-3 text-sm text-[#6B6B6B] empty:hidden">{photoNote}</p>
+            </ChefSection>
+          ) : null}
         </div>
+        <Sheet
+          open={faceSheet}
+          onOpenChange={setFaceSheet}
+          title="Change your picture"
+          footer={
+            <>
+              <button type="button" className={secondaryActionClass} onClick={() => setFaceSheet(false)}>Cancel</button>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" disabled={!faceDraft} onClick={saveFace}>Save</button>
+            </>
+          }
+        >
+          <div className="mt-5">
+            <ChefAvatarGrid selectedId={faceDraft} onSelect={setFaceDraft} />
+          </div>
+        </Sheet>
         <ChefFlash message={notice} onClose={() => setNotice("")} />
       </div>
     );

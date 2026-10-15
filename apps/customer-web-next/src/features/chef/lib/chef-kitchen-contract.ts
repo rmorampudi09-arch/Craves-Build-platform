@@ -1,3 +1,4 @@
+import { safeChefPhotoUrl } from "../../../shared/lib/chef-photo.ts";
 import type {
   ChefKitchen,
   ChefKitchenInput,
@@ -25,6 +26,25 @@ export const CHEF_KITCHEN_FIELD_LIMITS = {
   state: 80,
   postalCode: 16,
 } as const;
+
+/** The 18 drawn faces a chef picks from (catalog-service CHEF_AVATAR_IDS); chefs never upload their own face. */
+export const CHEF_AVATAR_IDS: readonly string[] = Array.from({ length: 18 }, (_, index) => `chef-avatar-${String(index + 1).padStart(2, "0")}`);
+export const chefAvatarUrl = (avatarId: string) => `https://craves.in/media/public/chef-avatars/${avatarId}.jpg`;
+
+/** The face a picture link points to, or null when it is not one of the 18. */
+export function chefAvatarIdFromUrl(url: string | null | undefined): string | null {
+  const id = url?.match(/\/(chef-avatar-\d{2})\.jpg(?:[?#].*)?$/)?.[1];
+  return id && CHEF_AVATAR_IDS.includes(id) ? id : null;
+}
+
+/**
+ * Whether the chef picks a face before the chef area opens. Only a loaded kitchen that is not
+ * suspended and whose server says "no picture" (null) asks; a failed read, no kitchen yet, or an
+ * older server that leaves the field out all open the chef area, so no chef is ever stuck.
+ */
+export function chefAvatarGateStep(read: "failed" | ChefKitchen | null): "ask" | "open" {
+  return read !== "failed" && read?.chefPhotoUrl === null && read.status !== "SUSPENDED" ? "ask" : "open";
+}
 
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -108,6 +128,8 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
     status,
     createdAt,
     updatedAt,
+    // Only what the server sent, so a screen can tell "not offered yet" from "empty".
+    ...(raw.chefPhotoUrl !== undefined ? { chefPhotoUrl: safeChefPhotoUrl(raw.chefPhotoUrl) } : {}),
   };
 }
 

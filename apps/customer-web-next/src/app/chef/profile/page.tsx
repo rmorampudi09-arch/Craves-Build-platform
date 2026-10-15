@@ -18,15 +18,15 @@ import {
   LogOut,
   ShieldCheck,
   Store,
-  UserRound,
 } from "lucide-react";
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { switchToCustomerApp, useChefSignOut } from "@/features/chef/components/chef-account-menu";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 import { ChefPill, ChefSkeleton } from "@/features/chef/components/chef-ui";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 
 type Application = { firstName:string|null; lastName:string|null; status:string };
-type Kitchen = { kitchenName:string };
+type Kitchen = { kitchenName:string; chefPhotoUrl?:string|null };
 type Item = { label: string; description: string; icon: ComponentType<{ className?: string }> } & ({ href: string } | { action: "switch" | "sign-out" });
 
 const PROFILE_UNAVAILABLE = "Your profile could not load. Please try again.";
@@ -80,7 +80,7 @@ function MoreHub(){
     {loading ? <div className="flex items-center gap-4 p-4"><ChefSkeleton className="h-14 w-14 !rounded-full"/><div className="grid flex-1 gap-2"><ChefSkeleton className="h-4 w-1/2"/><ChefSkeleton className="h-3 w-1/3"/></div></div>
      : error ? <div className="p-4"><p role="alert" className="text-[0.9375rem] text-[#1A1A1A]">{error}</p><button type="button" onClick={()=>setRetry(value=>value+1)} className="chef-btn is-primary mt-4">Try again</button></div>
      : <div className="flex items-center gap-4 p-4 md:p-5">
-        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#1A1A1A] font-display text-lg font-bold text-white" aria-hidden="true">{name.split(/\s+/).map(part=>part[0]).join("").slice(0,2).toUpperCase()||<UserRound className="h-6 w-6"/>}</span>
+        <ChefFace photoUrl={kitchen?.chefPhotoUrl} name={name} size={56}/>
         <div className="min-w-0"><h2 className="truncate font-display text-xl font-bold tracking-tight text-[#1A1A1A]">{name}</h2><p className="mt-1 flex flex-wrap items-center gap-2 text-[0.9375rem] text-[#6B6B6B]"><span className="truncate">{kitchen?.kitchenName||"Your kitchen"}</span>{application?.status==="APPROVED"?<ChefPill tone="success">Verified chef</ChefPill>:<ChefPill tone="warning">Application in progress</ChefPill>}</p></div>
        </div>}
    </section>

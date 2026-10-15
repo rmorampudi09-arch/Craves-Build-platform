@@ -4,9 +4,12 @@ export type BillingUnit = "week" | "14 days" | "28 days";
 
 export function billingUnit(period: string): BillingUnit {
   switch (period.toUpperCase()) {
-    case "MONTHLY": return "28 days";
-    case "FORTNIGHTLY": return "14 days";
-    default: return "week";
+    case "MONTHLY":
+      return "28 days";
+    case "FORTNIGHTLY":
+      return "14 days";
+    default:
+      return "week";
   }
 }
 

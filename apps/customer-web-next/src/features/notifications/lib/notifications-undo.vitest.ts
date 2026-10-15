@@ -86,7 +86,7 @@ describe("notifications", () => {
   });
 });
 
-describe("who a notice is for, and where it leads", () => {
+describe("where a notice leads", () => {
   const ORDER = "44444444-4444-4444-8444-444444444444";
   const notices = [
     { id: "55555555-5555-4555-8555-555555555555", title: "New order received", body: "A paid Craves order is waiting.", noticeType: "CHEF_ORDER_AWAITING_ACCEPTANCE",
@@ -103,19 +103,6 @@ describe("who a notice is for, and where it leads", () => {
     vi.stubGlobal("fetch", fetch);
     return fetch;
   }
-
-  it("shows a chef only kitchen notices, and opening one marks it read", async () => {
-    const fetch = stub();
-    render(createElement(NotificationsPage, { audience: "chef" }));
-    const open = await screen.findByRole("link", { name: "Open order" });
-    expect(open.getAttribute("href")).toBe(`/chef/orders/${ORDER}`);
-    expect(screen.queryByText("Chef accepted your order")).toBeNull();
-    expect(screen.queryByText("Payment received")).toBeNull();
-    expect(screen.getByText("Welcome to Craves")).toBeTruthy();
-    fireEvent.click(open);
-    expect(fetch).toHaveBeenCalledWith(`/api/notifications/in-app/${notices[0].id}/read`, expect.objectContaining({ method: "PATCH" }));
-    expect(screen.getByRole("button", { name: /^Unread \(1\)/ })).toBeTruthy();
-  });
 
   it("links a customer's own orders and never a kitchen's order", async () => {
     stub();

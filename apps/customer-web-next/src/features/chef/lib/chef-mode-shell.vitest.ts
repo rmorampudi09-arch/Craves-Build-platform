@@ -45,6 +45,7 @@ beforeEach(() => {
     if (url === "/api/auth/logout") { me = null; return Response.json({ signedOut: true }); }
     if (url === "/api/chef/application") return Response.json({ firstName: "Asha", lastName: "Rao", status: "APPROVED", documents: [] });
     if (url === "/api/chef/kitchen") return Response.json({ kitchenName: "Asha's Kitchen" });
+    if (url.startsWith("/api/notifications/in-app/page")) return Response.json({ notices: [], nextCursor: null, hasMore: false });
     if (url.startsWith("/api/notifications/in-app")) return Response.json([]);
     return Response.json({}, { status: 404 });
   }));
@@ -212,12 +213,12 @@ describe("More hub", () => {
 });
 
 describe("Chef notifications", () => {
-  it("shows the shared notifications inside Chef Mode and goes back to the chef home", async () => {
+  it("shows the chef's notifications inside Chef Mode and goes back to the chef home", async () => {
     vi.mocked(usePathname).mockReturnValue("/chef/notifications");
     render(createElement(ChefNotificationsPage));
-    fireEvent.click(await screen.findByRole("link", { name: "Back to home" }));
-    expect(mocks.push).toHaveBeenCalledWith("/chef");
-    expect(mocks.push).not.toHaveBeenCalledWith("/home");
+    expect(await screen.findByText("No notifications yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/chef");
+    expect(screen.queryByRole("link", { name: "Back to home" })).toBeNull();
   });
 });
 

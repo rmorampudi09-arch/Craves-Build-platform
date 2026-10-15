@@ -1340,7 +1340,7 @@ export function ChefMenuManager() {
           if (!open) setOptions(null);
         }}
         busy={busy}
-        title={options === "delete" ? `Delete ${form.itemName.trim() || "this dish"}?` : "Dish options"}
+        title={options === "delete" ? `Delete ${items.find((item) => item.id === form.id)?.itemName ?? "this dish"}?` : "Dish options"}
         description={options === "delete" ? "Customers won’t see it any more. If it’s in a meal plan, change the plan first." : undefined}
         footer={
           options === "delete" ? (

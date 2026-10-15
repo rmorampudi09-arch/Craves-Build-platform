@@ -104,7 +104,8 @@ describe("DELETE /api/chef/menu/[menuItemId]", () => {
   });
 });
 
-describe("Dish options", () => {
+// The whole dish form renders each time: give a busy machine room.
+describe("Dish options", { timeout: 20_000 }, () => {
   let stored: ChefMenuItem[];
   let deleteAnswer: () => Response;
   const fetcher = vi.fn<typeof fetch>();

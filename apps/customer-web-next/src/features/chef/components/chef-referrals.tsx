@@ -598,23 +598,26 @@ export function ChefReferrals() {
       </div>
 
       <Sheet open={rules} onOpenChange={setRules} title="How it works">
-        <ul className="chef-list mt-4 rounded-xl border border-[#E3E6EA]">
-          {CHEF_REFERRAL_RATES_BPS.map((bps, index) => (
-            <li key={index} className="chef-row">
-              <span className="chef-row-main">
-                <span className="chef-row-title block">
-                  {index === 0 ? "Level 1 · Direct referrals" : `Level ${index + 1}`}
+        {/* Sheets open outside the chef page: the theme brings the chef colours along. */}
+        <div className="chef-panel-theme mt-4 !bg-transparent">
+          <ul className="chef-list rounded-xl border border-[#E3E6EA]">
+            {CHEF_REFERRAL_RATES_BPS.map((bps, index) => (
+              <li key={index} className="chef-row">
+                <span className="chef-row-main">
+                  <span className="chef-row-title block">
+                    {index === 0 ? "Level 1 · Direct referrals" : `Level ${index + 1}`}
+                  </span>
                 </span>
-              </span>
-              <span className="chef-row-value">{bps / 100}%</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-[0.875rem] leading-6 text-[#6B6B6B]">
-          Each credit is held for 24 hours before it counts. Joining alone does not earn a reward.
-        </p>
-        <h3 className="mb-2 mt-5 text-[0.9375rem] font-semibold text-[#1A1A1A]">Referral terms</h3>
-        <TermsList />
+                <span className="chef-row-value">{bps / 100}%</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[0.875rem] leading-6 text-[#6B6B6B]">
+            Each credit is held for 24 hours before it counts. Joining alone does not earn a reward.
+          </p>
+          <h3 className="mb-2 mt-5 text-[0.9375rem] font-semibold text-[#1A1A1A]">Referral terms</h3>
+          <TermsList />
+        </div>
       </Sheet>
       {feedback}
     </div>

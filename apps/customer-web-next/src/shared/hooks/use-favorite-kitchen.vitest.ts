@@ -53,6 +53,20 @@ describe("useFavoriteKitchen", () => {
     expect(fetch.mock.calls.at(-1)).toEqual([`/api/customer/favorite-kitchens/${OTHER}`, expect.objectContaining({ method: "PUT" })]);
   });
 
+  it("keeps what the tap meant when the saved list arrives after it", async () => {
+    let list!: (response: Response) => void;
+    const fetch = vi.fn(async (_url: string, init: RequestInit = {}) => init.method ? new Response(null, { status: 204 }) : new Promise<Response>(resolve => { list = resolve; }));
+    vi.stubGlobal("fetch", fetch);
+    const { useFavoriteKitchen } = await import("./use-favorite-kitchen");
+    const heart = renderHook(() => useFavoriteKitchen(SAVED));
+    expect(heart.result.current.saved).toBe(false); // still loading, so the heart offers "Save"
+    let done!: Promise<void>;
+    act(() => { done = heart.result.current.toggle(); });
+    await act(async () => { list(Response.json({ items: [{ kitchenId: SAVED, createdAt: AT }], nextCursor: null })); await done; });
+    expect(heart.result.current).toMatchObject({ saved: true, busy: false });
+    expect(fetch.mock.calls.filter(([, init]) => init?.method)).toEqual([]);
+  });
+
   it("rolls back when the save fails", async () => {
     backend(() => Response.json({ code: "FAVORITE_ENTITY_FAILED" }, { status: 503 }));
     const { useFavoriteKitchen } = await import("./use-favorite-kitchen");

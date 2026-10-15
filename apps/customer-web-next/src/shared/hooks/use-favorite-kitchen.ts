@@ -34,14 +34,16 @@ function signIn() {
 
 async function toggle(id: string) {
   if (pending.has(id)) return;
+  // The tap means what the heart showed, even when the saved list arrives after it.
+  const next = !saved.has(id);
   pending.add(id);
   emit();
-  await load();
-  const next = !saved.has(id);
   const write = (on: boolean) => { if (on) saved.add(id); else saved.delete(id); };
-  write(next);
-  emit();
   try {
+    await load();
+    if (saved.has(id) === next) return;
+    write(next);
+    emit();
     await setFavoriteKitchen(id, next);
   } catch (error) {
     write(!next);

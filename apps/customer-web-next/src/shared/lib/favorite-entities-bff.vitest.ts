@@ -114,6 +114,16 @@ describe("favorite entities browser client", () => {
     expect(put.mock.calls[0][1]).toEqual(expect.objectContaining({ method: "PUT", body: JSON.stringify({ enabled: true }) }));
   });
 
+  it("renews an expired access cookie once and retries", async () => {
+    const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json({ code: "SESSION_EXPIRED" }, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await setFavoriteKitchen(KITCHEN, true);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([`/api/customer/favorite-kitchens/${KITCHEN}`, "/api/auth/refresh", `/api/customer/favorite-kitchens/${KITCHEN}`]);
+  });
+
   it.each([
     [401, { code: "AUTHENTICATION_REQUIRED" }, "SESSION_EXPIRED"],
     [404, { code: "FEATURE_NOT_AVAILABLE" }, "FEATURE_NOT_AVAILABLE"],

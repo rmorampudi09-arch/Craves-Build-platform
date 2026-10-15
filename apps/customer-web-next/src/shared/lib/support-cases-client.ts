@@ -1,3 +1,4 @@
+import { sessionFetch } from "./session-fetch";
 import { parseSupportCase, parseSupportCasePage, type SupportCase, type SupportCasePage } from "./support-cases-contract";
 
 /** code is FEATURE_NOT_AVAILABLE (show Coming soon), SESSION_EXPIRED, a backend code, or SUPPORT_CASE_FAILED. */
@@ -8,7 +9,7 @@ export class SupportCaseError extends Error {
 }
 
 async function call<T>(path: string, parse: (value: unknown) => T | null, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { cache: "no-store", credentials: "same-origin", ...init });
+  const response = await sessionFetch(path, { cache: "no-store", ...init });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const code = response.status === 401 ? "SESSION_EXPIRED" : (body as { code?: unknown } | null)?.code;

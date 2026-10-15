@@ -9,6 +9,7 @@ import {
   type FavoriteWatch,
   type FavoriteWatchEntityType,
 } from "./favorite-entities-contract";
+import { sessionFetch } from "./session-fetch";
 
 /** code is FEATURE_NOT_AVAILABLE (show Coming soon), SESSION_EXPIRED, a backend code, or FAVORITE_ENTITY_FAILED. */
 export class FavoriteEntityError extends Error {
@@ -18,7 +19,7 @@ export class FavoriteEntityError extends Error {
 }
 
 async function call<T>(path: string, parse: (value: unknown) => T | null, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { cache: "no-store", credentials: "same-origin", ...init });
+  const response = await sessionFetch(path, { cache: "no-store", ...init });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const code = response.status === 401 ? "SESSION_EXPIRED" : (body as { code?: unknown } | null)?.code;

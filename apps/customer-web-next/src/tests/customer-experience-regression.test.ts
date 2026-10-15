@@ -128,7 +128,7 @@ test("reviewed checkout never traps the customer while restoring the cart", () =
 test("access-token expiry preserves refresh login instead of bouncing customers to landing", () => {
   const authMe = source("../app/api/auth/me/route.ts");
   const authClient = source("../features/auth/api/cravesAuth.ts");
-  const sessionFetch = source("../features/auth/api/sessionFetch.ts");
+  const sessionFetch = source("../shared/lib/session-fetch.ts");
 
   assert.doesNotMatch(authMe, /clearSessionCookies/);
   assert.match(authClient, /refreshSessionForGeneration/);

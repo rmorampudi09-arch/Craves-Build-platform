@@ -101,6 +101,16 @@ describe("support cases browser client", () => {
     expect(page.mock.calls[0][0]).toBe("/api/support/cases?cursor=a%20b");
   });
 
+  it("renews an expired access cookie once and retries", async () => {
+    const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json({ code: "SESSION_EXPIRED" }, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+      .mockResolvedValueOnce(Response.json(flat));
+    vi.stubGlobal("fetch", fetch);
+    expect((await getSupportCase(CASE_ID)).id).toBe(CASE_ID);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([`/api/support/cases/${CASE_ID}`, "/api/auth/refresh", `/api/support/cases/${CASE_ID}`]);
+  });
+
   it.each([
     [404, { code: "FEATURE_NOT_AVAILABLE" }, "FEATURE_NOT_AVAILABLE"],
     [401, { code: "AUTHENTICATION_REQUIRED" }, "SESSION_EXPIRED"],

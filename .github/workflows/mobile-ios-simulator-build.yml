@@ -62,12 +62,20 @@ jobs:
           cp .env.example .env
           grep -qx 'CRAVES_API_BASE_URL=https://api.craves.in' .env
 
+      - name: Cache pods
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/mobile/ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('apps/mobile/ios/Podfile.lock', 'apps/mobile/package-lock.json') }}
+
       - name: Install pods
         working-directory: apps/mobile/ios
         env:
           RCT_NEW_ARCH_ENABLED: '1'
           NO_FLIPPER: '1'
-        run: bundle exec pod install --repo-update
+        run: bundle exec pod install
 
       - name: Build for the iOS Simulator (Release, unsigned)
         working-directory: apps/mobile/ios

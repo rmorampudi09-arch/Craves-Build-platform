@@ -87,16 +87,18 @@ function dateOnly(value: unknown): string | null { return typeof value === "stri
 function instant(value: unknown): string | null { return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null; }
 function count(value: unknown): number | null { return Number.isInteger(value) && Number(value) >= 0 ? Number(value) : null; }
 
-/** An https image, or the server's own "/api/..." image path resolved against the API base (BFF only). */
-function planImageUrl(value: unknown, apiBase?: string): string | null {
+const UPSTREAM_IMAGE = /^\/api\/v1\/subscriptions\/plans\/([0-9a-f-]{36})\/image\?v=(\d{1,15})$/i;
+const OWN_IMAGE = /^\/api\/subscriptions\/plans\/([0-9a-f-]{36})\/image\?v=\d{1,15}$/i;
+
+/** Our image route for the server's own photo path (the browser never calls the API origin), an https URL as is, anything else dropped. */
+function planImageUrl(value: unknown): string | null {
   const raw = text(value, 2000);
-  if (!raw || !(raw.startsWith("https://") || (apiBase && raw.startsWith("/api/")))) return null;
-  try {
-    const url = new URL(raw, apiBase);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
+  if (!raw) return null;
+  const upstream = UPSTREAM_IMAGE.exec(raw);
+  if (upstream) return UUID.test(upstream[1]) ? `/api/subscriptions/plans/${upstream[1].toLowerCase()}/image?v=${upstream[2]}` : null;
+  const own = OWN_IMAGE.exec(raw);
+  if (own) return UUID.test(own[1]) ? raw : null;
+  return /^https:\/\/[^\s"'<>]+$/.test(raw) ? raw : null;
 }
 
 export function indiaBusinessDate(now = new Date()): string {
@@ -110,19 +112,19 @@ export function indiaBusinessDate(now = new Date()): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-export function parsePublicSubscriptionPlan(value: unknown, apiBase?: string): PublicSubscriptionPlan | null {
+export function parsePublicSubscriptionPlan(value: unknown): PublicSubscriptionPlan | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const id = text(raw.id, 64); const planCode = text(raw.planCode, 80); const name = text(raw.name, 160);
   const billingPeriod = text(raw.billingPeriod, 20); const amount = typeof raw.amount === "number" ? raw.amount : Number(raw.amount);
   const currency = text(raw.currency, 3)?.toUpperCase() ?? null;
   if (!id || !UUID.test(id) || !planCode || !name || !billingPeriod || !PLAN_PERIODS.has(billingPeriod) || !Number.isFinite(amount) || amount < 0 || !currency || !CURRENCY.test(currency)) return null;
-  return { id, planCode, name, description: optionalText(raw.description, 2000), billingPeriod: billingPeriod as PublicSubscriptionPlan["billingPeriod"], amount, currency, imageUrl: planImageUrl(raw.imageUrl, apiBase) };
+  return { id, planCode, name, description: optionalText(raw.description, 2000), billingPeriod: billingPeriod as PublicSubscriptionPlan["billingPeriod"], amount, currency, imageUrl: planImageUrl(raw.imageUrl) };
 }
-export function parsePublicSubscriptionPlans(value: unknown, apiBase?: string): PublicSubscriptionPlan[] | null {
+export function parsePublicSubscriptionPlans(value: unknown): PublicSubscriptionPlan[] | null {
   if (!Array.isArray(value) || value.length > 500) return null;
   // One plan the web can't read is left out; it must never hide every other plan.
-  return value.map(item => parsePublicSubscriptionPlan(item, apiBase)).filter(plan => plan !== null);
+  return value.map(item => parsePublicSubscriptionPlan(item)).filter(plan => plan !== null);
 }
 
 export function parseDayCredit(value: unknown): DayCredit | null {

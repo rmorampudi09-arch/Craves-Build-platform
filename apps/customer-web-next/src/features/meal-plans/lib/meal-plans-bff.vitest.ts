@@ -12,6 +12,7 @@ vi.mock("@/shared/lib/server-api", async (original) => ({
   authenticatedApiFetch: upstream,
 }));
 import { GET as listPlans } from "@/app/api/subscriptions/plans/route";
+import { GET as readPlanImage } from "@/app/api/subscriptions/plans/[planId]/image/route";
 import { GET as readSchedule } from "@/app/api/subscriptions/plans/[planId]/schedule/route";
 import { POST as createSubscription } from "@/app/api/subscriptions/route";
 import { PATCH as pause } from "@/app/api/subscriptions/[subscriptionId]/pause/route";
@@ -117,7 +118,7 @@ describe("meal plan list BFF", () => {
     ]);
   });
 
-  it("turns the server's plan photo path into an https URL on the API host", async () => {
+  it("turns the server's plan photo path into our own image route", async () => {
     publicUpstream.mockResolvedValue(
       Response.json([
         { ...plan, imageUrl: `/api/v1/subscriptions/plans/${PLAN}/image?v=9` },
@@ -127,10 +128,39 @@ describe("meal plan list BFF", () => {
     const [withPhoto, insecure] = await (
       await listPlans(new NextRequest("https://craves.in/api/subscriptions/plans"))
     ).json();
-    expect(withPhoto.imageUrl).toBe(
-      `https://api.example.test/api/v1/subscriptions/plans/${PLAN}/image?v=9`,
-    );
+    expect(withPhoto.imageUrl).toBe(`/api/subscriptions/plans/${PLAN}/image?v=9`);
     expect(insecure.imageUrl).toBeNull();
+  });
+
+  it("serves the plan photo from the public plan image, JPEG or PNG only", async () => {
+    publicUpstream.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "image/jpeg" } }),
+    );
+    const params = Promise.resolve({ planId: PLAN });
+    const photo = await readPlanImage(
+      new NextRequest(`https://craves.in/api/subscriptions/plans/${PLAN}/image?v=9`),
+      { params },
+    );
+    expect(photo.status).toBe(200);
+    expect(photo.headers.get("content-type")).toBe("image/jpeg");
+    expect(photo.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(publicUpstream).toHaveBeenLastCalledWith(
+      `/subscriptions/plans/${PLAN}/image?v=9`,
+      expect.anything(),
+    );
+    const unversioned = await readPlanImage(
+      new NextRequest(`https://craves.in/api/subscriptions/plans/${PLAN}/image`),
+      { params },
+    );
+    expect(unversioned.status).toBe(400);
+    publicUpstream.mockResolvedValue(
+      new Response("<svg/>", { headers: { "Content-Type": "image/svg+xml" } }),
+    );
+    const svg = await readPlanImage(
+      new NextRequest(`https://craves.in/api/subscriptions/plans/${PLAN}/image?v=9`),
+      { params },
+    );
+    expect(svg.status).toBe(502);
   });
 });
 

@@ -71,13 +71,16 @@ test("customer subscription keeps its own plan name for plans no longer listed",
   assert.equal(parseCustomerSubscription({ ...parsed, planName: undefined })?.planName, null);
 });
 
-test("plan photos are https only; the server's own image path resolves against the API base", () => {
-  const path = `/api/v1/subscriptions/plans/${plan.id}/image?v=1760000000`;
-  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: path }, "https://api.craves.in/api/v1")?.imageUrl, `https://api.craves.in${path}`);
-  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: path })?.imageUrl, null);
+test("plan photos are https only; the server's own image path goes through our image route", () => {
+  const own = `/api/subscriptions/plans/${plan.id}/image?v=1760000000`;
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: `/api/v1/subscriptions/plans/${plan.id.toUpperCase()}/image?v=1760000000` })?.imageUrl, own);
+  // The browser reads the BFF's answer with the same parser.
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: own })?.imageUrl, own);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "/api/v1/subscriptions/plans/not-a-plan/image?v=1" })?.imageUrl, null);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "/api/v1/admin/secret" })?.imageUrl, null);
   assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "https://cdn.craves.in/p.jpg" })?.imageUrl, "https://cdn.craves.in/p.jpg");
-  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "http://cdn.craves.in/p.jpg" }, "https://api.craves.in/api/v1")?.imageUrl, null);
-  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "javascript:alert(1)" }, "https://api.craves.in/api/v1")?.imageUrl, null);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "http://cdn.craves.in/p.jpg" })?.imageUrl, null);
+  assert.equal(parsePublicSubscriptionPlan({ ...plan, imageUrl: "javascript:alert(1)" })?.imageUrl, null);
   assert.equal(parsePublicSubscriptionPlan(plan)?.imageUrl, null);
 });
 

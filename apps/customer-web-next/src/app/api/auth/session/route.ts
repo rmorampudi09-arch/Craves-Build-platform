@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
     }, 40_000);
     const raw = await upstream.json().catch(() => null);
     if (!upstream.ok) {
-      return NextResponse.json({ code: "SIGN_IN_FAILED", message: publicAuthError(upstream.status) }, { status: upstream.status });
+      // Email sign-in sends an account without a verified phone number to phone OTP, as the app does.
+      const code = (raw as { code?: unknown } | null)?.code === "PHONE_NUMBER_MISSING" ? "PHONE_NUMBER_MISSING" : "SIGN_IN_FAILED";
+      return NextResponse.json({ code, message: publicAuthError(upstream.status) }, { status: upstream.status });
     }
     const session = parseSessionExchange(raw);
     if (!session) return NextResponse.json({ code: "INVALID_AUTH_RESPONSE", message: "Sign-in is temporarily unavailable." }, { status: 502 });

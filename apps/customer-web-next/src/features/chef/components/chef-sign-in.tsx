@@ -61,9 +61,12 @@ type View = { phase: "checking" | "form" | "opening"; user: CravesUser | null };
 export function ChefSignIn({
   returnTo,
   centralOtp,
+  email = false,
 }: {
   returnTo: string | null;
   centralOtp: boolean;
+  /** Opens on email & password (the landing popup's link). */
+  email?: boolean;
 }) {
   const router = useRouter();
   const navigation = useRef(router);
@@ -142,6 +145,7 @@ export function ChefSignIn({
               centralOtp={centralOtp}
               initialPhone={view.user?.phoneNumber}
               onSignedIn={signedIn}
+              email={email}
             />
           ) : (
             <section

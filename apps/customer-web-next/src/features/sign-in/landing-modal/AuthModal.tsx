@@ -568,6 +568,12 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
               </form>
 
               {!launchingSoon && <div className="auth-modal__footer">
+                {/* Email & password signs in only (the app has no email sign-up), on the role's sign-in page. */}
+                {!isSignUp && <p>
+                  <a className="auth-modal__switch" href={role === 'chef' ? '/chef/sign-in?method=email' : '/sign-in?method=email&returnTo=%2Fhome'}>
+                    Use email &amp; password
+                  </a>
+                </p>}
                 <p>
                   {isSignUp ? `Already have a ${accountName} account?` : 'New to Craves?'}{' '}
                   <button type="button" className="auth-modal__switch" onClick={changeMode} disabled={submitting}>

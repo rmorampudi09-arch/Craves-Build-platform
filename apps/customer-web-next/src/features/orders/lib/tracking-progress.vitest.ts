@@ -2,7 +2,7 @@
 // Synthetic owned order; no network or customer mutations.
 import { createElement, type ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import TrackingPage from '../screens/OrderTracking';
 
 const fixture = vi.hoisted(() => ({ id: '11111111-2222-4333-8444-555555555555', navigate: vi.fn() }));
@@ -11,7 +11,10 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => createElement('a', { href: to }, children),
 }));
 vi.mock('../../auth/api/cravesAuth', () => ({ loadSession: async () => ({ identityId: fixture.id }) }));
-vi.mock('../components/TrackingHeader', () => ({ TrackingHeader: () => createElement('header', null, 'Track order') }));
+vi.mock('../components/TrackingHeader', () => ({
+  TrackingHeader: ({ onBack, backLabel }: { onBack: () => void; backLabel: string }) =>
+    createElement('header', null, createElement('button', { type: 'button', onClick: onBack }, backLabel)),
+}));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -28,4 +31,7 @@ it('renders ready-for-pickup as the headline for a valid empty delivery projecti
   expect(screen.queryByRole('heading', { name: 'Waiting for delivery updates' })).toBeNull();
   expect(screen.getByText('Total')).toBeTruthy();
   expect(screen.queryByText('Backend total')).toBeNull();
+  // Opened from the order's details, so back returns there, like the app.
+  fireEvent.click(screen.getByRole('button', { name: 'Back to order details' }));
+  expect(fixture.navigate).toHaveBeenCalledWith({ to: `/orders/${fixture.id}` });
 });

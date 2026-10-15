@@ -8,6 +8,7 @@ interface TrackingHeaderProps {
   /** The page's one h1. */
   title?: string;
   onBack: () => void;
+  backLabel?: string;
   onRefresh: () => void;
   refreshing?: boolean;
 }
@@ -16,6 +17,7 @@ export function TrackingHeader({
   orderId,
   title = "Track order",
   onBack,
+  backLabel = "Back to orders",
   onRefresh,
   refreshing = false,
 }: TrackingHeaderProps) {
@@ -26,7 +28,7 @@ export function TrackingHeader({
           type="button"
           onClick={onBack}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
-          aria-label="Back to orders"
+          aria-label={backLabel}
         >
           <FaArrowLeft className="text-lg" aria-hidden="true" />
         </button>

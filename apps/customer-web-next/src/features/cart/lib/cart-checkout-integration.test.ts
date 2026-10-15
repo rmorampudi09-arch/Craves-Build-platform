@@ -95,7 +95,7 @@ test("Razorpay payment is contract validated and backend verified", () => {
     /<(input|textarea)[^>]*(name|id|autoComplete)=[^>]*(card|cvv|upi[-_ ]?pin)/i,
   );
   assert.match(payment, /amount:\s*payment\.amountPaise/);
-  assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\`\)/);
+  assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\?paid=1\`\)/);
   assert.doesNotMatch(payment, /amount\s*:\s*Math\.round\(/);
 });
 

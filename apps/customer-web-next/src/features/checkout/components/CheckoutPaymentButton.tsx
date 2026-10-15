@@ -215,7 +215,8 @@ export function CheckoutPaymentButton({
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
     window.sessionStorage.removeItem("craves.checkout.operationId");
-    router.replace(`/orders/${orderId}`);
+    // The order can trail a verified payment: paid=1 keeps its page from offering Pay again meanwhile.
+    router.replace(`/orders/${orderId}?paid=1`);
   }, [router]);
 
   const checkStatus = useCallback(async (paymentOrderId: string) => {

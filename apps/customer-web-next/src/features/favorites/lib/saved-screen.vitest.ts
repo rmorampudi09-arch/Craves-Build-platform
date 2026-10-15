@@ -210,6 +210,52 @@ describe("Saved screen", () => {
     ).toHaveLength(2);
   });
 
+  it("loads more saved home chefs, a page at a time", async () => {
+    const LATER_KITCHEN = "6b000000-0000-4000-8000-000000000002";
+    const fetch = stub((url, init) => {
+      if (url === "/api/customer/favorite-kitchens")
+        return Response.json({ items: [{ kitchenId: KITCHEN, createdAt: AT }], nextCursor: "a2" });
+      if (url === "/api/customer/favorite-kitchens?cursor=a2")
+        return Response.json({
+          items: [{ kitchenId: LATER_KITCHEN, createdAt: AT }],
+          nextCursor: null,
+        });
+      if (url !== "/api/discovery/favorites/home/resolve") return undefined;
+      const { chefIdentityIds, kitchenIds } = JSON.parse(String(init?.body)) as Record<
+        string,
+        string[]
+      >;
+      return Response.json({
+        items: [
+          ...chefIdentityIds.map((id) => card("CHEF", id)),
+          ...kitchenIds.map((id) =>
+            id === KITCHEN
+              ? card("KITCHEN", id)
+              : {
+                  ...card("KITCHEN", id),
+                  kitchenId: id,
+                  chefIdentityId: null,
+                  kitchenName: "Ravi's kitchen",
+                },
+          ),
+        ],
+      });
+    });
+    render(createElement(WishlistPage));
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Home chefs" }));
+    expect(await screen.findByRole("link", { name: /Asha's kitchen/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Ravi's kitchen/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more saved home chefs" }));
+    expect(await screen.findByRole("link", { name: /Ravi's kitchen/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Asha's kitchen/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load more saved home chefs" })).toBeNull();
+    // Only the list with another page is read again.
+    expect(
+      fetch.mock.calls.filter(([url]) => url.startsWith("/api/customer/favorite-chefs")).length,
+    ).toBe(1);
+  });
+
   it.each(["/api/customer/favorite-kitchens", "/api/discovery/favorites/home/resolve"])(
     "shows Coming soon when %s isn't live yet",
     async (path) => {

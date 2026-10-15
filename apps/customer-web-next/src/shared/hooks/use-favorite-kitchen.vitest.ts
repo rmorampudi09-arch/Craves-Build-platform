@@ -39,6 +39,23 @@ describe("useFavoriteKitchen", () => {
     expect(reads(fetch)).toBe(1);
   });
 
+  it("reads every page of saved kitchens, ten at most", async () => {
+    let page = 0;
+    const fetch = vi.fn(async (url: string) => Response.json({ items: [{ kitchenId: url.includes("cursor") ? OTHER : SAVED, createdAt: AT }], nextCursor: `p${++page}` }));
+    vi.stubGlobal("fetch", fetch);
+    const { useFavoriteKitchen } = await import("./use-favorite-kitchen");
+    const later = renderHook(() => useFavoriteKitchen(OTHER));
+    await waitFor(() => expect(later.result.current.saved).toBe(true));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(10));
+    expect(fetch.mock.calls.slice(0, 3).map(([url]) => url)).toEqual([
+      "/api/customer/favorite-kitchens",
+      "/api/customer/favorite-kitchens?cursor=p1",
+      "/api/customer/favorite-kitchens?cursor=p2",
+    ]);
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+    expect(fetch).toHaveBeenCalledTimes(10);
+  });
+
   it("saves optimistically and every heart for that kitchen follows", async () => {
     let finish!: (response: Response) => void;
     const fetch = backend(() => new Promise<Response>(resolve => { finish = resolve; }) as unknown as Response);

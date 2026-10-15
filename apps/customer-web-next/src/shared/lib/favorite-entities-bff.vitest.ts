@@ -39,6 +39,23 @@ describe("favorite kitchens and chefs BFF", () => {
     expect((await listChefs(request("/api/customer/favorite-chefs"))).status).toBe(502);
   });
 
+  it("passes a checked page size and cursor through, and refuses anything else", async () => {
+    upstream.mockImplementation(async () => Response.json({ items: [], nextCursor: null }));
+    expect((await listChefs(request("/api/customer/favorite-chefs?limit=50&cursor=MjAyNi0xMC0xMA"))).status).toBe(200);
+    expect((await listKitchens(request("/api/customer/favorite-kitchens?cursor=abc_-9"))).status).toBe(200);
+    expect(upstream.mock.calls.map(call => call[1])).toEqual([
+      "/customer/favorite-chefs?limit=50&cursor=MjAyNi0xMC0xMA",
+      "/customer/favorite-kitchens?limit=100&cursor=abc_-9",
+    ]);
+    upstream.mockClear();
+    for (const query of ["limit=0", "limit=101", "limit=ten", "cursor=", "cursor=a%2Fb", `cursor=${"a".repeat(513)}`]) {
+      const response = await listKitchens(request(`/api/customer/favorite-kitchens?${query}`));
+      expect([query, response.status, await response.json()]).toEqual([query, 400, { code: "INVALID_FAVORITE_QUERY" }]);
+    }
+    expect((await listChefs(request("/api/customer/favorite-chefs?cursor=a+b"))).status).toBe(400);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
   it("saves and removes by uuid only, from this site only", async () => {
     expect((await saveKitchen(request("/api/customer/favorite-kitchens/x", { method: "PUT" }), params({ kitchenId: "x" }))).status).toBe(400);
     expect((await removeChef(request(`/api/customer/favorite-chefs/${CHEF}`, { method: "DELETE", origin: "https://evil.example" }), params({ chefIdentityId: CHEF }))).status).toBe(403);
@@ -104,8 +121,10 @@ describe("favorite entities browser client", () => {
       [`/api/customer/favorite-chefs/${CHEF}`, "DELETE", "same-origin"],
       [`/api/customer/favorite-kitchens/${KITCHEN}`, "PUT", "same-origin"],
     ]);
-    answer({ items: [{ chefIdentityId: CHEF, createdAt: AT }], nextCursor: null });
+    const chefs = answer({ items: [{ chefIdentityId: CHEF, createdAt: AT }], nextCursor: null });
     expect((await listFavoriteChefs()).items[0].chefIdentityId).toBe(CHEF);
+    await listFavoriteChefs("a-b_c");
+    expect(chefs.mock.calls.map(([url]) => url)).toEqual(["/api/customer/favorite-chefs", "/api/customer/favorite-chefs?cursor=a-b_c"]);
     const watches = answer([watch]);
     expect(await listFavoriteWatches("CHEF")).toHaveLength(1);
     expect(watches.mock.calls[0][0]).toBe("/api/customer/favorite-watches?entityType=CHEF");

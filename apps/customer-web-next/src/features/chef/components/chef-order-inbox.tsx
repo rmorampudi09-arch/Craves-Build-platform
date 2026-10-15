@@ -105,7 +105,7 @@ export function ChefOrderInbox() {
   const loadHistory = useCallback(async (cursor: string | null) => {
     setHistory((current) => ({ orders: current?.orders ?? [], nextCursor: cursor, state: "loading" }));
     try {
-      const page = await fetchChefOrderHistoryPage({ cursor });
+      const page = await fetchChefOrderHistoryPage({ cursor, status: "DELIVERED" });
       setHistory((current) => ({ orders: [...(current?.orders ?? []), ...page.orders], nextCursor: page.hasMore ? page.nextCursor : null, state: "ready" }));
     } catch (caught) {
       const soon = caught instanceof ChefOrderHistoryError && caught.code === FEATURE_NOT_AVAILABLE;

@@ -62,12 +62,12 @@ afterEach(() => {
 
 describe("Done orders", () => {
   it("adds older orders page by page and keeps the live copy of an order in both", async () => {
-    pages["/api/chef/orders/page?limit=20"] = Response.json({
+    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = Response.json({
       orders: [order(5, "OUT_FOR_DELIVERY"), order(3), order(4, "CHEF_REJECTED")],
       nextCursor: "c2",
       hasMore: true,
     });
-    pages["/api/chef/orders/page?limit=20&cursor=c2"] = Response.json({
+    pages["/api/chef/orders/page?limit=20&cursor=c2&status=DELIVERED"] = Response.json({
       orders: [order(1)],
       nextCursor: null,
       hasMore: false,
@@ -80,7 +80,7 @@ describe("Done orders", () => {
   });
 
   it("keeps the recent orders and says older ones are coming soon while the server has no paging", async () => {
-    pages["/api/chef/orders/page?limit=20"] = Response.json(
+    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = Response.json(
       { code: "FEATURE_NOT_AVAILABLE" },
       { status: 404 },
     );
@@ -91,7 +91,7 @@ describe("Done orders", () => {
 
   it("offers Try again when a page fails", async () => {
     let attempts = 0;
-    pages["/api/chef/orders/page?limit=20"] = () =>
+    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = () =>
       ++attempts === 1
         ? Response.json({ code: "CHEF_ORDER_HISTORY_FAILED" }, { status: 503 })
         : Response.json({ orders: [order(2)], nextCursor: null, hasMore: false });
@@ -102,7 +102,7 @@ describe("Done orders", () => {
 
   it("reaches past orders when nothing is live", async () => {
     live = [];
-    pages["/api/chef/orders/page?limit=20"] = Response.json({
+    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = Response.json({
       orders: [order(2)],
       nextCursor: null,
       hasMore: false,

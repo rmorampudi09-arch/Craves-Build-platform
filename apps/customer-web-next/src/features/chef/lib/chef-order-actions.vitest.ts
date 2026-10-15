@@ -126,11 +126,18 @@ describe("ready order", () => {
     expect(screen.getByText("Ravi Kumar · Craves delivery")).toBeTruthy();
     expect(screen.getByText("Arriving in 6 min")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Call Ravi Kumar" }).getAttribute("href")).toBe("tel:+919888888888");
+    // No photo: a delivery bike, never the chef avatar.
+    expect(document.querySelector(".lucide-bike")).toBeTruthy();
+    cleanup();
+    show(ready({ deliveryPartner: { ...partner, photoUrl: "https://cdn.craves.in/partners/ravi.jpg" } }));
+    expect(document.querySelector("img")?.getAttribute("src")).toBe("https://cdn.craves.in/partners/ravi.jpg");
+    expect(document.querySelector(".lucide-bike")).toBeNull();
   });
 
   it("says when no partner is assigned, and hides Handed over when the server has no hand-over", () => {
     show(ready());
     expect(screen.getByText("Waiting for a delivery partner")).toBeTruthy();
+    expect(document.querySelector(".lucide-bike")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Handed over" })).toBeNull();
   });
 

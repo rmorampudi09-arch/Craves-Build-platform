@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  Bike,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -164,7 +165,13 @@ function PartnerRow({ partner, now }: { partner: ChefDeliveryPartner | null | un
   const eta = pickupEtaLabel(partner?.pickupEtaAt ?? null, now);
   return (
     <div className="flex items-center gap-3 rounded-xl border border-[#E3E6EA] bg-white p-3">
-      <ChefFace photoUrl={partner?.photoUrl} name={name} size={40} />
+      {partner?.photoUrl ? (
+        <ChefFace photoUrl={partner.photoUrl} name={name} size={40} />
+      ) : (
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]" aria-hidden="true">
+          <Bike className="h-5 w-5" />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold text-[#1A1A1A]">{name ? `${name} · Craves delivery` : "Waiting for a delivery partner"}</p>
         {name && eta ? <p className="text-[0.8125rem] text-[#6B6B6B]">{eta}</p> : null}

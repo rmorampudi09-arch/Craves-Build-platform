@@ -389,7 +389,7 @@ function BrowseFoodsPage() {
 
     setDiscoveryState("ready");
     if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
-      setCatalogMessage("No active home kitchens or dishes are available within 50 km of your default address.");
+      setCatalogMessage("No active home kitchens or dishes are available within 10 km of your default address.");
     } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
       setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
     } else {
@@ -754,18 +754,6 @@ function BrowseFoodsPage() {
     }
   }, [nearbyDishes]);
 
-  const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
-    const grouped: Record<string, string[]> = {};
-    for (const dish of nearbyDishes) {
-      if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
-      const current = grouped[dish.kitchenId] ?? [];
-      if (!current.includes(dish.img) && current.length < 5) {
-        grouped[dish.kitchenId] = [...current, dish.img];
-      }
-    }
-    return grouped;
-  }, [nearbyDishes]);
-
   const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
@@ -938,7 +926,7 @@ function BrowseFoodsPage() {
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
-          dishImagesByKitchen={kitchenDishImages}
+          dishes={nearbyDishes}
           limit={6}
         />
 

@@ -9,6 +9,7 @@ import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
+import { KitchenDiscoverCard } from "@/features/chefs/components/KitchenDiscoverCard";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
@@ -17,7 +18,7 @@ import {
   loadCart,
   subscribeCart,
 } from "@/features/cart/api/cravesCart";
-import { discoverDishes } from "@/features/dish/api/dishes";
+import { discoverDishes, type Dish } from "@/features/dish/api/dishes";
 import { discoverKitchens } from "@/features/chefs/api/kitchens";
 import {
   clearSession,
@@ -54,7 +55,7 @@ export function AllChefsPage() {
   const [user, setUser] = useState<CravesUser | null>(null);
   const [address, setAddress] = useState<CravesAddress | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>([]);
-  const [dishImagesByKitchen, setDishImagesByKitchen] = useState<Record<string, string[]>>({});
+  const [dishes, setDishes] = useState<Dish[]>([]);
   const [state, setState] = useState<DiscoveryState>("loading");
   const [message, setMessage] = useState("Loading home chefs near your delivery address…");
   const [searchTerm, setSearchTerm] = useState("");
@@ -68,10 +69,10 @@ export function AllChefsPage() {
       typeof nextAddress.lng !== "number"
     ) {
       setKitchens([]);
-      setDishImagesByKitchen({});
+      setDishes([]);
       setState("address-required");
       setMessage(
-        "Choose a default delivery address to see all active home chefs within 50 km.",
+        "Choose a default delivery address to see all active home chefs within 10 km.",
       );
       return;
     }
@@ -98,28 +99,18 @@ export function AllChefsPage() {
         throw kitchenResult.reason;
       }
 
-      const previews: Record<string, string[]> = {};
-      if (dishResult.status === "fulfilled") {
-        for (const dish of dishResult.value) {
-          if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
-          const current = previews[dish.kitchenId] ?? [];
-          if (!current.includes(dish.img) && current.length < 5) {
-            previews[dish.kitchenId] = [...current, dish.img];
-          }
-        }
-      }
-
-      setDishImagesByKitchen(previews);
+      // Without dishes the cards still show, just without dish photos, prep time or prices.
+      setDishes(dishResult.status === "fulfilled" ? dishResult.value : []);
       setKitchens(kitchenResult.value.kitchens);
       setState("ready");
       setMessage(
         kitchenResult.value.kitchens.length > 0
-          ? "Showing active home chefs within 50 km of your delivery address."
-          : "No active home chefs are available within 50 km of your delivery address yet.",
+          ? "Showing active home chefs within 10 km of your delivery address."
+          : "No active home chefs are available within 10 km of your delivery address yet.",
       );
     } catch (error) {
       setKitchens([]);
-      setDishImagesByKitchen({});
+      setDishes([]);
       setState("error");
       setMessage(
         error instanceof Error
@@ -244,7 +235,8 @@ export function AllChefsPage() {
           }
           onRetry={() => void refresh(address)}
           onManageAddress={openAddressManager}
-          dishImagesByKitchen={dishImagesByKitchen}
+          dishes={dishes}
+          renderKitchen={(kitchen, summary, open) => <KitchenDiscoverCard kitchen={kitchen} summary={summary} onOpen={open} />}
         />
       </main>
 

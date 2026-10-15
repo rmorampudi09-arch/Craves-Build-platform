@@ -162,26 +162,35 @@ function DishBody() {
   );
 }
 
+/** The kitchen page's order: photo band, chef face over its edge, name, fact chips, bio, category tabs, dishes. */
 function KitchenBody() {
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-      <div className="rounded-[1.75rem] border border-[#E5E7EB] p-5 sm:p-6 md:rounded-[2rem] md:p-7">
-        <SkeletonBlock className="h-3 w-32 rounded-full" soft />
-        <SkeletonBlock className="mt-3 h-8 w-2/3 rounded-full" />
-        <SkeletonBlock className="mt-4 h-3.5 w-full max-w-xl rounded-full" soft />
+    <>
+      <SkeletonBlock className="h-[75vw] max-h-[28rem] w-full rounded-none" soft />
+      <div className="mx-auto max-w-6xl px-4 md:px-6">
+        <SkeletonBlock className="-mt-[46px] h-[92px] w-[92px] rounded-full ring-4 ring-white" />
+        <SkeletonBlock className="mt-2 h-8 w-2/3 max-w-sm rounded-full" />
+        <SkeletonBlock className="mt-2 h-3.5 w-1/2 max-w-xs rounded-full" soft />
+        <div className="mt-3 flex gap-2">
+          {["w-20", "w-24", "w-16"].map((width) => (
+            <SkeletonBlock key={width} className={`h-7 ${width} rounded-full`} soft />
+          ))}
+        </div>
+        <SkeletonBlock className="mt-3 h-3.5 w-full max-w-xl rounded-full" soft />
         <SkeletonBlock className="mt-2 h-3.5 w-4/5 max-w-lg rounded-full" soft />
-        <div className="mt-5 grid grid-cols-2 gap-2.5 lg:max-w-[27rem]">
-          {Array.from({ length: 4 }, (_, index) => (
-            <SkeletonBlock key={index} className="h-20 rounded-2xl" soft />
+        <div className="mt-6 flex gap-2 border-b border-[#E5E7EB] py-2.5">
+          {["w-28", "w-24", "w-20"].map((width) => (
+            <SkeletonBlock key={width} className={`h-10 ${width} rounded-full`} soft />
+          ))}
+        </div>
+        <SkeletonBlock className="mt-6 h-6 w-36 rounded-full" />
+        <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <CardSkeleton key={index} media="aspect-[16/9] sm:aspect-[16/10]" />
           ))}
         </div>
       </div>
-      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }, (_, index) => (
-          <CardSkeleton key={index} media="aspect-[16/9] sm:aspect-[16/10]" />
-        ))}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -228,6 +237,27 @@ function CartBody() {
   );
 }
 
+/** A Chefs-tab kitchen card: chef face, name and heart, then the photo strip and the prep time and price line. */
+export function KitchenDiscoverCardSkeleton() {
+  return (
+    <div className="rounded-[1.35rem] border border-[#E5E7EB] bg-white p-3 sm:p-3.5" aria-hidden="true">
+      <div className="flex items-center gap-3">
+        <SkeletonBlock className="h-14 w-14 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <SkeletonBlock className="h-4 w-2/3 rounded-full" />
+          <SkeletonBlock className="h-3 w-1/2 rounded-full" soft />
+        </div>
+        <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" soft />
+      </div>
+      <SkeletonBlock className="mt-3 h-[9.5rem] w-full rounded-2xl" />
+      <div className="mt-3 flex justify-between gap-3">
+        <SkeletonBlock className="h-3 w-32 rounded-full" soft />
+        <SkeletonBlock className="h-3 w-16 rounded-full" soft />
+      </div>
+    </div>
+  );
+}
+
 function ChefsBody() {
   return (
     <div className="mx-auto max-w-[88rem] px-4 pt-3 md:px-7 md:pt-4 lg:px-10">
@@ -235,7 +265,7 @@ function ChefsBody() {
       <SkeletonBlock className="mt-3 h-8 w-64 max-w-full rounded-full" />
       <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }, (_, index) => (
-          <CardSkeleton key={index} media="aspect-[16/9]" />
+          <KitchenDiscoverCardSkeleton key={index} />
         ))}
       </div>
     </div>

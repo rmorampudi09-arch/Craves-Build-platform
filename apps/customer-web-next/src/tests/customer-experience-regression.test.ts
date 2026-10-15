@@ -27,10 +27,10 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(home, /CustomerPageSkeleton/);
   assert.match(home, /loadMoreDiscoveredDishes/);
   assert.match(home, /hasMoreDiscoveredDishes/);
-  assert.match(home, /dishImagesByKitchen=\{kitchenDishImages\}/);
+  assert.match(home, /dishes=\{nearbyDishes\}/);
   assert.match(chefs, /CustomerPageSkeleton/);
   assert.match(chefs, /discoverDishes\(/);
-  assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
+  assert.match(chefs, /dishes=\{dishes\}/);
   assert.match(kitchens, /KitchenDishPreview/);
   // Kitchen photos slide on by themselves (the next one follows from the right) only with a
   // Pause photos control (WCAG 2.2.2), never for reduced motion, only while the card is on

@@ -1,21 +1,24 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowRight,
   ChefHat,
+  Clock3,
   MapPin,
   Pause,
   Play,
   RefreshCw,
   SearchX,
-  UtensilsCrossed,
 } from "lucide-react";
 
 import { formatDistance, type NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import styles from "@/features/home/screens/HomeReference.module.css";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
+import { summarizeKitchenDishes, type KitchenCardDish, type KitchenDishSummary } from "@/shared/lib/kitchen-dish-summary";
+import { FavoriteKitchenHeart } from "@/shared/ui/buttons/FavoriteKitchenHeart";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
@@ -25,6 +28,7 @@ const SLIDE_MS = 3200;
 const PHOTOS_PAUSED_KEY = "craves.kitchen-photos.paused";
 /** Phones show this many kitchens on Home; wider screens show `limit`. */
 const PHONE_LIMIT = 4;
+const NO_PHOTOS: string[] = [];
 
 const kitchenImagePreloads = new Map<string, Promise<boolean>>();
 
@@ -64,9 +68,12 @@ interface KitchensGridProps {
   onSelectKitchen: (kitchen: NearbyKitchen) => void;
   onRetry: () => void;
   onManageAddress: () => void;
-  dishImagesByKitchen?: Record<string, string[]>;
+  /** The nearby dishes already loaded: each card's photos, prep time and starting price come from them. */
+  dishes: readonly KitchenCardDish[];
   /** Home shows the nearest few and links to every chef; the chefs page shows all. */
   limit?: number;
+  /** The chefs page draws its own card; Home's card is the default. */
+  renderKitchen?: (kitchen: NearbyKitchen, summary: KitchenDishSummary | undefined, open: () => void) => ReactNode;
 }
 
 function KitchenSkeleton() {
@@ -183,7 +190,7 @@ function KitchenDishPreview({
 
   if (!count) {
     return (
-      <div className="flex aspect-[16/9] items-center justify-center bg-[#F1F3F5] text-[#F62E18]">
+      <div className="flex aspect-[16/9] items-center justify-center rounded-t-[1.3rem] bg-[#F1F3F5] text-[#F62E18]">
         <ChefHat className="h-12 w-12" strokeWidth={1.6} aria-hidden="true" />
       </div>
     );
@@ -191,7 +198,7 @@ function KitchenDishPreview({
 
   const slide = "h-full w-full shrink-0 snap-center snap-always object-cover";
   return (
-    <div className="relative aspect-[16/9] overflow-hidden bg-[#F1F3F5]">
+    <div className="relative aspect-[16/9] overflow-hidden rounded-t-[1.3rem] bg-[#F1F3F5]">
       {/* A native snap strip: the photo follows the finger and settles on release. */}
       <div
         ref={stripRef}
@@ -255,11 +262,13 @@ export function KitchensGrid({
   onSelectKitchen,
   onRetry,
   onManageAddress,
-  dishImagesByKitchen = {},
+  dishes,
   limit,
+  renderKitchen,
 }: KitchensGridProps) {
   const normalizedSearch = searchTerm.trim();
   const shownKitchens = limit ? kitchens.slice(0, limit) : kitchens;
+  const summaries = useMemo(() => summarizeKitchenDishes(dishes), [dishes]);
   // Moving photos can be paused (WCAG 2.2.2) and never move for reduced motion.
   const reduceMotion = useReducedMotion();
   const [photosPaused, setPhotosPaused] = useState(false);
@@ -280,8 +289,9 @@ export function KitchensGrid({
     }
   };
   const slideshow =
+    !renderKitchen &&
     !reduceMotion &&
-    shownKitchens.some((kitchen) => (dishImagesByKitchen[kitchen.id]?.length ?? 0) > 1);
+    shownKitchens.some((kitchen) => (summaries.get(kitchen.id)?.imageUrls.length ?? 0) > 1);
 
   return (
     <section
@@ -379,55 +389,68 @@ export function KitchensGrid({
       {state === "ready" && kitchens.length > 0 ? (
         <div className={styles.kitchenGrid}>
           {shownKitchens.map((kitchen, index) => {
+            const summary = summaries.get(kitchen.id);
+            if (renderKitchen) return <Fragment key={kitchen.id}>{renderKitchen(kitchen, summary, () => onSelectKitchen(kitchen))}</Fragment>;
             const name = kitchen.displayName || kitchen.kitchenName;
-            const location = [kitchen.areaName, kitchen.city].filter(Boolean).join(", ");
-            const previews = dishImagesByKitchen[kitchen.id] ?? [];
             return (
+              // The heart is the card button's sibling, so neither control sits inside the other.
               <article
                 key={kitchen.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelectKitchen(kitchen)}
-                onKeyDown={(event) => {
-                  if (event.target !== event.currentTarget) return;
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelectKitchen(kitchen);
-                  }
-                }}
-                className={`${limit && index >= PHONE_LIMIT ? "max-sm:hidden " : ""}group cursor-pointer overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[border-color,box-shadow] duration-300 hover:border-[#D7DADF] hover:shadow-[0_14px_32px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30`}
-                aria-label={`Open ${name}`}
+                className={`${limit && index >= PHONE_LIMIT ? "max-sm:hidden " : ""}group relative rounded-[1.35rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[border-color,box-shadow] duration-300 hover:border-[#D7DADF] hover:shadow-[0_14px_32px_rgba(26,26,26,0.10)]`}
               >
-                  <KitchenDishPreview
-                    name={name}
-                    images={previews}
-                    priority={index < 4}
-                    autoplay={slideshow && !photosPaused}
-                    order={index}
-                  />
-                  <div className="px-3.5 pb-2.5 pt-2.5 sm:px-4 sm:pb-3">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectKitchen(kitchen)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectKitchen(kitchen);
+                    }
+                  }}
+                  className="cursor-pointer rounded-[1.35rem]"
+                  aria-label={`Open ${name}`}
+                >
+                  <div className="relative">
+                    <KitchenDishPreview
+                      name={name}
+                      images={summary?.imageUrls ?? NO_PHOTOS}
+                      priority={index < 4}
+                      autoplay={slideshow && !photosPaused}
+                      order={index}
+                    />
+                    {summary?.preparationTimeLabel ? (
+                      <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A]/60 px-2.5 py-1 text-[0.7rem] font-black text-white backdrop-blur-sm">
+                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                        {summary.preparationTimeLabel}
+                      </span>
+                    ) : null}
+                    <ChefFace
+                      photoUrl={kitchen.chefPhotoUrl}
+                      name={name}
+                      size={56}
+                      className="absolute -bottom-7 left-3 z-10 shadow-[0_4px_14px_rgba(26,26,26,0.16)] ring-[3px] ring-white"
+                    />
+                  </div>
+                  <div className="px-3.5 pb-3 pt-8 sm:px-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate font-display text-base font-black tracking-[-0.02em] text-[#1A1A1A] sm:text-[1.05rem]">
-                          {name}
-                        </h3>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-[0.7rem] font-bold text-[#6B6B6B] sm:text-xs">
-                          <MapPin className="h-3.5 w-3.5 shrink-0 fill-[#F62E18] text-[#F62E18]" strokeWidth={1.4} aria-hidden="true" />
-                          <span className="truncate">{location || `${kitchen.city}, ${kitchen.state}`}</span>
-                        </p>
-                      </div>
+                      <h3 className="min-w-0 truncate font-display text-base font-black tracking-[-0.02em] text-[#1A1A1A] sm:text-[1.05rem]">
+                        {name}
+                      </h3>
                       <span className="shrink-0 rounded-lg bg-[#F1F3F5] px-2.5 py-1 text-[0.66rem] font-black text-[#1A1A1A]">
                         {formatDistance(kitchen.distanceMeters)}
                       </span>
                     </div>
-
-                    <div className="mt-2 flex items-center border-t border-[#F1F3F5] pt-2">
-                      <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-black text-[#1A1A1A] sm:text-xs">
-                        <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                        {kitchen.activeMenuItemCount} active {kitchen.activeMenuItemCount === 1 ? "dish" : "dishes"}
-                      </span>
-                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6B6B6B]">
+                      {kitchen.description || "Home-cooked meals prepared with care."}
+                    </p>
+                    {summary ? (
+                      <p className="mt-1.5 text-xs font-black text-[#C4200F]">Starts from {summary.startingPriceLabel}</p>
+                    ) : null}
                   </div>
+                </div>
+                <FavoriteKitchenHeart kitchenId={kitchen.id} kitchenName={name} className="absolute right-2.5 top-2.5 z-20 !h-9 !w-9" />
               </article>
             );
           })}

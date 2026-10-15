@@ -754,18 +754,6 @@ function BrowseFoodsPage() {
     }
   }, [nearbyDishes]);
 
-  const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
-    const grouped: Record<string, string[]> = {};
-    for (const dish of nearbyDishes) {
-      if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
-      const current = grouped[dish.kitchenId] ?? [];
-      if (!current.includes(dish.img) && current.length < 5) {
-        grouped[dish.kitchenId] = [...current, dish.img];
-      }
-    }
-    return grouped;
-  }, [nearbyDishes]);
-
   const filteredKitchens = kitchens;
 
   const filteredDishes = useMemo(() => {
@@ -938,7 +926,7 @@ function BrowseFoodsPage() {
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
-          dishImagesByKitchen={kitchenDishImages}
+          dishes={nearbyDishes}
           limit={6}
         />
 

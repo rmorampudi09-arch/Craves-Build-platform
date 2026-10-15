@@ -62,7 +62,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(progressiveImage, /unoptimized = true/);
   assert.match(cartItemList, /priorityImage=\{index < 4\}/);
   assert.match(cartItemRow, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
-  assert.match(wishlist, /fetchPriority=\{index < 4 \? "high" : "auto"\}/);
+  assert.match(wishlist, /eager=\{index < 4\}/);
+  assert.match(source("../features/favorites/components/SavedDishCard.tsx"), /fetchPriority=\{eager \? "high" : "auto"\}/);
   assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);

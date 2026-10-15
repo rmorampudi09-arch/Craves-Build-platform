@@ -33,7 +33,10 @@ public class InternalPaymentController {
         if (providedKey == null) {
             providedKey = headers.get("X-Craves-Internal-" + "Secret");
         }
-        if (internalKey == null || internalKey.isBlank() || !internalKey.equals(providedKey)) {
+        if (internalKey == null || internalKey.isBlank() || providedKey == null
+            || !java.security.MessageDigest.isEqual(
+                internalKey.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                providedKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
         String reason = request == null ? "Payment confirmed" : "Payment confirmed: " + request.providerOrderId();

@@ -45,7 +45,7 @@ public class SubscriptionBillingOutboxPublisher {
         this.sender = builder.sender().topicName(properties.getTopicName()).buildClient();
     }
 
-    @Scheduled(fixedDelayString = "${craves.subscription.billing.publisher-fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.subscription.config.WorkerSchedulingConfiguration.BILLING_SCHEDULER, fixedDelayString = "${craves.subscription.billing.publisher-fixed-delay-ms:5000}")
     public void publish() {
         List<OutboxRecord> records = repository.claimOutbox(
             properties.getBatchSize(),

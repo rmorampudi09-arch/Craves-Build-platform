@@ -17,7 +17,7 @@ public class OccurrenceGeneratorWorker {
         this.service = service;
     }
 
-    @Scheduled(fixedDelayString = "${craves.subscription.occurrence-generator.fixed-delay-ms:60000}")
+    @Scheduled(scheduler = in.craves.subscription.config.WorkerSchedulingConfiguration.OCCURRENCE_SCHEDULER, fixedDelayString = "${craves.subscription.occurrence-generator.fixed-delay-ms:60000}")
     public void run() {
         service.generateDue();
     }

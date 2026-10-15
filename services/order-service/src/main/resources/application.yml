@@ -30,10 +30,28 @@ management:
         enabled: true
 
 craves:
+  # CH-07 Idempotency-Key replay; only requests that send the header are affected.
+  idempotency:
+    enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}
+  # CH-04 read-only silent-failure checks; findings are CRAVES_ALERT log lines (infra/monitoring).
+  monitoring:
+    enabled: ${CRAVES_MONITORING_ENABLED:true}
+    stuck-order-minutes: ${CRAVES_MONITORING_STUCK_ORDER_MINUTES:90}
+    lookback-days: ${CRAVES_MONITORING_LOOKBACK_DAYS:7}
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/payments/**=integration;/internal/v1/checkouts/**=integration;/internal/v1/delivery-handoff-eligibility/**=integration}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
     verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
     internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
@@ -65,6 +83,8 @@ craves:
     max-concurrent-messages: ${CRAVES_REFUND_STATUS_MAX_CONCURRENT_MESSAGES:2}
     prefetch-count: ${CRAVES_REFUND_STATUS_PREFETCH_COUNT:4}
     max-delivery-attempts: ${CRAVES_REFUND_STATUS_MAX_DELIVERY_ATTEMPTS:5}
+    session-enabled: ${CRAVES_REFUND_STATUS_SESSION_ENABLED:false}
+    session-subscription-name: ${CRAVES_REFUND_STATUS_SESSION_SUBSCRIPTION:order-service-refund-status-changed-v3}
   delivery-status-consumer:
     enabled: ${CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED:false}
     fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
@@ -74,6 +94,8 @@ craves:
     max-concurrent-messages: ${CRAVES_DELIVERY_STATUS_MAX_CONCURRENT_MESSAGES:2}
     prefetch-count: ${CRAVES_DELIVERY_STATUS_PREFETCH_COUNT:4}
     max-delivery-attempts: ${CRAVES_DELIVERY_STATUS_MAX_DELIVERY_ATTEMPTS:5}
+    session-enabled: ${CRAVES_DELIVERY_STATUS_SESSION_ENABLED:false}
+    session-subscription-name: ${CRAVES_DELIVERY_STATUS_SESSION_SUBSCRIPTION:order-service-delivery-status-changed-v3}
   subscription-orders:
     consumer-enabled: ${CRAVES_SUBSCRIPTION_ORDER_CONSUMER_ENABLED:false}
     callback-worker-enabled: ${CRAVES_SUBSCRIPTION_ORDER_CALLBACK_WORKER_ENABLED:false}
@@ -99,6 +121,8 @@ craves:
       max-attempts: ${CRAVES_DOMAIN_EVENT_OUTBOX_MAX_ATTEMPTS:10}
       retry-base-delay-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_RETRY_BASE_DELAY_SECONDS:5}
       stale-lock-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_STALE_LOCK_SECONDS:300}
+      blocked-type-grace-seconds: ${CRAVES_DOMAIN_EVENT_OUTBOX_BLOCKED_TYPE_GRACE_SECONDS:300}
+      dead-letter-blocked-types: ${CRAVES_DOMAIN_EVENT_OUTBOX_DEAD_LETTER_BLOCKED_TYPES:false}
     service-bus:
       enabled: ${CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED:false}
       fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}

@@ -126,10 +126,10 @@ public class NotificationDeliveryRepository {
                         WHERE preference.recipient_identity_id = request.recipient_identity_id
                           AND preference.channel = request.channel
                    ), true) = true
+                   AND request.attempt_count < ?
                    AND (
                        (request.status IN ('PENDING', 'FAILED')
-                        AND COALESCE(request.next_attempt_at, now()) <= now()
-                        AND request.attempt_count < ?)
+                        AND COALESCE(request.next_attempt_at, now()) <= now())
                        OR
                        (request.status = 'PROCESSING'
                         AND request.locked_at < now() - (? * INTERVAL '1 minute'))
@@ -165,6 +165,36 @@ public class NotificationDeliveryRepository {
                 lockToken
             ),
             channel, maxAttempts, staleLockMinutes, batchSize, lockToken
+        );
+    }
+
+    /**
+     * CH-02: a lease that expired on the final attempt (the worker died mid-send) can never be claimed again.
+     * Dead-letter it the same way markFailure does, so it shows up in admin notification recovery and alerts.
+     */
+    public int deadLetterExpired(int maxAttempts, int staleLockMinutes) {
+        return jdbcTemplate.update(
+            """
+                WITH exhausted AS (
+                    UPDATE notification_schema.notification_request
+                       SET status = 'DEAD_LETTER', lock_token = NULL, locked_at = NULL,
+                           last_error = COALESCE(last_error, 'Delivery attempts exhausted; the last lease expired'),
+                           updated_at = now()
+                     WHERE attempt_count >= ?
+                       AND (status = 'FAILED'
+                            OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))
+                    RETURNING id, channel, attempt_count, last_error
+                )
+                INSERT INTO notification_schema.channel_delivery_dead_letter
+                    (id, notification_request_id, channel, final_error_code, final_error_message, attempt_count, created_at)
+                SELECT gen_random_uuid(), id, channel, 'ATTEMPTS_EXHAUSTED', left(last_error, 1000), attempt_count, now()
+                  FROM exhausted
+                ON CONFLICT (notification_request_id) DO UPDATE SET
+                    channel = EXCLUDED.channel, final_error_code = EXCLUDED.final_error_code,
+                    final_error_message = EXCLUDED.final_error_message, attempt_count = EXCLUDED.attempt_count,
+                    created_at = now()
+                """,
+            maxAttempts, staleLockMinutes
         );
     }
 

@@ -2,6 +2,7 @@ package in.craves.order.service;
 
 import in.craves.order.config.NotificationClientProperties;
 import in.craves.order.config.NotificationOutboxDispatcherProperties;
+import in.craves.order.config.WorkerSchedulingConfiguration;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -35,7 +36,10 @@ public class NotificationOutboxDispatcher {
         this.restClientBuilder = restClientBuilder;
     }
 
-    @Scheduled(fixedDelayString = "${craves.notification.outbox-dispatcher.fixed-delay-ms:30000}")
+    @Scheduled(
+        scheduler = WorkerSchedulingConfiguration.OUTBOX_SCHEDULER,
+        fixedDelayString = "${craves.notification.outbox-dispatcher.fixed-delay-ms:30000}"
+    )
     public void dispatchDue() {
         if (!dispatcherProperties.isEnabled()) {
             return;
@@ -47,6 +51,10 @@ public class NotificationOutboxDispatcher {
 
         int batchSize = Math.max(1, dispatcherProperties.getBatchSize());
         int maxAttempts = Math.max(1, dispatcherProperties.getMaxAttempts());
+        int deadLettered = repository.deadLetterExhausted(maxAttempts);
+        if (deadLettered > 0) {
+            log.error("CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=order_notification reason=attempts_exhausted count={}", deadLettered);
+        }
         for (PendingNotificationOutboxEvent event : repository.findDue(batchSize, maxAttempts)) {
             if (repository.markProcessing(event.id())) {
                 dispatchOne(event, maxAttempts);

@@ -215,8 +215,9 @@ public class SubscriptionPaymentRepository {
             WITH candidates AS (
                 SELECT id
                   FROM payment_schema.subscription_payment_status_outbox
-                 WHERE (status IN ('PENDING', 'FAILED') AND next_attempt_at <= now() AND attempt_count < ?)
-                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute'))
+                 WHERE attempt_count < ?
+                   AND ((status IN ('PENDING', 'FAILED') AND next_attempt_at <= now())
+                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))
                  ORDER BY created_at
                  FOR UPDATE SKIP LOCKED
                  LIMIT ?
@@ -236,6 +237,18 @@ public class SubscriptionPaymentRepository {
                 rs.getInt("attempt_count"), lockToken
             ),
             maxAttempts, staleLockMinutes, batchSize, lockToken
+        );
+    }
+
+    /** CH-02: a lease that expired on the final attempt (or a FAILED row past a lowered limit) can never be claimed. */
+    public int deadLetterExpiredOutbox(int maxAttempts, int staleLockMinutes) {
+        return jdbcTemplate.update(
+            "UPDATE payment_schema.subscription_payment_status_outbox SET status = 'DEAD_LETTER', " +
+                "last_error = COALESCE(last_error, 'Publication attempts exhausted; the last lease expired'), " +
+                "lock_token = NULL, locked_at = NULL, updated_at = now() " +
+                "WHERE attempt_count >= ? AND (status = 'FAILED' " +
+                "OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))",
+            maxAttempts, staleLockMinutes
         );
     }
 

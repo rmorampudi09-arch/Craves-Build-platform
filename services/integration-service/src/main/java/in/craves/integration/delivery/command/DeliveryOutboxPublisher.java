@@ -29,8 +29,12 @@ public class DeliveryOutboxPublisher {
         this.properties = properties;
     }
 
-    @Scheduled(fixedDelayString = "${craves.delivery-command.outbox-publish-interval-ms:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.delivery-command.outbox-publish-interval-ms:5000}")
     public void publishPending() {
+        int deadLettered = outbox.deadLetterExpired();
+        if (deadLettered > 0) {
+            log.error("CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=delivery reason=attempts_exhausted count={}", deadLettered);
+        }
         List<OutboxRecord> records = outbox.claimBatch(properties.getOutboxBatchSize());
         for (OutboxRecord record : records) {
             try {

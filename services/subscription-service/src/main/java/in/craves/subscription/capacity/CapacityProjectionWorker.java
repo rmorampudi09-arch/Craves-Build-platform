@@ -22,7 +22,7 @@ public class CapacityProjectionWorker {
         this.service = service;
     }
 
-    @Scheduled(fixedDelayString = "${craves.subscription.capacity.projection-fixed-delay-ms:60000}")
+    @Scheduled(scheduler = in.craves.subscription.config.WorkerSchedulingConfiguration.CAPACITY_SCHEDULER, fixedDelayString = "${craves.subscription.capacity.projection-fixed-delay-ms:60000}")
     public void extendProjection() {
         ProjectionSummary summary = service.projectLaggingBatch();
         if (summary.claimedSubscriptions() > 0) {

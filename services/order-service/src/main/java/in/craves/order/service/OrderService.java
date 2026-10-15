@@ -14,8 +14,6 @@ import in.craves.order.web.ApiDtos.ChargePolicyResponse;
 import in.craves.order.web.ApiDtos.CheckoutRequest;
 import in.craves.order.web.ApiDtos.CheckoutResponse;
 import in.craves.order.web.ApiDtos.CheckoutStatus;
-import in.craves.order.web.ApiDtos.ChefAcceptRequest;
-import in.craves.order.web.ApiDtos.ChefRejectRequest;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.DeliveryPartnerResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
@@ -521,25 +519,6 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse acceptChefOrder(CravesPrincipal principal, UUID orderId, ChefAcceptRequest request) {
-        requireChef(principal);
-        OrderResponse order = getOrderForChef(principal, orderId);
-        if (order.status() != OrderStatus.PAYMENT_PENDING && order.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING && order.status() != OrderStatus.PAID) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is not waiting for chef acceptance");
-        }
-        updateOrderStatus(orderId, order.status(), OrderStatus.CHEF_ACCEPTED, principal.identityId(), safeReason(request.note()), request.prepTimeMinutes());
-        return getOrderForChef(principal, orderId);
-    }
-
-    @Transactional
-    public OrderResponse rejectChefOrder(CravesPrincipal principal, UUID orderId, ChefRejectRequest request) {
-        requireChef(principal);
-        OrderResponse order = getOrderForChef(principal, orderId);
-        updateOrderStatus(orderId, order.status(), OrderStatus.CHEF_REJECTED, principal.identityId(), safeReason(request.reason()), null);
-        return getOrderForChef(principal, orderId);
-    }
-
-    @Transactional
     public OrderResponse markReadyForPickup(CravesPrincipal principal, UUID orderId) {
         requireChef(principal);
         OrderResponse order = getOrderForChef(principal, orderId);
@@ -675,19 +654,24 @@ public class OrderService {
     }
 
     private void updateOrderStatus(UUID orderId, OrderStatus oldStatus, OrderStatus newStatus, UUID actor, String reason, Integer prepTimeMinutes) {
+        int updated;
         if (newStatus == OrderStatus.CHEF_ACCEPTED) {
             if (prepTimeMinutes == null || prepTimeMinutes <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Preparation time is required when accepting an order");
             }
-            jdbcTemplate.update(
-                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = ?, ready_at = now() + (? * INTERVAL '1 minute'), updated_at = now() WHERE id = ?",
-                newStatus.name(), reason, prepTimeMinutes, prepTimeMinutes, orderId
+            updated = jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = ?, ready_at = now() + (? * INTERVAL '1 minute'), updated_at = now() WHERE id = ? AND status = ?",
+                newStatus.name(), reason, prepTimeMinutes, prepTimeMinutes, orderId, oldStatus.name()
             );
         } else {
-            jdbcTemplate.update(
-                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = COALESCE(?, prep_time_minutes), updated_at = now() WHERE id = ?",
-                newStatus.name(), reason, prepTimeMinutes, orderId
+            updated = jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = COALESCE(?, prep_time_minutes), updated_at = now() WHERE id = ? AND status = ?",
+                newStatus.name(), reason, prepTimeMinutes, orderId, oldStatus.name()
             );
+        }
+        if (updated != 1) {
+            // CH-05 / F1-12: compare-and-set, so a status that moved meanwhile is never overwritten.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order status changed; reload the order");
         }
         addStatusHistory(orderId, oldStatus, newStatus, actor, reason);
     }

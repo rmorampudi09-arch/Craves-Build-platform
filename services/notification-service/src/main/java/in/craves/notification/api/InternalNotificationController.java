@@ -27,7 +27,10 @@ public class InternalNotificationController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     public NotificationRequestResponse create(@RequestHeader(value = "X-Craves-" + "Internal-Key", required = false) String providedKey,
                                               @RequestBody CreateNotificationRequest request) {
-        if (configuredKey == null || configuredKey.isBlank() || !configuredKey.equals(providedKey)) {
+        if (configuredKey == null || configuredKey.isBlank() || providedKey == null
+            || !java.security.MessageDigest.isEqual(
+                configuredKey.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                providedKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Internal key is invalid");
         }
         return notificationService.create(request);

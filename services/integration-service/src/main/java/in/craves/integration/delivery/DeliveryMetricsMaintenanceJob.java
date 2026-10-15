@@ -14,7 +14,7 @@ public class DeliveryMetricsMaintenanceJob {
         this.maintenanceService = maintenanceService;
     }
 
-    @Scheduled(
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_MAINTENANCE_SCHEDULER,
         cron = "${craves.delivery-intelligence.maintenance-cron:0 0 2 * * *}",
         zone = "${craves.delivery-intelligence.maintenance-zone:Asia/Kolkata}"
     )

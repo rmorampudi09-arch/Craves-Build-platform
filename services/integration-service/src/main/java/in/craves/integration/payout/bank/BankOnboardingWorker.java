@@ -14,7 +14,7 @@ public class BankOnboardingWorker {
     private static final Logger LOG=LoggerFactory.getLogger(BankOnboardingWorker.class);
     private final BankOnboardingService service;
     public BankOnboardingWorker(BankOnboardingService service) {this.service=service;}
-    @Scheduled(fixedDelayString="${CRAVES_BANK_WORKER_DELAY_MS:30000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.PAYOUT_SCHEDULER, fixedDelayString="${CRAVES_BANK_WORKER_DELAY_MS:30000}")
     public void tick() {
         for(int n=0;n<10;n++) {
             try {if(!service.processOne())break;}

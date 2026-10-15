@@ -14,6 +14,6 @@ public class OrderFinancialWorker {
     private static final Logger LOG=LoggerFactory.getLogger(OrderFinancialWorker.class);
     private final OrderFinancialFinalizationService service;
     public OrderFinancialWorker(OrderFinancialFinalizationService service){this.service=service;}
-    @Scheduled(fixedDelayString="${CRAVES_FINANCE_FINALIZATION_POLL_MS:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.FINANCE_SCHEDULER, fixedDelayString="${CRAVES_FINANCE_FINALIZATION_POLL_MS:5000}")
     public void tick(){for(var id:service.pending()){try{service.finish(id);}catch(RuntimeException failure){LOG.warn("Financial finalization deferred for order {}",id);}}}
 }

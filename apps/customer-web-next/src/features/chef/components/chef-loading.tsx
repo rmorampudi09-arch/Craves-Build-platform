@@ -38,7 +38,7 @@ const ROUTE_SHAPES: ReadonlyArray<readonly [RegExp, ChefLoadingShape]> = [
   [/^\/chef\/meal-plans\/?$/, "soon"],
   [/^\/chef\/notifications\/?$/, "notifications"],
   [/^\/chef\/profile\/?$/, "more"],
-  [/^\/chef\/support\/?$/, "chat"],
+  [/^\/chef\/support\/chat\/?$/, "chat"],
 ];
 
 export function chefLoadingShapeFor(pathname: string | null): ChefLoadingShape {

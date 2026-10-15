@@ -304,7 +304,7 @@ export function KitchensGrid({
             id="nearby-kitchens-heading"
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
-            Home chefs near you
+            {limit ? "Top kitchens near you" : "Home chefs near you"}
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
             Browse nearby home chefs through the dishes they are cooking today.

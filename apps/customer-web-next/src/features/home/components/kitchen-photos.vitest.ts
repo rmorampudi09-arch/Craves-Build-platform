@@ -59,3 +59,11 @@ it("a kitchen with no loaded dishes keeps its card, without a price", () => {
   expect(screen.getByText("Hyderabadi home food")).toBeTruthy();
   expect(screen.queryByText(/Starts from/)).toBeNull();
 });
+
+it("Home names the section like the app; the chefs page keeps its own title", () => {
+  grid({ limit: 6 });
+  expect(screen.getByRole("heading", { name: "Top kitchens near you" })).toBeTruthy();
+  cleanup();
+  grid();
+  expect(screen.getByRole("heading", { name: "Home chefs near you" })).toBeTruthy();
+});

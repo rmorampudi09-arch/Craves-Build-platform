@@ -33,7 +33,7 @@ import {
   WEEK_ORDER,
   type EditorSlot,
 } from "./chef-meal-plans.ts";
-import { planPhotoCrop } from "./chef-plan-photo.ts";
+import { photoCrop } from "./shrink-photo.ts";
 import type { ChefMealSchedule } from "./chef-subscription-plan-contract.ts";
 
 const DISH_A = "44444444-4444-4444-8444-444444444444";
@@ -381,7 +381,7 @@ test("plan list: filters, counts, meta line, price and the subscriber switch", (
 });
 
 test("plan photos keep the middle 4:3 and are at most 1600 px wide", () => {
-  assert.deepEqual(planPhotoCrop(4000, 3000), {
+  assert.deepEqual(photoCrop(4000, 3000, 4 / 3), {
     sx: 0,
     sy: 0,
     sw: 4000,
@@ -389,7 +389,7 @@ test("plan photos keep the middle 4:3 and are at most 1600 px wide", () => {
     width: 1600,
     height: 1200,
   });
-  assert.deepEqual(planPhotoCrop(3000, 3000), {
+  assert.deepEqual(photoCrop(3000, 3000, 4 / 3), {
     sx: 0,
     sy: 375,
     sw: 3000,
@@ -397,12 +397,21 @@ test("plan photos keep the middle 4:3 and are at most 1600 px wide", () => {
     width: 1600,
     height: 1200,
   });
-  assert.deepEqual(planPhotoCrop(1600, 600), {
+  assert.deepEqual(photoCrop(1600, 600, 4 / 3), {
     sx: 400,
     sy: 0,
     sw: 800,
     sh: 600,
     width: 800,
     height: 600,
+  });
+  // Dish photos keep their shape and only shrink.
+  assert.deepEqual(photoCrop(3000, 4000), {
+    sx: 0,
+    sy: 0,
+    sw: 3000,
+    sh: 4000,
+    width: 1200,
+    height: 1600,
   });
 });

@@ -19,7 +19,7 @@ import {
   Store,
 } from "lucide-react";
 import { ChefKitchenError, readChefKitchen, saveChefAvatar, uploadKitchenPhoto } from "@/features/chef/api/chef-kitchen";
-import { shrinkDishPhoto } from "@/features/chef/lib/shrink-photo";
+import { shrinkPhoto } from "@/features/chef/lib/shrink-photo";
 import { ChefAvatarGrid } from "@/features/chef/components/chef-avatar";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
@@ -590,7 +590,7 @@ export function ChefKitchenForm() {
     const file = event.target.files?.[0];
     event.target.value = "";
     // Photos lock once added, so the chef sees the 4:3 crop and confirms it first, as with the app's crop step.
-    if (file) void shrinkDishPhoto(file, 4 / 3).then((photo) => { setPhotoDraft(photo); setPhotoSheet(true); });
+    if (file) void shrinkPhoto(file, 4 / 3).then((photo) => { setPhotoDraft(photo); setPhotoSheet(true); });
   }
 
   function showPhotoSheet(open: boolean) {

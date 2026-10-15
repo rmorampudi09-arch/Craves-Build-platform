@@ -111,5 +111,7 @@ describe("CodeSlots", () => {
     await waitFor(() => expect(input.value).toBe(""));
     fireEvent.change(input, { target: { value: "Your OTP is 654321" } });
     expect(onComplete).toHaveBeenLastCalledWith("654321");
+    // The harness clears a wrong code 10 ms later; let that happen before teardown.
+    await waitFor(() => expect(input.value).toBe(""));
   });
 });

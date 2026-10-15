@@ -117,8 +117,9 @@ describe("one refresh at a time", () => {
       String(input) === "/api/auth/me" ? Response.json(identity) : Response.json({ identity }));
     vi.stubGlobal("fetch", fetcher);
     const request = vi.fn(async (_name: string, work: () => Promise<unknown>) => {
-      // Another tab finishes renewing the shared cookies while this one waits for the lock.
-      localStorage.setItem("craves.session.refreshed-at", String(Date.now()));
+      // Another tab finishes renewing the shared cookies while this one waits for the lock. A strictly later time:
+      // in the same millisecond as this tab's own last refresh (an earlier test's), it would read as this tab's own.
+      localStorage.setItem("craves.session.refreshed-at", String(Date.now() + 1));
       return work();
     });
     vi.stubGlobal("navigator", { ...navigator, locks: { request } });

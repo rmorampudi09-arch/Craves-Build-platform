@@ -9,7 +9,7 @@ import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
  * Customer sign-in. With confirm, a chef switching over from Chef Mode confirms with an OTP to
  * the number they are signed in with: Chef Mode and the customer app each ask for their own.
  */
-export function CustomerSignIn({ returnTo, centralOtp, confirm }: { returnTo: string; centralOtp: boolean; confirm: boolean }) {
+export function CustomerSignIn({ returnTo, centralOtp, confirm, email = false }: { returnTo: string; centralOtp: boolean; confirm: boolean; email?: boolean }) {
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   useEffect(() => {
     if (confirm) void loadSession({ hydrateCustomerProfile: "background" }).catch(() => null);
@@ -23,6 +23,7 @@ export function CustomerSignIn({ returnTo, centralOtp, confirm }: { returnTo: st
         returnTo={returnTo}
         centralOtp={centralOtp}
         initialPhone={phone}
+        email={email}
         heading={confirm ? { title: "Switch to the customer app", text: "Confirm it’s you with a code sent to this number." } : undefined}
       />
       {confirm ? (

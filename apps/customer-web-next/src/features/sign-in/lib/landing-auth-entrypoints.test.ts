@@ -24,6 +24,8 @@ test("standalone landing preserves the original ZIP popup styling and uses real 
   assert.match(zipAuthModal, /Choose your role/);
   assert.match(zipAuthModal, /Create your account/);
   assert.doesNotMatch(zipAuthModal, /not connected in this preview/);
+  // Email & password signs in on the role's own sign-in page; there is no email sign-up.
+  assert.match(zipAuthModal, /\{!isSignUp && <p>\s*<a className="auth-modal__switch" href=\{role === 'chef' \? '\/chef\/sign-in\?method=email' : '\/sign-in\?method=email&returnTo=%2Fhome'\}>/);
   const entry = source("../landing-modal/entry.tsx");
   assert.match(entry, /onRequestCode=\{requestCode\}/);
   assert.match(entry, /onVerifyCode=\{verifyCode\}/);

@@ -11,6 +11,7 @@ import {
   FaGift,
   FaHeadset,
   FaHeart,
+  FaKey,
   FaRightFromBracket,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
@@ -22,6 +23,7 @@ import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOu
 import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
 import { ProfileLinkCard } from "@/features/profile/components/ProfileLinkCard";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { ChangePasswordSheet, useHasPassword } from "@/shared/ui/forms/change-password-sheet";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
@@ -213,6 +215,8 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [application, setApplication] = useState<ChefApplication | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const hasPassword = useHasPassword(user?.phoneNumber);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -536,6 +540,23 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
               subtitle="Get quick answers about orders and payments"
             />
 
+            {/* Only accounts that sign in with email and password have one to change. */}
+            {hasPassword ? (
+              <button
+                type="button"
+                onClick={() => setPasswordOpen(true)}
+                className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl !border-[#E5E7EB] !bg-white p-3.5 text-left !shadow-none transition-[box-shadow] hover:!shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                  <FaKey className="text-[18px]" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="block text-sm font-black text-[#1A1A1A]">Change password</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[#6B6B6B]">Choose a new password</span>
+                </span>
+              </button>
+            ) : null}
+
             <ProfileSignOutAction onSignOut={onSignOut} />
           </div>
         </section>
@@ -552,6 +573,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
           setError("");
         }}
       />
+      <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} phoneNumber={user.phoneNumber} />
     </div>
   );
 }

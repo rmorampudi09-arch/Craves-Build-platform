@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
-import { ChevronRight, Mail, Phone, Trash2 } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { ChevronRight, KeyRound, Mail, Phone, Trash2 } from "lucide-react";
 import { ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import { maskEmail, maskPhone } from "@/features/chef/lib/chef-security";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { ChangePasswordSheet, useHasPassword } from "@/shared/ui/forms/change-password-sheet";
 
-/** Login & security: what the chef logs in with, and asking Craves to delete the account. */
+/** Login & security: what the chef logs in with, Change password for email accounts, and asking Craves to delete the account. */
 export function ChefSecurity() {
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   const email = user?.email?.trim();
   const verified = Boolean(email && user?.emailVerified);
+  const hasPassword = useHasPassword(user?.phoneNumber);
+  const [changingPassword, setChangingPassword] = useState(false);
   return (
     <div className="chef-stack">
       <ChefSection flush>
@@ -37,6 +40,16 @@ export function ChefSecurity() {
         </div>
       </ChefSection>
       <ChefSection flush>
+        {hasPassword ? (
+          <button type="button" className="chef-row w-full text-left" onClick={() => setChangingPassword(true)}>
+            <span className="chef-row-icon"><KeyRound className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="chef-row-main">
+              <span className="chef-row-title block">Change password</span>
+              <span className="chef-row-meta block">Choose a new password</span>
+            </span>
+            <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
+          </button>
+        ) : null}
         <Link href={`/chef/support/new?topic=${encodeURIComponent("Delete my account")}&from=/chef/security`} className="chef-row">
           <span className="chef-row-icon"><Trash2 className="h-5 w-5 text-[#C4200F]" aria-hidden="true" /></span>
           <span className="chef-row-main">
@@ -47,8 +60,15 @@ export function ChefSecurity() {
         </Link>
       </ChefSection>
       <p className="px-1 text-[0.875rem] leading-6 text-[#6B6B6B]">
-        To change your mobile number, contact support. You log in with a one-time code, so there&apos;s no password to manage.
+        To change your mobile number, contact support.
+        {hasPassword ? null : " You log in with a one-time code, so there's no password to manage."}
       </p>
+      <ChangePasswordSheet
+        open={changingPassword}
+        onClose={() => setChangingPassword(false)}
+        phoneNumber={user?.phoneNumber ?? ""}
+        bodyClassName="chef-panel-theme chef-sheet-theme"
+      />
     </div>
   );
 }

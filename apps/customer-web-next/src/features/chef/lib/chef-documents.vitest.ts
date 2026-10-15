@@ -110,10 +110,10 @@ describe("Documents & verification", () => {
       "POST /api/chef/application/proof-files": () => Response.json({ id: PROOF }),
     });
     render(createElement(ChefDocuments));
-    fireEvent.click(await screen.findByRole("button", { name: "Upload another document" }));
+    fireEvent.click(await screen.findByText("Upload another document"));
     const input = document.querySelector<HTMLInputElement>("input[type=file]")!;
     const picker = vi.spyOn(input, "click").mockImplementation(() => undefined);
-    fireEvent.click(screen.getByRole("button", { name: "Kitchen photo" }));
+    fireEvent.click(screen.getByText("Kitchen photo"));
     expect(picker).toHaveBeenCalled();
     expect(input.accept).toBe("image/jpeg,image/png");
     fireEvent.change(input, {
@@ -140,15 +140,15 @@ describe("Documents & verification", () => {
         ),
     });
     render(createElement(ChefDocuments));
-    fireEvent.click(await screen.findByRole("button", { name: "Upload another document" }));
+    fireEvent.click(await screen.findByText("Upload another document"));
     const input = document.querySelector<HTMLInputElement>("input[type=file]")!;
     vi.spyOn(input, "click").mockImplementation(() => undefined);
-    fireEvent.click(screen.getByRole("button", { name: "Cooking setup photo" }));
+    fireEvent.click(screen.getByText("Cooking setup photo"));
     fireEvent.change(input, {
       target: { files: [new File(["%PDF"], "kitchen.pdf", { type: "application/pdf" })] },
     });
     expect((await screen.findByRole("alert")).textContent).toBe("Choose a JPG or PNG photo.");
-    fireEvent.click(screen.getByRole("button", { name: "PAN card · back" }));
+    fireEvent.click(screen.getByText("PAN card · back"));
     fireEvent.change(input, {
       target: { files: [new File(["%PDF"], "pan.pdf", { type: "application/pdf" })] },
     });

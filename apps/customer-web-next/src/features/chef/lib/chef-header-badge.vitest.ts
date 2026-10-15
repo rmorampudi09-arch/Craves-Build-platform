@@ -11,7 +11,12 @@ import { NOTICES_READ_EVENT } from "@/shared/lib/notice-events";
 vi.mock("next/navigation", () => ({ usePathname: () => "/chef/orders", useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 const chef = { id: "61111111-1111-4111-8111-111111111111", phoneNumber: "+910000000002", displayName: "Asha Rao", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER", "CHEF"] };
 const count = vi.hoisted(() => ({ response: () => Response.json({ unreadCount: 3 }) }));
-const fetcher = vi.fn<typeof fetch>(async (input) => (String(input) === "/api/notifications/in-app/unread-count?role=CHEF" ? count.response() : Response.json({}, { status: 404 })));
+const fetcher = vi.fn<typeof fetch>(async (input) => {
+  const url = String(input);
+  if (url === "/api/auth/me") return Response.json(chef);
+  if (url === "/api/auth/refresh") return Response.json({ identity: chef });
+  return url === "/api/notifications/in-app/unread-count?role=CHEF" ? count.response() : Response.json({}, { status: 404 });
+});
 
 beforeEach(() => {
   fetcher.mockClear();

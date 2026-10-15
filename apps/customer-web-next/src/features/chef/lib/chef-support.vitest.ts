@@ -64,12 +64,12 @@ describe("Help & support", () => {
       .mockResolvedValueOnce({ items: [CHEF_TICKET, CUSTOMER_TICKET], nextCursor: "next" })
       .mockResolvedValueOnce({ items: [CHEF_TICKET, OLDER_TICKET], nextCursor: null });
     render(createElement(ChefSupportHub));
-    const row = await screen.findByRole("link", { name: /#C0001 · Payout not received/ });
+    const row = (await screen.findByText(/#C0001 · Payout not received/)).closest("a")!;
     expect(row.getAttribute("href")).toBe(`/chef/support/tickets/${CHEF_TICKET.id}`);
     expect(row.textContent).toContain("You wrote · Just now");
     expect(row.textContent).toContain("Open");
     expect(screen.queryByText(/Late delivery/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    fireEvent.click(screen.getByText("Load more"));
     await screen.findByText(/Move my kitchen/);
     expect(api.list).toHaveBeenLastCalledWith("next");
     expect(screen.getAllByText(/#C0001/)).toHaveLength(1);

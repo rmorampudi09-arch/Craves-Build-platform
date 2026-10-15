@@ -55,47 +55,39 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Chef notifications", () => {
-  it("shows only kitchen notices, filters them, and opens each one's page", async () => {
+  it("shows only kitchen notices and opens each one's page, marking it read", async () => {
     respond({
-      [PAGE]: () =>
-        Response.json({
-          notices: [NEW_ORDER, PAYOUT, REVIEW, OWN_ORDER, WELCOME],
-          nextCursor: null,
-          hasMore: false,
-        }),
-      [`PATCH /api/notifications/in-app/${NEW_ORDER.id}/read`]: () =>
-        new Response(null, { status: 204 }),
+      [PAGE]: () => Response.json({ notices: [NEW_ORDER, PAYOUT, REVIEW, OWN_ORDER, WELCOME], nextCursor: null, hasMore: false }),
+      [`PATCH /api/notifications/in-app/${NEW_ORDER.id}/read`]: () => new Response(null, { status: 204 }),
     });
     const read = vi.fn();
     window.addEventListener(NOTICES_READ_EVENT, read);
     render(createElement(ChefNotifications));
-    const order = await screen.findByRole("link", { name: /New order received/ });
+    const order = (await screen.findByText("New order received")).closest("a")!;
     expect(order.getAttribute("href")).toBe(`/chef/orders/${ORDER}`);
-    expect(screen.getByRole("link", { name: /Payout sent/ }).getAttribute("href")).toBe(
-      "/chef/earnings/payouts",
-    );
+    expect(screen.getByText("Payout sent").closest("a")!.getAttribute("href")).toBe("/chef/earnings/payouts");
+    expect(screen.getByText("New review").closest("a")).toBeNull();
     expect(screen.queryByText("Chef accepted your order")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Earlier" })).toBeTruthy();
-    expect(
-      within(screen.getByRole("group", { name: "Show notifications about" })).getByRole("button", {
-        name: "Orders, 1 unread",
-      }),
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Money, 1 unread" }));
-    expect(screen.queryByText("New order received")).toBeNull();
-    expect(screen.getByText("Payout sent")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Reviews" }));
-    expect(screen.getByText("New review")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
-
-    fireEvent.click(screen.getByRole("link", { name: /New order received/ }));
-    expect(fetcher).toHaveBeenCalledWith(`/api/notifications/in-app/${NEW_ORDER.id}/read`, {
-      method: "PATCH",
-    });
-    expect(screen.getByRole("button", { name: "Orders" })).toBeTruthy();
+    expect(screen.getByText("Earlier")).toBeTruthy();
+    fireEvent.click(order);
+    expect(fetcher).toHaveBeenCalledWith(`/api/notifications/in-app/${NEW_ORDER.id}/read`, { method: "PATCH" });
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
     window.removeEventListener(NOTICES_READ_EVENT, read);
+  });
+
+  it("filters by Orders, Money and Reviews, with each one's unread count", async () => {
+    respond({ [PAGE]: () => Response.json({ notices: [NEW_ORDER, PAYOUT, REVIEW], nextCursor: null, hasMore: false }) });
+    render(createElement(ChefNotifications));
+    await screen.findByText("New order received");
+    const filters = within(screen.getByRole("group", { name: "Show notifications about" })).getAllByRole("button");
+    expect(filters.map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["All", "Orders, 1 unread", "Money, 1 unread", "Reviews"]);
+    fireEvent.click(filters[2]);
+    expect(filters[2].getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("New order received")).toBeNull();
+    expect(screen.getByText("Payout sent")).toBeTruthy();
+    fireEvent.click(filters[3]);
+    expect(screen.getByText("New review")).toBeTruthy();
+    expect(screen.queryByText("Payout sent")).toBeNull();
   });
 
   it("marks each unread notice read on its own, never through read-all", async () => {

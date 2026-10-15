@@ -40,28 +40,30 @@ export function ChefSecurity() {
         </div>
       </ChefSection>
       <ChefSection flush>
-        {hasPassword ? (
-          <button type="button" className="chef-row w-full text-left" onClick={() => setChangingPassword(true)}>
-            <span className="chef-row-icon"><KeyRound className="h-5 w-5" aria-hidden="true" /></span>
+        <div className="chef-list">
+          {hasPassword ? (
+            <button type="button" className="chef-row w-full !rounded-none !border-0 !bg-transparent !shadow-none text-left" onClick={() => setChangingPassword(true)}>
+              <span className="chef-row-icon"><KeyRound className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="chef-row-main">
+                <span className="chef-row-title block">Change password</span>
+                <span className="chef-row-meta block">Choose a new password</span>
+              </span>
+              <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
+            </button>
+          ) : null}
+          <Link href={`/chef/support/new?topic=${encodeURIComponent("Delete my account")}&from=/chef/security`} className="chef-row">
+            <span className="chef-row-icon"><Trash2 className="h-5 w-5 text-[#C4200F]" aria-hidden="true" /></span>
             <span className="chef-row-main">
-              <span className="chef-row-title block">Change password</span>
-              <span className="chef-row-meta block">Choose a new password</span>
+              <span className="chef-row-title block !text-[#C4200F]">Delete my account</span>
+              <span className="chef-row-meta block">Asks Craves support to close your account</span>
             </span>
             <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
-          </button>
-        ) : null}
-        <Link href={`/chef/support/new?topic=${encodeURIComponent("Delete my account")}&from=/chef/security`} className="chef-row">
-          <span className="chef-row-icon"><Trash2 className="h-5 w-5 text-[#C4200F]" aria-hidden="true" /></span>
-          <span className="chef-row-main">
-            <span className="chef-row-title block !text-[#C4200F]">Delete my account</span>
-            <span className="chef-row-meta block">Asks Craves support to close your account</span>
-          </span>
-          <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
-        </Link>
+          </Link>
+        </div>
       </ChefSection>
       <p className="px-1 text-[0.875rem] leading-6 text-[#6B6B6B]">
         To change your mobile number, contact support.
-        {hasPassword ? null : " You log in with a one-time code, so there's no password to manage."}
+        {hasPassword === false ? " You log in with a one-time code, so there's no password to manage." : null}
       </p>
       <ChangePasswordSheet
         open={changingPassword}

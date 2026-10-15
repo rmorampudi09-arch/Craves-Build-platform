@@ -18,15 +18,15 @@ const FIELDS = [
 ] as const;
 const ALL_TOUCHED = { currentPassword: true, newPassword: true, confirmPassword: true };
 
-/** True when this account signs in with email and password on this browser; phone-only accounts never see Change password. */
-export function useHasPassword(phoneNumber: string | undefined): boolean {
-  const [owner, setOwner] = useState<string | null>(null);
+/** Whether this account signs in with email and password on this browser (undefined until checked); phone-only accounts never see Change password. */
+export function useHasPassword(phoneNumber: string | undefined): boolean | undefined {
+  const [checked, setChecked] = useState<{ phone: string; has: boolean } | null>(null);
   useEffect(() => {
     let active = true;
-    if (phoneNumber) void passwordUser(phoneNumber).then((user) => { if (active) setOwner(user ? phoneNumber : null); });
+    if (phoneNumber) void passwordUser(phoneNumber).then((user) => { if (active) setChecked({ phone: phoneNumber, has: Boolean(user) }); });
     return () => { active = false; };
   }, [phoneNumber]);
-  return Boolean(phoneNumber) && owner === phoneNumber;
+  return checked && checked.phone === phoneNumber ? checked.has : undefined;
 }
 
 /** Change password: current password (re-authentication), new password and confirmation. bodyClassName carries Chef Mode's theme into the portal. */

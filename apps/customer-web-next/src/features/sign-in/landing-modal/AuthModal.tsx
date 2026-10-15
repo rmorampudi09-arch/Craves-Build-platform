@@ -570,7 +570,15 @@ const AuthModal = ({ onClose, onRequestCode, onVerifyCode, customersLaunchingSoo
               {!launchingSoon && <div className="auth-modal__footer">
                 {/* Email & password signs in only (the app has no email sign-up), on the role's sign-in page. */}
                 {!isSignUp && <p>
-                  <a className="auth-modal__switch" href={role === 'chef' ? '/chef/sign-in?method=email' : '/sign-in?method=email&returnTo=%2Fhome'}>
+                  <a
+                    className="auth-modal__switch"
+                    href={role === 'chef' ? '/chef/sign-in?method=email' : '/sign-in?method=email&returnTo=%2Fhome'}
+                    // Not while a code is sent or checked: leaving mid-verification would skip marking the mode verified.
+                    // Looks like the disabled switch inline, since AuthModal.css stays the original popup's.
+                    aria-disabled={submitting || closing || undefined}
+                    style={submitting || closing ? { opacity: 0.6, cursor: 'wait' } : undefined}
+                    onClick={(event) => { if (submitting || closing) event.preventDefault(); }}
+                  >
                     Use email &amp; password
                   </a>
                 </p>}

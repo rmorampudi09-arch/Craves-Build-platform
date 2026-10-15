@@ -190,6 +190,21 @@ describe("Dish options", { timeout: 20_000 }, () => {
     });
   });
 
+  it("asks before a duplicate replaces unsaved changes", async () => {
+    render(createElement(ChefMenuManager));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Fixture dish" }));
+    fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Edited dish" } });
+    fireEvent.click(screen.getByRole("button", { name: "Dish options" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Duplicate dish/ }));
+    await screen.findByRole("dialog", { name: "Discard your changes?" });
+    expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe("Edited dish");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    await screen.findByRole("heading", { name: "Add a dish" });
+    expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe(
+      "Copy of Fixture dish",
+    );
+  });
+
   it("deletes only after the chef confirms", async () => {
     await openOptions();
     fireEvent.click(screen.getByRole("button", { name: "Delete dish" }));

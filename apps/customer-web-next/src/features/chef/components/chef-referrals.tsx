@@ -191,7 +191,7 @@ function ChefReferralJoin({
               ? "Setting up your invite link…"
               : step === "slow"
                 ? "Your invite link is still being set up. Check again in a few minutes."
-                : "The referral terms have changed. Reload this page to read the new terms and join."}
+                : "The referral terms have changed. Joining will be back here soon."}
           </p>
           {checkFailed ? (
             <p role="alert" className="text-[0.875rem] text-[#6B6B6B]">
@@ -396,7 +396,11 @@ export function ChefReferrals() {
   const [notice, setNotice] = useState("");
   const [problem, setProblem] = useState("");
 
+  const reading = useRef(false);
   const readCode = useCallback(async (): Promise<ReferralError | null> => {
+    // One read at a time, so a slow reply can never land after (and undo) a newer one.
+    if (reading.current) return null;
+    reading.current = true;
     setChecking(true);
     try {
       setCode({ kind: "ready", data: await fetchReferralCode() });
@@ -406,6 +410,7 @@ export function ChefReferrals() {
       setCode(readFailure(failure));
       return failure;
     } finally {
+      reading.current = false;
       setChecking(false);
     }
   }, []);

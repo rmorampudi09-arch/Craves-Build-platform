@@ -57,6 +57,8 @@ test("referral code: only the service's code alphabet and an https link", () => 
 test("chef referral earnings: amounts as paise strings whose sums agree", () => {
   const parsed = parseChefReferralEarnings(earnings);
   assert.equal(parsed?.netRecordedPaise, "40000");
+  // The BFF sends the parsed reply on and the browser parses it again.
+  assert.deepEqual(parseChefReferralEarnings(parsed), parsed);
   assert.equal(parsed?.recentPostings[0].amountPaise, "-5000");
   for (const change of [
     { netRecordedPaise: "45000" },

@@ -12,6 +12,7 @@ import { GET as readEarnings } from "@/app/api/referrals/me/chef-earnings/route"
 import { POST as enroll } from "@/app/api/referrals/enroll/route";
 import {
   enrollInChefReferrals,
+  fetchChefReferralEarnings,
   fetchReferralCode,
   ReferralError,
 } from "@/features/chef/api/chef-referrals";
@@ -189,6 +190,20 @@ describe("referral enrol BFF", () => {
 });
 
 describe("referral browser helpers", () => {
+  it("read what the BFF routes actually send", async () => {
+    upstream.mockResolvedValue(Response.json(earnings));
+    const bffEarnings = await readEarnings(request("/api/referrals/me/chef-earnings"));
+    upstream.mockResolvedValue(Response.json(code));
+    const bffCode = await readCode(request("/api/referrals/me/code"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string) => (path.endsWith("/code") ? bffCode : bffEarnings)),
+    );
+    expect((await fetchChefReferralEarnings()).monthRemainingPaise).toBe("150000");
+    expect(await fetchReferralCode()).toEqual({ code: code.code, link: code.link });
+  });
+
+
   it("send the terms version and throw coded errors", async () => {
     const fetch = vi.fn(async () => Response.json({ accepted: true, status: "ALREADY_ENROLLED" }));
     vi.stubGlobal("fetch", fetch);

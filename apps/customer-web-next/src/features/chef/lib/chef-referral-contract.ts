@@ -8,7 +8,9 @@ export type ChefReferralPosting = {
   postingMonth: string;
   postedAt: string;
 };
+// Keeps the reply's own shape so the browser can run the same parser on what the BFF passes on.
 export type ChefReferralEarnings = {
+  currency: "INR";
   creditedPaise: string;
   reversedPaise: string;
   netRecordedPaise: string;
@@ -16,6 +18,7 @@ export type ChefReferralEarnings = {
   monthlyCapPaise: string;
   monthUsedPaise: string;
   monthRemainingPaise: string;
+  monthlyCapReached: boolean;
   recentPostings: ChefReferralPosting[];
 };
 export type ReferralEnrollStatus = "QUEUED" | "ALREADY_ENROLLED";
@@ -120,6 +123,7 @@ export function parseChefReferralEarnings(value: unknown): ChefReferralEarnings 
   )
     return null;
   return {
+    currency: "INR",
     creditedPaise,
     reversedPaise,
     netRecordedPaise,
@@ -127,6 +131,7 @@ export function parseChefReferralEarnings(value: unknown): ChefReferralEarnings 
     monthlyCapPaise,
     monthUsedPaise,
     monthRemainingPaise,
+    monthlyCapReached: raw.monthlyCapReached,
     recentPostings: recentPostings as ChefReferralPosting[],
   };
 }

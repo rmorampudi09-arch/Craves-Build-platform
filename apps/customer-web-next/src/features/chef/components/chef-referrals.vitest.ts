@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefReferrals } from "./chef-referrals";
 
 const invite = { code: "ABCDEFGH23456789", link: "https://craves.in/r/ABCDEFGH23456789" };
+// What /api/referrals/me/chef-earnings sends (the parsed reply).
 const earnings = {
   currency: "INR",
   creditedPaise: "45000",
@@ -104,6 +105,32 @@ describe("Refer a chef", () => {
     expect(
       screen.getByText("Your invite link is still being set up. Check again in a few minutes."),
     ).toBeTruthy();
+  });
+
+  it("waits for a slow check instead of starting another", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    routes.mockImplementation((path) =>
+      path.endsWith("/enroll") ? Response.json({ accepted: true, status: "QUEUED" }) : notJoined(),
+    );
+    render(createElement(ChefReferrals));
+    fireEvent.click(await screen.findByLabelText("I accept the referral terms"));
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+    await screen.findByText("Setting up your invite link…");
+    let answer: (reply: Response) => void = () => {};
+    const slow = vi.fn(
+      (path: string) =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+          if (!path.endsWith("/code")) resolve(Response.json(earnings));
+        }),
+    );
+    vi.stubGlobal("fetch", slow);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_000);
+    });
+    expect(slow).toHaveBeenCalledTimes(1);
+    answer(Response.json(invite));
+    expect(await screen.findByText(invite.code)).toBeTruthy();
   });
 
   it("shows Coming soon when the routes are not published", async () => {

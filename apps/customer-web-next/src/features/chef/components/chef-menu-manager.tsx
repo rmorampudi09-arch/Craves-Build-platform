@@ -233,6 +233,8 @@ export function ChefMenuManager() {
   const [baseline, setBaseline] = useState(JSON.stringify(EMPTY));
   const [editing, setEditing] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  /** The dish Discard copies next, when Duplicate asked first; otherwise Discard closes the form. */
+  const copyAfterDiscard = useRef<ChefMenuItem | null>(null);
   /** Dish options: the menu, or the delete question in its place. */
   const [options, setOptions] = useState<"menu" | "delete" | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -316,6 +318,7 @@ export function ChefMenuManager() {
   function requestLeave(): boolean {
     if (busyRef.current) return false;
     if (dirty) {
+      copyAfterDiscard.current = null;
       setConfirmLeave(true);
       return false;
     }
@@ -1364,13 +1367,16 @@ export function ChefMenuManager() {
               onClick={() => {
                 const dish = items.find((item) => item.id === form.id);
                 setOptions(null);
-                if (dish) start(dish, true);
+                if (!dish) return;
+                if (!dirty) return start(dish, true);
+                copyAfterDiscard.current = dish;
+                setConfirmLeave(true);
               }}
             >
               <span className="chef-row-icon"><CopyPlus className="h-5 w-5" aria-hidden="true" /></span>
               <span className="chef-row-main">
                 <span className="chef-row-title block">Duplicate dish</span>
-                <span className="chef-row-meta block">{dirty ? "Changes you haven’t saved here will be lost." : "A new draft with the same details"}</span>
+                <span className="chef-row-meta block">A new draft with the same details</span>
               </span>
             </button>
             <button type="button" className="chef-row w-full !rounded-none !border-0 !bg-transparent text-left" onClick={() => setOptions("delete")}>
@@ -1387,7 +1393,17 @@ export function ChefMenuManager() {
         description="What you added here will be lost."
         footer={
           <>
-            <button type="button" className={secondaryActionClass} onClick={closeEditor}>
+            <button
+              type="button"
+              className={secondaryActionClass}
+              onClick={() => {
+                const dish = copyAfterDiscard.current;
+                if (dish) {
+                  setConfirmLeave(false);
+                  start(dish, true);
+                } else closeEditor();
+              }}
+            >
               Discard
             </button>
             <button

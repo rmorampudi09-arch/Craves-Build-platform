@@ -15,7 +15,7 @@ afterEach(cleanup);
 it("drops a kitchen photo that fails to load instead of showing a broken image", () => {
   const kitchen = {
     id: "4b1c0000-0000-4000-8000-000000000001", kitchenName: "Ammi's Dastarkhwan", displayName: null, description: null,
-    areaName: "Tolichowki", city: "Hyderabad", state: "Telangana", distanceMeters: 3400, activeMenuItemCount: 4,
+    areaName: "Tolichowki", city: "Hyderabad", state: "Telangana", distanceMeters: 3400, activeMenuItemCount: 4, chefPhotoUrl: null, kitchenPhotoUrls: [],
   };
   const [a, b] = ["https://img.craves.test/a.webp", "https://img.craves.test/b.webp"];
   const { container } = render(createElement(KitchensGrid, {

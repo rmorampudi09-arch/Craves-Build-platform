@@ -4,6 +4,7 @@ import { publicApiFetch } from "@/shared/lib/public-api";
 import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 
 const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size"]);
+const NO_STORE = { "Cache-Control": "no-store" };
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 function coordinate(value: string | null): number {
@@ -39,16 +40,16 @@ export async function GET(request: NextRequest) {
   ) {
     return NextResponse.json(
       { error: "INVALID_LOCATION", message: "Valid latitude, longitude and discovery bounds are required." },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status: 400, headers: NO_STORE },
     );
   }
   const query = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: String(page), size: String(size) });
   try {
     const upstream = await publicApiFetch(`/discovery/kitchens?${query}`); const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: upstream.status });
-    const parsed = parseKitchenDiscovery(body); return parsed ? NextResponse.json(parsed, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Catalog response validation failed." }, { status: 502 });
+    if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: upstream.status, headers: NO_STORE });
+    const parsed = parseKitchenDiscovery(body); return parsed ? NextResponse.json(parsed, { headers: NO_STORE }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Catalog response validation failed." }, { status: 502, headers: NO_STORE });
   } catch (error) {
     const timeout = error instanceof Error && error.name === "AbortError";
-    return NextResponse.json({ error: timeout ? "DISCOVERY_TIMEOUT" : "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: timeout ? 504 : 502 });
+    return NextResponse.json({ error: timeout ? "DISCOVERY_TIMEOUT" : "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: timeout ? 504 : 502, headers: NO_STORE });
   }
 }

@@ -250,7 +250,8 @@ export function AllChefsPage() {
       />
 
       <main>
-        {state === "address-required" ? null : (
+        {/* Spice reloads from the address, so the filters wait for it. */}
+        {!address || state === "address-required" ? null : (
           <div className="mx-auto max-w-[88rem] px-4 pt-3 md:px-7 md:pt-4 lg:px-10">
             <KitchenFilterBar view={view} onViewChange={changeView} />
           </div>

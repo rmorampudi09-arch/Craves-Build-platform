@@ -44,10 +44,10 @@ afterEach(() => {
 });
 
 describe("Home promo banners", () => {
-  it("holds a placeholder while loading and shows nothing when there are no banners", async () => {
+  it("shows nothing while loading or when there are no banners", async () => {
     mocks.banners.mockReturnValue(new Promise(() => undefined));
     const loading = render(createElement(WelcomeBanner, { onOpenSearch: vi.fn() }));
-    expect(loading.container.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+    expect(loading.container.innerHTML).toBe("");
     cleanup();
     const { container } = await show([]);
     expect(container.innerHTML).toBe("");
@@ -69,8 +69,12 @@ describe("Home promo banners", () => {
 
   it("slides every 4 s, and a swipe holds its banner for one full interval", async () => {
     const { strip, scrollTo } = await show([banner(1), banner(2), banner(3)]);
+    expect(screen.getByText("Banner 1 of 3")).toBeTruthy();
     tick();
     expect(scrollTo).toHaveBeenLastCalledWith({ left: 300, behavior: "smooth" });
+    strip!.scrollLeft = 300;
+    fireEvent.scroll(strip!);
+    expect(screen.getByText("Banner 2 of 3")).toBeTruthy();
     tick(BANNER_ADVANCE_MS / 2);
     fireEvent.touchEnd(strip!);
     tick(BANNER_ADVANCE_MS / 2);
@@ -103,6 +107,16 @@ describe("Home promo banners", () => {
     tick(3 * BANNER_ADVANCE_MS);
     expect(scrollTo).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Play banners" })).toBeTruthy();
+  });
+
+  it("starts again when Play is pressed, though focus stays on the button", async () => {
+    const { scrollTo } = await show([banner(1), banner(2)]);
+    fireEvent.click(screen.getByRole("button", { name: "Pause banners" }));
+    const play = screen.getByRole("button", { name: "Play banners" });
+    play.focus();
+    fireEvent.click(play);
+    tick();
+    expect(scrollTo).toHaveBeenCalledOnce();
   });
 
   it("never moves for reduced motion", async () => {

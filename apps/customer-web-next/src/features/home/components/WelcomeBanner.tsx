@@ -5,7 +5,6 @@ import { Pause, Play } from "lucide-react";
 import { fetchHomeBanners } from "@/features/home/api/home-banners";
 import type { HomeBanner } from "@/features/home/lib/home-banner-contract";
 import styles from "@/features/home/screens/HomeReference.module.css";
-import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
 
 /** How long each banner stays before the next one slides in (as in the app). */
 export const BANNER_ADVANCE_MS = 4_000;
@@ -17,7 +16,7 @@ const frame =
 
 /**
  * The promo banners admins publish: they slide on every 4 s and loop round, a tap opens search.
- * Nothing shows when there are none or they can't be loaded.
+ * Nothing shows while they load (as in the app), when there are none or when they can't be loaded.
  */
 export function WelcomeBanner({ onOpenSearch }: { onOpenSearch: () => void }) {
   const [banners, setBanners] = useState<HomeBanner[] | null>(null);
@@ -52,12 +51,8 @@ export function WelcomeBanner({ onOpenSearch }: { onOpenSearch: () => void }) {
     const strip = stripRef.current;
     if (!strip || !autoplay) return;
     const advance = () => {
-      // Hovering or keyboard focus holds the current banner too.
-      if (
-        Date.now() - heldAt.current < BANNER_ADVANCE_MS ||
-        strip.closest("section")?.matches(":hover, :focus-within")
-      )
-        return;
+      // Hovering or focusing a banner holds it too; Play/Pause sits outside the strip, so pressing Play restarts.
+      if (Date.now() - heldAt.current < BANNER_ADVANCE_MS || strip.matches(":hover, :focus-within")) return;
       const width = strip.clientWidth;
       if (width)
         strip.scrollTo({
@@ -97,13 +92,6 @@ export function WelcomeBanner({ onOpenSearch }: { onOpenSearch: () => void }) {
     }, 140);
   };
 
-  if (banners === null) {
-    return (
-      <div className={section} aria-hidden="true">
-        <div className={`${skeletonStyles.block} ${frame}`} />
-      </div>
-    );
-  }
   if (!count) return null;
 
   // After the last banner the first one comes round again from the right.
@@ -148,6 +136,9 @@ export function WelcomeBanner({ onOpenSearch }: { onOpenSearch: () => void }) {
 
       {count > 1 ? (
         <div className="relative mx-auto flex min-h-8 max-w-[64rem] items-center justify-center pt-1">
+          <span className="sr-only">
+            Banner {current + 1} of {count}
+          </span>
           <div className="flex items-center gap-1.5" aria-hidden="true">
             {shown.map((banner, index) => (
               <span

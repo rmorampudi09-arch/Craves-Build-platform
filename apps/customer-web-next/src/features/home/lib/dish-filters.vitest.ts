@@ -42,7 +42,7 @@ describe("dish filters", () => {
   });
 
   it("matches the catalog spice level, leaving out dishes without one", () => {
-    expect(matchesDishFilters(dish({ spiceLevel: "Hot" }), { ...DEFAULT_DISH_FILTERS, spice: "SPICY" })).toBe(true);
+    expect(matchesDishFilters(dish({ spiceLevel: "Spicy" }), { ...DEFAULT_DISH_FILTERS, spice: "SPICY" })).toBe(true);
     expect(matchesDishFilters(dish({ spiceLevel: "Mild" }), { ...DEFAULT_DISH_FILTERS, spice: "MILD" })).toBe(true);
     expect(matchesDishFilters(dish({ spiceLevel: "Mild" }), { ...DEFAULT_DISH_FILTERS, spice: "MEDIUM" })).toBe(false);
     expect(matchesDishFilters(dish({}), { ...DEFAULT_DISH_FILTERS, spice: "MILD" })).toBe(false);

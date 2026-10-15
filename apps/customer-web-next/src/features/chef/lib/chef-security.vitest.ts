@@ -19,10 +19,12 @@ afterEach(() => {
 });
 
 describe("Login & security", () => {
-  it("shows the masked mobile number, the email's state, and Delete my account as a ticket", () => {
+  it("shows the masked mobile number, the email's state, and Delete my account as a ticket", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(chef)));
     setSessionIdentity(chef);
     render(createElement(ChefSecurity));
+    // Says there is no password only once the sign-in method is known.
+    expect(screen.queryByText(/no password to manage/)).toBeNull();
     expect(screen.getByText("+91 ••••• 43210 · used to log in")).toBeTruthy();
     expect(screen.getByText("Not added")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Add your email" }).getAttribute("href")).toBe("/chef/finance");
@@ -36,7 +38,7 @@ describe("Login & security", () => {
     act(() => setSessionIdentity({ ...chef, email: "asha@gmail.com", emailVerified: true }));
     expect(screen.getAllByText("Verified")).toHaveLength(2);
     expect(screen.queryByRole("link", { name: /your email/ })).toBeNull();
-    expect(screen.getByText(/no password to manage/)).toBeTruthy();
+    expect(await screen.findByText(/no password to manage/)).toBeTruthy();
   });
 
   it("offers Change password, in the chef theme, only to a chef who signs in with email and password", async () => {

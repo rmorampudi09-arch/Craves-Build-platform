@@ -91,7 +91,7 @@ export function EmailSignInForm({
   }
 
   function show(next: View) {
-    if (busy) return;
+    if (busy || opening) return;
     setError("");
     setView(next);
   }
@@ -143,7 +143,8 @@ export function EmailSignInForm({
             onBlur={() => setTouched((current) => ({ ...current, email: true }))}
             aria-invalid={shownEmailError ? true : undefined}
             aria-describedby={shownEmailError ? "sign-in-email-error" : undefined}
-            disabled={busy}
+            // Read-only while checking, never disabled: the focused field keeps focus and the keypad stays up.
+            readOnly={busy}
           />
           {shownEmailError ? <p id="sign-in-email-error" className={FIELD_ERROR}>{shownEmailError}</p> : null}
         </div>
@@ -168,14 +169,14 @@ export function EmailSignInForm({
                 onBlur={() => setTouched((current) => ({ ...current, password: true }))}
                 aria-invalid={shownPasswordError ? true : undefined}
                 aria-describedby={shownPasswordError ? "sign-in-password-error" : undefined}
-                disabled={busy}
+                readOnly={busy}
               />
               <button
                 type="button"
                 className="absolute bottom-0.5 right-1 flex h-11 w-11 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none"
                 aria-label={passwordVisible ? "Hide password" : "Show password"}
                 onClick={() => setPasswordVisible((visible) => !visible)}
-                disabled={busy}
+                disabled={busy || opening}
               >
                 {passwordVisible ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
               </button>
@@ -186,7 +187,7 @@ export function EmailSignInForm({
         {error ? <p role="alert" className="text-left text-sm font-medium text-[#C4200F]">{error}</p> : null}
         {signingIn ? (
           <div className="-my-1 flex justify-end">
-            <button type="button" className={`${TEXT_BUTTON} -mr-3`} disabled={busy} onClick={() => show("forgot")}>
+            <button type="button" className={`${TEXT_BUTTON} -mr-3`} disabled={busy || opening} onClick={() => show("forgot")}>
               Forgot password?
             </button>
           </div>

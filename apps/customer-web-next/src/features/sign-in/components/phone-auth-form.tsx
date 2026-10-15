@@ -82,10 +82,13 @@ export function PhoneAuthForm({
     "Use your mobile number to receive a one-time password.",
   );
   const [busy, setBusy] = useState(false);
+  // Why email sign-in sent the person back here; an alert, so it is read out as the phone view appears.
+  const [notice, setNotice] = useState("");
   const [resendIn, setResendIn] = useState(0);
   const confirmation = useRef<PhoneConfirmation | null>(null);
   const verifier = useRef<RecaptchaVerifier | null>(null);
   const phoneInput = useRef<HTMLInputElement>(null);
+  const sendButton = useRef<HTMLButtonElement>(null);
 
   const clearVerifier = useCallback(() => {
     verifier.current?.clear();
@@ -162,6 +165,7 @@ export function PhoneAuthForm({
       clearVerifier();
       setOtp("");
       setStage("otp");
+      setNotice("");
       setOtpStatus("idle");
       setResendIn(RESEND_DELAY_SECONDS);
       setMessage(
@@ -249,10 +253,11 @@ export function PhoneAuthForm({
     }
   }
 
-  function backToPhone(notice?: string) {
+  function backToPhone(reason?: string) {
     setMethod("phone");
-    if (notice) setMessage(notice);
-    requestAnimationFrame(() => phoneInput.current?.focus());
+    setNotice(reason ?? "");
+    // A prefilled number has no field, so Send OTP takes focus instead.
+    requestAnimationFrame(() => (phoneInput.current ?? sendButton.current)?.focus());
   }
 
   function useAnotherNumber() {
@@ -293,6 +298,7 @@ export function PhoneAuthForm({
   }
 
   const otpStage = stage !== "phone";
+  const phoneHelp = [phoneError && "phone-error", notice && "phone-notice"].filter(Boolean).join(" ") || undefined;
 
   if (method === "email") return <EmailSignInForm chef={chefJourney} onSignedIn={openSignedIn} onUsePhone={backToPhone} />;
 
@@ -414,7 +420,7 @@ export function PhoneAuthForm({
                   value={groupDigits(phone.slice(3))}
                   onChange={changeNationalNumber}
                   aria-invalid={phoneError ? true : undefined}
-                  aria-describedby={phoneError ? "phone-error" : undefined}
+                  aria-describedby={phoneHelp}
                   required
                 />
               </div>
@@ -431,7 +437,7 @@ export function PhoneAuthForm({
                 autoComplete="tel"
                 inputMode="tel"
                 aria-invalid={phoneError ? true : undefined}
-                aria-describedby={phoneError ? "phone-error" : undefined}
+                aria-describedby={phoneHelp}
                 required
               />
             )}
@@ -440,6 +446,11 @@ export function PhoneAuthForm({
         {!otpStage && phoneError ? (
           <p id="phone-error" role="alert" className="text-left text-sm font-medium text-[#C4200F]">
             {phoneError}
+          </p>
+        ) : null}
+        {!otpStage && notice ? (
+          <p id="phone-notice" role="alert" className="text-left text-sm font-medium text-[#1A1A1A]">
+            {notice}
           </p>
         ) : null}
 
@@ -476,7 +487,7 @@ export function PhoneAuthForm({
           </>
         ) : (
           <>
-            <button className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
+            <button ref={sendButton} className="craves-primary-action w-full" aria-busy={busy} disabled={busy}>
               {busy ? "Requesting OTP…" : "Send OTP"}
             </button>
             {anyCountry ? null : (

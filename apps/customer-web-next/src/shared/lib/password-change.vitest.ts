@@ -112,6 +112,21 @@ describe("Change password sheet", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
   });
 
+  it("opens again on a clean form after a change", async () => {
+    mocks.auth.currentUser = emailUser();
+    const sheet = (open: boolean) => createElement(ChangePasswordSheet, { open, onClose: vi.fn(), phoneNumber: "+919876543210" });
+    const view = render(sheet(true));
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "old-password" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-password" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "new-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+    await screen.findByRole("button", { name: "Done" });
+    view.rerender(sheet(false));
+    view.rerender(sheet(true));
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+    expect((screen.getByLabelText("Current password") as HTMLInputElement).value).toBe("");
+  });
+
   it("shows the app's message when the current password is wrong", async () => {
     mocks.auth.currentUser = emailUser();
     mocks.reauthenticate.mockRejectedValue(Object.assign(new Error("Firebase"), { code: "auth/invalid-credential" }));

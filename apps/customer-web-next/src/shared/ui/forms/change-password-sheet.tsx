@@ -46,13 +46,17 @@ export function ChangePasswordSheet({ open, onClose, phoneNumber, bodyClassName 
   const errors = validatePasswordChange(values);
   const typed = Object.values(values).some(Boolean);
 
-  useEffect(() => {
-    if (!open) return;
-    setValues(EMPTY);
-    setTouched({});
-    setError("");
-    setDone(false);
-  }, [open]);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    // Reset while rendering, so a reopened sheet never shows the last "Password changed" first.
+    setWasOpen(open);
+    if (open) {
+      setValues(EMPTY);
+      setTouched({});
+      setError("");
+      setDone(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -129,8 +133,9 @@ export function ChangePasswordSheet({ open, onClose, phoneNumber, bodyClassName 
                     onBlur={() => setTouched((current) => ({ ...current, [name]: true }))}
                     aria-invalid={problem ? true : undefined}
                     aria-describedby={problem ? `${id}-${name}-error` : undefined}
-                    disabled={busy}
-                    className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-base text-[#1A1A1A] focus:!border-[#1A1A1A] disabled:bg-[#F1F3F5] aria-[invalid=true]:border-[#C4200F]"
+                    // Read-only while saving, never disabled: the focused field keeps focus and the keypad stays up.
+                    readOnly={busy}
+                    className="mt-2 min-h-12 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-base text-[#1A1A1A] focus:!border-[#1A1A1A] read-only:bg-[#F1F3F5] aria-[invalid=true]:border-[#C4200F]"
                   />
                   {problem ? <p id={`${id}-${name}-error`} className="mt-1.5 text-sm font-medium text-[#C4200F]">{problem}</p> : null}
                 </div>

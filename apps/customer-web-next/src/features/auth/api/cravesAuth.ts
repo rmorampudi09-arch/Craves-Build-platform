@@ -438,6 +438,11 @@ export async function clearSession(): Promise<void> {
   // Signing out also drops chef application details kept across "Sign in again" (use-chef-onboarding).
   try { window.sessionStorage.removeItem("craves.chef-application-unsaved"); } catch { /* storage blocked */ }
   forgetSession(true);
+  // Like the app's logout, end the Firebase sign-in too, so this browser cannot mint a new Craves session from it.
+  // Loaded on demand to keep Firebase out of every page's bundle; best effort (hosts without Firebase config throw).
+  await Promise.all([import("firebase/auth"), import("@/shared/lib/firebase-client")])
+    .then(([{ signOut }, { getFirebaseBrowserClient }]) => signOut(getFirebaseBrowserClient().auth))
+    .catch(() => undefined);
 }
 
 export function subscribeSession(listener: () => void): () => void {

@@ -787,7 +787,7 @@ describe("Approved Chef first step", () => {
       return normal(input);
     });
     render(createElement(ChefModeDashboard));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose another time" }));
     fireEvent.click(screen.getByText("45"));
     fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
     const note = await screen.findByText(/^Order #0BDE0000 accepted\./);

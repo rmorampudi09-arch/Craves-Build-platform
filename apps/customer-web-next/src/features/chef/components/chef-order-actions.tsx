@@ -5,19 +5,39 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  Bike,
   Check,
   CheckCircle2,
   ChevronDown,
+  Clock3,
   LoaderCircle,
   PackageCheck,
+  Phone,
   XCircle,
 } from "lucide-react";
 import { ChefFlash, ChefNotice, ChefSection } from "@/features/chef/components/chef-ui";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import {
   parseChefOrderResponse,
+  type ChefDeliveryPartner,
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
+import { parseChefMenuItems, type ChefMenuItem } from "@/features/chef/lib/chef-menu-contract";
+import {
+  NOT_PICKED_UP_REASONS,
+  acceptReadyMinutes,
+  declineConsequence,
+  notPickedUpCase,
+  pickupEtaLabel,
+  prepCountdown,
+  respondCountdown,
+  type Countdown,
+} from "@/features/chef/lib/chef-order-presentation";
+import { FEATURE_NOT_AVAILABLE, isFeatureUnavailable } from "@/shared/lib/feature-availability";
+import { createSupportCase, SupportCaseError } from "@/shared/lib/support-cases-client";
+import { shortOrderNumber } from "@/shared/lib/order-number";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
 type DecisionStep = "choose" | "accept" | "decline";
 
@@ -32,6 +52,8 @@ const DECLINE_REASONS = [
 // Native radios (one Tab stop, arrow keys) drawn as tiles; the tile shows the focus ring.
 const tile =
   "relative flex cursor-pointer items-center rounded-xl border text-[#1A1A1A] transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#1A1A1A]";
+
+const field = "mt-2 block min-h-12 w-full rounded-xl border bg-white px-4 text-base text-[#1A1A1A]";
 
 /** The step's own box on the order page; on an order card (inline) just a heading and note. */
 function Frame({
@@ -62,6 +84,178 @@ function Frame({
   );
 }
 
+let dishesRequest: Promise<ChefMenuItem[]> | null = null;
+
+/** The chef's dishes, for the minutes one-tap Accept promises. Cards that open together share one read; a failed read counts as no dishes. */
+function loadDishes(): Promise<ChefMenuItem[]> {
+  dishesRequest ??= sessionFetch("/api/chef/menu", { cache: "no-store" })
+    .then(async (response) => (response.ok ? parseChefMenuItems(await response.json().catch(() => null)) : null) ?? [])
+    .catch(() => [])
+    .finally(() => {
+      dishesRequest = null;
+    });
+  return dishesRequest;
+}
+
+const TONE_COLOR = { danger: "var(--chef-error)", warning: "var(--chef-warning)", success: "var(--chef-success)" } as const;
+
+/** A clock for the countdowns: ticks each second while the tab is visible, and only while something counts down. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    let timer = 0;
+    const sync = () => {
+      window.clearInterval(timer);
+      setNow(Date.now());
+      if (!document.hidden) timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [active]);
+  return now;
+}
+
+/** "Respond in 4:32" and the like, with a bar. A timer role, so screen readers don't read every tick. */
+function CountdownLine({ countdown }: { countdown: Countdown }) {
+  const color = TONE_COLOR[countdown.tone];
+  return (
+    <div className="mb-3 flex items-center gap-2 text-sm font-bold" style={{ color }}>
+      {countdown.tone === "danger" ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Clock3 className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      <span role="timer" className="shrink-0">{countdown.label}</span>
+      {countdown.fill !== null ? (
+        <span className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-full bg-[#F1F3F5]" aria-hidden="true">
+          <span className="block h-full rounded-full" style={{ width: `${Math.round(countdown.fill * 100)}%`, background: color }} />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** One reason from a short list, as tiles. */
+function ReasonTiles({ name, options, value, onChange }: { name: string; options: readonly string[]; value: string; onChange(reason: string): void }) {
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="sr-only">Reason</legend>
+      {options.map((item) => {
+        const selected = value === item;
+        return (
+          <label
+            key={item}
+            className={`${tile} min-h-12 gap-3 px-4 text-left text-[0.9375rem] font-semibold ${selected ? "border-[#1A1A1A] bg-white shadow-[inset_0_0_0_1px_#1A1A1A]" : "border-[#D3D7DD] bg-white"}`}
+          >
+            <input type="radio" name={name} className="sr-only" checked={selected} onChange={() => onChange(item)} />
+            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${selected ? "border-[#1A1A1A]" : "border-[#8A8F98]"}`} aria-hidden="true">{selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#1A1A1A]" /> : null}</span>
+            {item}
+          </label>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+/** The courier for a ready order, or a plain line while none is assigned yet. */
+function PartnerRow({ partner, now }: { partner: ChefDeliveryPartner | null | undefined; now: number }) {
+  const name = partner?.name;
+  const phone = partner?.phone?.replace(/[^\d+]/g, "");
+  const eta = pickupEtaLabel(partner?.pickupEtaAt ?? null, now);
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-[#E3E6EA] bg-white p-3">
+      {partner?.photoUrl ? (
+        <ChefFace photoUrl={partner.photoUrl} name={name} size={40} />
+      ) : (
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]" aria-hidden="true">
+          <Bike className="h-5 w-5" />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-[#1A1A1A]">{name ? `${name} · Craves delivery` : "Waiting for a delivery partner"}</p>
+        {name && eta ? <p className="text-[0.8125rem] text-[#6B6B6B]">{eta}</p> : null}
+      </div>
+      {name && phone ? (
+        <a href={`tel:${phone}`} className="chef-btn is-small" aria-label={`Call ${name}`}>
+          <Phone className="h-4 w-4" aria-hidden="true" /> Call
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+/** "What happened with #X?": sends the answer to Craves support with the order attached. */
+function NotPickedUp({ orderId }: { orderId: string }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<string>(NOT_PICKED_UP_REASONS[0]);
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [sent, setSent] = useState("");
+
+  async function send() {
+    if (sending) return;
+    setSending(true);
+    setFailed(false);
+    try {
+      await createSupportCase(notPickedUpCase(orderId, reason, note));
+      setSent("Sent to Craves support");
+      setOpen(false);
+    } catch (caught) {
+      if (caught instanceof SupportCaseError && caught.code === FEATURE_NOT_AVAILABLE) {
+        setSent("Support is coming soon. Call Craves support.");
+        setOpen(false);
+      } else setFailed(true);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setReason(NOT_PICKED_UP_REASONS[0]);
+          setNote("");
+          setFailed(false);
+          setOpen(true);
+        }}
+        className="chef-btn is-tall flex-1"
+      >
+        Not picked up
+      </button>
+      <Sheet
+        open={open}
+        onOpenChange={setOpen}
+        busy={sending}
+        closeOnOutsideTap={!note.trim()}
+        title={`What happened with #${shortOrderNumber(orderId)}?`}
+        footer={
+          <>
+            <button type="button" onClick={() => setOpen(false)} disabled={sending} className={secondaryActionClass}>Cancel</button>
+            <button type="button" onClick={() => void send()} aria-busy={sending || undefined} className="craves-primary-action w-full sm:w-auto">
+              {sending ? "Sending…" : "Send to support"}
+            </button>
+          </>
+        }
+      >
+        <div className="mt-4">
+          <ReasonTiles name={`not-picked-up-${orderId}`} options={NOT_PICKED_UP_REASONS} value={reason} onChange={setReason} />
+          <label className="mt-4 block text-sm font-semibold text-[#1A1A1A]">
+            Details for support
+            <textarea value={note} maxLength={400} onChange={(event) => setNote(event.target.value)} placeholder="Add details (optional)" className={`${field} min-h-24 py-3`} data-craves-single-border="true" />
+          </label>
+          <p className="mt-3 text-sm text-[#6B6B6B]">Craves support gets this with the order attached and will call you if needed.</p>
+          {failed ? <p role="alert" className="chef-field-error mt-2">We couldn’t send this. Check your connection and try again.</p> : null}
+        </div>
+      </Sheet>
+      <ChefFlash message={sent} onClose={() => setSent("")} />
+    </>
+  );
+}
+
 export function ChefOrderActions({
   order,
   onUpdated,
@@ -89,8 +283,31 @@ export function ChefOrderActions({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [handOverSoon, setHandOverSoon] = useState(false);
+  const [confirmReady, setConfirmReady] = useState(false);
+  const [dishes, setDishes] = useState<ChefMenuItem[] | null>(null);
   const stepRef = useRef<HTMLDivElement>(null);
   const stepChanged = useRef(false);
+  const pending = order.status === "CHEF_ACCEPTANCE_PENDING";
+  const cooking = order.status === "CHEF_ACCEPTED" || order.status === "PREPARING";
+  const expiresAt = pending ? order.chefAcceptanceExpiresAt : null;
+  const now = useNow(Boolean(expiresAt) || (cooking && Boolean(order.prepTimeMinutes)) || (order.status === "READY_FOR_PICKUP" && Boolean(order.deliveryPartner?.pickupEtaAt)));
+  const countdown = expiresAt ? respondCountdown({ createdAt: order.createdAt, chefAcceptanceExpiresAt: expiresAt }, now) : prepCountdown(order, now);
+  const clock = countdown ? <CountdownLine countdown={countdown} /> : null;
+  // Null while the dishes load, so the one-tap button never promises a time it is about to change.
+  const readyMinutes = order.prepTimeMinutes ?? (dishes ? acceptReadyMinutes(order, dishes) : null);
+  const dishSummary = order.items.map((item) => `${item.quantity} × ${item.itemName}`).join(", ");
+
+  useEffect(() => {
+    if (!pending || order.prepTimeMinutes != null) return;
+    let live = true;
+    void loadDishes().then((items) => {
+      if (live) setDishes(items);
+    });
+    return () => {
+      live = false;
+    };
+  }, [pending, order.prepTimeMinutes]);
 
   // A new step replaces the buttons that were pressed: move focus to the new step's heading.
   useEffect(() => {
@@ -122,6 +339,11 @@ export function ChefOrderActions({
         body: body ? JSON.stringify(body) : undefined,
       });
       const result = await response.json().catch(() => null);
+      if (path === "handed-over" && isFeatureUnavailable(response.status, result)) {
+        setHandOverSoon(true);
+        setMessage("Handed over is coming soon.");
+        return;
+      }
       if (!response.ok) {
         const failure = chefApiError(response, result, "We couldn’t save your answer. Please try again.");
         // A conflict we have no exact text for keeps the plain "order changed" advice.
@@ -137,9 +359,11 @@ export function ChefOrderActions({
       setMessage(
         path === "ready-for-pickup"
           ? "Food marked ready for pickup."
-          : path === "reject"
-            ? "Order declined. The customer will see that your kitchen couldn’t take it."
-            : "Order accepted. The customer sees your cooking time.",
+          : path === "handed-over"
+            ? "Marked as handed over."
+            : path === "reject"
+              ? "Order declined. The customer will see that your kitchen couldn’t take it."
+              : "Order accepted. The customer sees your cooking time.",
       );
     } catch (caught) {
       setError(chefErrorText(caught, "We couldn’t save your answer. Please try again."));
@@ -149,8 +373,6 @@ export function ChefOrderActions({
     }
   }
 
-  const field =
-    "mt-2 block min-h-12 w-full rounded-xl border bg-white px-4 text-base text-[#1A1A1A]";
   // While saving, buttons stay focusable (aria-disabled), so keyboard focus is never dropped.
   const busyProps = (action: string) => ({
     "aria-disabled": Boolean(busyAction) || undefined,
@@ -167,15 +389,27 @@ export function ChefOrderActions({
   let content: ReactNode;
   if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "choose") {
     content = (
-      <Frame inline={inline} title="Can you cook this now?" note="If you accept, you’ll choose how long it takes.">
+      <Frame inline={inline} title="Can you cook this now?">
+        {clock}
         <div className="grid gap-2 sm:grid-cols-2">
-          <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-go is-tall">
-            <CheckCircle2 className="h-6 w-6" aria-hidden="true" /> Accept order
+          <button
+            type="button"
+            {...busyProps("accept")}
+            disabled={readyMinutes === null}
+            onClick={() => readyMinutes !== null && void act("accept", { prepTimeMinutes: readyMinutes, note: null, actionId: crypto.randomUUID() })}
+            className="chef-btn is-go is-tall"
+          >
+            {busyAction === "accept" || readyMinutes === null ? <LoaderCircle className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <CheckCircle2 className="h-6 w-6" aria-hidden="true" />}
+            {busyAction === "accept" ? "Saving…" : readyMinutes === null ? "Accept order" : `Accept · ready in ${readyMinutes} min`}
           </button>
           <button type="button" {...busyProps("")} onClick={() => goTo("decline")} className="chef-btn is-danger is-tall">
             <XCircle className="h-6 w-6" aria-hidden="true" /> Can’t take it
           </button>
         </div>
+        <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-small is-quiet mt-2">
+          Choose another time
+        </button>
+        {feedback ? <div className="mt-3">{feedback}</div> : null}
       </Frame>
     );
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "accept") {
@@ -184,6 +418,7 @@ export function ChefOrderActions({
     content = (
       <Frame inline={inline} title="How long will it take?" note="Time to cook and pack the whole order." action={backButton}>
         <div className="chef-step">
+          {clock}
           <fieldset>
             <legend className="sr-only">Cooking time</legend>
             <div className="grid grid-cols-4 gap-2">
@@ -246,33 +481,18 @@ export function ChefOrderActions({
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING") {
     const reason = selectedReason === "Something else" ? customReason.trim() : selectedReason;
     content = (
-      <Frame inline={inline} title="Why can’t you take it?" note="Pick the closest reason. The customer will see that your kitchen couldn’t take this order." action={backButton}>
+      <Frame inline={inline} title="Why can’t you take it?" note={declineConsequence(order)} action={backButton}>
         <div className="chef-step">
-          <fieldset className="grid gap-2">
-            <legend className="sr-only">Reason</legend>
-            {DECLINE_REASONS.map((item) => {
-              const selected = selectedReason === item;
-              return (
-                <label
-                  key={item}
-                  className={`${tile} min-h-12 gap-3 px-4 text-left text-[0.9375rem] font-semibold ${selected ? "border-[#1A1A1A] bg-white shadow-[inset_0_0_0_1px_#1A1A1A]" : "border-[#D3D7DD] bg-white"}`}
-                >
-                  <input
-                    type="radio"
-                    name={`decline-${order.id}`}
-                    className="sr-only"
-                    checked={selected}
-                    onChange={() => {
-                      setSelectedReason(item);
-                      setError("");
-                    }}
-                  />
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${selected ? "border-[#1A1A1A]" : "border-[#8A8F98]"}`} aria-hidden="true">{selected ? <span className="h-2.5 w-2.5 rounded-full bg-[#1A1A1A]" /> : null}</span>
-                  {item}
-                </label>
-              );
-            })}
-          </fieldset>
+          {clock}
+          <ReasonTiles
+            name={`decline-${order.id}`}
+            options={DECLINE_REASONS}
+            value={selectedReason}
+            onChange={(item) => {
+              setSelectedReason(item);
+              setError("");
+            }}
+          />
           {selectedReason === "Something else" ? (
             <label className="mt-4 block text-sm font-semibold text-[#1A1A1A]">Tell us briefly (at least 3 characters)<textarea value={customReason} maxLength={500} onChange={(event) => setCustomReason(event.target.value)} className={`${field} min-h-24 py-3`} placeholder="A short reason is enough" data-craves-single-border="true" /></label>
           ) : null}
@@ -285,8 +505,27 @@ export function ChefOrderActions({
   } else if (order.status === "CHEF_ACCEPTED" || order.status === "PREPARING") {
     content = (
       <Frame inline={inline} title="Is everything packed?" note="Tap only when every item is cooked and packed.">
+        {clock}
         {feedback}
-        <button type="button" {...busyProps("ready-for-pickup")} onClick={() => void act("ready-for-pickup")} className="chef-btn is-go is-tall is-block mt-1">{busyAction ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <PackageCheck className="h-5 w-5" aria-hidden="true" />}{busyAction ? "Saving…" : "Food is ready for pickup"}</button>
+        <button type="button" {...busyProps("ready-for-pickup")} onClick={() => setConfirmReady(true)} className="chef-btn is-go is-tall is-block mt-1">{busyAction ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <PackageCheck className="h-5 w-5" aria-hidden="true" />}{busyAction ? "Saving…" : "Food is ready for pickup"}</button>
+      </Frame>
+    );
+  } else if (order.status === "READY_FOR_PICKUP") {
+    content = (
+      <Frame inline={inline} title="Waiting for pickup" note="Hand the bag only to the partner shown here. Check the order number on the bag.">
+        <PartnerRow partner={order.deliveryPartner} now={now} />
+        {feedback ? <div className="mt-3">{feedback}</div> : null}
+        <div className="mt-3 flex gap-2">
+          <NotPickedUp orderId={order.id} />
+          {order.chefHandedOverAt !== null ? null : handOverSoon ? (
+            <p className="flex flex-[2] items-center justify-center rounded-xl bg-[#F1F3F5] px-3 text-center text-sm font-semibold text-[#6B6B6B]">Handed over is coming soon.</p>
+          ) : (
+            <button type="button" {...busyProps("handed-over")} onClick={() => void act("handed-over")} className="chef-btn is-go is-tall flex-[2]">
+              {busyAction === "handed-over" ? <LoaderCircle className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="h-5 w-5" aria-hidden="true" />}
+              {busyAction === "handed-over" ? "Saving…" : "Handed over"}
+            </button>
+          )}
+        </div>
       </Frame>
     );
   } else if (inline) {
@@ -309,6 +548,29 @@ export function ChefOrderActions({
       <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
+      <Dialog
+        open={confirmReady}
+        onOpenChange={setConfirmReady}
+        busy={busyAction === "ready-for-pickup"}
+        title={`Is #${shortOrderNumber(order.id)} packed and ready?`}
+        description={`${dishSummary}${dishSummary ? ". " : ""}The delivery partner is told to pick it up.`}
+        footer={
+          <>
+            <button type="button" onClick={() => setConfirmReady(false)} disabled={Boolean(busyAction)} className={secondaryActionClass}>Not yet</button>
+            <button
+              type="button"
+              aria-busy={busyAction === "ready-for-pickup" || undefined}
+              onClick={async () => {
+                await act("ready-for-pickup");
+                setConfirmReady(false);
+              }}
+              className="craves-primary-action w-full sm:w-auto"
+            >
+              {busyAction === "ready-for-pickup" ? "Saving…" : "Yes, it’s ready"}
+            </button>
+          </>
+        }
+      />
       {/* On an order card the list shows its own update notice, since the card moves on. */}
       {inline ? null : (
         <ChefFlash message={busyAction ? "" : message} announce={false} onClose={() => setMessage("")} />

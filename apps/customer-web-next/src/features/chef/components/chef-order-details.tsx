@@ -8,6 +8,7 @@ import {
   ChevronDown,
   LifeBuoy,
   MapPin,
+  MessageSquare,
   Phone,
   RefreshCw,
 } from "lucide-react";
@@ -23,7 +24,7 @@ import {
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
-import { ChefOrderProgress, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
+import { ChefOrderProgress, CustomerNote, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
 import { useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import {
@@ -132,6 +133,7 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
         .filter(Boolean)
         .join(", ")
     : null;
+  const phone = order.deliveryAddress?.contactPhoneNumber.replace(/[^\d+]/g, "");
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const status = chefOrderStatus(order.status);
   const currency = { currency: order.currency };
@@ -182,6 +184,11 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
               );
             })}
           </ul>
+          {order.customerNote ? (
+            <div className="border-t border-[#E3E6EA] px-4 py-3 md:px-5">
+              <CustomerNote note={order.customerNote} />
+            </div>
+          ) : null}
           <div className="border-t border-[#E3E6EA] px-4 py-3 empty:hidden md:px-5">
             <HearOrderButton order={order} />
           </div>
@@ -192,10 +199,16 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
         {order.deliveryAddress && address ? (
           <ChefSection title="Delivery" labelledBy="chef-order-delivery">
             <p className="font-semibold text-[#1A1A1A]">{order.deliveryAddress.recipientName}</p>
-            <a href={`tel:${order.deliveryAddress.contactPhoneNumber.replace(/[^\d+]/g, "")}`} className="chef-btn is-small mt-2">
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              Call {order.deliveryAddress.contactPhoneNumber}
-            </a>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a href={`tel:${phone}`} className="chef-btn is-small">
+                <Phone className="h-4 w-4" aria-hidden="true" />
+                Call {order.deliveryAddress.contactPhoneNumber}
+              </a>
+              <a href={`sms:${phone}`} className="chef-btn is-small">
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                Message customer
+              </a>
+            </div>
             <p className="mt-2 flex gap-2 text-[0.9375rem] leading-6 text-[#6B6B6B]"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />{address}</p>
           </ChefSection>
         ) : null}

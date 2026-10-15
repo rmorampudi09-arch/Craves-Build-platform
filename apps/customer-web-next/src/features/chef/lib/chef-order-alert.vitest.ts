@@ -188,7 +188,7 @@ describe("Orders screen", () => {
 
   it("says what happened after Accept, follows the order to Cooking and keeps focus on it", async () => {
     render(createElement(ChefOrderInbox));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose another time" }));
     fireEvent.click(screen.getByText("45"));
     fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
     await screen.findByText("Order #0BDE0101 accepted. Start cooking: ready in about 45 min.");

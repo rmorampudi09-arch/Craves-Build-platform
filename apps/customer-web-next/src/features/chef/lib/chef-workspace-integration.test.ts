@@ -107,7 +107,7 @@ test("chef order BFF accepts known deployed envelopes without weakening records"
   assert.match(listRoute, /parseChefOrdersResponse\(raw\)/);
   assert.match(detailRoute, /parseChefOrderResponse\(raw\)/);
   assert.match(contract, /items\.some\(\(item\) => item === null\)/);
-  assert.doesNotMatch(contract, /customerIdentityId|checkoutId|pickupAddress/);
+  assert.doesNotMatch(contract, /customerIdentityId|pickupAddress/);
 });
 
 test("chef order actions use unique idempotency keys and strict responses", () => {

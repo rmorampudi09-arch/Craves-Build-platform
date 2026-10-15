@@ -3,9 +3,11 @@ import {
   parseChefReferralEarnings,
   parseReferralCode,
   parseReferralEnrollment,
+  parseReferralOverview,
   type ChefReferralEarnings,
   type ReferralCode,
   type ReferralEnrollStatus,
+  type ReferralOverview,
 } from "@/features/chef/lib/chef-referral-contract";
 import { CHEF_REFERRAL_TERMS_VERSION } from "@/features/chef/lib/chef-referral-terms";
 
@@ -38,6 +40,11 @@ async function call<T>(
 
 export function fetchReferralCode(): Promise<ReferralCode> {
   return call("/api/referrals/me/code", parseReferralCode);
+}
+
+/** The Joined, On hold and Earned numbers. */
+export function fetchReferralOverview(): Promise<ReferralOverview> {
+  return call("/api/referrals/me", parseReferralOverview);
 }
 
 export function fetchChefReferralEarnings(): Promise<ChefReferralEarnings> {

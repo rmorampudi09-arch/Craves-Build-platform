@@ -76,11 +76,7 @@ import {
   type MealPlanFormValues,
   type MealSlot,
 } from "@/features/chef/lib/chef-meal-plans";
-import {
-  PLAN_PHOTO_MAX_BYTES,
-  PLAN_PHOTO_TYPES,
-  preparePlanPhoto,
-} from "@/features/chef/lib/chef-plan-photo";
+import { shrinkPhoto } from "@/features/chef/lib/shrink-photo";
 import type {
   ChefMealPlan,
   ChefMealPlanPeriod,
@@ -99,6 +95,9 @@ import {
 
 type Step = 1 | 2 | 3;
 const STEP_NAMES: Record<Step, string> = { 1: "Details", 2: "Meals", 3: "Review" };
+// What the plan photo route takes: JPEG or PNG, 2 MB at most.
+const PLAN_PHOTO_TYPES = ["image/jpeg", "image/png"];
+const PLAN_PHOTO_MAX_BYTES = 2_097_152;
 const MONTH_DAYS = Array.from({ length: 28 }, (_, index) => index + 1);
 const SLOT_ICON: Record<MealSlot, typeof Sun> = {
   BREAKFAST: Coffee,
@@ -382,7 +381,8 @@ function MealPlanForm({
   async function pickPhoto(file: File) {
     setPhotoError("");
     if (!PLAN_PHOTO_TYPES.includes(file.type)) return setPhotoError("Choose a JPEG or PNG photo.");
-    const prepared = await preparePlanPhoto(file);
+    // Shown 4:3 on plan cards, like the app's picker; a photo the browser can't read is sent as chosen and the server checks it.
+    const prepared = await shrinkPhoto(file, 4 / 3);
     if (prepared.size > PLAN_PHOTO_MAX_BYTES)
       return setPhotoError("Photo is too large. Pick a smaller photo.");
     setPhoto(prepared);

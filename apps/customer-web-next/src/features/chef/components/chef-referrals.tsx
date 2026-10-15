@@ -14,6 +14,7 @@ import {
   enrollInChefReferrals,
   fetchChefReferralEarnings,
   fetchReferralCode,
+  fetchReferralOverview,
   ReferralError,
 } from "@/features/chef/api/chef-referrals";
 import {
@@ -30,6 +31,7 @@ import {
   referralRupees,
   type ChefReferralEarnings,
   type ReferralCode,
+  type ReferralOverview,
 } from "@/features/chef/lib/chef-referral-contract";
 import {
   CHEF_REFERRAL_RATES_BPS,
@@ -51,6 +53,7 @@ const CHECK_EVERY_MS = 3_000;
 const GIVE_UP_AFTER_MS = 60_000;
 const LOAD_FAILED = "Check your connection and try again.";
 const SOON = "Coming soon";
+const sum = (values: string[]) => values.reduce((total, value) => total + Number(value), 0);
 
 function asReferralError(error: unknown): ReferralError {
   return error instanceof ReferralError ? error : new ReferralError("NETWORK_ERROR", 0);
@@ -388,6 +391,7 @@ function EarningsSection({
 export function ChefReferrals() {
   const [code, setCode] = useState<Read<ReferralCode>>({ kind: "loading" });
   const [earnings, setEarnings] = useState<Read<ChefReferralEarnings>>({ kind: "loading" });
+  const [overview, setOverview] = useState<Read<ReferralOverview>>({ kind: "loading" });
   // True from the server taking the join request until the invite link arrives.
   const [joined, setJoined] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -425,10 +429,15 @@ export function ChefReferrals() {
   useEffect(() => {
     void readCode();
   }, [readCode]);
-  // Earnings are refused until the chef is a member: read them once the invite is there.
+  // Earnings and the overview are refused until the chef is a member: read them once the invite is there.
   const ready = code.kind === "ready";
   useEffect(() => {
-    if (ready) void readEarnings();
+    if (!ready) return;
+    void readEarnings();
+    fetchReferralOverview().then(
+      (data) => setOverview({ kind: "ready", data }),
+      (error: unknown) => setOverview(readFailure(asReferralError(error))),
+    );
   }, [ready, readEarnings]);
 
   async function copy(text: string, done: string) {
@@ -503,7 +512,18 @@ export function ChefReferrals() {
     );
 
   const invite = code.data;
-  const earned =
+  // The app's tiles come from the overview; null while it loads.
+  const numbers =
+    overview.kind === "ready"
+      ? {
+          joined: String(sum(overview.data.downline.map((level) => level.members))),
+          onHold: referralRupees(overview.data.pendingPaise),
+          earned: referralRupees(sum(overview.data.levels.map((level) => level.netEarnedPaise))),
+        }
+      : null;
+  const noNumber = overview.kind === "loading" ? null : overview.kind === "soon" ? SOON : "—";
+  // Until the gateway publishes the overview, Earned comes from the chef earnings.
+  const earnedSoFar =
     earnings.kind === "ready"
       ? referralRupees(earnings.data.netRecordedPaise)
       : earnings.kind === "loading"
@@ -549,14 +569,13 @@ export function ChefReferrals() {
         </button>
       </ChefSection>
 
-      {/* Joined and On hold need the referral overview, which isn't published yet; Earned comes from the earnings. */}
       <ChefSection flush>
-        <div className="chef-stats is-three">
+        <div className="chef-stats is-three" aria-busy={overview.kind === "loading"}>
           {(
             [
-              ["Joined", SOON],
-              ["On hold", SOON],
-              ["Earned", earned],
+              ["Joined", numbers?.joined ?? noNumber],
+              ["On hold", numbers?.onHold ?? noNumber],
+              ["Earned", numbers?.earned ?? (overview.kind === "soon" ? earnedSoFar : noNumber)],
             ] as const
           ).map(([label, value]) => (
             <div key={label} className="chef-stat">

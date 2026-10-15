@@ -4,6 +4,7 @@ import {
   parseChefReferralEarnings,
   parseReferralCode,
   parseReferralEnrollment,
+  parseReferralOverview,
   referralRupees,
 } from "./chef-referral-contract.ts";
 import { CHEF_REFERRAL_TERMS } from "./chef-referral-terms.ts";
@@ -52,6 +53,45 @@ test("referral code: only the service's code alphabet and an https link", () => 
     null,
   ])
     assert.equal(parseReferralCode(bad), null);
+});
+
+test("referral overview: three level rows, member counts and pending paise, nothing else passed on", () => {
+  const levels = [
+    { level: 1, netEarnedPaise: "30000" },
+    { level: 2, netEarnedPaise: "-500" },
+    { level: 3, netEarnedPaise: "0" },
+  ];
+  const downline = [{ level: 1, members: "2" }];
+  const overview = {
+    asOf: "2026-10-15T04:00:00Z",
+    currency: "INR",
+    pendingPaise: "15000",
+    levels,
+    downline,
+    onReviewHold: false,
+  };
+  const parsed = parseReferralOverview(overview);
+  assert.deepEqual(parsed, { currency: "INR", pendingPaise: "15000", levels, downline });
+  assert.deepEqual(parseReferralOverview(parsed), parsed);
+  assert.deepEqual(parseReferralOverview({ ...overview, downline: [] })?.downline, []);
+  for (const change of [
+    { currency: "USD" },
+    { pendingPaise: "-1" },
+    { pendingPaise: 15000 },
+    { levels: levels.slice(0, 2) },
+    { levels: [levels[0], levels[0], levels[2]] },
+    { levels: [levels[0], levels[1], { level: 4, netEarnedPaise: "0" }] },
+    {
+      downline: [
+        { level: 1, members: "2" },
+        { level: 1, members: "3" },
+      ],
+    },
+    { downline: [{ level: 1, members: 2 }] },
+    { downline: [{ level: 2, members: "1.5" }] },
+    { downline: "none" },
+  ])
+    assert.equal(parseReferralOverview({ ...overview, ...change }), null, JSON.stringify(change));
 });
 
 test("chef referral earnings: amounts as paise strings whose sums agree", () => {

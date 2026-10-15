@@ -19,7 +19,7 @@ import {
   Store,
 } from "lucide-react";
 import { ChefKitchenError, readChefKitchen, saveChefAvatar, uploadKitchenPhoto } from "@/features/chef/api/chef-kitchen";
-import { shrinkDishPhoto } from "@/features/chef/lib/shrink-photo";
+import { shrinkPhoto } from "@/features/chef/lib/shrink-photo";
 import { ChefAvatarGrid } from "@/features/chef/components/chef-avatar";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
@@ -62,11 +62,11 @@ type SocialLinkField = (typeof SOCIAL_LINK_FIELDS)[number];
 
 const SOCIAL_LINK_LABELS: Record<SocialLinkField, string> = { instagram: "Instagram", facebook: "Facebook", youtube: "YouTube", website: "Website" };
 const SUGGESTED_CUISINES = ["Andhra", "Telangana", "Biryani", "Tiffins", "North Indian", "South Indian", "Chinese", "Snacks", "Sweets", "Desserts"];
-// Matches the app: once saved, a kitchen's area, city, PIN code, state and map pin move only through Craves support.
-// An empty one can still be filled in, so an unfinished kitchen can still open.
+// Matches the app: only the first kitchen setup fills the area, city, PIN code and state. Once the kitchen exists
+// they, and its map pin, move only through Craves support ("Move my kitchen"), even when one was left empty.
 const LOCKED_ADDRESS = ["areaName", "city", "state", "postalCode"] as const;
 function savedAddress(kitchen: ChefKitchen | null): Partial<FormState> {
-  return Object.fromEntries(LOCKED_ADDRESS.filter((field) => kitchen?.[field]).map((field) => [field, kitchen?.[field]]));
+  return kitchen ? Object.fromEntries(LOCKED_ADDRESS.map((field) => [field, kitchen[field] ?? ""])) : {};
 }
 
 type SetupStep = "name" | "address" | "ready" | "summary";
@@ -509,7 +509,9 @@ export function ChefKitchenForm() {
     if (missingPickup) {
       setStep(missingPickup === "phoneNumber" ? "name" : "address");
       const labels = { phoneNumber: "a kitchen phone", areaName: "the pickup area", postalCode: "the pickup pincode" };
-      invalidate(missingPickup, `Complete ${labels[missingPickup]} before opening your kitchen. Pickup partners need this to collect orders.`);
+      invalidate(missingPickup, kitchen && missingPickup !== "phoneNumber"
+        ? `Your kitchen needs ${labels[missingPickup]} before it can open. Use Move my kitchen to ask Craves support to add it.`
+        : `Complete ${labels[missingPickup]} before opening your kitchen. Pickup partners need this to collect orders.`);
       return;
     }
     if (form.status === "ACTIVE" && (!form.latitude.trim() || !form.longitude.trim())) {
@@ -590,7 +592,7 @@ export function ChefKitchenForm() {
     const file = event.target.files?.[0];
     event.target.value = "";
     // Photos lock once added, so the chef sees the 4:3 crop and confirms it first, as with the app's crop step.
-    if (file) void shrinkDishPhoto(file, 4 / 3).then((photo) => { setPhotoDraft(photo); setPhotoSheet(true); });
+    if (file) void shrinkPhoto(file, 4 / 3).then((photo) => { setPhotoDraft(photo); setPhotoSheet(true); });
   }
 
   function showPhotoSheet(open: boolean) {
@@ -791,11 +793,11 @@ export function ChefKitchenForm() {
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<RequiredMark /><input {...inputProps("addressLine1")} aria-required="true" value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Street / Road <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.addressLine2} onChange={(event) => setField("addressLine2", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("areaName")} readOnly={"areaName" in locked} value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} maxLength={120} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("areaName")} readOnly={"areaName" in locked} value={form.areaName || ("areaName" in locked ? "–" : "")} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} maxLength={120} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Landmark <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.landmark} onChange={(event) => setField("landmark", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">City<RequiredMark /><input {...inputProps("city")} aria-required="true" readOnly={"city" in locked} value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">State<RequiredMark /><input {...inputProps("state")} aria-required="true" readOnly={"state" in locked} value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("postalCode")} readOnly={"postalCode" in locked} value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">City<RequiredMark /><input {...inputProps("city")} aria-required="true" readOnly={"city" in locked} value={form.city || ("city" in locked ? "–" : "")} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">State<RequiredMark /><input {...inputProps("state")} aria-required="true" readOnly={"state" in locked} value={form.state || ("state" in locked ? "–" : "")} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("postalCode")} readOnly={"postalCode" in locked} value={form.postalCode || ("postalCode" in locked ? "–" : "")} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
         </div>
         {form.serviceAreas ? <ChipPicker label="Delivery areas" options={form.areaName.trim() ? [form.areaName.trim()] : []} selected={form.serviceAreas} onChange={(next) => setField("serviceAreas", next)} addLabel="+ Add area" addFieldLabel="Add a delivery area" /> : null}
         {kitchen ? (

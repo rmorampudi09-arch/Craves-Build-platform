@@ -66,11 +66,35 @@ export async function fetchScheduleOverride(date: string): Promise<ChefScheduleO
   }
 }
 
+/**
+ * Counts special days saved or removed, so the kitchen's state reads today's again. The week's hours are left as they
+ * are: reading them again could fail and hide them right after "Special day saved".
+ */
+let overrideChanges = 0;
+const overrideListeners = new Set<() => void>();
+function subscribeOverrideChanges(listener: () => void) {
+  overrideListeners.add(listener);
+  return () => {
+    overrideListeners.delete(listener);
+  };
+}
+export const useOverrideChanges = () =>
+  useSyncExternalStore(subscribeOverrideChanges, () => overrideChanges, () => 0);
+
+async function changeOverride<T>(saving: Promise<T>): Promise<T> {
+  const saved = await saving;
+  overrideChanges += 1;
+  overrideListeners.forEach((listener) => listener());
+  return saved;
+}
+
 export const saveScheduleOverride = (date: string, update: ChefOverrideUpdate) =>
-  call(overridePath(date), parseChefScheduleOverride, HOURS_SAVE_FAILED, put(update));
+  changeOverride(
+    call(overridePath(date), parseChefScheduleOverride, HOURS_SAVE_FAILED, put(update)),
+  );
 
 export const deleteScheduleOverride = (date: string) =>
-  call(overridePath(date), () => true, HOURS_SAVE_FAILED, { method: "DELETE" });
+  changeOverride(call(overridePath(date), () => true, HOURS_SAVE_FAILED, { method: "DELETE" }));
 
 /** What every screen showing the schedule sees: one read and one copy, so a pause on one shows on the other. */
 export type KitchenScheduleView =

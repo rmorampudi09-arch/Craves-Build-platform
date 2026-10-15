@@ -1,4 +1,4 @@
-// Mirrors referral-service MemberController (/referrals/me/code, /referrals/me/chef-earnings) and
+// Mirrors referral-service MemberController (/referrals/me, /referrals/me/code, /referrals/me/chef-earnings) and
 // auth-service ReferralEnrollmentController (/auth/referrals/enroll). Browser-safe.
 
 export type ReferralCode = { code: string; link: string };
@@ -22,6 +22,14 @@ export type ChefReferralEarnings = {
   recentPostings: ChefReferralPosting[];
 };
 export type ReferralEnrollStatus = "QUEUED" | "ALREADY_ENROLLED";
+type ReferralLevel = 1 | 2 | 3;
+/** The part of the referral overview the Joined, On hold and Earned tiles show, in the reply's own shape. */
+export type ReferralOverview = {
+  currency: "INR";
+  pendingPaise: string;
+  levels: { level: ReferralLevel; netEarnedPaise: string }[];
+  downline: { level: ReferralLevel; members: string }[];
+};
 
 /** The referral reads answer this 403 for an account that has not joined the programme yet (or is inactive). */
 export const REFERRAL_NOT_ENROLLED = "REFERRAL_ACCOUNT_NOT_ENROLLED_OR_INACTIVE";
@@ -32,6 +40,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE = /^[2-9A-HJ-NP-Z]{16}$/;
 const PAISE = /^-?\d{1,13}$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+const COUNT = /^\d{1,19}$/;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -134,6 +143,47 @@ export function parseChefReferralEarnings(value: unknown): ChefReferralEarnings 
     monthlyCapReached: raw.monthlyCapReached,
     recentPostings: recentPostings as ChefReferralPosting[],
   };
+}
+
+const level = (value: unknown): ReferralLevel | null =>
+  value === 1 || value === 2 || value === 3 ? value : null;
+
+/** One earnings row for each of the three levels, and at most one member count per level. */
+export function parseReferralOverview(value: unknown): ReferralOverview | null {
+  const raw = record(value);
+  const pendingPaise = paise(raw?.pendingPaise);
+  if (
+    !raw ||
+    raw.currency !== "INR" ||
+    !pendingPaise ||
+    !Array.isArray(raw.levels) ||
+    raw.levels.length !== 3 ||
+    !Array.isArray(raw.downline) ||
+    raw.downline.length > 3
+  )
+    return null;
+  const levels = raw.levels.map((item) => {
+    const row = record(item);
+    const at = level(row?.level),
+      netEarnedPaise = paise(row?.netEarnedPaise, true);
+    return at && netEarnedPaise ? { level: at, netEarnedPaise } : null;
+  });
+  const downline = raw.downline.map((item) => {
+    const row = record(item);
+    const at = level(row?.level);
+    return at && typeof row?.members === "string" && COUNT.test(row.members)
+      ? { level: at, members: row.members }
+      : null;
+  });
+  if (levels.some((row) => !row) || downline.some((row) => !row)) return null;
+  const known = levels as ReferralOverview["levels"],
+    members = downline as ReferralOverview["downline"];
+  if (
+    new Set(known.map((row) => row.level)).size !== known.length ||
+    new Set(members.map((row) => row.level)).size !== members.length
+  )
+    return null;
+  return { currency: "INR", pendingPaise, levels: known, downline: members };
 }
 
 export function parseReferralEnrollment(value: unknown): ReferralEnrollStatus | null {

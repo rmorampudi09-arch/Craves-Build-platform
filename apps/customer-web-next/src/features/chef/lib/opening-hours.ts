@@ -173,6 +173,8 @@ export type KitchenOpenState = {
   opensAt: string | null;
   /** "11:00 AM – 10:00 PM". */
   hoursToday: string | null;
+  /** Closed outside the hours because today is a special day set to Closed all day. */
+  closedAllDay: boolean;
   /** What the Taking orders switch shows: on unless the chef or the schedule stopped orders. */
   takingOrders: boolean;
 };
@@ -184,21 +186,31 @@ type ScheduleState = {
   weeklyWindows: readonly WeeklyWindow[];
 };
 
-/** The kitchen's state from its status and, once read, its schedule. */
+/** Today's special day, when one is set: closed all day, or its own hours instead of the week's. */
+type SpecialDay = { closed: boolean; windows: readonly TimeRange[] };
+
+/** The kitchen's state from its status and, once read, its schedule and today's special day (in the kitchen's time zone). */
 export function kitchenOpenState(
   kitchenStatus: string,
   schedule: ScheduleState | null,
   now: Date,
+  special: SpecialDay | null = null,
 ): KitchenOpenState {
   const at = schedule ? kitchenClock(now, schedule.timezoneId) : null;
-  const today = schedule && at ? rangesForDay(schedule.weeklyWindows, at.day) : [];
+  // As the server decides: a special day's hours (none when closed all day) replace the week's for that date.
+  const today =
+    schedule && at
+      ? special
+        ? [...(special.closed ? [] : special.windows)].sort((a, b) =>
+            a.opensAt.localeCompare(b.opensAt),
+          )
+        : rangesForDay(schedule.weeklyWindows, at.day)
+      : [];
   const next = at ? today.find((range) => range.opensAt > at.time) : undefined;
-  // A day without hours is closed once the week has any: that is how the server decides.
-  // shortcut: today's special day is not read (nor is it in the app), so it shows the weekly hours although the server
-  // goes by the special day (e.g. Closed all day); load today's override with the schedule if chefs trip on it.
+  // A day without hours is closed once the week has any, or when it is a special day.
   const outsideHours =
     !!at &&
-    !!schedule?.weeklyWindows.length &&
+    (!!special || !!schedule?.weeklyWindows.length) &&
     !today.some(
       (range) =>
         range.opensAt <= at.time && (at.time < range.closesAt || range.closesAt === MIDNIGHT),
@@ -218,6 +230,7 @@ export function kitchenOpenState(
     hoursToday: today.length
       ? `${formatHoursTime(today[0].opensAt)} – ${formatHoursTime(today[today.length - 1].closesAt)}`
       : null,
+    closedAllDay: closedReason === "outside-hours" && !!special?.closed,
     takingOrders: status === "open" || status === "paused" || closedReason === "outside-hours",
   });
   if (kitchenStatus === "SUSPENDED") return state("suspended");

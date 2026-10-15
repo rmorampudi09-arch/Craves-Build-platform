@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { MotionGlobalConfig } from "framer-motion";
 import { createElement, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { reloadKitchenSchedule } from "../api/chef-kitchen-schedule";
+import { reloadKitchenSchedule, saveScheduleOverride } from "../api/chef-kitchen-schedule";
 import { ChefKitchenSwitch } from "../components/chef-kitchen-switch";
 import type { ChefKitchen } from "./chef-kitchen-types";
 
@@ -40,6 +40,12 @@ const base = {
 };
 let saved: ChefKitchen;
 let schedule: typeof base | null;
+/** Today's special day, or null for none. */
+let special: {
+  closed: boolean;
+  reason: string | null;
+  windows: { opensAt: string; closesAt: string }[];
+} | null;
 /** Answers for the next kitchen or schedule PUT instead of saving it. */
 let refuse: { url: string; status: number; body: unknown } | null;
 /** Holds back the answer to the next schedule read until it settles. */
@@ -66,6 +72,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   saved = kitchen;
   schedule = base;
+  special = null;
   refuse = null;
   hold = null;
   vi.stubGlobal(
@@ -92,6 +99,12 @@ beforeEach(() => {
       hold = null;
       await held;
       return Response.json(answer);
+    }
+    if (url.startsWith("/api/chef/kitchen/schedule/overrides/")) {
+      if (init?.method === "PUT") special = body;
+      return special
+        ? Response.json({ serviceDate: url.slice(-10), ...special })
+        : Response.json({ code: "SCHEDULE_OVERRIDE_NOT_FOUND" }, { status: 404 });
     }
     throw new Error(`Unexpected route ${url}`);
   });
@@ -179,6 +192,33 @@ describe("Kitchen status", () => {
       "/chef/operations#chef-hours",
     );
     expect(screen.queryByRole("button", { name: "Pause new orders" })).toBeNull();
+  });
+
+  it("goes by today's special day: closed all day, or its own hours", async () => {
+    special = { closed: true, reason: "Diwali", windows: [] };
+    render(createElement(Host));
+    expect(await screen.findByRole("heading", { name: "Closed all day" })).toBeTruthy();
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/chef/kitchen/schedule/overrides/2026-10-15",
+      expect.anything(),
+    );
+    expect(screen.getByRole("link", { name: "Change opening hours" })).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Taking orders" }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    cleanup();
+
+    special = { closed: false, reason: null, windows: [{ opensAt: "18:00", closesAt: "21:00" }] };
+    render(createElement(Host));
+    expect(await screen.findByRole("heading", { name: "Closed · opens 6:00 PM" })).toBeTruthy();
+  });
+
+  it("shows a special day saved for today straight away, without reading the week's hours again", async () => {
+    render(createElement(Host));
+    expect(await screen.findByRole("heading", { name: "Open · taking orders" })).toBeTruthy();
+    schedule = null; // another read of the hours would now come back empty and hide them
+    await saveScheduleOverride("2026-10-15", { closed: true, reason: null, windows: [] });
+    expect(await screen.findByRole("heading", { name: "Closed all day" })).toBeTruthy();
   });
 
   it("leaves a kitchen Craves paused alone", async () => {

@@ -7,6 +7,7 @@ import { parseChefApplication } from "@/features/chef-onboarding/lib/chef-applic
 import { enterChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { rememberChefName } from "@/features/chef/lib/chef-name";
 import { ChefLoading, chefLoadingShapeFor } from "@/features/chef/components/chef-loading";
+import { ChefAvatarGate } from "@/features/chef/components/chef-avatar";
 import { Fragment, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AuthenticationRequiredError,
@@ -159,7 +160,7 @@ export function ChefAccessBoundary({ children }: { children: ReactNode }) {
   if (state === "ready" && isSessionReady() && hasChefRole(getSession())) {
     // Reset private forms and request receipts on owner/session changes, while
     // preserving local work during healthy same-owner email/profile updates.
-    return <Fragment key={scope}>{children}</Fragment>;
+    return <Fragment key={scope}><ChefAvatarGate>{children}</ChefAvatarGate></Fragment>;
   }
 
   if (state === "unavailable") {

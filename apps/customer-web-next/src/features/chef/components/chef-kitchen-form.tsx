@@ -5,17 +5,37 @@ import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef
 import { ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import Link from "next/link";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { createSupportCase, SupportCaseError } from "@/shared/lib/support-cases-client";
+import { SUPPORT_MESSAGE_MAX } from "@/shared/lib/support-cases-contract";
+import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import {
   ArrowLeft,
+  Camera,
   Check,
   ChevronRight,
+  ImageIcon,
   MapPin,
   Store,
 } from "lucide-react";
+import { ChefKitchenError, readChefKitchen, saveChefAvatar, uploadKitchenPhoto } from "@/features/chef/api/chef-kitchen";
+import { shrinkDishPhoto } from "@/features/chef/lib/shrink-photo";
+import { ChefAvatarGrid } from "@/features/chef/components/chef-avatar";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
+import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { parseOnboardingState } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
-import { CHEF_KITCHEN_FIELD_LIMITS, missingKitchenPickupField } from "@/features/chef/lib/chef-kitchen-contract";
+import {
+  CHEF_KITCHEN_FIELD_LIMITS,
+  CHEF_KITCHEN_TAG_LIMITS,
+  SOCIAL_LINK_FIELDS,
+  SOCIAL_LINK_MAX,
+  chefAvatarIdFromUrl,
+  isSocialLink,
+  kitchenPhotoSlots,
+  missingKitchenPickupField,
+} from "@/features/chef/lib/chef-kitchen-contract";
 import type {
   ChefKitchen,
   ChefKitchenInput,
@@ -27,13 +47,27 @@ import { RequiredMark } from "@/shared/ui/forms/required-mark";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
 
 type FormState = Record<
-  keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status">,
+  keyof Omit<ChefKitchenInput, "latitude" | "longitude" | "status" | "cuisines" | "serviceAreas" | "socialLinks">,
   string
 > & {
   latitude: string;
   longitude: string;
   status: EditableKitchenStatus;
+  // Only when the server sent them: each field shows only then.
+  cuisines?: string[];
+  serviceAreas?: string[];
+  socialLinks?: Record<SocialLinkField, string>;
 };
+type SocialLinkField = (typeof SOCIAL_LINK_FIELDS)[number];
+
+const SOCIAL_LINK_LABELS: Record<SocialLinkField, string> = { instagram: "Instagram", facebook: "Facebook", youtube: "YouTube", website: "Website" };
+const SUGGESTED_CUISINES = ["Andhra", "Telangana", "Biryani", "Tiffins", "North Indian", "South Indian", "Chinese", "Snacks", "Sweets", "Desserts"];
+// Matches the app: once saved, a kitchen's area, city, PIN code, state and map pin move only through Craves support.
+// An empty one can still be filled in, so an unfinished kitchen can still open.
+const LOCKED_ADDRESS = ["areaName", "city", "state", "postalCode"] as const;
+function savedAddress(kitchen: ChefKitchen | null): Partial<FormState> {
+  return Object.fromEntries(LOCKED_ADDRESS.filter((field) => kitchen?.[field]).map((field) => [field, kitchen?.[field]]));
+}
 
 type SetupStep = "name" | "address" | "ready" | "summary";
 
@@ -55,8 +89,19 @@ const EMPTY: FormState = {
   status: "DRAFT",
 };
 
+const PHOTO_TILE =
+  "relative flex h-24 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border-2 border-dashed border-[#D0D5DB] bg-white px-1 text-center text-[0.8125rem] font-semibold text-[#6B6B6B] disabled:cursor-not-allowed";
+
+const PHOTOS_LOCKED = "Kitchen photos can’t be changed. To change one, contact Craves support.";
+const PHOTO_ERRORS: Record<string, string> = {
+  KITCHEN_PHOTOS_LOCKED: PHOTOS_LOCKED,
+  [FEATURE_NOT_AVAILABLE]: "Photos are coming soon.",
+  INVALID_KITCHEN_PHOTO: "Choose a JPEG or PNG photo of 8 MB or less.",
+};
+const PHOTO_SOURCE = `${secondaryActionClass} gap-2 sm:w-full`;
+
 const INPUT_CLASS =
-  "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:bg-[#F1F3F5]";
+  "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:bg-[#F1F3F5] read-only:bg-[#F1F3F5] read-only:text-[#6B6B6B]";
 
 function fromKitchen(kitchen: ChefKitchen | null, registeredPhone = ""): FormState {
   if (!kitchen) return EMPTY;
@@ -76,6 +121,11 @@ function fromKitchen(kitchen: ChefKitchen | null, registeredPhone = ""): FormSta
     latitude: kitchen.latitude === null ? "" : String(kitchen.latitude),
     longitude: kitchen.longitude === null ? "" : String(kitchen.longitude),
     status: kitchen.status === "SUSPENDED" ? "INACTIVE" : kitchen.status,
+    ...(kitchen.cuisines ? { cuisines: kitchen.cuisines } : {}),
+    ...(kitchen.serviceAreas ? { serviceAreas: kitchen.serviceAreas } : {}),
+    ...(kitchen.socialLinks
+      ? { socialLinks: { instagram: kitchen.socialLinks.instagram ?? "", facebook: kitchen.socialLinks.facebook ?? "", youtube: kitchen.socialLinks.youtube ?? "", website: kitchen.socialLinks.website ?? "" } }
+      : {}),
   };
 }
 
@@ -122,6 +172,73 @@ function PageBack() {
   );
 }
 
+/** Chips to switch on and off, with "+ Add" for one of the chef's own (up to 10 in all, 40 characters each). */
+function ChipPicker({ label, options, selected, onChange, addLabel, addFieldLabel }: {
+  label: string;
+  options: readonly string[];
+  selected: string[];
+  onChange(next: string[]): void;
+  addLabel: string;
+  addFieldLabel: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const chips = useRef<HTMLDivElement>(null);
+  const closing = useRef(false);
+  const full = selected.length >= CHEF_KITCHEN_TAG_LIMITS.count;
+  useEffect(() => {
+    if (adding || !closing.current) return;
+    closing.current = false;
+    // Back to "+ Add", or to the newest chip once ten are chosen and "+ Add" is off.
+    Array.from(chips.current?.querySelectorAll<HTMLButtonElement>("button:enabled") ?? []).at(-1)?.focus();
+  }, [adding]);
+  function close() {
+    closing.current = true;
+    setAdding(false);
+  }
+  function add() {
+    const word = draft.trim();
+    if (word && !selected.some((item) => item.toLowerCase() === word.toLowerCase())) onChange([...selected, word]);
+    setDraft("");
+    close();
+  }
+  return (
+    <fieldset className="mt-5 grid gap-2">
+      <legend className="mb-2 text-sm font-semibold text-[#1A1A1A]">{label}</legend>
+      <div ref={chips} className="chef-chips is-wrap">
+        {[...new Set([...options, ...selected])].map((item) => {
+          const on = selected.includes(item);
+          return (
+            <button key={item} type="button" aria-pressed={on} disabled={!on && full} onClick={() => onChange(on ? selected.filter((other) => other !== item) : [...selected, item])} className="chef-chip max-w-full !whitespace-normal text-left wrap-anywhere disabled:opacity-60">
+              {item}
+            </button>
+          );
+        })}
+        {adding ? null : <button type="button" disabled={full} onClick={() => setAdding(true)} className="chef-chip disabled:opacity-60">{addLabel}</button>}
+      </div>
+      {adding ? (
+        <div className="flex gap-2">
+          <input
+            aria-label={addFieldLabel}
+            autoFocus
+            value={draft}
+            maxLength={CHEF_KITCHEN_TAG_LIMITS.length}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                add();
+              } else if (event.key === "Escape") close();
+            }}
+            className={`${INPUT_CLASS} !mt-0`}
+          />
+          <button type="button" disabled={!draft.trim()} onClick={add} className="chef-btn">Add</button>
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}
+
 function StepHeader({
   label,
   onBack,
@@ -149,9 +266,23 @@ export function ChefKitchenForm() {
   const [message, setMessage] = useState("Loading your kitchen…");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photoSaving, setPhotoSaving] = useState<"CHEF" | "KITCHEN" | null>(null);
+  // A new key each time, so a repeated message is read out again.
+  const [photoNote, setPhotoNote] = useState({ text: "", key: 0 });
+  const [faceSheet, setFaceSheet] = useState(false);
+  const [faceDraft, setFaceDraft] = useState<string | null>(null);
+  const [moveSheet, setMoveSheet] = useState(false);
+  const [moveDraft, setMoveDraft] = useState("");
+  const [moveState, setMoveState] = useState<"idle" | "sending" | "sent" | "failed" | "unavailable">("idle");
+  const [photoSheet, setPhotoSheet] = useState(false);
+  const [photoDraft, setPhotoDraft] = useState<File | null>(null);
+  const photoPreview = useMemo(() => (photoDraft ? URL.createObjectURL(photoDraft) : null), [photoDraft]);
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
   const [locating, setLocating] = useState(false);
   const locationRequest = useRef(0);
-  const [invalidField, setInvalidField] = useState<keyof FormState | null>(null);
+  const [invalidField, setInvalidField] = useState<keyof FormState | SocialLinkField | null>(null);
   const [validationAttempt, setValidationAttempt] = useState(0);
   useEffect(() => {
     if (!invalidField) return;
@@ -163,8 +294,8 @@ export function ChefKitchenForm() {
     input?.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
     if (!reduced) input?.animate([{ transform: "translateX(0)" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(0)" }], { duration: 240, iterations: 1 });
   }, [invalidField, validationAttempt]);
-  function invalidate(name: keyof FormState, reason: string) { setInvalidField(name); setValidationAttempt(value => value + 1); setMessage(reason); }
-  function inputProps(name: keyof FormState) { return { id: `kitchen-${name}`, "aria-invalid": invalidField === name, "aria-describedby": invalidField === name ? "kitchen-field-error" : undefined }; }
+  function invalidate(name: keyof FormState | SocialLinkField, reason: string) { setInvalidField(name); setValidationAttempt(value => value + 1); setMessage(reason); }
+  function inputProps(name: keyof FormState | SocialLinkField) { return { id: `kitchen-${name}`, "aria-invalid": invalidField === name, "aria-describedby": invalidField === name ? "kitchen-field-error" : undefined }; }
   function checkFieldLengths(fields: (keyof typeof CHEF_KITCHEN_FIELD_LIMITS)[]): boolean {
     const labels = { kitchenName: "Kitchen name", displayName: "Chef name", city: "City", state: "State", postalCode: "Pincode" };
     for (const field of fields) {
@@ -184,7 +315,7 @@ export function ChefKitchenForm() {
     try {
       const address = await reverseGeocodeCurrentLocation(next.latitude, next.longitude);
       if (version !== locationRequest.current) return;
-      setForm(current => ({ ...current, addressLine1: address.houseNumber || address.formattedAddress, addressLine2: address.street || "", areaName: address.area || "", city: address.city || current.city, state: address.state || current.state, postalCode: address.postalCode || current.postalCode }));
+      setForm(current => ({ ...current, addressLine1: address.houseNumber || address.formattedAddress, addressLine2: address.street || "", areaName: address.area || "", city: address.city || current.city, state: address.state || current.state, postalCode: address.postalCode || current.postalCode, ...savedAddress(kitchen) }));
       setMessage("Pin updated. Check your house and address details below.");
     } catch { if (version === locationRequest.current) setMessage("Pin updated. Please check your address details below."); }
     finally { if (version === locationRequest.current) setLocating(false); }
@@ -249,6 +380,32 @@ export function ChefKitchenForm() {
     if (invalidField === name) { setInvalidField(null); setMessage(""); }
   }
 
+  function setLink(field: SocialLinkField, value: string) {
+    setForm((current) => (current.socialLinks ? { ...current, socialLinks: { ...current.socialLinks, [field]: value } } : current));
+    if (invalidField === field) { setInvalidField(null); setMessage(""); }
+  }
+
+  function checkLinks(): boolean {
+    const bad = SOCIAL_LINK_FIELDS.find((field) => form.socialLinks && !isSocialLink(form.socialLinks[field]));
+    if (!bad) return true;
+    setStep("name");
+    invalidate(bad, `${SOCIAL_LINK_LABELS[bad]} link must start with https://`);
+    return false;
+  }
+
+  async function sendMove() {
+    const text = moveDraft.trim();
+    if (!text || moveState === "sending") return;
+    setMoveState("sending");
+    try {
+      await createSupportCase({ contextRole: "CHEF", subject: "Move my kitchen", message: text });
+      setMoveDraft("");
+      setMoveState("sent");
+    } catch (error) {
+      setMoveState(error instanceof SupportCaseError && error.code === FEATURE_NOT_AVAILABLE ? "unavailable" : "failed");
+    }
+  }
+
   function go(next: SetupStep) {
     setMessage("");
     setNotice("");
@@ -262,7 +419,7 @@ export function ChefKitchenForm() {
       invalidate("kitchenName", "Please give your kitchen a name customers can recognize.");
       return;
     }
-    if (!checkFieldLengths(["kitchenName", "displayName"])) return;
+    if (!checkFieldLengths(["kitchenName", "displayName"]) || !checkLinks()) return;
     go("address");
   }
 
@@ -306,6 +463,7 @@ export function ChefKitchenForm() {
             postalCode: detected.postalCode || current.postalCode,
             latitude: String(latitude),
             longitude: String(longitude),
+            ...savedAddress(kitchen),
           }));
           setMessage(
             detected.preciseHouseNumber
@@ -346,7 +504,7 @@ export function ChefKitchenForm() {
       invalidate(missing, "Please check your kitchen name and address before saving.");
       return;
     }
-    if (!checkFieldLengths(["kitchenName", "displayName", "city", "state", "postalCode"])) return;
+    if (!checkFieldLengths(["kitchenName", "displayName", "city", "state", "postalCode"]) || !checkLinks()) return;
     const missingPickup = form.status === "ACTIVE" ? missingKitchenPickupField(form) : null;
     if (missingPickup) {
       setStep(missingPickup === "phoneNumber" ? "name" : "address");
@@ -375,6 +533,8 @@ export function ChefKitchenForm() {
         postalCode: form.postalCode || null,
         latitude: form.latitude === "" ? null : Number(form.latitude),
         longitude: form.longitude === "" ? null : Number(form.longitude),
+        // A socialLinks object replaces all four links on the server, so it always carries all four.
+        socialLinks: form.socialLinks && Object.fromEntries(SOCIAL_LINK_FIELDS.map((field) => [field, form.socialLinks?.[field].trim() || null])),
       };
       const response = await sessionFetch("/api/chef/kitchen", {
         method: "PUT",
@@ -397,7 +557,64 @@ export function ChefKitchenForm() {
     }
   }
 
+  function notePhoto(text: string) {
+    setPhotoNote((current) => ({ text, key: current.key + 1 }));
+  }
+
+  /** Photos save apart from the form, one at a time. */
+  async function savePhoto(kind: "CHEF" | "KITCHEN", work: () => Promise<ChefKitchen>, done: string) {
+    if (photoSaving) return;
+    setPhotoSaving(kind);
+    notePhoto("");
+    try {
+      setKitchen(await work());
+      setNotice(done);
+    } catch (error) {
+      const code = error instanceof ChefKitchenError ? error.code : "";
+      // The tiles were out of date (photos arrived from the application or another device): show what Craves holds.
+      if (code === "KITCHEN_PHOTOS_LOCKED") void readChefKitchen().then((latest) => latest && setKitchen(latest), () => undefined);
+      notePhoto(PHOTO_ERRORS[code] ?? (kind === "CHEF" ? "We couldn’t save your picture. Please try again." : "We couldn’t save that photo. Please try again."));
+    } finally {
+      setPhotoSaving(null);
+    }
+  }
+
+  function saveFace() {
+    const avatarId = faceDraft;
+    if (!avatarId) return;
+    setFaceSheet(false);
+    void savePhoto("CHEF", () => saveChefAvatar(avatarId), "Picture saved");
+  }
+
+  function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    // Photos lock once added, so the chef sees the 4:3 crop and confirms it first, as with the app's crop step.
+    if (file) void shrinkDishPhoto(file, 4 / 3).then((photo) => { setPhotoDraft(photo); setPhotoSheet(true); });
+  }
+
+  function showPhotoSheet(open: boolean) {
+    setPhotoSheet(open);
+    if (!open) setPhotoDraft(null);
+  }
+
+  function confirmPhoto() {
+    const photo = photoDraft;
+    if (!photo) return;
+    showPhotoSheet(false);
+    void savePhoto("KITCHEN", () => uploadKitchenPhoto(photo), "Photo saved");
+  }
+
+  function pickPhoto(input: HTMLInputElement | null) {
+    setPhotoSheet(false);
+    input?.click();
+  }
+
   const suspended = kitchen?.status === "SUSPENDED";
+  const locked = savedAddress(kitchen);
+  const pinLocked = kitchen?.latitude != null && kitchen.longitude != null;
+  const photoSlots: (string | null | undefined)[] = kitchen ? kitchenPhotoSlots(kitchen) ?? [undefined, undefined] : [];
+  const nextPhotoSlot = photoSlots.indexOf(null);
   const mapped = Boolean(form.latitude.trim()) && Boolean(form.longitude.trim());
 
   if (!loaded) {
@@ -419,7 +636,7 @@ export function ChefKitchenForm() {
     const open = kitchen?.status === "ACTIVE";
     return (
       <div>
-        <ChefPageHead title="Kitchen" subtitle="How customers see your kitchen, and where riders pick up." back={PAGE_BACK} />
+        <ChefPageHead title="Kitchen details" subtitle="How customers see your kitchen, and where riders pick up." back={PAGE_BACK} />
         <div className="chef-stack">
           <ChefSection>
             <div className="flex flex-wrap items-center gap-2">
@@ -438,7 +655,91 @@ export function ChefKitchenForm() {
               <Link href="/chef/menu" className="chef-btn">Go to my menu <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
             </div>
           </ChefSection>
+          {kitchen ? (
+            <ChefSection title="Photos" labelledBy="kitchen-photos-title">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  className={PHOTO_TILE}
+                  disabled={kitchen.chefPhotoUrl === undefined || photoSaving !== null}
+                  aria-busy={photoSaving === "CHEF"}
+                  onClick={() => {
+                    setFaceDraft(chefAvatarIdFromUrl(kitchen.chefPhotoUrl));
+                    setFaceSheet(true);
+                  }}
+                >
+                  <ChefFace photoUrl={kitchen.chefPhotoUrl} name={form.displayName} size={44} />
+                  Your picture
+                  {kitchen.chefPhotoUrl === undefined ? <ChefPill>Coming soon</ChefPill> : null}
+                  {photoSaving === "CHEF" ? <span className="absolute top-1 text-xs">Saving…</span> : null}
+                </button>
+                {photoSlots.map((url, slot) => {
+                  const saving = photoSaving === "KITCHEN" && slot === nextPhotoSlot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      className={PHOTO_TILE}
+                      disabled={url === undefined || photoSaving !== null}
+                      aria-busy={saving}
+                      onClick={() => {
+                        if (url || slot !== nextPhotoSlot) notePhoto(url ? PHOTOS_LOCKED : "Add the overall kitchen photo first.");
+                        else setPhotoSheet(true);
+                      }}
+                    >
+                      {url ? <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <Store className="h-6 w-6" aria-hidden="true" />}
+                      <span className={url ? "absolute inset-x-0 bottom-0 bg-white py-0.5 text-[#1A1A1A]" : undefined}>
+                        {slot === 0 ? "Overall kitchen" : "Cooking setup"}
+                        {url ? <span className="sr-only">: photo added</span> : null}
+                      </span>
+                      {url === undefined ? <ChefPill>Coming soon</ChefPill> : null}
+                      {saving ? <span className="absolute top-1 text-xs">Saving…</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+              <input ref={cameraInput} type="file" accept="image/jpeg,image/png" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
+              <input ref={galleryInput} type="file" accept="image/jpeg,image/png" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
+              <p aria-live="polite" className="mt-3 text-sm text-[#6B6B6B] empty:mt-0">{photoNote.text ? <span key={photoNote.key}>{photoNote.text}</span> : null}</p>
+            </ChefSection>
+          ) : null}
         </div>
+        <Sheet
+          open={faceSheet}
+          onOpenChange={setFaceSheet}
+          title="Change your picture"
+          footer={
+            <>
+              <button type="button" className={secondaryActionClass} onClick={() => setFaceSheet(false)}>Cancel</button>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" disabled={!faceDraft} onClick={saveFace}>Save</button>
+            </>
+          }
+        >
+          <div className="mt-5">
+            <ChefAvatarGrid selectedId={faceDraft} onSelect={setFaceDraft} />
+          </div>
+        </Sheet>
+        <Sheet
+          open={photoSheet}
+          onOpenChange={showPhotoSheet}
+          title="Kitchen photo"
+          description="Photos can’t be changed once added."
+          footer={photoPreview ? (
+            <>
+              <button type="button" className={secondaryActionClass} onClick={() => setPhotoDraft(null)}>Choose another</button>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" onClick={confirmPhoto}>Use this photo</button>
+            </>
+          ) : undefined}
+        >
+          {photoPreview ? (
+            <img src={photoPreview} alt="Your kitchen photo" className="mt-5 aspect-[4/3] w-full rounded-2xl object-cover" />
+          ) : (
+            <div className="mt-5 grid gap-2">
+              <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(cameraInput.current)}><Camera className="h-5 w-5" aria-hidden="true" />Take a photo</button>
+              <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(galleryInput.current)}><ImageIcon className="h-5 w-5" aria-hidden="true" />Choose from gallery</button>
+            </div>
+          )}
+        </Sheet>
         <ChefFlash message={notice} onClose={() => setNotice("")} />
       </div>
     );
@@ -455,11 +756,16 @@ export function ChefKitchenForm() {
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Choose a simple name you’ll be happy to see next to your food.</p>
         <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">Kitchen name<RequiredMark /><input {...inputProps("kitchenName")} aria-required="true" value={form.kitchenName} onChange={(event) => setField("kitchenName", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.kitchenName} /></label>
         <label className="mt-4 block text-sm font-semibold text-[#1A1A1A]">Tell customers what you cook <span className="font-normal text-[#6B6B6B]">(optional)</span><textarea value={form.description} onChange={(event) => setField("description", event.target.value)} className={`${INPUT_CLASS} min-h-28`} maxLength={1000} /></label>
+        {form.cuisines ? <ChipPicker label="What you cook" options={SUGGESTED_CUISINES} selected={form.cuisines} onChange={(next) => setField("cuisines", next)} addLabel="+ Add" addFieldLabel="Add a cuisine" /> : null}
         <details className="mt-5 rounded-2xl bg-[#F1F3F5] p-4">
           <summary className="cursor-pointer text-sm font-semibold text-[#1A1A1A]">More kitchen details</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-[#1A1A1A]">Chef name customers see <span className="font-normal text-[#6B6B6B]">(optional)</span><input {...inputProps("displayName")} value={form.displayName} onChange={(event) => setField("displayName", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.displayName} /></label>
             <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Kitchen email <span className="font-normal text-[#6B6B6B]">(optional)</span><input type="email" value={form.email} onChange={(event) => setField("email", event.target.value)} className={INPUT_CLASS} /></label>
+            {form.socialLinks ? <p className="text-sm text-[#6B6B6B] sm:col-span-2">Social links start with https://</p> : null}
+            {form.socialLinks ? SOCIAL_LINK_FIELDS.map((field) => (
+              <label key={field} className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">{SOCIAL_LINK_LABELS[field]} <span className="font-normal text-[#6B6B6B]">(optional)</span><input {...inputProps(field)} type="url" inputMode="url" placeholder="https://" value={form.socialLinks?.[field]} onChange={(event) => setLink(field, event.target.value)} className={INPUT_CLASS} maxLength={SOCIAL_LINK_MAX} /></label>
+            )) : null}
           </div>
         </details>
         <label className="mt-5 block text-sm font-semibold text-[#1A1A1A]">Kitchen phone <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("phoneNumber")} value={form.phoneNumber} onChange={(event) => setField("phoneNumber", event.target.value)} className={INPUT_CLASS} inputMode="tel" maxLength={24} /></label>
@@ -479,19 +785,55 @@ export function ChefKitchenForm() {
         <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><MapPin className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Is this where you cook?</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">Pickup partners use this location when food is ready.</p>
-        <button type="button" disabled={locating} onClick={useCurrentLocation} className="chef-btn is-block mt-6"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? "Finding my address…" : mapped ? "Refresh current location" : "Use my current location"}</button>
+        {pinLocked ? null : <button type="button" disabled={locating} onClick={useCurrentLocation} className="chef-btn is-block mt-6"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? "Finding my address…" : mapped ? "Refresh current location" : "Use my current location"}</button>}
         {message ? <p id="kitchen-field-error" role={invalidField ? "alert" : "status"} className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#6B6B6B]">{message}</p> : null}
-        {form.latitude !== "" && form.longitude !== "" ? <div className="mt-5"><AddressMapPicker latitude={Number(form.latitude)} longitude={Number(form.longitude)} onCenterChange={next => void moveKitchenPin(next)} onUseCurrentLocation={useCurrentLocation} locating={locating} disabled={locating} /></div> : null}
+        {!pinLocked && form.latitude !== "" && form.longitude !== "" ? <div className="mt-5"><AddressMapPicker latitude={Number(form.latitude)} longitude={Number(form.longitude)} onCenterChange={next => void moveKitchenPin(next)} onUseCurrentLocation={useCurrentLocation} locating={locating} disabled={locating} /></div> : null}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Flat / House / Building<RequiredMark /><input {...inputProps("addressLine1")} aria-required="true" value={form.addressLine1} onChange={(event) => setField("addressLine1", event.target.value)} className={INPUT_CLASS} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A] sm:col-span-2">Street / Road <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.addressLine2} onChange={(event) => setField("addressLine2", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("areaName")} value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} maxLength={120} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Area <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("areaName")} readOnly={"areaName" in locked} value={form.areaName} onChange={(event) => setField("areaName", event.target.value)} className={INPUT_CLASS} maxLength={120} /></label>
           <label className="text-sm font-semibold text-[#1A1A1A]">Landmark <span className="font-normal text-[#6B6B6B]">(optional)</span><input value={form.landmark} onChange={(event) => setField("landmark", event.target.value)} className={INPUT_CLASS} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">City<RequiredMark /><input {...inputProps("city")} aria-required="true" value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">State<RequiredMark /><input {...inputProps("state")} aria-required="true" value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
-          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("postalCode")} value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">City<RequiredMark /><input {...inputProps("city")} aria-required="true" readOnly={"city" in locked} value={form.city} onChange={(event) => setField("city", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.city} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">State<RequiredMark /><input {...inputProps("state")} aria-required="true" readOnly={"state" in locked} value={form.state} onChange={(event) => setField("state", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.state} /></label>
+          <label className="text-sm font-semibold text-[#1A1A1A]">Pincode <span className="font-normal text-[#6B6B6B]">(required to accept orders)</span><input {...inputProps("postalCode")} readOnly={"postalCode" in locked} value={form.postalCode} onChange={(event) => setField("postalCode", event.target.value)} className={INPUT_CLASS} inputMode="numeric" maxLength={CHEF_KITCHEN_FIELD_LIMITS.postalCode} /></label>
         </div>
+        {form.serviceAreas ? <ChipPicker label="Delivery areas" options={form.areaName.trim() ? [form.areaName.trim()] : []} selected={form.serviceAreas} onChange={(next) => setField("serviceAreas", next)} addLabel="+ Add area" addFieldLabel="Add a delivery area" /> : null}
+        {kitchen ? (
+          <div className="mt-5 rounded-2xl bg-[#F1F3F5] p-4">
+            <p className="text-sm leading-6 text-[#6B6B6B]">Your saved area, city, PIN code, state and map pin stay as they are. To move your kitchen, contact Craves support.</p>
+            <button type="button" onClick={() => { if (moveState === "sent") setMoveState("idle"); setMoveSheet(true); }} className="chef-btn is-small mt-3">Move my kitchen</button>
+          </div>
+        ) : null}
         <button type="button" onClick={continueAddress} disabled={locating} className="chef-btn is-primary is-block mt-7">Yes, this is right</button>
+        <Sheet
+          open={moveSheet}
+          onOpenChange={setMoveSheet}
+          title="Move my kitchen"
+          description="Tell Craves support the new address. They move your kitchen and its map pin for you."
+          busy={moveState === "sending"}
+          unsavedChanges={moveState !== "sent" && Boolean(moveDraft.trim())}
+          footer={moveState === "sent" ? (
+            <>
+              <Link href="/chef/support" className={secondaryActionClass}>Open Get help</Link>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" onClick={() => setMoveSheet(false)}>Done</button>
+            </>
+          ) : (
+            <>
+              <button type="button" className={secondaryActionClass} onClick={() => setMoveSheet(false)}>Cancel</button>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" disabled={!moveDraft.trim() || moveState === "sending" || moveState === "unavailable"} aria-busy={moveState === "sending"} onClick={() => void sendMove()}>{moveState === "sending" ? "Sending…" : "Send"}</button>
+            </>
+          )}
+        >
+          {moveState === "sent" ? (
+            <p role="status" className="mt-5 text-[0.9375rem] leading-6 text-[#1A1A1A]">Sent. Craves support will reply in Get help.</p>
+          ) : (
+            <>
+              {moveState === "unavailable" ? <div className="mt-5"><ComingSoon title="Chat is on its way" message="You will be able to write to Craves support here soon." /></div> : null}
+              <label className="mt-5 block text-sm font-semibold text-[#1A1A1A]">Your new kitchen address<textarea value={moveDraft} onChange={(event) => setMoveDraft(event.target.value)} className={`${INPUT_CLASS} min-h-28`} maxLength={SUPPORT_MESSAGE_MAX} /></label>
+              {moveState === "failed" ? <p role="alert" className="mt-3 text-sm font-medium text-[#C4200F]">We couldn’t send that. Your message is still here.</p> : null}
+            </>
+          )}
+        </Sheet>
       </section>
       </>
     );

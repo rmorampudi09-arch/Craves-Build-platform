@@ -3,12 +3,13 @@
  * A phone photo can be 4000 px and several MB, so every card would download all of it. Before
  * upload, shrink it to 1600 px on the long side (sharp on a 2x phone screen at full width) as a
  * JPEG. Anything that can't be shrunk, or wouldn't get smaller, is uploaded as chosen.
+ * `aspect` (width / height) first crops the centre to that shape, like the app's 4:3 kitchen photos.
  */
 const LONG_EDGE = 1600;
 const QUALITY = 0.85;
 const ALREADY_SMALL_BYTES = 500 * 1024;
 
-export async function shrinkDishPhoto(file: File): Promise<File> {
+export async function shrinkDishPhoto(file: File, aspect?: number): Promise<File> {
   if (typeof createImageBitmap !== "function" || typeof document === "undefined") return file;
   let bitmap: ImageBitmap;
   try {
@@ -17,19 +18,22 @@ export async function shrinkDishPhoto(file: File): Promise<File> {
     return file;
   }
   try {
-    const scale = Math.min(1, LONG_EDGE / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size <= ALREADY_SMALL_BYTES) return file;
+    const width = aspect ? Math.min(bitmap.width, bitmap.height * aspect) : bitmap.width;
+    const height = aspect ? Math.min(bitmap.height, bitmap.width / aspect) : bitmap.height;
+    const cropped = bitmap.width - width >= 1 || bitmap.height - height >= 1;
+    const scale = Math.min(1, LONG_EDGE / Math.max(width, height));
+    if (scale === 1 && !cropped && file.size <= ALREADY_SMALL_BYTES) return file;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
     const context = canvas.getContext("2d");
     if (!context) return file;
     // JPEG has no transparency: a see-through PNG gets a white plate, like a menu card.
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, (bitmap.width - width) / 2, (bitmap.height - height) / 2, width, height, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", QUALITY));
-    if (!blob || blob.size >= file.size) return file;
+    if (!blob || (!cropped && blob.size >= file.size)) return file;
     return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "dish"}.jpg`, { type: "image/jpeg" });
   } catch {
     return file;

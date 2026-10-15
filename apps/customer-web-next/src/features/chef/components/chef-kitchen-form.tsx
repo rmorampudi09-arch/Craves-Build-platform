@@ -5,7 +5,7 @@ import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef
 import { ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import Link from "next/link";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createSupportCase, SupportCaseError } from "@/shared/lib/support-cases-client";
 import { SUPPORT_MESSAGE_MAX } from "@/shared/lib/support-cases-contract";
 import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
@@ -183,21 +183,33 @@ function ChipPicker({ label, options, selected, onChange, addLabel, addFieldLabe
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
+  const chips = useRef<HTMLDivElement>(null);
+  const closing = useRef(false);
   const full = selected.length >= CHEF_KITCHEN_TAG_LIMITS.count;
+  useEffect(() => {
+    if (adding || !closing.current) return;
+    closing.current = false;
+    // Back to "+ Add", or to the newest chip once ten are chosen and "+ Add" is off.
+    Array.from(chips.current?.querySelectorAll<HTMLButtonElement>("button:enabled") ?? []).at(-1)?.focus();
+  }, [adding]);
+  function close() {
+    closing.current = true;
+    setAdding(false);
+  }
   function add() {
     const word = draft.trim();
     if (word && !selected.some((item) => item.toLowerCase() === word.toLowerCase())) onChange([...selected, word]);
     setDraft("");
-    setAdding(false);
+    close();
   }
   return (
     <fieldset className="mt-5 grid gap-2">
       <legend className="mb-2 text-sm font-semibold text-[#1A1A1A]">{label}</legend>
-      <div className="chef-chips is-wrap">
+      <div ref={chips} className="chef-chips is-wrap">
         {[...new Set([...options, ...selected])].map((item) => {
           const on = selected.includes(item);
           return (
-            <button key={item} type="button" aria-pressed={on} disabled={!on && full} onClick={() => onChange(on ? selected.filter((other) => other !== item) : [...selected, item])} className="chef-chip disabled:opacity-60">
+            <button key={item} type="button" aria-pressed={on} disabled={!on && full} onClick={() => onChange(on ? selected.filter((other) => other !== item) : [...selected, item])} className="chef-chip max-w-full !whitespace-normal text-left wrap-anywhere disabled:opacity-60">
               {item}
             </button>
           );
@@ -216,7 +228,7 @@ function ChipPicker({ label, options, selected, onChange, addLabel, addFieldLabe
               if (event.key === "Enter") {
                 event.preventDefault();
                 add();
-              } else if (event.key === "Escape") setAdding(false);
+              } else if (event.key === "Escape") close();
             }}
             className={`${INPUT_CLASS} !mt-0`}
           />
@@ -255,13 +267,17 @@ export function ChefKitchenForm() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [photoSaving, setPhotoSaving] = useState<"CHEF" | "KITCHEN" | null>(null);
-  const [photoNote, setPhotoNote] = useState("");
+  // A new key each time, so a repeated message is read out again.
+  const [photoNote, setPhotoNote] = useState({ text: "", key: 0 });
   const [faceSheet, setFaceSheet] = useState(false);
   const [faceDraft, setFaceDraft] = useState<string | null>(null);
   const [moveSheet, setMoveSheet] = useState(false);
   const [moveDraft, setMoveDraft] = useState("");
   const [moveState, setMoveState] = useState<"idle" | "sending" | "sent" | "failed" | "unavailable">("idle");
   const [photoSheet, setPhotoSheet] = useState(false);
+  const [photoDraft, setPhotoDraft] = useState<File | null>(null);
+  const photoPreview = useMemo(() => (photoDraft ? URL.createObjectURL(photoDraft) : null), [photoDraft]);
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
   const [locating, setLocating] = useState(false);
@@ -541,11 +557,15 @@ export function ChefKitchenForm() {
     }
   }
 
-  /** Photos save the moment they are chosen, apart from the form, one at a time. */
+  function notePhoto(text: string) {
+    setPhotoNote((current) => ({ text, key: current.key + 1 }));
+  }
+
+  /** Photos save apart from the form, one at a time. */
   async function savePhoto(kind: "CHEF" | "KITCHEN", work: () => Promise<ChefKitchen>, done: string) {
     if (photoSaving) return;
     setPhotoSaving(kind);
-    setPhotoNote("");
+    notePhoto("");
     try {
       setKitchen(await work());
       setNotice(done);
@@ -553,7 +573,7 @@ export function ChefKitchenForm() {
       const code = error instanceof ChefKitchenError ? error.code : "";
       // The tiles were out of date (photos arrived from the application or another device): show what Craves holds.
       if (code === "KITCHEN_PHOTOS_LOCKED") void readChefKitchen().then((latest) => latest && setKitchen(latest), () => undefined);
-      setPhotoNote(PHOTO_ERRORS[code] ?? (kind === "CHEF" ? "We couldn’t save your picture. Please try again." : "We couldn’t save that photo. Please try again."));
+      notePhoto(PHOTO_ERRORS[code] ?? (kind === "CHEF" ? "We couldn’t save your picture. Please try again." : "We couldn’t save that photo. Please try again."));
     } finally {
       setPhotoSaving(null);
     }
@@ -569,7 +589,20 @@ export function ChefKitchenForm() {
   function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) void savePhoto("KITCHEN", async () => uploadKitchenPhoto(await shrinkDishPhoto(file, 4 / 3)), "Photo saved");
+    // Photos lock once added, so the chef sees the 4:3 crop and confirms it first, as with the app's crop step.
+    if (file) void shrinkDishPhoto(file, 4 / 3).then((photo) => { setPhotoDraft(photo); setPhotoSheet(true); });
+  }
+
+  function showPhotoSheet(open: boolean) {
+    setPhotoSheet(open);
+    if (!open) setPhotoDraft(null);
+  }
+
+  function confirmPhoto() {
+    const photo = photoDraft;
+    if (!photo) return;
+    showPhotoSheet(false);
+    void savePhoto("KITCHEN", () => uploadKitchenPhoto(photo), "Photo saved");
   }
 
   function pickPhoto(input: HTMLInputElement | null) {
@@ -650,7 +683,7 @@ export function ChefKitchenForm() {
                       disabled={url === undefined || photoSaving !== null}
                       aria-busy={saving}
                       onClick={() => {
-                        if (url || slot !== nextPhotoSlot) setPhotoNote(url ? PHOTOS_LOCKED : "Add the overall kitchen photo first.");
+                        if (url || slot !== nextPhotoSlot) notePhoto(url ? PHOTOS_LOCKED : "Add the overall kitchen photo first.");
                         else setPhotoSheet(true);
                       }}
                     >
@@ -667,7 +700,7 @@ export function ChefKitchenForm() {
               </div>
               <input ref={cameraInput} type="file" accept="image/jpeg,image/png" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
               <input ref={galleryInput} type="file" accept="image/jpeg,image/png" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
-              <p aria-live="polite" className="mt-3 text-sm text-[#6B6B6B] empty:hidden">{photoNote}</p>
+              <p aria-live="polite" className="mt-3 text-sm text-[#6B6B6B] empty:mt-0">{photoNote.text ? <span key={photoNote.key}>{photoNote.text}</span> : null}</p>
             </ChefSection>
           ) : null}
         </div>
@@ -686,11 +719,26 @@ export function ChefKitchenForm() {
             <ChefAvatarGrid selectedId={faceDraft} onSelect={setFaceDraft} />
           </div>
         </Sheet>
-        <Sheet open={photoSheet} onOpenChange={setPhotoSheet} title="Kitchen photo" description="Photos can’t be changed once added.">
-          <div className="mt-5 grid gap-2">
-            <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(cameraInput.current)}><Camera className="h-5 w-5" aria-hidden="true" />Take a photo</button>
-            <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(galleryInput.current)}><ImageIcon className="h-5 w-5" aria-hidden="true" />Choose from gallery</button>
-          </div>
+        <Sheet
+          open={photoSheet}
+          onOpenChange={showPhotoSheet}
+          title="Kitchen photo"
+          description="Photos can’t be changed once added."
+          footer={photoPreview ? (
+            <>
+              <button type="button" className={secondaryActionClass} onClick={() => setPhotoDraft(null)}>Choose another</button>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" onClick={confirmPhoto}>Use this photo</button>
+            </>
+          ) : undefined}
+        >
+          {photoPreview ? (
+            <img src={photoPreview} alt="Your kitchen photo" className="mt-5 aspect-[4/3] w-full rounded-2xl object-cover" />
+          ) : (
+            <div className="mt-5 grid gap-2">
+              <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(cameraInput.current)}><Camera className="h-5 w-5" aria-hidden="true" />Take a photo</button>
+              <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(galleryInput.current)}><ImageIcon className="h-5 w-5" aria-hidden="true" />Choose from gallery</button>
+            </div>
+          )}
         </Sheet>
         <ChefFlash message={notice} onClose={() => setNotice("")} />
       </div>

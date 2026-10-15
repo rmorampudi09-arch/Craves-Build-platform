@@ -65,6 +65,8 @@ beforeEach(() => {
     "matchMedia",
     vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })),
   );
+  // jsdom has no object URLs: the photo preview needs one.
+  vi.stubGlobal("URL", class extends URL { static createObjectURL() { return "blob:fixture"; } static revokeObjectURL() {} });
   stored = { ...base, chefPhotoUrl: FACE("05"), kitchenPhotoUrl: K1, kitchenPhotoUrls: [K1] };
   photoReply = () => Response.json({ ...stored, kitchenPhotoUrls: [K1, K2] });
   saved = null;
@@ -114,16 +116,35 @@ it("adds the cooking setup photo from the gallery and shows it at once", async (
   fireEvent.change(gallery(), {
     target: { files: [new File(["fixture"], "setup.png", { type: "image/png" })] },
   });
+  // Photos lock once added: the chef sees the photo and confirms it before it uploads.
+  expect((await screen.findByRole("img", { name: "Your kitchen photo" })).getAttribute("src")).toBe("blob:fixture");
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/kitchen/photos")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Use this photo" }));
   await screen.findByText("Photo saved");
   const upload = fetcher.mock.calls.find(([url]) => url === "/api/chef/kitchen/photos")!;
   expect((upload[1]?.body as FormData).get("file")).toMatchObject({ name: "setup.png" });
   expect((await tile(/^Cooking setup: photo added/)).textContent).toContain("Cooking setup");
 });
 
-it("says a filled photo is locked, and that the overall photo comes first", async () => {
+it("lets the chef choose another photo before anything uploads", async () => {
+  open();
+  fireEvent.click(await tile(/^Cooking setup/));
+  fireEvent.click(await screen.findByRole("button", { name: "Choose from gallery" }));
+  fireEvent.change(gallery(), { target: { files: [new File(["fixture"], "blurry.jpg", { type: "image/jpeg" })] } });
+  fireEvent.click(await screen.findByRole("button", { name: "Choose another" }));
+  expect(screen.queryByRole("img", { name: "Your kitchen photo" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Take a photo" })).toBeTruthy();
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/kitchen/photos")).toBe(false);
+});
+
+it("says a filled photo is locked on every tap, and that the overall photo comes first", async () => {
   open();
   fireEvent.click(await tile(/^Overall kitchen: photo added/));
   expect(note()).toBe("Kitchen photos can’t be changed. To change one, contact Craves support.");
+  const first = document.querySelector("[aria-live=polite] > span");
+  fireEvent.click(await tile(/^Overall kitchen: photo added/));
+  // A fresh node, so screen readers read the same words out again.
+  expect(document.querySelector("[aria-live=polite] > span")).not.toBe(first);
   cleanup();
   stored = { ...stored, kitchenPhotoUrl: null, kitchenPhotoUrls: [] };
   open();
@@ -143,6 +164,7 @@ it("reloads the photos and shows the lock when Craves already holds them", async
   fireEvent.change(document.querySelector<HTMLInputElement>("input[capture=environment]")!, {
     target: { files: [new File(["fixture"], "setup.jpg", { type: "image/jpeg" })] },
   });
+  fireEvent.click(await screen.findByRole("button", { name: "Use this photo" }));
   await tile(/^Cooking setup: photo added/);
   expect(note()).toBe("Kitchen photos can’t be changed. To change one, contact Craves support.");
 });
@@ -185,6 +207,11 @@ it("edits what the chef cooks, delivery areas and links, with the area, city, PI
   fireEvent.change(screen.getByRole("textbox", { name: "Add a cuisine" }), { target: { value: " Pulao " } });
   fireEvent.keyDown(screen.getByRole("textbox", { name: "Add a cuisine" }), { key: "Enter" });
   expect(screen.getByRole("button", { name: "Pulao" }).getAttribute("aria-pressed")).toBe("true");
+  // Keyboard users land back on "+ Add" after adding or leaving the field.
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "+ Add" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ Add" }));
+  fireEvent.keyDown(screen.getByRole("textbox", { name: "Add a cuisine" }), { key: "Escape" });
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "+ Add" }));
   fireEvent.change(field("Facebook"), { target: { value: "facebook.com/asha" } });
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(screen.getByRole("alert").textContent).toBe("Facebook link must start with https://");

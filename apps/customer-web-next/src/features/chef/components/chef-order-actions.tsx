@@ -402,7 +402,7 @@ export function ChefOrderActions({
         <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-small is-quiet mt-2">
           Choose another time
         </button>
-        {feedback}
+        {feedback ? <div className="mt-3">{feedback}</div> : null}
       </Frame>
     );
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "accept") {
@@ -507,7 +507,7 @@ export function ChefOrderActions({
     content = (
       <Frame inline={inline} title="Waiting for pickup" note="Hand the bag only to the partner shown here. Check the order number on the bag.">
         <PartnerRow partner={order.deliveryPartner} now={now} />
-        {feedback}
+        {feedback ? <div className="mt-3">{feedback}</div> : null}
         <div className="mt-3 flex gap-2">
           <NotPickedUp orderId={order.id} />
           {order.chefHandedOverAt !== null ? null : handOverSoon ? (

@@ -498,11 +498,10 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
               badge={String(cartItemCount)}
             />
             <ProfileLinkCard
+              to="/refer"
               icon={FaGift}
               title="Refer a friend"
-              subtitle="Invite friends and earn rewards"
-              badge="Soon"
-              disabled
+              subtitle="Share Craves with friends"
             />
             <ProfileLinkCard
               to={chef.to}

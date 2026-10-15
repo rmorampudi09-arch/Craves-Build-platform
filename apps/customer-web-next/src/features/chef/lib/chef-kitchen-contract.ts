@@ -2,6 +2,7 @@ import { safeChefPhotoUrl } from "../../../shared/lib/chef-photo.ts";
 import type {
   ChefKitchen,
   ChefKitchenInput,
+  ChefKitchenSocialLinks,
   EditableKitchenStatus,
   KitchenStatus,
 } from "./chef-kitchen-types";
@@ -26,6 +27,22 @@ export const CHEF_KITCHEN_FIELD_LIMITS = {
   state: 80,
   postalCode: 16,
 } as const;
+
+// catalog-service CatalogService: up to 10 cuisines or delivery areas of 1-40 characters; https links of up to 200.
+export const CHEF_KITCHEN_TAG_LIMITS = { count: 10, length: 40 } as const;
+export const SOCIAL_LINK_MAX = 200;
+export const SOCIAL_LINK_FIELDS = ["instagram", "facebook", "youtube", "website"] as const satisfies readonly (keyof ChefKitchenSocialLinks)[];
+
+/** Empty, or an https:// link with a host, as Catalog accepts. */
+export function isSocialLink(value: string): boolean {
+  const link = value.trim();
+  if (!link) return true;
+  try {
+    return link.length <= SOCIAL_LINK_MAX && /^https:\/\//i.test(link) && new URL(link).hostname !== "";
+  } catch {
+    return false;
+  }
+}
 
 /** The 18 drawn faces a chef picks from (catalog-service CHEF_AVATAR_IDS); chefs never upload their own face. */
 export const CHEF_AVATAR_IDS: readonly string[] = Array.from({ length: 18 }, (_, index) => `chef-avatar-${String(index + 1).padStart(2, "0")}`);
@@ -81,6 +98,31 @@ function instant(value: unknown): string | null {
   return typeof value === "string" && !Number.isNaN(Date.parse(value))
     ? value
     : null;
+}
+
+function stringList(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value.map((entry) => entry.trim()).filter(Boolean) : undefined;
+}
+
+function socialLinks(value: unknown): ChefKitchenSocialLinks | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const link = (entry: unknown) => (typeof entry === "string" && entry.trim() ? entry.trim() : null);
+  return { instagram: link(raw.instagram), facebook: link(raw.facebook), youtube: link(raw.youtube), website: link(raw.website) };
+}
+
+/** Absent (undefined) keeps what Catalog has; false is a list Catalog would refuse. */
+function tagsInput(value: unknown): string[] | undefined | false {
+  if (value === undefined || value === null) return undefined;
+  const list = stringList(value);
+  return list && list.length === (value as unknown[]).length && list.length <= CHEF_KITCHEN_TAG_LIMITS.count && list.every((tag) => tag.length <= CHEF_KITCHEN_TAG_LIMITS.length) ? list : false;
+}
+
+function linksInput(value: unknown): ChefKitchenSocialLinks | undefined | false {
+  if (value === undefined || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const links = socialLinks(value);
+  return links && SOCIAL_LINK_FIELDS.every((field) => raw[field] == null || (typeof raw[field] === "string" && isSocialLink(raw[field]))) ? links : false;
 }
 
 /** These pickup fields are also required by Order's checkout snapshot. Drafts can remain incomplete. */
@@ -144,6 +186,9 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
     ...(Array.isArray(raw.kitchenPhotoUrls)
       ? { kitchenPhotoUrls: raw.kitchenPhotoUrls.map(safeChefPhotoUrl).filter((url): url is string => url !== null).slice(0, 2) }
       : {}),
+    ...(stringList(raw.cuisines) ? { cuisines: stringList(raw.cuisines) } : {}),
+    ...(stringList(raw.serviceAreas) ? { serviceAreas: stringList(raw.serviceAreas) } : {}),
+    ...(socialLinks(raw.socialLinks) ? { socialLinks: socialLinks(raw.socialLinks) } : {}),
   };
 }
 
@@ -163,6 +208,9 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     raw.longitude !== null &&
     raw.longitude !== undefined &&
     raw.longitude !== "";
+  const cuisines = tagsInput(raw.cuisines);
+  const serviceAreas = tagsInput(raw.serviceAreas);
+  const links = linksInput(raw.socialLinks);
   if (
     !kitchenName ||
     !addressLine1 ||
@@ -174,7 +222,10 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     !validOptionalText(raw.postalCode, CHEF_KITCHEN_FIELD_LIMITS.postalCode) ||
     hasLat !== hasLon ||
     (hasLat && (latitude === null || longitude === null)) ||
-    (status === "ACTIVE" && (latitude === null || longitude === null || missingKitchenPickupField(raw) !== null))
+    (status === "ACTIVE" && (latitude === null || longitude === null || missingKitchenPickupField(raw) !== null)) ||
+    cuisines === false ||
+    serviceAreas === false ||
+    links === false
   )
     return null;
   return {
@@ -193,5 +244,8 @@ export function parseChefKitchenInput(value: unknown): ChefKitchenInput | null {
     latitude,
     longitude,
     status,
+    ...(cuisines ? { cuisines } : {}),
+    ...(serviceAreas ? { serviceAreas } : {}),
+    ...(links ? { socialLinks: links } : {}),
   };
 }

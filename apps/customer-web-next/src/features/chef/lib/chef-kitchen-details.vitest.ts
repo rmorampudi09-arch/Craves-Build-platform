@@ -38,6 +38,8 @@ const base = {
 };
 let stored: Record<string, unknown>;
 let photoReply: () => Response;
+let saved: Record<string, unknown> | null;
+let supportReply: () => Response;
 let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;
 
 beforeAll(() => {
@@ -56,18 +58,29 @@ beforeEach(() => {
     status: "ACTIVE",
     roles: ["CHEF"],
   });
+  // jsdom has no scrolling: the form scrolls to a field it asks about.
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+  vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })),
   );
   stored = { ...base, chefPhotoUrl: FACE("05"), kitchenPhotoUrl: K1, kitchenPhotoUrls: [K1] };
   photoReply = () => Response.json({ ...stored, kitchenPhotoUrls: [K1, K2] });
+  saved = null;
+  supportReply = () => Response.json(ticket, { status: 201 });
   fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     if (url === "/api/chef/kitchen" && !init?.method) return Response.json(stored);
     if (url === "/api/chef/application") return Response.json({ status: "APPROVED" });
     if (url === "/api/chef/onboarding") return Response.json({}, { status: 404 });
     if (url === "/api/chef/kitchen/photos" && init?.method === "POST") return photoReply();
+    if (url === "/api/support/cases" && init?.method === "POST") return supportReply();
+    if (url === "/api/chef/kitchen" && init?.method === "PUT") {
+      saved = JSON.parse(String(init.body));
+      stored = { ...stored, ...saved };
+      return Response.json(stored);
+    }
     if (url === "/api/chef/kitchen/chef-avatar" && init?.method === "PUT") {
       stored = { ...stored, chefPhotoUrl: FACE(JSON.parse(String(init.body)).avatarId.slice(-2)) };
       return Response.json(stored);
@@ -80,6 +93,11 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+const ticket = {
+  id: "5a0c0000-0000-4000-8000-0000000000c1", caseNumber: "CRV-5A0C000000004000800000000000", requesterRole: "CHEF", orderId: null, subject: "Move my kitchen",
+  status: "OPEN", lastRequesterMessageAt: null, lastSupportMessageAt: null, resolvedAt: null, closedAt: null, createdAt: "2026-10-10T08:00:00Z", updatedAt: "2026-10-10T08:00:00Z",
+  messages: [{ id: "3e000000-0000-4000-8000-000000000001", senderRole: "CHEF", body: "New address", createdAt: "2026-10-10T08:00:00Z" }],
+};
 const open = () => render(createElement(ChefKitchenForm));
 const tile = (name: RegExp) => screen.findByRole("button", { name });
 const note = () => document.querySelector("[aria-live=polite]")?.textContent;
@@ -153,4 +171,78 @@ it("changes the chef picture from the current face", async () => {
     ),
   ).toEqual({ avatarId: "chef-avatar-02" });
   await waitFor(() => expect(document.querySelector(`img[src="${FACE("02")}"]`)).not.toBeNull());
+});
+
+const field = (name: string) => screen.getByLabelText(name, { exact: false }) as HTMLInputElement;
+
+it("edits what the chef cooks, delivery areas and links, with the area, city, PIN and state locked", async () => {
+  stored = { ...stored, cuisines: ["Biryani"], serviceAreas: ["Madhapur"], socialLinks: { instagram: "https://instagram.com/asha", facebook: null, youtube: null, website: null } };
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
+  expect(screen.getByRole("button", { name: "Biryani" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Andhra" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ Add" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Add a cuisine" }), { target: { value: " Pulao " } });
+  fireEvent.keyDown(screen.getByRole("textbox", { name: "Add a cuisine" }), { key: "Enter" });
+  expect(screen.getByRole("button", { name: "Pulao" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.change(field("Facebook"), { target: { value: "facebook.com/asha" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByRole("alert").textContent).toBe("Facebook link must start with https://");
+  fireEvent.change(field("Facebook"), { target: { value: "https://facebook.com/asha" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+  for (const name of ["Area", "City", "State", "Pincode"]) expect(field(name).readOnly).toBe(true);
+  for (const name of ["Flat / House / Building", "Street / Road", "Landmark"]) expect(field(name).readOnly).toBe(false);
+  expect(screen.queryByRole("button", { name: /current location/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Madhapur" }));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
+  await waitFor(() => expect(saved).not.toBeNull());
+  expect(saved).toMatchObject({
+    city: "Hyderabad", state: "Telangana", postalCode: "500081", areaName: "Madhapur", latitude: 17.44, longitude: 78.39,
+    cuisines: ["Biryani", "Andhra", "Pulao"], serviceAreas: [],
+    socialLinks: { instagram: "https://instagram.com/asha", facebook: "https://facebook.com/asha", youtube: null, website: null },
+  });
+});
+
+it("leaves out what the server doesn't send, and lets an unfinished kitchen fill an empty area and PIN", async () => {
+  stored = { ...stored, areaName: null, postalCode: null, latitude: null, longitude: null };
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
+  expect(screen.queryByRole("group", { name: "What you cook" })).toBeNull();
+  expect(screen.queryByLabelText("Instagram", { exact: false })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.queryByRole("group", { name: "Delivery areas" })).toBeNull();
+  expect(field("Area").readOnly).toBe(false);
+  expect(field("Pincode").readOnly).toBe(false);
+  expect(field("City").readOnly).toBe(true);
+  expect(screen.getByRole("button", { name: "Use my current location" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
+  await waitFor(() => expect(saved).not.toBeNull());
+  for (const key of ["cuisines", "serviceAreas", "socialLinks"]) expect(saved).not.toHaveProperty(key);
+});
+
+it("asks Craves support to move the kitchen, and keeps the message when support chat isn't live yet", async () => {
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "Move my kitchen" }));
+  await screen.findByRole("dialog", { name: "Move my kitchen" });
+  fireEvent.change(screen.getByLabelText("Your new kitchen address"), { target: { value: " 4 New Street, Kondapur " } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await screen.findByText("Sent. Craves support will reply in Get help.");
+  const sent = fetcher.mock.calls.find(([url]) => url === "/api/support/cases")!;
+  expect(JSON.parse(String(sent[1]?.body))).toEqual({ contextRole: "CHEF", orderId: null, subject: "Move my kitchen", message: "4 New Street, Kondapur" });
+  expect(screen.getByRole("link", { name: "Open Get help" }).getAttribute("href")).toBe("/chef/support");
+  fireEvent.click(screen.getByRole("button", { name: "Done" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+  supportReply = () => Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 });
+  fireEvent.click(screen.getByRole("button", { name: "Move my kitchen" }));
+  fireEvent.change(await screen.findByLabelText("Your new kitchen address"), { target: { value: "4 New Street" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await screen.findByText("Chat is on its way");
+  expect((screen.getByLabelText("Your new kitchen address") as HTMLTextAreaElement).value).toBe("4 New Street");
+  expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
 });

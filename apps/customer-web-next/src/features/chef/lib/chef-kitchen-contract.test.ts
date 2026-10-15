@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHEF_AVATAR_IDS, chefAvatarGateStep, chefAvatarIdFromUrl, chefAvatarUrl, kitchenPhotoSlots, parseChefKitchen, parseChefKitchenInput } from "./chef-kitchen-contract.ts";
+import { CHEF_AVATAR_IDS, chefAvatarGateStep, chefAvatarIdFromUrl, chefAvatarUrl, isSocialLink, kitchenPhotoSlots, parseChefKitchen, parseChefKitchenInput } from "./chef-kitchen-contract.ts";
 
 const kitchen = {
   id: "11111111-2222-4333-8444-555555555555",
@@ -106,4 +106,35 @@ test("keeps https kitchen photos only, and tells the overall photo from the cook
   assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrl: null, kitchenPhotoUrls: [k2] }), [null, k2]);
   assert.equal(kitchenPhotoSlots(parseChefKitchen(kitchen)!), undefined);
   assert.equal("kitchenPhotoUrl" in parseChefKitchen(kitchen)!, false);
+});
+
+const links = { instagram: "https://instagram.com/asha", facebook: null, youtube: null, website: "https://asha.example" };
+
+test("keeps cuisines, delivery areas and links only when the server sent them", () => {
+  const plain = parseChefKitchen(kitchen)!;
+  for (const field of ["cuisines", "serviceAreas", "socialLinks"]) assert.equal(field in plain, false, field);
+  const full = parseChefKitchen({ ...kitchen, cuisines: [" Biryani "], serviceAreas: [], socialLinks: { ...links, facebook: "  ", extra: "x" } })!;
+  assert.deepEqual(full.cuisines, ["Biryani"]);
+  assert.deepEqual(full.serviceAreas, []);
+  assert.deepEqual(full.socialLinks, links);
+});
+
+test("accepts only https links with a host, of up to 200 characters", () => {
+  for (const good of ["", "  ", "https://instagram.com/asha", "HTTPS://asha.example/a?b=c", `https://a.example/${"x".repeat(200 - 18)}`]) assert.equal(isSocialLink(good), true, good);
+  for (const bad of ["http://asha.example", "instagram.com/asha", "javascript:alert(1)", "https://", `https://a.example/${"x".repeat(200 - 17)}`]) assert.equal(isSocialLink(bad), false, bad);
+});
+
+test("sends cuisines, delivery areas and links only when given, and only as Catalog accepts them", () => {
+  const draft = { ...kitchen, status: "DRAFT" };
+  const plain = parseChefKitchenInput(draft)!;
+  for (const field of ["cuisines", "serviceAreas", "socialLinks"]) assert.equal(field in plain, false, field);
+  assert.equal("cuisines" in parseChefKitchenInput({ ...draft, cuisines: null })!, false);
+  const full = parseChefKitchenInput({ ...draft, cuisines: [" Biryani ", "x".repeat(40)], serviceAreas: [], socialLinks: { ...links, facebook: "", youtube: undefined } })!;
+  assert.deepEqual(full.cuisines, ["Biryani", "x".repeat(40)]);
+  assert.deepEqual(full.serviceAreas, []);
+  assert.deepEqual(full.socialLinks, links);
+  for (const bad of [
+    { cuisines: Array.from({ length: 11 }, (_, i) => `c${i}`) }, { cuisines: ["x".repeat(41)] }, { cuisines: [" "] }, { cuisines: [7] }, { cuisines: "Biryani" },
+    { serviceAreas: ["ok", ""] }, { socialLinks: { ...links, website: "http://asha.example" } }, { socialLinks: { ...links, instagram: 5 } }, { socialLinks: "https://x.example" }, { socialLinks: [] },
+  ]) assert.equal(parseChefKitchenInput({ ...draft, ...bad }), null, JSON.stringify(bad));
 });

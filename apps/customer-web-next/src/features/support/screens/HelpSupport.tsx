@@ -13,10 +13,22 @@ import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideC
 const TILE =
   "flex h-28 min-w-0 flex-1 flex-col items-center justify-center gap-2 rounded-2xl text-sm font-black transition-[border-color,box-shadow,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
 
-function TileBody({ icon: Icon, label, hint, filled = false }: { icon: ComponentType<{ className?: string }>; label: string; hint: string; filled?: boolean }) {
+function TileBody({
+  icon: Icon,
+  label,
+  hint,
+  filled = false,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  hint: string;
+  filled?: boolean;
+}) {
   return (
     <>
-      <span className={`flex h-11 w-11 items-center justify-center rounded-full ${filled ? "bg-white/20 text-white" : "bg-[#F1F3F5] text-[#F62E18]"}`}>
+      <span
+        className={`flex h-11 w-11 items-center justify-center rounded-full ${filled ? "bg-white/20 text-white" : "bg-[#F1F3F5] text-[#F62E18]"}`}
+      >
         <Icon className="h-5 w-5" aria-hidden="true" />
       </span>
       {label}
@@ -47,10 +59,19 @@ export function HelpSupport() {
         <p className="px-1 text-sm text-[#6B6B6B]">How would you like to reach Craves?</p>
         <div className="mt-4 flex gap-2.5">
           <Link to="/support" className={`${TILE} bg-[#C4200F] text-white hover:bg-[#A81B0C]`}>
-            <TileBody filled icon={MessageCircle} label="Chat" hint="chat with the Craves assistant about orders, payments, refunds or your account" />
+            <TileBody
+              filled
+              icon={MessageCircle}
+              label="Chat"
+              hint="chat with the Craves assistant about orders, payments, refunds or your account"
+            />
           </Link>
           <a href={`tel:${CRAVES_SUPPORT_PHONE}`} className={outlined}>
-            <TileBody icon={Phone} label="Call" hint={`call Craves support on ${CRAVES_SUPPORT_PHONE_LABEL}`} />
+            <TileBody
+              icon={Phone}
+              label="Call"
+              hint={`call Craves support on ${CRAVES_SUPPORT_PHONE_LABEL}`}
+            />
           </a>
           <a href={`mailto:${CRAVES_SUPPORT_EMAIL}?subject=Craves%20support`} className={outlined}>
             <TileBody icon={Mail} label="Email" hint={`email ${CRAVES_SUPPORT_EMAIL}`} />
@@ -63,7 +84,10 @@ export function HelpSupport() {
         <h2 className="mb-2 mt-8 px-1 font-display text-lg font-black">Common questions</h2>
         <ul className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
           {SUPPORT_COMMON_QUESTIONS.map((question, index) => (
-            <li key={question.label} className={index > 0 ? "border-t border-[#F1F3F5]" : undefined}>
+            <li
+              key={question.label}
+              className={index > 0 ? "border-t border-[#F1F3F5]" : undefined}
+            >
               <Link
                 to={question.href}
                 className="flex min-h-14 items-center gap-3 px-4 py-3 text-sm font-semibold transition-colors hover:bg-[#F8F9FA] focus-visible:bg-[#F8F9FA] focus-visible:outline-none"

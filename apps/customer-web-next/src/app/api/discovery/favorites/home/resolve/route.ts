@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { favoriteHomesRequest, parseFavoriteHomeCards } from "@/features/favorites/lib/saved-resolve-contract";
+import {
+  favoriteHomesRequest,
+  parseFavoriteHomeCards,
+} from "@/features/favorites/lib/saved-resolve-contract";
 import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { upstreamFailure } from "@/shared/lib/feature-availability";
 import { isSameOrigin } from "@/shared/lib/request-security";
@@ -32,8 +35,12 @@ export async function POST(request: NextRequest) {
       return failure(mapped.status, mapped.code);
     }
     const parsed = parseFavoriteHomeCards(body);
-    return parsed ? NextResponse.json(parsed, { headers }) : failure(502, "INVALID_FAVORITE_HOME_RESPONSE");
+    return parsed
+      ? NextResponse.json(parsed, { headers })
+      : failure(502, "INVALID_FAVORITE_HOME_RESPONSE");
   } catch (error) {
-    return error instanceof SessionRequiredError ? failure(401, "SESSION_EXPIRED") : failure(503, "FAVORITE_HOME_UNAVAILABLE");
+    return error instanceof SessionRequiredError
+      ? failure(401, "SESSION_EXPIRED")
+      : failure(503, "FAVORITE_HOME_UNAVAILABLE");
   }
 }

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSavedMenuItems, savedMenuItemsRequest } from "@/features/favorites/lib/saved-resolve-contract";
+import {
+  parseSavedMenuItems,
+  savedMenuItemsRequest,
+} from "@/features/favorites/lib/saved-resolve-contract";
 import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { upstreamFailure } from "@/shared/lib/feature-availability";
 import { publicApiFetch } from "@/shared/lib/public-api";
@@ -32,7 +35,9 @@ export async function POST(request: NextRequest) {
       return failure(mapped.status, mapped.code);
     }
     const parsed = parseSavedMenuItems(body);
-    return parsed ? NextResponse.json(parsed, { headers }) : failure(502, "INVALID_SAVED_RESOLVE_RESPONSE");
+    return parsed
+      ? NextResponse.json(parsed, { headers })
+      : failure(502, "INVALID_SAVED_RESOLVE_RESPONSE");
   } catch {
     return failure(503, "SAVED_RESOLVE_UNAVAILABLE");
   }

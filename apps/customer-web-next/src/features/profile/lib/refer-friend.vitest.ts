@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...props }, children),
+  Link: ({ children, to, ...props }: { children: ReactNode; to: string }) =>
+    createElement("a", { href: to, ...props }, children),
 }));
 
 import { ReferFriend } from "@/features/profile/screens/ReferFriend";
@@ -25,8 +26,12 @@ afterEach(() => {
 describe("Refer a friend", () => {
   it("shares to WhatsApp and Messages, and hides More without a system share sheet", () => {
     render(createElement(ReferFriend));
-    expect(screen.getByRole("link", { name: "WhatsApp" }).getAttribute("href")).toBe(`https://wa.me/?text=${encodeURIComponent(TEXT)}`);
-    expect(screen.getByRole("link", { name: "Messages" }).getAttribute("href")).toBe(`sms:?&body=${encodeURIComponent(TEXT)}`);
+    expect(screen.getByRole("link", { name: "WhatsApp" }).getAttribute("href")).toBe(
+      `https://wa.me/?text=${encodeURIComponent(TEXT)}`,
+    );
+    expect(screen.getByRole("link", { name: "Messages" }).getAttribute("href")).toBe(
+      `sms:?&body=${encodeURIComponent(TEXT)}`,
+    );
     expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 

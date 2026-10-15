@@ -142,6 +142,15 @@ describe("saved dishes resolve BFF", () => {
     expect(body.items[0]).not.toHaveProperty("description");
     expect(publicFetch.mock.calls[0][0]).toBe("/discovery/saved/menu-items/resolve");
     expect(JSON.parse(publicFetch.mock.calls[0][1].body)).toEqual({ menuItemIds: [DISH] });
+
+    // An oversized photo URL drops only that photo, never the whole list.
+    publicFetch.mockResolvedValueOnce(
+      Response.json({
+        items: [saved(DISH, { primaryImageUrl: `https://img.craves.in/${"a".repeat(2000)}.jpg` })],
+      }),
+    );
+    const long = await resolveSaved(request(savedPath, { menuItemIds: [DISH] }));
+    expect([long.status, (await long.json()).items[0].primaryImageUrl]).toEqual([200, null]);
   });
 
   it("rejects a response it can't trust and maps upstream failures", async () => {

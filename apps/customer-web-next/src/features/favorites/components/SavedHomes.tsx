@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle, BellPlus, BellRing, ChefHat, Heart } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import { resolveFavoriteHomes } from "@/features/favorites/api/savedResolve";
+import { resolveFavoriteHomes, SavedResolveError } from "@/features/favorites/api/savedResolve";
 import {
   favoriteHomeName,
   favoriteHomeState,
@@ -122,11 +122,7 @@ function SavedHomeRow({
           onClick={onToggleWatch}
           disabled={busy}
           aria-pressed={alerts}
-          aria-label={
-            alerts
-              ? `Stop cooking alerts from ${name}`
-              : `Alert me in Craves when ${name} is cooking`
-          }
+          aria-label={`Cooking alerts from ${name}`}
           title={alerts ? "Cooking alerts on" : "Get cooking alerts"}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-colors hover:text-[#C4200F] disabled:cursor-wait disabled:opacity-50"
         >
@@ -196,8 +192,12 @@ export function SavedHomes() {
         ),
       );
       setStatus("ready");
-    } catch {
-      setStatus("resolve-error");
+    } catch (error) {
+      setStatus(
+        error instanceof SavedResolveError && error.code === FEATURE_NOT_AVAILABLE
+          ? "unavailable"
+          : "resolve-error",
+      );
     }
   }, []);
 

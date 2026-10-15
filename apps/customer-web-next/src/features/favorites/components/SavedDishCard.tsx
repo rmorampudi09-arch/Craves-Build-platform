@@ -12,6 +12,7 @@ import {
   type SavedTone,
 } from "@/features/favorites/lib/saved-presentation";
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
+import { useFavoriteKitchen } from "@/shared/hooks/use-favorite-kitchen";
 
 const TONE: Record<SavedTone, string> = {
   positive: "bg-[#EDF7EE] text-[#2E7D32]",
@@ -27,21 +28,48 @@ function money(amount: number, currency: string): string {
   }).format(amount);
 }
 
-/** A saved dish with today's availability; it opens only while the dish and kitchen are live, and Add shows only when it can be ordered now. */
+function SaveKitchenToggle({
+  kitchenId,
+  kitchenName,
+  onChange,
+}: {
+  kitchenId: string;
+  kitchenName: string;
+  onChange: () => void;
+}) {
+  const { saved, busy, toggle } = useFavoriteKitchen(kitchenId);
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle().then(onChange)}
+      disabled={busy}
+      aria-pressed={saved}
+      className="mt-2 inline-flex min-h-10 items-center rounded-full bg-[#F1F3F5] px-3 text-xs font-bold text-[#C4200F] transition-colors hover:text-[#F62E18] disabled:cursor-wait disabled:opacity-50"
+    >
+      {saved ? "Kitchen saved" : "Save kitchen"}
+      <span className="sr-only">: {kitchenName}</span>
+    </button>
+  );
+}
+
+/** A saved dish with today's availability; it opens only while the dish and kitchen are live, Add shows only when it can be ordered now, and its kitchen can be saved from here. */
 export function SavedDishCard({
   item,
   busy,
   eager,
   onRemove,
   onAdd,
+  onKitchenChange,
 }: {
   item: SavedMenuItem;
   busy: boolean;
   eager: boolean;
   onRemove: () => void;
   onAdd: () => void;
+  onKitchenChange: () => void;
 }) {
   const name = savedDishName(item);
+  const kitchenName = savedDishKitchenName(item);
   const open = canOpenSavedDish(item);
   const availability = savedDishAvailability(item);
   const toDish = (children: ReactNode, className: string) =>
@@ -83,9 +111,7 @@ export function SavedDishCard({
           <h3 className="line-clamp-2 font-display text-base font-black">{name}</h3>,
           open ? "block transition-colors hover:text-[#F62E18]" : "block",
         )}
-        <p className="mt-0.5 truncate text-xs font-semibold text-[#6B6B6B]">
-          {savedDishKitchenName(item)}
-        </p>
+        <p className="mt-0.5 truncate text-xs font-semibold text-[#6B6B6B]">{kitchenName}</p>
         {item.price !== null && item.currency ? (
           <p className="mt-1.5 font-display text-sm font-black">
             {money(item.price, item.currency)}
@@ -98,6 +124,13 @@ export function SavedDishCard({
         </p>
         {availability.detail ? (
           <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">{availability.detail}</p>
+        ) : null}
+        {item.kitchenId ? (
+          <SaveKitchenToggle
+            kitchenId={item.kitchenId}
+            kitchenName={kitchenName}
+            onChange={onKitchenChange}
+          />
         ) : null}
       </div>
 

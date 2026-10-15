@@ -50,7 +50,7 @@ const savedItem = z.object({
   kitchenDisplayName: text,
   kitchenStatus: text,
   // Only an https picture may be shown; anything else becomes "no photo".
-  primaryImageUrl: z.string().max(2000).nullable().transform(safeChefPhotoUrl),
+  primaryImageUrl: z.unknown().transform(safeChefPhotoUrl),
   timezoneId: z.string().min(1).max(64),
   acceptingOrders: z.boolean(),
   paused: z.boolean(),

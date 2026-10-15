@@ -5,8 +5,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const addToCart = vi.hoisted(() => vi.fn());
+// Stable like the router's own navigate, so the page's load effect runs once.
+const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
   Link: ({
     children,
     to,
@@ -126,6 +128,7 @@ function stub(override: Route = () => undefined) {
 
 beforeEach(() => {
   addToCart.mockReset();
+  navigate.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -167,9 +170,8 @@ describe("Saved screen", () => {
     const fetch = stub();
     render(createElement(WishlistPage));
     fireEvent.mouseDown(await screen.findByRole("tab", { name: "Home chefs" }));
-    const bell = await screen.findByRole("button", {
-      name: "Alert me in Craves when Asha's kitchen is cooking",
-    });
+    const bell = await screen.findByRole("button", { name: "Cooking alerts from Asha's kitchen" });
+    expect(bell.getAttribute("aria-pressed")).toBe("false");
     expect(
       screen
         .getAllByRole("listitem")
@@ -180,7 +182,7 @@ describe("Saved screen", () => {
     );
 
     fireEvent.click(bell);
-    await screen.findByRole("button", { name: "Stop cooking alerts from Asha's kitchen" });
+    await waitFor(() => expect(bell.getAttribute("aria-pressed")).toBe("true"));
     expect(
       fetch.mock.calls
         .filter(([, init]) => init?.method === "PUT")
@@ -202,14 +204,38 @@ describe("Saved screen", () => {
     ]);
   });
 
-  it("shows Coming soon when saving kitchens isn't live yet", async () => {
-    stub((url) =>
-      url === "/api/customer/favorite-kitchens"
-        ? Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 })
-        : undefined,
-    );
+  it.each(["/api/customer/favorite-kitchens", "/api/discovery/favorites/home/resolve"])(
+    "shows Coming soon when %s isn't live yet",
+    async (path) => {
+      stub((url) =>
+        url === path
+          ? Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 })
+          : undefined,
+      );
+      render(createElement(WishlistPage));
+      expect(await screen.findByText("Saved home chefs")).toBeTruthy();
+      expect(screen.getByText("Coming soon")).toBeTruthy();
+    },
+  );
+
+  it("saves or unsaves a dish's kitchen from its card and reloads Home chefs", async () => {
+    const fetch = stub();
+    const kitchenReads = () =>
+      fetch.mock.calls.filter(
+        ([url, init]) => url === "/api/customer/favorite-kitchens" && !init?.method,
+      ).length;
     render(createElement(WishlistPage));
-    expect(await screen.findByText("Saved home chefs")).toBeTruthy();
-    expect(screen.getByText("Coming soon")).toBeTruthy();
+    const toggles = await screen.findAllByRole("button", { name: "Kitchen saved: Asha's kitchen" });
+    expect(toggles).toHaveLength(2);
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("true");
+    const reads = kitchenReads();
+    fireEvent.click(toggles[0]);
+    expect(
+      await screen.findAllByRole("button", { name: "Save kitchen: Asha's kitchen" }),
+    ).toHaveLength(2);
+    expect(
+      fetch.mock.calls.filter(([, init]) => init?.method === "DELETE").map(([url]) => url),
+    ).toEqual([`/api/customer/favorite-kitchens/${KITCHEN}`]);
+    await waitFor(() => expect(kitchenReads()).toBeGreaterThan(reads));
   });
 });

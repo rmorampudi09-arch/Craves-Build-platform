@@ -38,6 +38,8 @@ function WishlistPage() {
   const [failure, setFailure] = useState<LoadFailure>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Saving a kitchen from a dish card reloads Home chefs so the new save shows there.
+  const [homesKey, setHomesKey] = useState(0);
   const rememberScroll = useReturnScroll(ready && !loading);
 
   const loadFavorites = useCallback(async () => {
@@ -146,6 +148,7 @@ function WishlistPage() {
       eager={index < 4}
       onRemove={() => void removeSavedDish(item)}
       onAdd={() => void addSavedDishToCart(item)}
+      onKitchenChange={() => setHomesKey((key) => key + 1)}
     />
   );
 
@@ -286,7 +289,7 @@ function WishlistPage() {
               {dishes}
             </TabsContent>
             <TabsContent value="homes" forceMount className="mt-0 data-[state=inactive]:hidden">
-              <SavedHomes />
+              <SavedHomes key={homesKey} />
             </TabsContent>
           </Tabs>
         )}

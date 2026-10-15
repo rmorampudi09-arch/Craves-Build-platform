@@ -26,10 +26,11 @@ import {
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { ChefSkeletonRow } from "@/features/chef/components/chef-loading";
+import { ChefEarningsInsights } from "@/features/chef/components/chef-earnings-insights";
 
 type LedgerView = "ALL" | ChefEarningStatus;
 
-/** `children` sit between the totals and the list of orders (the page's money links). */
+/** Sales for a period first, then the totals; `children` sit between the totals and the list of orders (the page's money links). */
 export function ChefEarningsLedger({ children }: { children?: ReactNode }) {
   const [entries, setEntries] = useState<ChefEarning[]>([]);
   const [view, setView] = useState<LedgerView>("ALL");
@@ -104,11 +105,12 @@ export function ChefEarningsLedger({ children }: { children?: ReactNode }) {
 
   return (
     <div className="chef-stack">
+      <ChefEarningsInsights entries={entries} loading={loading} failed={!!error && entries.length === 0} onRetry={() => void load()} />
       <ChefSection flush>
         <div className="chef-stats is-three" aria-busy={loading}>
           {(
             [
-              ["You earned", approvedPayable],
+              ["Earned in all", approvedPayable],
               ["Coming to your bank", pendingPayable],
               ["Paid to your bank", settledPayable],
             ] as const

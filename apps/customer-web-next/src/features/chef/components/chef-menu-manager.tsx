@@ -10,9 +10,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   Camera,
+  CopyPlus,
+  Ellipsis,
   Minus,
   Plus,
   Store,
+  Trash2,
   UtensilsCrossed,
   X,
 } from "lucide-react";
@@ -28,7 +31,8 @@ import { ChefMenuSkeleton } from "@/features/chef/components/chef-loading";
 import { ChefCategoryPicker } from "@/features/chef/components/chef-category-picker";
 import { ChefMenuViews } from "@/features/chef/components/chef-menu-views";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
-import { Dialog, secondaryActionClass, useOverlayHistory } from "@/shared/ui/overlays/overlay";
+import { Dialog, secondaryActionClass, Sheet, useOverlayHistory } from "@/shared/ui/overlays/overlay";
+import { isFeatureUnavailable } from "@/shared/lib/feature-availability";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
 import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
 import { DISH_CATEGORIES, knownCategory } from "@/features/chef/lib/dish-categories";
@@ -230,6 +234,10 @@ export function ChefMenuManager() {
   const [baseline, setBaseline] = useState(JSON.stringify(EMPTY));
   const [editing, setEditing] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  /** The dish Discard copies next, when Duplicate asked first; otherwise Discard closes the form. */
+  const copyAfterDiscard = useRef<ChefMenuItem | null>(null);
+  /** Dish options: the menu, or the delete question in its place. */
+  const [options, setOptions] = useState<"menu" | "delete" | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -311,6 +319,7 @@ export function ChefMenuManager() {
   function requestLeave(): boolean {
     if (busyRef.current) return false;
     if (dirty) {
+      copyAfterDiscard.current = null;
       setConfirmLeave(true);
       return false;
     }
@@ -324,8 +333,13 @@ export function ChefMenuManager() {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
   }
-  function start(item?: ChefMenuItem) {
-    const next = item ? toForm(item) : EMPTY;
+  /** Opens the dish form; a copy is a new draft filled from the dish, saved with the normal create. */
+  function start(item?: ChefMenuItem, copy = false) {
+    const next = !item
+      ? EMPTY
+      : copy
+        ? { ...toForm(item), id: null, itemName: `Copy of ${item.itemName}`.slice(0, 180), available: false, status: "DRAFT" as const }
+        : toForm(item);
     setForm(next);
     setBaseline(JSON.stringify(next));
     setImageFiles([]);
@@ -552,6 +566,35 @@ export function ChefMenuManager() {
       setMessage(
         chefErrorText(error, "Availability could not be confirmed. Reload the menu to check it."),
       );
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+  async function deleteDish() {
+    const dish = items.find((item) => item.id === form.id);
+    if (!dish || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("");
+    setNotice("");
+    const refused = `We couldn’t delete ${dish.itemName}. If it’s in a meal plan, change the plan first.`;
+    try {
+      const response = await sessionFetch(`/api/chef/menu/${dish.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        setOptions(null);
+        if (isFeatureUnavailable(response.status, body)) setMessage("Deleting dishes is coming soon.");
+        else setMessage(chefErrorText(apiError(response, body, refused), refused));
+        return;
+      }
+      setItems((current) => current.filter((item) => item.id !== dish.id));
+      setOptions(null);
+      closeEditor();
+      setNotice(`${dish.itemName} deleted`);
+    } catch (error) {
+      setOptions(null);
+      setMessage(chefErrorText(error, refused));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -849,7 +892,21 @@ export function ChefMenuManager() {
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Menu
         </button>
-        <h1 className="chef-page-title">{form.id ? "Edit dish" : "Add a dish"}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="chef-page-title">{form.id ? "Edit dish" : "Add a dish"}</h1>
+          {form.id ? (
+            <button
+              type="button"
+              className="chef-icon-button shrink-0 !border-0 !bg-transparent !p-0 !shadow-none"
+              aria-label="Dish options"
+              aria-haspopup="dialog"
+              disabled={busy}
+              onClick={() => setOptions("menu")}
+            >
+              <Ellipsis className="h-5 w-5" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
         <p className="chef-page-subtitle">
           {form.id
             ? "Customers see your changes as soon as you save."
@@ -1282,6 +1339,55 @@ export function ChefMenuManager() {
         </button>
       </div>
 
+      <Sheet
+        open={options !== null}
+        onOpenChange={(open) => {
+          if (!open) setOptions(null);
+        }}
+        busy={busy}
+        title={options === "delete" ? `Delete ${items.find((item) => item.id === form.id)?.itemName ?? "this dish"}?` : "Dish options"}
+        description={options === "delete" ? "Customers won’t see it any more. If it’s in a meal plan, change the plan first." : undefined}
+        footer={
+          options === "delete" ? (
+            <>
+              <button type="button" className={secondaryActionClass} disabled={busy} onClick={() => setOptions(null)}>
+                Cancel
+              </button>
+              <button type="button" className="craves-primary-action w-full sm:w-auto" aria-busy={busy} disabled={busy} onClick={() => void deleteDish()}>
+                {busy ? "Deleting…" : "Delete dish"}
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        {options === "menu" ? (
+          // Sheets open outside the chef page: the theme brings the chef colours along.
+          <div className="chef-panel-theme chef-list mt-4 overflow-hidden rounded-xl border border-[#E3E6EA] !bg-transparent">
+            <button
+              type="button"
+              className="chef-row w-full !rounded-none !border-0 !bg-transparent text-left"
+              onClick={() => {
+                const dish = items.find((item) => item.id === form.id);
+                setOptions(null);
+                if (!dish) return;
+                if (!dirty) return start(dish, true);
+                copyAfterDiscard.current = dish;
+                setConfirmLeave(true);
+              }}
+            >
+              <span className="chef-row-icon"><CopyPlus className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="chef-row-main">
+                <span className="chef-row-title block">Duplicate dish</span>
+                <span className="chef-row-meta block">A new draft with the same details</span>
+              </span>
+            </button>
+            <button type="button" className="chef-row w-full !rounded-none !border-0 !bg-transparent text-left" onClick={() => setOptions("delete")}>
+              <span className="chef-row-icon text-[#C4200F]"><Trash2 className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="chef-row-main"><span className="chef-row-title block text-[#C4200F]">Delete dish</span></span>
+            </button>
+          </div>
+        ) : null}
+      </Sheet>
       <Dialog
         open={confirmLeave}
         onOpenChange={setConfirmLeave}
@@ -1289,7 +1395,17 @@ export function ChefMenuManager() {
         description="What you added here will be lost."
         footer={
           <>
-            <button type="button" className={secondaryActionClass} onClick={closeEditor}>
+            <button
+              type="button"
+              className={secondaryActionClass}
+              onClick={() => {
+                const dish = copyAfterDiscard.current;
+                if (dish) {
+                  setConfirmLeave(false);
+                  start(dish, true);
+                } else closeEditor();
+              }}
+            >
               Discard
             </button>
             <button

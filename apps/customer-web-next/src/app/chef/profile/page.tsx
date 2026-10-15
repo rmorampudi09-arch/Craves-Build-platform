@@ -12,6 +12,7 @@ import {
   ChevronRight,
   FileCheck2,
   FileText,
+  Gift,
   Wallet,
   Landmark,
   LifeBuoy,
@@ -46,6 +47,7 @@ function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
       { href: "/chef/finance", icon: Wallet, label: "Balance & payouts", description: "Take out the money you earned" },
       { href: "/chef/bank", icon: Landmark, label: "Edit bank account details", description: "The account Craves sends your money to" },
       { href: "/chef/statements", icon: FileText, label: "Statements", description: "PDF records to keep or share" },
+      { href: "/chef/referrals", icon: Gift, label: "Refer a chef", description: "Earn from chefs you invite" },
     ] },
     { title: "Account", items: [
       { href: "/chef/application/status", icon: FileCheck2, label: "Your application", description: "What you sent to Craves" },

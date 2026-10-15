@@ -17,3 +17,29 @@ export function parseCustomerNotifications(value: unknown): CustomerNotification
   if (!Array.isArray(value) || value.length > 100) return null; const notices = value.map(parseCustomerNotification);
   return notices.some((notice) => notice === null) ? null : notices as CustomerNotification[];
 }
+
+export type NotificationPage = { notices: CustomerNotification[]; nextCursor: string | null; hasMore: boolean };
+/** notification-service AppNoticePageResponse; the cursor is base64url without padding. */
+export function parseNotificationPage(value: unknown): NotificationPage | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null; const raw = value as Record<string, unknown>;
+  const notices = parseCustomerNotifications(raw.notices);
+  const nextCursor = raw.nextCursor == null ? null : typeof raw.nextCursor === "string" && /^[A-Za-z0-9_-]{1,512}$/.test(raw.nextCursor) ? raw.nextCursor : undefined;
+  if (!notices || nextCursor === undefined || typeof raw.hasMore !== "boolean" || (raw.hasMore && !nextCursor)) return null;
+  return { notices, nextCursor, hasMore: raw.hasMore };
+}
+export function parseUnreadCount(value: unknown): number | null {
+  const count = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>).unreadCount : null;
+  return typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
+// Sent to customers despite the CHEF_ prefix: "the chef accepted/declined your order".
+const CUSTOMER_CHEF_TYPES = new Set(["CHEF_ACCEPTED_ORDER", "CHEF_REJECTED_ORDER"]);
+export function isKitchenNotice(notice: CustomerNotification): boolean {
+  const type = notice.noticeType.toUpperCase();
+  return (type.startsWith("CHEF_") && !CUSTOMER_CHEF_TYPES.has(type)) || (notice.targetType ?? "").toUpperCase().startsWith("CHEF_");
+}
+/** About food the person bought; Chef Mode leaves these to the customer app. Unknown types show in both. */
+export function isOwnOrderNotice(notice: CustomerNotification): boolean {
+  const type = notice.noticeType.toUpperCase();
+  return !isKitchenNotice(notice) && (CUSTOMER_CHEF_TYPES.has(type) || /^(ORDER|PAYMENT|DELIVERY|REFUND)_/.test(type));
+}

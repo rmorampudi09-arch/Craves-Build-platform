@@ -16,6 +16,7 @@ import { GET as readSchedule } from "@/app/api/subscriptions/plans/[planId]/sche
 import { POST as createSubscription } from "@/app/api/subscriptions/route";
 import { PATCH as pause } from "@/app/api/subscriptions/[subscriptionId]/pause/route";
 import { PATCH as resume } from "@/app/api/subscriptions/[subscriptionId]/resume/route";
+import { POST as chooseDayCredit } from "@/app/api/subscriptions/[subscriptionId]/day-credits/[creditId]/choice/route";
 
 const PLAN = "11111111-1111-4111-8111-111111111111";
 const SUBSCRIPTION = "33333333-3333-4333-8333-333333333333";
@@ -288,5 +289,50 @@ describe("meal plan changes BFF", () => {
       400,
       "DELIVERY_ADDRESS_OUT_OF_RANGE",
     ]);
+  });
+});
+
+describe("day credit choice BFF", () => {
+  const CREDIT = "88888888-8888-4888-8888-888888888888";
+  const credit = { id: CREDIT, kind: "PAUSE", firstDate: "2026-10-10", lastDate: "2026-10-12", mealSlotCode: null, days: 3, status: "EXTENDED", refundAmount: null, currency: "INR", choiceDeadline: "2026-10-16T06:00:00Z", extendAvailable: true };
+  const path = `/api/subscriptions/${SUBSCRIPTION}/day-credits/${CREDIT}/choice`;
+  const choose = (body: unknown, ids = { subscriptionId: SUBSCRIPTION, creditId: CREDIT }, origin?: string) =>
+    chooseDayCredit(request(path, { method: "POST", body, origin }), params(ids));
+
+  it("forwards one choice and returns the settled credit, uncached", async () => {
+    upstream.mockResolvedValue(Response.json({ ...credit, internal: "dropped" }));
+    const response = await choose({ choice: "EXTEND" });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual(credit);
+    expect(upstream.mock.calls[0][1]).toBe(`/subscriptions/${SUBSCRIPTION}/day-credits/${CREDIT}/choice`);
+    expect(JSON.parse(upstream.mock.calls[0][2].body)).toEqual({ choice: "EXTEND" });
+  });
+
+  it("rejects bad ids, bad choices and cross-site posts before the backend", async () => {
+    expect((await choose({ choice: "EXTEND" }, { subscriptionId: "nope", creditId: CREDIT })).status).toBe(400);
+    expect((await choose({ choice: "EXTEND" }, { subscriptionId: SUBSCRIPTION, creditId: "nope" })).status).toBe(400);
+    for (const body of [{ choice: "BOTH" }, { choice: "REFUND", amount: 1 }, null]) expect((await choose(body)).status).toBe(400);
+    expect((await choose({ choice: "REFUND" }, undefined, "https://evil.example")).status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [409, { code: "REFUNDS_NOT_AVAILABLE" }, 409, "REFUNDS_NOT_AVAILABLE"],
+    [409, { code: "DAY_CREDIT_ALREADY_SETTLED" }, 409, "DAY_CREDIT_ALREADY_SETTLED"],
+    [404, { statusCode: 404, message: "Resource not found" }, 404, "FEATURE_NOT_AVAILABLE"],
+    [401, {}, 401, "SESSION_EXPIRED"],
+    [500, {}, 503, "DAY_CREDIT_CHOICE_FAILED"],
+  ])("maps upstream %i to %i", async (status, body, expected, code) => {
+    upstream.mockResolvedValue(Response.json(body, { status }));
+    const response = await choose({ choice: "REFUND" });
+    expect([response.status, (await response.json()).code]).toEqual([expected, code]);
+  });
+
+  it("answers 502 when the backend returns another or a broken credit", async () => {
+    upstream.mockResolvedValue(Response.json({ ...credit, id: "99999999-9999-4999-8999-999999999999" }));
+    expect((await choose({ choice: "EXTEND" })).status).toBe(502);
+    upstream.mockResolvedValue(Response.json({ ...credit, status: "MAYBE" }));
+    expect((await choose({ choice: "EXTEND" })).status).toBe(502);
   });
 });

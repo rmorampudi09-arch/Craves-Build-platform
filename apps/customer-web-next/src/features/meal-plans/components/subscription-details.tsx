@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
-import { indiaBusinessDate, type CustomerSubscription } from "@/features/meal-plans/lib/subscription-contract";
+import { indiaBusinessDate, parseCustomerSubscription, type CustomerSubscription, type DayCredit, type DayCreditChoice } from "@/features/meal-plans/lib/subscription-contract";
 import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
-import { changeDeadline, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
-import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { changeDeadline, dayCreditCard, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
+import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 
@@ -54,6 +54,12 @@ const ACTION_COPY: Record<Action, { title: string; confirm: string; busy: string
 };
 
 const LOADING_PLAN = "Loading your meal plan…";
+const CHOICE_ERRORS: Record<string, string> = {
+  DAY_CREDIT_ALREADY_SETTLED: "This day has already been settled.",
+  DAY_CREDIT_NOT_FOUND: "This choice is no longer available.",
+  REFUNDS_NOT_AVAILABLE: "Refunds aren’t available yet. You can add the days at the end instead.",
+  EXTEND_NOT_AVAILABLE: "This plan has ended, so days can’t be added. Choose a refund.",
+};
 const ENDED_LINES: Partial<Record<SubscriptionOccurrence["status"], string>> = {
   SKIPPED: "You skipped this meal.",
   CANCELLED: "This meal was cancelled.",
@@ -79,13 +85,15 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   const [typed, setTyped] = useState(false);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [meal, setMeal] = useState<SubscriptionOccurrence | null>(null);
+  const [pick, setPick] = useState<{ credit: DayCredit; choice: DayCreditChoice } | null>(null);
 
   const load = useCallback(async () => {
     const subscriptionResponse = await sessionFetch(`/api/subscriptions/${subscriptionId}`, { cache: "no-store" });
     const subscriptionBody = await subscriptionResponse.json().catch(() => null);
     if (subscriptionResponse.status === 401) throw new Error("Your session expired. Sign in again.");
     if (!subscriptionResponse.ok) throw new Error(subscriptionResponse.status === 404 ? "We couldn’t find this meal plan." : "We couldn’t load your meal plan. Please try again.");
-    const current = subscriptionBody as CustomerSubscription;
+    const current = parseCustomerSubscription(subscriptionBody);
+    if (!current) throw new Error("We couldn’t load your meal plan. Please try again.");
     setItem(current);
 
     const [policyResponse, scheduleResponse, occurrenceResponse, addressResponse] = await Promise.all([
@@ -158,6 +166,29 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
     }
   }
 
+  // A choice can't be changed later, so the card's buttons ask first.
+  async function choose(credit: DayCredit, choice: DayCreditChoice) {
+    setBusy(true);
+    setSheetError("");
+    try {
+      const response = await sessionFetch(`/api/subscriptions/${subscriptionId}/day-credits/${credit.id}/choice`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ choice }),
+      });
+      if (!response.ok) {
+        const { code } = await response.json().catch(() => ({})) as { code?: string };
+        if (response.status === 409) void load().catch(() => undefined); // our copy of the choice is stale
+        throw new Error((code && CHOICE_ERRORS[code]) || "We couldn’t save your choice. Please try again.");
+      }
+      await load();
+      setPick(null);
+      setMessage(choice === "REFUND" ? "Refund requested." : "Days added at the end of your plan.");
+    } catch (error) {
+      setSheetError(error instanceof Error ? error.message : "We couldn’t save your choice. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const scheduleGroups = useMemo(() => {
     if (!schedule) return [];
     const groups = new Map<string, typeof schedule.items>();
@@ -179,6 +210,8 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   const pauseLine = pauseDaysLine(item);
   const dishNames = new Map(schedule?.items.map(entry => [entry.menuItemId, entry.itemName ?? "Meal item"]));
   const servings = meal?.items.reduce((sum, entry) => sum + entry.quantity, 0) ?? 0;
+  const pickView = pick ? dayCreditCard(pick.credit, today) : null;
+  const pickLabel = (pick?.choice === "REFUND" ? pickView?.refundLabel : pickView?.extendLabel) ?? "";
   const deadline = policy?.customerSkipEnabled ? changeDeadline(occurrences, policy.skipCutoffMinutes) : null;
   const paymentRequired = item.status === "PENDING_PAYMENT" || item.status === "PAYMENT_FAILED";
   const copy = sheet ? ACTION_COPY[sheet.action] : null;
@@ -207,6 +240,20 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
       {paymentRequired && <Link href={`/subscriptions/${item.id}/payment`} className="craves-primary-action mt-5">{item.status === "PAYMENT_FAILED" ? "Try payment again" : "Pay now"}</Link>}
       <p className="text-sm font-medium text-[#1A1A1A]" role="status">{message ? <span className="mt-4 block">{message}</span> : null}</p>
     </section>
+
+    {item.dayCredits.map(credit => {
+      const view = dayCreditCard(credit, today);
+      return <section key={credit.id} className={card}>
+        <h2 className="text-lg font-bold">{view.title}</h2>
+        {view.pending ? <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" disabled={busy} onClick={() => { setSheetError(""); setPick({ credit, choice: "REFUND" }); }} className={quietButton}>{view.refundLabel}</button>
+            {view.extendAvailable && <button type="button" disabled={busy} onClick={() => { setSheetError(""); setPick({ credit, choice: "EXTEND" }); }} className="craves-primary-action">{view.extendLabel}</button>}
+          </div>
+          {view.note && <p className="mt-3 text-sm text-[#6B6B6B]">{view.note}</p>}
+        </> : view.settledLine && <p className="mt-2 text-sm text-[#6B6B6B]">{view.settledLine}</p>}
+      </section>;
+    })}
 
     <section className={card}>
       <h2 className="text-lg font-bold">Manage meal plan</h2>
@@ -286,6 +333,22 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
         {sheetError && <p role="alert" className="mt-3 rounded-xl bg-[#F1F3F5] p-3 font-medium text-[#C4200F]">{sheetError}</p>}
       </div> : null}
     </Sheet>
+
+    <Dialog
+      open={pick !== null}
+      onOpenChange={next => { if (!next) setPick(null); }}
+      busy={busy}
+      title={`${pickLabel}?`}
+      description={pick?.choice === "REFUND"
+        ? "The refund goes back to the UPI or card you paid with. You can’t change this later."
+        : "Your plan runs longer by these days. You can’t change this later."}
+      footer={pick ? <>
+        <button type="button" onClick={() => setPick(null)} disabled={busy} className={secondaryActionClass}>Not now</button>
+        <button type="button" disabled={busy} aria-busy={busy} onClick={() => void choose(pick.credit, pick.choice)} className="craves-primary-action w-full sm:w-auto">{busy ? "Saving…" : pickLabel}</button>
+      </> : null}
+    >
+      {sheetError && pick ? <p role="alert" className="mt-3 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">{sheetError}</p> : null}
+    </Dialog>
 
     <Sheet
       open={meal !== null}

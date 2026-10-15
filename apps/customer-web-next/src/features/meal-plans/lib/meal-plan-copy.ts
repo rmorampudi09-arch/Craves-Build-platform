@@ -1,4 +1,5 @@
-import { indiaBusinessDate, type CustomerSubscription, type CustomerSubscriptionStatus } from "./subscription-contract.ts";
+import { indiaBusinessDate, type CustomerSubscription, type CustomerSubscriptionStatus, type DayCredit } from "./subscription-contract.ts";
+import { mealSlotLabel } from "./meal-plan-schedule.ts";
 import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
 
 /** Customer words for meal plans; never the raw enums or minute counts. */
@@ -31,6 +32,16 @@ export const MEAL_STATUS: Record<SubscriptionOccurrence["status"], string> = {
   CANCELLED: "Cancelled",
   FAILED: "Couldn’t be placed",
 };
+
+/** "₹1,200", or "₹1,499.50" when there are paise. */
+export function formatMoney(value: number, currency: string): string {
+  try {
+    const paise = Number.isInteger(value) ? 0 : 2;
+    return new Intl.NumberFormat("en-IN", { style: "currency", currency, minimumFractionDigits: paise, maximumFractionDigits: paise }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
 
 /** "Mon 12 Oct" for a plan date (YYYY-MM-DD). */
 export function planDay(date: string): string {
@@ -126,4 +137,40 @@ export function pauseDaysLine(subscription: Pick<CustomerSubscription, "status" 
   return left === 0
     ? "No pause days left this bill."
     : `${left} pause ${left === 1 ? "day" : "days"} left this bill. Your plan restarts by itself after a pause.`;
+}
+
+export type DayCreditCard = {
+  title: string;
+  refundLabel: string;
+  extendLabel: string;
+  note: string | null;
+  settledLine: string | null;
+  pending: boolean;
+  extendAvailable: boolean;
+};
+
+const dayCount = (days: number) => `${days} ${days === 1 ? "day" : "days"}`;
+
+/** The refund-or-extend card for one declined day or one pause. */
+export function dayCreditCard(credit: DayCredit, today: string): DayCreditCard {
+  // A declined meal is offered as one day; a pause as its paid days.
+  const days = credit.kind === "PAUSE" ? credit.days ?? 1 : 1;
+  const pending = credit.status === "PENDING_CHOICE";
+  const deadline = new Date(credit.choiceDeadline);
+  const deadlineDay = indiaBusinessDate(deadline);
+  const fallback = credit.extendAvailable ? "we’ll add it at the end" : "we’ll request a refund";
+  return {
+    title: credit.kind === "PAUSE"
+      ? `You paused ${dayCount(days)}`
+      : `Your chef couldn’t make ${credit.mealSlotCode ? mealSlotLabel(credit.mealSlotCode) : "a meal"} on ${planDay(credit.firstDate)}`,
+    refundLabel: credit.refundAmount === null ? "Get a refund" : `Get a refund (${formatMoney(credit.refundAmount, credit.currency ?? "INR")})`,
+    extendLabel: `Add ${dayCount(days)} at the end`,
+    // The server settles it at the exact deadline, so the time is shown; once that day has passed, nothing is promised.
+    note: pending && deadlineDay >= today ? `If you don’t choose by ${clock.format(deadline)} on ${planDay(deadlineDay)}, ${fallback}.` : null,
+    settledLine: credit.status === "EXTENDED" ? `${dayCount(days)} added at the end.`
+      : credit.status === "REFUND_REQUESTED" ? "Refund requested. It goes back to the UPI or card you paid with."
+        : credit.status === "REFUNDED" ? "Refunded to the UPI or card you paid with." : null,
+    pending,
+    extendAvailable: credit.extendAvailable,
+  };
 }

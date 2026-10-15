@@ -15,6 +15,7 @@ import {
   mealsAndDays,
   type MealPlanFoodType,
 } from "@/features/meal-plans/lib/meal-plan-schedule";
+import { formatMoney } from "@/features/meal-plans/lib/meal-plan-copy";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 
@@ -24,18 +25,6 @@ const FOOD_TYPE: Record<MealPlanFoodType, { label: string; dot: string }> = {
   EGG: { label: "Egg", dot: "bg-[#D99A00]" },
   NON_VEG: { label: "Non-veg", dot: "bg-[#D92D20]" },
 };
-
-function money(value: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
 
 function PlanCard({ plan, cover }: { plan: PublicSubscriptionPlan; cover: PlanCover | undefined }) {
   const unit = billingUnit(plan.billingPeriod);
@@ -84,7 +73,7 @@ function PlanCard({ plan, cover }: { plan: PublicSubscriptionPlan; cover: PlanCo
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[#1A1A1A]">
-              <strong className="text-xl">{money(plan.amount, plan.currency)}</strong>
+              <strong className="text-xl">{formatMoney(plan.amount, plan.currency)}</strong>
               <span className="text-sm text-[#6B6B6B]"> / {unit}</span>
             </p>
             {rating ? (

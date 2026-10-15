@@ -88,6 +88,10 @@ const plan = (id: string, name: string, billingPeriod = "WEEKLY") => ({
 
 let current: Record<string, unknown> = subscription();
 let mine: unknown[] = [];
+const credit = {
+  id: "99999999-9999-4999-8999-999999999999", kind: "PAUSE", firstDate: "2099-10-10", lastDate: "2099-10-12", mealSlotCode: null, days: 3,
+  status: "PENDING_CHOICE", refundAmount: 360, currency: "INR", choiceDeadline: "2099-10-16T06:00:00Z", extendAvailable: true,
+};
 
 beforeAll(() => {
   MotionGlobalConfig.skipAnimations = true;
@@ -98,8 +102,11 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
-      if ((init?.method ?? "GET") !== "GET")
-        return Response.json({ code: "RESUME_AFTER_AUTO_RESTART" }, { status: 400 });
+      if ((init?.method ?? "GET") !== "GET") {
+        if (!url.endsWith("/choice")) return Response.json({ code: "RESUME_AFTER_AUTO_RESTART" }, { status: 400 });
+        current = subscription({ dayCredits: [{ ...credit, status: "EXTENDED" }] });
+        return Response.json({ ...credit, status: "EXTENDED" });
+      }
       if (url.endsWith("/policy")) return Response.json(policy);
       if (url.endsWith("/schedule"))
         return Response.json(
@@ -240,6 +247,34 @@ describe("meal plans list", () => {
       target: { value: "biryani" },
     });
     expect(screen.getByText("No plans match “biryani”.")).toBeTruthy();
+    await settle();
+  });
+});
+
+describe("refund or extra days", () => {
+  it("offers both while the choice is open, asks first, then shows the outcome", async () => {
+    current = subscription({ dayCredits: [credit] });
+    render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    expect(await screen.findByRole("heading", { name: "You paused 3 days" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Get a refund (₹360)" })).toBeTruthy();
+    expect(screen.getByText("If you don’t choose by 11:30 am on Fri 16 Oct, we’ll add it at the end.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add 3 days at the end" }));
+    const dialog = screen.getByRole("dialog", { name: "Add 3 days at the end?" });
+    expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add 3 days at the end" }));
+    expect(await screen.findByText("3 days added at the end.")).toBeTruthy();
+    const post = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "POST");
+    expect(post?.[0]).toBe(`/api/subscriptions/${ID}/day-credits/${credit.id}/choice`);
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ choice: "EXTEND" });
+    expect(screen.queryByRole("button", { name: /Get a refund/ })).toBeNull();
+    await settle();
+  });
+
+  it("offers only a refund once the plan can't run longer", async () => {
+    current = subscription({ dayCredits: [{ ...credit, extendAvailable: false }] });
+    render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    expect(await screen.findByRole("button", { name: "Get a refund (₹360)" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add 3 days at the end" })).toBeNull();
     await settle();
   });
 });

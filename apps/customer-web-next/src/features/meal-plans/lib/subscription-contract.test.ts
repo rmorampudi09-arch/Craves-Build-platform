@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCustomerSubscription, parsePublicSubscriptionPlan, parsePublicSubscriptionPlans } from "./subscription-contract.ts";
+import { parseCustomerSubscription, parseDayCredit, parseDayCreditChoice, parsePublicSubscriptionPlan, parsePublicSubscriptionPlans } from "./subscription-contract.ts";
 import { billingPeriodLabel, billingUnit, weeksPerBill } from "./meal-plan-schedule.ts";
 
 const plan = {
@@ -88,4 +88,27 @@ test("the pause allowance is read when the server sends it", () => {
   const old = parseCustomerSubscription(base);
   assert.deepEqual([old?.pauseDaysPerBill, old?.pauseDaysLeft, old?.pauseAutoResumeDate], [null, null, null]);
   assert.equal(parseCustomerSubscription({ ...base, pauseDaysLeft: -1 })?.pauseDaysLeft, null);
+});
+
+const credit = {
+  id: "88888888-8888-4888-8888-888888888888", kind: "DECLINE", firstDate: "2026-10-14", lastDate: "2026-10-14", mealSlotCode: "LUNCH", days: null,
+  status: "PENDING_CHOICE", refundAmount: null, currency: "INR", choiceDeadline: "2026-10-16T06:00:00Z", extendAvailable: true,
+};
+
+test("day credits parse, and one the web can't read is left out", () => {
+  assert.deepEqual(parseDayCredit(credit), credit);
+  assert.equal(parseDayCredit({ ...credit, refundAmount: "120.50" })?.refundAmount, 120.5);
+  for (const broken of [{ ...credit, kind: "BONUS" }, { ...credit, status: "LOST" }, { ...credit, id: "x" }, { ...credit, lastDate: "2026-10-13" },
+    { ...credit, extendAvailable: "yes" }, { ...credit, days: 0 }, { ...credit, refundAmount: -1 }, { ...credit, choiceDeadline: "soon" }]) {
+    assert.equal(parseDayCredit(broken), null);
+  }
+  const base = { id: "33333333-3333-4333-8333-333333333333", planId: plan.id, status: "ACTIVE", startDate: "2026-08-01", createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+  assert.deepEqual(parseCustomerSubscription({ ...base, dayCredits: [credit, { ...credit, kind: "BONUS" }] })?.dayCredits, [credit]);
+  assert.deepEqual(parseCustomerSubscription(base)?.dayCredits, []);
+});
+
+test("a day credit choice is REFUND or EXTEND and nothing else", () => {
+  assert.deepEqual(parseDayCreditChoice({ choice: "REFUND" }), { choice: "REFUND" });
+  assert.deepEqual(parseDayCreditChoice({ choice: "EXTEND" }), { choice: "EXTEND" });
+  for (const bad of [null, {}, { choice: "refund" }, { choice: "EXTEND", days: 3 }, "EXTEND"]) assert.equal(parseDayCreditChoice(bad), null);
 });

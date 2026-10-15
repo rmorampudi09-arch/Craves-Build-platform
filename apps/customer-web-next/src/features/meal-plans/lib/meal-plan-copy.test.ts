@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeDeadline, isPastSubscription, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "./meal-plan-copy.ts";
+import { changeDeadline, dayCreditCard, formatMoney, isPastSubscription, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "./meal-plan-copy.ts";
+import type { DayCredit } from "./subscription-contract.ts";
 import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
 
 const meal = (serviceDate: string, serviceAt: string, status: SubscriptionOccurrence["status"] = "READY_FOR_ORDER") =>
@@ -72,4 +73,44 @@ test("the pause days line shows only for running plans on a server that sends it
   assert.equal(pauseDaysLine({ status: "PAUSED", pauseDaysLeft: 0 }), "No pause days left this bill.");
   assert.equal(pauseDaysLine({ status: "ACTIVE", pauseDaysLeft: null }), null);
   assert.equal(pauseDaysLine({ status: "CANCELLED", pauseDaysLeft: 1 }), null);
+});
+
+test("money reads in rupees, with paise only when there are some", () => {
+  assert.equal(formatMoney(1200, "INR"), "₹1,200");
+  assert.equal(formatMoney(1499.5, "INR"), "₹1,499.50");
+});
+
+const decline: DayCredit = {
+  id: "88888888-8888-4888-8888-888888888888", kind: "DECLINE", firstDate: "2026-10-14", lastDate: "2026-10-14", mealSlotCode: "LUNCH", days: null,
+  // 11:30 am IST on Friday 16 October.
+  status: "PENDING_CHOICE", refundAmount: null, currency: "INR", choiceDeadline: "2026-10-16T06:00:00Z", extendAvailable: true,
+};
+const pausedDays: DayCredit = { ...decline, kind: "PAUSE", firstDate: "2026-10-10", lastDate: "2026-10-12", mealSlotCode: null, days: 3 };
+
+test("a declined meal offers a refund or a day at the end until the deadline", () => {
+  assert.deepEqual(dayCreditCard(decline, "2026-10-14"), {
+    title: "Your chef couldn’t make Lunch on Wed 14 Oct",
+    refundLabel: "Get a refund",
+    extendLabel: "Add 1 day at the end",
+    note: "If you don’t choose by 11:30 am on Fri 16 Oct, we’ll add it at the end.",
+    settledLine: null,
+    pending: true,
+    extendAvailable: true,
+  });
+  assert.equal(dayCreditCard(decline, "2026-10-17").note, null);
+});
+
+test("paused days, priced refunds and ended plans read like the app", () => {
+  const card = dayCreditCard(pausedDays, "2026-10-14");
+  assert.deepEqual([card.title, card.extendLabel], ["You paused 3 days", "Add 3 days at the end"]);
+  assert.equal(dayCreditCard({ ...decline, refundAmount: 120 }, "2026-10-14").refundLabel, "Get a refund (₹120)");
+  assert.equal(dayCreditCard({ ...decline, extendAvailable: false }, "2026-10-14").note, "If you don’t choose by 11:30 am on Fri 16 Oct, we’ll request a refund.");
+});
+
+test("a settled choice shows its outcome instead of buttons", () => {
+  const refunded = dayCreditCard({ ...decline, status: "REFUND_REQUESTED" }, "2026-10-14");
+  assert.deepEqual([refunded.pending, refunded.note, refunded.settledLine], [false, null, "Refund requested. It goes back to the UPI or card you paid with."]);
+  assert.equal(dayCreditCard({ ...pausedDays, status: "EXTENDED" }, "2026-10-14").settledLine, "3 days added at the end.");
+  assert.equal(dayCreditCard({ ...decline, status: "EXTENDED" }, "2026-10-14").settledLine, "1 day added at the end.");
+  assert.equal(dayCreditCard({ ...decline, status: "REFUNDED" }, "2026-10-14").settledLine, "Refunded to the UPI or card you paid with.");
 });

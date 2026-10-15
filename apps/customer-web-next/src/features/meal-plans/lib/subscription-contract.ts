@@ -36,7 +36,27 @@ export type CustomerSubscription = {
   pauseDaysLeft: number | null;
   /** While paused: the day the plan restarts by itself. */
   pauseAutoResumeDate: string | null;
+  /** Refund-or-extend choices; empty on an older server and while refunds are switched off. */
+  dayCredits: DayCredit[];
 };
+
+/** A declined day or paused days: a refund request or the days at the end, chosen once before the deadline. */
+export type DayCredit = {
+  id: string;
+  kind: "DECLINE" | "PAUSE";
+  firstDate: string;
+  lastDate: string;
+  mealSlotCode: string | null;
+  days: number | null;
+  status: "PENDING_CHOICE" | "EXTENDED" | "REFUND_REQUESTED" | "REFUNDED";
+  /** Empty until finance prices the refund. */
+  refundAmount: number | null;
+  currency: string | null;
+  choiceDeadline: string;
+  extendAvailable: boolean;
+};
+
+export type DayCreditChoice = "REFUND" | "EXTEND";
 
 export type CreateSubscriptionInput = {
   planId: string;
@@ -49,6 +69,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const CURRENCY = /^[A-Z]{3}$/;
 const PLAN_PERIODS = new Set(["WEEKLY", "FORTNIGHTLY", "MONTHLY"]);
 const SUBSCRIPTION_STATUSES = new Set(["PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"]);
+const CREDIT_STATUSES = new Set(["PENDING_CHOICE", "EXTENDED", "REFUND_REQUESTED", "REFUNDED"]);
+const SLOT = /^[A-Z0-9][A-Z0-9_-]{0,39}$/;
 
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -98,6 +120,26 @@ export function parsePublicSubscriptionPlans(value: unknown, apiBase?: string): 
   return value.map(item => parsePublicSubscriptionPlan(item, apiBase)).filter(plan => plan !== null);
 }
 
+export function parseDayCredit(value: unknown): DayCredit | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const firstDate = dateOnly(raw.firstDate); const lastDate = dateOnly(raw.lastDate); const choiceDeadline = instant(raw.choiceDeadline);
+  const days = raw.days == null ? null : Number.isInteger(raw.days) && Number(raw.days) > 0 && Number(raw.days) <= 366 ? Number(raw.days) : undefined;
+  const refundAmount = raw.refundAmount == null ? null : typeof raw.refundAmount === "number" || typeof raw.refundAmount === "string" ? Number(raw.refundAmount) : NaN;
+  const currency = raw.currency == null ? null : text(raw.currency, 3);
+  const mealSlotCode = raw.mealSlotCode == null ? null : typeof raw.mealSlotCode === "string" && SLOT.test(raw.mealSlotCode) ? raw.mealSlotCode : undefined;
+  if (typeof raw.id !== "string" || !UUID.test(raw.id) || (raw.kind !== "DECLINE" && raw.kind !== "PAUSE") || !firstDate || !lastDate || lastDate < firstDate
+    || typeof raw.status !== "string" || !CREDIT_STATUSES.has(raw.status) || !choiceDeadline || typeof raw.extendAvailable !== "boolean" || days === undefined
+    || mealSlotCode === undefined || (refundAmount !== null && (!Number.isFinite(refundAmount) || refundAmount < 0)) || (currency !== null && !CURRENCY.test(currency))) return null;
+  return { id: raw.id, kind: raw.kind, firstDate, lastDate, mealSlotCode, days, status: raw.status as DayCredit["status"], refundAmount, currency, choiceDeadline, extendAvailable: raw.extendAvailable };
+}
+
+export function parseDayCreditChoice(value: unknown): { choice: DayCreditChoice } | null {
+  if (!value || typeof value !== "object" || Object.keys(value).length !== 1) return null;
+  const { choice } = value as { choice?: unknown };
+  return choice === "REFUND" || choice === "EXTEND" ? { choice } : null;
+}
+
 export function parseCustomerSubscription(value: unknown): CustomerSubscription | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -106,7 +148,9 @@ export function parseCustomerSubscription(value: unknown): CustomerSubscription 
   const deliveryAddressId = optionalText(raw.deliveryAddressId, 64);
   if (!id || !UUID.test(id) || !planId || !UUID.test(planId) || !status || !SUBSCRIPTION_STATUSES.has(status) || !startDate || !createdAt || !updatedAt || (deliveryAddressId && !UUID.test(deliveryAddressId))) return null;
   return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt, planName: optionalText(raw.planName, 160),
-    pauseDaysPerBill: count(raw.pauseDaysPerBill), pauseDaysLeft: count(raw.pauseDaysLeft), pauseAutoResumeDate: raw.pauseAutoResumeDate == null ? null : dateOnly(raw.pauseAutoResumeDate) };
+    pauseDaysPerBill: count(raw.pauseDaysPerBill), pauseDaysLeft: count(raw.pauseDaysLeft), pauseAutoResumeDate: raw.pauseAutoResumeDate == null ? null : dateOnly(raw.pauseAutoResumeDate),
+    // A choice the web can't read is left out; the server still settles it at the deadline.
+    dayCredits: Array.isArray(raw.dayCredits) ? raw.dayCredits.slice(0, 100).map(parseDayCredit).filter(credit => credit !== null) : [] };
 }
 export function parseCustomerSubscriptions(value: unknown): CustomerSubscription[] | null {
   if (!Array.isArray(value) || value.length > 500) return null;

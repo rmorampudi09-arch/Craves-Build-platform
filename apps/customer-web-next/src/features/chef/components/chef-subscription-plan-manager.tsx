@@ -43,6 +43,7 @@ import {
   chefPlanPriceLabel,
   chefPlanStatus,
   filterChefPlans,
+  sortScheduleItems,
   subscriberCountLabel,
   type ChefPlanFilter,
 } from "@/features/chef/lib/chef-meal-plans";
@@ -224,8 +225,9 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
           <ul className="grid gap-3">
             {shown.map((plan) => {
               const items = schedules[plan.id]?.items;
-              const cover = items?.[0]
-                ? dishPhoto(menuItems.find((item) => item.id === items[0].menuItemId))
+              const first = items && sortScheduleItems(items)[0];
+              const cover = first
+                ? dishPhoto(menuItems.find((item) => item.id === first.menuItemId))
                 : null;
               return (
                 <PlanCard

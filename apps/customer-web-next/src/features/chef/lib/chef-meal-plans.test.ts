@@ -25,6 +25,7 @@ import {
   setSlotQuantity,
   setSlotTime,
   slotsToScheduleRequest,
+  sortScheduleItems,
   stepWithErrors,
   subscriberCountLabel,
   TIME_OPTIONS,
@@ -349,6 +350,19 @@ test("plan list: filters, counts, meta line, price and the subscriber switch", (
   assert.equal(
     chefPlanMetaLine("MONTHLY", [item({ dayOfMonth: 1 }), item({ dayOfMonth: 15 })]),
     "Monthly · Lunch · 2 days a month",
+  );
+  // The cover is the first meal served: Sunday's, then the day's first meal.
+  assert.deepEqual(
+    sortScheduleItems([
+      item({ isoDayOfWeek: 1, menuItemId: DISH_A }),
+      item({ isoDayOfWeek: 7, menuItemId: DISH_B, sequenceNumber: 2 }),
+      item({ isoDayOfWeek: 7, menuItemId: DISH_A }),
+    ]).map((meal) => [meal.isoDayOfWeek, meal.sequenceNumber]),
+    [
+      [7, 1],
+      [7, 2],
+      [1, 1],
+    ],
   );
   assert.equal(
     chefPlanPriceLabel({ amount: 1499, currency: "INR", billingPeriod: "WEEKLY" }),

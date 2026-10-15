@@ -187,6 +187,13 @@ function daysSummary(items: readonly ScheduleItemLike[]): string | null {
   return monthDays > 0 ? `${monthDays} ${monthDays === 1 ? "day" : "days"} a month` : null;
 }
 
+/** Meals in serving order: weekday menus start on Sunday; old date-based menus go by date. The first is the plan's cover. */
+export function sortScheduleItems<T extends ScheduleItemLike>(items: readonly T[]): T[] {
+  const dayKey = (item: ScheduleItemLike) =>
+    item.isoDayOfWeek ? item.isoDayOfWeek % 7 : (item.dayOfMonth ?? 0);
+  return [...items].sort((a, b) => dayKey(a) - dayKey(b) || a.sequenceNumber - b.sequenceNumber);
+}
+
 /** "Weekly · Lunch, Dinner · Mon – Fri"; just the frequency while the schedule is empty or not loaded. */
 export function chefPlanMetaLine(
   period: ChefMealPlanPeriod,
@@ -194,12 +201,7 @@ export function chefPlanMetaLine(
 ): string {
   const parts = [billingPeriodLabel(period)];
   if (items?.length) {
-    // Weekday menus start on Sunday; old date-based menus go by date.
-    const dayKey = (item: ScheduleItemLike) =>
-      item.isoDayOfWeek ? item.isoDayOfWeek % 7 : (item.dayOfMonth ?? 0);
-    const sorted = [...items].sort(
-      (a, b) => dayKey(a) - dayKey(b) || a.sequenceNumber - b.sequenceNumber,
-    );
+    const sorted = sortScheduleItems(items);
     parts.push([...new Set(sorted.map((item) => mealSlotLabel(item.mealSlotCode)))].join(", "));
     const days = daysSummary(items);
     if (days) parts.push(days);

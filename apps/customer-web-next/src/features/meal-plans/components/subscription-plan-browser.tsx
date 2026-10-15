@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getAddress } from "@/features/auth/api/cravesAuth";
 import type { PublicSubscriptionPlan } from "@/features/meal-plans/lib/subscription-contract";
+import { billingPeriodLabel, billingUnit } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
 function money(value: number, currency: string): string {
@@ -47,13 +48,13 @@ export function SubscriptionPlanBrowser() {
     {message && <p className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]" role="status">{message}</p>}
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {plans.map(plan => <article key={plan.id} className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5">
-        <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">{plan.billingPeriod === "WEEKLY" ? "Weekly" : "Monthly"}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">{billingPeriodLabel(plan.billingPeriod)}</p>
         <h2 className="mt-2 text-xl font-bold text-[#1A1A1A]">{plan.name}</h2>
         <p className="mt-2 flex-1 text-sm leading-6 text-[#6B6B6B]">{plan.description ?? "Home-cooked meals from a local chef."}</p>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[#1A1A1A]">
             <strong className="text-xl">{money(plan.amount, plan.currency)}</strong>
-            <span className="text-sm text-[#6B6B6B]"> / {plan.billingPeriod === "WEEKLY" ? "week" : "month"}</span>
+            <span className="text-sm text-[#6B6B6B]"> / {billingUnit(plan.billingPeriod)}</span>
           </p>
           <Link href={`/subscriptions/new?planId=${encodeURIComponent(plan.id)}`} className="craves-primary-action">
             Choose plan

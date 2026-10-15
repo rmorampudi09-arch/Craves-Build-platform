@@ -3,7 +3,7 @@ export type PublicSubscriptionPlan = {
   planCode: string;
   name: string;
   description: string | null;
-  billingPeriod: "WEEKLY" | "MONTHLY";
+  billingPeriod: "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
   amount: number;
   currency: string;
 };
@@ -40,7 +40,7 @@ export type CreateSubscriptionInput = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CURRENCY = /^[A-Z]{3}$/;
-const PLAN_PERIODS = new Set(["WEEKLY", "MONTHLY"]);
+const PLAN_PERIODS = new Set(["WEEKLY", "FORTNIGHTLY", "MONTHLY"]);
 const SUBSCRIPTION_STATUSES = new Set(["PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"]);
 
 function text(value: unknown, max: number): string | null {
@@ -74,7 +74,8 @@ export function parsePublicSubscriptionPlan(value: unknown): PublicSubscriptionP
 }
 export function parsePublicSubscriptionPlans(value: unknown): PublicSubscriptionPlan[] | null {
   if (!Array.isArray(value) || value.length > 500) return null;
-  const parsed = value.map(parsePublicSubscriptionPlan); return parsed.some(item => item === null) ? null : parsed as PublicSubscriptionPlan[];
+  // One plan the web can't read is left out; it must never hide every other plan.
+  return value.map(parsePublicSubscriptionPlan).filter(plan => plan !== null);
 }
 
 export function parseCustomerSubscription(value: unknown): CustomerSubscription | null {

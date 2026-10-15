@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCustomerSubscription, parsePublicSubscriptionPlan } from "./subscription-contract.ts";
+import { parseCustomerSubscription, parsePublicSubscriptionPlan, parsePublicSubscriptionPlans } from "./subscription-contract.ts";
+import { billingPeriodLabel, billingUnit, weeksPerBill } from "./meal-plan-schedule.ts";
 
 const plan = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -21,6 +22,20 @@ test("parses public plan without internal chef identity", () => {
 
 test("rejects unsupported billing period", () => {
   assert.equal(parsePublicSubscriptionPlan({ ...plan, billingPeriod: "DAILY" }), null);
+});
+
+test("a 14-day plan parses and is billed per 14 days", () => {
+  const parsed = parsePublicSubscriptionPlan({ ...plan, billingPeriod: "FORTNIGHTLY" });
+  assert.equal(parsed?.billingPeriod, "FORTNIGHTLY");
+  assert.deepEqual([billingPeriodLabel("FORTNIGHTLY"), billingUnit("FORTNIGHTLY"), weeksPerBill(billingUnit("FORTNIGHTLY"))], ["14 days", "14 days", 2]);
+  assert.deepEqual([billingUnit("WEEKLY"), billingUnit("MONTHLY"), weeksPerBill("28 days")], ["week", "28 days", 4]);
+});
+
+test("one malformed plan is dropped and the rest of the list survives", () => {
+  const second = { ...plan, id: "55555555-5555-4555-8555-555555555555", billingPeriod: "FORTNIGHTLY" };
+  const parsed = parsePublicSubscriptionPlans([plan, { ...plan, id: "not-a-uuid" }, { ...plan, billingPeriod: "DAILY" }, null, second]);
+  assert.deepEqual(parsed?.map(item => item.id), [plan.id, second.id]);
+  assert.equal(parsePublicSubscriptionPlans({ plans: [plan] }), null);
 });
 
 test("customer subscription excludes identity ids", () => {

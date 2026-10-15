@@ -8,6 +8,7 @@ import {
   parseCustomerSubscription,
   type PublicSubscriptionPlan,
 } from "@/features/meal-plans/lib/subscription-contract";
+import { billingPeriodLabel } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 
@@ -119,7 +120,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   return (
     <form onSubmit={submit} className="max-w-xl rounded-2xl border border-[#E5E7EB] bg-white p-5 sm:p-6">
       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">
-        {plan.billingPeriod === "WEEKLY" ? "Weekly plan" : "Monthly plan"}
+        {billingPeriodLabel(plan.billingPeriod)}
       </p>
       <h2 className="mt-1 text-2xl font-bold text-[#1A1A1A]">{plan.name}</h2>
       {plan.description ? <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{plan.description}</p> : null}

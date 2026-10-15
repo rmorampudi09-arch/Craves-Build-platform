@@ -792,11 +792,11 @@ describe("Approved Chef first step", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
     fireEvent.click(screen.getByText("45"));
     fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
-    const note = await screen.findByText(/^Order #000101 accepted\./);
+    const note = await screen.findByText(/^Order #0BDE0000 accepted\./);
     // ChefFlash leaves on its own when its CSS countdown ends (jsdom never animates); the chef can also close it.
     expect(note).toBeTruthy();
     const flash = document.querySelector("#chef-order-update .chef-flash");
-    expect(flash?.textContent).toMatch(/Order #000101 accepted\./);
+    expect(flash?.textContent).toMatch(/Order #0BDE0000 accepted\./);
     fireEvent.click(within(flash as HTMLElement).getByRole("button", { name: "Close message", hidden: true }));
     await waitFor(() => expect(document.querySelector("#chef-order-update .chef-flash")).toBeNull());
   });

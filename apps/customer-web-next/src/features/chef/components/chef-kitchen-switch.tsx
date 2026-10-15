@@ -10,6 +10,7 @@ import {
   fetchScheduleOverride,
   scheduleUpdate,
   useKitchenSchedule,
+  useOverrideChanges,
 } from "@/features/chef/api/chef-kitchen-schedule";
 import { ChefChoiceChips } from "@/features/chef/components/chef-ui";
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
@@ -120,7 +121,8 @@ function useMinuteClock(): Date {
 
 /**
  * Today's special day for the kitchen's date, or null when there is none, it isn't read yet or can't be (the week's
- * hours apply). It is read again whenever the schedule is, so a special day saved for today shows straight away.
+ * hours apply). It is read again whenever the schedule is and after a special day is saved or removed, so one for
+ * today shows straight away.
  */
 function useSpecialDay(
   schedule: { timezoneId: string } | null,
@@ -129,6 +131,7 @@ function useSpecialDay(
   const [read, setRead] = useState<{ date: string; special: ChefScheduleOverride | null } | null>(
     null,
   );
+  const changes = useOverrideChanges();
   useEffect(() => {
     if (!schedule || !date) return;
     let current = true;
@@ -140,7 +143,7 @@ function useSpecialDay(
     return () => {
       current = false;
     };
-  }, [schedule, date]);
+  }, [schedule, date, changes]);
   return read && read.date === date ? read.special : null;
 }
 

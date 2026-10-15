@@ -66,10 +66,25 @@ export async function fetchScheduleOverride(date: string): Promise<ChefScheduleO
   }
 }
 
-/** Every screen showing the schedule reads it again after a special day changes: the kitchen's state goes by today's. */
+/**
+ * Counts special days saved or removed, so the kitchen's state reads today's again. The week's hours are left as they
+ * are: reading them again could fail and hide them right after "Special day saved".
+ */
+let overrideChanges = 0;
+const overrideListeners = new Set<() => void>();
+function subscribeOverrideChanges(listener: () => void) {
+  overrideListeners.add(listener);
+  return () => {
+    overrideListeners.delete(listener);
+  };
+}
+export const useOverrideChanges = () =>
+  useSyncExternalStore(subscribeOverrideChanges, () => overrideChanges, () => 0);
+
 async function changeOverride<T>(saving: Promise<T>): Promise<T> {
   const saved = await saving;
-  void reloadKitchenSchedule();
+  overrideChanges += 1;
+  overrideListeners.forEach((listener) => listener());
   return saved;
 }
 

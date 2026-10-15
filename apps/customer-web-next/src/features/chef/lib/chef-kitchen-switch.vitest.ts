@@ -213,9 +213,10 @@ describe("Kitchen status", () => {
     expect(await screen.findByRole("heading", { name: "Closed · opens 6:00 PM" })).toBeTruthy();
   });
 
-  it("shows a special day saved for today straight away", async () => {
+  it("shows a special day saved for today straight away, without reading the week's hours again", async () => {
     render(createElement(Host));
     expect(await screen.findByRole("heading", { name: "Open · taking orders" })).toBeTruthy();
+    schedule = null; // another read of the hours would now come back empty and hide them
     await saveScheduleOverride("2026-10-15", { closed: true, reason: null, windows: [] });
     expect(await screen.findByRole("heading", { name: "Closed all day" })).toBeTruthy();
   });

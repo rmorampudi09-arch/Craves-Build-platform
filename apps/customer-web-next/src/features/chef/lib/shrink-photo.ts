@@ -2,8 +2,9 @@
  * Dish, kitchen and plan photos are shown to customers straight from storage, at the size they were uploaded.
  * A phone photo can be 4000 px and several MB, so every card would download all of it. Before
  * upload, shrink it to 1600 px on the long side (sharp on a 2x phone screen at full width) as a
- * JPEG. Anything that can't be shrunk, or wouldn't get smaller, is uploaded as chosen.
- * `aspect` (width / height) first keeps the centre in that shape, like the app's 4:3 kitchen and plan photos.
+ * JPEG. A dish photo that is already small, or wouldn't get smaller, is uploaded as chosen; anything that can't be
+ * read or drawn is uploaded as chosen too. With `aspect` (width / height), like the app's 4:3 kitchen and plan
+ * photos, the centre is kept in that shape and the photo is always redrawn, so no EXIF (the chef's GPS) goes out.
  */
 const LONG_EDGE = 1600;
 const QUALITY = 0.85;
@@ -34,8 +35,7 @@ export async function shrinkPhoto(file: File, aspect?: number): Promise<File> {
   }
   try {
     const box = photoCrop(bitmap.width, bitmap.height, aspect);
-    const cropped = box.sw < bitmap.width || box.sh < bitmap.height;
-    if (Math.max(box.sw, box.sh) <= LONG_EDGE && !cropped && file.size <= ALREADY_SMALL_BYTES) return file;
+    if (!aspect && Math.max(box.sw, box.sh) <= LONG_EDGE && file.size <= ALREADY_SMALL_BYTES) return file;
     const canvas = document.createElement("canvas");
     canvas.width = box.width;
     canvas.height = box.height;
@@ -46,7 +46,7 @@ export async function shrinkPhoto(file: File, aspect?: number): Promise<File> {
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(bitmap, box.sx, box.sy, box.sw, box.sh, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", QUALITY));
-    if (!blob || (!cropped && blob.size >= file.size)) return file;
+    if (!blob || (!aspect && blob.size >= file.size)) return file;
     return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`, { type: "image/jpeg" });
   } catch {
     return file;

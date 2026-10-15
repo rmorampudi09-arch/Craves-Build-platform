@@ -427,6 +427,7 @@ function DishDetailPage() {
               rating={reviewSummary?.overallAverage ?? dish.rating}
               reviewCount={reviewSummary?.reviewCount ?? null}
               distanceMeters={dish.distanceMeters}
+              kitchenDescription={dish.kitchenDescription}
             />
 
             {dish.ingredients && dish.ingredients.length > 0 ? (

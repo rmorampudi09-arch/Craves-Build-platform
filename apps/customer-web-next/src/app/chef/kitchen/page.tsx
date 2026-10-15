@@ -2,7 +2,7 @@ import { ChefAccessBoundary } from "@/features/chef/components/chef-access-bound
 import { ChefKitchenForm } from "@/features/chef/components/chef-kitchen-form";
 
 export const metadata = {
-  title: "My kitchen | Craves",
+  title: "Kitchen details | Craves",
   robots: { index: false, follow: false },
 };
 

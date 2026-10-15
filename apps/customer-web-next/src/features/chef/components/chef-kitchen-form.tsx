@@ -603,7 +603,7 @@ export function ChefKitchenForm() {
     const open = kitchen?.status === "ACTIVE";
     return (
       <div>
-        <ChefPageHead title="Kitchen" subtitle="How customers see your kitchen, and where riders pick up." back={PAGE_BACK} />
+        <ChefPageHead title="Kitchen details" subtitle="How customers see your kitchen, and where riders pick up." back={PAGE_BACK} />
         <div className="chef-stack">
           <ChefSection>
             <div className="flex flex-wrap items-center gap-2">

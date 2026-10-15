@@ -18,7 +18,7 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
   const multipart = contentType.startsWith("multipart/form-data;");
   const pathname = new URL(request.url).pathname;
-  if (multipart && !/^\/api\/chef\/(?:application\/proof-files|menu\/[0-9a-f-]{36}\/images)$/.test(pathname)) {
+  if (multipart && !/^\/api\/chef\/(?:application\/proof-files|menu\/[0-9a-f-]{36}\/images|kitchen\/photos)$/.test(pathname)) {
     return rejected(415, "JSON_REQUIRED");
   }
   const json = /^application\/json(?:\s*;|$)/.test(contentType);

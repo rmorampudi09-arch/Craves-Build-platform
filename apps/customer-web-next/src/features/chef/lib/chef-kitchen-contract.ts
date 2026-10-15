@@ -46,6 +46,16 @@ export function chefAvatarGateStep(read: "failed" | ChefKitchen | null): "ask" |
   return read !== "failed" && read?.chefPhotoUrl === null && read.status !== "SUSPENDED" ? "ask" : "open";
 }
 
+/**
+ * The "Overall kitchen" and "Cooking setup" tiles: a photo link, null when empty, or undefined while the server
+ * doesn't offer kitchen photos. Catalog fills slot 1 before slot 2, and support can empty either one.
+ */
+export function kitchenPhotoSlots(kitchen: ChefKitchen): [string | null, string | null] | undefined {
+  if (!kitchen.kitchenPhotoUrls) return undefined;
+  const overall = kitchen.kitchenPhotoUrl ?? null;
+  return [overall, kitchen.kitchenPhotoUrls.find((url) => url !== overall) ?? null];
+}
+
 function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const result = value.trim();
@@ -130,6 +140,10 @@ export function parseChefKitchen(value: unknown): ChefKitchen | null {
     updatedAt,
     // Only what the server sent, so a screen can tell "not offered yet" from "empty".
     ...(raw.chefPhotoUrl !== undefined ? { chefPhotoUrl: safeChefPhotoUrl(raw.chefPhotoUrl) } : {}),
+    ...(raw.kitchenPhotoUrl !== undefined ? { kitchenPhotoUrl: safeChefPhotoUrl(raw.kitchenPhotoUrl) } : {}),
+    ...(Array.isArray(raw.kitchenPhotoUrls)
+      ? { kitchenPhotoUrls: raw.kitchenPhotoUrls.map(safeChefPhotoUrl).filter((url): url is string => url !== null).slice(0, 2) }
+      : {}),
   };
 }
 

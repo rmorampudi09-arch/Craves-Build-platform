@@ -5,22 +5,25 @@ import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef
 import { ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import Link from "next/link";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowLeft,
+  Camera,
   Check,
   ChevronRight,
+  ImageIcon,
   MapPin,
   Store,
 } from "lucide-react";
-import { ChefKitchenError, saveChefAvatar } from "@/features/chef/api/chef-kitchen";
+import { ChefKitchenError, readChefKitchen, saveChefAvatar, uploadKitchenPhoto } from "@/features/chef/api/chef-kitchen";
+import { shrinkDishPhoto } from "@/features/chef/lib/shrink-photo";
 import { ChefAvatarGrid } from "@/features/chef/components/chef-avatar";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { parseOnboardingState } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
-import { CHEF_KITCHEN_FIELD_LIMITS, chefAvatarIdFromUrl, missingKitchenPickupField } from "@/features/chef/lib/chef-kitchen-contract";
+import { CHEF_KITCHEN_FIELD_LIMITS, chefAvatarIdFromUrl, kitchenPhotoSlots, missingKitchenPickupField } from "@/features/chef/lib/chef-kitchen-contract";
 import type {
   ChefKitchen,
   ChefKitchenInput,
@@ -62,6 +65,14 @@ const EMPTY: FormState = {
 
 const PHOTO_TILE =
   "relative flex h-24 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border-2 border-dashed border-[#D0D5DB] bg-white px-1 text-center text-[0.8125rem] font-semibold text-[#6B6B6B] disabled:cursor-not-allowed";
+
+const PHOTOS_LOCKED = "Kitchen photos can’t be changed. To change one, contact Craves support.";
+const PHOTO_ERRORS: Record<string, string> = {
+  KITCHEN_PHOTOS_LOCKED: PHOTOS_LOCKED,
+  [FEATURE_NOT_AVAILABLE]: "Photos are coming soon.",
+  INVALID_KITCHEN_PHOTO: "Choose a JPEG or PNG photo of 8 MB or less.",
+};
+const PHOTO_SOURCE = `${secondaryActionClass} gap-2 sm:w-full`;
 
 const INPUT_CLASS =
   "mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-base text-[#1A1A1A] outline-none transition focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10 disabled:bg-[#F1F3F5]";
@@ -161,6 +172,9 @@ export function ChefKitchenForm() {
   const [photoNote, setPhotoNote] = useState("");
   const [faceSheet, setFaceSheet] = useState(false);
   const [faceDraft, setFaceDraft] = useState<string | null>(null);
+  const [photoSheet, setPhotoSheet] = useState(false);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
   const [locating, setLocating] = useState(false);
   const locationRequest = useRef(0);
   const [invalidField, setInvalidField] = useState<keyof FormState | null>(null);
@@ -419,7 +433,9 @@ export function ChefKitchenForm() {
       setNotice(done);
     } catch (error) {
       const code = error instanceof ChefKitchenError ? error.code : "";
-      setPhotoNote(code === FEATURE_NOT_AVAILABLE ? "Photos are coming soon." : kind === "CHEF" ? "We couldn’t save your picture. Please try again." : "We couldn’t save that photo. Please try again.");
+      // The tiles were out of date (photos arrived from the application or another device): show what Craves holds.
+      if (code === "KITCHEN_PHOTOS_LOCKED") void readChefKitchen().then((latest) => latest && setKitchen(latest), () => undefined);
+      setPhotoNote(PHOTO_ERRORS[code] ?? (kind === "CHEF" ? "We couldn’t save your picture. Please try again." : "We couldn’t save that photo. Please try again."));
     } finally {
       setPhotoSaving(null);
     }
@@ -432,7 +448,20 @@ export function ChefKitchenForm() {
     void savePhoto("CHEF", () => saveChefAvatar(avatarId), "Picture saved");
   }
 
+  function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void savePhoto("KITCHEN", async () => uploadKitchenPhoto(await shrinkDishPhoto(file, 4 / 3)), "Photo saved");
+  }
+
+  function pickPhoto(input: HTMLInputElement | null) {
+    setPhotoSheet(false);
+    input?.click();
+  }
+
   const suspended = kitchen?.status === "SUSPENDED";
+  const photoSlots: (string | null | undefined)[] = kitchen ? kitchenPhotoSlots(kitchen) ?? [undefined, undefined] : [];
+  const nextPhotoSlot = photoSlots.indexOf(null);
   const mapped = Boolean(form.latitude.trim()) && Boolean(form.longitude.trim());
 
   if (!loaded) {
@@ -481,7 +510,6 @@ export function ChefKitchenForm() {
                   className={PHOTO_TILE}
                   disabled={kitchen.chefPhotoUrl === undefined || photoSaving !== null}
                   aria-busy={photoSaving === "CHEF"}
-                  aria-label="Change your picture"
                   onClick={() => {
                     setFaceDraft(chefAvatarIdFromUrl(kitchen.chefPhotoUrl));
                     setFaceSheet(true);
@@ -492,7 +520,33 @@ export function ChefKitchenForm() {
                   {kitchen.chefPhotoUrl === undefined ? <ChefPill>Coming soon</ChefPill> : null}
                   {photoSaving === "CHEF" ? <span className="absolute top-1 text-xs">Saving…</span> : null}
                 </button>
+                {photoSlots.map((url, slot) => {
+                  const saving = photoSaving === "KITCHEN" && slot === nextPhotoSlot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      className={PHOTO_TILE}
+                      disabled={url === undefined || photoSaving !== null}
+                      aria-busy={saving}
+                      onClick={() => {
+                        if (url || slot !== nextPhotoSlot) setPhotoNote(url ? PHOTOS_LOCKED : "Add the overall kitchen photo first.");
+                        else setPhotoSheet(true);
+                      }}
+                    >
+                      {url ? <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <Store className="h-6 w-6" aria-hidden="true" />}
+                      <span className={url ? "absolute inset-x-0 bottom-0 bg-white py-0.5 text-[#1A1A1A]" : undefined}>
+                        {slot === 0 ? "Overall kitchen" : "Cooking setup"}
+                        {url ? <span className="sr-only">: photo added</span> : null}
+                      </span>
+                      {url === undefined ? <ChefPill>Coming soon</ChefPill> : null}
+                      {saving ? <span className="absolute top-1 text-xs">Saving…</span> : null}
+                    </button>
+                  );
+                })}
               </div>
+              <input ref={cameraInput} type="file" accept="image/jpeg,image/png" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
+              <input ref={galleryInput} type="file" accept="image/jpeg,image/png" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={choosePhoto} />
               <p aria-live="polite" className="mt-3 text-sm text-[#6B6B6B] empty:hidden">{photoNote}</p>
             </ChefSection>
           ) : null}
@@ -510,6 +564,12 @@ export function ChefKitchenForm() {
         >
           <div className="mt-5">
             <ChefAvatarGrid selectedId={faceDraft} onSelect={setFaceDraft} />
+          </div>
+        </Sheet>
+        <Sheet open={photoSheet} onOpenChange={setPhotoSheet} title="Kitchen photo" description="Photos can’t be changed once added.">
+          <div className="mt-5 grid gap-2">
+            <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(cameraInput.current)}><Camera className="h-5 w-5" aria-hidden="true" />Take a photo</button>
+            <button type="button" className={PHOTO_SOURCE} onClick={() => pickPhoto(galleryInput.current)}><ImageIcon className="h-5 w-5" aria-hidden="true" />Choose from gallery</button>
           </div>
         </Sheet>
         <ChefFlash message={notice} onClose={() => setNotice("")} />

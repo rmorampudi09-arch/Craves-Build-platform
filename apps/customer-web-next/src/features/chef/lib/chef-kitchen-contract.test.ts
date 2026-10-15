@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHEF_AVATAR_IDS, chefAvatarGateStep, chefAvatarIdFromUrl, chefAvatarUrl, parseChefKitchen, parseChefKitchenInput } from "./chef-kitchen-contract.ts";
+import { CHEF_AVATAR_IDS, chefAvatarGateStep, chefAvatarIdFromUrl, chefAvatarUrl, kitchenPhotoSlots, parseChefKitchen, parseChefKitchenInput } from "./chef-kitchen-contract.ts";
 
 const kitchen = {
   id: "11111111-2222-4333-8444-555555555555",
@@ -93,4 +93,17 @@ test("keeps the chef picture only when the server sent it, and only as an https 
   assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: chefAvatarUrl("chef-avatar-03") })?.chefPhotoUrl, chefAvatarUrl("chef-avatar-03"));
   assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: "http://craves.in/a.jpg" })?.chefPhotoUrl, null);
   assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: 42 })?.chefPhotoUrl, null);
+});
+
+test("keeps https kitchen photos only, and tells the overall photo from the cooking setup", () => {
+  const k1 = "https://craves.in/media/k1.jpg", k2 = "https://craves.in/media/k2.jpg";
+  const parsed = parseChefKitchen({ ...kitchen, kitchenPhotoUrl: k1, kitchenPhotoUrls: [k1, "http://craves.in/x.jpg", 7, k2, "https://craves.in/media/k3.jpg"] })!;
+  assert.deepEqual(parsed.kitchenPhotoUrls, [k1, k2]);
+  assert.deepEqual(kitchenPhotoSlots(parsed), [k1, k2]);
+  assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrls: [k1] }), [k1, null]);
+  assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrl: null, kitchenPhotoUrls: [] }), [null, null]);
+  // Support emptied slot 1: the overall photo is the one to add next.
+  assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrl: null, kitchenPhotoUrls: [k2] }), [null, k2]);
+  assert.equal(kitchenPhotoSlots(parseChefKitchen(kitchen)!), undefined);
+  assert.equal("kitchenPhotoUrl" in parseChefKitchen(kitchen)!, false);
 });

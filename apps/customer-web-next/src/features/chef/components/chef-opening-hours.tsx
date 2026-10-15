@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
@@ -379,6 +379,12 @@ export function ChefOpeningHours() {
   const [sheetError, setSheetError] = useState("");
   const [flash, setFlash] = useState("");
   const busy = useRef(false);
+  const ready = view.state === "ready";
+
+  // "Change opening hours" links here with #chef-hours; the hours only exist once read.
+  useEffect(() => {
+    if (ready && window.location.hash === "#chef-hours") document.getElementById("chef-hours")?.scrollIntoView();
+  }, [ready]);
 
   if (view.state === "loading") {
     return (

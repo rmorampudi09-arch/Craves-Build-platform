@@ -20,6 +20,7 @@ import {
   Store,
   UserRound,
 } from "lucide-react";
+import { Clock3, SlidersHorizontal } from "lucide-react";
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { switchToCustomerApp, useChefSignOut } from "@/features/chef/components/chef-account-menu";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
@@ -38,6 +39,7 @@ function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
     { title: "Kitchen", items: [
       { href: "/chef/kitchen", icon: Store, label: "Kitchen details", description: kitchen?.kitchenName || "Name, address and phone" },
       { href: "/chef/operations", icon: ShieldCheck, label: "Can customers find you?", description: "See what’s done and what’s left" },
+      { href: "/chef/operations#chef-hours", icon: Clock3, label: "Opening hours", description: "Weekly hours, special days and pauses" },
       // Plates per day only counts meal plan plates, so it waits for meal plans.
       { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Coming soon" },
     ] },
@@ -50,6 +52,7 @@ function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
     { title: "Account", items: [
       { href: "/chef/application/status", icon: FileCheck2, label: "Your application", description: "What you sent to Craves" },
       { href: "/chef/notifications", icon: Bell, label: "Notifications", description: "Messages from Craves" },
+      { href: "/chef/preferences", icon: SlidersHorizontal, label: "Preferences", description: "Accept orders automatically, cooking time" },
       { href: "/chef/support", icon: LifeBuoy, label: "Get help", description: "Talk to Craves about an order or money" },
       { action: "switch", icon: ArrowLeftRight, label: "Switch to customer app", description: "Order food for yourself" },
       { action: "sign-out", icon: LogOut, label: "Sign out", description: "Sign out on this phone" },

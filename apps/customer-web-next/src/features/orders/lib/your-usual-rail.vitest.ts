@@ -8,10 +8,17 @@ const navigate = vi.hoisted(() => vi.fn());
 const menu = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
-  Link: ({ children, to, ...rest }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...rest }, children),
+  Link: ({ children, to, ...rest }: { children: ReactNode; to: string }) =>
+    createElement("a", { href: to, ...rest }, children),
 }));
-vi.mock("@/features/auth/api/cravesAuth", () => ({ loadSession: async () => ({ id: "fixture-customer" }) }));
-vi.mock("@/features/cart/api/cravesCart", () => ({ addToCart: vi.fn(), loadCart: vi.fn(async () => []), CartKeptError: class extends Error {} }));
+vi.mock("@/features/auth/api/cravesAuth", () => ({
+  loadSession: async () => ({ id: "fixture-customer" }),
+}));
+vi.mock("@/features/cart/api/cravesCart", () => ({
+  addToCart: vi.fn(),
+  loadCart: vi.fn(async () => []),
+  CartKeptError: class extends Error {},
+}));
 vi.mock("@/features/dish/api/dishes", () => ({ loadKitchenMenu: menu }));
 
 import OrdersPage from "../screens/OrderHistory";
@@ -25,28 +32,97 @@ const PHOTO = "https://craves.in/media/public/chef-avatars/chef-avatar-07.jpg";
 function order(id: string, status: string) {
   const at = new Date(Date.now() - 3 * 86_400_000).toISOString();
   return {
-    id, checkoutId: id, kitchenId: KITCHEN, kitchenName: "Relangi", status, currency: "INR", foodSubtotal: 240, platformFee: 0, taxAmount: 0,
-    deliveryFee: 0, grandTotal: 240, chefResponseNote: null, prepTimeMinutes: null, deliveryAddress: null, createdAt: at, updatedAt: at,
-    items: [{ id: `${id.slice(0, -3)}301`, menuItemId: DISH, itemName: "Veg thali", category: "Meals", foodType: "VEG", unitPrice: 120, quantity: 2, lineTotal: 240 }],
+    id,
+    checkoutId: id,
+    kitchenId: KITCHEN,
+    kitchenName: "Relangi",
+    status,
+    currency: "INR",
+    foodSubtotal: 240,
+    platformFee: 0,
+    taxAmount: 0,
+    deliveryFee: 0,
+    grandTotal: 240,
+    chefResponseNote: null,
+    prepTimeMinutes: null,
+    deliveryAddress: null,
+    createdAt: at,
+    updatedAt: at,
+    items: [
+      {
+        id: `${id.slice(0, -3)}301`,
+        menuItemId: DISH,
+        itemName: "Veg thali",
+        category: "Meals",
+        foodType: "VEG",
+        unitPrice: 120,
+        quantity: 2,
+        lineTotal: 240,
+      },
+    ],
   };
 }
 const candidate = {
-  orderId: DELIVERED, kitchenId: KITCHEN, kitchenName: "Relangi", lastOrderedAt: "2026-10-10T07:12:00Z", completedOrdersFromKitchen: 3,
-  items: [{ menuItemId: DISH, itemName: "Veg thali", quantity: 2 }], previousOrderTotal: "240", previousOrderCurrency: "INR",
-  orderLikeLastTimeAvailable: true, preferenceRecallSupported: true, rememberedPreferenceCount: 0, currentValidationNotice: "Prices are checked again when the cart is rebuilt.",
+  orderId: DELIVERED,
+  kitchenId: KITCHEN,
+  kitchenName: "Relangi",
+  lastOrderedAt: "2026-10-10T07:12:00Z",
+  completedOrdersFromKitchen: 3,
+  items: [{ menuItemId: DISH, itemName: "Veg thali", quantity: 2 }],
+  previousOrderTotal: "240",
+  previousOrderCurrency: "INR",
+  orderLikeLastTimeAvailable: true,
+  preferenceRecallSupported: true,
+  rememberedPreferenceCount: 0,
+  currentValidationNotice: "Prices are checked again when the cart is rebuilt.",
 };
-const kitchen = { id: KITCHEN, kitchenName: "Relangi", displayName: null, description: null, areaName: null, city: "Hyderabad", state: "Telangana", status: "ACTIVE", createdAt: null, chefPhotoUrl: PHOTO, kitchenPhotoUrls: [] };
-const emptyCart = { id: CART, currency: "INR", items: [], totals: { foodSubtotal: 0, currency: "INR" } };
-const line = { id: "0bde0000-0000-4000-8000-000000000302", menuItemId: DISH, kitchenId: KITCHEN, itemName: "Veg thali", kitchenName: "Relangi", unitPrice: 120, currency: "INR", quantity: 2, lineTotal: 240, createdAt: "2026-10-15T08:00:00Z", updatedAt: "2026-10-15T08:00:00Z" };
+const kitchen = {
+  id: KITCHEN,
+  kitchenName: "Relangi",
+  displayName: null,
+  description: null,
+  areaName: null,
+  city: "Hyderabad",
+  state: "Telangana",
+  status: "ACTIVE",
+  createdAt: null,
+  chefPhotoUrl: PHOTO,
+  kitchenPhotoUrls: [],
+};
+const emptyCart = {
+  id: CART,
+  currency: "INR",
+  items: [],
+  totals: { foodSubtotal: 0, currency: "INR" },
+};
+const line = {
+  id: "0bde0000-0000-4000-8000-000000000302",
+  menuItemId: DISH,
+  kitchenId: KITCHEN,
+  itemName: "Veg thali",
+  kitchenName: "Relangi",
+  unitPrice: 120,
+  currency: "INR",
+  quantity: 2,
+  lineTotal: 240,
+  createdAt: "2026-10-15T08:00:00Z",
+  updatedAt: "2026-10-15T08:00:00Z",
+};
 
 function serve(orders: unknown[], cart: unknown = emptyCart) {
   const fetch = vi.fn(async (url: string) => {
     const path = url.split("?")[0];
     if (path === "/api/orders") return Response.json(orders);
-    if (path === "/api/orders/repeat-candidates") return Response.json({ items: [candidate], nextCursor: null, hasMore: false });
+    if (path === "/api/orders/repeat-candidates")
+      return Response.json({ items: [candidate], nextCursor: null, hasMore: false });
     if (path === `/api/catalog/kitchens/${KITCHEN}`) return Response.json(kitchen);
     if (path === "/api/cart") return Response.json(cart);
-    if (path === `/api/cart/reorder-if-unchanged/${DELIVERED}`) return Response.json({ ...emptyCart, items: [line], totals: { foodSubtotal: 240, currency: "INR" } });
+    if (path === `/api/cart/reorder-if-unchanged/${DELIVERED}`)
+      return Response.json({
+        ...emptyCart,
+        items: [line],
+        totals: { foodSubtotal: 240, currency: "INR" },
+      });
     return new Response(null, { status: 404 });
   });
   vi.stubGlobal("fetch", fetch);
@@ -79,7 +155,10 @@ it("shows the chef's face on each order and refills the cart from Your usual in 
 });
 
 it("sends the customer to their cart rather than replacing dishes already in it", async () => {
-  serve([order(DELIVERED, "DELIVERED")], { ...emptyCart, items: [{ ...line, kitchenName: "Ammi's" }] });
+  serve([order(DELIVERED, "DELIVERED")], {
+    ...emptyCart,
+    items: [{ ...line, kitchenName: "Ammi's" }],
+  });
   menu.mockResolvedValue([{ id: DISH }]);
   render(createElement(OrdersPage));
 
@@ -95,5 +174,7 @@ it("asks for repeat baskets only once something was delivered", async () => {
   render(createElement(OrdersPage));
   await screen.findByRole("region", { name: "In progress" });
   expect(screen.queryByRole("region", { name: "Your usual" })).toBeNull();
-  expect(fetch.mock.calls.some(([url]) => String(url).startsWith("/api/orders/repeat-candidates"))).toBe(false);
+  expect(
+    fetch.mock.calls.some(([url]) => String(url).startsWith("/api/orders/repeat-candidates")),
+  ).toBe(false);
 });

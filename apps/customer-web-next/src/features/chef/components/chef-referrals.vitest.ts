@@ -26,6 +26,21 @@ const earnings = {
     },
   ],
 };
+// What /api/referrals/me sends: the overview cut down to the tiles.
+const overview = {
+  currency: "INR",
+  pendingPaise: "15000",
+  levels: [
+    { level: 1, netEarnedPaise: "30000" },
+    { level: 2, netEarnedPaise: "12000" },
+    { level: 3, netEarnedPaise: "0" },
+  ],
+  downline: [
+    { level: 1, members: "2" },
+    { level: 2, members: "1" },
+  ],
+};
+const unpublished = () => Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 });
 const notJoined = () =>
   Response.json({ code: "REFERRAL_ACCOUNT_NOT_ENROLLED_OR_INACTIVE" }, { status: 403 });
 const routes = vi.fn<(path: string) => Response>();
@@ -45,8 +60,13 @@ afterEach(() => {
 
 describe("Refer a chef", () => {
   it("shows the invite, the earned tile and the credits for a member", async () => {
+    // The overview isn't on the gateway yet: Joined and On hold say Coming soon, Earned comes from the earnings.
     routes.mockImplementation((path) =>
-      path.endsWith("/code") ? Response.json(invite) : Response.json(earnings),
+      path.endsWith("/code")
+        ? Response.json(invite)
+        : path === "/api/referrals/me"
+          ? unpublished()
+          : Response.json(earnings),
     );
     render(createElement(ChefReferrals));
     expect(await screen.findByText(invite.code)).toBeTruthy();
@@ -56,6 +76,35 @@ describe("Refer a chef", () => {
     expect(screen.getByText("Referral reversal")).toBeTruthy();
     expect(screen.getByText("−₹50.00")).toBeTruthy();
     expect(screen.getAllByText("Coming soon")).toHaveLength(2);
+  });
+
+  it("shows Joined, On hold and Earned from the overview once it answers", async () => {
+    routes.mockImplementation((path) =>
+      path.endsWith("/code")
+        ? Response.json(invite)
+        : path === "/api/referrals/me"
+          ? Response.json(overview)
+          : Response.json(earnings),
+    );
+    render(createElement(ChefReferrals));
+    const tile = async (label: string) =>
+      (await screen.findByText(label)).nextElementSibling?.textContent;
+    await screen.findByText("₹420.00");
+    expect(await tile("Joined")).toBe("3");
+    expect(await tile("On hold")).toBe("₹150.00");
+    expect(await tile("Earned")).toBe("₹420.00");
+    expect(screen.queryByText("Coming soon")).toBeNull();
+
+    cleanup();
+    routes.mockImplementation((path) =>
+      path.endsWith("/code")
+        ? Response.json(invite)
+        : path === "/api/referrals/me"
+          ? Response.json({ code: "REFERRAL_OVERVIEW_UNAVAILABLE" }, { status: 503 })
+          : Response.json(earnings),
+    );
+    render(createElement(ChefReferrals));
+    expect(await screen.findAllByText("—")).toHaveLength(3);
   });
 
   it("joins an older account, then waits for the invite link and checks again", async () => {
@@ -134,9 +183,7 @@ describe("Refer a chef", () => {
   });
 
   it("shows Coming soon when the routes are not published", async () => {
-    routes.mockImplementation(() =>
-      Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 }),
-    );
+    routes.mockImplementation(unpublished);
     render(createElement(ChefReferrals));
     expect(await screen.findByText("Referrals are on their way")).toBeTruthy();
   });

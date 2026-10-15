@@ -9,11 +9,13 @@ vi.mock("@/shared/lib/server-api", async (original) => ({
 }));
 import { GET as readCode } from "@/app/api/referrals/me/code/route";
 import { GET as readEarnings } from "@/app/api/referrals/me/chef-earnings/route";
+import { GET as readOverview } from "@/app/api/referrals/me/route";
 import { POST as enroll } from "@/app/api/referrals/enroll/route";
 import {
   enrollInChefReferrals,
   fetchChefReferralEarnings,
   fetchReferralCode,
+  fetchReferralOverview,
   ReferralError,
 } from "@/features/chef/api/chef-referrals";
 import { CHEF_REFERRAL_TERMS_VERSION } from "@/features/chef/lib/chef-referral-terms";
@@ -37,6 +39,29 @@ const earnings = {
   settlementDestination: "CHEF_EARNINGS",
   withdrawalAvailability: "CHECK_VERIFIED_CHEF_EARNINGS_BALANCE",
   recentPostings: [],
+};
+// What referral-service MemberQueries.overview answers.
+const overview = {
+  asOf: "2026-10-15T04:00:00Z",
+  currency: "INR",
+  pendingPaise: "15000",
+  availablePaise: "0",
+  reservedPaise: "0",
+  balanceUpdatedAt: "2026-10-15T03:00:00Z",
+  onReviewHold: false,
+  levels: [
+    { level: 1, netEarnedPaise: "30000" },
+    { level: 2, netEarnedPaise: "12000" },
+    { level: 3, netEarnedPaise: "0" },
+  ],
+  downline: [
+    { level: 1, members: "2" },
+    { level: 2, members: "1" },
+  ],
+  code,
+  cashout: { enabled: false, eligible: false, reason: "CASHOUT_DISABLED", minimumPaise: "25000" },
+  spendingEnabled: false,
+  policy: null,
 };
 const terms = { termsVersion: CHEF_REFERRAL_TERMS_VERSION, termsAccepted: true };
 
@@ -129,6 +154,63 @@ describe("chef referral earnings BFF", () => {
   });
 });
 
+describe("referral overview BFF", () => {
+  it("passes on only what the tiles show", async () => {
+    upstream.mockResolvedValue(Response.json(overview));
+    const response = await readOverview(request("/api/referrals/me"));
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      currency: "INR",
+      pendingPaise: "15000",
+      levels: overview.levels,
+      downline: overview.downline,
+    });
+    expect(upstream.mock.calls[0][1]).toBe("/referrals/me");
+  });
+
+  it.each([
+    // Not on the gateway yet.
+    [new Response(null, { status: 404 }), 404, "FEATURE_NOT_AVAILABLE"],
+    [
+      Response.json({ code: "REFERRAL_ACCOUNT_NOT_ENROLLED_OR_INACTIVE" }, { status: 403 }),
+      403,
+      "REFERRAL_ACCOUNT_NOT_ENROLLED_OR_INACTIVE",
+    ],
+    [new Response(null, { status: 401 }), 401, "SESSION_EXPIRED"],
+    [
+      Response.json({ ...overview, levels: overview.levels.slice(1) }),
+      502,
+      "INVALID_REFERRAL_OVERVIEW_RESPONSE",
+    ],
+    [
+      Response.json({ ...overview, downline: [{ level: 1, members: "-1" }] }),
+      502,
+      "INVALID_REFERRAL_OVERVIEW_RESPONSE",
+    ],
+  ])("maps upstream %# to %s %s", async (reply, status, failure) => {
+    upstream.mockResolvedValue(reply);
+    expect(await answer(await readOverview(request("/api/referrals/me")))).toEqual([
+      status,
+      failure,
+    ]);
+  });
+
+  it("answers 503 when the service can't be reached, and the browser reads what it sends", async () => {
+    upstream.mockRejectedValue(new Error("down"));
+    expect(await answer(await readOverview(request("/api/referrals/me")))).toEqual([
+      503,
+      "REFERRAL_OVERVIEW_UNAVAILABLE",
+    ]);
+    upstream.mockResolvedValue(Response.json(overview));
+    const sent = await readOverview(request("/api/referrals/me"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => sent),
+    );
+    expect((await fetchReferralOverview()).pendingPaise).toBe("15000");
+  });
+});
+
 describe("referral enrol BFF", () => {
   it("sends exactly the accepted terms to the auth service", async () => {
     upstream.mockResolvedValue(
@@ -202,7 +284,6 @@ describe("referral browser helpers", () => {
     expect((await fetchChefReferralEarnings()).monthRemainingPaise).toBe("150000");
     expect(await fetchReferralCode()).toEqual({ code: code.code, link: code.link });
   });
-
 
   it("send the terms version and throw coded errors", async () => {
     const fetch = vi.fn(async () => Response.json({ accepted: true, status: "ALREADY_ENROLLED" }));

@@ -46,6 +46,7 @@ import {
   type SpiceLevel,
 } from "@/features/chef/lib/chef-menu-contract";
 import { shrinkDishPhoto } from "@/features/chef/lib/shrink-photo";
+import { SPICE_LEVEL_LABELS } from "@/shared/lib/spice-level";
 
 type FormState = {
   id: string | null;
@@ -89,11 +90,12 @@ const FOOD_TYPES = [
   { value: "NON_VEG", label: "Non-veg", color: "bg-[#D92D20]", border: "border-[#D92D20]" },
   { value: "EGG", label: "Egg", color: "bg-[#D99A00]", border: "border-[#D99A00]" },
 ] as const;
+// The words customers see and filter by.
 const SPICE_LEVELS = [
   { value: "", label: "Not set" },
-  { value: "MILD", label: "Mild" },
-  { value: "MEDIUM", label: "Medium" },
-  { value: "SPICY", label: "Hot" },
+  { value: "MILD", label: SPICE_LEVEL_LABELS.MILD },
+  { value: "MEDIUM", label: SPICE_LEVEL_LABELS.MEDIUM },
+  { value: "SPICY", label: SPICE_LEVEL_LABELS.SPICY },
 ] as const;
 // One tap fills the usual answers; the box still takes any number.
 const READY_IN = [15, 30, 45, 60] as const;

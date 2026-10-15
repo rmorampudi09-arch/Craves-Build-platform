@@ -173,6 +173,8 @@ describe("Dish options", { timeout: 20_000 }, () => {
     expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe(
       "Copy of Fixture dish",
     );
+    // The spice words customers see and filter by.
+    expect(screen.getByRole("radio", { name: "Spicy" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await screen.findByText("Dish added");
     const created = JSON.parse(

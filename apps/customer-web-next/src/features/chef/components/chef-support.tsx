@@ -409,7 +409,7 @@ export function ChefSupportTicket({
               return (
                 <li
                   key={message.id}
-                  className={`max-w-[82%] rounded-2xl px-4 py-3 ${mine ? "justify-self-end rounded-br-md bg-[#FDECEA]" : "justify-self-start rounded-bl-md border border-[#E5E7EB] bg-white"}`}
+                  className={`max-w-[82%] rounded-2xl px-4 py-3 ${mine ? "justify-self-end rounded-br-md bg-[#E3E6EA]" : "justify-self-start rounded-bl-md border border-[#E5E7EB] bg-white"}`}
                 >
                   {mine ? (
                     <span className="sr-only">You:</span>

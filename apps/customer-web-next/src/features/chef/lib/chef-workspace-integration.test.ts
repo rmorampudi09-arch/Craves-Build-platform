@@ -44,9 +44,11 @@ test("chef workspace navigation and the More hub expose every implemented backen
 });
 
 test("pages that are not tabs keep an obvious way back", () => {
-  for (const [page, href] of [["operations", "/chef/profile"], ["meal-plans", "/chef/profile"], ["capacity", "/chef/meal-plans"], ["notifications", "/chef"]]) {
+  for (const [page, href] of [["operations", "/chef/profile"], ["capacity", "/chef/meal-plans"], ["notifications", "/chef"]]) {
     assert.match(source(`../../../app/chef/${page}/page.tsx`), new RegExp(`back=\\{\\{\\s*href: "${href.replaceAll("/", "\\/")}"`), page);
   }
+  // Meal plans swap their header for the plan editor, so the list draws it.
+  assert.match(source("../components/chef-subscription-plan-manager.tsx"), /back=\{\{ href: "\/chef\/profile", label: "More" \}\}/);
   assert.match(source("../../../app/chef/support/page.tsx"), /\{ href: "\/chef\/profile", label: "More" \}/);
   assert.match(source("../components/chef-kitchen-form.tsx"), /PAGE_BACK = \{ href: "\/chef\/profile", label: "More" \}/);
   assert.match(source("../components/chef-order-details.tsx"), /back=\{\{ href: "\/chef\/orders", label: "Orders" \}\}/);
@@ -119,9 +121,9 @@ test("chef order actions use unique idempotency keys and strict responses", () =
 });
 
 test("chef pages render their headers only after the access check", () => {
-  for (const page of ["capacity", "meal-plans", "operations", "finance", "statements", "profile", "earnings"]) {
+  for (const [page, header] of [["capacity", "<ChefPageHeader"], ["meal-plans", "<ChefSubscriptionPlanManager"], ["operations", "<ChefPageHeader"], ["finance", "<ChefPageHeader"], ["statements", "<ChefPageHeader"], ["profile", "<ChefPageHeader"], ["earnings", "<ChefPageHeader"]]) {
     const contents = source(`../../../app/chef/${page}/page.tsx`);
     const boundary = contents.indexOf("<ChefAccessBoundary>");
-    assert.ok(boundary >= 0 && boundary < contents.indexOf("<ChefPageHeader"), page);
+    assert.ok(boundary >= 0 && boundary < contents.indexOf(header), page);
   }
 });

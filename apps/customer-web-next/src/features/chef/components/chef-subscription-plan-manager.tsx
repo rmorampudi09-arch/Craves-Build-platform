@@ -34,7 +34,7 @@ import {
   ChefPill,
   ChefSection,
 } from "@/features/chef/components/chef-ui";
-import { chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
+import { ChefError, chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
 import type { ChefMenuItem } from "@/features/chef/lib/chef-menu-contract";
 import {
   acceptingSubscribersValue,
@@ -101,8 +101,12 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
     try {
       setMenuItems(await loadChefMenu());
       setMenuStatus("ready");
-    } catch {
-      setMenuStatus("error");
+    } catch (error) {
+      const noKitchen =
+        error instanceof ChefError &&
+        error.status === 400 &&
+        error.ref === "KITCHEN_PROFILE_REQUIRED";
+      setMenuStatus(noKitchen ? "no-kitchen" : "error");
     }
   }, []);
   useEffect(() => {
@@ -233,6 +237,7 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
                 <PlanCard
                   key={plan.id}
                   plan={plan}
+                  inMenu={inMenu}
                   items={items}
                   photoUrl={plan.imageUrl ?? cover}
                   onOpen={() => setEditing({ plan, step: 1 })}
@@ -265,7 +270,15 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
         />
       )}
       <div className="chef-stack">
-        {inMenu ? <ChefMenuViews current="plans" /> : null}
+        {inMenu ? (
+          <ChefMenuViews
+            current="plans"
+            counts={{
+              dishes: menuStatus === "ready" ? menuItems.length : undefined,
+              plans: plans?.length,
+            }}
+          />
+        ) : null}
         {body}
       </div>
       <ChefFlash message={notice} onClose={() => setNotice("")} />
@@ -275,6 +288,7 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
 
 function PlanCard({
   plan,
+  inMenu,
   items,
   photoUrl,
   onOpen,
@@ -282,6 +296,7 @@ function PlanCard({
   onChanged,
 }: {
   plan: ChefMealPlan;
+  inMenu: boolean;
   items: ChefMealSchedule["items"] | undefined;
   photoUrl: string | null;
   onOpen(): void;
@@ -406,7 +421,7 @@ function PlanCard({
             <CalendarDays className="h-4 w-4" aria-hidden="true" /> Schedule
           </button>
           <Link
-            href={`/chef/capacity?plan=${plan.id}`}
+            href={`/chef/capacity?plan=${plan.id}${inMenu ? "&from=menu" : ""}`}
             className="flex min-h-12 items-center justify-center gap-2 border-l border-[#E3E6EA] font-bold text-[#1A1A1A]"
           >
             <Gauge className="h-4 w-4" aria-hidden="true" /> Daily limits

@@ -680,7 +680,7 @@ export function ChefMenuManager() {
         }
       />
       <div className="chef-stack">
-        <ChefMenuViews current="dishes" />
+        <ChefMenuViews current="dishes" counts={{ dishes: loading || loadError ? undefined : items.length }} />
         {loadError ? (
           <ChefSection>
             <ChefEmpty

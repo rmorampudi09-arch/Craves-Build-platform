@@ -8,14 +8,18 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-// ?plan= comes from a plan card: only that plan's days count.
-export default async function ChefCapacityPage({ searchParams }: { searchParams: Promise<{ plan?: string | string[] }> }) {
-  const { plan } = await searchParams;
+// ?plan= comes from a plan card (&from=menu when it is in the Menu tab): only that plan's days count. Without it, More opened the page.
+export default async function ChefCapacityPage({ searchParams }: { searchParams: Promise<{ plan?: string | string[]; from?: string | string[] }> }) {
+  const { plan, from } = await searchParams;
+  const planId = typeof plan === "string" && isUuid(plan) ? plan : null;
+  const back = !planId ? { href: "/chef/profile", label: "More" }
+    : from === "menu" ? { href: "/chef/menu?view=plans", label: "Menu" }
+    : { href: "/chef/meal-plans", label: "Meal plans" };
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Daily limits" description="How many plates you can cook" back={{ href: "/chef/meal-plans", label: "Meal plans" }} />
-        <ChefDailyLimits planId={typeof plan === "string" && isUuid(plan) ? plan : null} />
+        <ChefPageHeader title="Daily limits" description="How many plates you can cook" back={back} />
+        <ChefDailyLimits planId={planId} />
       </ChefAccessBoundary>
     </main>
   );

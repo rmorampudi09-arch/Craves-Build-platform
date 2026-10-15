@@ -6,6 +6,9 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ChefSubscriptionPlanManager } from "../components/chef-subscription-plan-manager";
 
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+
 const PLAN_ID = "7f639200-0000-4000-8000-0000000000a1";
 const NEW_ID = "7f639200-0000-4000-8000-0000000000b2";
 const DISH = "44444444-4444-4444-8444-444444444444";
@@ -136,6 +139,7 @@ afterAll(() => {
   MotionGlobalConfig.skipAnimations = false;
 });
 beforeEach(() => {
+  router.push.mockReset();
   plans = [];
   fetcher = vi.fn<typeof fetch>(route);
   vi.stubGlobal("fetch", fetcher);
@@ -300,6 +304,53 @@ describe("Chef meal plans", { timeout: 20_000 }, () => {
     expect(calls("POST", "/api/chef/subscription-plans")).toHaveLength(1);
   });
 
+  it("asks before an in-app link leaves unsaved changes, then follows it", async () => {
+    render(
+      createElement(
+        "div",
+        null,
+        createElement("a", { href: "/chef/orders" }, "Orders"),
+        createElement(ChefSubscriptionPlanManager),
+      ),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Create a plan" }));
+    fillDetails();
+    fireEvent.click(screen.getByRole("link", { name: "Orders" }));
+    const ask = await screen.findByRole("dialog", { name: "Save as draft?" });
+    fireEvent.click(within(ask).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    fireEvent.click(screen.getByRole("link", { name: "Orders" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "Save as draft?" })).getByRole("button", {
+        name: "Save draft",
+      }),
+    );
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/chef/orders"));
+    expect(calls("POST", "/api/chef/subscription-plans")).toHaveLength(1);
+
+    router.push.mockReset();
+    fireEvent.change(screen.getByLabelText(/Plan name/), { target: { value: "Thrown away" } });
+    fireEvent.click(screen.getByRole("link", { name: "Orders" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "Save as draft?" })).getByRole("button", {
+        name: "Discard",
+      }),
+    );
+    expect(router.push).toHaveBeenCalledWith("/chef/orders");
+    expect(calls("PUT", /subscription-plans\/[^/]+$/)).toHaveLength(0);
+  });
+
+  it("shows counts on the Menu toggle and keeps Menu as the way back from Daily limits", async () => {
+    plans = [base];
+    render(createElement(ChefSubscriptionPlanManager, { inMenu: true }));
+    expect(await screen.findByRole("link", { name: "Meal plans · 1" })).toBeTruthy();
+    await screen.findByRole("link", { name: "Dishes · 1" });
+    expect(screen.getByRole("link", { name: "Daily limits" }).getAttribute("href")).toBe(
+      `/chef/capacity?plan=${PLAN_ID}&from=menu`,
+    );
+  });
+
   it("shows a plan waiting approval read-only and sends a change request as a support ticket", async () => {
     plans = [{ ...base, status: "PENDING_APPROVAL" }];
     render(createElement(ChefSubscriptionPlanManager));
@@ -348,5 +399,23 @@ describe("Chef meal plans", { timeout: 20_000 }, () => {
     );
     render(createElement(ChefSubscriptionPlanManager));
     expect(await screen.findByText("8 subscribers")).toBeTruthy();
+    // Without a kitchen the dish picker points to kitchen setup, not to the connection.
+    fireEvent.click(screen.getByRole("button", { name: "New plan" }));
+    await screen.findByRole("heading", { name: "New meal plan" });
+    fillDetails();
+    fireEvent.click(screen.getByRole("button", { name: "Next: Meals" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a meal for Sunday" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "Add a meal for Sun" })).getByRole(
+        "button",
+        { name: "Lunch" },
+      ),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Lunch dish, not selected" }));
+    const picker = await screen.findByRole("dialog", { name: "Pick a dish" });
+    expect(within(picker).getByRole("link", { name: "Set up my kitchen" }).getAttribute("href")).toBe(
+      "/chef/kitchen",
+    );
+    expect(within(picker).queryByText(/Check your connection/)).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -128,7 +129,8 @@ function photoProblem(error: unknown): string {
 
 export type MenuState = {
   items: ChefMenuItem[];
-  status: "loading" | "ready" | "error";
+  /** no-kitchen: the menu needs a kitchen profile first (400 KITCHEN_PROFILE_REQUIRED). */
+  status: "loading" | "ready" | "error" | "no-kitchen";
   retry(): void;
 };
 
@@ -260,8 +262,11 @@ function MealPlanForm({
   const [removing, setRemoving] = useState<EditorSlot | null>(null);
   const [copying, setCopying] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const router = useRouter();
   // State lags a frame behind a tap; the lock keeps a double tap to one request.
   const saving = useRef(false);
+  /** The page a link was taking the chef to when "Save as draft?" opened. */
+  const leaveTo = useRef<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const firstStep = useRef(true);
 
@@ -314,9 +319,47 @@ function MealPlanForm({
   useEffect(() => {
     if (!editable || !dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    // In-app links (the header, the desktop nav) would drop the draft too: ask first, then follow the link.
+    const guard = (event: MouseEvent) => {
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        link.target ||
+        link.hasAttribute("download") ||
+        link.origin !== window.location.origin ||
+        (link.pathname === window.location.pathname && link.search === window.location.search)
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (saving.current) return;
+      leaveTo.current = link.pathname + link.search + link.hash;
+      setSheet(null);
+      setAskLeave(true);
+    };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    document.addEventListener("click", guard, true);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", guard, true);
+    };
   }, [editable, dirty]);
+  /** Done with the editor: back to the plans, or on to the page of the link that asked to leave. */
+  function leave(message?: string, to = leaveTo.current) {
+    leaveTo.current = null;
+    if (!to) return onClose(message);
+    setDirty(false);
+    router.push(to);
+  }
+  function stay() {
+    leaveTo.current = null;
+    setAskLeave(false);
+  }
   // A new step starts at its top, and screen readers hear which step it is.
   useEffect(() => {
     if (firstStep.current) {
@@ -372,6 +415,8 @@ function MealPlanForm({
     setAttempt(mode);
     setAskLeave(false);
     if (saving.current) return;
+    const to = leaveTo.current;
+    leaveTo.current = null;
     const problem = stepWithErrors(validateMealPlanForm(form, slots, mode));
     if (problem) return setStep(problem);
     saving.current = true;
@@ -404,7 +449,7 @@ function MealPlanForm({
         setStep(2);
         return;
       }
-      onClose(mode === "submit" ? "Sent to Craves for approval" : "Draft saved");
+      leave(mode === "submit" ? "Sent to Craves for approval" : "Draft saved", to);
     } catch (cause) {
       setServerError(chefErrorText(cause, "The meal plan could not be saved. Try again."));
     } finally {
@@ -589,9 +634,15 @@ function MealPlanForm({
               onChange={(event) => updateForm("description", event.target.value)}
               placeholder="What customers get, how it’s packed"
               {...invalid("description")}
+              aria-describedby={`${errors.description ? "plan-description-error " : ""}plan-description-count`}
             />
-            <p className="chef-section-note mt-1.5 text-right tabular-nums" aria-live="polite">
+            <p id="plan-description-count" className="chef-section-note mt-1.5 text-right tabular-nums">
               {form.description.length}/{DESCRIPTION_MAX}
+            </p>
+            <p className="sr-only" role="status">
+              {form.description.length >= DESCRIPTION_MAX
+                ? `Description is at the ${DESCRIPTION_MAX} character limit.`
+                : ""}
             </p>
             {fieldError("description")}
           </div>
@@ -997,16 +1048,12 @@ function MealPlanForm({
       </Sheet>
       <Dialog
         open={askLeave}
-        onOpenChange={setAskLeave}
+        onOpenChange={(open) => !open && stay()}
         title="Save as draft?"
         description="Your plan isn’t sent to Craves yet. A draft keeps what you’ve done so far."
         footer={
           <>
-            <button
-              type="button"
-              className={secondaryActionClass}
-              onClick={() => setAskLeave(false)}
-            >
+            <button type="button" className={secondaryActionClass} onClick={stay}>
               Keep editing
             </button>
             <button
@@ -1014,7 +1061,7 @@ function MealPlanForm({
               className={secondaryActionClass}
               onClick={() => {
                 setAskLeave(false);
-                onClose();
+                leave();
               }}
             >
               Discard
@@ -1272,6 +1319,17 @@ function DishChoices({
   onPick(id: string): void;
 }) {
   if (dishes.length === 0) {
+    if (menu.status === "no-kitchen")
+      return (
+        <div className="mt-4 grid justify-items-start gap-3">
+          <p className="text-sm text-[#1A1A1A]">
+            Set up your kitchen first, then add dishes to your menu.
+          </p>
+          <Link href="/chef/kitchen" className="chef-btn">
+            Set up my kitchen
+          </Link>
+        </div>
+      );
     return menu.status === "error" ? (
       <div className="mt-4 grid justify-items-start gap-3">
         <p className="text-sm text-[#1A1A1A]">

@@ -44,9 +44,13 @@ test("chef workspace navigation and the More hub expose every implemented backen
 });
 
 test("pages that are not tabs keep an obvious way back", () => {
-  for (const [page, href] of [["operations", "/chef/profile"], ["capacity", "/chef/meal-plans"], ["notifications", "/chef"]]) {
+  for (const [page, href] of [["operations", "/chef/profile"], ["notifications", "/chef"]]) {
     assert.match(source(`../../../app/chef/${page}/page.tsx`), new RegExp(`back=\\{\\{\\s*href: "${href.replaceAll("/", "\\/")}"`), page);
   }
+  // Daily limits goes back to where it was opened: a plan card in Meal plans or in Menu, or More.
+  const capacity = source("../../../app/chef/capacity/page.tsx");
+  for (const href of ["/chef/profile", "/chef/menu?view=plans", "/chef/meal-plans"]) assert.ok(capacity.includes(`{ href: "${href}"`), href);
+  assert.match(capacity, /back=\{back\}/);
   // Meal plans swap their header for the plan editor, so the list draws it.
   assert.match(source("../components/chef-subscription-plan-manager.tsx"), /back=\{\{ href: "\/chef\/profile", label: "More" \}\}/);
   assert.match(source("../../../app/chef/support/page.tsx"), /\{ href: "\/chef\/profile", label: "More" \}/);

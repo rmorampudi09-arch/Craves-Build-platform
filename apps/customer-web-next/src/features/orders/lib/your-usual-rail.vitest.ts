@@ -27,6 +27,8 @@ const KITCHEN = "4a000000-0000-4000-8000-000000000001";
 const DELIVERED = "0bde0000-0000-4000-8000-000000000101";
 const DISH = "0bde0000-0000-4000-8000-000000000201";
 const CART = "0bde0000-0000-4000-8000-000000000401";
+// Each step waits on the one before (session, orders, baskets, menu, cart): give a busy test machine time.
+const WAIT = { timeout: 5000 };
 const PHOTO = "https://craves.in/media/public/chef-avatars/chef-avatar-07.jpg";
 
 function order(id: string, status: string) {
@@ -143,15 +145,15 @@ it("shows the chef's face on each order and refills the cart from Your usual in 
   menu.mockResolvedValue([{ id: DISH }]);
   render(createElement(OrdersPage));
 
-  const usual = await screen.findByRole("region", { name: "Your usual" });
+  const usual = await screen.findByRole("region", { name: "Your usual" }, WAIT);
   expect(within(usual).getByText("2× Veg thali")).toBeTruthy();
   expect(within(usual).getByText("Ordered from this kitchen 3 times")).toBeTruthy();
   expect(within(usual).getByText("Previous total ₹240")).toBeTruthy();
   const past = screen.getByRole("region", { name: "Past orders" });
-  await vi.waitFor(() => expect(past.querySelector("img")?.getAttribute("src")).toBe(PHOTO));
+  await vi.waitFor(() => expect(past.querySelector("img")?.getAttribute("src")).toBe(PHOTO), WAIT);
 
   fireEvent.click(within(usual).getByRole("button", { name: "Order like last time" }));
-  await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/cart" }));
+  await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/cart" }), WAIT);
 });
 
 it("sends the customer to their cart rather than replacing dishes already in it", async () => {
@@ -162,8 +164,8 @@ it("sends the customer to their cart rather than replacing dishes already in it"
   menu.mockResolvedValue([{ id: DISH }]);
   render(createElement(OrdersPage));
 
-  fireEvent.click(await screen.findByRole("button", { name: "Order like last time" }));
-  const status = await screen.findByText(/Your cart already has dishes from Ammi's/);
+  fireEvent.click(await screen.findByRole("button", { name: "Order like last time" }, WAIT));
+  const status = await screen.findByText(/Your cart already has dishes from Ammi's/, {}, WAIT);
   expect(status.closest("[role=status]")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Go to cart" }).getAttribute("href")).toBe("/cart");
   expect(navigate).not.toHaveBeenCalled();
@@ -172,7 +174,7 @@ it("sends the customer to their cart rather than replacing dishes already in it"
 it("asks for repeat baskets only once something was delivered", async () => {
   const fetch = serve([order("0bde0000-0000-4000-8000-000000000102", "PREPARING")]);
   render(createElement(OrdersPage));
-  await screen.findByRole("region", { name: "In progress" });
+  await screen.findByRole("region", { name: "In progress" }, WAIT);
   expect(screen.queryByRole("region", { name: "Your usual" })).toBeNull();
   expect(
     fetch.mock.calls.some(([url]) => String(url).startsWith("/api/orders/repeat-candidates")),

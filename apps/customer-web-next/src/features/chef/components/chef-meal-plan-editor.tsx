@@ -1418,7 +1418,7 @@ function RequestChangeDialog({
       <p role="status" className="mt-4 text-sm leading-6 text-[#1A1A1A]">
         Request sent (#{state.sent}). A Craves support person will reply in{" "}
         <Link href="/chef/support" className="font-semibold underline">
-          Get help
+          Help & support
         </Link>
         .
       </p>
@@ -1426,7 +1426,7 @@ function RequestChangeDialog({
   } else if (state === "soon") {
     body = (
       <p role="status" className="mt-4 text-sm leading-6 text-[#1A1A1A]">
-        Coming soon: requests from here aren’t open yet. Use Get help to reach Craves.
+        Coming soon: requests from here aren’t open yet. Use Help & support to reach Craves.
       </p>
     );
   } else {

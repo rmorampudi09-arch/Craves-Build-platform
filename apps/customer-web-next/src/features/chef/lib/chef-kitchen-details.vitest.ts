@@ -258,10 +258,10 @@ it("asks Craves support to move the kitchen, and keeps the message when support 
   await screen.findByRole("dialog", { name: "Move my kitchen" });
   fireEvent.change(screen.getByLabelText("Your new kitchen address"), { target: { value: " 4 New Street, Kondapur " } });
   fireEvent.click(screen.getByRole("button", { name: "Send" }));
-  await screen.findByText("Sent. Craves support will reply in Get help.");
+  await screen.findByText("Sent. Craves support will reply in Help & support.");
   const sent = fetcher.mock.calls.find(([url]) => url === "/api/support/cases")!;
   expect(JSON.parse(String(sent[1]?.body))).toEqual({ contextRole: "CHEF", orderId: null, subject: "Move my kitchen", message: "4 New Street, Kondapur" });
-  expect(screen.getByRole("link", { name: "Open Get help" }).getAttribute("href")).toBe("/chef/support");
+  expect(screen.getByRole("link", { name: "Open Help & support" }).getAttribute("href")).toBe("/chef/support");
   fireEvent.click(screen.getByRole("button", { name: "Done" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 

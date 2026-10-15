@@ -814,7 +814,7 @@ export function ChefKitchenForm() {
           unsavedChanges={moveState !== "sent" && Boolean(moveDraft.trim())}
           footer={moveState === "sent" ? (
             <>
-              <Link href="/chef/support" className={secondaryActionClass}>Open Get help</Link>
+              <Link href="/chef/support" className={secondaryActionClass}>Open Help & support</Link>
               <button type="button" className="craves-primary-action w-full sm:w-auto" onClick={() => setMoveSheet(false)}>Done</button>
             </>
           ) : (
@@ -825,7 +825,7 @@ export function ChefKitchenForm() {
           )}
         >
           {moveState === "sent" ? (
-            <p role="status" className="mt-5 text-[0.9375rem] leading-6 text-[#1A1A1A]">Sent. Craves support will reply in Get help.</p>
+            <p role="status" className="mt-5 text-[0.9375rem] leading-6 text-[#1A1A1A]">Sent. Craves support will reply in Help & support.</p>
           ) : (
             <>
               {moveState === "unavailable" ? <div className="mt-5"><ComingSoon title="Chat is on its way" message="You will be able to write to Craves support here soon." /></div> : null}

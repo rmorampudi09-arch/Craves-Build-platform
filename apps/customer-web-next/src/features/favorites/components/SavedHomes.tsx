@@ -13,6 +13,7 @@ import {
   type WatchKey,
 } from "@/features/favorites/lib/saved-presentation";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { setKitchenSaved } from "@/shared/hooks/use-favorite-kitchen";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import {
   FavoriteEntityError,
@@ -215,6 +216,7 @@ export function SavedHomes() {
         entry.chefIdentityId ? setFavoriteChef(entry.chefIdentityId, false) : null,
         entry.kitchenId ? setFavoriteKitchen(entry.kitchenId, false) : null,
       ]);
+      if (entry.kitchenId) setKitchenSaved(entry.kitchenId, false);
       setEntries((current) => current.filter((item) => item !== entry));
       setNotice(`${name} was removed from Saved.`);
     } catch {

@@ -67,6 +67,15 @@ describe("useFavoriteKitchen", () => {
     expect(fetch.mock.calls.filter(([, init]) => init?.method)).toEqual([]);
   });
 
+  it("follows a kitchen removed elsewhere on the page", async () => {
+    backend(() => Response.json({}));
+    const { setKitchenSaved, useFavoriteKitchen } = await import("./use-favorite-kitchen");
+    const heart = renderHook(() => useFavoriteKitchen(SAVED));
+    await waitFor(() => expect(heart.result.current.saved).toBe(true));
+    await act(async () => setKitchenSaved(SAVED.toUpperCase(), false));
+    expect(heart.result.current.saved).toBe(false);
+  });
+
   it("rolls back when the save fails", async () => {
     backend(() => Response.json({ code: "FAVORITE_ENTITY_FAILED" }, { status: 503 }));
     const { useFavoriteKitchen } = await import("./use-favorite-kitchen");

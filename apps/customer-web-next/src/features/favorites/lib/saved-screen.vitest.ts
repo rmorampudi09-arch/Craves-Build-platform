@@ -33,7 +33,7 @@ vi.mock("@/features/cart/components/CustomerFloatingCart", () => ({
   CustomerFloatingCart: () => null,
 }));
 
-import WishlistPage from "@/features/favorites/screens/Wishlist";
+let WishlistPage: typeof import("@/features/favorites/screens/Wishlist").default;
 
 const NOW = "22222222-2222-4222-8222-222222222222";
 const LATER = "33333333-3333-4333-8333-333333333333";
@@ -126,9 +126,11 @@ function stub(override: Route = () => undefined) {
   return fetch;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   addToCart.mockReset();
   navigate.mockReset();
+  vi.resetModules(); // a fresh "once per page load" saved-kitchen store for each case
+  WishlistPage = (await import("@/features/favorites/screens/Wishlist")).default;
 });
 afterEach(() => {
   cleanup();
@@ -202,6 +204,10 @@ describe("Saved screen", () => {
       `/api/customer/favorite-chefs/${CHEF}`,
       `/api/customer/favorite-kitchens/${KITCHEN}`,
     ]);
+    // The Dishes tab's kitchen toggles follow the removal.
+    expect(
+      await screen.findAllByRole("button", { name: "Save kitchen: Asha's kitchen" }),
+    ).toHaveLength(2);
   });
 
   it.each(["/api/customer/favorite-kitchens", "/api/discovery/favorites/home/resolve"])(

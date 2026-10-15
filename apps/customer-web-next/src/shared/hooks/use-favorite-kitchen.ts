@@ -54,6 +54,16 @@ async function toggle(id: string) {
   }
 }
 
+/** Records a save or unsave written elsewhere (Saved > Home chefs), so every heart on the page agrees with it. */
+export function setKitchenSaved(kitchenId: string, on: boolean) {
+  const id = kitchenId.toLowerCase();
+  // Applied after the first read, which started before this write and would undo it. Not read yet: that read sees it.
+  void loaded?.then(() => {
+    if (on) saved.add(id); else saved.delete(id);
+    emit();
+  });
+}
+
 /** Whether this kitchen is in the customer's saved kitchens, and an optimistic toggle that rolls back if the save fails. */
 export function useFavoriteKitchen(kitchenId: string): { saved: boolean; busy: boolean; toggle: () => Promise<void> } {
   const id = kitchenId.toLowerCase();

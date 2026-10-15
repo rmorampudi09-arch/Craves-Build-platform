@@ -1,3 +1,5 @@
+import { safeChefPhotoUrl } from "../../../shared/lib/chef-photo.ts";
+
 export type ChefOrderStatus =
   | "PAYMENT_PENDING"
   | "PAID"
@@ -36,6 +38,14 @@ export type ChefDeliveryAddress = {
   postalCode: string;
 };
 
+/** The courier the delivery provider assigned. photoUrl is https only. */
+export type ChefDeliveryPartner = {
+  name: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  pickupEtaAt: string | null;
+};
+
 export type ChefOrder = {
   id: string;
   kitchenName: string | null;
@@ -56,6 +66,9 @@ export type ChefOrder = {
   checkoutId?: string | null;
   /** The server's deadline to accept or decline a new order. */
   chefAcceptanceExpiresAt?: string | null;
+  deliveryPartner?: ChefDeliveryPartner | null;
+  /** Null until the chef hands the order over; absent when the server has no hand-over yet, so the button stays hidden. */
+  chefHandedOverAt?: string | null;
 };
 
 const CANONICAL_UUID =
@@ -181,6 +194,18 @@ function parseAddress(value: unknown): ChefDeliveryAddress | null {
   };
 }
 
+function parsePartner(value: unknown): ChefDeliveryPartner | null {
+  const raw = record(value);
+  return raw
+    ? {
+        name: optional(raw.name, 120),
+        phone: optional(raw.phone, 40),
+        photoUrl: safeChefPhotoUrl(raw.photoUrl),
+        pickupEtaAt: instant(raw.pickupEtaAt),
+      }
+    : null;
+}
+
 export function parseChefOrder(value: unknown): ChefOrder | null {
   const raw = record(value);
   if (!raw) return null;
@@ -231,6 +256,8 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     updatedAt,
     checkoutId: isCanonicalUuid(raw.checkoutId) ? raw.checkoutId : null,
     chefAcceptanceExpiresAt: instant(raw.chefAcceptanceExpiresAt),
+    deliveryPartner: parsePartner(raw.deliveryPartner),
+    ...(raw.chefHandedOverAt === null || instant(raw.chefHandedOverAt) ? { chefHandedOverAt: instant(raw.chefHandedOverAt) } : {}),
   };
 }
 

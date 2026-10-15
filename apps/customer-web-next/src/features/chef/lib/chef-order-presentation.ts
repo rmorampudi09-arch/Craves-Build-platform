@@ -1,3 +1,4 @@
+import { shortOrderNumber } from "../../../shared/lib/order-number.ts";
 import type { ChefOrder } from "./chef-order-contract.ts";
 
 export type CountdownTone = "danger" | "warning" | "success";
@@ -25,4 +26,30 @@ export function declineConsequence(order: Pick<ChefOrder, "checkoutId">): string
   return order.checkoutId
     ? "The customer is told right away and gets a full refund."
     : "The customer is told right away. This meal-plan day moves to the end of their plan.";
+}
+
+export const NOT_PICKED_UP_REASONS = [
+  "Partner hasn’t arrived yet",
+  "Partner left without the order",
+  "Partner asked me to cancel",
+  "Something else",
+] as const;
+
+/** The support ticket for an order the courier has not collected, with the order attached (as the app). */
+export function notPickedUpCase(orderId: string, reason: string, note: string) {
+  const details = note.trim();
+  return {
+    contextRole: "CHEF" as const,
+    orderId,
+    subject: `Not picked up · #${shortOrderNumber(orderId)}`,
+    message: details ? `${reason}\n\n${details}` : reason,
+  };
+}
+
+/** "Arriving in 6 min", "Should be here now", or null without a pickup time. */
+export function pickupEtaLabel(pickupEtaAt: string | null, now: number): string | null {
+  const eta = pickupEtaAt ? Date.parse(pickupEtaAt) : NaN;
+  if (Number.isNaN(eta)) return null;
+  const minutes = Math.ceil((eta - now) / 60_000);
+  return minutes > 0 ? `Arriving in ${minutes} min` : "Should be here now";
 }

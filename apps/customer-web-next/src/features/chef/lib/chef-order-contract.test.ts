@@ -67,6 +67,19 @@ test("keeps the checkout (none for a meal-plan order) and the response deadline"
   assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "soon" })?.chefAcceptanceExpiresAt, null);
 });
 
+test("keeps the delivery partner with an https photo only, and tells a missing hand-over apart from one still to do", () => {
+  const partner = { name: "Ravi", phone: "+919888888888", photoUrl: "https://cdn.craves.in/p.jpg", pickupEtaAt: "2026-07-30T00:20:00Z" };
+  assert.deepEqual(parseChefOrder({ ...order, deliveryPartner: partner })?.deliveryPartner, partner);
+  assert.equal(parseChefOrder({ ...order, deliveryPartner: { ...partner, photoUrl: "http://cdn.craves.in/p.jpg" } })?.deliveryPartner?.photoUrl, null);
+  assert.equal(parseChefOrder({ ...order, deliveryPartner: { ...partner, photoUrl: "javascript:alert(1)" } })?.deliveryPartner?.photoUrl, null);
+  assert.deepEqual(parseChefOrder({ ...order, deliveryPartner: {} })?.deliveryPartner, { name: null, phone: null, photoUrl: null, pickupEtaAt: null });
+  assert.equal(parseChefOrder(order)?.deliveryPartner, null);
+  assert.equal("chefHandedOverAt" in (parseChefOrder(order) ?? {}), false);
+  assert.equal(parseChefOrder({ ...order, chefHandedOverAt: null })?.chefHandedOverAt, null);
+  assert.equal(parseChefOrder({ ...order, chefHandedOverAt: "2026-07-30T00:30:00Z" })?.chefHandedOverAt, "2026-07-30T00:30:00Z");
+  assert.equal("chefHandedOverAt" in (parseChefOrder({ ...order, chefHandedOverAt: "later" }) ?? {}), false);
+});
+
 test("accepts canonical PostgreSQL UUIDs regardless of RFC version bits", () => {
   const historical = {
     ...order,

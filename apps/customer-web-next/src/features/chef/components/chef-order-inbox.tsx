@@ -208,7 +208,7 @@ export function ChefOrderInbox() {
                 text={view === "NEEDS_ANSWER" ? "No order is waiting for your answer." : "Choose another filter to see older orders."}
               />
             </ChefSection>
-          ) : view === "NEEDS_ANSWER" || view === "IN_PROGRESS" ? (
+          ) : view === "NEEDS_ANSWER" || view === "IN_PROGRESS" || view === "READY" ? (
             // Orders that need the chef: big cards with the answer right on them, oldest first.
             <div key={view} className="chef-stack chef-step">
               {[...visibleOrders].reverse().map((order) => (

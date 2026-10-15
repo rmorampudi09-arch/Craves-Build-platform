@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { declineConsequence, respondCountdown } from "./chef-order-presentation.ts";
+import { declineConsequence, notPickedUpCase, pickupEtaLabel, respondCountdown } from "./chef-order-presentation.ts";
 
 const createdAt = "2026-10-10T08:00:00Z";
 const at = (iso: string) => Date.parse(iso);
@@ -43,4 +43,22 @@ test("decline wording follows the kind of order", () => {
     declineConsequence({ checkoutId: null }),
     "The customer is told right away. This meal-plan day moves to the end of their plan.",
   );
+});
+
+test("a not-picked-up ticket names the order with a middle dot and carries the reason and note", () => {
+  const id = "7f6392a6-1111-4222-8333-444444444444";
+  assert.deepEqual(notPickedUpCase(id, "Partner left without the order", "  Waited 20 min  "), {
+    contextRole: "CHEF",
+    orderId: id,
+    subject: "Not picked up · #7F6392A6",
+    message: "Partner left without the order\n\nWaited 20 min",
+  });
+  assert.equal(notPickedUpCase(id, "Something else", " ").message, "Something else");
+});
+
+test("pickup time reads as minutes to go, then as due now", () => {
+  const now = at("2026-10-10T08:00:00Z");
+  assert.equal(pickupEtaLabel("2026-10-10T08:05:30Z", now), "Arriving in 6 min");
+  assert.equal(pickupEtaLabel("2026-10-10T08:00:00Z", now), "Should be here now");
+  assert.equal(pickupEtaLabel(null, now), null);
 });

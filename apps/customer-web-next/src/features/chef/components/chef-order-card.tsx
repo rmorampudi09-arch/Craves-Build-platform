@@ -51,7 +51,7 @@ export function orderUpdateText(order: ChefOrder): string {
     case "PREPARING":
       return `${number} accepted. Start cooking${order.prepTimeMinutes ? `: ready in about ${order.prepTimeMinutes} min` : ""}.`;
     case "READY_FOR_PICKUP":
-      return `${number} is ready for pickup.`;
+      return order.chefHandedOverAt ? `${number} marked as handed over.` : `${number} is ready for pickup.`;
     case "CHEF_REJECTED":
       return `${number} declined. The customer has been told.`;
     default:

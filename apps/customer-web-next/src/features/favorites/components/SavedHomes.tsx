@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, BellPlus, BellRing, ChefHat, Heart } from "lucide-react";
+import { AlertTriangle, BellPlus, BellRing, ChefHat, Heart, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { resolveFavoriteHomes, SavedResolveError } from "@/features/favorites/api/savedResolve";
@@ -29,7 +29,14 @@ import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 
-type Status = "loading" | "unavailable" | "list-error" | "resolve-error" | "ready";
+// "more": the list stays up while the next pages load.
+type Status = "loading" | "unavailable" | "list-error" | "resolve-error" | "ready" | "more";
+type SavedIds = {
+  kitchenIds: string[];
+  chefIds: string[];
+  kitchenCursor: string | null;
+  chefCursor: string | null;
+};
 
 const watchKey = (watch: Pick<FavoriteWatch, "entityType" | "entityId">): WatchKey =>
   `${watch.entityType}:${watch.entityId}`;
@@ -155,15 +162,30 @@ export function SavedHomes() {
   const [watched, setWatched] = useState<Set<WatchKey> | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [saved, setSaved] = useState<SavedIds | null>(null);
 
-  const load = useCallback(async () => {
-    setStatus("loading");
+  // A fresh load reads both first pages; "Load more" reads the next page of each list that has one.
+  const load = useCallback(async (more: SavedIds | null = null) => {
+    setStatus(more ? "more" : "loading");
     setNotice("");
-    let kitchenIds: string[], chefIds: string[];
+    let next: SavedIds;
     try {
-      const [kitchens, chefs] = await Promise.all([listFavoriteKitchens(), listFavoriteChefs()]);
-      kitchenIds = kitchens.items.map((item) => item.kitchenId);
-      chefIds = chefs.items.map((item) => item.chefIdentityId);
+      const [kitchens, chefs] = await Promise.all([
+        !more || more.kitchenCursor ? listFavoriteKitchens(more?.kitchenCursor) : null,
+        !more || more.chefCursor ? listFavoriteChefs(more?.chefCursor) : null,
+      ]);
+      next = {
+        kitchenIds: [
+          ...(more?.kitchenIds ?? []),
+          ...(kitchens?.items.map((item) => item.kitchenId) ?? []),
+        ],
+        chefIds: [
+          ...(more?.chefIds ?? []),
+          ...(chefs?.items.map((item) => item.chefIdentityId) ?? []),
+        ],
+        kitchenCursor: kitchens?.nextCursor ?? null,
+        chefCursor: chefs?.nextCursor ?? null,
+      };
     } catch (error) {
       setStatus(
         error instanceof FavoriteEntityError && error.code === FEATURE_NOT_AVAILABLE
@@ -172,12 +194,15 @@ export function SavedHomes() {
       );
       return;
     }
+    const { kitchenIds, chefIds } = next;
     if (kitchenIds.length + chefIds.length === 0) {
+      setSaved(next);
       setEntries([]);
       setStatus("ready");
       return;
     }
     try {
+      // Like the app, every saved home loaded so far is checked again, so rows merge across pages.
       const [cards, watches] = await Promise.all([
         resolveFavoriteHomes(chefIds, kitchenIds),
         Promise.all([listFavoriteWatches("KITCHEN"), listFavoriteWatches("CHEF")]).then(
@@ -186,6 +211,7 @@ export function SavedHomes() {
         ),
       ]);
       setWatched(watches);
+      setSaved(next);
       setEntries(
         mergeSavedHomes(
           cards.filter((card) => card.requestedType === "KITCHEN"),
@@ -218,6 +244,15 @@ export function SavedHomes() {
       ]);
       if (entry.kitchenId) setKitchenSaved(entry.kitchenId, false);
       setEntries((current) => current.filter((item) => item !== entry));
+      // So the next "Load more" doesn't bring it back.
+      setSaved(
+        (current) =>
+          current && {
+            ...current,
+            kitchenIds: current.kitchenIds.filter((id) => id !== entry.kitchenId),
+            chefIds: current.chefIds.filter((id) => id !== entry.chefIdentityId),
+          },
+      );
       setNotice(`${name} was removed from Saved.`);
     } catch {
       setNotice(`We couldn’t remove ${name}. Please try again.`);
@@ -284,7 +319,8 @@ export function SavedHomes() {
       />
     );
   }
-  if (entries.length === 0) {
+  const hasMore = Boolean(saved?.kitchenCursor || saved?.chefCursor);
+  if (entries.length === 0 && !hasMore) {
     return (
       <div className="px-4 py-12 text-center">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
@@ -321,12 +357,26 @@ export function SavedHomes() {
             key={`${entry.card.requestedType}:${entry.card.requestedId}`}
             entry={entry}
             watched={watched}
-            busy={busy}
+            busy={busy || status === "more"}
             onToggleWatch={() => void toggleWatch(entry)}
             onRemove={() => void remove(entry)}
           />
         ))}
       </ul>
+      {hasMore ? (
+        <button
+          type="button"
+          disabled={busy || status === "more"}
+          aria-busy={status === "more"}
+          onClick={() => void load(saved)}
+          className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl !border !border-[#D8DADD] !bg-white text-sm font-bold !text-[#C4200F] !shadow-none"
+        >
+          {status === "more" ? (
+            <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+          ) : null}
+          Load more saved home chefs
+        </button>
+      ) : null}
       <p className="mt-3 px-1 text-sm text-[#6B6B6B]">
         Tap the heart on any kitchen to save its home chef here.
       </p>

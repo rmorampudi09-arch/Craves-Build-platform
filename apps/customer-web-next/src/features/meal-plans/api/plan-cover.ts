@@ -34,6 +34,12 @@ async function rating(kitchenId: string): Promise<PlanCover["rating"]> {
     : null;
 }
 
+/** The first dish's https photo: what a plan without its own photo shows. */
+export function firstDishPhoto(items: PublicSubscriptionSchedule["items"]): string | null {
+  const cover = items.length > 0 ? summarizeSchedule(items).coverMenuItemId : null;
+  return items.find((item) => item.menuItemId === cover)?.imageUrl ?? null;
+}
+
 async function load(planId: string): Promise<PlanCover> {
   const schedule = (await json(`/api/subscriptions/plans/${planId}/schedule`).catch(
     () => null,
@@ -46,8 +52,7 @@ async function load(planId: string): Promise<PlanCover> {
     ? await Promise.all([getKitchenProfile(kitchenId).catch(() => null), rating(kitchenId)])
     : [null, null];
   return {
-    dishImageUrl:
-      items.find((item) => item.menuItemId === summary?.coverMenuItemId)?.imageUrl ?? null,
+    dishImageUrl: firstDishPhoto(items),
     kitchenName: profile?.displayName?.trim() || profile?.kitchenName || null,
     summary,
     rating: stars,

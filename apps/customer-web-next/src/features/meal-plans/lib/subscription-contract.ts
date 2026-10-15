@@ -36,6 +36,8 @@ export type CustomerSubscription = {
   amount: number | null;
   currency: string | null;
   nextBillingDate: string | null;
+  /** The plan photo, as PublicSubscriptionPlan.imageUrl. */
+  planImageUrl: string | null;
   /** Pause allowance per paid bill (1 weekly, 3 for 14 days, 7 monthly); null from an older server. */
   pauseDaysPerBill: number | null;
   pauseDaysLeft: number | null;
@@ -160,6 +162,7 @@ export function parseCustomerSubscription(value: unknown): CustomerSubscription 
   const currency = typeof raw.currency === "string" && CURRENCY.test(raw.currency) ? raw.currency : null;
   return { id, planId, status: status as CustomerSubscriptionStatus, startDate, endDate: raw.endDate == null ? null : dateOnly(raw.endDate), nextServiceDate: raw.nextServiceDate == null ? null : dateOnly(raw.nextServiceDate), deliveryAddressId, notes: optionalText(raw.notes, 2000), createdAt, updatedAt, planName: optionalText(raw.planName, 160),
     billingPeriod, amount: Number.isFinite(amount) && amount >= 0 ? amount : null, currency, nextBillingDate: raw.nextBillingDate == null ? null : dateOnly(raw.nextBillingDate),
+    planImageUrl: planImageUrl(raw.planImageUrl),
     pauseDaysPerBill: count(raw.pauseDaysPerBill), pauseDaysLeft: count(raw.pauseDaysLeft), pauseAutoResumeDate: raw.pauseAutoResumeDate == null ? null : dateOnly(raw.pauseAutoResumeDate),
     // A choice the web can't read is left out; the server still settles it at the deadline.
     dayCredits: Array.isArray(raw.dayCredits) ? raw.dayCredits.slice(0, 100).map(parseDayCredit).filter(credit => credit !== null) : [] };

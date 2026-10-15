@@ -18,12 +18,20 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-function load(): Promise<void> {
-  // A failed read (signed out, not live yet) leaves the set empty; a tap still saves, or asks to sign in.
-  loaded ??= listFavoriteKitchens().then(page => {
+async function readAll() {
+  let cursor: string | null = null;
+  // shortcut: the first 10 pages (1,000 kitchens); a heart for a kitchen saved beyond them shows as unsaved.
+  for (let pages = 0; pages < 10 && (pages === 0 || cursor); pages++) {
+    const page = await listFavoriteKitchens(cursor);
     for (const { kitchenId } of page.items) saved.add(kitchenId.toLowerCase());
     emit();
-  }, () => undefined);
+    cursor = page.nextCursor;
+  }
+}
+
+function load(): Promise<void> {
+  // A failed read (signed out, not live yet) keeps what was read; a tap still saves, or asks to sign in.
+  loaded ??= readAll().catch(() => undefined);
   return loaded;
 }
 

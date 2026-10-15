@@ -32,16 +32,19 @@ async function call<T>(path: string, parse: (value: unknown) => T | null, init: 
 
 const done = () => true;
 
-export function listFavoriteKitchens(): Promise<FavoritePage<FavoriteKitchen>> {
-  return call("/api/customer/favorite-kitchens", parseFavoriteKitchenPage);
+const after = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : "");
+
+/** One page of saved kitchens: the first, or the one after `cursor` (the previous page's nextCursor). */
+export function listFavoriteKitchens(cursor?: string | null): Promise<FavoritePage<FavoriteKitchen>> {
+  return call(`/api/customer/favorite-kitchens${after(cursor)}`, parseFavoriteKitchenPage);
 }
 
 export async function setFavoriteKitchen(kitchenId: string, saved: boolean): Promise<void> {
   await call(`/api/customer/favorite-kitchens/${encodeURIComponent(kitchenId)}`, done, { method: saved ? "PUT" : "DELETE" });
 }
 
-export function listFavoriteChefs(): Promise<FavoritePage<FavoriteChef>> {
-  return call("/api/customer/favorite-chefs", parseFavoriteChefPage);
+export function listFavoriteChefs(cursor?: string | null): Promise<FavoritePage<FavoriteChef>> {
+  return call(`/api/customer/favorite-chefs${after(cursor)}`, parseFavoriteChefPage);
 }
 
 export async function setFavoriteChef(chefIdentityId: string, saved: boolean): Promise<void> {

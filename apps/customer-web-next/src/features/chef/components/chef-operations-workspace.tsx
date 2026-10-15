@@ -4,6 +4,8 @@ import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefEmpty, ChefSection, clockTime, dateTime } from "@/features/chef/components/chef-ui";
 import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
+import { ChefOpeningHours } from "@/features/chef/components/chef-opening-hours";
+import { reloadKitchenSchedule } from "@/features/chef/api/chef-kitchen-schedule";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, CheckCircle2, Clock3, RefreshCw, X } from "lucide-react";
@@ -230,6 +232,8 @@ export function ChefOperationsWorkspace() {
 
       {kitchen ? <ChefKitchenSwitch kitchen={kitchen} onChange={setKitchen} /> : null}
 
+      {kitchen ? <ChefOpeningHours /> : null}
+
       <ChefSection title="What customers need" flush labelledBy="chef-checklist">
         <ol className="chef-checklist">
           <CheckRow
@@ -325,14 +329,11 @@ export function ChefOperationsWorkspace() {
         </ul>
       </ChefSection>
 
-      <ChefSection title="Opening hours">
-        <p className="text-[0.9375rem] leading-6 text-[#6B6B6B]">
-          Weekly opening hours aren’t available yet. For now, use the Kitchen open switch, and turn dishes on or off in Menu.
-        </p>
-      </ChefSection>
-
       <div className="flex flex-col items-center gap-2 pt-1">
-        <button type="button" disabled={refreshing} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
+        <button type="button" disabled={refreshing} onClick={() => {
+            void load(true);
+            if (kitchen) void reloadKitchenSchedule();
+          }} className="chef-btn is-small" aria-busy={refreshing}>
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
           Check again
         </button>

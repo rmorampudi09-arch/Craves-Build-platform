@@ -76,8 +76,9 @@ test("operations readiness uses supported backend controls only", () => {
   assert.match(operations, /parseChefApplicationReadiness/);
   assert.match(operations, /approvedDocumentCount/);
   assert.match(operations, /\/api\/chef\/application\/readiness/);
-  // No invented weekly schedule: the screen says opening hours aren't available yet.
-  assert.match(operations, /Weekly opening hours aren’t available yet/);
+  // Opening hours come from the kitchen schedule, not from anything made up on the screen.
+  assert.match(operations, /<ChefOpeningHours \/>/);
+  assert.match(source("../api/chef-kitchen-schedule.ts"), /"\/api\/chef\/kitchen\/schedule"/);
   assert.doesNotMatch(operations, /FSSAI.*required|commissionRate|deliveryRadius\s*=/i);
 });
 

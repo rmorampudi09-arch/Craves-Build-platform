@@ -278,3 +278,21 @@ export function formatChefOrderStatus(status: ChefOrderStatus): string {
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
 }
+
+export type ChefOrderHistoryPage = { orders: ChefOrder[]; nextCursor: string | null; hasMore: boolean };
+
+export function isChefOrderStatus(value: unknown): value is ChefOrderStatus {
+  return typeof value === "string" && STATUSES.has(value as ChefOrderStatus);
+}
+
+const PAGE_KEYS = new Set(["orders", "nextCursor", "hasMore"]);
+
+/** order-service OrderPageResponse from GET /api/v1/chef/orders/page: only these keys, unique orders, and hasMore needs a cursor. */
+export function parseChefOrderHistoryPage(value: unknown): ChefOrderHistoryPage | null {
+  const raw = record(value);
+  if (!raw || Object.keys(raw).some((key) => !PAGE_KEYS.has(key)) || typeof raw.hasMore !== "boolean") return null;
+  const orders = parseChefOrders(raw.orders);
+  const nextCursor = raw.nextCursor == null ? null : typeof raw.nextCursor === "string" && raw.nextCursor.length >= 1 && raw.nextCursor.length <= 512 ? raw.nextCursor : undefined;
+  if (!orders || orders.length > 100 || new Set(orders.map((order) => order.id)).size !== orders.length || nextCursor === undefined || (raw.hasMore && !nextCursor)) return null;
+  return { orders, nextCursor, hasMore: raw.hasMore };
+}

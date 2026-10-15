@@ -1,12 +1,5 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import {
-  ChefHat,
-  MapPin,
-  PackageCheck,
-  Star,
-  UtensilsCrossed,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
@@ -24,7 +17,12 @@ import {
   loadSession,
 } from "@/features/auth/api/cravesAuth";
 import { DetailBrowseHeader } from "@/features/customer-shell/components/DetailBrowseHeader";
-import { ChefDishesGrid } from "@/features/chefs/components/ChefDishesGrid";
+import { KitchenHeader } from "@/features/chefs/components/KitchenHeader";
+import { KitchenMenu } from "@/features/chefs/components/KitchenMenu";
+import { kitchenFoodMixLabel, kitchenJoinedLabel, kitchenLocation } from "@/features/chefs/lib/kitchen-menu";
+import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
+import { formatPreparationTime } from "@/shared/lib/kitchen-dish-summary";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { CustomerReviewsSection } from "@/features/dish/components/CustomerReviewsSection";
 import {
@@ -61,6 +59,22 @@ function ChefProfilePage() {
   const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
   const rememberScroll = useReturnScroll(!loading);
+  const { profile } = useKitchenProfile(id);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [pastTitle, setPastTitle] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
+
+  // The kitchen bar (h-16) turns white and shows the kitchen once its name has scrolled under the bar.
+  useEffect(() => {
+    const title = titleRef.current;
+    if (!title || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setPastTitle(Boolean(entry && !entry.isIntersecting && entry.boundingClientRect.top < 64)),
+      { rootMargin: "-64px 0px 0px 0px" },
+    );
+    observer.observe(title);
+    return () => observer.disconnect();
+  }, [chef]);
 
   useEffect(() => {
     let active = true;
@@ -178,78 +192,73 @@ function ChefProfilePage() {
   }
 
   const dishes = getDishesByChef(chef.name);
-  const fallbackDescription = chef.specialties.length
-    ? `Explore ${chef.specialties.join(", ")} and other home-cooked dishes currently available from this kitchen.`
-    : "Explore the home-cooked dishes currently available from this kitchen on Craves.";
+  const name = chef.name;
+  const location = profile ? kitchenLocation([profile.areaName, profile.city, profile.state]) : chef.location;
+  const subtitle = [
+    profile?.displayName && profile.displayName !== profile.kitchenName ? profile.kitchenName : null,
+    location,
+    kitchenJoinedLabel(profile?.createdAt),
+  ].filter(Boolean).join(" · ");
+  const facts = [
+    `${chef.activeDishCount} ${chef.activeDishCount === 1 ? "dish" : "dishes"}`,
+    kitchenFoodMixLabel(dishes),
+    formatPreparationTime(dishes),
+    reviewSummary && reviewSummary.reviewCount > 0 && reviewSummary.overallAverage !== null
+      ? `${reviewSummary.overallAverage.toFixed(1)} ★ · ${reviewSummary.reviewCount} ${reviewSummary.reviewCount === 1 ? "review" : "reviews"}`
+      : null,
+  ].filter((fact): fact is string => Boolean(fact));
+  const bio = profile?.description ?? chef.bio;
 
   return (
     <div
       className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-14"}`}
       onClickCapture={rememberScroll}
     >
-      <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
+      <KitchenHeader
+        kitchenId={chef.id}
+        name={name}
+        chefPhotoUrl={profile?.chefPhotoUrl}
+        photos={profile?.kitchenPhotoUrls ?? []}
+        solid={pastTitle}
+        onBack={handleBack}
+      />
 
-      <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <section className="rounded-[1.75rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.045)] sm:p-6 md:rounded-[2rem] md:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
-                {chef.name}
-              </h1>
-              {chef.location ? (
-                <p className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#6B6B6B]">
-                  <MapPin className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                  {chef.location}
-                </p>
+      <main className="mx-auto max-w-6xl px-4 md:px-6">
+        <section className="relative z-10">
+          <ChefFace
+            photoUrl={profile?.chefPhotoUrl}
+            name={name}
+            size={92}
+            className="-mt-[46px] flex shadow-[0_8px_24px_rgba(26,26,26,0.14)] ring-4 ring-white"
+          />
+          <h1 ref={titleRef} className="mt-2 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
+            {name}
+          </h1>
+          {subtitle ? <p className="mt-1 text-sm font-semibold text-[#6B6B6B]">{subtitle}</p> : null}
+          <ul className="mt-3 flex flex-wrap gap-2" aria-label="About this kitchen">
+            {facts.map((fact) => (
+              <li key={fact} className="rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-bold text-[#1A1A1A]">{fact}</li>
+            ))}
+          </ul>
+          {bio ? (
+            <>
+              <p id="kitchen-bio" className={`mt-3 max-w-3xl text-sm leading-6 text-[#1A1A1A] sm:text-[0.95rem] ${bioExpanded ? "" : "line-clamp-3"}`}>{bio}</p>
+              {bio.length > 180 ? (
+                <button
+                  type="button"
+                  onClick={() => setBioExpanded((value) => !value)}
+                  aria-expanded={bioExpanded}
+                  aria-controls="kitchen-bio"
+                  className="mt-1 !min-h-10 !min-w-0 !border-0 !bg-transparent !p-0 text-sm font-black text-[#C4200F] !shadow-none"
+                >
+                  {bioExpanded ? "Show less" : "Read more"}
+                </button>
               ) : null}
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem]">
-                {chef.bio || fallbackDescription}
-              </p>
-            </div>
-
-            <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:w-[27rem]">
-              <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
-                <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                <p className="mt-2 text-lg font-black text-[#1A1A1A]">{chef.activeDishCount}</p>
-                <p className="text-[0.68rem] font-bold text-[#6B6B6B]">Dishes available</p>
-              </div>
-              <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
-                <PackageCheck className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                <p className="mt-2 text-sm font-black text-[#1A1A1A]">Made to order</p>
-                <p className="mt-1 text-[0.68rem] font-bold text-[#6B6B6B]">Prepared after you order</p>
-              </div>
-              {/* Full width only when it is the odd tile out (no reviews yet), so the grid has no hole. */}
-              <div className={`${reviewSummary ? "" : "col-span-2 "}rounded-2xl bg-[#F1F3F5] p-3.5`}>
-                <ChefHat className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                <p className="mt-2 text-sm font-black text-[#1A1A1A]">
-                  {chef.specialties.length > 0
-                    ? chef.specialties.slice(0, 2).join(" · ")
-                    : "Home-cooked dishes"}
-                </p>
-                <p className="mt-1 text-[0.68rem] font-bold text-[#6B6B6B]">Specialities</p>
-              </div>
-              {reviewSummary ? (
-                <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
-                  <Star
-                    className="h-4 w-4 fill-[#F62E18] text-[#F62E18]"
-                    aria-hidden="true"
-                  />
-                  <p className="mt-2 text-lg font-black text-[#1A1A1A]">
-                    {reviewSummary.overallAverage !== null
-                      ? reviewSummary.overallAverage.toFixed(1)
-                      : "—"}
-                  </p>
-                  <p className="text-[0.68rem] font-bold text-[#6B6B6B]">
-                    {reviewSummary.reviewCount}{" "}
-                    {reviewSummary.reviewCount === 1 ? "review" : "reviews"}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </div>
+            </>
+          ) : null}
         </section>
 
-        <ChefDishesGrid chefName={chef.name} dishes={dishes} />
+        <KitchenMenu dishes={dishes} />
         {chef.reviews.length > 0 ? (
           <CustomerReviewsSection reviews={chef.reviews} />
         ) : null}

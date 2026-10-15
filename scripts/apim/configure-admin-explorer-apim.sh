@@ -4,7 +4,7 @@ set -euo pipefail
 set +x
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 API_ID=craves-admin-explorer-v1
 API_PATH=api/v1/admin/explorer
 API_VERSION=2022-08-01

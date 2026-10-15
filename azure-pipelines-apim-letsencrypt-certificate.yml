@@ -26,9 +26,9 @@ variables:
   dnsZoneName: _acme-challenge.api.craves.in
   keyVaultName: kvcravesprodlowl3ing6
   keyVaultCertificateName: craves-api-tls
-  apimName: apim-craves-prodlow-l3ing6
+  apimName: apim-craves-prodlow-kmqgfy
   apimHostname: api.craves.in
-  apimDefaultHostname: apim-craves-prodlow-l3ing6.azure-api.net
+  apimDefaultHostname: apim-craves-prodlow-kmqgfy.azure-api.net
   acmeShVersion: 3.1.4
   renewBeforeDays: 30
   dnsPropagationSeconds: 60

@@ -58,7 +58,7 @@ steps:
         chmod +x scripts/apim/configure-favorites-p2-p3-apim.sh
         scripts/apim/configure-favorites-p2-p3-apim.sh
 
-        gateway="$(az apim show -g rg-craves-prodlow-centralindia -n apim-craves-prodlow-l3ing6 --query gatewayUrl -o tsv)"
+        gateway="$(az apim show -g rg-craves-prodlow-centralindia -n apim-craves-prodlow-kmqgfy --query gatewayUrl -o tsv)"
         test -n "$gateway"
         correlation="favorites-p2-p3-$(Build.BuildId)"
         probe_401() {

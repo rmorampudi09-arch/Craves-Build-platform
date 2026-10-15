@@ -110,7 +110,7 @@ def main():
     check(args.evidence is not None, 'Evidence directory is required')
     check(os.environ.get('ACADEMY_EXPECTED_SOURCE') == source['sourceSha'], 'Selected pipeline commit differs from the reviewed release SHA')
     expected_image = os.environ.get('ACADEMY_EXPECTED_IMAGE', '')
-    check(re.fullmatch(r'cravesprodlowacr82121\.azurecr\.io/craves/auth-service@sha256:[a-f0-9]{64}', expected_image), 'Expected image must be the exact approved Auth digest')
+    check(re.fullmatch(r'cravesrm09prodlow6bf632\.azurecr\.io/craves/auth-service@sha256:[a-f0-9]{64}', expected_image), 'Expected image must be the exact approved Auth digest')
     args.evidence.mkdir(parents=True, exist_ok=True)
     current = current_snapshot()
     if args.phase == 'preflight':

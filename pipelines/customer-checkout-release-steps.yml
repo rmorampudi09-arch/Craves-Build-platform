@@ -34,9 +34,9 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
-        python3 scripts/apim/customer-checkout-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0
-        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:customer-checkout-$(Build.SourceVersion)"
-        az acr login --name cravesprodlowacr82121 --only-show-errors
+        python3 scripts/apim/customer-checkout-routes.py --expected-image cravesrm09prodlow6bf632.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0
+        IMAGE="cravesrm09prodlow6bf632.azurecr.io/craves/order-service:customer-checkout-$(Build.SourceVersion)"
+        az acr login --name cravesrm09prodlow6bf632 --only-show-errors
         docker build --pull -t "$IMAGE" services/order-service
         docker push "$IMAGE"
   - task: AzureCLI@2
@@ -48,8 +48,8 @@ steps:
       inlineScript: |
         set -euo pipefail
         set +x
-        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:customer-checkout-$(Build.SourceVersion)"
-        export EXPECTED_PREVIOUS_IMAGE=cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0
+        IMAGE="cravesrm09prodlow6bf632.azurecr.io/craves/order-service:customer-checkout-$(Build.SourceVersion)"
+        export EXPECTED_PREVIOUS_IMAGE=cravesrm09prodlow6bf632.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0
         export READY_ATTEMPTS=150 READY_SLEEP_SECONDS=5
         DEPLOY_LOG=$(mktemp)
         if bash scripts/release/deploy-single-service-preserve-runtime.sh rg-craves-prodlow-centralindia ca-craves-order-service-prodlow "$IMAGE" order >"$DEPLOY_LOG" 2>&1; then

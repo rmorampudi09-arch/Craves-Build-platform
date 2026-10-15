@@ -15,7 +15,7 @@ variables:
   resourceGroup: rg-craves-prodlow-centralindia
   keyVaultName: kvcravesprodlowl3ing6
   firebaseServiceAccountSecret: craves-auth-firebase-service-account-json-base64
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   containerAppName: ca-craves-web-ui-test
   productionContainerAppName: ca-craves-web-prodlow
   appPath: apps/customer-web-next

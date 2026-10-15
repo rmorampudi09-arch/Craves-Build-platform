@@ -9,8 +9,8 @@ from pathlib import Path
 
 SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
 RG = 'rg-craves-prodlow-centralindia'
-ACR = 'cravesprodlowacr82121'
-APIM = 'apim-craves-prodlow-l3ing6'
+ACR = 'cravesrm09prodlow6bf632'
+APIM = 'apim-craves-prodlow-kmqgfy'
 ALLOWED = {('account','show'), ('containerapp','list'), ('containerapp','show'),
            ('containerapp','revision','list'), ('acr','manifest','show-metadata'),
            ('apim','api','list'), ('apim','api','operation','list'),

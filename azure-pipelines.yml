@@ -41,7 +41,7 @@ parameters:
 variables:
   projectName: craves
   environmentName: prodlow
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   templateFile: infra/main.bicep
 
 pool:

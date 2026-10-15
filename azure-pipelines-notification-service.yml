@@ -7,7 +7,7 @@ parameters:
     default: rg-craves-prodlow-centralindia
   - name: acrName
     type: string
-    default: cravesprodlowacr82121
+    default: cravesrm09prodlow6bf632
   - name: containerAppName
     type: string
     default: ca-craves-notification-service-p

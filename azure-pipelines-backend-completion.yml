@@ -35,7 +35,7 @@ parameters:
   - name: containerRegistryName
     displayName: Azure Container Registry
     type: string
-    default: cravesprodlowacr82121
+    default: cravesrm09prodlow6bf632
 
 pool:
   vmImage: ubuntu-latest

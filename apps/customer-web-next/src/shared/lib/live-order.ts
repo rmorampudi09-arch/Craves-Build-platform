@@ -1,4 +1,5 @@
 // The live order bubble's model, ported from the app (features/liveOrder/liveOrderModel.ts). Browser-safe.
+import { formatDishPrice } from "./kitchen-dish-summary.ts";
 import { shortOrderNumber } from "./order-number.ts";
 
 export const LIVE_ORDER_STEPS = ["Accepted", "Cooked", "On the way", "Delivered"] as const;
@@ -84,10 +85,9 @@ function isSource(value: unknown): value is Source {
   );
 }
 
-/** "₹48.25", "₹240": the app's order money format. */
+/** "₹48.25", "₹1,200": the same en-IN money as the order page the bubble opens. */
 export function formatLiveOrderMoney(amount: number, currency: string): string {
-  const value = amount.toFixed(Number.isInteger(amount) ? 0 : 2);
-  return currency === "INR" ? `₹${value}` : `${currency} ${value}`;
+  return formatDishPrice(amount, currency);
 }
 
 /** The newest order in progress, ready to show; null when nothing is cooking or on the way. */

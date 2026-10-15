@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getLiveOrder, LIVE_ORDER_STEPS } from "./live-order.ts";
+import { formatLiveOrderMoney, getLiveOrder, LIVE_ORDER_STEPS } from "./live-order.ts";
 
 // Synthetic orders, shaped like GET /api/orders.
 const NOW = Date.parse("2026-10-15T13:00:00Z");
@@ -111,4 +111,9 @@ test("picks the newest order in progress and labels it for the card", () => {
       },
     ],
   });
+});
+
+test("money reads like the order page: grouped en-IN rupees, paise only when there are any", () => {
+  assert.equal(formatLiveOrderMoney(1200, "INR"), "₹1,200");
+  assert.equal(formatLiveOrderMoney(48.25, "INR"), "₹48.25");
 });

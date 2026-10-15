@@ -498,11 +498,10 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
               badge={String(cartItemCount)}
             />
             <ProfileLinkCard
+              to="/refer"
               icon={FaGift}
               title="Refer a friend"
-              subtitle="Invite friends and earn rewards"
-              badge="Soon"
-              disabled
+              subtitle="Share Craves with friends"
             />
             <ProfileLinkCard
               to={chef.to}
@@ -525,10 +524,10 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
 
           <div className="grid gap-3 md:grid-cols-2">
             <ProfileLinkCard
-              to="/contact"
+              to="/help"
               icon={FaHeadset}
-              title="Contact us"
-              subtitle="Help and support"
+              title="Help & support"
+              subtitle="Chat, call or email"
             />
             <ProfileLinkCard
               to="/support"

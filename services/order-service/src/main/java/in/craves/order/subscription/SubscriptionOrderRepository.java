@@ -155,8 +155,9 @@ public class SubscriptionOrderRepository {
             WITH candidates AS (
                 SELECT id
                   FROM order_schema.subscription_order_callback_outbox
-                 WHERE (status IN ('PENDING', 'FAILED') AND next_attempt_at <= now() AND attempt_count < ?)
-                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute'))
+                 WHERE attempt_count < ?
+                   AND ((status IN ('PENDING', 'FAILED') AND next_attempt_at <= now())
+                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))
                  ORDER BY created_at
                  FOR UPDATE SKIP LOCKED
                  LIMIT ?
@@ -179,6 +180,18 @@ public class SubscriptionOrderRepository {
                 rs.getBoolean("chef_declined")
             ),
             maxAttempts, staleMinutes, batchSize, lockToken
+        );
+    }
+
+    /** A lease that expired on the final attempt (or a FAILED row past a lowered limit) can never be claimed again. */
+    public int deadLetterExhaustedCallbacks(int maxAttempts, int staleMinutes) {
+        return jdbcTemplate.update(
+            "UPDATE order_schema.subscription_order_callback_outbox SET status = 'DEAD_LETTER', " +
+                "last_error = COALESCE(last_error, 'Callback attempts exhausted; the last lease expired'), " +
+                "lock_token = NULL, locked_at = NULL, updated_at = now() " +
+                "WHERE attempt_count >= ? AND (status = 'FAILED' " +
+                "OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))",
+            maxAttempts, staleMinutes
         );
     }
 

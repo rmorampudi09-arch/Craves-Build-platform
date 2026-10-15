@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -100,6 +102,78 @@ public class OrderDomainOutboxRepository {
         parameters.add(lockToken);
 
         return jdbcTemplate.query(sql, this::mapRecord, parameters.toArray());
+    }
+
+    /**
+     * Rows that used their last attempt can never be claimed again: a lease that expired on the final
+     * attempt (the pod died mid-publish) or a FAILED row past a lowered limit. Dead-letter them so they alert.
+     */
+    public int deadLetterExhausted(int maxAttempts, int staleLockSeconds) {
+        return jdbcTemplate.update(
+            """
+                UPDATE order_schema.domain_event_outbox
+                SET status = 'DEAD',
+                    lock_token = NULL,
+                    locked_at = NULL,
+                    last_error = COALESCE(last_error, 'Publication attempts exhausted; the last lease expired'),
+                    updated_at = now()
+                WHERE attempts >= ?
+                  AND (
+                      status = 'FAILED'
+                      OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 second'))
+                  )
+                """,
+            maxAttempts,
+            staleLockSeconds
+        );
+    }
+
+    /** Unpublished rows whose event type is not on the allow-list and older than the grace period, per type. */
+    public Map<String, Integer> blockedEventTypeBacklog(List<String> enabledEventTypes, int olderThanSeconds) {
+        String sql = """
+            SELECT event_type, count(*) AS row_count
+            FROM order_schema.domain_event_outbox
+            WHERE status IN ('PENDING', 'FAILED')
+              AND event_type NOT IN (%s)
+              AND created_at < now() - (? * INTERVAL '1 second')
+            GROUP BY event_type
+            """.formatted(placeholders(enabledEventTypes));
+        Map<String, Integer> backlog = new TreeMap<>();
+        jdbcTemplate.query(
+            sql,
+            (ResultSet resultSet) -> {
+                backlog.put(resultSet.getString("event_type"), resultSet.getInt("row_count"));
+            },
+            typesThenSeconds(enabledEventTypes, olderThanSeconds)
+        );
+        return backlog;
+    }
+
+    /** Opt-in policy: event types blocked by the allow-list go DEAD instead of waiting in PENDING forever. */
+    public int deadLetterBlockedEventTypes(List<String> enabledEventTypes, int olderThanSeconds) {
+        String sql = """
+            UPDATE order_schema.domain_event_outbox
+            SET status = 'DEAD',
+                last_error = 'Event type is not enabled for publication',
+                updated_at = now()
+            WHERE status IN ('PENDING', 'FAILED')
+              AND event_type NOT IN (%s)
+              AND created_at < now() - (? * INTERVAL '1 second')
+            """.formatted(placeholders(enabledEventTypes));
+        return jdbcTemplate.update(sql, typesThenSeconds(enabledEventTypes, olderThanSeconds));
+    }
+
+    private static String placeholders(List<String> values) {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("At least one enabled event type is required");
+        }
+        return String.join(",", Collections.nCopies(values.size(), "?"));
+    }
+
+    private static Object[] typesThenSeconds(List<String> eventTypes, int seconds) {
+        List<Object> parameters = new ArrayList<>(eventTypes);
+        parameters.add(seconds);
+        return parameters.toArray();
     }
 
     public boolean markPublished(UUID id, UUID lockToken, String brokerMessageId) {

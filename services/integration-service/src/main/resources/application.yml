@@ -12,6 +12,24 @@ spring:
     table: flyway_schema_history
 
 craves:
+  # CH-07 Idempotency-Key replay; only requests that send the header are affected.
+  idempotency:
+    enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}
+  # CH-04 read-only silent-failure checks; findings are CRAVES_ALERT log lines (infra/monitoring).
+  monitoring:
+    enabled: ${CRAVES_MONITORING_ENABLED:true}
+    stuck-order-minutes: ${CRAVES_MONITORING_STUCK_ORDER_MINUTES:90}
+    lookback-days: ${CRAVES_MONITORING_LOOKBACK_DAYS:7}
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/finance/quotes=order;/internal/v1/finance/events=order;/internal/v1/finance/catalog-eligibility=catalog;/internal/v1/delivery-pickup-locations/**=catalog}
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   delivery-feedback:
     enabled: ${CRAVES_DELIVERY_FEEDBACK_ENABLED:true}
     batch-size: ${CRAVES_DELIVERY_FEEDBACK_BATCH_SIZE:50}

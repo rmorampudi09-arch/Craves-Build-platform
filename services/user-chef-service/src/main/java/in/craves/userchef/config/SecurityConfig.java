@@ -1,6 +1,8 @@
 package in.craves.userchef.config;
 
 import in.craves.userchef.security.CravesJwtAuthenticationFilter;
+import in.craves.userchef.security.internalcall.InternalCallFilter;
+import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,7 +20,9 @@ import org.springframework.http.HttpStatus;
 @EnableWebSecurity
 public class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, CravesJwtAuthenticationFilter filter) throws Exception {
+    SecurityFilterChain securityFilterChain(
+        HttpSecurity http, CravesJwtAuthenticationFilter filter, Environment environment
+    ) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(errors -> errors.defaultAuthenticationEntryPointFor(
@@ -36,8 +40,11 @@ public class SecurityConfig {
                 .requestMatchers("/internal/v1/auth-email/projection").permitAll()
                 // Support chat for signed-out website visitors: no account data; limits in SupportChatController.
                 .requestMatchers(HttpMethod.POST, "/api/v1/support/chat/guest").permitAll()
+                // CH-03: metrics and prometheus are not for signed-in customers; only health stays reachable.
+                .requestMatchers("/actuator/**").denyAll()
                 .anyRequest().authenticated()
             )
+            .addFilterBefore(InternalCallFilter.fromEnvironment(environment, "/internal/**"), UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

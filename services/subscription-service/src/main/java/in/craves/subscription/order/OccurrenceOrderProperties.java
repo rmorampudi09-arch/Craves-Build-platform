@@ -37,7 +37,9 @@ public class OccurrenceOrderProperties {
     }
 
     public boolean validInternalAccess(String supplied) {
-        return StringUtils.hasText(internalAccessValue) && internalAccessValue.equals(supplied);
+        return StringUtils.hasText(internalAccessValue) && supplied != null && java.security.MessageDigest.isEqual(
+            internalAccessValue.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            supplied.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     public boolean isRequestWorkerEnabled() { return requestWorkerEnabled; }

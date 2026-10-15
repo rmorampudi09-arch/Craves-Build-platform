@@ -27,7 +27,9 @@ public class PauseAutoResumeWorker {
         this.service = service;
     }
 
+    // Spring's default pool, which this job already used; CH-01 requires every job to name its pool.
     @Scheduled(
+        scheduler = "taskScheduler",
         initialDelayString = "${craves.subscription.pause.auto-resume-initial-delay-ms:60000}",
         fixedDelayString = "${craves.subscription.pause.auto-resume-fixed-delay-ms:300000}"
     )

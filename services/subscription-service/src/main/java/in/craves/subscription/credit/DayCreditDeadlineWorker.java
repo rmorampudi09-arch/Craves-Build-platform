@@ -17,7 +17,9 @@ public class DayCreditDeadlineWorker {
         this.service = service;
     }
 
+    // Spring's default pool, which this job already used; CH-01 requires every job to name its pool.
     @Scheduled(
+        scheduler = "taskScheduler",
         initialDelayString = "${craves.subscription.refund-choice.deadline-sweep-initial-delay-ms:60000}",
         fixedDelayString = "${craves.subscription.refund-choice.deadline-sweep-fixed-delay-ms:300000}"
     )

@@ -35,6 +35,13 @@ management:
         enabled: true
 
 craves:
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/roles/chef/**=user-chef;/internal/v1/identities/**=user-chef|notification}
   firebase:
     project-id: ${FIREBASE_PROJECT_ID:}
     credentials-json-base64: ${FIREBASE_SERVICE_ACCOUNT_JSON_BASE64:}

@@ -14,7 +14,13 @@ const LIVE_STATUSES: Record<string, { status: string; title: string; doneSteps: 
 /** An order still "in progress" this long after it was placed is stuck, not live: no bubble for it. */
 const LIVE_ORDER_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
-export type LiveOrderItem = { id: string; itemName: string; quantity: number; price: string };
+export type LiveOrderItem = {
+  id: string;
+  menuItemId: string;
+  itemName: string;
+  quantity: number;
+  price: string;
+};
 export type LiveOrder = {
   orderId: string;
   kitchenName: string;
@@ -26,7 +32,13 @@ export type LiveOrder = {
   items: LiveOrderItem[];
 };
 
-type SourceItem = { id: string; itemName: string; quantity: number; lineTotal: number };
+type SourceItem = {
+  id: string;
+  menuItemId: string;
+  itemName: string;
+  quantity: number;
+  lineTotal: number;
+};
 type Source = {
   id: string;
   kitchenName: string;
@@ -47,6 +59,7 @@ function isItem(value: unknown): value is SourceItem {
   return (
     !!raw &&
     isText(raw.id) &&
+    isText(raw.menuItemId) &&
     isText(raw.itemName) &&
     Number.isInteger(raw.quantity) &&
     raw.quantity! > 0 &&
@@ -99,6 +112,7 @@ export function getLiveOrder(orders: unknown, now = Date.now()): LiveOrder | nul
     paid: formatLiveOrderMoney(newest.grandTotal, currency),
     items: newest.items.map((item) => ({
       id: item.id,
+      menuItemId: item.menuItemId,
       itemName: item.itemName,
       quantity: item.quantity,
       price: formatLiveOrderMoney(item.lineTotal, currency),

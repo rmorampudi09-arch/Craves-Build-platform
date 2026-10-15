@@ -170,6 +170,24 @@ describe("conditional reorder BFF", () => {
     const response = await reorder(ORDER);
     expect([response.status, (await response.json()).code]).toEqual([status, code]);
   });
+
+  it("passes on the order service's short reason for a refused rebuild, and nothing else", async () => {
+    const answer = (message: string, status = 409) =>
+      upstream.mockResolvedValueOnce(
+        Response.json({ error: "MENU_ITEM_UNAVAILABLE", message }, { status }),
+      );
+    answer(" This dish is no longer on the menu. ");
+    expect(await (await reorder(ORDER)).json()).toEqual({
+      code: "MENU_ITEM_UNAVAILABLE",
+      message: "This dish is no longer on the menu.",
+    });
+    answer("x".repeat(181));
+    expect(await (await reorder(ORDER)).json()).toEqual({ code: "MENU_ITEM_UNAVAILABLE" });
+    answer("Internal detail", 500);
+    const failed = await reorder(ORDER);
+    expect(failed.status).toBe(503);
+    expect(await failed.json()).not.toHaveProperty("message");
+  });
 });
 
 describe("Your usual browser calls", () => {
@@ -182,27 +200,45 @@ describe("Your usual browser calls", () => {
     return fetch;
   }
 
-  it("lists the baskets, and none while the backend has no repeat orders", async () => {
-    const fetch = answer({ "/api/orders/repeat-candidates": () => Response.json(page) });
-    expect((await listRepeatOrders()).map((item) => item.orderId)).toEqual([ORDER]);
+  it("lists a page of baskets, and none once signed out or while the backend has no repeat orders", async () => {
+    const fetch = answer({
+      "/api/orders/repeat-candidates": () =>
+        Response.json({ ...page, nextCursor: "next-1", hasMore: true }),
+    });
+    expect(await listRepeatOrders()).toMatchObject({
+      items: [{ orderId: ORDER }],
+      nextCursor: "next-1",
+    });
     expect(fetch.mock.calls[0][0]).toBe("/api/orders/repeat-candidates?limit=20");
+    await listRepeatOrders("next-1");
+    expect(fetch.mock.calls[1][0]).toBe("/api/orders/repeat-candidates?limit=20&cursor=next-1");
+    const none = { items: [], nextCursor: null, hasMore: false };
     answer({
       "/api/orders/repeat-candidates": () =>
         Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 }),
     });
-    expect(await listRepeatOrders()).toEqual([]);
+    expect(await listRepeatOrders()).toEqual(none);
+    // The sign-in ended and could not be renewed.
+    answer({
+      "/api/orders/repeat-candidates": () =>
+        Response.json({ code: "SESSION_EXPIRED" }, { status: 401 }),
+      "/api/auth/refresh": () => new Response(null, { status: 401 }),
+    });
+    expect(await listRepeatOrders()).toEqual(none);
     answer({ "/api/orders/repeat-candidates": () => new Response(null, { status: 403 }) });
     await expect(listRepeatOrders()).rejects.toThrow();
   });
 
-  it("checks the menu, then fills the empty cart with the basket and reloads the cart", async () => {
+  it("checks the menu, then fills the empty cart with the basket without asking and reloads the cart", async () => {
     menu.mockResolvedValue([{ id: DISH }]);
+    const confirm = vi.fn(async () => true);
     const fetch = answer({
       "/api/cart": () => Response.json({ ...cart, items: [] }),
       [`/api/cart/reorder-if-unchanged/${ORDER}`]: () => Response.json(cart),
     });
-    expect(await orderLikeLastTime(basket)).toEqual({ added: true });
+    expect(await orderLikeLastTime(basket, confirm)).toEqual({ added: true });
     expect(menu).toHaveBeenCalledWith(KITCHEN, { remember: false });
+    expect(confirm).not.toHaveBeenCalled();
     expect(fetch.mock.calls[1]).toEqual([
       `/api/cart/reorder-if-unchanged/${ORDER}`,
       expect.objectContaining({ method: "POST", body: JSON.stringify(reorderBody) }),
@@ -210,33 +246,69 @@ describe("Your usual browser calls", () => {
     expect(loadCart).toHaveBeenCalledTimes(1);
   });
 
-  it("never replaces a cart that holds dishes, and stops at dishes no longer on the menu", async () => {
+  it("replaces a cart that holds dishes only once the customer agrees, sending the cart they saw", async () => {
     menu.mockResolvedValue([{ id: DISH }]);
     const fetch = answer({
-      "/api/cart": () =>
-        Response.json({ ...cart, items: [{ ...cartLine, kitchenName: "Ammi's" }] }),
+      "/api/cart": () => Response.json(cart),
+      [`/api/cart/reorder-if-unchanged/${ORDER}`]: () => Response.json(cart),
     });
-    expect(await orderLikeLastTime(basket)).toEqual({
-      added: false,
-      recovery: "cart",
-      message:
-        "Your cart already has dishes from Ammi's. Check out or empty your cart first, then order like last time.",
-    });
+    expect(await orderLikeLastTime(basket, async () => false)).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
 
+    expect(await orderLikeLastTime(basket, async () => true)).toEqual({ added: true });
+    expect(fetch.mock.calls[2]).toEqual([
+      `/api/cart/reorder-if-unchanged/${ORDER}`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          expectedCart: {
+            cartId: CART,
+            items: [{ id: cartLine.id, quantity: 2, updatedAt: cartLine.updatedAt }],
+          },
+          expectedKitchenId: KITCHEN,
+        }),
+      }),
+    ]);
+  });
+
+  it("stops at dishes no longer on the menu, a menu that didn't load and a cart it can't read", async () => {
+    const confirm = vi.fn(async () => true);
+    const fetch = answer({ "/api/cart": () => new Response(null, { status: 503 }) });
     menu.mockResolvedValue([]);
-    expect(await orderLikeLastTime(basket)).toMatchObject({ added: false, recovery: "menu" });
+    expect(await orderLikeLastTime(basket, confirm)).toMatchObject({
+      added: false,
+      recovery: "menu",
+    });
     menu.mockRejectedValue(new Error("offline"));
-    expect(await orderLikeLastTime(basket)).toMatchObject({ added: false, recovery: null });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await orderLikeLastTime(basket, confirm)).toMatchObject({
+      added: false,
+      recovery: null,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    menu.mockResolvedValue([{ id: DISH }]);
+    expect(await orderLikeLastTime(basket, confirm)).toEqual({
+      added: false,
+      recovery: "menu",
+      message: "Craves could not verify your current cart. Refresh it before trying again.",
+    });
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it.each([
-    [() => Response.json({ code: "CART_CHANGED" }, { status: 409 }), "cart", /cart changed/],
     [
-      () => Response.json({ code: "ORDER_NOT_FOUND" }, { status: 404 }),
+      () => Response.json({ code: "CART_CHANGED" }, { status: 409 }),
       "menu",
-      /cannot be rebuilt/,
+      /^Your cart changed while you were reviewing it\. Start again to review the latest cart\.$/,
+    ],
+    [
+      () =>
+        Response.json({ code: "ORDER_NOT_FOUND", message: "Order not found." }, { status: 404 }),
+      "menu",
+      /^Order not found\.$/,
+    ],
+    [
+      () => Response.json({ code: "REORDER_FAILED" }, { status: 422 }),
+      "menu",
+      /^That information changed\. Refresh and try again\.$/,
     ],
     [() => new Response(null, { status: 403 }), "cart", /could not be confirmed/],
     [
@@ -252,9 +324,9 @@ describe("Your usual browser calls", () => {
         "/api/cart": () => Response.json({ ...cart, items: [] }),
         [`/api/cart/reorder-if-unchanged/${ORDER}`]: failure,
       });
-      const outcome = await orderLikeLastTime(basket);
+      const outcome = await orderLikeLastTime(basket, async () => true);
       expect(outcome).toMatchObject({ added: false, recovery });
-      expect(outcome.added ? "" : outcome.message).toMatch(message);
+      expect(outcome?.added === false ? outcome.message : "").toMatch(message);
       expect(loadCart).not.toHaveBeenCalled();
     },
   );

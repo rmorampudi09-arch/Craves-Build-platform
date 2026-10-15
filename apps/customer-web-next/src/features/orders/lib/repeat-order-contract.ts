@@ -130,50 +130,55 @@ export function parseRepeatOrderPage(value: unknown): RepeatOrderPage | null {
     : null;
 }
 
+type ExpectedCart = ReorderCartRequest["expectedCart"];
+
+/** The cart's lines as the conditional reorder compares them: id, quantity and updatedAt, each line once. */
+function parseExpectedLines(value: unknown): ExpectedCart["items"] | null {
+  if (!Array.isArray(value) || value.length > 200) return null;
+  const items = value.map((entry) => {
+    const line = record(entry);
+    const id = uuid(line?.id);
+    const quantity = int(line?.quantity, 1, 100);
+    const updatedAt = instant(line?.updatedAt);
+    return id && quantity !== null && updatedAt ? { id, quantity, updatedAt } : null;
+  });
+  return items.some((item) => !item) || new Set(items.map((item) => item!.id)).size !== items.length
+    ? null
+    : (items as ExpectedCart["items"]);
+}
+
 /** The body of a conditional reorder: the cart the customer last saw (each line's id, quantity and updatedAt) and the order's kitchen. */
 export function parseReorderCartRequest(value: unknown): ReorderCartRequest | null {
   const raw = record(value);
   const cart = record(raw?.expectedCart);
   const cartId = uuid(cart?.cartId);
   const expectedKitchenId = uuid(raw?.expectedKitchenId);
-  if (!cartId || !expectedKitchenId || !Array.isArray(cart?.items) || cart.items.length > 200)
-    return null;
-  const items = cart.items.map((value) => {
-    const line = record(value);
-    const id = uuid(line?.id);
-    const quantity = int(line?.quantity, 1, 100);
-    const updatedAt = instant(line?.updatedAt);
-    return id && quantity !== null && updatedAt ? { id, quantity, updatedAt } : null;
-  });
-  if (items.some((item) => !item) || new Set(items.map((item) => item!.id)).size !== items.length)
-    return null;
-  return {
-    expectedCart: { cartId, items: items as ReorderCartRequest["expectedCart"]["items"] },
-    expectedKitchenId,
-  };
+  const items = parseExpectedLines(cart?.items);
+  return cartId && expectedKitchenId && items
+    ? { expectedCart: { cartId, items }, expectedKitchenId }
+    : null;
 }
 
-/** What a reorder needs from GET /api/cart: the cart's id, and whose dishes it holds (null when it is empty). */
-export function parseCartForReorder(
-  value: unknown,
-): { cartId: string; kitchenName: string | null } | null {
+/** The cart from GET /api/cart as the conditional reorder expects it to still be. */
+export function parseCartForReorder(value: unknown): ExpectedCart | null {
   const raw = record(value);
   const cartId = uuid(raw?.id);
-  if (!cartId || !Array.isArray(raw?.items)) return null;
-  return {
-    cartId,
-    kitchenName: raw.items.length
-      ? (text(record(raw.items[0])?.kitchenName, 180) ?? "another kitchen")
-      : null,
-  };
+  const items = parseExpectedLines(raw?.items);
+  return cartId && items ? { cartId, items } : null;
 }
 
-/** Most-ordered kitchens first, then the newest order (the app also lifts favourite kitchens cooking today). */
+/**
+ * Favourite kitchens first, then the most-ordered kitchens, then the newest order. The app also orders favourites
+ * by whether they cook today; the web has no cooking state, so they share one rank.
+ */
 export function rankRepeatOrderCandidates(
   candidates: readonly RepeatOrderCandidate[],
+  favoriteKitchenIds: ReadonlySet<string>,
 ): RepeatOrderCandidate[] {
   return [...candidates].sort(
     (left, right) =>
+      Number(favoriteKitchenIds.has(right.kitchenId)) -
+        Number(favoriteKitchenIds.has(left.kitchenId)) ||
       right.completedOrdersFromKitchen - left.completedOrdersFromKitchen ||
       Date.parse(right.lastOrderedAt) - Date.parse(left.lastOrderedAt) ||
       left.orderId.localeCompare(right.orderId),

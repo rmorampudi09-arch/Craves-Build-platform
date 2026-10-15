@@ -15,16 +15,34 @@ import {
   repeatOrderBasketSummary,
   type RepeatOrderCandidate,
 } from "@/features/orders/lib/repeat-order-contract";
+import { listFavoriteKitchens } from "@/shared/lib/favorite-entities-client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/shared/ui/overlays/alert-dialog";
+import { useOverlayHistory } from "@/shared/ui/overlays/overlay";
 
 const VISIBLE_CANDIDATES = 6;
 const orderedDate = (value: string) =>
   new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(value));
 
+type Baskets = {
+  items: RepeatOrderCandidate[];
+  nextCursor: string | null;
+  favorites: ReadonlySet<string>;
+};
+
 /** "Your usual": the customer's regular baskets, each one tap from a refilled cart (the app's Order like last time). */
 export function YourUsualRail() {
   const navigate = useNavigate();
-  const [candidates, setCandidates] = useState<RepeatOrderCandidate[] | null>(null);
+  const [baskets, setBaskets] = useState<Baskets | null>(null);
   const [failed, setFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [confirming, setConfirming] = useState<((replace: boolean) => void) | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
     kitchenId: string;
@@ -34,11 +52,17 @@ export function YourUsualRail() {
 
   const load = useCallback(async () => {
     setFailed(false);
-    setCandidates(null);
+    setBaskets(null);
     try {
-      setCandidates(
-        rankRepeatOrderCandidates(await listRepeatOrders()).slice(0, VISIBLE_CANDIDATES),
-      );
+      const [page, favorites] = await Promise.all([
+        listRepeatOrders(),
+        // Without favourites the baskets still rank by how often and how recently they were ordered.
+        listFavoriteKitchens().then(
+          ({ items }) => new Set(items.map((item) => item.kitchenId.toLowerCase())),
+          () => new Set<string>(),
+        ),
+      ]);
+      setBaskets({ items: page.items, nextCursor: page.nextCursor, favorites });
     } catch {
       setFailed(true);
     }
@@ -48,12 +72,43 @@ export function YourUsualRail() {
     void load();
   }, [load]);
 
+  // The app ranks every page loaded so far and keeps the best six.
+  async function loadMore() {
+    if (!baskets?.nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await listRepeatOrders(baskets.nextCursor);
+      setBaskets(
+        (current) =>
+          current && {
+            ...current,
+            items: [...current.items, ...page.items],
+            nextCursor: page.nextCursor,
+          },
+      );
+    } catch {
+      setFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const settleConfirm = (replace: boolean) => {
+    confirming?.(replace);
+    setConfirming(null);
+  };
+  useOverlayHistory(confirming !== null, () => settleConfirm(false));
+
   async function reorder(candidate: RepeatOrderCandidate) {
     if (pending) return;
     setPending(candidate.orderId);
     setNotice(null);
     try {
-      const outcome = await orderLikeLastTime(candidate);
+      const outcome = await orderLikeLastTime(
+        candidate,
+        () => new Promise<boolean>((resolve) => setConfirming(() => resolve)),
+      );
+      if (!outcome) return;
       if (outcome.added) navigate({ to: "/cart" });
       else
         setNotice({
@@ -82,7 +137,7 @@ export function YourUsualRail() {
       </div>
     );
   }
-  if (!candidates) {
+  if (!baskets) {
     return (
       <p
         role="status"
@@ -96,7 +151,11 @@ export function YourUsualRail() {
       </p>
     );
   }
-  if (!candidates.length) return null;
+  if (!baskets.items.length) return null;
+  const candidates = rankRepeatOrderCandidates(baskets.items, baskets.favorites).slice(
+    0,
+    VISIBLE_CANDIDATES,
+  );
 
   return (
     <section aria-labelledby="your-usual-title" className="mb-7">
@@ -117,13 +176,18 @@ export function YourUsualRail() {
       <div role="status">
         {notice ? (
           <div className="mb-3 rounded-2xl bg-[#F1F3F5] p-4">
-            <p className="text-sm font-medium text-[#1A1A1A]">{notice.message}</p>
+            <p className="text-sm font-bold text-[#1A1A1A]">
+              That previous basket cannot be rebuilt exactly right now
+            </p>
+            <p className="mt-1 text-[13px] text-[#6B6B6B]">{notice.message}</p>
             {notice.recovery ? (
               <Link
                 to={notice.recovery === "cart" ? "/cart" : `/kitchen/${notice.kitchenId}`}
                 className="mt-3 inline-flex min-h-11 items-center rounded-full bg-white px-4 text-sm font-bold text-[#C4200F]"
               >
-                {notice.recovery === "cart" ? "Go to cart" : "View today's menu"}
+                {notice.recovery === "cart"
+                  ? "Check cart before retrying"
+                  : "View today's menu from this kitchen"}
               </Link>
             ) : null}
           </div>
@@ -152,6 +216,11 @@ export function YourUsualRail() {
                   {orderedDate(candidate.lastOrderedAt)}
                 </time>
               </div>
+              {baskets.favorites.has(candidate.kitchenId) ? (
+                <p className="self-start rounded-full bg-[#E8F7F1] px-2.5 py-0.5 text-xs font-bold text-[#166B49]">
+                  Favorite kitchen
+                </p>
+              ) : null}
               <p className="line-clamp-2 text-[13px] font-semibold text-[#1A1A1A]">
                 {repeatOrderBasketSummary(candidate)}
               </p>
@@ -185,6 +254,47 @@ export function YourUsualRail() {
           );
         })}
       </ul>
+
+      {baskets.nextCursor ? (
+        <button
+          type="button"
+          disabled={loadingMore}
+          aria-busy={loadingMore}
+          onClick={() => void loadMore()}
+          className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl !border !border-[#D8DADD] !bg-white text-sm font-bold !text-[#C4200F] !shadow-none"
+        >
+          {loadingMore ? (
+            <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+          ) : null}
+          Show more familiar orders
+        </button>
+      ) : null}
+
+      <AlertDialog
+        open={confirming !== null}
+        onOpenChange={(open) => {
+          if (!open) settleConfirm(false);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-[1.8rem] border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] sm:rounded-[1.8rem]">
+          <AlertDialogTitle className="text-xl font-bold">Replace current cart?</AlertDialogTitle>
+          <AlertDialogDescription className="text-sm leading-6 text-[#6B6B6B]">
+            Craves will recheck this exact cart before replacing it. The previous basket will then
+            be rebuilt using today’s availability and prices.
+          </AlertDialogDescription>
+          <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+            <AlertDialogCancel className="!mt-0 !min-h-11 !rounded-full !border-0 !bg-[#F1F3F5] !px-5 !text-sm !font-bold !text-[#1A1A1A]">
+              Keep cart
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => settleConfirm(true)}
+              className="!min-h-11 !rounded-full !bg-[#C4200F] !px-5 !text-sm !font-bold !text-white"
+            >
+              Verify &amp; replace
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

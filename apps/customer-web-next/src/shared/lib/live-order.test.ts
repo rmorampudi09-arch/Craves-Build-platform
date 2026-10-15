@@ -102,7 +102,13 @@ test("picks the newest order in progress and labels it for the card", () => {
     doneSteps: 3,
     paid: "₹48.25",
     items: [
-      { id: "55555555-5555-4555-8555-555555555555", itemName: "Dal", quantity: 2, price: "₹40" },
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        menuItemId: "66666666-6666-4666-8666-666666666666",
+        itemName: "Dal",
+        quantity: 2,
+        price: "₹40",
+      },
     ],
   });
 });

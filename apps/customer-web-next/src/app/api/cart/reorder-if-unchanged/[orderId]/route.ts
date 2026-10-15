@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ orderId: string }> };
 
 const headers = { "Cache-Control": "no-store" };
-const failure = (status: number, code: string) => NextResponse.json({ code }, { status, headers });
+const failure = (status: number, code: string, message?: string) =>
+  NextResponse.json({ code, message }, { status, headers });
 
 /** Rebuilds the cart from a delivered order, only if the cart is still exactly the one the customer saw. */
 export async function POST(request: NextRequest, context: Context) {
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest, context: Context) {
     const body = (await upstream.json().catch(() => null)) as {
       error?: unknown;
       code?: unknown;
+      message?: unknown;
     } | null;
     if (!upstream.ok) {
       // order-service names its errors in "error" (CART_CHANGED, CART_KITCHEN_CONFLICT, ORDER_NOT_FOUND…); an empty 403 is an unexpected failure, not a sign-out.
@@ -40,7 +42,13 @@ export async function POST(request: NextRequest, context: Context) {
         { code: body?.error ?? body?.code },
         "REORDER_FAILED",
       );
-      return failure(mapped.status, mapped.code);
+      // Like the app, the customer reads the service's own short reason when it refuses a rebuild.
+      const message = typeof body?.message === "string" ? body.message.trim() : "";
+      return failure(
+        mapped.status,
+        mapped.code,
+        mapped.status < 500 && message && message.length <= 180 ? message : undefined,
+      );
     }
     const cart = parseCart(body);
     return cart ? NextResponse.json(cart, { headers }) : failure(502, "INVALID_CART_RESPONSE");

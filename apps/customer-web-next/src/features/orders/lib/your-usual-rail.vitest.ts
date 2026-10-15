@@ -111,12 +111,34 @@ const line = {
   updatedAt: "2026-10-15T08:00:00Z",
 };
 
-function serve(orders: unknown[], cart: unknown = emptyCart) {
+const FAVOURITE = "4a000000-0000-4000-8000-000000000002";
+const OTHER_ORDER = "0bde0000-0000-4000-8000-000000000103";
+const favouriteBasket = {
+  ...candidate,
+  orderId: OTHER_ORDER,
+  kitchenId: FAVOURITE,
+  kitchenName: "Ammi's",
+  completedOrdersFromKitchen: 1,
+};
+
+function serve(
+  orders: unknown[],
+  {
+    cart = emptyCart as unknown,
+    pages = [{ items: [candidate], nextCursor: null as string | null, hasMore: false }],
+    favourites = [] as string[],
+  } = {},
+) {
   const fetch = vi.fn(async (url: string) => {
     const path = url.split("?")[0];
     if (path === "/api/orders") return Response.json(orders);
     if (path === "/api/orders/repeat-candidates")
-      return Response.json({ items: [candidate], nextCursor: null, hasMore: false });
+      return Response.json(pages[url.includes("cursor=") ? 1 : 0]);
+    if (path === "/api/customer/favorite-kitchens")
+      return Response.json({
+        items: favourites.map((kitchenId) => ({ kitchenId, createdAt: "2026-10-01T00:00:00Z" })),
+        nextCursor: null,
+      });
     if (path === `/api/catalog/kitchens/${KITCHEN}`) return Response.json(kitchen);
     if (path === "/api/cart") return Response.json(cart);
     if (path === `/api/cart/reorder-if-unchanged/${DELIVERED}`)
@@ -156,19 +178,64 @@ it("shows the chef's face on each order and refills the cart from Your usual in 
   await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/cart" }), WAIT);
 });
 
-it("sends the customer to their cart rather than replacing dishes already in it", async () => {
-  serve([order(DELIVERED, "DELIVERED")], {
-    ...emptyCart,
-    items: [{ ...line, kitchenName: "Ammi's" }],
+it("asks before replacing dishes already in the cart, and keeps them when told to", async () => {
+  const fetch = serve([order(DELIVERED, "DELIVERED")], {
+    cart: { ...emptyCart, items: [line], totals: { foodSubtotal: 240, currency: "INR" } },
   });
+  const rebuilt = () =>
+    fetch.mock.calls.filter(([url]) => String(url).startsWith("/api/cart/reorder-if-unchanged"));
   menu.mockResolvedValue([{ id: DISH }]);
   render(createElement(OrdersPage));
 
-  fireEvent.click(await screen.findByRole("button", { name: "Order like last time" }, WAIT));
-  const status = await screen.findByText(/Your cart already has dishes from Ammi's/, {}, WAIT);
-  expect(status.closest("[role=status]")).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Go to cart" }).getAttribute("href")).toBe("/cart");
-  expect(navigate).not.toHaveBeenCalled();
+  const button = await screen.findByRole("button", { name: "Order like last time" }, WAIT);
+  fireEvent.click(button);
+  const ask = await screen.findByRole("alertdialog", { name: "Replace current cart?" }, WAIT);
+  fireEvent.click(within(ask).getByRole("button", { name: "Keep cart" }));
+  await vi.waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull(), WAIT);
+  await vi.waitFor(() => expect(button.hasAttribute("disabled")).toBe(false), WAIT);
+  expect(rebuilt()).toHaveLength(0);
+
+  fireEvent.click(button);
+  fireEvent.click(await screen.findByRole("button", { name: "Verify & replace" }, WAIT));
+  await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/cart" }), WAIT);
+  expect(rebuilt()[0]).toEqual([
+    `/api/cart/reorder-if-unchanged/${DELIVERED}`,
+    expect.objectContaining({
+      body: JSON.stringify({
+        expectedCart: {
+          cartId: CART,
+          items: [{ id: line.id, quantity: 2, updatedAt: line.updatedAt }],
+        },
+        expectedKitchenId: KITCHEN,
+      }),
+    }),
+  ]);
+});
+
+it("puts favourite kitchens first and ranks more baskets on request", async () => {
+  serve([order(DELIVERED, "DELIVERED")], {
+    pages: [
+      { items: [candidate], nextCursor: "next-1", hasMore: true },
+      { items: [favouriteBasket], nextCursor: null, hasMore: false },
+    ],
+    favourites: [FAVOURITE],
+  });
+  render(createElement(OrdersPage));
+
+  const usual = await screen.findByRole("region", { name: "Your usual" }, WAIT);
+  expect(within(usual).queryByText("Favorite kitchen")).toBeNull();
+  fireEvent.click(within(usual).getByRole("button", { name: "Show more familiar orders" }));
+  await vi.waitFor(
+    () =>
+      expect(
+        within(usual)
+          .getAllByRole("heading", { level: 3 })
+          .map((h) => h.textContent),
+      ).toEqual(["Ammi's", "Relangi"]),
+    WAIT,
+  );
+  expect(within(usual).getByText("Favorite kitchen")).toBeTruthy();
+  expect(within(usual).queryByRole("button", { name: "Show more familiar orders" })).toBeNull();
 });
 
 it("asks for repeat baskets only once something was delivered", async () => {

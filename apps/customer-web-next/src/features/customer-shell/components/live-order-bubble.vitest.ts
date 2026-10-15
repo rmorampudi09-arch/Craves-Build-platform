@@ -4,11 +4,21 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const session = vi.hoisted(() => ({ user: null as { id: string } | null }));
+const session = vi.hoisted(() => ({
+  user: null as { id: string } | null,
+  listeners: new Set<() => void>(),
+  // What /api/auth/me answers when the bubble asks.
+  signedIn: null as { id: string } | null,
+  load: vi.fn(),
+}));
 vi.mock("@/features/auth/api/cravesAuth", () => ({
   getSession: () => session.user,
-  subscribeSession: () => () => undefined,
+  subscribeSession: (listener: () => void) => {
+    session.listeners.add(listener);
+    return () => session.listeners.delete(listener);
+  },
   recoverSessionSnapshotForNavigation: () => session.user,
+  loadSession: session.load,
 }));
 vi.mock("next/link", () => ({
   default: ({ children, href, ...rest }: { children: ReactNode; href: string }) =>
@@ -18,6 +28,7 @@ vi.mock("next/link", () => ({
 import { LiveOrderBubble } from "./LiveOrderBubble";
 
 const LIVE = "7f6392a6-1111-4111-8111-111111111111";
+const PHOTO = "https://craves.in/media/public/dishes/veg-thali.jpg";
 function order(id: string, status: string) {
   const at = new Date(Date.now() - 20 * 60_000).toISOString();
   return {
@@ -49,9 +60,16 @@ async function settle() {
 
 beforeEach(() => {
   fetchOrders.mockReset();
+  session.load.mockReset();
+  session.load.mockImplementation(async () => {
+    session.user = session.signedIn;
+    session.listeners.forEach((listener) => listener());
+    return session.user;
+  });
   vi.useFakeTimers();
   vi.stubGlobal("fetch", fetchOrders);
   session.user = { id: "customer-1" };
+  session.signedIn = null;
 });
 afterEach(() => {
   cleanup();
@@ -64,19 +82,32 @@ describe("live order bubble", () => {
     session.user = null;
     render(createElement(LiveOrderBubble, { pathname: "/home" }));
     await settle();
+    expect(session.load).toHaveBeenCalledWith({ failFastUnauthenticated: true });
     expect(fetchOrders).not.toHaveBeenCalled();
     expect(bubble()).toBeNull();
   });
 
+  it("loads the session itself on a page that doesn't", async () => {
+    session.user = null;
+    session.signedIn = { id: "customer-1" };
+    fetchOrders.mockResolvedValue(Response.json([order(LIVE, "PREPARING")]));
+    render(createElement(LiveOrderBubble, { pathname: "/subscriptions" }));
+    await settle();
+    expect(bubble()).not.toBeNull();
+  });
+
   it("grows the newest live order's card with its steps, items, amount paid, order and help links", async () => {
-    fetchOrders.mockResolvedValue(
-      Response.json([
-        order(LIVE, "READY_FOR_PICKUP"),
-        order("bbbbbbbb-1111-4111-8111-111111111111", "DELIVERED"),
-      ]),
+    fetchOrders.mockImplementation(async (url: string) =>
+      url === "/api/orders"
+        ? Response.json([
+            order(LIVE, "READY_FOR_PICKUP"),
+            order("bbbbbbbb-1111-4111-8111-111111111111", "DELIVERED"),
+          ])
+        : Response.json({ primaryImageUrl: PHOTO }),
     );
     render(createElement(LiveOrderBubble, { pathname: "/home" }));
     await settle();
+    expect(session.load).not.toHaveBeenCalled();
     expect(fetchOrders).toHaveBeenCalledWith(
       "/api/orders",
       expect.objectContaining({ cache: "no-store" }),
@@ -93,6 +124,11 @@ describe("live order bubble", () => {
     expect(card.textContent).toContain("Veg thali × 2");
     expect(card.textContent).toContain("₹240");
     expect(card.textContent).toContain("Paid ₹248.50");
+    await settle();
+    expect(fetchOrders).toHaveBeenCalledWith(
+      "/api/catalog/menu-items/66666666-6666-4666-8666-666666666666",
+    );
+    expect(card.querySelector("img")?.getAttribute("src")).toBe(PHOTO);
     expect(screen.getByRole("link", { name: "View order details" }).getAttribute("href")).toBe(
       `/orders/${LIVE}`,
     );

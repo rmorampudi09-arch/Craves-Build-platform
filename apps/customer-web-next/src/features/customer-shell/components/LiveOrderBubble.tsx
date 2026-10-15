@@ -9,6 +9,7 @@ import { MdMoped } from "react-icons/md";
 
 import {
   getSession,
+  loadSession,
   recoverSessionSnapshotForNavigation,
   subscribeSession,
 } from "@/features/auth/api/cravesAuth";
@@ -60,9 +61,10 @@ function useLiveOrder(pathname: string): LiveOrder | null {
   const [result, setResult] = useState<{ userId: string; order: LiveOrder | null } | null>(null);
   const lastRead = useRef<{ userId: string; at: number } | null>(null);
 
-  // A page opened straight from a link may never load the session: start from this tab's last sign-in.
+  // A page opened straight from a link may never load the session: start from this tab's last sign-in, else ask once.
   useEffect(() => {
-    recoverSessionSnapshotForNavigation();
+    if (!recoverSessionSnapshotForNavigation())
+      void loadSession({ failFastUnauthenticated: true }).catch(() => null);
   }, []);
 
   const read = useCallback(async (owner: string, force: boolean) => {
@@ -104,6 +106,37 @@ function useLiveOrder(pathname: string): LiveOrder | null {
   return order;
 }
 
+/** The dish's first photo from the public catalog (the browser keeps it a minute); a blank tile without one. */
+function DishThumb({ menuItemId }: { menuItemId: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    fetch(`/api/catalog/menu-items/${encodeURIComponent(menuItemId)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((dish: { primaryImageUrl?: unknown } | null) => {
+        const url = dish?.primaryImageUrl;
+        if (current && typeof url === "string" && url.startsWith("https://")) setSrc(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [menuItemId]);
+  const tile = "h-[52px] w-[52px] shrink-0 rounded-lg border border-[#E5E7EB] bg-[#F1F3F5]";
+  return src ? (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() => setSrc(null)}
+      className={`${tile} object-cover`}
+    />
+  ) : (
+    <span aria-hidden="true" className={tile} />
+  );
+}
+
 /** A red moped bubble above the tab bar while an order is cooking or on its way; tapping it grows the order's card out of it (the app's live order bubble). */
 export function LiveOrderBubble({ pathname }: { pathname: string }) {
   const order = useLiveOrder(pathname);
@@ -124,8 +157,8 @@ export function LiveOrderBubble({ pathname }: { pathname: string }) {
 
   return (
     <RadixDialog.Root open={open} onOpenChange={(next) => setOpenKey(next ? key : null)}>
-      {/* Hidden with the tab bar on pages that own a bottom action bar. */}
-      <div className={`fixed z-40 ${ANCHOR} [body:has([data-craves-action-bar])_&]:hidden`}>
+      {/* Hidden on pages that own a bottom action bar; the ones beside the tab bar (dish, its skeleton) show below lg only. */}
+      <div className={`fixed z-40 ${ANCHOR} max-lg:[body:has([data-craves-action-bar])_&]:hidden`}>
         <p
           className="sr-only"
           aria-live="polite"
@@ -215,14 +248,14 @@ export function LiveOrderBubble({ pathname }: { pathname: string }) {
                   <div className="mx-5 mt-4 min-h-0 overflow-y-auto overscroll-contain rounded-2xl border border-[#E5E7EB] p-3">
                     <ul className="space-y-2">
                       {order.items.map((item) => (
-                        <li
-                          key={item.id}
-                          className="flex items-baseline justify-between gap-3 text-sm"
-                        >
-                          <span className="min-w-0 font-semibold">
-                            {item.itemName} × {item.quantity}
+                        <li key={item.id} className="flex items-center gap-3 text-sm">
+                          <DishThumb menuItemId={item.menuItemId} />
+                          <span className="min-w-0 flex-1">
+                            <span className="line-clamp-2 font-semibold">
+                              {item.itemName} × {item.quantity}
+                            </span>
+                            <span className="block text-[#6B6B6B]">{item.price}</span>
                           </span>
-                          <span className="shrink-0 text-[#6B6B6B]">{item.price}</span>
                         </li>
                       ))}
                     </ul>

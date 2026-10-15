@@ -112,33 +112,55 @@ test("checks the conditional reorder body", () => {
     assert.equal(parseReorderCartRequest(broken), null);
 });
 
-test("reads the cart's id and whose dishes it holds", () => {
+test("reads the cart as the conditional reorder expects it to still be", () => {
   const cartId = "0bde0000-0000-4000-8000-000000000401";
-  assert.deepEqual(parseCartForReorder({ id: cartId, items: [] }), { cartId, kitchenName: null });
-  assert.deepEqual(parseCartForReorder({ id: cartId, items: [{ kitchenName: " Ammi's " }] }), {
-    cartId,
-    kitchenName: "Ammi's",
-  });
-  assert.equal(parseCartForReorder({ id: "nope", items: [] }), null);
+  const line = {
+    id: "0bde0000-0000-4000-8000-000000000302",
+    quantity: 2,
+    updatedAt: "2026-10-15T08:00:00.123456Z",
+  };
+  assert.deepEqual(parseCartForReorder({ id: cartId, items: [] }), { cartId, items: [] });
+  assert.deepEqual(
+    parseCartForReorder({ id: cartId, items: [{ ...line, itemName: "Veg thali" }] }),
+    { cartId, items: [line] },
+  );
+  for (const broken of [
+    { id: "nope", items: [] },
+    { id: cartId },
+    { id: cartId, items: [{ ...line, updatedAt: undefined }] },
+    { id: cartId, items: [line, line] },
+  ])
+    assert.equal(parseCartForReorder(broken), null);
 });
 
-test("ranks the most-ordered kitchens first, then the newest order", () => {
-  const at = (orderId: string, completedOrdersFromKitchen: number, lastOrderedAt: string) =>
+test("ranks favourite kitchens first, then the most-ordered kitchens, then the newest order", () => {
+  const at = (
+    orderId: string,
+    completedOrdersFromKitchen: number,
+    lastOrderedAt: string,
+    kitchenId = "kitchen",
+  ) =>
     ({
       ...candidate,
       orderId,
+      kitchenId,
       completedOrdersFromKitchen,
       lastOrderedAt,
     }) as unknown as RepeatOrderCandidate;
-  const ranked = rankRepeatOrderCandidates([
+  const baskets = [
     at("c", 1, "2026-10-14T00:00:00Z"),
     at("b", 4, "2026-10-01T00:00:00Z"),
     at("a", 4, "2026-10-09T00:00:00Z"),
     at("d", 4, "2026-10-09T00:00:00Z"),
-  ]);
+    at("f", 1, "2026-09-01T00:00:00Z", "favourite"),
+  ];
   assert.deepEqual(
-    ranked.map((item) => item.orderId),
-    ["a", "d", "b", "c"],
+    rankRepeatOrderCandidates(baskets, new Set()).map((item) => item.orderId),
+    ["a", "d", "b", "c", "f"],
+  );
+  assert.deepEqual(
+    rankRepeatOrderCandidates(baskets, new Set(["favourite"])).map((item) => item.orderId),
+    ["f", "a", "d", "b", "c"],
   );
 });
 

@@ -4,6 +4,7 @@ import type {
 } from "../../../shared/lib/support-cases-contract.ts";
 import { shortOrderNumber } from "../../../shared/lib/order-number.ts";
 import { formatRelativeTime } from "../../../shared/lib/relative-time.ts";
+import { CRAVES_SUPPORT_PHONE } from "../../../shared/lib/support-phone.ts";
 
 /** Help & support's common topics (same as the app); each opens a ticket with the topic as its subject. */
 export const SUPPORT_TOPICS = [
@@ -70,15 +71,13 @@ export function ticketSubject(topic: string | null, orderId: string | null): str
   );
 }
 
-export const SUPPORT_PHONE_FALLBACK = "+918367366787";
-
 /** The support number from the chef onboarding read, or today's number when the read failed. */
 export function supportPhoneFrom(body: unknown): string {
   const phone =
     body && typeof body === "object" ? (body as { supportPhone?: unknown }).supportPhone : null;
   return typeof phone === "string" && /^\+?[0-9]{10,15}$/.test(phone.trim())
     ? phone.trim()
-    : SUPPORT_PHONE_FALLBACK;
+    : CRAVES_SUPPORT_PHONE;
 }
 
 /** `+91 83673 66787` for an Indian mobile number; anything else as given. */

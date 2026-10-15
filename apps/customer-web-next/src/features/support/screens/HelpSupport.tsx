@@ -4,10 +4,9 @@ import type { ComponentType } from "react";
 
 import {
   CRAVES_SUPPORT_EMAIL,
-  CRAVES_SUPPORT_PHONE,
-  CRAVES_SUPPORT_PHONE_LABEL,
   SUPPORT_COMMON_QUESTIONS,
 } from "@/features/support/lib/support-contact";
+import { CRAVES_SUPPORT_PHONE, CRAVES_SUPPORT_PHONE_LABEL } from "@/shared/lib/support-phone";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 const TILE =

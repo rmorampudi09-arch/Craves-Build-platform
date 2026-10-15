@@ -101,23 +101,19 @@ function ChefReferralJoin({
   const [checkFailed, setCheckFailed] = useState(false);
   const [terms, setTerms] = useState(false);
   const sending = useRef(false);
-  const latestCheck = useRef(onCheck);
-  useEffect(() => {
-    latestCheck.current = onCheck;
-  });
 
   // The invite link appears a few seconds after joining: ask every 3 s (not while the tab is hidden) for up to a minute.
   useEffect(() => {
     if (step !== "settingUp") return;
     const poll = setInterval(() => {
-      if (document.visibilityState === "visible") void latestCheck.current();
+      if (document.visibilityState === "visible") void onCheck();
     }, CHECK_EVERY_MS);
     const giveUp = setTimeout(() => setStep("slow"), GIVE_UP_AFTER_MS);
     return () => {
       clearInterval(poll);
       clearTimeout(giveUp);
     };
-  }, [step]);
+  }, [step, onCheck]);
 
   async function join() {
     if (!accepted || sending.current) return;

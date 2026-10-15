@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isCanonicalUuid,
+  isChefOrderStatus,
   parseChefOrder,
+  parseChefOrderHistoryPage,
   parseChefOrderResponse,
   parseChefOrders,
   parseChefOrdersResponse,
@@ -116,4 +118,24 @@ test("validates complete chef order arrays", () => {
   assert.equal(parseChefOrders([order])?.length, 1);
   assert.equal(parseChefOrders([order, { ...order, id: "bad" }]), null);
   assert.equal(parseChefOrdersResponse({ unexpected: [order] }), null);
+});
+
+test("reads a chef order history page and rejects a broken one", () => {
+  const second = { ...order, id: "11111111-2222-4333-8444-555555555556" };
+  assert.deepEqual(parseChefOrderHistoryPage({ orders: [order, second], nextCursor: "c1", hasMore: true })?.orders.map((o) => o.id), [order.id, second.id]);
+  assert.deepEqual(parseChefOrderHistoryPage({ orders: [], nextCursor: null, hasMore: false }), { orders: [], nextCursor: null, hasMore: false });
+  assert.equal(parseChefOrderHistoryPage({ orders: [order], hasMore: false })?.nextCursor, null);
+  for (const page of [
+    { orders: [order], nextCursor: null, hasMore: true },
+    { orders: [order], nextCursor: "", hasMore: false },
+    { orders: [order], nextCursor: "c".repeat(513), hasMore: true },
+    { orders: [order, order], nextCursor: null, hasMore: false },
+    { orders: [{ ...order, status: "PROVIDER_INTERNAL" }], nextCursor: null, hasMore: false },
+    { orders: [order], nextCursor: null, hasMore: "false" },
+    { orders: [order], nextCursor: null, hasMore: false, total: 1 },
+    { content: [order], nextCursor: null, hasMore: false },
+    [order],
+  ]) assert.equal(parseChefOrderHistoryPage(page), null);
+  assert.equal(isChefOrderStatus("DELIVERED"), true);
+  assert.equal(isChefOrderStatus("delivered"), false);
 });

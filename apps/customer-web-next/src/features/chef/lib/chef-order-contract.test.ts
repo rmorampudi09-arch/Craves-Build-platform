@@ -54,9 +54,17 @@ test("keeps fulfillment address but removes identity/internal fields", () => {
   const parsed = parseChefOrder(order);
   assert.equal(parsed?.deliveryAddress?.contactPhoneNumber, "+919999999999");
   assert.equal("customerIdentityId" in (parsed ?? {}), false);
-  assert.equal("checkoutId" in (parsed ?? {}), false);
   assert.equal("kitchenId" in (parsed ?? {}), false);
   assert.equal("pickupAddress" in (parsed ?? {}), false);
+});
+
+test("keeps the checkout (none for a meal-plan order) and the response deadline", () => {
+  assert.equal(parseChefOrder(order)?.checkoutId, order.checkoutId);
+  assert.equal(parseChefOrder({ ...order, checkoutId: null })?.checkoutId, null);
+  assert.equal(parseChefOrder({ ...order, checkoutId: "bad" })?.checkoutId, null);
+  assert.equal(parseChefOrder(order)?.chefAcceptanceExpiresAt, null);
+  assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "2026-07-30T00:10:00Z" })?.chefAcceptanceExpiresAt, "2026-07-30T00:10:00Z");
+  assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "soon" })?.chefAcceptanceExpiresAt, null);
 });
 
 test("accepts canonical PostgreSQL UUIDs regardless of RFC version bits", () => {

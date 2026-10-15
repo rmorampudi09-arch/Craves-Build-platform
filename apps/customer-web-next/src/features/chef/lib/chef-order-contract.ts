@@ -52,6 +52,10 @@ export type ChefOrder = {
   items: ChefOrderItem[];
   createdAt: string;
   updatedAt: string;
+  /** The checkout the customer paid in; null for a meal-plan order, which has none. */
+  checkoutId?: string | null;
+  /** The server's deadline to accept or decline a new order. */
+  chefAcceptanceExpiresAt?: string | null;
 };
 
 const CANONICAL_UUID =
@@ -225,6 +229,8 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     items: items as ChefOrderItem[],
     createdAt,
     updatedAt,
+    checkoutId: isCanonicalUuid(raw.checkoutId) ? raw.checkoutId : null,
+    chefAcceptanceExpiresAt: instant(raw.chefAcceptanceExpiresAt),
   };
 }
 
@@ -240,8 +246,8 @@ export function parseChefOrders(value: unknown): ChefOrder[] | null {
  * APIM and older deployed BFF revisions have returned either a direct JSON
  * array, Spring Page `{ content: [...] }`, or named `{ orders: [...] }` /
  * `{ data: [...] }` envelopes. All variants still pass the same strict order
- * allow-list; unknown fields such as identity, checkout and pickup snapshots
- * are discarded.
+ * allow-list; unknown fields such as identity and pickup snapshots are
+ * discarded.
  */
 export function parseChefOrdersResponse(value: unknown): ChefOrder[] | null {
   if (Array.isArray(value)) return parseChefOrders(value);

@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Clock3,
   LoaderCircle,
   PackageCheck,
   XCircle,
@@ -18,6 +19,7 @@ import {
   parseChefOrderResponse,
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
+import { declineConsequence, respondCountdown, type Countdown } from "@/features/chef/lib/chef-order-presentation";
 
 type DecisionStep = "choose" | "accept" | "decline";
 
@@ -62,6 +64,45 @@ function Frame({
   );
 }
 
+const TONE_COLOR = { danger: "var(--chef-error)", warning: "var(--chef-warning)", success: "var(--chef-success)" } as const;
+
+/** A clock for the countdowns: ticks each second while the tab is visible, and only while something counts down. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    let timer = 0;
+    const sync = () => {
+      window.clearInterval(timer);
+      setNow(Date.now());
+      if (!document.hidden) timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [active]);
+  return now;
+}
+
+/** "Respond in 4:32" and the like, with a bar. A timer role, so screen readers don't read every tick. */
+function CountdownLine({ countdown }: { countdown: Countdown }) {
+  const color = TONE_COLOR[countdown.tone];
+  return (
+    <div className="mb-3 flex items-center gap-2 text-sm font-bold" style={{ color }}>
+      {countdown.tone === "danger" ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Clock3 className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      <span role="timer" className="shrink-0">{countdown.label}</span>
+      {countdown.fill !== null ? (
+        <span className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-full bg-[#F1F3F5]" aria-hidden="true">
+          <span className="block h-full rounded-full" style={{ width: `${Math.round(countdown.fill * 100)}%`, background: color }} />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function ChefOrderActions({
   order,
   onUpdated,
@@ -91,6 +132,9 @@ export function ChefOrderActions({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const stepRef = useRef<HTMLDivElement>(null);
   const stepChanged = useRef(false);
+  const expiresAt = order.status === "CHEF_ACCEPTANCE_PENDING" ? order.chefAcceptanceExpiresAt : null;
+  const now = useNow(Boolean(expiresAt));
+  const clock = expiresAt ? <CountdownLine countdown={respondCountdown({ createdAt: order.createdAt, chefAcceptanceExpiresAt: expiresAt }, now)} /> : null;
 
   // A new step replaces the buttons that were pressed: move focus to the new step's heading.
   useEffect(() => {
@@ -168,6 +212,7 @@ export function ChefOrderActions({
   if (order.status === "CHEF_ACCEPTANCE_PENDING" && decisionStep === "choose") {
     content = (
       <Frame inline={inline} title="Can you cook this now?" note="If you accept, you’ll choose how long it takes.">
+        {clock}
         <div className="grid gap-2 sm:grid-cols-2">
           <button type="button" {...busyProps("")} onClick={() => goTo("accept")} className="chef-btn is-go is-tall">
             <CheckCircle2 className="h-6 w-6" aria-hidden="true" /> Accept order
@@ -184,6 +229,7 @@ export function ChefOrderActions({
     content = (
       <Frame inline={inline} title="How long will it take?" note="Time to cook and pack the whole order." action={backButton}>
         <div className="chef-step">
+          {clock}
           <fieldset>
             <legend className="sr-only">Cooking time</legend>
             <div className="grid grid-cols-4 gap-2">
@@ -246,8 +292,9 @@ export function ChefOrderActions({
   } else if (order.status === "CHEF_ACCEPTANCE_PENDING") {
     const reason = selectedReason === "Something else" ? customReason.trim() : selectedReason;
     content = (
-      <Frame inline={inline} title="Why can’t you take it?" note="Pick the closest reason. The customer will see that your kitchen couldn’t take this order." action={backButton}>
+      <Frame inline={inline} title="Why can’t you take it?" note={declineConsequence(order)} action={backButton}>
         <div className="chef-step">
+          {clock}
           <fieldset className="grid gap-2">
             <legend className="sr-only">Reason</legend>
             {DECLINE_REASONS.map((item) => {

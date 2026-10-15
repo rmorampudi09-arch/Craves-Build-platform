@@ -525,10 +525,10 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
 
           <div className="grid gap-3 md:grid-cols-2">
             <ProfileLinkCard
-              to="/contact"
+              to="/help"
               icon={FaHeadset}
-              title="Contact us"
-              subtitle="Help and support"
+              title="Help & support"
+              subtitle="Chat, call or email"
             />
             <ProfileLinkCard
               to="/support"

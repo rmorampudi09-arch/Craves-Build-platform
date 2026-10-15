@@ -26,6 +26,7 @@ import {
 } from "@/features/chef/components/chef-ui";
 import { ChefMenuSkeleton } from "@/features/chef/components/chef-loading";
 import { ChefCategoryPicker } from "@/features/chef/components/chef-category-picker";
+import { ChefMenuViews } from "@/features/chef/components/chef-menu-views";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { Dialog, secondaryActionClass, useOverlayHistory } from "@/shared/ui/overlays/overlay";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
@@ -679,6 +680,7 @@ export function ChefMenuManager() {
         }
       />
       <div className="chef-stack">
+        <ChefMenuViews current="dishes" counts={{ dishes: loading || loadError ? undefined : items.length }} />
         {loadError ? (
           <ChefSection>
             <ChefEmpty

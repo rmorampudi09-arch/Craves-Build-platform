@@ -1,54 +1,63 @@
-import { chefUpstream } from "@/features/chef/lib/chef-errors";
-import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
-import { parseChefMealSchedule, parseChefMealScheduleInput } from "@/features/chef/lib/chef-subscription-plan-contract";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { isSameOrigin } from "@/shared/lib/request-security";
-import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
+import { authenticatedApiFetch, isUuid } from "@/shared/lib/server-api";
+import { planFailure, planReply, planUnreachable } from "@/features/chef/lib/chef-plan-bff";
+import {
+  parseChefMealSchedule,
+  parseChefMealScheduleInput,
+} from "@/features/chef/lib/chef-subscription-plan-contract";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ planId: string }> };
 
-function failure(status: number, raw: unknown = null) {
-  return NextResponse.json({ code: status === 401 ? "SESSION_EXPIRED" : status === 403 ? "CHEF_ACCESS_REQUIRED" : status === 404 ? "MEAL_SCHEDULE_NOT_FOUND" : "CHEF_MEAL_SCHEDULE_REQUEST_FAILED", ...chefUpstream(raw) }, { status });
-}
-
+// A 404 PLAN_SCHEDULE_NOT_FOUND means the plan has no meals yet.
 export async function GET(request: NextRequest, context: Context) {
   const { planId } = await context.params;
-  if (!isUuid(planId)) return NextResponse.json({ code: "INVALID_PLAN_ID" }, { status: 400 });
+  if (!isUuid(planId)) return planReply(400, { code: "INVALID_PLAN_ID" });
   try {
-    const upstream = await authenticatedApiFetch(request, `/chef/subscription-plans/${planId}/schedule`);
+    const upstream = await authenticatedApiFetch(
+      request,
+      `/chef/subscription-plans/${planId}/schedule`,
+    );
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return failure(upstream.status, await upstream.json().catch(() => null));
+    if (!upstream.ok)
+      return planFailure(upstream.status, body, "CHEF_MEAL_SCHEDULE_REQUEST_FAILED");
     const schedule = parseChefMealSchedule(body);
-    return schedule ? NextResponse.json(schedule, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_CHEF_MEAL_SCHEDULE_RESPONSE" }, { status: 502 });
+    return schedule
+      ? planReply(200, schedule)
+      : planReply(502, { code: "INVALID_CHEF_MEAL_SCHEDULE_RESPONSE" });
   } catch (error) {
-    if (error instanceof SessionRequiredError) return failure(401);
-    return NextResponse.json({ code: "CHEF_MEAL_SCHEDULE_UNAVAILABLE" }, { status: 503 });
+    return planUnreachable(error, "CHEF_MEAL_SCHEDULE_UNAVAILABLE");
   }
 }
 
 export async function PUT(request: NextRequest, context: Context) {
   const bounded = await boundBffRequest(request);
   if (bounded instanceof NextResponse) return bounded;
-  request = bounded;
-
-  if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 });
+  if (!isSameOrigin(bounded)) return planReply(403, { code: "ORIGIN_REJECTED" });
   const { planId } = await context.params;
-  if (!isUuid(planId)) return NextResponse.json({ code: "INVALID_PLAN_ID" }, { status: 400 });
-  const input = parseChefMealScheduleInput(await request.json().catch(() => null));
-  if (!input) return NextResponse.json({ code: "INVALID_CHEF_MEAL_SCHEDULE_INPUT" }, { status: 400 });
+  if (!isUuid(planId)) return planReply(400, { code: "INVALID_PLAN_ID" });
+  const input = parseChefMealScheduleInput(await bounded.json().catch(() => null));
+  if (!input) return planReply(400, { code: "INVALID_CHEF_MEAL_SCHEDULE_INPUT" });
   try {
-    const upstream = await authenticatedApiFetch(request, `/chef/subscription-plans/${planId}/schedule`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
+    const upstream = await authenticatedApiFetch(
+      bounded,
+      `/chef/subscription-plans/${planId}/schedule`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return failure(upstream.status, await upstream.json().catch(() => null));
+    if (!upstream.ok)
+      return planFailure(upstream.status, body, "CHEF_MEAL_SCHEDULE_REQUEST_FAILED");
     const schedule = parseChefMealSchedule(body);
-    return schedule ? NextResponse.json(schedule, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_CHEF_MEAL_SCHEDULE_RESPONSE" }, { status: 502 });
+    return schedule
+      ? planReply(200, schedule)
+      : planReply(502, { code: "INVALID_CHEF_MEAL_SCHEDULE_RESPONSE" });
   } catch (error) {
-    if (error instanceof SessionRequiredError) return failure(401);
-    return NextResponse.json({ code: "CHEF_MEAL_SCHEDULE_UNAVAILABLE" }, { status: 503 });
+    return planUnreachable(error, "CHEF_MEAL_SCHEDULE_UNAVAILABLE");
   }
 }

@@ -57,7 +57,19 @@ jobs:
             createdb "$database"
           done
       - name: Verify bounded backend change scope
-        run: python3 scripts/referrals/verify-backend-scope.py
+        # The scope gate freezes the reviewed referral integration, so it applies only to PRs that change referral-owned
+        # code; the Postgres tests below run for every PR.
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          owned='^(services/referral-service/|scripts/referrals/|services/(auth|order|integration)-service/src/(main|test)/java/in/craves/(auth|order|integration)/referrals/|services/(auth|order|integration)-service/src/main/resources/db/migration/V[0-9]+__(referral|chef_referral|manual_referral)_[a-z_]+\.sql$)'
+          changed="$(git diff --name-only --no-renames refs/remotes/origin/main...HEAD)"
+          if grep -Eq "$owned" <<< "$changed"; then
+            python3 scripts/referrals/verify-backend-scope.py
+          else
+            echo 'No referral-owned path changed; the frozen referral scope gate does not apply.'
+          fi
       - name: Backend verification from Bash
         run: bash scripts/referrals/test-backend.sh
       - uses: actions/upload-artifact@v4

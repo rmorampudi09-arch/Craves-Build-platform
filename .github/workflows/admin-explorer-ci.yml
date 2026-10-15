@@ -157,7 +157,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - run: python3 scripts/admin-explorer/verify-source.py
-      - run: python3 scripts/admin-explorer/verify-backend-release.py
+      # Strict deployed-source parity (verify-backend-release.py) is release evidence, not a code check: it runs at
+      # release time in scripts/admin-explorer/verify-runtime-readiness.sh.
       - run: python3 scripts/admin-explorer/test-backend-release.py
       - run: python3 scripts/admin-explorer/test-backend-pinning.py
       - run: bash -n scripts/apim/configure-admin-explorer-apim.sh

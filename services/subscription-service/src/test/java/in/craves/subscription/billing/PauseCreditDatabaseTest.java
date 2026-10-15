@@ -152,4 +152,46 @@ class PauseCreditDatabaseTest {
         assertEquals(java.sql.Date.valueOf(d("10-21")),credit.get(0).get("cycle_end"));
         assertEquals(d("10-21"),nextBilling());
     }
+
+    @Test void extendingAPauseChoiceAddsTheDaysAtTheEnd() {
+        UUID waiting=UUID.randomUUID();
+        db.update("INSERT INTO subscription_schema.subscription_occurrence(id,subscription_id,plan_id,customer_identity_id,chef_identity_id,delivery_address_id,service_date,service_at,schedule_version,status,meal_slot_code) VALUES (?,?,?,?,?,?,?,CAST(? AS timestamptz),1,'BILLING_PENDING','LUNCH')",waiting,subscription,plan,customer,chef,UUID.randomUUID(),d("10-20"),"2026-10-20T06:30:00Z");
+
+        // Billing restarts on 10-19 (next_billing_date and the open bill's end), so the 3 days run 10-19 to 10-22.
+        assertEquals(d("10-22"),tx.execute(s->repository.applyEndCredit(subscription,"PAUSE_CREDIT",start->3,"Paused days added at the end: 3 days")));
+
+        List<Map<String,Object>> credit=creditRows();
+        assertEquals(1,credit.size());
+        assertEquals(0,BigDecimal.ZERO.compareTo((BigDecimal)credit.get(0).get("amount")));
+        assertEquals("PAID",credit.get(0).get("status"));
+        assertEquals(java.sql.Date.valueOf(d("10-19")),credit.get(0).get("cycle_start"));
+        assertEquals(java.sql.Date.valueOf(d("10-22")),credit.get(0).get("cycle_end"));
+        assertEquals(d("10-22"),nextBilling());
+        assertEquals("READY_FOR_ORDER",db.queryForObject("SELECT status FROM subscription_schema.subscription_occurrence WHERE id=?",String.class,waiting));
+        assertEquals("PAUSE_CREDIT_EXTENDED",db.queryForObject("SELECT source FROM subscription_schema.subscription_occurrence_history WHERE occurrence_id=?",String.class,waiting));
+    }
+
+    @Test void deferringLeavesPausedDaysOutAndReturnsThem() {
+        assertEquals(new SubscriptionBillingRepository.DeferredPause(d("10-07"),5),
+            tx.execute(s->repository.applyPauseCreditDeferringPausedDays(subscription,d("10-25"))));
+
+        assertEquals("PAUSED_CYCLE_VOIDED",invoiceRow(open).get("failure_code"));
+        assertEquals(List.of(),creditRows());
+        assertEquals(d("10-25"),nextBilling());
+    }
+
+    @Test void deferringWithNoPaidPausedDaysLaysOutCarriedCreditsOnly() {
+        UUID earlier=UUID.randomUUID();credit(earlier,d("10-19"),d("10-21"));
+        db.update("UPDATE subscription_schema.customer_subscription SET next_billing_date=? WHERE id=?",d("10-21"),subscription);
+        // Paused on 10-13, inside the unpaid bill: no paid day was stopped.
+        pausedAgainAt("2026-10-13T04:00:00Z");
+
+        assertEquals(new SubscriptionBillingRepository.DeferredPause(d("10-13"),0),
+            tx.execute(s->repository.applyPauseCreditDeferringPausedDays(subscription,d("10-16"))));
+
+        assertEquals("PAUSED_CYCLE_VOIDED",invoiceRow(open).get("failure_code"));
+        assertEquals(List.of(Map.of("id",earlier,"cycle_start",java.sql.Date.valueOf(d("10-16")),"cycle_end",java.sql.Date.valueOf(d("10-18")))),
+            db.queryForList("SELECT id,cycle_start,cycle_end FROM subscription_schema.subscription_invoice WHERE provider_reference='PAUSE_CREDIT'"));
+        assertEquals(d("10-18"),nextBilling());
+    }
 }

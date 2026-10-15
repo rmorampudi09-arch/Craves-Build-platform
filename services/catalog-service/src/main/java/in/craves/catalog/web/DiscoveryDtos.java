@@ -31,8 +31,12 @@ public final class DiscoveryDtos {
         BigDecimal longitude,
         long distanceMeters,
         long activeMenuItemCount,
-        String chefPhotoUrl
+        String chefPhotoUrl,
+        List<String> kitchenPhotoUrls
     ) {
+        public NearbyKitchenSummaryResponse {
+        kitchenPhotoUrls = kitchenPhotoUrls == null ? List.of() : List.copyOf(kitchenPhotoUrls);
+        }
     }
 
     public record NearbyKitchenDiscoveryResponse(

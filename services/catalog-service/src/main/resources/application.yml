@@ -60,6 +60,11 @@ craves:
       ttl-seconds: ${CRAVES_DISCOVERY_CACHE_TTL_SECONDS:120}
       failure-backoff-seconds: ${CRAVES_DISCOVERY_CACHE_FAILURE_BACKOFF_SECONDS:30}
       key-prefix: ${CRAVES_DISCOVERY_CACHE_KEY_PREFIX:craves:catalog:discovery}
+  user-chef:
+    # Kitchen photo import pulls approved registration photos from user-chef-service; blank = import off.
+    internal-base-url: ${CRAVES_USER_CHEF_INTERNAL_BASE_URL:}
+    # Defaults to the shared internal secret that user-chef-service also reads as CRAVES_INTERNAL_SERVICE_SECRET.
+    internal-secret: ${CRAVES_USER_CHEF_INTERNAL_SECRET:${CRAVES_INTERNAL_SERVICE_SECRET:}}
   pickup-provisioning:
     enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}
     integration-base-url: ${CRAVES_INTEGRATION_SERVICE_BASE_URL:}

@@ -1,10 +1,12 @@
 package in.craves.subscription.service;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
-import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.PauseAllowance.PauseStatus;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleService;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.plan.PlanImageRepository.PlanImage;
 import in.craves.subscription.repository.SubscriptionRepository;
@@ -39,7 +41,7 @@ public class SubscriptionService {
     private final CapacityService capacityService;
     private final PlanImageRepository planImages;
     private final SubscriptionBillingProperties billing;
-    private final SubscriptionBillingRepository billingRepository;
+    private final DayCreditService dayCreditService;
     private final SubscriptionLifecycleRepository lifecycleRepository;
 
     public SubscriptionService(
@@ -47,14 +49,14 @@ public class SubscriptionService {
         CapacityService capacityService,
         PlanImageRepository planImages,
         SubscriptionBillingProperties billing,
-        SubscriptionBillingRepository billingRepository,
+        DayCreditService dayCreditService,
         SubscriptionLifecycleRepository lifecycleRepository
     ) {
         this.repository = repository;
         this.capacityService = capacityService;
         this.planImages = planImages;
         this.billing = billing;
-        this.billingRepository = billingRepository;
+        this.dayCreditService = dayCreditService;
         this.lifecycleRepository = lifecycleRepository;
     }
 
@@ -202,9 +204,13 @@ public class SubscriptionService {
                 LocalDate resumeDate = subscription.nextServiceDate() == null
                     ? LocalDate.now(BUSINESS_ZONE)
                     : subscription.nextServiceDate().isBefore(LocalDate.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : subscription.nextServiceDate();
-                capacityService.reacquireForResume(subscription, resumeDate);
+                // A customer pause keeps the chef's spot; only an admin pause (or one from before that rule) released it.
+                if (!capacityService.hasCommittedCapacity(subscription.id())) {
+                    capacityService.reacquireForResume(subscription, resumeDate);
+                }
+                lifecycleRepository.closePause(subscription.id(), resumeDate);
                 // Before the status update so the returned subscription already shows the moved billing date.
-                billingRepository.applyPauseCredit(subscription.id(), resumeDate);
+                dayCreditService.creditPausedDays(subscription.id(), resumeDate);
             } else {
                 capacityService.commitForActivation(subscription);
             }
@@ -212,6 +218,10 @@ public class SubscriptionService {
             capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator paused subscription: " + reason.trim());
         } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
             capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator moved subscription to " + normalized + ": " + reason.trim());
+        }
+        if ("PAUSED".equals(subscription.status()) && !"ACTIVE".equals(normalized)) {
+            // Ends the customer's pause so a later admin pause never inherits its restart date.
+            lifecycleRepository.closePause(subscription.id(), LocalDate.now(BUSINESS_ZONE));
         }
         SubscriptionResponse updated = repository.updateSubscriptionStatus(
             subscription.id(), subscription.status(), normalized, reason.trim(), user.identityId()
@@ -267,13 +277,16 @@ public class SubscriptionService {
     }
 
     private CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        PauseStatus pause = SubscriptionLifecycleService.pauseStatus(lifecycleRepository, subscription, today);
         return new CustomerSubscriptionResponse(
             subscription.id(), subscription.planId(), subscription.status(), subscription.startDate(),
             subscription.endDate(), subscription.nextServiceDate(), subscription.deliveryAddressId(),
             subscription.notes(), subscription.createdAt(), subscription.updatedAt(),
             subscription.planName(), subscription.billingPeriod(), subscription.amount(), subscription.currency(),
-            nextChargeDate(subscription.nextBillingDate(), billing, LocalDate.now(BUSINESS_ZONE)),
-            subscription.planImageUrl()
+            nextChargeDate(subscription.nextBillingDate(), billing, today),
+            subscription.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate(),
+            dayCreditService.forCustomer(subscription.id())
         );
     }
 

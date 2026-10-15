@@ -619,7 +619,7 @@ export function ChefKitchenDetails({ flow }: Props) {
       <Card
         icon={<Camera size={20} aria-hidden="true" />}
         title="Kitchen photos"
-        subtitle="Two clear photos of where you cook."
+        subtitle="Two clear photos of where you cook. Customers see them on your kitchen page."
         done={photosDone}
       >
         {missing.length && !photosDone ? (

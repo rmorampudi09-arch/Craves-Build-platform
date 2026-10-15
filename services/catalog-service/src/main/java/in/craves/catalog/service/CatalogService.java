@@ -34,6 +34,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -142,7 +143,10 @@ public class CatalogService {
         return getMyKitchen(principal);
     }
 
-    /** Stores the new chef or kitchen photo URL; the replaced blob is removed only after commit. */
+    /**
+     * Fills the first empty kitchen photo slot. Chefs never replace or remove a kitchen photo; support clears a slot
+     * ({@link #clearKitchenPhotoSlot}) and the chef then adds a new one.
+     */
     @Transactional
     public KitchenProfileResponse uploadKitchenPhoto(CravesPrincipal principal, KitchenPhotoKind kind, MultipartFile file) {
         requireChef(principal);
@@ -150,8 +154,34 @@ public class CatalogService {
             throw ApiException.badRequest("CHEF_PHOTO_UPLOAD_DISABLED", "Chefs choose a Craves picture instead of uploading a photo");
         }
         UUID kitchenId = requireMyKitchenId(principal.identityId());
+        // Row lock: two uploads at once fill slot 1 then slot 2, never the same slot.
+        Map<String, Object> slots = jdbcTemplate.queryForMap(
+            "SELECT kitchen_photo_url, kitchen_photo_2_url FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", kitchenId
+        );
+        String column = slots.get("kitchen_photo_url") == null ? "kitchen_photo_url"
+            : slots.get("kitchen_photo_2_url") == null ? "kitchen_photo_2_url" : null;
+        if (column == null) throw kitchenPhotosLocked();
         StoredMedia stored = mediaStorageService.uploadKitchenImage(kitchenId, kind, file);
-        return setKitchenPhoto(principal, kitchenId, kind, stored.publicUrl());
+        jdbcTemplate.update("UPDATE catalog_schema.kitchen_profile SET " + column + " = ?, updated_at = now() WHERE id = ?", stored.publicUrl(), kitchenId);
+        return getMyKitchen(principal);
+    }
+
+    /** Support only: empties one kitchen photo slot so the chef can add a new photo; the blob is removed after commit. */
+    @Transactional
+    public void clearKitchenPhotoSlot(UUID kitchenId, int slot) {
+        String column = slot == 1 ? "kitchen_photo_url" : slot == 2 ? "kitchen_photo_2_url" : null;
+        if (column == null) throw ApiException.badRequest("KITCHEN_PHOTO_SLOT_INVALID", "Kitchen photo slot must be 1 or 2");
+        List<String> previous = jdbcTemplate.query(
+            "SELECT " + column + " FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", (rs, row) -> rs.getString(1), kitchenId
+        );
+        if (previous.isEmpty()) throw ApiException.notFound("KITCHEN_NOT_FOUND", "Kitchen was not found");
+        jdbcTemplate.update("UPDATE catalog_schema.kitchen_profile SET " + column + " = NULL, updated_at = now() WHERE id = ?", kitchenId);
+        String url = previous.getFirst();
+        if (url != null) afterCommit(() -> mediaStorageService.deleteByPublicUrl(url));
+    }
+
+    private static ApiException kitchenPhotosLocked() {
+        return ApiException.conflict("KITCHEN_PHOTOS_LOCKED", "Kitchen photos can't be changed. To change one, contact Craves support.");
     }
 
     /** Stores the shared hosted URL of one of the Craves faces as the chef photo. */
@@ -165,11 +195,13 @@ public class CatalogService {
     @Transactional
     public KitchenProfileResponse deleteKitchenPhoto(CravesPrincipal principal, KitchenPhotoKind kind) {
         requireChef(principal);
+        if (kind == KitchenPhotoKind.KITCHEN) throw kitchenPhotosLocked();
         return setKitchenPhoto(principal, requireMyKitchenId(principal.identityId()), kind, null);
     }
 
+    /** Chef picture only; kitchen photos go through the slot rules above. */
     private KitchenProfileResponse setKitchenPhoto(CravesPrincipal principal, UUID kitchenId, KitchenPhotoKind kind, String url) {
-        String column = kind == KitchenPhotoKind.CHEF ? "chef_photo_url" : "kitchen_photo_url";
+        String column = "chef_photo_url";
         String previous = jdbcTemplate.queryForObject(
             "SELECT " + column + " FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", String.class, kitchenId
         );
@@ -593,6 +625,7 @@ public class CatalogService {
             instant(rs, "updated_at"),
             rs.getString("chef_photo_url"),
             rs.getString("kitchen_photo_url"),
+            kitchenPhotoUrls(rs),
             fromJson(rs.getString("cuisines"), STRING_LIST),
             fromJson(rs.getString("service_areas"), STRING_LIST),
             fromJson(rs.getString("social_links"), SOCIAL_LINKS),
@@ -613,8 +646,16 @@ public class CatalogService {
             rs.getBigDecimal("longitude"),
             rs.getBigDecimal("distance_km"),
             rs.getLong("active_menu_item_count"),
-            rs.getString("chef_photo_url")
+            rs.getString("chef_photo_url"),
+            kitchenPhotoUrls(rs)
         );
+    }
+
+    /** Slot 1 then slot 2, skipping empty slots. */
+    public static List<String> kitchenPhotoUrls(ResultSet rs) throws SQLException {
+        return java.util.stream.Stream.of(rs.getString("kitchen_photo_url"), rs.getString("kitchen_photo_2_url"))
+            .filter(java.util.Objects::nonNull)
+            .toList();
     }
 
     private MenuItemResponse mapMenuItem(ResultSet rs, int rowNum) throws SQLException {

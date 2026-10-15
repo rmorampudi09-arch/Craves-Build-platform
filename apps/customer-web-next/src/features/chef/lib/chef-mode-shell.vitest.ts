@@ -170,7 +170,7 @@ describe("More hub", () => {
     // One read of the links: a name query per row is too slow for this long list.
     const links = screen.getAllByRole("link").map((link) => [link.querySelector(".chef-row-title")?.textContent, link.getAttribute("href")]);
     for (const [label, href] of [
-      ["Kitchen details", "/chef/kitchen"], ["Opening hours", "/chef/operations"], ["Daily limits", "/chef/capacity"],
+      ["Kitchen details", "/chef/kitchen"], ["Can customers find you?", "/chef/operations"], ["Opening hours", "/chef/operations#chef-hours"], ["Daily limits", "/chef/capacity"],
       ["Meal plans", "/chef/meal-plans"], ["Documents", "/chef/documents"], ["Earnings", "/chef/earnings"],
       ["Balance & payouts", "/chef/finance"], ["Payout history", "/chef/earnings/payouts"], ["Edit bank account details", "/chef/bank"],
       ["Statements", "/chef/statements"], ["Refer a chef", "/chef/referrals"], ["Preferences", "/chef/preferences"], ["Your application", "/chef/application/status"],

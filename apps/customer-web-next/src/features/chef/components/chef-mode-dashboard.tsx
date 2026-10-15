@@ -392,6 +392,7 @@ export function ChefModeDashboard() {
           <ChefKitchenSwitch
             kitchen={snapshot.kitchen}
             onChange={(kitchen) => setSnapshot((current) => ({ ...current, kitchen }))}
+            cookingCount={stats.cookingCount}
           />
         ) : null}
 

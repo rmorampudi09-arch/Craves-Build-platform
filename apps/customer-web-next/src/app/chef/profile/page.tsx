@@ -43,10 +43,11 @@ function groups(kitchen: Kitchen | null): { title: string; items: Item[] }[] {
   return [
     { title: "Kitchen", items: [
       { href: "/chef/kitchen", icon: Store, label: "Kitchen details", description: kitchen?.kitchenName || "Name, address and phone" },
-      { href: "/chef/operations", icon: Clock3, label: "Opening hours", description: "Hours, pausing, and whether customers can find you" },
+      { href: "/chef/operations", icon: ShieldCheck, label: "Can customers find you?", description: "See what’s done and what’s left" },
+      { href: "/chef/operations#chef-hours", icon: Clock3, label: "Opening hours", description: "Weekly hours, special days and pauses" },
       { href: "/chef/capacity", icon: Gauge, label: "Daily limits", description: "How many plates you cook each day" },
       { href: "/chef/meal-plans", icon: CalendarDays, label: "Meal plans", description: "Plans customers subscribe to" },
-      { href: "/chef/documents", icon: ShieldCheck, label: "Documents", description: "Verification and your documents" },
+      { href: "/chef/documents", icon: FileCheck2, label: "Documents", description: "Verification and your documents" },
     ] },
     { title: "Money", items: [
       { href: "/chef/earnings", icon: BadgeIndianRupee, label: "Earnings", description: "Money from your orders" },

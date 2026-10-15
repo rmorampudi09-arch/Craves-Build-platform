@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CalendarDays, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
@@ -75,7 +75,7 @@ function TimeSelect({
   closing,
   onChange,
 }: {
-  label: string;
+  label: ReactNode;
   value: string;
   closing: boolean;
   onChange(time: string): void;
@@ -113,13 +113,13 @@ function RangesEditor({
       {ranges.map((range, index) => (
         <div key={index} className="flex items-end gap-2">
           <TimeSelect
-            label={index ? "Opens (second time)" : "Opens"}
+            label={<>Opens{index ? <span className="sr-only"> (second time)</span> : null}</>}
             value={range.opensAt}
             closing={false}
             onChange={(time) => set(index, "opensAt", time)}
           />
           <TimeSelect
-            label={index ? "Closes (second time)" : "Closes"}
+            label={<>Closes{index ? <span className="sr-only"> (second time)</span> : null}</>}
             value={range.closesAt}
             closing
             onChange={(time) => set(index, "closesAt", time)}

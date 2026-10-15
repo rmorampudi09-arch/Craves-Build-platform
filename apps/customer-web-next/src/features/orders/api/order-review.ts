@@ -63,12 +63,12 @@ export async function saveOrderReview(
   return review;
 }
 
-/** Tags are optional: none when the list isn't live yet or didn't load. */
-export async function listReviewTags(): Promise<ReviewTag[]> {
+/** The active tags; null when the list isn't live yet or didn't load (tags are optional). */
+export async function listReviewTags(): Promise<ReviewTag[] | null> {
   try {
     const response = await sessionFetch("/api/reviews/tags", { cache: "no-store" });
-    return response.ok ? (parseReviewTags(await response.json()) ?? []) : [];
+    return response.ok ? parseReviewTags(await response.json()) : null;
   } catch {
-    return [];
+    return null;
   }
 }

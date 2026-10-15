@@ -30,8 +30,17 @@ const fake = vi.hoisted(() => {
       return this.element;
     }
   }
+  const toggle = () => {
+    const handler = { on: true, enable: () => void (handler.on = true), disable: () => void (handler.on = false) };
+    return handler;
+  };
   class FakeMap {
     options: Record<string, unknown>;
+    keyboard = toggle();
+    dragPan = toggle();
+    scrollZoom = toggle();
+    touchZoomRotate = toggle();
+    doubleClickZoom = toggle();
     handlers: Record<string, Handler[]> = {};
     route = { setData: vi.fn() };
     fitBounds = vi.fn();
@@ -194,6 +203,22 @@ describe("order map", () => {
     expect(map.easeTo).toHaveBeenLastCalledWith(
       expect.objectContaining({ center: [78.4867, 17.385] }),
     );
+  });
+
+  it("keeps a blurred tracking map still and out of the tab order until pickup", async () => {
+    const props = { home: HOME, courier: null, interactive: true, label: "Map, hidden until your order is picked up" };
+    const view = render(createElement(OrderMap, { ...props, blurred: true }));
+    const map = await loadedMap();
+    const handlers = () => [map.keyboard, map.dragPan, map.scrollZoom, map.touchZoomRotate, map.doubleClickZoom].map((handler) => handler.on);
+    expect(map.canvas.tabIndex).toBe(-1);
+    expect(handlers()).toEqual([false, false, false, false, false]);
+    expect(screen.getByRole("img", { name: "Map, hidden until your order is picked up" })).toBeTruthy();
+
+    view.rerender(createElement(OrderMap, { ...props, blurred: false, label: "Delivery map" }));
+    expect(map.canvas.tabIndex).toBe(0);
+    expect(handlers()).toEqual([true, true, true, true, true]);
+    expect(map.canvas.getAttribute("aria-label")).toBe("Delivery map");
+    expect(screen.queryByRole("img")).toBeNull();
   });
 
   it("keeps its frame and overlays when the map style never arrives", async () => {

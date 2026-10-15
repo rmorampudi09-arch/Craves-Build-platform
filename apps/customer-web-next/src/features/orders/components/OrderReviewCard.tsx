@@ -66,7 +66,7 @@ function saveProblem(error: unknown): { message: string; refresh?: boolean } {
 /** "Rate this order" on a delivered order, then the saved rating with an Edit action, like the app. */
 export function OrderReviewCard({ orderId }: { orderId: string }) {
   const [loaded, setLoaded] = useState<Loaded>({ kind: "loading" });
-  const [tags, setTags] = useState<ReviewTag[]>([]);
+  const [tags, setTags] = useState<ReviewTag[] | null>(null);
   const [editing, setEditing] = useState(false);
   // A fresh form each time it opens, kept mounted while it animates closed.
   const [formKey, setFormKey] = useState(0);
@@ -96,7 +96,7 @@ export function OrderReviewCard({ orderId }: { orderId: string }) {
   const review = loaded.kind === "ready" ? loaded.review : null;
   const hasMedia = Boolean(review?.mediaAssetIds.length);
   const tagLabels = (review?.tagCodes ?? []).flatMap(
-    (code) => tags.find((tag) => tag.code === code)?.displayLabel ?? [],
+    (code) => tags?.find((tag) => tag.code === code)?.displayLabel ?? [],
   );
   const openForm = () => {
     setNotice("");
@@ -230,7 +230,7 @@ function ReviewForm({
   open: boolean;
   orderId: string;
   review: CustomerReview | null;
-  tags: ReviewTag[];
+  tags: ReviewTag[] | null;
   onClose: () => void;
   onRefresh: () => void;
   onSaved: (review: CustomerReview) => void;
@@ -238,14 +238,17 @@ function ReviewForm({
   const id = useId();
   const [rating, setRating] = useState(review?.overallRating ?? 0);
   const [text, setText] = useState(review?.reviewText ?? "");
-  // Saved tags stay picked even when the tag list didn't load, so an edit never drops them.
-  const [picked, setPicked] = useState<string[]>(review?.tagCodes ?? []);
+  // A tag that is no longer offered can't be saved again, so it is dropped; if the list didn't load, all are kept.
+  const [savedTags] = useState(() =>
+    (review?.tagCodes ?? []).filter((code) => !tags || tags.some((tag) => tag.code === code)),
+  );
+  const [picked, setPicked] = useState(savedTags);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ message: string; refresh?: boolean } | null>(null);
   const changed =
     rating !== (review?.overallRating ?? 0) ||
     text !== (review?.reviewText ?? "") ||
-    picked.join() !== (review?.tagCodes ?? []).join();
+    picked.join() !== savedTags.join();
 
   async function save() {
     if (!rating || busy) return;
@@ -322,7 +325,7 @@ function ReviewForm({
         </div>
       </fieldset>
 
-      {tags.length ? (
+      {tags?.length ? (
         <fieldset className="mt-5">
           <legend className="text-base font-semibold">What stood out?</legend>
           <p className="text-sm text-[#6B6B6B]">Optional. Pick up to {REVIEW_TAGS_MAX}.</p>

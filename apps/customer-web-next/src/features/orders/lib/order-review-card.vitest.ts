@@ -51,10 +51,10 @@ const tags = [
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-/** The review answers `review` (or each write in turn), the tag list answers `tags`. */
-function serve(review: [unknown, number], writes: [unknown, number][] = []) {
+/** The review answers `review` (or each write in turn), the tag list answers `tagList`. */
+function serve(review: [unknown, number], writes: [unknown, number][] = [], tagList: [unknown, number] = [tags, 200]) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
-    if (url === "/api/reviews/tags") return json(tags);
+    if (url === "/api/reviews/tags") return json(...tagList);
     if (!init?.method) return json(...review);
     const next = writes.shift();
     return next ? json(...next) : json({ code: "ORDER_REVIEW_FAILED" }, 503);
@@ -124,6 +124,20 @@ describe("rate this order", () => {
       method: "PUT",
       body: expect.objectContaining({ expectedVersion: 1, overallRating: 2, tagCodes: ["TASTY"] }),
     });
+  });
+
+  it.each([
+    ["drops a tag that is no longer offered", [tags, 200], ["Tasty"], ["TASTY"]],
+    ["keeps every saved tag when the tag list didn't load", [{ code: "FEATURE_NOT_AVAILABLE" }, 404], [], ["TASTY", "RETIRED"]],
+  ] as const)("%s when the rating is edited", async (_case, tagList, shown, sent) => {
+    const fetch = serve([{ ...saved, tagCodes: ["TASTY", "RETIRED"] }, 200], [[saved, 200]], [...tagList]);
+    render(createElement(OrderReviewCard, { orderId: ORDER_ID }));
+    // Only tags on offer have a label to show.
+    await waitFor(() => expect(screen.queryAllByRole("listitem").map((item) => item.textContent)).toEqual(shown));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit your rating" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update review" }));
+    await screen.findByText(/Review updated/);
+    expect(writeBody(fetch).body.tagCodes).toEqual(sent);
   });
 
   it("asks for a refresh when the review changed elsewhere", async () => {

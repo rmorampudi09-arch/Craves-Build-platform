@@ -109,9 +109,17 @@ export function OrderMap({
     };
   }, [interactive]);
 
+  // A blurred map is a backdrop: no gestures, no keyboard panning, out of the tab order.
   useEffect(() => {
-    if (interactive) map?.getCanvas().setAttribute("aria-label", label);
-  }, [interactive, label, map]);
+    if (!interactive || !map) return;
+    const canvas = map.getCanvas();
+    canvas.setAttribute("aria-label", label);
+    canvas.tabIndex = blurred ? -1 : 0;
+    for (const handler of [map.keyboard, map.dragPan, map.scrollZoom, map.touchZoomRotate, map.doubleClickZoom]) {
+      if (blurred) handler.disable();
+      else handler.enable();
+    }
+  }, [blurred, interactive, label, map]);
 
   // Runs after every render; the key keeps a poll that changed nothing from moving the camera.
   useEffect(() => {
@@ -151,7 +159,7 @@ export function OrderMap({
           The label sits here, not on the frame, so the overlays stay readable. */}
       <div
         className={`absolute inset-0 ${blurred ? "pointer-events-none scale-110 blur-md saturate-50" : ""}`}
-        {...(interactive && !failed ? {} : { role: "img", "aria-label": label })}
+        {...(interactive && !blurred && !failed ? {} : { role: "img", "aria-label": label })}
       >
         <div ref={containerRef} className="h-full w-full" />
       </div>

@@ -88,9 +88,9 @@ describe("order status after payment", () => {
   it("confirms the order, says what happens next and keeps the paise in the bill", async () => {
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByRole("heading", { name: "Order placed" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Waiting for the chef" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: "Order details" })).toBeTruthy();
-    expect(screen.getByText(/is reviewing your order/)).toBeTruthy();
+    expect(screen.getByText("The chef will confirm your order shortly.")).toBeTruthy();
     // Before pickup the map is a blurred backdrop under the three kitchen steps.
     expect(screen.getByTestId("order-map").dataset.label).toBe("Map, hidden until your order is picked up");
     const progress = screen.getByRole("list", { name: "Order progress" });
@@ -107,7 +107,7 @@ describe("order status after payment", () => {
   it("shows the chef's cooking time and note once accepted", async () => {
     serve(order("PREPARING", { prepTimeMinutes: 25, chefResponseNote: "Preparing fresh" }));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByText(/Ready in about 25 min/)).toBeTruthy();
+    expect(await screen.findByText("The chef is cooking now. Ready in about 25 min.")).toBeTruthy();
     expect(screen.getByText("“Preparing fresh”").closest("figure")?.textContent).toContain("Note from the chef");
   });
 
@@ -118,7 +118,8 @@ describe("order status after payment", () => {
       ["PREPARING", "Chef accepted", 1],
       ["READY_FOR_PICKUP", "Ready for pickup", 2],
     ] as const) {
-      serve(order(status));
+      // Recent, so an unpaid order is still waiting for its payment.
+      serve(order(status, { createdAt: new Date().toISOString() }));
       render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
       const progress = await screen.findByRole("list", { name: "Order progress" });
       expect(progress.querySelector('[aria-current="step"]')?.textContent, status).toBe(current);
@@ -137,7 +138,7 @@ describe("order status after payment", () => {
     cleanup();
     serve(order("CHEF_REJECTED"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByRole("heading", { name: /couldn’t take this order/ })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Chef declined" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "How was your order?" })).toBeNull();
     expect(screen.getByRole("link", { name: "Browse dishes" }).getAttribute("href")).toBe("/home");
   });
@@ -146,7 +147,8 @@ describe("order status after payment", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const fetch = serve(order("PAYMENT_PENDING", { createdAt: new Date(Date.now() - 45 * 60_000).toISOString() }));
-      render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+      const paymentStep = vi.fn(() => createElement("button", { type: "button" }, "Pay"));
+      render(createElement(CustomerOrderStatus, { orderId: fixture.id, paymentStep }));
       expect(await screen.findByRole("heading", { name: "Payment not completed" })).toBeTruthy();
       expect(
         screen.getByText(
@@ -156,6 +158,9 @@ describe("order status after payment", () => {
       expect(screen.getByRole("link", { name: /Get help/ }).getAttribute("href")).toBe(`/support?orderId=${fixture.id}`);
       expect(screen.getByText("Order total")).toBeTruthy();
       expect(screen.queryByText(/Razorpay is confirming/)).toBeNull();
+      // It says one thing: no kitchen steps waiting for the chef, and no Pay.
+      expect(screen.queryByTestId("order-map")).toBeNull();
+      expect(paymentStep).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(45_000);
       expect(orderCalls(fetch)).toBe(1);
     } finally {
@@ -183,7 +188,17 @@ describe("order status after payment", () => {
     serve(order("PAID"));
     const paymentStep = vi.fn(() => createElement("button", { type: "button" }, "Pay"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, paymentStep }));
-    await screen.findByRole("heading", { name: "Order placed" });
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    expect(paymentStep).not.toHaveBeenCalled();
+  });
+
+  it("right after checkout verified the payment, says it is being confirmed instead of asking to pay again", async () => {
+    serve(order("PAYMENT_PENDING", { createdAt: new Date(Date.now() - 2 * 60_000).toISOString() }));
+    const paymentStep = vi.fn(() => createElement("button", { type: "button" }, "Pay"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true, paymentStep }));
+    expect(await screen.findByRole("heading", { name: "Confirming your payment" })).toBeTruthy();
+    expect(screen.getByText(/there’s no need to pay again/)).toBeTruthy();
+    expect(screen.getByText("Total paid")).toBeTruthy();
     expect(paymentStep).not.toHaveBeenCalled();
   });
 
@@ -193,9 +208,9 @@ describe("order status after payment", () => {
       for (const [status, heading, calls] of [
         ["DELIVERED", "Delivered", 1],
         ["REFUNDED", "Refunded", 1],
-        ["PREPARING", /is cooking/, 2],
+        ["PREPARING", "Preparing your food", 2],
         // A rejected order still moves on to its refund.
-        ["CHEF_REJECTED", /couldn’t take this order/, 2],
+        ["CHEF_REJECTED", "Chef declined", 2],
       ] as const) {
         const fetch = serve(order(status));
         render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
@@ -239,14 +254,14 @@ describe("order map, chef and bill", () => {
   it("keeps the kitchen steps while the partner is still on the way to the kitchen", async () => {
     serve(order("READY_FOR_PICKUP"), 200, { "/delivery-status": delivery("COURIER_TO_PICKUP") });
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByRole("heading", { name: "Packed and ready" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Ready for pickup" })).toBeTruthy();
     expect(screen.getByRole("list", { name: "Order progress" })).toBeTruthy();
   });
 
   it("asks nothing about delivery before the food is ready, and shows no map once the order is closed", async () => {
     const fetch = serve(order("PREPARING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    await screen.findByRole("heading", { name: /is cooking/ });
+    await screen.findByRole("heading", { name: "Preparing your food" });
     expect(fetch.mock.calls.some(([url]) => url.endsWith("/delivery-status"))).toBe(false);
     cleanup();
     serve(order("CANCELLED"));

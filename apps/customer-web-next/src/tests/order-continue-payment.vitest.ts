@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The order page reuses checkout's Razorpay step for an unpaid order. Synthetic ids; nothing is paid.
 import { createElement, type ReactNode } from "react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const fixture = vi.hoisted(() => ({
@@ -83,7 +83,10 @@ afterEach(() => {
 it("offers checkout's payment step while the order's checkout waits for payment", async () => {
   const fetch = serve(checkout());
   render(createElement(OrderDetailsPage, { orderId: fixture.orderId }));
+  expect(screen.getByRole("status").textContent).toBe("Getting your payment ready…");
   expect(await screen.findByRole("button", { name: "Pay ₹300" })).toBeTruthy();
+  // Named like the app's button at every width, above checkout's Pay bar.
+  expect(screen.getByRole("heading", { name: "Continue payment" })).toBeTruthy();
   expect(screen.getByRole("region", { name: "Continue payment" })).toBeTruthy();
   expect(fetch).toHaveBeenCalledWith(
     `/api/checkout/${fixture.checkoutId}`,
@@ -108,7 +111,6 @@ it.each([
     checkout({ orders: [{ ...order, id: "0bde0000-0000-4000-8000-000000000011" }] }),
     200,
   ],
-  ["unreadable", { code: "CHECKOUT_UNAVAILABLE" }, 503],
 ])("offers no payment when the checkout is %s", async (_case, body, status) => {
   const fetch = serve(body, status);
   render(createElement(OrderDetailsPage, { orderId: fixture.orderId }));
@@ -116,4 +118,15 @@ it.each([
   await act(async () => undefined);
   expect(screen.queryByRole("button")).toBeNull();
   expect(fixture.payment).not.toHaveBeenCalled();
+});
+
+it("says when the checkout didn't load and tries again", async () => {
+  const fetch = serve({ code: "CHECKOUT_UNAVAILABLE" }, 503);
+  render(createElement(OrderDetailsPage, { orderId: fixture.orderId }));
+  expect((await screen.findByRole("alert")).textContent).toContain("You haven’t been charged.");
+  expect(fixture.payment).not.toHaveBeenCalled();
+  fetch.mockResolvedValue(Response.json(checkout()));
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByRole("button", { name: "Pay ₹300" })).toBeTruthy();
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

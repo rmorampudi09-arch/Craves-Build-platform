@@ -9,7 +9,6 @@ import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
 import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
 import {
-  formatOrderStatus,
   isAbandonedUnpaidOrder,
   parseCustomerOrder,
   type CustomerOrder,
@@ -18,7 +17,7 @@ import {
   parseDeliveryStatusResponse,
   type DeliveryStatusResponse,
 } from "@/features/orders/lib/delivery-status";
-import { homePin, orderJourney, tracksDelivery } from "@/features/orders/lib/order-journey";
+import { homePin, orderJourney, tracksDelivery, type OrderJourney } from "@/features/orders/lib/order-journey";
 import { loadKitchenMenu } from "@/features/dish/api/dishes";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
@@ -71,91 +70,21 @@ function addressLine(order: CustomerOrder): string {
     .join(", ");
 }
 
-type Tone = "placed" | "waiting" | "problem";
-
 /** Nothing changes after these, so the page stops checking. A rejected order still moves on to its refund. */
 const FINAL_STATUSES = new Set(["DELIVERED", "CANCELLED", "REFUNDED"]);
 
-function summary(order: CustomerOrder, abandoned: boolean, pickedUp: boolean): { title: string; next: string; tone: Tone } {
-  const kitchen = order.kitchenName;
-  if (abandoned) {
-    return {
-      title: "Payment not completed",
-      next: "This order wasn’t paid, so it wasn’t sent to the kitchen. If money left your account, contact support with this order number.",
-      tone: "problem",
-    };
-  }
-  switch (order.status) {
-    case "PAYMENT_PENDING":
-      return { title: "Payment pending", next: "Finish the payment to send this order to the chef.", tone: "waiting" };
-    case "PAID":
-    case "CHEF_ACCEPTANCE_PENDING":
-      return {
-        title: "Order placed",
-        next: `${kitchen} is reviewing your order. Their cooking time shows here once they accept.`,
-        tone: "placed",
-      };
-    case "CHEF_ACCEPTED":
-    case "PREPARING":
-      return {
-        title: `${kitchen} is cooking`,
-        next: order.prepTimeMinutes
-          ? `Ready in about ${order.prepTimeMinutes} min, then it’s on its way to you.`
-          : "Your food is being cooked fresh. It goes out for delivery as soon as it’s packed.",
-        tone: "placed",
-      };
-    case "READY_FOR_PICKUP":
-      // The pickup can be reported before the order status moves.
-      if (!pickedUp) {
-        return {
-          title: "Packed and ready",
-          next: "A delivery partner is picking it up from the kitchen.",
-          tone: "placed",
-        };
-      }
-    // falls through
-    case "OUT_FOR_DELIVERY":
-      return {
-        title: "On the way",
-        next: "Your order has left the kitchen. Track it for live delivery updates.",
-        tone: "placed",
-      };
-    case "DELIVERED":
-      return { title: "Delivered", next: `Enjoy your meal from ${kitchen}.`, tone: "placed" };
-    case "CHEF_REJECTED":
-      return {
-        title: `${kitchen} couldn’t take this order`,
-        next: "Craves refunds this order to your original payment method. The refund shows here as it moves.",
-        tone: "problem",
-      };
-    case "REFUND_PENDING":
-      return {
-        title: "Refund in progress",
-        next: "Your refund has been sent to your original payment method. Banks can take a few working days to show it.",
-        tone: "problem",
-      };
-    case "REFUNDED":
-      return {
-        title: "Refunded",
-        next: "The amount has been returned to your original payment method.",
-        tone: "problem",
-      };
-    case "REFUND_FAILED":
-      return {
-        title: "Refund delayed",
-        next: "Craves is retrying your refund. Get help below if it doesn’t arrive.",
-        tone: "problem",
-      };
-    case "CANCELLED":
-      return {
-        title: "Order cancelled",
-        next: "This order was cancelled. Any amount paid is refunded to your original payment method.",
-        tone: "problem",
-      };
-    default:
-      return { title: formatOrderStatus(order.status), next: "", tone: "waiting" };
-  }
-}
+// Web-only states: an unpaid order nobody came back to, and the landing right after checkout verified a payment.
+const ABANDONED: OrderJourney = {
+  kind: "CLOSED",
+  title: "Payment not completed",
+  detail: "This order wasn’t paid, so it wasn’t sent to the kitchen. If money left your account, contact support with this order number.",
+};
+const CONFIRMING: OrderJourney = {
+  kind: "KITCHEN",
+  step: -1,
+  title: "Confirming your payment",
+  detail: "Razorpay is confirming the payment. This page updates by itself, so there’s no need to pay again.",
+};
 
 /** Drawn once when the order is placed; static for reduced motion. */
 function PlacedTick() {
@@ -245,13 +174,16 @@ function DishPhoto({ url }: { url: string | undefined }) {
  * Where checkout lands after a successful payment, and the order's page from Your orders:
  * what happened, the map (blurred with the kitchen steps until pickup, live after), the bill and
  * the ways forward (continue payment, track, rate, get help). `paymentStep` is checkout's own
- * payment step, shown while the order is unpaid.
+ * payment step, shown while the order is unpaid. `justPaid` marks checkout's landing after a verified payment,
+ * which the order can trail while the payment is confirmed.
  */
 export function CustomerOrderStatus({
   orderId,
+  justPaid = false,
   paymentStep: PaymentStep,
 }: {
   orderId: string;
+  justPaid?: boolean;
   /** `onSettled` reloads the order once a payment attempt ends, paid or not. */
   paymentStep?: ComponentType<{ order: CustomerOrder; onSettled: () => void }>;
 }) {
@@ -368,12 +300,12 @@ export function CustomerOrderStatus({
     );
   }
 
-  const journey = orderJourney(order.status, delivery?.status ?? null);
-  const status = summary(order, abandoned, journey.kind === "DELIVERY");
+  const unpaid = order.status === "PAYMENT_PENDING";
+  const journey = abandoned ? ABANDONED : unpaid && justPaid ? CONFIRMING : orderJourney(order, delivery?.status ?? null);
   const home = homePin(order);
   const delivered = order.status === "DELIVERED";
-  const problem = status.tone === "problem";
-  const awaitingPayment = order.status === "PAYMENT_PENDING";
+  const problem = journey.kind === "CLOSED";
+  const awaitingPayment = unpaid && !abandoned && !justPaid;
   const trackable = !problem && !delivered;
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const bill: [string, number][] = [
@@ -393,7 +325,7 @@ export function CustomerOrderStatus({
             {/* What happened and what happens next, with the way forward right under it. */}
             <section className={`${CARD} p-5 md:p-6`} aria-labelledby="order-status-title">
               <div className="flex items-start gap-4">
-                {status.tone === "placed" ? (
+                {!problem && !unpaid ? (
                   <PlacedTick />
                 ) : (
                   <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
@@ -409,10 +341,10 @@ export function CustomerOrderStatus({
                     id="order-status-title"
                     className="font-display text-2xl font-bold leading-tight tracking-[-0.03em]"
                   >
-                    {status.title}
+                    {journey.title}
                   </h2>
-                  {status.next ? (
-                    <p className="mt-1.5 text-[0.9375rem] leading-6 text-[#4A4A4A]">{status.next}</p>
+                  {journey.detail ? (
+                    <p className="mt-1.5 text-[0.9375rem] leading-6 text-[#4A4A4A]">{journey.detail}</p>
                   ) : null}
                   <p className="mt-2 text-sm text-[#6B6B6B]">
                     Order #{shortOrderNumber(order.id)} · Placed {when(order.createdAt)}

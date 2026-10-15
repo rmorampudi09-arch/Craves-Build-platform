@@ -278,6 +278,6 @@ describe("order review browser client", () => {
 
   it("offers no tags when the list doesn't load", async () => {
     answer({ code: "FEATURE_NOT_AVAILABLE" }, 404);
-    expect(await listReviewTags()).toEqual([]);
+    expect(await listReviewTags()).toBeNull();
   });
 });

@@ -162,7 +162,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
 
   const currentPresentation = trackingPresentation(order?.status ?? null, delivery?.status ?? null);
   const pickedUp = order
-    ? orderJourney(order.status, delivery?.status ?? null).kind === "DELIVERY"
+    ? orderJourney(order, delivery?.status ?? null).kind === "DELIVERY"
     : hasLeftKitchen(delivery?.status ?? null);
   const address = order?.deliveryAddress
     ? [
@@ -201,7 +201,8 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
       <TrackingHeader
         // The header only displays this: pass the short number customers see everywhere.
         orderId={shortOrderNumber(id)}
-        onBack={() => navigate({ to: "/orders" })}
+        onBack={() => navigate({ to: `/orders/${id}` })}
+        backLabel="Back to order details"
         onRefresh={() => void refresh(id, true)}
         refreshing={busy}
       />

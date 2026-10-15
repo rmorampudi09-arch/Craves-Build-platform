@@ -9,10 +9,13 @@ export const metadata = {
 
 export default async function OrderStatusPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ paid?: string | string[] }>;
 }) {
-  const { orderId } = await params;
+  const [{ orderId }, { paid }] = await Promise.all([params, searchParams]);
   if (!isUuid(orderId)) notFound();
-  return <OrderDetailsPage orderId={orderId} />;
+  // Checkout adds ?paid=1 once it has verified the payment; it only changes what the page says.
+  return <OrderDetailsPage orderId={orderId} justPaid={paid === "1"} />;
 }

@@ -66,7 +66,7 @@ describe("payment pending after a reload", () => {
   it("opens the order once the payment is confirmed", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => paymentStatus("PAID")));
     renderButton();
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith(`/orders/${ORDER_ID}`));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith(`/orders/${ORDER_ID}?paid=1`));
     expect(window.sessionStorage.getItem("craves.checkout.paymentPending")).toBeNull();
   });
 

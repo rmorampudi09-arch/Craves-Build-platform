@@ -232,7 +232,7 @@ it("edits what the chef cooks, delivery areas and links, with the area, city, PI
   });
 });
 
-it("leaves out what the server doesn't send, and lets an unfinished kitchen fill an empty area and PIN", async () => {
+it("leaves out what the server doesn't send, and keeps an empty area and PIN locked like the app", async () => {
   stored = { ...stored, areaName: null, postalCode: null, latitude: null, longitude: null };
   open();
   fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
@@ -240,13 +240,22 @@ it("leaves out what the server doesn't send, and lets an unfinished kitchen fill
   expect(screen.queryByLabelText("Instagram", { exact: false })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(screen.queryByRole("group", { name: "Delivery areas" })).toBeNull();
-  expect(field("Area").readOnly).toBe(false);
-  expect(field("Pincode").readOnly).toBe(false);
-  expect(field("City").readOnly).toBe(true);
+  for (const name of ["Area", "Pincode", "City", "State"]) expect(field(name).readOnly).toBe(true);
+  expect([field("Area").value, field("Pincode").value]).toEqual(["–", "–"]);
   expect(screen.getByRole("button", { name: "Use my current location" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+  // Opening needs the area, which only Craves support can add now.
+  fireEvent.click(screen.getByRole("button", { name: /^Yes, get my kitchen ready/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
+  expect(screen.getByRole("alert").textContent).toBe(
+    "Your kitchen needs the pickup area before it can open. Use Move my kitchen to ask Craves support to add it.",
+  );
+  expect(screen.getByRole("button", { name: "Move my kitchen" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Yes, this is right" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Not yet/ }));
   fireEvent.click(screen.getByRole("button", { name: "Save my kitchen" }));
   await waitFor(() => expect(saved).not.toBeNull());
+  expect(saved).toMatchObject({ areaName: null, postalCode: null, city: "Hyderabad", state: "Telangana" });
   for (const key of ["cuisines", "serviceAreas", "socialLinks"]) expect(saved).not.toHaveProperty(key);
 });
 

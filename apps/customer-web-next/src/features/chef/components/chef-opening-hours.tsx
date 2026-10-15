@@ -39,7 +39,7 @@ import {
 type SpecialDay = { date: string; closed: boolean; reason: string | null; windows: TimeRange[] };
 
 // Sheets open outside the chef page: this brings the chef controls' look into them.
-const SHEET_BODY = "chef-panel-theme !min-h-0 mt-5 grid gap-5";
+const SHEET_BODY = "chef-panel-theme chef-sheet-theme mt-5 grid gap-5";
 const ROW = "chef-row !rounded-none !border-0 !bg-transparent";
 
 function SwitchRow({

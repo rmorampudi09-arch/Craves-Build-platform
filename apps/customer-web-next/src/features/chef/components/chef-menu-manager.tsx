@@ -1362,7 +1362,7 @@ export function ChefMenuManager() {
       >
         {options === "menu" ? (
           // Sheets open outside the chef page: the theme brings the chef colours along.
-          <div className="chef-panel-theme chef-list mt-4 overflow-hidden rounded-xl border border-[#E3E6EA] !bg-transparent">
+          <div className="chef-panel-theme chef-sheet-theme chef-list mt-4 overflow-hidden rounded-xl border border-[#E3E6EA]">
             <button
               type="button"
               className="chef-row w-full !rounded-none !border-0 !bg-transparent text-left"

@@ -600,7 +600,7 @@ export function ChefReferrals() {
 
       <Sheet open={rules} onOpenChange={setRules} title="How it works">
         {/* Sheets open outside the chef page: the theme brings the chef colours along. */}
-        <div className="chef-panel-theme mt-4 !bg-transparent">
+        <div className="chef-panel-theme chef-sheet-theme mt-4">
           <ul className="chef-list rounded-xl border border-[#E3E6EA]">
             {CHEF_REFERRAL_RATES_BPS.map((bps, index) => (
               <li key={index} className="chef-row">

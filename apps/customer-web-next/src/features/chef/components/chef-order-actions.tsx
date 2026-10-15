@@ -241,7 +241,8 @@ function NotPickedUp({ orderId }: { orderId: string }) {
           </>
         }
       >
-        <div className="mt-4">
+        {/* Sheets open outside the chef page: the theme brings the chef error colour along. */}
+        <div className="chef-panel-theme chef-sheet-theme mt-4">
           <ReasonTiles name={`not-picked-up-${orderId}`} options={NOT_PICKED_UP_REASONS} value={reason} onChange={setReason} />
           <label className="mt-4 block text-sm font-semibold text-[#1A1A1A]">
             Details for support

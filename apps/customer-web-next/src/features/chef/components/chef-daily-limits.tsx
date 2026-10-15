@@ -535,47 +535,50 @@ export function ChefDailyLimits({ planId }: { planId: string | null }) {
         description={`For ${slotName}. Subscribers can’t order more of a dish than this each day.`}
         busy={busy}
       >
-        {dishes.length === 0 ? (
-          <p className="mt-4 text-sm text-[#6B6B6B]">Turn on a dish on your menu first.</p>
-        ) : (
-          <fieldset disabled={frozen} className="mt-4 grid min-w-0 gap-3">
-            <ChefChoiceChips
-              legend="Dish"
-              name="limits-dish"
-              value={dishId ?? ""}
-              onChange={pickDish}
-              options={dishOptions}
-            />
-            <Row title="Most plates a day">
-              <PlateStepper
-                name="Plates of this dish"
-                value={dishMax}
-                onChange={(max) => setDishMax(clampPlates(max))}
+        {/* Sheets open outside the chef page: the theme brings the chef chips and buttons along. */}
+        <div className="chef-panel-theme chef-sheet-theme">
+          {dishes.length === 0 ? (
+            <p className="mt-4 text-sm text-[#6B6B6B]">Turn on a dish on your menu first.</p>
+          ) : (
+            <fieldset disabled={frozen} className="mt-4 grid min-w-0 gap-3">
+              <ChefChoiceChips
+                legend="Dish"
+                name="limits-dish"
+                value={dishId ?? ""}
+                onChange={pickDish}
+                options={dishOptions}
               />
-            </Row>
-            <SwitchRow
-              title="Subscribers can order this dish"
-              value={dishOn}
-              onChange={setDishOn}
-            />
-            {dishLimitsFor(dishId)?.mixed ? (
-              <Warning>
-                Your days have different limits for this dish now. Saving sets them all to these
-                numbers.
-              </Warning>
-            ) : null}
-            <button
-              type="button"
-              className="chef-btn is-primary"
-              disabled={frozen || busy}
-              aria-busy={busy}
-              onClick={() => void saveDish()}
-            >
-              {busy ? "Saving…" : "Save dish limit"}
-            </button>
-            <Problem text={sheetProblem} />
-          </fieldset>
-        )}
+              <Row title="Most plates a day">
+                <PlateStepper
+                  name="Plates of this dish"
+                  value={dishMax}
+                  onChange={(max) => setDishMax(clampPlates(max))}
+                />
+              </Row>
+              <SwitchRow
+                title="Subscribers can order this dish"
+                value={dishOn}
+                onChange={setDishOn}
+              />
+              {dishLimitsFor(dishId)?.mixed ? (
+                <Warning>
+                  Your days have different limits for this dish now. Saving sets them all to these
+                  numbers.
+                </Warning>
+              ) : null}
+              <button
+                type="button"
+                className="chef-btn is-primary"
+                disabled={frozen || busy}
+                aria-busy={busy}
+                onClick={() => void saveDish()}
+              >
+                {busy ? "Saving…" : "Save dish limit"}
+              </button>
+              <Problem text={sheetProblem} />
+            </fieldset>
+          )}
+        </div>
       </Sheet>
 
       <Sheet
@@ -585,114 +588,116 @@ export function ChefDailyLimits({ planId }: { planId: string | null }) {
         description={`For ${slotName}.`}
         busy={busy}
       >
-        <fieldset disabled={frozen} className="mt-4 grid min-w-0 gap-3">
-          <div>
-            <label htmlFor="limits-date" className="chef-field-label">
-              Date
-            </label>
-            <input
-              id="limits-date"
-              type="date"
-              min={today}
-              value={date}
-              onChange={(event) => event.target.value && chooseDate(event.target.value)}
-              className={`${FIELD} mt-2`}
-            />
-            <p className="mt-1.5 font-semibold text-[#1A1A1A]" aria-live="polite">
-              {date ? `Changing ${dayLabel(date, today)}` : "Pick the day you want to change."}
-            </p>
-          </div>
-          {date && (dateKind === "meal" ? slotChange(date) : dishChange(date, dateDishId)) ? (
-            <Warning>This date already has a change. Saving replaces it.</Warning>
-          ) : null}
-          {dishes.length > 0 ? (
-            <ChefChoiceChips
-              legend="Change"
-              name="limits-date-kind"
-              value={dateKind}
-              onChange={setDateKind}
-              options={[
-                { value: "meal", label: "Whole meal" },
-                { value: "dish", label: "One dish" },
-              ]}
-            />
-          ) : null}
-          {dateKind === "meal" ? (
-            <>
-              <Row title="Total plates">
-                <PlateStepper
-                  name="Total plates that day"
-                  value={dateValues.total}
-                  onChange={(total) => setDateValues(setTotalPlates(dateValues, total))}
-                />
-              </Row>
-              <Row title="Kept for subscribers">
-                <PlateStepper
-                  name="Kept for subscribers that day"
-                  value={dateValues.subscriber}
-                  onChange={(subscriber) =>
-                    setDateValues(setSubscriberPlates(dateValues, subscriber))
-                  }
-                />
-              </Row>
-              <SwitchRow
-                title={`Close ${slotName} on this day`}
-                hint="Your other meals are not changed."
-                value={dateClosed}
-                onChange={setDateClosed}
+        <div className="chef-panel-theme chef-sheet-theme">
+          <fieldset disabled={frozen} className="mt-4 grid min-w-0 gap-3">
+            <div>
+              <label htmlFor="limits-date" className="chef-field-label">
+                Date
+              </label>
+              <input
+                id="limits-date"
+                type="date"
+                min={today}
+                value={date}
+                onChange={(event) => event.target.value && chooseDate(event.target.value)}
+                className={`${FIELD} mt-2`}
               />
-            </>
-          ) : (
-            <>
+              <p className="mt-1.5 font-semibold text-[#1A1A1A]" aria-live="polite">
+                {date ? `Changing ${dayLabel(date, today)}` : "Pick the day you want to change."}
+              </p>
+            </div>
+            {date && (dateKind === "meal" ? slotChange(date) : dishChange(date, dateDishId)) ? (
+              <Warning>This date already has a change. Saving replaces it.</Warning>
+            ) : null}
+            {dishes.length > 0 ? (
               <ChefChoiceChips
-                legend="Dish"
-                name="limits-date-dish"
-                value={dateDishId ?? ""}
-                onChange={(id) => pickDateDish(id)}
-                options={dishOptions}
+                legend="Change"
+                name="limits-date-kind"
+                value={dateKind}
+                onChange={setDateKind}
+                options={[
+                  { value: "meal", label: "Whole meal" },
+                  { value: "dish", label: "One dish" },
+                ]}
               />
-              <Row title="Most plates">
-                <PlateStepper
-                  name="Plates of this dish that day"
-                  value={dateDishMax}
-                  onChange={(max) => setDateDishMax(clampPlates(max))}
+            ) : null}
+            {dateKind === "meal" ? (
+              <>
+                <Row title="Total plates">
+                  <PlateStepper
+                    name="Total plates that day"
+                    value={dateValues.total}
+                    onChange={(total) => setDateValues(setTotalPlates(dateValues, total))}
+                  />
+                </Row>
+                <Row title="Kept for subscribers">
+                  <PlateStepper
+                    name="Kept for subscribers that day"
+                    value={dateValues.subscriber}
+                    onChange={(subscriber) =>
+                      setDateValues(setSubscriberPlates(dateValues, subscriber))
+                    }
+                  />
+                </Row>
+                <SwitchRow
+                  title={`Close ${slotName} on this day`}
+                  hint="Your other meals are not changed."
+                  value={dateClosed}
+                  onChange={setDateClosed}
                 />
-              </Row>
-              <SwitchRow
-                title="Close this dish on this day"
-                hint="It stays on your menu."
-                value={dateDishClosed}
-                onChange={setDateDishClosed}
-              />
-            </>
-          )}
-          <button
-            type="button"
-            className="chef-btn is-primary"
-            disabled={
-              !date || date < today || (dateKind === "dish" && !dateDishId) || frozen || busy
-            }
-            aria-busy={busy}
-            onClick={() => void saveDate()}
-          >
-            {busy ? "Saving…" : "Save date"}
-          </button>
-          <Problem text={sheetProblem} />
-        </fieldset>
-        {changes.length > 0 ? (
-          <section aria-labelledby="limits-changes" className="mt-5 grid gap-1">
-            <h3 id="limits-changes" className="font-semibold text-[#1A1A1A]">
-              Dates you’ve changed
-            </h3>
-            <ul className="grid gap-0.5">
-              {changes.map((line) => (
-                <li key={line} className="chef-section-note">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+              </>
+            ) : (
+              <>
+                <ChefChoiceChips
+                  legend="Dish"
+                  name="limits-date-dish"
+                  value={dateDishId ?? ""}
+                  onChange={(id) => pickDateDish(id)}
+                  options={dishOptions}
+                />
+                <Row title="Most plates">
+                  <PlateStepper
+                    name="Plates of this dish that day"
+                    value={dateDishMax}
+                    onChange={(max) => setDateDishMax(clampPlates(max))}
+                  />
+                </Row>
+                <SwitchRow
+                  title="Close this dish on this day"
+                  hint="It stays on your menu."
+                  value={dateDishClosed}
+                  onChange={setDateDishClosed}
+                />
+              </>
+            )}
+            <button
+              type="button"
+              className="chef-btn is-primary"
+              disabled={
+                !date || date < today || (dateKind === "dish" && !dateDishId) || frozen || busy
+              }
+              aria-busy={busy}
+              onClick={() => void saveDate()}
+            >
+              {busy ? "Saving…" : "Save date"}
+            </button>
+            <Problem text={sheetProblem} />
+          </fieldset>
+          {changes.length > 0 ? (
+            <section aria-labelledby="limits-changes" className="mt-5 grid gap-1">
+              <h3 id="limits-changes" className="font-semibold text-[#1A1A1A]">
+                Dates you’ve changed
+              </h3>
+              <ul className="grid gap-0.5">
+                {changes.map((line) => (
+                  <li key={line} className="chef-section-note">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       </Sheet>
     </div>
   );

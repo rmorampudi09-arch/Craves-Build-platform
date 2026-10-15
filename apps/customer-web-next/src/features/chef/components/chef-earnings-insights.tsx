@@ -255,7 +255,7 @@ function DateRangeSheet({
       }
     >
       {/* Sheets open outside the chef page: the theme brings the chef colours along. */}
-      <div className="chef-panel-theme !bg-transparent">
+      <div className="chef-panel-theme chef-sheet-theme">
       <div className="mt-4 grid grid-cols-2 gap-3">
         {(
           [
@@ -580,7 +580,7 @@ export function ChefEarningsInsights({
         {dayOrders.length === 0 ? (
           <p className="mt-4 text-[0.9375rem] text-[#6B6B6B]">No orders this day.</p>
         ) : (
-          <ul className="chef-panel-theme chef-list mt-4 overflow-hidden rounded-xl border border-[#E3E6EA] !bg-transparent">
+          <ul className="chef-panel-theme chef-sheet-theme chef-list mt-4 overflow-hidden rounded-xl border border-[#E3E6EA]">
             {dayOrders.map((order) => {
               const state = chefOrderStatus(order.status);
               const title = [`#${shortOrderNumber(order.id)}`, order.deliveryAddress?.recipientName]

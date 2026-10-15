@@ -40,6 +40,15 @@
   caret-color: var(--chef-action);
 }
 
+/* A sheet or dialog body: sheets open on <body>, outside the chef page, so their body takes the
+ * chef theme with this class next to chef-panel-theme, without the page's full height, tab-bar
+ * padding or background. */
+.chef-panel-theme.chef-sheet-theme {
+  min-height: 0;
+  padding-bottom: 0;
+  background: transparent !important;
+}
+
 /*
  * The customer theme styles every <button> outside any cascade layer, which beats
  * Tailwind utilities. Inside Chef Mode, a button that names its own background,

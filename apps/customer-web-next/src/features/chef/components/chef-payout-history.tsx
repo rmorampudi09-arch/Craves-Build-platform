@@ -152,7 +152,7 @@ export function ChefPayoutHistory() {
         {opened && view ? (
           <>
             {/* Sheets open outside the chef page: the theme brings the chef colours along. */}
-            <dl className="chef-panel-theme mt-4 grid gap-3 rounded-xl border border-[#E3E6EA] p-4 text-[0.9375rem] !bg-transparent">
+            <dl className="chef-panel-theme chef-sheet-theme mt-4 grid gap-3 rounded-xl border border-[#E3E6EA] p-4 text-[0.9375rem]">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-[#6B6B6B]">Amount</dt>
                 <dd className="chef-amount font-semibold">{formatInr(opened.amount)}</dd>

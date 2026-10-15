@@ -1007,27 +1007,30 @@ function MealPlanForm({
         onOpenChange={(open) => !open && setSheet(null)}
         title="Pick a dish"
       >
-        <DishChoices
-          menu={menu}
-          dishes={availableDishes}
-          selected={
-            sheet?.kind === "dish"
-              ? (slots.find((slot) => slot.key === sheet.key)?.menuItemId ?? null)
-              : null
-          }
-          onPick={(id) => {
-            if (sheet?.kind === "dish")
-              updateSlots((current) => setSlotDish(current, sheet.key, id));
-            setSheet(null);
-          }}
-        />
+        {/* Sheets open outside the chef page: the theme brings the chef buttons along. */}
+        <div className="chef-panel-theme chef-sheet-theme">
+          <DishChoices
+            menu={menu}
+            dishes={availableDishes}
+            selected={
+              sheet?.kind === "dish"
+                ? (slots.find((slot) => slot.key === sheet.key)?.menuItemId ?? null)
+                : null
+            }
+            onPick={(id) => {
+              if (sheet?.kind === "dish")
+                updateSlots((current) => setSlotDish(current, sheet.key, id));
+              setSheet(null);
+            }}
+          />
+        </div>
       </Sheet>
       <Sheet
         open={sheet?.kind === "add"}
         onOpenChange={(open) => !open && setSheet(null)}
         title={`Add a meal for ${dayName(kind, day)}`}
       >
-        <div className="mt-4 grid gap-2">
+        <div className="chef-panel-theme chef-sheet-theme mt-4 grid gap-2">
           {freeSlots.map((code) => {
             const Icon = SLOT_ICON[code];
             return (
@@ -1499,7 +1502,8 @@ function RequestChangeDialog({
         )
       }
     >
-      {body}
+      {/* Dialogs open outside the chef page: the theme brings the chef field colours along. */}
+      <div className="chef-panel-theme chef-sheet-theme">{body}</div>
     </Dialog>
   );
 }

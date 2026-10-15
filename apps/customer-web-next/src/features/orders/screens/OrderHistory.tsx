@@ -353,10 +353,10 @@ export default function OrdersPage() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <h3 className="truncate text-base font-semibold text-[#1A1A1A]">
-                                    {/* The whole card opens the order; its ::after covers the card. */}
+                                    {/* The whole card opens the order, like the app; tracking is one tap on from there. Its ::after covers the card. */}
                                     <Link
-                                      to={active ? `/orders/${order.id}/tracking` : `/orders/${order.id}`}
-                                      aria-label={`${active ? "Track order" : "View order"} from ${order.kitchenName}`}
+                                      to={`/orders/${order.id}`}
+                                      aria-label={`View order from ${order.kitchenName}`}
                                       className="after:absolute after:inset-0 after:rounded-2xl"
                                     >
                                       {order.kitchenName}

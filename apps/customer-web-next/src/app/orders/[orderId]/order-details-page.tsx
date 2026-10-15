@@ -13,11 +13,16 @@ import { sessionFetch } from "@/shared/lib/session-fetch";
 
 /** The order page, with checkout's own Razorpay step while the order is unpaid. */
 export function OrderDetailsPage({ orderId, justPaid = false }: { orderId: string; justPaid?: boolean }) {
-  return <CustomerOrderStatus orderId={orderId} justPaid={justPaid} paymentStep={ContinuePayment} />;
+  return <CustomerOrderStatus orderId={orderId} justPaid={justPaid} paymentStep={PaymentStep} />;
+}
+
+/** A meal-plan order has no checkout, so there is nothing to pay on it. */
+function PaymentStep({ order, onSettled }: { order: CustomerOrder; onSettled: () => void }) {
+  return order.checkoutId ? <ContinuePayment orderId={order.id} checkoutId={order.checkoutId} onSettled={onSettled} /> : null;
 }
 
 /** Offered only while the order's checkout still waits for payment, like the app. */
-function ContinuePayment({ order, onSettled }: { order: CustomerOrder; onSettled: () => void }) {
+function ContinuePayment({ orderId, checkoutId, onSettled }: { orderId: string; checkoutId: string; onSettled: () => void }) {
   // null: the checkout no longer waits for this order's payment.
   const [checkout, setCheckout] = useState<CustomerCheckout | null | "loading" | "failed">("loading");
   const [attempt, setAttempt] = useState(0);
@@ -26,11 +31,11 @@ function ContinuePayment({ order, onSettled }: { order: CustomerOrder; onSettled
 
   useEffect(() => {
     let live = true;
-    sessionFetch(`/api/checkout/${encodeURIComponent(order.checkoutId)}`, { cache: "no-store" })
+    sessionFetch(`/api/checkout/${encodeURIComponent(checkoutId)}`, { cache: "no-store" })
       .then(async (response) => {
         const parsed = response.ok ? parseCheckout(await response.json()) : null;
         if (!parsed) throw new Error("checkout unavailable");
-        return parsed.status === "PAYMENT_PENDING" && parsed.orders.some((item) => item.id === order.id) ? parsed : null;
+        return parsed.status === "PAYMENT_PENDING" && parsed.orders.some((item) => item.id === orderId) ? parsed : null;
       })
       .then(
         (next) => {
@@ -43,7 +48,7 @@ function ContinuePayment({ order, onSettled }: { order: CustomerOrder; onSettled
     return () => {
       live = false;
     };
-  }, [order.checkoutId, order.id, attempt]);
+  }, [checkoutId, orderId, attempt]);
 
   if (checkout === null) return null;
   return (

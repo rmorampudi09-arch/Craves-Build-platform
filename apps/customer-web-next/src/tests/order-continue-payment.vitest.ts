@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({
   orderId: "0bde0000-0000-4000-8000-000000000010",
   checkoutId: "0bde0000-0000-4000-8000-000000000060",
+  orderCheckoutId: "0bde0000-0000-4000-8000-000000000060" as string | null,
   onSettled: vi.fn(),
   payment: vi.fn(),
 }));
@@ -17,7 +18,7 @@ vi.mock("@/features/orders/components/CustomerOrderStatus", () => ({
     paymentStep: (props: { order: unknown; onSettled: () => void }) => ReactNode;
   }) =>
     createElement(paymentStep, {
-      order: { id: fixture.orderId, checkoutId: fixture.checkoutId, status: "PAYMENT_PENDING" },
+      order: { id: fixture.orderId, checkoutId: fixture.orderCheckoutId, status: "PAYMENT_PENDING" },
       onSettled: fixture.onSettled,
     }),
 }));
@@ -72,6 +73,7 @@ function serve(body: unknown, status = 200) {
 }
 
 beforeEach(() => {
+  fixture.orderCheckoutId = fixture.checkoutId;
   fixture.onSettled.mockReset();
   fixture.payment.mockReset();
 });
@@ -129,4 +131,13 @@ it("says when the checkout didn't load and tries again", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByRole("button", { name: "Pay ₹300" })).toBeTruthy();
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("offers no payment on a meal-plan order, which has no checkout", async () => {
+  fixture.orderCheckoutId = null;
+  const fetch = serve(checkout());
+  render(createElement(OrderDetailsPage, { orderId: fixture.orderId }));
+  await act(async () => undefined);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(screen.queryByRole("region", { name: "Continue payment" })).toBeNull();
 });

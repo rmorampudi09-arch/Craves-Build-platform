@@ -6,28 +6,56 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ChefOpeningHours } from "../components/chef-opening-hours";
 
-const schedule = { kitchenId: "6b1c0000-0000-4000-8000-000000000001", timezoneId: "Asia/Kolkata", acceptingOrders: true, pausedUntil: "2026-10-15T12:00:00Z", pauseReason: "Paused by chef", weeklyWindows: [{ dayOfWeek: 1, opensAt: "11:00", closesAt: "22:00" }] };
+const schedule = {
+  kitchenId: "6b1c0000-0000-4000-8000-000000000001",
+  timezoneId: "Asia/Kolkata",
+  acceptingOrders: true,
+  pausedUntil: "2026-10-15T12:00:00Z",
+  pauseReason: "Paused by chef",
+  weeklyWindows: [{ dayOfWeek: 1, opensAt: "11:00", closesAt: "22:00" }],
+};
 let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;
-const puts = () => fetcher.mock.calls.filter(([, init]) => init?.method === "PUT").map(([url, init]) => [url, JSON.parse(String(init?.body))]);
+const puts = () =>
+  fetcher.mock.calls
+    .filter(([, init]) => init?.method === "PUT")
+    .map(([url, init]) => [url, JSON.parse(String(init?.body))]);
 
-beforeAll(() => { MotionGlobalConfig.skipAnimations = true; });
-afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
+beforeAll(() => {
+  MotionGlobalConfig.skipAnimations = true;
+});
+afterAll(() => {
+  MotionGlobalConfig.skipAnimations = false;
+});
 beforeEach(() => {
-  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })));
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })),
+  );
   fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
-    if (url === "/api/chef/kitchen/schedule") return Response.json(init?.method === "PUT" ? { ...schedule, ...JSON.parse(String(init.body)) } : schedule);
-    if (url.startsWith("/api/chef/kitchen/schedule/overrides/")) return init?.method === "PUT" ? Response.json({ serviceDate: url.slice(-10), ...JSON.parse(String(init.body)) }) : Response.json({ code: "SCHEDULE_OVERRIDE_NOT_FOUND" }, { status: 404 });
+    if (url === "/api/chef/kitchen/schedule")
+      return Response.json(
+        init?.method === "PUT" ? { ...schedule, ...JSON.parse(String(init.body)) } : schedule,
+      );
+    if (url.startsWith("/api/chef/kitchen/schedule/overrides/"))
+      return init?.method === "PUT"
+        ? Response.json({ serviceDate: url.slice(-10), ...JSON.parse(String(init.body)) })
+        : Response.json({ code: "SCHEDULE_OVERRIDE_NOT_FOUND" }, { status: 404 });
     throw new Error(`Unexpected route ${url}`);
   });
   vi.stubGlobal("fetch", fetcher);
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("Opening hours", () => {
   it("lists the week, with days that have no hours closed", async () => {
     render(createElement(ChefOpeningHours));
-    expect((await screen.findByRole("button", { name: /^Monday/ })).textContent).toContain("11:00 AM – 10:00 PM");
+    expect((await screen.findByRole("button", { name: /^Monday/ })).textContent).toContain(
+      "11:00 AM – 10:00 PM",
+    );
     expect(screen.getByRole("button", { name: /^Tuesday/ }).textContent).toContain("Closed");
   });
 
@@ -43,12 +71,25 @@ describe("Opening hours", () => {
     fireEvent.click(within(sheet).getByRole("button", { name: "Wednesday" }));
     fireEvent.click(within(sheet).getByRole("button", { name: "Save" }));
     await screen.findByText("Opening hours saved");
-    expect(puts()).toEqual([["/api/chef/kitchen/schedule", {
-      acceptingOrders: true, pausedUntil: schedule.pausedUntil, pauseReason: "Paused by chef",
-      weeklyWindows: [{ dayOfWeek: 1, opensAt: "11:00", closesAt: "22:00" }, { dayOfWeek: 2, opensAt: "09:00", closesAt: "23:59" }, { dayOfWeek: 3, opensAt: "09:00", closesAt: "23:59" }],
-    }]]);
+    expect(puts()).toEqual([
+      [
+        "/api/chef/kitchen/schedule",
+        {
+          acceptingOrders: true,
+          pausedUntil: schedule.pausedUntil,
+          pauseReason: "Paused by chef",
+          weeklyWindows: [
+            { dayOfWeek: 1, opensAt: "11:00", closesAt: "22:00" },
+            { dayOfWeek: 2, opensAt: "09:00", closesAt: "23:59" },
+            { dayOfWeek: 3, opensAt: "09:00", closesAt: "23:59" },
+          ],
+        },
+      ],
+    ]);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByRole("button", { name: /^Wednesday/ }).textContent).toContain("9:00 AM – Midnight");
+    expect(screen.getByRole("button", { name: /^Wednesday/ }).textContent).toContain(
+      "9:00 AM – Midnight",
+    );
   });
 
   it("says what is wrong with overlapping times and sends nothing", async () => {
@@ -56,7 +97,9 @@ describe("Opening hours", () => {
     fireEvent.click(await screen.findByRole("button", { name: /^Monday/ }));
     const sheet = await screen.findByRole("dialog", { name: "Monday" });
     fireEvent.click(within(sheet).getByRole("button", { name: "Add another time" }));
-    fireEvent.change(within(sheet).getByLabelText("Opens (second time)"), { target: { value: "21:00" } });
+    fireEvent.change(within(sheet).getByLabelText("Opens (second time)"), {
+      target: { value: "21:00" },
+    });
     fireEvent.click(within(sheet).getByRole("button", { name: "Save" }));
     expect(within(sheet).getByRole("alert").textContent).toBe("The two times overlap.");
     expect(puts()).toEqual([]);
@@ -67,7 +110,9 @@ describe("Opening hours", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add a special day" }));
     const sheet = await screen.findByRole("dialog", { name: "Add a special day" });
     fireEvent.click(within(sheet).getByRole("button", { name: "Tomorrow" }));
-    fireEvent.change(await within(sheet).findByLabelText(/Reason/), { target: { value: " Diwali " } });
+    fireEvent.change(await within(sheet).findByLabelText(/Reason/), {
+      target: { value: " Diwali " },
+    });
     expect(within(sheet).queryByRole("button", { name: "Remove special day" })).toBeNull();
     fireEvent.click(within(sheet).getByRole("button", { name: "Save" }));
     await screen.findByText("Special day saved");
@@ -78,13 +123,17 @@ describe("Opening hours", () => {
   });
 
   it("shows Coming soon when the schedule route isn't live", async () => {
-    fetcher.mockImplementation(async () => Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 }));
+    fetcher.mockImplementation(async () =>
+      Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 }),
+    );
     render(createElement(ChefOpeningHours));
     expect(await screen.findByText("Opening hours are on their way")).toBeTruthy();
   });
 
   it("offers Try again when the schedule can't load", async () => {
-    fetcher.mockImplementationOnce(async () => Response.json({ code: "KITCHEN_SCHEDULE_UNAVAILABLE" }, { status: 503 }));
+    fetcher.mockImplementationOnce(async () =>
+      Response.json({ code: "KITCHEN_SCHEDULE_UNAVAILABLE" }, { status: 503 }),
+    );
     render(createElement(ChefOpeningHours));
     fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("button", { name: /^Monday/ })).toBeTruthy();

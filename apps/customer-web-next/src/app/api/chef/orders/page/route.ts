@@ -14,7 +14,7 @@ function failure(status: number, code: string) {
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const limit = params.get("limit") ?? "20", cursor = params.get("cursor"), status = params.get("status");
-  if (!/^\d{1,2}$/.test(limit) || Number(limit) < 1 || Number(limit) > 50 || (cursor !== null && (!cursor || cursor.length > 512)) || (status !== null && !isChefOrderStatus(status))) {
+  if (!/^\d{1,2}$/.test(limit) || Number(limit) < 1 || Number(limit) > 50 || (cursor !== null && !/^[A-Za-z0-9_-]{1,512}$/.test(cursor)) || (status !== null && !isChefOrderStatus(status))) {
     return failure(400, "INVALID_CHEF_ORDER_HISTORY_QUERY");
   }
   const query = new URLSearchParams({ limit: String(Number(limit)) });

@@ -55,7 +55,7 @@ describe("support cases BFF", () => {
   });
 
   it("validates the list query and forwards limit and cursor", async () => {
-    for (const query of ["?limit=0", "?limit=51", "?limit=abc", `?cursor=${"c".repeat(513)}`, "?cursor="]) {
+    for (const query of ["?limit=0", "?limit=51", "?limit=abc", `?cursor=${"c".repeat(513)}`, "?cursor=", "?cursor=a..b"]) {
       expect((await list(request(`/api/support/cases${query}`))).status).toBe(400);
     }
     upstream.mockResolvedValue(Response.json({ cases: [summary], nextCursor: "next", hasMore: true }));

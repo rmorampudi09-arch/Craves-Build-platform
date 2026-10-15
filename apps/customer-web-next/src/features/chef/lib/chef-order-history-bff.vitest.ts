@@ -16,7 +16,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("chef order history BFF", () => {
   it("validates the query before calling the order service", async () => {
-    for (const query of ["?limit=0", "?limit=51", "?limit=abc", "?limit=", `?cursor=${"c".repeat(513)}`, "?cursor=", "?status=SHIPPED", "?status=delivered", "?status="]) {
+    for (const query of ["?limit=0", "?limit=51", "?limit=abc", "?limit=", `?cursor=${"c".repeat(513)}`, "?cursor=", "?cursor=a..b", "?cursor=a%2Bb", "?status=SHIPPED", "?status=delivered", "?status="]) {
       expect((await read(query)).status, query).toBe(400);
     }
     expect(upstream).not.toHaveBeenCalled();
@@ -24,10 +24,10 @@ describe("chef order history BFF", () => {
 
   it("forwards limit, cursor and status and returns the parsed page", async () => {
     upstream.mockResolvedValue(Response.json(page));
-    const response = await read("?limit=05&cursor=a%2Bb&status=DELIVERED");
+    const response = await read("?limit=05&cursor=a-b_C9&status=DELIVERED");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect((await response.json()).nextCursor).toBe("next");
-    expect(upstream.mock.calls[0][1]).toBe("/chef/orders/page?limit=5&cursor=a%2Bb&status=DELIVERED");
+    expect(upstream.mock.calls[0][1]).toBe("/chef/orders/page?limit=5&cursor=a-b_C9&status=DELIVERED");
     await read();
     expect(upstream.mock.calls[1][1]).toBe("/chef/orders/page?limit=20");
   });

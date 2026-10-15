@@ -25,7 +25,7 @@ function failure(status: number, code: string) {
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const limit = params.get("limit") ?? "20", cursor = params.get("cursor");
-  if (!/^\d{1,2}$/.test(limit) || Number(limit) < 1 || Number(limit) > 50 || (cursor !== null && (!cursor || cursor.length > 512))) {
+  if (!/^\d{1,2}$/.test(limit) || Number(limit) < 1 || Number(limit) > 50 || (cursor !== null && !/^[A-Za-z0-9_-]{1,512}$/.test(cursor))) {
     return failure(400, "INVALID_SUPPORT_CASE_QUERY");
   }
   const query = new URLSearchParams({ limit });

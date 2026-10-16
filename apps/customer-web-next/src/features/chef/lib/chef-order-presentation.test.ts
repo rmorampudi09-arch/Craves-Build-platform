@@ -74,6 +74,14 @@ test("cooking counts down from acceptance and then counts minutes late", () => {
   assert.equal(prepCountdown({ ...cooking, status: "READY_FOR_PICKUP" }, at("2026-10-10T08:00:00Z")), null);
 });
 
+test("countdowns, pickup times and decline wording speak the chef's language", () => {
+  const order = { createdAt, chefAcceptanceExpiresAt: "2026-10-10T08:15:00Z" };
+  assert.equal(respondCountdown(order, at(createdAt), "te").label, "15:00 లో జవాబు ఇవ్వండి");
+  assert.equal(prepCountdown({ status: "PREPARING", prepTimeMinutes: 20, updatedAt: createdAt }, at("2026-10-10T08:25:00Z"), "kn")?.label, "5 ನಿಮಿ ತಡ");
+  assert.equal(pickupEtaLabel("2026-10-10T08:05:30Z", at(createdAt), "kn"), "6 ನಿಮಿಷದಲ್ಲಿ ಬರುತ್ತಾರೆ");
+  assert.notEqual(declineConsequence({ checkoutId: null }, "te"), declineConsequence({ checkoutId: null }));
+});
+
 test("one-tap accept promises the held time, else the slowest dish, else 15 minutes", () => {
   const item = (menuItemId: string, itemName: string) => ({ id: menuItemId, menuItemId, itemName, category: null, foodType: null, unitPrice: 100, quantity: 1, lineTotal: 100 });
   const dishes = [

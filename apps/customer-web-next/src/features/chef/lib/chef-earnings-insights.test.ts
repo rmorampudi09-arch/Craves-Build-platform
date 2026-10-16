@@ -92,6 +92,10 @@ test("India days whatever the browser's zone", () => {
   assert.equal(istDayName(istDayStart(NOW), NOW), "Today");
   assert.equal(istDayName(istDayStart(NOW) - DAY_MS, NOW), "Yesterday");
   assert.equal(istDayName(istDayStart(NOW) - 3 * DAY_MS, NOW), "Mon, 12 Oct");
+  // The chef's words; the month stays as Indian calendars print it.
+  assert.equal(istDayName(istDayStart(NOW), NOW, "te"), "ఈరోజు");
+  assert.equal(istDayName(istDayStart(NOW) - DAY_MS, NOW, "kn"), "ನಿನ್ನೆ");
+  assert.equal(istDayName(istDayStart(NOW) - 3 * DAY_MS, NOW, "te"), "సోమ, 12 Oct");
 });
 
 test("periods and the period before", () => {
@@ -156,6 +160,10 @@ test("the week's summary: money from earnings, counts and dishes from orders", (
   assert.deepEqual(
     summary.byDay.map((day) => day.label),
     ["Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Today"],
+  );
+  assert.deepEqual(
+    summarizeEarnings({ orders, earnings, range: "week", now: NOW, language: "kn" }).byDay.map((day) => day.label),
+    ["ಶುಕ್ರ", "ಶನಿ", "ಭಾನು", "ಸೋಮ", "ಮಂಗಳ", "ಬುಧ", "ಇಂದು"],
   );
   assert.deepEqual(
     summary.byDay.slice(-2).map((day) => day.amount),
@@ -264,8 +272,11 @@ test("payout history words and India-month groups", () => {
   assert.equal(payoutStatusView("PAID").label, "Paid");
   assert.equal(payoutStatusView("PENDING_APPROVAL").label, "Craves is checking");
   assert.equal(payoutStatusView("RESERVED").label, "Requested");
+  assert.equal(payoutStatusView("toString").label, "Craves is checking");
+  assert.deepEqual(payoutStatusView("PAID", "te"), { label: "చెల్లించాం", tone: "success", note: "డబ్బు మీ బ్యాంక్‌కు చేరింది." });
+  assert.equal(payoutStatusView("UNKNOWN", "kn").label, "Craves ಪರಿಶೀಲಿಸುತ್ತಿದೆ");
   // Balance & payouts shows the same words as Payout history.
-  assert.match(readFileSync(new URL("../components/chef-withdrawal-panel.tsx", import.meta.url), "utf8"), /const state = payoutStatusView\(row\.status\);/);
+  assert.match(readFileSync(new URL("../components/chef-withdrawal-panel.tsx", import.meta.url), "utf8"), /const state = payoutStatusView\(row\.status, language\);/);
   const rows = [
     "2026-10-02T10:00:00Z",
     "2026-09-30T19:00:00Z",
@@ -282,4 +293,5 @@ test("payout history words and India-month groups", () => {
       ["Earlier", 1],
     ],
   );
+  assert.equal(groupByMonth(["nope"], (row) => row, NOW, "te")[0]?.title, "ఇంతకు ముందు");
 });

@@ -2,19 +2,20 @@
 // Actual rendered components; all service responses and identity changes are disposable fixtures.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
-import { createElement, useState } from "react";
+import { Fragment, createElement, useState } from "react";
 import { usePathname } from "next/navigation";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ChefMenuManager } from "../components/chef-menu-manager";
 import { ChefKitchenForm } from "../components/chef-kitchen-form";
 import { ChefModeDashboard } from "../components/chef-mode-dashboard";
-import ChefLayout from "../../../app/chef/layout";
+import { ChefShell } from "../components/chef-shell";
 import { ChefWorkspaceNavigation } from "../components/chef-workspace-navigation";
 import type { ChefMenuItem } from "./chef-menu-contract";
 import type { ChefKitchen } from "./chef-kitchen-types";
 import { ChefAccessBoundary } from "../components/chef-access-boundary";
 import { ChefBankOnboardingPanel } from "../components/chef-bank-onboarding-panel";
 import ChefFinancePage from "../../../app/chef/finance/page";
+import ChefBankPage from "../../../app/chef/bank/page";
 import ProfilePage from "../../profile/screens/Profile";
 import { captureSessionContext, clearSession, getSession, invalidateSession, setSessionEmailVerification, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
@@ -63,7 +64,7 @@ async function confirmSignOut() {
 describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
-    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Chef fixture")));
     const header = screen.getByRole("link", { name: "Craves Chef home" }).closest("header")!;
     expect(screen.getByRole("link", { name: "Craves Chef home" }).getAttribute("href")).toBe("/chef");
     expect(header.contains(screen.getByRole("button", { name: "Account menu" }))).toBe(true);
@@ -73,15 +74,16 @@ describe("Chef navigation placement", () => {
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
   });
   it.each([
-    ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Earnings", "page"],
-    ["/chef/finance", "Earnings", "true"], ["/chef/statements", "Earnings", "true"], ["/chef/bank", "Earnings", "true"],
-    ["/chef/profile", "More", "page"], ["/chef/kitchen", "More", "true"], ["/chef/operations", "More", "true"], ["/chef/meal-plans", "More", "true"],
+    ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Money", "page"],
+    ["/chef/finance", "Money", "true"], ["/chef/statements", "Money", "true"], ["/chef/bank", "Money", "true"],
+    ["/chef/earnings/payouts", "Money", "true"], ["/chef/earnings/orders", "Money", "true"], ["/chef/meal-plans", "Menu", "true"],
+    ["/chef/profile", "More", "page"], ["/chef/kitchen", "More", "true"], ["/chef/operations", "More", "true"], ["/chef/hours", "More", "true"],
     ["/chef/capacity", "More", "true"], ["/chef/support", "More", "true"], ["/chef/application/status", "More", "true"],
   ])("keeps labeled active navigation for %s", (pathname, label, current) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "More"]);
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Money", "More"]);
     expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe(current);
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });
@@ -100,7 +102,7 @@ describe("Chef navigation placement", () => {
   });
   it("marks the bell, not a tab, on Notifications", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/notifications");
-    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Chef fixture")));
     expect(screen.getByRole("link", { name: "Notifications" }).getAttribute("aria-current")).toBe("page");
     const tabs = within(screen.getByRole("navigation", { name: "Chef primary navigation" })).getAllByRole("link");
     expect(tabs.filter(link => link.hasAttribute("aria-current"))).toHaveLength(0);
@@ -109,7 +111,7 @@ describe("Chef navigation placement", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/orders");
     // Opened fresh: the session has not answered yet, and this device remembers Chef A's kitchen.
     act(() => invalidateSession(captureSessionContext()));
-    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Chef fixture")));
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Notifications" })).toBeTruthy();
     // The account menu needs the account, so it waits for the answer.
@@ -130,11 +132,12 @@ describe("chef finance owner boundaries", () => {
     render(createElement(ChefFinancePage));
     await screen.findByDisplayValue("a@example.invalid");
     await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
-    expect(screen.getByText("Money summary")).toBeTruthy();
+    // The money summary PDF moved to Statements; Balance & payouts keeps how the balance is worked out.
+    expect(screen.getByText("How your balance is worked out")).toBeTruthy();
   });
 
   it("clears bank inputs and the old balance on owner change and ignores a late refresh", async () => {
-    render(createElement(ChefFinancePage));
+    render(createElement(Fragment, null, createElement(ChefFinancePage), createElement(ChefBankPage)));
     await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     const late = deferred<Response>();
@@ -150,7 +153,7 @@ describe("chef finance owner boundaries", () => {
   });
 
   it("preserves healthy form input on a same-owner verified email update", async () => {
-    render(createElement(ChefFinancePage));
+    render(createElement(Fragment, null, createElement(ChefFinancePage), createElement(ChefBankPage)));
     const account = await screen.findByLabelText("Account number");
     fireEvent.change(account, { target: { value: "123456789" } });
     act(() => { setSessionEmailVerification(a.id, { ...email(a), email: "replacement@example.invalid", emailRevision: 2 }); });
@@ -738,6 +741,8 @@ describe("Approved Chef first step", () => {
       const url = String(input);
       if (url === "/api/chef/kitchen") return Promise.resolve(Response.json(hasKitchen ? kitchenFixture : null));
       if (["/api/chef/menu", "/api/chef/orders", "/api/chef/earnings"].includes(url)) return Promise.resolve(Response.json([]));
+      // The welcome is only for a chef approved in the last 30 days: it needs the approval date.
+      if (url === "/api/chef/application") return Promise.resolve(Response.json({ firstName: "Fixture", lastName: "Chef", status: "APPROVED", reviewedAt: new Date().toISOString() }));
       return normal(input);
     });
     render(createElement(ChefModeDashboard));

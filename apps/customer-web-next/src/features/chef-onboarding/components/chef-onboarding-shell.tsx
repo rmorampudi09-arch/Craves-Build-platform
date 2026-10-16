@@ -10,14 +10,28 @@ import {
   DialogDescription,
 } from "@/shared/ui/overlays/dialog";
 import { Content } from "@radix-ui/react-dialog";
+import { messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
+import { LanguageButton } from "@/shared/ui/language/language-chooser";
 import { Spinner } from "@/features/chef-onboarding/components/chef-onboarding-ui";
 import "@/features/chef-onboarding/styles/chef-onboarding.css";
+
+const TEXT = messages({
+  en: { back: "Back", saveExit: "Save & exit", saving: "Saving", saved: "Draft saved", unsaved: "Unsaved changes" },
+  te: { back: "వెనక్కి", saveExit: "సేవ్ చేసి వెళ్లండి", saving: "సేవ్ అవుతోంది", saved: "డ్రాఫ్ట్ సేవ్ అయింది", unsaved: "సేవ్ చేయని మార్పులు" },
+  kn: { back: "ಹಿಂದೆ", saveExit: "ಉಳಿಸಿ ಹೊರಡಿ", saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ", saved: "ಡ್ರಾಫ್ಟ್ ಉಳಿಸಲಾಗಿದೆ", unsaved: "ಉಳಿಸದ ಬದಲಾವಣೆಗಳು" },
+});
+
+// `.cob button` resets every button, so the pill look is restated. On phones only the globe shows; its
+// label still says the language.
+const LANGUAGE_BUTTON =
+  "shrink-0 !rounded-full !border !text-[0.9375rem] !font-semibold max-sm:!min-w-11 max-sm:!px-0 max-sm:justify-center max-sm:[&>:not(:first-child)]:hidden";
 
 export type ChefSaveState = "saved" | "saving" | "unsaved" | null;
 
 type Props = {
   title: string;
-  description: string;
+  description: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   /** Shown only when a save is confirmed by the backend, in progress or pending. */
@@ -26,6 +40,7 @@ type Props = {
   /** null hides the Back button (for example on the submitted confirmation). */
   onBack: (() => void) | null;
   backLabel?: string;
+  /** Defaults to "Save & exit" in the chef's language; null hides it. */
   exitLabel?: string | null;
   onExit: () => void;
   /** A screen key: changing it resets scroll and moves focus to the new heading. */
@@ -46,12 +61,16 @@ export function ChefOnboardingShell({
   saveState,
   busy,
   onBack,
-  backLabel = "Back",
-  exitLabel = "Save & exit",
+  backLabel,
+  exitLabel,
   onExit,
   screenKey,
   hero,
 }: Props) {
+  const text = useText(TEXT);
+  // Before a language is chosen the screen itself is the three choices.
+  const { chosen } = useLanguage();
+  const exit = exitLabel === undefined ? text.saveExit : exitLabel;
   const scroller = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -90,49 +109,52 @@ export function ChefOnboardingShell({
           }}
           aria-busy={busy}
         >
-          {onBack || exitLabel || saveState ? (
+          {onBack || exit || saveState || chosen ? (
             <header className="cob-header" data-scrolled={scrolled}>
               {onBack ? (
                 <button
                   type="button"
                   className="cob-icon-button"
-                  aria-label={backLabel}
+                  aria-label={backLabel ?? text.back}
                   disabled={busy}
                   onClick={onBack}
                 >
                   <ArrowLeft size={20} aria-hidden="true" />
                 </button>
               ) : null}
-              <span className="cob-header-title" aria-hidden="true">
+              {/* Basis 0: the hidden title gives way first; then a long save note shortens, never the buttons. */}
+              <span className="cob-header-title !basis-0" aria-hidden="true">
                 {title}
               </span>
-              <div className="cob-header-actions">
+              <div className="cob-header-actions min-w-0 !shrink">
                 {saveState ? (
-                  <span role="status" aria-live="polite" className="cob-save-state">
+                  <span role="status" aria-live="polite" className="cob-save-state min-w-0">
                     {saveState === "saving" ? (
                       <Spinner red />
                     ) : saveState === "saved" ? (
                       <CheckCircle2 size={16} aria-hidden="true" />
                     ) : null}
-                    <span>
+                    <span className="min-w-0 truncate">
                       {saveState === "saving"
-                        ? "Saving"
+                        ? text.saving
                         : saveState === "saved"
-                          ? "Draft saved"
-                          : "Unsaved changes"}
+                          ? text.saved
+                          : text.unsaved}
                     </span>
                   </span>
                 ) : null}
-                {exitLabel ? (
+                {exit ? (
                   <button
                     type="button"
-                    className="cob-header-link"
+                    className="cob-header-link shrink-0"
                     disabled={busy}
                     onClick={onExit}
                   >
-                    {exitLabel}
+                    {exit}
                   </button>
                 ) : null}
+                {/* The chef can switch language at any step. */}
+                {chosen ? <LanguageButton className={LANGUAGE_BUTTON} /> : null}
               </div>
             </header>
           ) : null}

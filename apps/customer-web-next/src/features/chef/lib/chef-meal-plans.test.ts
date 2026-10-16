@@ -4,10 +4,13 @@ import {
   acceptingSubscribersValue,
   addMealLabel,
   addSlot,
+  billingPeriodLabel,
   chefPlanCounts,
   chefPlanMetaLine,
   chefPlanPriceLabel,
+  chefPlanStatus,
   copyDayToWeekdays,
+  dayName,
   dayRangeLabel,
   daysWithMeals,
   editorScheduleKind,
@@ -17,7 +20,9 @@ import {
   groupMealDays,
   initialSlots,
   leadHoursLabel,
+  mealSlotLabel,
   otherWeekdaysHaveMeals,
+  perBillingUnit,
   removeSlot,
   repeatsLabel,
   scheduleToSlots,
@@ -378,6 +383,57 @@ test("plan list: filters, counts, meta line, price and the subscriber switch", (
   assert.equal(acceptingSubscribersValue({ status: "ACTIVE", acceptingSubscribers: false }), false);
   assert.equal(acceptingSubscribersValue({ status: "ACTIVE", acceptingSubscribers: null }), null);
   assert.equal(acceptingSubscribersValue({ status: "DRAFT", acceptingSubscribers: true }), null);
+});
+
+test("plan words read in Telugu and Kannada, with every number filled in", () => {
+  const week = [1, 2, 3, 4, 5].map((day) => item({ isoDayOfWeek: day }));
+  const words = {
+    te: [
+      chefPlanMetaLine("WEEKLY", week, "te"),
+      chefPlanPriceLabel({ amount: 1499, currency: "INR", billingPeriod: "WEEKLY" }, "te"),
+      subscriberCountLabel(8, "te"),
+      leadHoursLabel(1, "te"),
+      addMealLabel(["BREAKFAST", "DINNER"], "te"),
+      dayRangeLabel("MONTHLY", [1, 2, 3, 15], "te"),
+      chefPlanStatus("PENDING_APPROVAL", "te").label,
+      validateMealPlanForm({ name: "", description: "", amount: "" }, [], "draft", "te").name,
+    ],
+    kn: [
+      chefPlanMetaLine("MONTHLY", [item({ dayOfMonth: 1 }), item({ dayOfMonth: 15 })], "kn"),
+      chefPlanPriceLabel({ amount: 12345.5, currency: "INR", billingPeriod: "MONTHLY" }, "kn"),
+      subscriberCountLabel(1, "kn"),
+      leadHoursLabel(24, "kn"),
+      addMealLabel(["LUNCH"], "kn"),
+      dayName("WEEKLY", 7, "long", "kn"),
+      chefPlanStatus("ACTIVE", "kn").label,
+      repeatsLabel("FORTNIGHTLY", "kn"),
+    ],
+  };
+  assert.deepEqual(words.te, [
+    "ప్రతి వారం · మధ్యాహ్న భోజనం · సోమ – శుక్ర",
+    "₹1,499 / వారం",
+    "8 సబ్‌స్క్రైబర్లు",
+    "1 గంట ముందు",
+    "ఉదయం టిఫిన్ లేదా రాత్రి భోజనం జోడించండి",
+    "రోజు 1 – 3, 15",
+    "Craves చూస్తోంది",
+    "ప్లాన్ పేరు ఇవ్వండి.",
+  ]);
+  assert.deepEqual(words.kn, [
+    "ಪ್ರತಿ ತಿಂಗಳು · ಮಧ್ಯಾಹ್ನದ ಊಟ · ತಿಂಗಳಿಗೆ 2 ದಿನ",
+    "₹12,345.50 / 28 ದಿನ",
+    "1 ಚಂದಾದಾರರು",
+    "24 ಗಂಟೆ ಮೊದಲು (ಸಾಮಾನ್ಯ)",
+    "ಮಧ್ಯಾಹ್ನದ ಊಟ ಸೇರಿಸಿ",
+    "ಭಾನುವಾರ",
+    "ಚಾಲ್ತಿಯಲ್ಲಿದೆ",
+    "ಪ್ರತಿ 14 ದಿನದ ಬಿಲ್‌ನಲ್ಲಿ ಈ ವಾರ 2 ಬಾರಿ ಬರುತ್ತದೆ.",
+  ]);
+  // English stays as it was; screen readers hear "per week" for "/ week".
+  assert.equal(perBillingUnit("FORTNIGHTLY"), "per 14 days");
+  assert.equal(billingPeriodLabel("MONTHLY"), "Monthly");
+  // A slot code the app doesn't know still reads as words.
+  assert.equal(mealSlotLabel("LATE_NIGHT", "te"), "Late night");
 });
 
 test("plan photos keep the middle 4:3 and are at most 1600 px wide", () => {

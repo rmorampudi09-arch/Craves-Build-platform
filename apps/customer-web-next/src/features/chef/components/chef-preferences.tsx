@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
@@ -19,10 +19,40 @@ import {
   parseChefKitchenSettings,
   type ChefKitchenSettings,
 } from "@/features/chef/lib/chef-schedule-contract";
+import { format, messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 
-const LOAD_FAILED = "We couldn’t load your order settings.";
-const SAVE_FAILED = "We couldn’t save that. Please try again.";
 const COOKING_TIMES = [10, 15, 20, 25, 30, 40, 45, 60];
+
+const TEXT = messages({
+  en: {
+    loadFailed: "We couldn’t load your order settings.", saveFailed: "We couldn’t save that. Please try again.", orders: "Orders",
+    soonTitle: "Order settings are on their way", soonText: "Automatic acceptance and a default cooking time will be here soon.",
+    failedTitle: "We couldn’t load your order settings", tryAgain: "Try again", saved: "Saved", saving: "Saving…",
+    autoAccept: "Accept orders automatically", onlyOpen: "Only while your kitchen is open", cookingTime: "Default cooking time",
+    minutes: "{minutes} min", notSet: "Not set", noTimeSet: "Used when a dish has no time set",
+    confirmTitle: "Accept new orders automatically?", confirmText: "Orders are accepted with your cooking time while your kitchen is open.",
+    notNow: "Not now", turnOn: "Turn on",
+  },
+  te: {
+    loadFailed: "మీ ఆర్డర్ సెట్టింగ్స్ లోడ్ చేయలేకపోయాం.", saveFailed: "అది సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి.", orders: "ఆర్డర్లు",
+    soonTitle: "ఆర్డర్ సెట్టింగ్స్ త్వరలో వస్తాయి", soonText: "ఆర్డర్లు ఆటోమేటిక్‌గా ఒప్పుకోవడం, మామూలు వంట సమయం త్వరలో ఇక్కడ వస్తాయి.",
+    failedTitle: "మీ ఆర్డర్ సెట్టింగ్స్ లోడ్ చేయలేకపోయాం", tryAgain: "మళ్లీ ప్రయత్నించండి", saved: "సేవ్ అయింది", saving: "సేవ్ అవుతోంది…",
+    autoAccept: "ఆర్డర్లను ఆటోమేటిక్‌గా ఒప్పుకోవడం", onlyOpen: "మీ వంటగది తెరిచి ఉన్నప్పుడు మాత్రమే", cookingTime: "మామూలు వంట సమయం",
+    minutes: "{minutes} నిమి", notSet: "పెట్టలేదు", noTimeSet: "వంటకానికి సమయం పెట్టకపోతే ఇది వాడతాం",
+    confirmTitle: "కొత్త ఆర్డర్లను ఆటోమేటిక్‌గా ఒప్పుకోవాలా?", confirmText: "మీ వంటగది తెరిచి ఉన్నప్పుడు, మీ వంట సమయంతో ఆర్డర్లు ఒప్పుకుంటాం.",
+    notNow: "ఇప్పుడు వద్దు", turnOn: "ఆన్ చేయండి",
+  },
+  kn: {
+    loadFailed: "ನಿಮ್ಮ ಆರ್ಡರ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ.", saveFailed: "ಅದನ್ನು ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", orders: "ಆರ್ಡರ್‌ಗಳು",
+    soonTitle: "ಆರ್ಡರ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿವೆ", soonText: "ಆರ್ಡರ್ ತಾನಾಗಿಯೇ ಒಪ್ಪಿಕೊಳ್ಳುವುದು ಮತ್ತು ಸಾಮಾನ್ಯ ಅಡುಗೆ ಸಮಯ ಶೀಘ್ರದಲ್ಲೇ ಇಲ್ಲಿ ಬರಲಿವೆ.",
+    failedTitle: "ನಿಮ್ಮ ಆರ್ಡರ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", saved: "ಉಳಿಸಲಾಗಿದೆ", saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ…",
+    autoAccept: "ಆರ್ಡರ್‌ಗಳನ್ನು ತಾನಾಗಿಯೇ ಒಪ್ಪಿಕೊಳ್ಳುವುದು", onlyOpen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿರುವಾಗ ಮಾತ್ರ", cookingTime: "ಸಾಮಾನ್ಯ ಅಡುಗೆ ಸಮಯ",
+    minutes: "{minutes} ನಿಮಿ", notSet: "ಹಾಕಿಲ್ಲ", noTimeSet: "ಖಾದ್ಯಕ್ಕೆ ಸಮಯ ಹಾಕದಿದ್ದರೆ ಇದನ್ನು ಬಳಸುತ್ತೇವೆ",
+    confirmTitle: "ಹೊಸ ಆರ್ಡರ್‌ಗಳನ್ನು ತಾನಾಗಿಯೇ ಒಪ್ಪಿಕೊಳ್ಳಬೇಕೇ?", confirmText: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿರುವಾಗ, ನಿಮ್ಮ ಅಡುಗೆ ಸಮಯದೊಂದಿಗೆ ಆರ್ಡರ್‌ಗಳನ್ನು ಒಪ್ಪಿಕೊಳ್ಳಲಾಗುತ್ತದೆ.",
+    notNow: "ಈಗ ಬೇಡ", turnOn: "ಆನ್ ಮಾಡಿ",
+  },
+});
 
 type Load =
   | { state: "loading" }
@@ -31,7 +61,7 @@ type Load =
   | { state: "error"; message: string };
 
 /** Reads the settings, or saves both of them when given (PUT replaces the pair). */
-async function request(settings?: ChefKitchenSettings): Promise<ChefKitchenSettings> {
+async function request(fallback: string, settings?: ChefKitchenSettings): Promise<ChefKitchenSettings> {
   const response = await sessionFetch(
     "/api/chef/kitchen/settings",
     settings
@@ -43,7 +73,7 @@ async function request(settings?: ChefKitchenSettings): Promise<ChefKitchenSetti
       : { cache: "no-store" },
   );
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw chefApiError(response, body, settings ? SAVE_FAILED : LOAD_FAILED);
+  if (!response.ok) throw chefApiError(response, body, fallback);
   const parsed = parseChefKitchenSettings(body);
   if (!parsed)
     throw new ChefError(
@@ -56,23 +86,30 @@ async function request(settings?: ChefKitchenSettings): Promise<ChefKitchenSetti
 
 /** Order settings: accept orders automatically, and the cooking time used when a dish has none. */
 export function ChefPreferences() {
+  const text = useText(TEXT);
+  // The read below runs once per attempt, not again when the chef changes language.
+  const words = useRef(text);
+  useEffect(() => {
+    words.current = text;
+  });
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState("");
+  const [saved, setSaved] = useState(false);
   const [confirmAuto, setConfirmAuto] = useState(false);
 
   useEffect(() => {
     let active = true;
-    request().then(
+    const failed = words.current.loadFailed;
+    request(failed).then(
       (settings) => active && setLoad({ state: "ready", settings }),
       (caught: unknown) =>
         active &&
         setLoad(
           isComingSoon(caught)
             ? { state: "soon" }
-            : { state: "error", message: chefErrorText(caught, LOAD_FAILED) },
+            : { state: "error", message: chefErrorText(caught, failed) },
         ),
     );
     return () => {
@@ -82,7 +119,7 @@ export function ChefPreferences() {
 
   if (load.state === "loading") {
     return (
-      <ChefSection title="Orders" flush labelledBy="chef-order-settings">
+      <ChefSection title={text.orders} flush labelledBy="chef-order-settings">
         <div className="chef-list" aria-busy="true">
           <ChefSkeletonRow media="none" trailing="toggle" />
           <ChefSkeletonRow media="none" trailing="value" />
@@ -92,10 +129,7 @@ export function ChefPreferences() {
   }
   if (load.state === "soon") {
     return (
-      <ComingSoon
-        title="Order settings are on their way"
-        message="Automatic acceptance and a default cooking time will be here soon."
-      />
+      <ComingSoon title={text.soonTitle} message={text.soonText} />
     );
   }
   if (load.state === "error") {
@@ -103,7 +137,7 @@ export function ChefPreferences() {
       <ChefSection>
         <ChefEmpty
           icon={AlertTriangle}
-          title="We couldn’t load your order settings"
+          title={text.failedTitle}
           text={load.message}
           action={
             <button
@@ -115,7 +149,7 @@ export function ChefPreferences() {
               }}
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              Try again
+              {text.tryAgain}
             </button>
           }
         />
@@ -134,12 +168,12 @@ export function ChefPreferences() {
     if (saving) return;
     setSaving(true);
     setError("");
-    setSaved("");
+    setSaved(false);
     try {
-      setLoad({ state: "ready", settings: await request(next) });
-      setSaved("Saved");
+      setLoad({ state: "ready", settings: await request(text.saveFailed, next) });
+      setSaved(true);
     } catch (caught) {
-      setError(chefErrorText(caught, SAVE_FAILED));
+      setError(chefErrorText(caught, text.saveFailed));
     } finally {
       setSaving(false);
     }
@@ -147,14 +181,14 @@ export function ChefPreferences() {
 
   return (
     <>
-      <ChefSection title="Orders" labelledBy="chef-order-settings">
+      <ChefSection title={text.orders} labelledBy="chef-order-settings">
         <div className="chef-setting-row">
           <div className="min-w-0 flex-1">
             <p id="chef-auto-accept" className="chef-setting-title">
-              Accept orders automatically
+              {text.autoAccept}
             </p>
             <p id="chef-auto-accept-note" className="chef-section-note">
-              Only while your kitchen is open
+              {text.onlyOpen}
             </p>
           </div>
           <AppleSwitch
@@ -171,12 +205,12 @@ export function ChefPreferences() {
         </div>
         <div className="chef-setting-row !block !py-3">
           <p id="chef-cooking-time" className="chef-setting-title">
-            Default cooking time{" "}
+            {text.cookingTime}{" "}
             <span className="font-normal text-[#6B6B6B]">
-              · {minutes ? `${minutes} min` : "Not set"}
+              · {minutes ? format(text.minutes, { minutes }) : text.notSet}
             </span>
           </p>
-          <p className="chef-section-note">Used when a dish has no time set</p>
+          <p className="chef-section-note">{text.noTimeSet}</p>
           <div role="group" aria-labelledby="chef-cooking-time" className="chef-chips is-wrap mt-3">
             {times.map((value) => (
               <button
@@ -189,7 +223,7 @@ export function ChefPreferences() {
                   value !== minutes && void save({ ...settings, defaultPrepMinutes: value })
                 }
               >
-                {value} min
+                {format(text.minutes, { minutes: value })}
               </button>
             ))}
           </div>
@@ -200,14 +234,14 @@ export function ChefPreferences() {
           </p>
         ) : null}
         <p role="status" className="sr-only">
-          {saving ? "Saving…" : saved}
+          {saving ? text.saving : saved ? text.saved : ""}
         </p>
       </ChefSection>
       <Dialog
         open={confirmAuto}
         onOpenChange={setConfirmAuto}
-        title="Accept new orders automatically?"
-        description="Orders are accepted with your cooking time while your kitchen is open."
+        title={text.confirmTitle}
+        description={text.confirmText}
         footer={
           <>
             <button
@@ -215,7 +249,7 @@ export function ChefPreferences() {
               className={secondaryActionClass}
               onClick={() => setConfirmAuto(false)}
             >
-              Not now
+              {text.notNow}
             </button>
             <button
               type="button"
@@ -225,7 +259,7 @@ export function ChefPreferences() {
                 void save({ ...settings, autoAcceptOrders: true });
               }}
             >
-              Turn on
+              {text.turnOn}
             </button>
           </>
         }

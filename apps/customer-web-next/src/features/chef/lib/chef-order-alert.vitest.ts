@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderWatcher } from "../components/chef-order-watcher";
 import { ChefOrderInbox } from "../components/chef-order-inbox";
-import { fetchChefOrders, mergeOrders, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
+import { fetchChefOrders, isAwaitingAnswer, mergeOrders, noteOrderAnswered, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
 import type { ChefOrder } from "./chef-order-contract";
 import { isChefModeTab, markChefModeVerified } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
@@ -56,6 +56,21 @@ describe("new-order alerts", () => {
     expect(noticeNewOrders([order(A, "CHEF_ACCEPTANCE_PENDING")])).toHaveLength(1);
     expect(noticeNewOrders([order(B, "PREPARING")])).toEqual([]);
     expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it("an answered order stays answered when a check that left earlier still lists it as waiting", () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-10T08:02:00Z") });
+    try {
+      noticeNewOrders([order(A, "CHEF_ACCEPTANCE_PENDING")]);
+      expect(isAwaitingAnswer(order(A, "CHEF_ACCEPTANCE_PENDING"))).toBe(true);
+      noteOrderAnswered(order(A, "CHEF_ACCEPTED"));
+      expect(isAwaitingAnswer(order(A, "CHEF_ACCEPTANCE_PENDING"))).toBe(false);
+      vi.advanceTimersByTime(61_000);
+      // The server still says waiting a minute later: believe it.
+      expect(isAwaitingAnswer(order(A, "CHEF_ACCEPTANCE_PENDING"))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the chef's own newer copy when an older check comes back, and reads pieces aloud plainly", () => {
@@ -179,11 +194,11 @@ describe("Orders screen", () => {
     render(createElement(ChefOrderInbox));
     await screen.findByRole("heading", { name: /Order #0BDE0101/ });
     await act(async () => {});
-    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     list = [order(C, "CHEF_ACCEPTANCE_PENDING"), ...list];
     await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
     await waitFor(() => expect(screen.getByRole("button", { name: /^New/ }).textContent).toContain("2"));
-    expect(screen.getByRole("button", { name: /^All/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /^Past/ }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("says what happened after Accept, follows the order to Cooking and keeps focus on it", async () => {

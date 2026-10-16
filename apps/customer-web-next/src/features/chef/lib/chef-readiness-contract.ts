@@ -15,7 +15,8 @@ const schema = z.object({
     rejectionReason: z.string().max(1000).nullable(),
   })).min(3).max(5),
   blockingIssues: z.array(z.object({
-    code: z.enum(["APPLICATION_REQUIRED", "APPLICATION_REJECTED", "EMAIL_VERIFICATION_REQUIRED", "DOCUMENT_MISSING", "DOCUMENT_REJECTED", "DOCUMENT_AWAITING_REVIEW", "ONBOARDING_NOT_SUBMITTED"]),
+    // user-chef ChefApplicationReadinessService also blocks on an FSSAI number Craves hasn't recorded yet.
+    code: z.enum(["APPLICATION_REQUIRED", "APPLICATION_REJECTED", "EMAIL_VERIFICATION_REQUIRED", "DOCUMENT_MISSING", "DOCUMENT_REJECTED", "DOCUMENT_AWAITING_REVIEW", "ONBOARDING_NOT_SUBMITTED", "FSSAI_VERIFICATION_REQUIRED"]),
     documentType: documentType.nullable(),
   })).max(9),
   evaluatedAt: z.string().datetime(),
@@ -25,7 +26,7 @@ const schema = z.object({
   const uploaded = value.documents.filter(document => document.status !== "MISSING").length;
   if (new Set(value.documents.map(document => document.documentType)).size !== value.requiredDocumentCount || value.documents.length !== value.requiredDocumentCount
     || approved !== value.approvedDocumentCount || uploaded !== value.uploadedDocumentCount
-    || value.approvalReady !== (value.applicationStatus === "PENDING" && value.emailStatus === "VERIFIED" && approved === value.requiredDocumentCount && !value.blockingIssues.some(issue => issue.code === "ONBOARDING_NOT_SUBMITTED"))
+    || value.approvalReady !== (value.applicationStatus === "PENDING" && value.emailStatus === "VERIFIED" && approved === value.requiredDocumentCount && !value.blockingIssues.some(issue => issue.code === "ONBOARDING_NOT_SUBMITTED" || issue.code === "FSSAI_VERIFICATION_REQUIRED"))
     || (value.approvalReady && value.blockingIssues.length !== 0)) {
     context.addIssue({ code: "custom", message: "Inconsistent application readiness" });
   }

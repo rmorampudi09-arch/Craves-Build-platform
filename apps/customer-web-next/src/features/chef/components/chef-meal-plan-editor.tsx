@@ -40,7 +40,6 @@ import type { ChefMenuItem, FoodType } from "@/features/chef/lib/chef-menu-contr
 import {
   addMealLabel,
   addSlot,
-  billingUnit,
   chefPlanMetaLine,
   chefPlanPriceLabel,
   chefPlanStatus,
@@ -66,12 +65,13 @@ import {
   setSlotDish,
   setSlotQuantity,
   setSlotTime,
+  perBillingUnit,
+  billingPeriodLabel,
   slotsToScheduleRequest,
   stepWithErrors,
   TIME_OPTIONS,
   validateMealPlanForm,
   WEEK_ORDER,
-  WEEKDAYS_SHORT,
   type EditorSlot,
   type MealPlanFormValues,
   type MealSlot,
@@ -92,9 +92,144 @@ import {
   secondaryActionClass,
   useOverlayHistory,
 } from "@/shared/ui/overlays/overlay";
+import { format, messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
+
+const TEXT = messages({
+  en: {
+    details: "Details", meals: "Meals", review: "Review", VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg",
+    photoTooLarge: "Photo is too large. Pick a smaller photo.", photoType: "Choose a JPEG or PNG photo.", photoOther: "Choose another photo.",
+    planLoadFailed: "This meal plan couldn’t load.", planLoadTitle: "Couldn’t load this meal plan", tryAgain: "Try again", loadingPlan: "Loading meal plan",
+    mealPlans: "Meal plans", dish: "Dish",
+    photosSoon: "Plan photos aren’t available yet.", retry: "Try again.", photoUploadFailed: "Photo couldn’t be uploaded. Try again.",
+    photoNotUploaded: "Plan saved, but the photo wasn’t uploaded. {reason}",
+    sent: "Sent to Craves for approval", draftSaved: "Draft saved", saveFailed: "The meal plan could not be saved. Try again.",
+    planPhoto: "Plan photo", planPhotoNote: "Customers see it on the plan card. JPEG or PNG.", changePhoto: "Change photo", addPhoto: "Add plan photo",
+    planName: "Plan name", planNamePlaceholder: "e.g. Weekly home lunch", howOften: "How often", price: "Price", pricePer: "Price {per}",
+    leadLabel: "Cook how early", leadHelp: "How long before each meal you start preparing.",
+    description: "Description", descriptionPlaceholder: "What customers get, how it’s packed", descriptionFull: "Description is at the {max} character limit.",
+    datePlan: "This plan was set up by date. Set up one week; it repeats every week.",
+    days: "Days", hasMeals: "{day}, has meals", keepMeal: "Add at least one meal to save schedule changes.",
+    missingDish: "Select a dish for every meal: {days}.", noMeals: "No meals on {day}.", addFor: "{label} for {day}",
+    copyDay: "Copy {day} to all weekdays", onlyOn: "You can only pick dishes that are on and available on your menu.",
+    editDetails: "Edit details", edit: "Edit", editMeals: "Edit meals",
+    note: "Note for Craves (optional)", notePlaceholder: "Anything the Craves team should know",
+    locked: "You can’t edit the plan while Craves checks it. Usually takes a day.",
+    checking: "Craves is checking this plan. You can’t edit it until then.",
+    liveNote: "This plan is live. To change something, send us a request.",
+    notLiveNote: "This plan isn’t live. To change something, send us a request.",
+    dayNumber: "day {day}", editPlan: "Edit meal plan", newPlan: "New meal plan", step: "Step {step} of 3 · {name}",
+    updatePlan: "Update the plan and submit it again.", show: "Show",
+    back: "Back", nextMeals: "Next: Meals", nextReview: "Next: Review", sending: "Sending…", submit: "Submit for approval", requestChange: "Request a change",
+    savingDraft: "Saving draft…", sendingCraves: "Sending to Craves…", pickDish: "Pick a dish", addMealFor: "Add a meal for {day}",
+    saveDraftTitle: "Save as draft?", saveDraftText: "Your plan isn’t sent to Craves yet. A draft keeps what you’ve done so far.",
+    keepEditing: "Keep editing", discard: "Discard", saveDraft: "Save draft",
+    removeTitle: "Remove {meal} on {day}?", removeThis: "Remove this meal?", removeText: "The dish planned for it on this day is removed.",
+    cancel: "Cancel", remove: "Remove", copyTitle: "Copy {day} to all weekdays?", copyText: "This replaces any meals already planned for the other weekdays.", copy: "Copy",
+    unavailable: "This dish is not available on your menu right now.",
+    slotTime: "{meal} time, for every {lower} in this plan", removeMeal: "Remove {meal}",
+    slotDish: "{meal} dish, {dish}", notSelected: "not selected", onMenu: "{price} on menu", addDish: "Add a dish",
+    portions: "{meal} portions", fewer: "Fewer {meal} portions", more: "More {meal} portions",
+    setUpFirst: "Set up your kitchen first, then add dishes to your menu.", setUpKitchen: "Set up my kitchen",
+    menuFailed: "Couldn’t load your menu. Check your connection and try again.", loadingMenu: "Loading your menu…",
+    noneOn: "None of your dishes are on and available yet.",
+    tellUs: "Tell us what you want to change.", sessionExpired: "Your session expired. Sign in again to continue.", requestFailed: "Your request didn’t send. Try again.",
+    sentBefore: "Request sent (#{number}). A Craves support person will reply in ", help: "Help & support", sentAfter: ".",
+    requestsSoon: "Coming soon: requests from here aren’t open yet. Use Help & support to reach Craves.",
+    whatChange: "What should change?", requestFor: "For “{name}”. Tell us what to change and a Craves support person will reply.",
+    done: "Done", sendRequest: "Send request",
+  },
+  te: {
+    details: "వివరాలు", meals: "భోజనాలు", review: "సరిచూడండి", VEG: "వెజ్", NON_VEG: "నాన్-వెజ్", EGG: "ఎగ్",
+    photoTooLarge: "ఫోటో చాలా పెద్దది. చిన్న ఫోటో ఎంచుకోండి.", photoType: "JPEG లేదా PNG ఫోటో ఎంచుకోండి.", photoOther: "వేరే ఫోటో ఎంచుకోండి.",
+    planLoadFailed: "ఈ మీల్ ప్లాన్ లోడ్ కాలేదు.", planLoadTitle: "ఈ మీల్ ప్లాన్ లోడ్ కాలేదు", tryAgain: "మళ్లీ ప్రయత్నించండి", loadingPlan: "మీల్ ప్లాన్ లోడ్ అవుతోంది",
+    mealPlans: "మీల్ ప్లాన్‌లు", dish: "వంటకం",
+    photosSoon: "ప్లాన్ ఫోటోలు ఇంకా అందుబాటులో లేవు.", retry: "మళ్లీ ప్రయత్నించండి.", photoUploadFailed: "ఫోటో అప్‌లోడ్ కాలేదు. మళ్లీ ప్రయత్నించండి.",
+    photoNotUploaded: "ప్లాన్ సేవ్ అయింది, కానీ ఫోటో అప్‌లోడ్ కాలేదు. {reason}",
+    sent: "ఆమోదం కోసం Craves కు పంపాం", draftSaved: "డ్రాఫ్ట్ సేవ్ అయింది", saveFailed: "మీల్ ప్లాన్ సేవ్ కాలేదు. మళ్లీ ప్రయత్నించండి.",
+    planPhoto: "ప్లాన్ ఫోటో", planPhotoNote: "ప్లాన్ కార్డుపై కస్టమర్లకు ఇది కనిపిస్తుంది. JPEG లేదా PNG.", changePhoto: "ఫోటో మార్చండి", addPhoto: "ప్లాన్ ఫోటో జోడించండి",
+    planName: "ప్లాన్ పేరు", planNamePlaceholder: "ఉదా. Weekly home lunch", howOften: "ఎన్ని రోజులకు ఒకసారి", price: "ధర", pricePer: "{per} ధర",
+    leadLabel: "ఎంత ముందు వండాలి", leadHelp: "ప్రతి భోజనానికి ఎంత ముందు వంట మొదలుపెడతారు.",
+    description: "వివరణ", descriptionPlaceholder: "కస్టమర్లకు ఏం వస్తుంది, ఎలా ప్యాక్ చేస్తారు", descriptionFull: "వివరణ {max} అక్షరాల పరిమితికి చేరింది.",
+    datePlan: "ఈ ప్లాన్ తేదీల ప్రకారం చేశారు. ఒక వారం సెట్ చేయండి; అది ప్రతి వారం మళ్లీ వస్తుంది.",
+    days: "రోజులు", hasMeals: "{day}, భోజనాలు ఉన్నాయి", keepMeal: "షెడ్యూల్ మార్పులు సేవ్ చేయడానికి కనీసం ఒక భోజనం జోడించండి.",
+    missingDish: "ప్రతి భోజనానికి ఒక వంటకం ఎంచుకోండి: {days}.", noMeals: "{day} భోజనాలు లేవు.", addFor: "{day}: {label}",
+    copyDay: "{day} భోజనాలను సోమ – శుక్ర అన్ని రోజులకు కాపీ చేయండి", onlyOn: "మీ మెనూలో ఆన్‌లో ఉన్న వంటకాలను మాత్రమే ఎంచుకోగలరు.",
+    editDetails: "వివరాలు మార్చండి", edit: "మార్చండి", editMeals: "భోజనాలు మార్చండి",
+    note: "Craves కోసం నోట్ (తప్పనిసరి కాదు)", notePlaceholder: "Craves టీమ్‌కు తెలియాల్సింది ఏదైనా",
+    locked: "Craves చూస్తున్నంత సేపు ప్లాన్ మార్చలేరు. సాధారణంగా ఒక రోజు పడుతుంది.",
+    checking: "Craves ఈ ప్లాన్ చూస్తోంది. అప్పటివరకు మీరు మార్చలేరు.",
+    liveNote: "ఈ ప్లాన్ నడుస్తోంది. ఏదైనా మార్చాలంటే మాకు రిక్వెస్ట్ పంపండి.",
+    notLiveNote: "ఈ ప్లాన్ ఇప్పుడు నడవడం లేదు. ఏదైనా మార్చాలంటే మాకు రిక్వెస్ట్ పంపండి.",
+    dayNumber: "రోజు {day}", editPlan: "మీల్ ప్లాన్ మార్చండి", newPlan: "కొత్త మీల్ ప్లాన్", step: "దశ {step}/3 · {name}",
+    updatePlan: "ప్లాన్ మార్చి మళ్లీ పంపండి.", show: "ఏది చూడాలి",
+    back: "వెనక్కి", nextMeals: "తర్వాత: భోజనాలు", nextReview: "తర్వాత: సరిచూడండి", sending: "పంపుతున్నాం…", submit: "ఆమోదం కోసం పంపండి", requestChange: "మార్పు కోసం అడగండి",
+    savingDraft: "డ్రాఫ్ట్ సేవ్ అవుతోంది…", sendingCraves: "Craves కు పంపుతున్నాం…", pickDish: "వంటకం ఎంచుకోండి", addMealFor: "{day}: భోజనం జోడించండి",
+    saveDraftTitle: "డ్రాఫ్ట్‌గా సేవ్ చేయాలా?", saveDraftText: "మీ ప్లాన్ ఇంకా Craves కు పంపలేదు. డ్రాఫ్ట్‌లో ఇప్పటివరకు చేసినది ఉంటుంది.",
+    keepEditing: "మార్చడం కొనసాగించండి", discard: "వదిలేయండి", saveDraft: "డ్రాఫ్ట్ సేవ్ చేయండి",
+    removeTitle: "{day} {meal} తీసేయాలా?", removeThis: "ఈ భోజనం తీసేయాలా?", removeText: "ఈ రోజు దానికి పెట్టిన వంటకం తీసేస్తాం.",
+    cancel: "రద్దు చేయండి", remove: "తీసేయండి", copyTitle: "{day} భోజనాలను సోమ – శుక్ర అన్ని రోజులకు కాపీ చేయాలా?", copyText: "సోమ – శుక్ర మిగతా రోజుల్లో ఇప్పటికే ఉన్న భోజనాల స్థానంలో ఇవి వస్తాయి.", copy: "కాపీ చేయండి",
+    unavailable: "ఈ వంటకం ఇప్పుడు మీ మెనూలో అందుబాటులో లేదు.",
+    slotTime: "{meal} సమయం (ఈ ప్లాన్‌లోని అన్ని రోజులకు)", removeMeal: "{meal} తీసేయండి",
+    slotDish: "{meal} వంటకం, {dish}", notSelected: "ఎంచుకోలేదు", onMenu: "మెనూలో {price}", addDish: "వంటకం జోడించండి",
+    portions: "{meal} ప్లేట్లు", fewer: "{meal} ప్లేట్లు తగ్గించండి", more: "{meal} ప్లేట్లు పెంచండి",
+    setUpFirst: "ముందు మీ వంటగదిని సిద్ధం చేయండి, తర్వాత మీ మెనూలో వంటకాలు జోడించండి.", setUpKitchen: "వంటగది సిద్ధం చేయండి",
+    menuFailed: "మీ మెనూ లోడ్ కాలేదు. ఇంటర్నెట్ చూసుకుని మళ్లీ ప్రయత్నించండి.", loadingMenu: "మీ మెనూ లోడ్ అవుతోంది…",
+    noneOn: "మీ వంటకాలు ఏవీ ఇంకా ఆన్‌లో లేవు.",
+    tellUs: "ఏం మార్చాలో మాకు చెప్పండి.", sessionExpired: "మీ సెషన్ ముగిసింది. కొనసాగడానికి మళ్లీ సైన్ ఇన్ చేయండి.", requestFailed: "మీ రిక్వెస్ట్ వెళ్లలేదు. మళ్లీ ప్రయత్నించండి.",
+    sentBefore: "రిక్వెస్ట్ పంపాం (#{number}). Craves నుండి ఒకరు ", help: "సహాయం", sentAfter: " పేజీలో జవాబు ఇస్తారు.",
+    requestsSoon: "త్వరలో వస్తుంది: ఇక్కడి నుండి రిక్వెస్ట్‌లు ఇంకా మొదలవలేదు. Craves ను చేరడానికి సహాయం పేజీ వాడండి.",
+    whatChange: "ఏం మారాలి?", requestFor: "“{name}” కోసం. ఏం మార్చాలో చెప్పండి, Craves నుండి ఒకరు జవాబు ఇస్తారు.",
+    done: "పూర్తయింది", sendRequest: "రిక్వెస్ట్ పంపండి",
+  },
+  kn: {
+    details: "ವಿವರಗಳು", meals: "ಊಟಗಳು", review: "ಪರಿಶೀಲಿಸಿ", VEG: "ವೆಜ್", NON_VEG: "ನಾನ್-ವೆಜ್", EGG: "ಎಗ್",
+    photoTooLarge: "ಫೋಟೋ ತುಂಬಾ ದೊಡ್ಡದಿದೆ. ಚಿಕ್ಕ ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.", photoType: "JPEG ಅಥವಾ PNG ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.", photoOther: "ಬೇರೆ ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+    planLoadFailed: "ಈ ಮೀಲ್ ಪ್ಲಾನ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ.", planLoadTitle: "ಈ ಮೀಲ್ ಪ್ಲಾನ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", loadingPlan: "ಮೀಲ್ ಪ್ಲಾನ್ ಲೋಡ್ ಆಗುತ್ತಿದೆ",
+    mealPlans: "ಮೀಲ್ ಪ್ಲಾನ್‌ಗಳು", dish: "ಖಾದ್ಯ",
+    photosSoon: "ಪ್ಲಾನ್ ಫೋಟೋಗಳು ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ.", retry: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", photoUploadFailed: "ಫೋಟೋ ಅಪ್‌ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    photoNotUploaded: "ಪ್ಲಾನ್ ಉಳಿಸಲಾಗಿದೆ, ಆದರೆ ಫೋಟೋ ಅಪ್‌ಲೋಡ್ ಆಗಲಿಲ್ಲ. {reason}",
+    sent: "ಅನುಮೋದನೆಗಾಗಿ Craves ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ", draftSaved: "ಡ್ರಾಫ್ಟ್ ಉಳಿಸಲಾಗಿದೆ", saveFailed: "ಮೀಲ್ ಪ್ಲಾನ್ ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    planPhoto: "ಪ್ಲಾನ್ ಫೋಟೋ", planPhotoNote: "ಪ್ಲಾನ್ ಕಾರ್ಡ್‌ನಲ್ಲಿ ಗ್ರಾಹಕರಿಗೆ ಇದು ಕಾಣುತ್ತದೆ. JPEG ಅಥವಾ PNG.", changePhoto: "ಫೋಟೋ ಬದಲಾಯಿಸಿ", addPhoto: "ಪ್ಲಾನ್ ಫೋಟೋ ಸೇರಿಸಿ",
+    planName: "ಪ್ಲಾನ್ ಹೆಸರು", planNamePlaceholder: "ಉದಾ. Weekly home lunch", howOften: "ಎಷ್ಟು ದಿನಕ್ಕೊಮ್ಮೆ", price: "ಬೆಲೆ", pricePer: "{per} ಬೆಲೆ",
+    leadLabel: "ಎಷ್ಟು ಮೊದಲು ಅಡುಗೆ ಮಾಡಬೇಕು", leadHelp: "ಪ್ರತಿ ಊಟಕ್ಕೆ ಎಷ್ಟು ಮೊದಲು ಅಡುಗೆ ಶುರುಮಾಡುತ್ತೀರಿ.",
+    description: "ವಿವರಣೆ", descriptionPlaceholder: "ಗ್ರಾಹಕರಿಗೆ ಏನು ಸಿಗುತ್ತದೆ, ಹೇಗೆ ಪ್ಯಾಕ್ ಮಾಡುತ್ತೀರಿ", descriptionFull: "ವಿವರಣೆ {max} ಅಕ್ಷರಗಳ ಮಿತಿ ತಲುಪಿದೆ.",
+    datePlan: "ಈ ಪ್ಲಾನ್ ದಿನಾಂಕಗಳ ಪ್ರಕಾರ ಮಾಡಲಾಗಿತ್ತು. ಒಂದು ವಾರ ಸಿದ್ಧಪಡಿಸಿ; ಅದು ಪ್ರತಿ ವಾರ ಮತ್ತೆ ಬರುತ್ತದೆ.",
+    days: "ದಿನಗಳು", hasMeals: "{day}, ಊಟಗಳಿವೆ", keepMeal: "ವೇಳಾಪಟ್ಟಿ ಬದಲಾವಣೆ ಉಳಿಸಲು ಕನಿಷ್ಠ ಒಂದು ಊಟ ಸೇರಿಸಿ.",
+    missingDish: "ಪ್ರತಿ ಊಟಕ್ಕೂ ಒಂದು ಖಾದ್ಯ ಆಯ್ಕೆಮಾಡಿ: {days}.", noMeals: "{day} ಊಟಗಳಿಲ್ಲ.", addFor: "{day}: {label}",
+    copyDay: "{day} ದಿನದ ಊಟಗಳನ್ನು ಸೋಮ – ಶುಕ್ರ ಎಲ್ಲಾ ದಿನಗಳಿಗೆ ಕಾಪಿ ಮಾಡಿ", onlyOn: "ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಆನ್ ಇರುವ ಖಾದ್ಯಗಳನ್ನು ಮಾತ್ರ ಆಯ್ಕೆಮಾಡಬಹುದು.",
+    editDetails: "ವಿವರಗಳನ್ನು ಬದಲಾಯಿಸಿ", edit: "ಬದಲಾಯಿಸಿ", editMeals: "ಊಟಗಳನ್ನು ಬದಲಾಯಿಸಿ",
+    note: "Craves ಗಾಗಿ ಟಿಪ್ಪಣಿ (ಕಡ್ಡಾಯವಲ್ಲ)", notePlaceholder: "Craves ತಂಡಕ್ಕೆ ತಿಳಿಯಬೇಕಾದ್ದು ಏನಾದರೂ",
+    locked: "Craves ಪರಿಶೀಲಿಸುತ್ತಿರುವಾಗ ಪ್ಲಾನ್ ಬದಲಾಯಿಸಲಾಗದು. ಸಾಮಾನ್ಯವಾಗಿ ಒಂದು ದಿನ ಬೇಕಾಗುತ್ತದೆ.",
+    checking: "Craves ಈ ಪ್ಲಾನ್ ಪರಿಶೀಲಿಸುತ್ತಿದೆ. ಅಲ್ಲಿಯವರೆಗೆ ನೀವು ಬದಲಾಯಿಸಲಾಗದು.",
+    liveNote: "ಈ ಪ್ಲಾನ್ ಚಾಲ್ತಿಯಲ್ಲಿದೆ. ಏನಾದರೂ ಬದಲಾಯಿಸಲು ನಮಗೆ ವಿನಂತಿ ಕಳುಹಿಸಿ.",
+    notLiveNote: "ಈ ಪ್ಲಾನ್ ಚಾಲ್ತಿಯಲ್ಲಿಲ್ಲ. ಏನಾದರೂ ಬದಲಾಯಿಸಲು ನಮಗೆ ವಿನಂತಿ ಕಳುಹಿಸಿ.",
+    dayNumber: "ದಿನ {day}", editPlan: "ಮೀಲ್ ಪ್ಲಾನ್ ಬದಲಾಯಿಸಿ", newPlan: "ಹೊಸ ಮೀಲ್ ಪ್ಲಾನ್", step: "ಹಂತ {step}/3 · {name}",
+    updatePlan: "ಪ್ಲಾನ್ ಬದಲಾಯಿಸಿ ಮತ್ತೆ ಕಳುಹಿಸಿ.", show: "ಯಾವುದನ್ನು ನೋಡಬೇಕು",
+    back: "ಹಿಂದೆ", nextMeals: "ಮುಂದೆ: ಊಟಗಳು", nextReview: "ಮುಂದೆ: ಪರಿಶೀಲಿಸಿ", sending: "ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…", submit: "ಅನುಮೋದನೆಗೆ ಕಳುಹಿಸಿ", requestChange: "ಬದಲಾವಣೆಗೆ ವಿನಂತಿಸಿ",
+    savingDraft: "ಡ್ರಾಫ್ಟ್ ಉಳಿಸಲಾಗುತ್ತಿದೆ…", sendingCraves: "Craves ಗೆ ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…", pickDish: "ಖಾದ್ಯ ಆಯ್ಕೆಮಾಡಿ", addMealFor: "{day}: ಊಟ ಸೇರಿಸಿ",
+    saveDraftTitle: "ಡ್ರಾಫ್ಟ್ ಆಗಿ ಉಳಿಸಬೇಕೇ?", saveDraftText: "ನಿಮ್ಮ ಪ್ಲಾನ್ ಇನ್ನೂ Craves ಗೆ ಕಳುಹಿಸಿಲ್ಲ. ಡ್ರಾಫ್ಟ್‌ನಲ್ಲಿ ಇಲ್ಲಿಯವರೆಗೆ ಮಾಡಿದ್ದು ಉಳಿಯುತ್ತದೆ.",
+    keepEditing: "ಬದಲಾಯಿಸುವುದನ್ನು ಮುಂದುವರಿಸಿ", discard: "ಬಿಟ್ಟುಬಿಡಿ", saveDraft: "ಡ್ರಾಫ್ಟ್ ಉಳಿಸಿ",
+    removeTitle: "{day} {meal} ತೆಗೆದುಹಾಕಬೇಕೇ?", removeThis: "ಈ ಊಟ ತೆಗೆದುಹಾಕಬೇಕೇ?", removeText: "ಈ ದಿನ ಅದಕ್ಕೆ ಇಟ್ಟಿದ್ದ ಖಾದ್ಯ ತೆಗೆದುಹಾಕಲಾಗುತ್ತದೆ.",
+    cancel: "ರದ್ದುಮಾಡಿ", remove: "ತೆಗೆದುಹಾಕಿ", copyTitle: "{day} ದಿನದ ಊಟಗಳನ್ನು ಸೋಮ – ಶುಕ್ರ ಎಲ್ಲಾ ದಿನಗಳಿಗೆ ಕಾಪಿ ಮಾಡಬೇಕೇ?", copyText: "ಸೋಮ – ಶುಕ್ರದ ಉಳಿದ ದಿನಗಳಲ್ಲಿ ಈಗಾಗಲೇ ಇರುವ ಊಟಗಳ ಬದಲು ಇವು ಬರುತ್ತವೆ.", copy: "ಕಾಪಿ ಮಾಡಿ",
+    unavailable: "ಈ ಖಾದ್ಯ ಈಗ ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ.",
+    slotTime: "{meal} ಸಮಯ (ಈ ಪ್ಲಾನ್‌ನ ಎಲ್ಲಾ ದಿನಗಳಿಗೆ)", removeMeal: "{meal} ತೆಗೆದುಹಾಕಿ",
+    slotDish: "{meal} ಖಾದ್ಯ, {dish}", notSelected: "ಆಯ್ಕೆ ಮಾಡಿಲ್ಲ", onMenu: "ಮೆನುವಿನಲ್ಲಿ {price}", addDish: "ಖಾದ್ಯ ಸೇರಿಸಿ",
+    portions: "{meal} ಪ್ಲೇಟ್‌ಗಳು", fewer: "{meal} ಪ್ಲೇಟ್ ಕಡಿಮೆ ಮಾಡಿ", more: "{meal} ಪ್ಲೇಟ್ ಹೆಚ್ಚಿಸಿ",
+    setUpFirst: "ಮೊದಲು ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಿದ್ಧಮಾಡಿ, ನಂತರ ನಿಮ್ಮ ಮೆನುಗೆ ಖಾದ್ಯಗಳನ್ನು ಸೇರಿಸಿ.", setUpKitchen: "ಅಡುಗೆಮನೆ ಸಿದ್ಧಮಾಡಿ",
+    menuFailed: "ನಿಮ್ಮ ಮೆನು ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", loadingMenu: "ನಿಮ್ಮ ಮೆನು ಲೋಡ್ ಆಗುತ್ತಿದೆ…",
+    noneOn: "ನಿಮ್ಮ ಯಾವ ಖಾದ್ಯವೂ ಇನ್ನೂ ಆನ್ ಆಗಿಲ್ಲ.",
+    tellUs: "ಏನು ಬದಲಾಯಿಸಬೇಕು ಎಂದು ನಮಗೆ ತಿಳಿಸಿ.", sessionExpired: "ನಿಮ್ಮ ಸೆಷನ್ ಮುಗಿದಿದೆ. ಮುಂದುವರಿಸಲು ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.", requestFailed: "ನಿಮ್ಮ ವಿನಂತಿ ಹೋಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    sentBefore: "ವಿನಂತಿ ಕಳುಹಿಸಲಾಗಿದೆ (#{number}). Craves ನಿಂದ ಒಬ್ಬರು ", help: "ಸಹಾಯ", sentAfter: " ಪುಟದಲ್ಲಿ ಉತ್ತರಿಸುತ್ತಾರೆ.",
+    requestsSoon: "ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ: ಇಲ್ಲಿಂದ ವಿನಂತಿಗಳು ಇನ್ನೂ ಶುರುವಾಗಿಲ್ಲ. Craves ಅನ್ನು ಸಂಪರ್ಕಿಸಲು ಸಹಾಯ ಪುಟ ಬಳಸಿ.",
+    whatChange: "ಏನು ಬದಲಾಗಬೇಕು?", requestFor: "“{name}” ಗಾಗಿ. ಏನು ಬದಲಾಯಿಸಬೇಕು ಎಂದು ತಿಳಿಸಿ, Craves ನಿಂದ ಒಬ್ಬರು ಉತ್ತರಿಸುತ್ತಾರೆ.",
+    done: "ಮುಗಿದಿದೆ", sendRequest: "ವಿನಂತಿ ಕಳುಹಿಸಿ",
+  },
+});
+type Text = (typeof TEXT)["en"];
 
 type Step = 1 | 2 | 3;
-const STEP_NAMES: Record<Step, string> = { 1: "Details", 2: "Meals", 3: "Review" };
+const STEP_NAMES: Record<Step, "details" | "meals" | "review"> = { 1: "details", 2: "meals", 3: "review" };
 // What the plan photo route takes: JPEG or PNG, 2 MB at most.
 const PLAN_PHOTO_TYPES = ["image/jpeg", "image/png"];
 const PLAN_PHOTO_MAX_BYTES = 2_097_152;
@@ -107,23 +242,19 @@ const SLOT_ICON: Record<MealSlot, typeof Sun> = {
 };
 const FIELD =
   "mt-2 block min-h-12 w-full rounded-xl border border-[#E3E6EA] bg-white px-4 text-base text-[#1A1A1A] disabled:bg-[#F1F3F5]";
-const FOOD: Record<FoodType, { label: string; color: string }> = {
-  VEG: { label: "Veg", color: "#2E7D32" },
-  NON_VEG: { label: "Non-veg", color: "#D92D20" },
-  EGG: { label: "Egg", color: "#D99A00" },
-};
+const FOOD_COLOR: Record<FoodType, string> = { VEG: "#2E7D32", NON_VEG: "#D92D20", EGG: "#D99A00" };
 
 /** The dish's cover photo, or its first. */
 export const dishPhoto = (item: ChefMenuItem | undefined) =>
   item?.images.find((image) => image.primary)?.publicUrl ?? item?.images[0]?.publicUrl ?? null;
 const isAvailable = (item: ChefMenuItem) => item.status === "ACTIVE" && item.available;
 
-function photoProblem(error: unknown): string {
+function photoProblem(error: unknown, text: Text): string {
   const ref = error instanceof ChefError ? error.ref : "";
-  if (ref === "PLAN_IMAGE_SIZE_INVALID") return "Photo is too large. Pick a smaller photo.";
+  if (ref === "PLAN_IMAGE_SIZE_INVALID") return text.photoTooLarge;
   if (ref === "PLAN_IMAGE_TYPE_UNSUPPORTED" || ref === "INVALID_PLAN_IMAGE")
-    return "Choose a JPEG or PNG photo.";
-  return error instanceof Error ? error.message : "Choose another photo.";
+    return text.photoType;
+  return error instanceof Error ? error.message : text.photoOther;
 }
 
 export type MenuState = {
@@ -148,22 +279,24 @@ export function ChefMealPlanEditor({
   menu: MenuState;
   onClose(message?: string): void;
 }) {
+  const text = useText(TEXT);
   const [schedule, setSchedule] = useState<ChefMealSchedule | null | undefined>(
     plan ? undefined : null,
   );
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const loadFailed = text.planLoadFailed;
 
   useEffect(() => {
     if (!plan) return;
     let live = true;
     loadMealSchedule(plan.id)
       .then((value) => live && setSchedule(value))
-      .catch((cause) => live && setError(chefErrorText(cause, "This meal plan couldn’t load.")));
+      .catch((cause) => live && setError(chefErrorText(cause, loadFailed)));
     return () => {
       live = false;
     };
-  }, [plan, attempt]);
+  }, [plan, attempt, loadFailed]);
 
   if (schedule !== undefined)
     return (
@@ -182,7 +315,7 @@ export function ChefMealPlanEditor({
         <ChefSection>
           <ChefEmpty
             icon={AlertTriangle}
-            title="Couldn’t load this meal plan"
+            title={text.planLoadTitle}
             text={error}
             action={
               <button
@@ -193,19 +326,20 @@ export function ChefMealPlanEditor({
                   setAttempt((value) => value + 1);
                 }}
               >
-                Try again
+                {text.tryAgain}
               </button>
             }
           />
         </ChefSection>
       ) : (
-        <ChefLoading shape="form" head={false} label="Loading meal plan" />
+        <ChefLoading shape="form" head={false} label={text.loadingPlan} />
       )}
     </div>
   );
 }
 
 function BackButton({ onClick, disabled }: { onClick(): void; disabled?: boolean }) {
+  const text = useText(TEXT);
   return (
     <button
       type="button"
@@ -213,7 +347,7 @@ function BackButton({ onClick, disabled }: { onClick(): void; disabled?: boolean
       disabled={disabled}
       onClick={onClick}
     >
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Meal plans
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {text.mealPlans}
     </button>
   );
 }
@@ -231,6 +365,8 @@ function MealPlanForm({
   menu: MenuState;
   onClose(message?: string): void;
 }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const editable = !plan || plan.status === "DRAFT" || plan.status === "REJECTED";
   const kind = editorScheduleKind(editable, schedule);
   const datePlanReset = editable && schedule?.recurrenceType === "MONTHLY";
@@ -270,7 +406,7 @@ function MealPlanForm({
   const firstStep = useRef(true);
 
   // Errors appear after the first Next / save attempt and then follow the chef's edits.
-  const errors = attempt ? validateMealPlanForm(form, slots, attempt) : {};
+  const errors = attempt ? validateMealPlanForm(form, slots, attempt, language) : {};
   const locked = !editable || busy !== null;
   const hasDishes = slots.some((slot) => slot.menuItemId !== null);
   // Only a schedule with dishes is sent, so a draft without any keeps the server's old schedule.
@@ -293,7 +429,7 @@ function MealPlanForm({
     [schedule],
   );
   const dishName = (menuItemId: string) =>
-    menuById.get(menuItemId)?.itemName ?? scheduledNames.get(menuItemId) ?? "Dish";
+    menuById.get(menuItemId)?.itemName ?? scheduledNames.get(menuItemId) ?? text.dish;
   const preview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo]);
   useEffect(
     () => () => {
@@ -380,11 +516,11 @@ function MealPlanForm({
 
   async function pickPhoto(file: File) {
     setPhotoError("");
-    if (!PLAN_PHOTO_TYPES.includes(file.type)) return setPhotoError("Choose a JPEG or PNG photo.");
+    if (!PLAN_PHOTO_TYPES.includes(file.type)) return setPhotoError(text.photoType);
     // Shown 4:3 on plan cards, like the app's picker; a photo the browser can't read is sent as chosen and the server checks it.
     const prepared = await shrinkPhoto(file, 4 / 3);
     if (prepared.size > PLAN_PHOTO_MAX_BYTES)
-      return setPhotoError("Photo is too large. Pick a smaller photo.");
+      return setPhotoError(text.photoTooLarge);
     setPhoto(prepared);
     setDirty(true);
   }
@@ -398,15 +534,15 @@ function MealPlanForm({
     } catch (cause) {
       if (isComingSoon(cause)) {
         setPhoto(null);
-        setPhotoError("Plan photos aren’t available yet.");
+        setPhotoError(text.photosSoon);
         return true;
       }
       const rejected = cause instanceof ChefError && cause.status === 400;
-      const reason = rejected ? photoProblem(cause) : "Try again.";
+      const reason = rejected ? photoProblem(cause, text) : text.retry;
       if (rejected) setPhoto(null);
       else setDirty(true); // the plan is saved; only the photo still waits to upload
-      setPhotoError(rejected ? reason : "Photo couldn’t be uploaded. Try again.");
-      setServerError(`Plan saved, but the photo wasn’t uploaded. ${reason}`);
+      setPhotoError(rejected ? reason : text.photoUploadFailed);
+      setServerError(format(text.photoNotUploaded, { reason }));
       return false;
     }
   }
@@ -449,9 +585,9 @@ function MealPlanForm({
         setStep(2);
         return;
       }
-      leave(mode === "submit" ? "Sent to Craves for approval" : "Draft saved", to);
+      leave(mode === "submit" ? text.sent : text.draftSaved, to);
     } catch (cause) {
-      setServerError(chefErrorText(cause, "The meal plan could not be saved. Try again."));
+      setServerError(chefErrorText(cause, text.saveFailed));
     } finally {
       saving.current = false;
       setBusy(null);
@@ -471,9 +607,9 @@ function MealPlanForm({
     setCopying(false);
   }
 
-  const unit = billingUnit(period);
-  const dayLong = dayName(kind, day, "long");
-  const status = plan ? chefPlanStatus(plan.status) : null;
+  const perUnit = perBillingUnit(period, language);
+  const dayLong = dayName(kind, day, "long", language);
+  const status = plan ? chefPlanStatus(plan.status, language) : null;
   const fieldError = (key: string) =>
     errors[key] ? (
       <p id={`plan-${key}-error`} className="chef-field-error">
@@ -487,13 +623,13 @@ function MealPlanForm({
     <fieldset disabled={locked} className="chef-stack min-w-0">
       {editable || photoUrl ? (
         <ChefSection
-          title="Plan photo"
-          note={editable ? "Customers see it on the plan card. JPEG or PNG." : undefined}
+          title={text.planPhoto}
+          note={editable ? text.planPhotoNote : undefined}
         >
           <div className="grid gap-3 sm:grid-cols-[16rem_minmax(0,1fr)] sm:items-center">
             <div className="relative aspect-[4/3] overflow-hidden rounded-[14px] bg-[#F1F3F5]">
               {photoUrl ? (
-                <img src={photoUrl} alt="Plan photo" className="h-full w-full object-cover" />
+                <img src={photoUrl} alt={text.planPhoto} className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full items-center justify-center text-[#6B6B6B]">
                   <UtensilsCrossed className="size-8" aria-hidden="true" />
@@ -503,7 +639,7 @@ function MealPlanForm({
             {editable ? (
               <label className="chef-btn w-fit cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-[#1A1A1A]">
                 <Camera className="h-4 w-4" aria-hidden="true" />
-                {photoUrl ? "Change photo" : "Add plan photo"}
+                {photoUrl ? text.changePhoto : text.addPhoto}
                 <input
                   type="file"
                   accept="image/jpeg,image/png"
@@ -529,7 +665,7 @@ function MealPlanForm({
         <div className="grid gap-5">
           <div>
             <label htmlFor="plan-name" className="chef-field-label">
-              Plan name
+              {text.planName}
               <RequiredMark />
             </label>
             <input
@@ -540,13 +676,13 @@ function MealPlanForm({
               className={FIELD}
               value={form.name}
               onChange={(event) => updateForm("name", event.target.value)}
-              placeholder="e.g. Weekly home lunch"
+              placeholder={text.planNamePlaceholder}
               {...invalid("name")}
             />
             {fieldError("name")}
           </div>
           <ChefChoiceChips
-            legend="How often"
+            legend={text.howOften}
             name="plan-period"
             disabled={locked}
             value={period}
@@ -555,15 +691,14 @@ function MealPlanForm({
               setPeriod(next);
               setDirty(true);
             }}
-            options={[
-              { value: "WEEKLY", label: "Weekly" },
-              { value: "FORTNIGHTLY", label: "14 days" },
-              { value: "MONTHLY", label: "Monthly" },
-            ]}
+            options={(["WEEKLY", "FORTNIGHTLY", "MONTHLY"] as const).map((value) => ({
+              value,
+              label: billingPeriodLabel(value, language),
+            }))}
           />
           <div>
             <label htmlFor="plan-amount" className="chef-field-label">
-              Price
+              {text.price}
               <RequiredMark />
             </label>
             <div className="relative">
@@ -582,21 +717,21 @@ function MealPlanForm({
                 value={form.amount}
                 onChange={(event) => updateForm("amount", event.target.value)}
                 placeholder="1499"
-                aria-label={`Price per ${unit}`}
+                aria-label={format(text.pricePer, { per: perUnit })}
                 {...invalid("amount")}
               />
               <span
                 aria-hidden="true"
                 className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#6B6B6B]"
               >
-                per {unit}
+                {perUnit}
               </span>
             </div>
             {fieldError("amount")}
           </div>
           <div>
             <label htmlFor="plan-lead" className="chef-field-label">
-              Cook how early
+              {text.leadLabel}
               <RequiredMark />
             </label>
             <select
@@ -611,17 +746,17 @@ function MealPlanForm({
             >
               {LEAD_HOUR_OPTIONS.map((hours) => (
                 <option key={hours} value={hours}>
-                  {leadHoursLabel(hours)}
+                  {leadHoursLabel(hours, language)}
                 </option>
               ))}
             </select>
             <p id="plan-lead-help" className="chef-section-note mt-1.5">
-              How long before each meal you start preparing.
+              {text.leadHelp}
             </p>
           </div>
           <div>
             <label htmlFor="plan-description" className="chef-field-label">
-              Description
+              {text.description}
               <RequiredMark />
             </label>
             <textarea
@@ -632,7 +767,7 @@ function MealPlanForm({
               className={`${FIELD} py-3 leading-6`}
               value={form.description}
               onChange={(event) => updateForm("description", event.target.value)}
-              placeholder="What customers get, how it’s packed"
+              placeholder={text.descriptionPlaceholder}
               {...invalid("description")}
               aria-describedby={`${errors.description ? "plan-description-error " : ""}plan-description-count`}
             />
@@ -641,7 +776,7 @@ function MealPlanForm({
             </p>
             <p className="sr-only" role="status">
               {form.description.length >= DESCRIPTION_MAX
-                ? `Description is at the ${DESCRIPTION_MAX} character limit.`
+                ? format(text.descriptionFull, { max: DESCRIPTION_MAX })
                 : ""}
             </p>
             {fieldError("description")}
@@ -668,17 +803,18 @@ function MealPlanForm({
     <div className="chef-stack">
       {datePlanReset ? (
         <ChefNotice icon={AlertTriangle}>
-          This plan was set up by date. Set up one week; it repeats every week.
+          {text.datePlan}
         </ChefNotice>
       ) : null}
       <div
         role="tablist"
-        aria-label="Days"
+        aria-label={text.days}
         className={kind === "WEEKLY" ? "grid grid-cols-7 gap-1" : "chef-chips"}
       >
         {dayTabs.map((value) => {
           const selected = day === value;
-          const label = kind === "WEEKLY" ? WEEKDAYS_SHORT[value - 1] : String(value);
+          const label = kind === "WEEKLY" ? dayName(kind, value, "short", language) : String(value);
+          const longName = dayName(kind, value, "long", language);
           return (
             <button
               key={value}
@@ -687,7 +823,7 @@ function MealPlanForm({
               role="tab"
               aria-selected={selected}
               aria-controls="plan-day-panel"
-              aria-label={`${dayName(kind, value, "long")}${mealDays.has(value) ? ", has meals" : ""}`}
+              aria-label={mealDays.has(value) ? format(text.hasMeals, { day: longName }) : longName}
               tabIndex={selected ? 0 : -1}
               onClick={() => setDay(value)}
               onKeyDown={onDayKey}
@@ -717,17 +853,18 @@ function MealPlanForm({
         ) : null}
         {scheduleNote && scheduleKept ? (
           <p role="alert" className="chef-field-error !mt-0">
-            Add at least one meal to save schedule changes.
+            {text.keepMeal}
           </p>
         ) : null}
         {missingDishDays.length > 0 ? (
           <p role="alert" className="chef-field-error !mt-0">
-            Select a dish for every meal:{" "}
-            {missingDishDays.map((value) => dayName(kind, value)).join(", ")}.
+            {format(text.missingDish, {
+              days: missingDishDays.map((value) => dayName(kind, value, "short", language)).join(", "),
+            })}
           </p>
         ) : null}
         {daySlots.length === 0 ? (
-          <p className="chef-section-note px-1">No meals on {dayName(kind, day, "long")}.</p>
+          <p className="chef-section-note px-1">{format(text.noMeals, { day: dayLong })}</p>
         ) : null}
         {daySlots.map((slot) => (
           <SlotCard
@@ -756,10 +893,10 @@ function MealPlanForm({
             type="button"
             className="chef-btn"
             disabled={locked}
-            aria-label={`${addMealLabel(freeSlots)} for ${dayName(kind, day, "long")}`}
+            aria-label={format(text.addFor, { label: addMealLabel(freeSlots, language), day: dayLong })}
             onClick={() => setSheet({ kind: "add" })}
           >
-            <Plus className="h-4 w-4" aria-hidden="true" /> {addMealLabel(freeSlots)}
+            <Plus className="h-4 w-4" aria-hidden="true" /> {addMealLabel(freeSlots, language)}
           </button>
         ) : null}
         {editable && kind === "WEEKLY" && daySlots.length > 0 ? (
@@ -771,12 +908,12 @@ function MealPlanForm({
               otherWeekdaysHaveMeals(slots, day) ? setCopying(true) : copyToWeekdays()
             }
           >
-            <Copy className="h-4 w-4" aria-hidden="true" /> {`Copy ${dayLong} to all weekdays`}
+            <Copy className="h-4 w-4" aria-hidden="true" /> {format(text.copyDay, { day: dayLong })}
           </button>
         ) : null}
         {editable ? (
           <p className="chef-section-note px-1">
-            You can only pick dishes that are on and available on your menu.
+            {text.onlyOn}
           </p>
         ) : null}
       </div>
@@ -788,15 +925,15 @@ function MealPlanForm({
   const review = (
     <div className="chef-stack">
       <ChefSection
-        title="Details"
+        title={text.details}
         action={
           <button
             type="button"
             className="chef-btn is-small is-quiet"
-            aria-label="Edit details"
+            aria-label={text.editDetails}
             onClick={() => setStep(1)}
           >
-            Edit
+            {text.edit}
           </button>
         }
       >
@@ -810,29 +947,32 @@ function MealPlanForm({
           ) : null}
           <div className="min-w-0">
             <p className="font-bold text-[#1A1A1A] [overflow-wrap:anywhere]">{form.name.trim()}</p>
-            <p className="chef-section-note">{chefPlanMetaLine(period, reviewItems)}</p>
-            <p className="chef-section-note">{repeatsLabel(period)}</p>
+            <p className="chef-section-note">{chefPlanMetaLine(period, reviewItems, language)}</p>
+            <p className="chef-section-note">{repeatsLabel(period, language)}</p>
             <p className="chef-amount mt-1 font-bold text-[#1A1A1A]">
-              {chefPlanPriceLabel({
-                amount: Number(form.amount.trim()),
-                currency: "INR",
-                billingPeriod: period,
-              })}
+              {chefPlanPriceLabel(
+                {
+                  amount: Number(form.amount.trim()),
+                  currency: "INR",
+                  billingPeriod: period,
+                },
+                language,
+              )}
             </p>
           </div>
         </div>
       </ChefSection>
       <ChefSection
-        title="Meals"
+        title={text.meals}
         flush
         action={
           <button
             type="button"
             className="chef-btn is-small is-quiet"
-            aria-label="Edit meals"
+            aria-label={text.editMeals}
             onClick={() => setStep(2)}
           >
-            Edit
+            {text.edit}
           </button>
         }
       >
@@ -840,7 +980,7 @@ function MealPlanForm({
           {groupMealDays(slots, kind).flatMap((group) =>
             group.meals.map((meal) => (
               <li key={`${group.days[0]}-${meal.slot}`} className="px-4 py-3 md:px-5">
-                <p className="font-semibold text-[#1A1A1A]">{`${dayRangeLabel(kind, group.days)} · ${mealSlotLabel(meal.slot)} ${formatServiceTime(meal.time)}`}</p>
+                <p className="font-semibold text-[#1A1A1A]">{`${dayRangeLabel(kind, group.days, language)} · ${mealSlotLabel(meal.slot, language)} ${formatServiceTime(meal.time)}`}</p>
                 <p className="chef-section-note">
                   {meal.menuItemId ? dishName(meal.menuItemId) : ""}
                   {meal.quantity > 1 ? ` × ${meal.quantity}` : ""}
@@ -852,7 +992,7 @@ function MealPlanForm({
       </ChefSection>
       <div>
         <label htmlFor="plan-note" className="chef-field-label">
-          Note for Craves (optional)
+          {text.note}
         </label>
         <textarea
           id="plan-note"
@@ -862,11 +1002,11 @@ function MealPlanForm({
           className={`${FIELD} py-3 leading-6`}
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Anything the Craves team should know"
+          placeholder={text.notePlaceholder}
         />
       </div>
       <ChefNotice icon={Lock}>
-        You can’t edit the plan while Craves checks it. Usually takes a day.
+        {text.locked}
       </ChefNotice>
     </div>
   );
@@ -875,14 +1015,14 @@ function MealPlanForm({
     editable || !plan
       ? null
       : plan.status === "PENDING_APPROVAL"
-        ? "Craves is checking this plan. You can’t edit it until then."
+        ? text.checking
         : plan.status === "ACTIVE"
-          ? "This plan is live. To change something, send us a request."
-          : "This plan isn’t live. To change something, send us a request.";
+          ? text.liveNote
+          : text.notLiveNote;
   const removingDay = removing
     ? kind === "WEEKLY"
-      ? dayName(kind, removing.day, "long")
-      : `day ${removing.day}`
+      ? dayName(kind, removing.day, "long", language)
+      : format(text.dayNumber, { day: removing.day })
     : "";
 
   return (
@@ -890,11 +1030,11 @@ function MealPlanForm({
       <header className="mb-4">
         <BackButton onClick={requestLeave} disabled={busy !== null} />
         <h1 ref={heading} tabIndex={-1} className="chef-page-title outline-none">
-          {editable ? (plan ? "Edit meal plan" : "New meal plan") : plan?.name}
+          {editable ? (plan ? text.editPlan : text.newPlan) : plan?.name}
         </h1>
         <p className="chef-page-subtitle">
           {editable ? (
-            `Step ${step} of 3 · ${STEP_NAMES[step]}`
+            format(text.step, { step, name: text[STEP_NAMES[step]] })
           ) : status ? (
             <ChefPill tone={status.tone}>{status.label}</ChefPill>
           ) : null}
@@ -919,8 +1059,8 @@ function MealPlanForm({
         ) : null}
         {plan?.status === "REJECTED" ? (
           <ChefNotice icon={AlertTriangle}>
-            <strong className="block">Changes requested</strong>
-            {plan.reviewReason ?? "Update the plan and submit it again."}
+            <strong className="block">{chefPlanStatus("REJECTED", language).label}</strong>
+            {plan.reviewReason ?? text.updatePlan}
           </ChefNotice>
         ) : null}
         {serverError ? (
@@ -930,13 +1070,13 @@ function MealPlanForm({
         ) : null}
         {!editable ? (
           <ChefChoiceChips
-            legend="Show"
+            legend={text.show}
             name="plan-view"
             value={step === 2 ? "meals" : "details"}
             onChange={(value) => setStep(value === "meals" ? 2 : 1)}
             options={[
-              { value: "details", label: "Details" },
-              { value: "meals", label: "Meals" },
+              { value: "details", label: text.details },
+              { value: "meals", label: text.meals },
             ]}
           />
         ) : null}
@@ -953,7 +1093,7 @@ function MealPlanForm({
                 disabled={busy !== null}
                 onClick={() => setStep((step - 1) as Step)}
               >
-                Back
+                {text.back}
               </button>
             ) : null}
             {step === 1 ? (
@@ -963,7 +1103,7 @@ function MealPlanForm({
                 disabled={busy !== null}
                 onClick={goToMeals}
               >
-                Next: Meals
+                {text.nextMeals}
               </button>
             ) : null}
             {step === 2 ? (
@@ -973,7 +1113,7 @@ function MealPlanForm({
                 disabled={busy !== null}
                 onClick={goToReview}
               >
-                Next: Review
+                {text.nextReview}
               </button>
             ) : null}
             {step === 3 ? (
@@ -984,7 +1124,7 @@ function MealPlanForm({
                 aria-busy={busy === "submit"}
                 onClick={() => void save("submit")}
               >
-                {busy === "submit" ? "Sending…" : "Submit for approval"}
+                {busy === "submit" ? text.sending : text.submit}
               </button>
             ) : null}
           </>
@@ -994,18 +1134,18 @@ function MealPlanForm({
             className="chef-btn is-primary flex-1"
             onClick={() => setRequesting(true)}
           >
-            Request a change
+            {text.requestChange}
           </button>
         )}
       </div>
       <p className="sr-only" role="status">
-        {busy === "draft" ? "Saving draft…" : busy === "submit" ? "Sending to Craves…" : ""}
+        {busy === "draft" ? text.savingDraft : busy === "submit" ? text.sendingCraves : ""}
       </p>
 
       <Sheet
         open={sheet?.kind === "dish"}
         onOpenChange={(open) => !open && setSheet(null)}
-        title="Pick a dish"
+        title={text.pickDish}
       >
         {/* Sheets open outside the chef page: the theme brings the chef buttons along. */}
         <div className="chef-panel-theme chef-sheet-theme">
@@ -1028,7 +1168,7 @@ function MealPlanForm({
       <Sheet
         open={sheet?.kind === "add"}
         onOpenChange={(open) => !open && setSheet(null)}
-        title={`Add a meal for ${dayName(kind, day)}`}
+        title={format(text.addMealFor, { day: dayName(kind, day, "short", language) })}
       >
         <div className="chef-panel-theme chef-sheet-theme mt-4 grid gap-2">
           {freeSlots.map((code) => {
@@ -1043,7 +1183,7 @@ function MealPlanForm({
                   setSheet(null);
                 }}
               >
-                <Icon className="h-5 w-5 text-[#6B6B6B]" aria-hidden="true" /> {mealSlotLabel(code)}
+                <Icon className="h-5 w-5 text-[#6B6B6B]" aria-hidden="true" /> {mealSlotLabel(code, language)}
               </button>
             );
           })}
@@ -1052,12 +1192,12 @@ function MealPlanForm({
       <Dialog
         open={askLeave}
         onOpenChange={(open) => !open && stay()}
-        title="Save as draft?"
-        description="Your plan isn’t sent to Craves yet. A draft keeps what you’ve done so far."
+        title={text.saveDraftTitle}
+        description={text.saveDraftText}
         footer={
           <>
             <button type="button" className={secondaryActionClass} onClick={stay}>
-              Keep editing
+              {text.keepEditing}
             </button>
             <button
               type="button"
@@ -1067,14 +1207,14 @@ function MealPlanForm({
                 leave();
               }}
             >
-              Discard
+              {text.discard}
             </button>
             <button
               type="button"
               className="craves-primary-action w-full sm:w-auto"
               onClick={() => void save("draft")}
             >
-              Save draft
+              {text.saveDraft}
             </button>
           </>
         }
@@ -1084,10 +1224,10 @@ function MealPlanForm({
         onOpenChange={(open) => !open && setRemoving(null)}
         title={
           removing
-            ? `Remove ${mealSlotLabel(removing.slot).toLowerCase()} on ${removingDay}?`
-            : "Remove this meal?"
+            ? format(text.removeTitle, { meal: mealSlotLabel(removing.slot, language).toLowerCase(), day: removingDay })
+            : text.removeThis
         }
-        description="The dish planned for it on this day is removed."
+        description={text.removeText}
         footer={
           <>
             <button
@@ -1095,7 +1235,7 @@ function MealPlanForm({
               className={secondaryActionClass}
               onClick={() => setRemoving(null)}
             >
-              Cancel
+              {text.cancel}
             </button>
             <button
               type="button"
@@ -1105,7 +1245,7 @@ function MealPlanForm({
                 setRemoving(null);
               }}
             >
-              Remove
+              {text.remove}
             </button>
           </>
         }
@@ -1113,8 +1253,8 @@ function MealPlanForm({
       <Dialog
         open={copying}
         onOpenChange={setCopying}
-        title={`Copy ${dayLong} to all weekdays?`}
-        description="This replaces any meals already planned for the other weekdays."
+        title={format(text.copyTitle, { day: dayLong })}
+        description={text.copyText}
         footer={
           <>
             <button
@@ -1122,14 +1262,14 @@ function MealPlanForm({
               className={secondaryActionClass}
               onClick={() => setCopying(false)}
             >
-              Cancel
+              {text.cancel}
             </button>
             <button
               type="button"
               className="craves-primary-action w-full sm:w-auto"
               onClick={copyToWeekdays}
             >
-              Copy
+              {text.copy}
             </button>
           </>
         }
@@ -1142,15 +1282,16 @@ function MealPlanForm({
 }
 
 function VegMark({ type }: { type: FoodType }) {
-  const food = FOOD[type];
+  const text = useText(TEXT);
+  const color = FOOD_COLOR[type];
   return (
     <span
       role="img"
-      aria-label={food.label}
+      aria-label={text[type]}
       className="flex size-4 shrink-0 items-center justify-center rounded-[4px] border-[1.5px]"
-      style={{ borderColor: food.color }}
+      style={{ borderColor: color }}
     >
-      <span className="size-2 rounded-full" style={{ background: food.color }} />
+      <span className="size-2 rounded-full" style={{ background: color }} />
     </span>
   );
 }
@@ -1194,10 +1335,12 @@ function SlotCard({
   onQuantity(quantity: number): void;
   onTime(time: string): void;
 }) {
-  const label = mealSlotLabel(slot.slot);
+  const text = useText(TEXT);
+  const { language } = useLanguage();
+  const label = mealSlotLabel(slot.slot, language);
   const Icon = SLOT_ICON[slot.slot];
   const problem =
-    error ?? (dishUnavailable ? "This dish is not available on your menu right now." : null);
+    error ?? (dishUnavailable ? text.unavailable : null);
   return (
     <section aria-label={label} className="chef-section p-4 md:p-5">
       <div className="flex items-center gap-2">
@@ -1209,7 +1352,7 @@ function SlotCard({
         {editable ? (
           <label className="flex items-center gap-1 text-sm text-[#6B6B6B]">
             <span className="sr-only">
-              {label} time, for every {label.toLowerCase()} in this plan
+              {format(text.slotTime, { meal: label, lower: label.toLowerCase() })}
             </span>
             <select
               value={slot.time}
@@ -1234,7 +1377,7 @@ function SlotCard({
             type="button"
             className="chef-icon-button"
             disabled={locked}
-            aria-label={`Remove ${label.toLowerCase()}`}
+            aria-label={format(text.removeMeal, { meal: label.toLowerCase() })}
             onClick={onDelete}
           >
             <Trash2 className="h-5 w-5" aria-hidden="true" />
@@ -1246,7 +1389,7 @@ function SlotCard({
           type="button"
           disabled={locked}
           onClick={onDish}
-          aria-label={`${label} dish, ${dishName ?? "not selected"}`}
+          aria-label={format(text.slotDish, { meal: label, dish: dishName ?? text.notSelected })}
           aria-describedby={problem ? `slot-${slot.key}-problem` : undefined}
           className={`flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-2 text-left disabled:cursor-default ${dishName ? "border-[#E3E6EA] bg-white" : "border-dashed border-[#C9CDD2] bg-[#F7F8FA] font-semibold text-[#C4200F]"} ${error ? "!border-[#C4200F]" : ""}`}
         >
@@ -1260,25 +1403,25 @@ function SlotCard({
                 </span>
                 {dish ? (
                   <span className="chef-section-note block">
-                    {formatPlanPrice(dish.price, dish.currency)} on menu
+                    {format(text.onMenu, { price: formatPlanPrice(dish.price, dish.currency) })}
                   </span>
                 ) : null}
               </span>
             </>
           ) : (
             <>
-              <Plus className="h-4 w-4" aria-hidden="true" /> Add a dish
+              <Plus className="h-4 w-4" aria-hidden="true" /> {text.addDish}
             </>
           )}
         </button>
         {dishName ? (
           editable ? (
-            <div className="flex items-center" role="group" aria-label={`${label} portions`}>
+            <div className="flex items-center" role="group" aria-label={format(text.portions, { meal: label })}>
               <button
                 type="button"
                 className="chef-icon-button"
                 disabled={locked || slot.quantity <= 1}
-                aria-label={`Fewer ${label.toLowerCase()} portions`}
+                aria-label={format(text.fewer, { meal: label.toLowerCase() })}
                 onClick={() => onQuantity(slot.quantity - 1)}
               >
                 <Minus className="h-5 w-5" aria-hidden="true" />
@@ -1290,7 +1433,7 @@ function SlotCard({
                 type="button"
                 className="chef-icon-button"
                 disabled={locked || slot.quantity >= 100}
-                aria-label={`More ${label.toLowerCase()} portions`}
+                aria-label={format(text.more, { meal: label.toLowerCase() })}
                 onClick={() => onQuantity(slot.quantity + 1)}
               >
                 <Plus className="h-5 w-5" aria-hidden="true" />
@@ -1321,32 +1464,33 @@ function DishChoices({
   selected: string | null;
   onPick(id: string): void;
 }) {
+  const text = useText(TEXT);
   if (dishes.length === 0) {
     if (menu.status === "no-kitchen")
       return (
         <div className="mt-4 grid justify-items-start gap-3">
           <p className="text-sm text-[#1A1A1A]">
-            Set up your kitchen first, then add dishes to your menu.
+            {text.setUpFirst}
           </p>
           <Link href="/chef/kitchen" className="chef-btn">
-            Set up my kitchen
+            {text.setUpKitchen}
           </Link>
         </div>
       );
     return menu.status === "error" ? (
       <div className="mt-4 grid justify-items-start gap-3">
         <p className="text-sm text-[#1A1A1A]">
-          Couldn’t load your menu. Check your connection and try again.
+          {text.menuFailed}
         </p>
         <button type="button" className="chef-btn" onClick={menu.retry}>
-          Try again
+          {text.tryAgain}
         </button>
       </div>
     ) : (
       <p role="status" className="mt-4 text-sm text-[#6B6B6B]">
         {menu.status === "loading"
-          ? "Loading your menu…"
-          : "None of your dishes are on and available yet."}
+          ? text.loadingMenu
+          : text.noneOn}
       </p>
     );
   }
@@ -1383,18 +1527,20 @@ function RequestChangeDialog({
   onOpenChange(open: boolean): void;
   planName: string;
 }) {
+  const text = useText(TEXT);
   const [message, setMessage] = useState("");
   const [state, setState] = useState<"idle" | "busy" | "soon" | { sent: string }>("idle");
   const [error, setError] = useState("");
   const sent = typeof state === "object";
 
   async function send() {
-    if (!message.trim()) return setError("Tell us what you want to change.");
+    if (!message.trim()) return setError(text.tellUs);
     setState("busy");
     setError("");
     try {
       const created = await createSupportCase({
         contextRole: "CHEF",
+        // Read by Craves support, so it stays English whatever the chef reads.
         subject: `Change meal plan: ${planName}`.slice(0, SUPPORT_SUBJECT_MAX),
         message: message.trim(),
       });
@@ -1406,8 +1552,8 @@ function RequestChangeDialog({
       setState("idle");
       setError(
         code === "SESSION_EXPIRED"
-          ? "Your session expired. Sign in again to continue."
-          : "Your request didn’t send. Try again.",
+          ? text.sessionExpired
+          : text.requestFailed,
       );
     }
   }
@@ -1416,24 +1562,24 @@ function RequestChangeDialog({
   if (sent) {
     body = (
       <p role="status" className="mt-4 text-sm leading-6 text-[#1A1A1A]">
-        Request sent (#{state.sent}). A Craves support person will reply in{" "}
+        {format(text.sentBefore, { number: state.sent })}
         <Link href="/chef/support" className="font-semibold underline">
-          Help & support
+          {text.help}
         </Link>
-        .
+        {text.sentAfter}
       </p>
     );
   } else if (state === "soon") {
     body = (
       <p role="status" className="mt-4 text-sm leading-6 text-[#1A1A1A]">
-        Coming soon: requests from here aren’t open yet. Use Help & support to reach Craves.
+        {text.requestsSoon}
       </p>
     );
   } else {
     body = (
       <div className="mt-4">
         <label htmlFor="plan-change-message" className="chef-field-label">
-          What should change?
+          {text.whatChange}
           <RequiredMark />
         </label>
         <textarea
@@ -1462,8 +1608,8 @@ function RequestChangeDialog({
         onOpenChange(next);
         if (!next && state !== "busy") setState("idle");
       }}
-      title="Request a change"
-      description={`For “${planName}”. Tell us what to change and a Craves support person will reply.`}
+      title={text.requestChange}
+      description={format(text.requestFor, { name: planName })}
       busy={state === "busy"}
       unsavedChanges={!!message.trim()}
       closeOnOutsideTap={!message.trim()}
@@ -1477,7 +1623,7 @@ function RequestChangeDialog({
               setState("idle");
             }}
           >
-            Done
+            {text.done}
           </button>
         ) : (
           <>
@@ -1487,7 +1633,7 @@ function RequestChangeDialog({
               disabled={state === "busy"}
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {text.cancel}
             </button>
             <button
               type="button"
@@ -1496,7 +1642,7 @@ function RequestChangeDialog({
               aria-busy={state === "busy"}
               onClick={() => void send()}
             >
-              {state === "busy" ? "Sending…" : "Send request"}
+              {state === "busy" ? text.sending : text.sendRequest}
             </button>
           </>
         )

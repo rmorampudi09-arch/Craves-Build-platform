@@ -1,5 +1,5 @@
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
-import { ChefPageHead } from "@/features/chef/components/chef-ui";
+import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 import ChefNotifications from "@/features/notifications/screens/ChefNotifications";
 
 export const metadata = {
@@ -11,7 +11,7 @@ export default function ChefNotificationsPage() {
   return (
     <div className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHead title="Notifications" back={{ href: "/chef", label: "Home" }} />
+        <ChefPageHeader title="Notifications" back={{ href: "/chef", label: "Home" }} />
         <ChefNotifications />
       </ChefAccessBoundary>
     </div>

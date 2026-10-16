@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   dayLabel,
+  dayName,
   formatHoursTime,
   kitchenClock,
   kitchenOpenState,
@@ -91,6 +92,14 @@ test("the kitchen's clock and day labels follow its time zone, not the browser's
   assert.equal(dayLabel("2026-10-15", "2026-10-15"), "Today");
   assert.equal(dayLabel("2026-10-16", "2026-10-15"), "Tomorrow");
   assert.equal(dayLabel("2026-10-18", "2026-10-15"), "Sun 18 Oct");
+  // In Telugu and Kannada the words change; times and the English month stay.
+  assert.equal(dayLabel("2026-10-18", "2026-10-15", "te"), "ఆది 18 Oct");
+  assert.equal(dayLabel("2026-10-19", "2026-10-15", "kn"), "ಸೋಮ 19 Oct");
+  assert.equal(upcomingDays("2026-10-15", "te")[1].label, "రేపు");
+  assert.equal(dayName(7, "kn"), "ಭಾನುವಾರ");
+  assert.deepEqual(summarizeRanges(rangesForDay(week, 5), true, "kn"), ["11:00 AM – ಮಧ್ಯರಾತ್ರಿ"]);
+  assert.equal(validateRanges([{ opensAt: "11:00", closesAt: "11:00" }], "te"), "ప్రతి సమయంలో, మూసే సమయం తెరిచే సమయం తర్వాత ఉండాలి.");
+  assert.equal(kitchenOpenState("ACTIVE", { ...schedule, weeklyWindows: [{ dayOfWeek: 4, opensAt: "11:00", closesAt: MIDNIGHT }] }, now, null, "te").hoursToday, "11:00 AM – అర్ధరాత్రి");
   const days = upcomingDays("2026-12-30");
   assert.equal(days.length, 30);
   assert.deepEqual(
@@ -136,7 +145,7 @@ test("the kitchen's state: Craves pause, chef closed, not taking orders, paused,
       between.hoursToday,
       between.takingOrders,
     ],
-    ["closed", "outside-hours", "6:00 PM", "11:00 AM – 10:00 PM", true],
+    ["closed", "outside-hours", "6:00 PM", "11:00 AM – 2:00 PM, 6:00 PM – 10:00 PM", true],
   );
   assert.equal(
     kitchenOpenState("ACTIVE", schedule, new Date("2026-10-15T06:00:00Z")).status,
@@ -175,7 +184,7 @@ test("today's special day goes before the week's hours, as the server decides", 
   });
   assert.deepEqual(
     [later.closedReason, later.opensAt, later.hoursToday],
-    ["outside-hours", "4:00 PM", "4:00 PM – 9:00 PM"],
+    ["outside-hours", "4:00 PM", "4:00 PM – 5:00 PM, 7:00 PM – 9:00 PM"],
   );
   // A special day counts even when no weekly hours are set; not taking orders still comes first.
   assert.equal(

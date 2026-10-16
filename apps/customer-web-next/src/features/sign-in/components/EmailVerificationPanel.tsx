@@ -528,7 +528,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
           <button type="button" className={buttonClass} disabled={disabled || timing.resendIn > 0 || !!retrySend} onClick={() => void send(createEmailSendAttempt("resend", pending.challengeId))}>{timing.resendIn > 0 ? `Resend in ${timing.resendIn}s` : "Resend email code"}</button>
         </div>
       </div>}
-      {error && <p role="alert" className="mt-3 text-sm text-contrast-red">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm text-[#C92716]">{error}</p>}
       {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
       {busy && <p role="status" className="mt-3 text-sm text-[#6B6B6B]">Checking email verification…</p>}
       <div className="mt-3 flex flex-wrap gap-3">

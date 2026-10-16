@@ -215,11 +215,16 @@ export class FakeBackend {
       return ok(this.kitchen);
     }
     if (key === "GET /api/chef/menu" || key === "GET /api/chef/orders" || key === "GET /api/chef/earnings") return ok([]);
+    if (key === "GET /api/chef/orders/page") return ok({ orders: [], nextCursor: null, hasMore: false });
     if (key === "GET /api/chef/finance/balance") return ok({ accounting: { recordedOrders: 0, grossFood: "0.00", totalServiceFee: "0.00", feeBeforeGst: "0.00", feeGst: "0.00", withholding: "0.00", originalNetEarnings: "0.00", recordedPayments: "0.00", outstanding: "0.00", otherLedgerMovements: "0.00", legacyRecords: 0 }, available: "0.00", outstanding: "0.00", reservedOrPaid: "0.00", onHold: true, manualRequestUsedToday: false, nextManualRequestAt: "2026-10-12T18:30:00Z", recentPayouts: [], executionEnabled: false, payoutMode: "CRAVES_MANUAL" });
     if (key === "GET /api/chef/finance/withdrawals") return ok({ code: "FINANCE_OPERATION_NOT_FOUND" }, 404);
     if (key === "GET /api/documents/capabilities") return ok({ enabled: true, emailEnabled: true, types: ["CHEF_ORDER_STATEMENT", "CHEF_EARNINGS_STATEMENT", "CHEF_SETTLEMENT_STATEMENT"], maxPeriodDays: 31, maxRows: 1000, taxInvoicesEnabled: false });
     if (key === "GET /api/documents") return ok({ items: [], nextCursor: null });
     if (key === "GET /api/notifications/in-app") return ok([]);
+    if (key === "GET /api/notifications/in-app/unread-count") return ok({ unreadCount: 0 });
+    // No opening hours set: the kitchen is open or closed by its switch alone, as before hours existed.
+    if (key === "GET /api/chef/kitchen/schedule") return ok({ kitchenId: (this.kitchen?.id as string) ?? uuid(900), timezoneId: "Asia/Kolkata", acceptingOrders: true, pausedUntil: null, pauseReason: null, weeklyWindows: [] });
+    if (method === "GET" && path.startsWith("/api/chef/kitchen/schedule/overrides/")) return ok({ code: "SCHEDULE_OVERRIDE_NOT_FOUND" }, 404);
     if (key === "GET /api/chef/application/readiness") return ok({ contractVersion: 1, applicationStatus: this.application.status, emailStatus: "VERIFIED", approvalReady: false, requiredDocumentCount: 3, uploadedDocumentCount: 3, approvedDocumentCount: 3, documents: [], blockingIssues: [], evaluatedAt: NOW, lastSavedAt: NOW });
     if (key === "GET /api/chef/application/evidence-status") return ok(this.documents);
     if (key === "GET /api/chef/subscription-capacity") return ok({ chefIdentityId: CHEF_ID, adminSalesFrozen: false, freezeReason: null, slotRules: [], menuItemRules: [], dateOverrides: [], menuItemDateOverrides: [], openIncidentCount: 0 });
@@ -248,9 +253,11 @@ export async function rememberChefDevice(page: Page, userId = CHEF_ID) {
 }
 
 export const test = base.extend<{ backend: FakeBackend }>({
-  backend: async ({ context, page }, provide, testInfo) => {
+  backend: async ({ context, page, baseURL }, provide, testInfo) => {
     const backend = new FakeBackend();
     await backend.install(context);
+    // A device that already chose English; language.spec.ts clears this to test the language step itself.
+    await context.addCookies([{ name: "craves_lang", value: "en", url: baseURL! }]);
     // 18+ rules and greetings depend on "today": pin it so the suite never drifts.
     await page.clock.install({ time: new Date("2026-10-12T09:00:00+05:30") });
     await provide(backend);

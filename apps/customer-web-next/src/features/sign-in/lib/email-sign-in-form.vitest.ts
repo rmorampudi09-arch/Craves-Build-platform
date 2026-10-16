@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 // "Use email & password" on the shared sign-in form (/sign-in, /chef/sign-in); Firebase and Craves are mocked.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { PhoneAuthForm } from "../components/phone-auth-form";
 import { isChefModeTab, markChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { LanguageProvider } from "@/shared/i18n/language-context";
+import type { Language } from "@/shared/i18n/language";
+
+// createElement passes children as its third argument; the cast only makes that prop optional.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
 
 const mocks = vi.hoisted(() => ({ signIn: vi.fn(), reset: vi.fn(), signOut: vi.fn() }));
+// Only the chef language provider uses the router (to redraw server text after a change).
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("firebase/auth", () => ({
   RecaptchaVerifier: class { render = vi.fn(); clear = vi.fn(); },
   signInWithPhoneNumber: vi.fn(),
@@ -127,6 +134,17 @@ it("resets a password with the same neutral confirmation whether or not the acco
   expect(mocks.reset).toHaveBeenCalledExactlyOnceWith({}, "nobody@example.com");
   fireEvent.click(screen.getByRole("button", { name: "Back to login" }));
   expect(emailField().value).toBe("nobody@example.com");
+});
+
+it("explains what to fix in a chef's language", () => {
+  render(createElement(Provider, { initial: "kn", chosen: true }, createElement(PhoneAuthForm, { returnTo: "/chef", email: true })));
+  expect(screen.getByRole("heading", { name: "ಮತ್ತೆ ಸ್ವಾಗತ" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "ಚೆಫ್ ಆಗಿ ಲಾಗಿನ್ ಆಗಿ" }));
+  // The rules come from the shared email helpers in English and are shown in Kannada.
+  expect(screen.getByText("ಸರಿಯಾದ ಇಮೇಲ್ ವಿಳಾಸ ನಮೂದಿಸಿ.")).toBeTruthy();
+  expect(screen.getByText("ಪಾಸ್‌ವರ್ಡ್‌ನಲ್ಲಿ ಕನಿಷ್ಠ 8 ಅಕ್ಷರಗಳು ಇರಬೇಕು.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "ಪಾಸ್‌ವರ್ಡ್ ತೋರಿಸಿ" })).toBeTruthy();
+  expect(mocks.signIn).not.toHaveBeenCalled();
 });
 
 it("keeps the admin portal on phone OTP only", () => {

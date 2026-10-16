@@ -1,7 +1,35 @@
 /**
  * Opening hours and whether the kitchen takes orders now, as the Craves app shows them.
- * Times are "HH:MM" in the kitchen's own time zone.
+ * Times are "HH:MM" in the kitchen's own time zone. Words come in the chef's language; times keep AM/PM
+ * and dates keep the English month, as elsewhere on the chef side.
  */
+import { messages, type Language } from "../../../shared/i18n/language.ts";
+
+const WORDS = messages({
+  en: {
+    midnight: "Midnight", closed: "Closed", notSet: "Not set", today: "Today", tomorrow: "Tomorrow",
+    closeAfterOpen: "Each time must close after it opens.", overlap: "The two times overlap.",
+    day1: "Monday", day2: "Tuesday", day3: "Wednesday", day4: "Thursday", day5: "Friday", day6: "Saturday", day7: "Sunday",
+    short1: "Mon", short2: "Tue", short3: "Wed", short4: "Thu", short5: "Fri", short6: "Sat", short7: "Sun",
+  },
+  te: {
+    midnight: "అర్ధరాత్రి", closed: "మూసి ఉంటుంది", notSet: "సమయం పెట్టలేదు", today: "ఈరోజు", tomorrow: "రేపు",
+    closeAfterOpen: "ప్రతి సమయంలో, మూసే సమయం తెరిచే సమయం తర్వాత ఉండాలి.", overlap: "రెండు సమయాలు ఒకదానిపై ఒకటి పడుతున్నాయి.",
+    day1: "సోమవారం", day2: "మంగళవారం", day3: "బుధవారం", day4: "గురువారం", day5: "శుక్రవారం", day6: "శనివారం", day7: "ఆదివారం",
+    short1: "సోమ", short2: "మంగళ", short3: "బుధ", short4: "గురు", short5: "శుక్ర", short6: "శని", short7: "ఆది",
+  },
+  kn: {
+    midnight: "ಮಧ್ಯರಾತ್ರಿ", closed: "ಮುಚ್ಚಿರುತ್ತದೆ", notSet: "ಸಮಯ ಹಾಕಿಲ್ಲ", today: "ಇಂದು", tomorrow: "ನಾಳೆ",
+    closeAfterOpen: "ಪ್ರತಿ ಸಮಯದಲ್ಲೂ, ಮುಚ್ಚುವ ಸಮಯ ತೆರೆಯುವ ಸಮಯದ ನಂತರ ಇರಬೇಕು.", overlap: "ಎರಡು ಸಮಯಗಳು ಒಂದರ ಮೇಲೊಂದು ಬರುತ್ತಿವೆ.",
+    day1: "ಸೋಮವಾರ", day2: "ಮಂಗಳವಾರ", day3: "ಬುಧವಾರ", day4: "ಗುರುವಾರ", day5: "ಶುಕ್ರವಾರ", day6: "ಶನಿವಾರ", day7: "ಭಾನುವಾರ",
+    short1: "ಸೋಮ", short2: "ಮಂಗಳ", short3: "ಬುಧ", short4: "ಗುರು", short5: "ಶುಕ್ರ", short6: "ಶನಿ", short7: "ಭಾನು",
+  },
+});
+
+/** "Monday", or "Mon" when short, for a day number (Monday 1 to Sunday 7). */
+export function dayName(day: number, language: Language = "en", short = false): string {
+  return WORDS[language][`${short ? "short" : "day"}${day}` as keyof (typeof WORDS)["en"]];
+}
 
 /** Monday first, with the day numbers the server uses (Monday 1 to Sunday 7). */
 export const DAYS = [
@@ -27,8 +55,8 @@ const clock = (hours: number, minutes: number) =>
   `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
 
 /** "11:00 AM", or "Midnight" for 23:59. */
-export function formatHoursTime(time: string): string {
-  return time === MIDNIGHT ? "Midnight" : clock(Number(time.slice(0, 2)), Number(time.slice(3, 5)));
+export function formatHoursTime(time: string, language: Language = "en"): string {
+  return time === MIDNIGHT ? WORDS[language].midnight : clock(Number(time.slice(0, 2)), Number(time.slice(3, 5)));
 }
 
 /** The ranges of one day, earliest first. */
@@ -43,20 +71,25 @@ export function rangesForDay(windows: readonly WeeklyWindow[], day: number): Tim
  * The lines shown for a day. A day with no range is Closed, except when the whole week has none:
  * then no hours were ever set, which is not the same as closed.
  */
-export function summarizeRanges(ranges: readonly TimeRange[], weekHasHours: boolean): string[] {
-  if (ranges.length === 0) return [weekHasHours ? "Closed" : "Not set"];
+export function summarizeRanges(
+  ranges: readonly TimeRange[],
+  weekHasHours: boolean,
+  language: Language = "en",
+): string[] {
+  if (ranges.length === 0) return [weekHasHours ? WORDS[language].closed : WORDS[language].notSet];
   return ranges.map(
-    (range) => `${formatHoursTime(range.opensAt)} – ${formatHoursTime(range.closesAt)}`,
+    (range) =>
+      `${formatHoursTime(range.opensAt, language)} – ${formatHoursTime(range.closesAt, language)}`,
   );
 }
 
 /** A plain-words problem with the ranges, or null when they can be saved. */
-export function validateRanges(ranges: readonly TimeRange[]): string | null {
+export function validateRanges(ranges: readonly TimeRange[], language: Language = "en"): string | null {
   if (ranges.some((range) => range.opensAt >= range.closesAt))
-    return "Each time must close after it opens.";
+    return WORDS[language].closeAfterOpen;
   const ordered = [...ranges].sort((a, b) => a.opensAt.localeCompare(b.opensAt));
   return ordered.some((range, index) => index > 0 && range.opensAt < ordered[index - 1].closesAt)
-    ? "The two times overlap."
+    ? WORDS[language].overlap
     : null;
 }
 
@@ -128,19 +161,19 @@ const utcDay = (date: string) => {
 const isoDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
 /** "Today", "Tomorrow", then "Sun 18 Oct", for a "YYYY-MM-DD" date seen from the kitchen's today. */
-export function dayLabel(date: string, today: string): string {
+export function dayLabel(date: string, today: string, language: Language = "en"): string {
   const apart = Math.round((utcDay(date) - utcDay(today)) / 86_400_000);
-  if (apart === 0) return "Today";
-  if (apart === 1) return "Tomorrow";
+  if (apart === 0) return WORDS[language].today;
+  if (apart === 1) return WORDS[language].tomorrow;
   const day = new Date(utcDay(date));
-  return `${WEEKDAYS[(day.getUTCDay() + 6) % 7]} ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]}`;
+  return `${dayName(((day.getUTCDay() + 6) % 7) + 1, language, true)} ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]}`;
 }
 
 /** The next 30 days a special day can be set for, starting today. */
-export function upcomingDays(today: string): { date: string; label: string }[] {
+export function upcomingDays(today: string, language: Language = "en"): { date: string; label: string }[] {
   return Array.from({ length: 30 }, (_, offset) => {
     const date = isoDay(utcDay(today) + offset * 86_400_000);
-    return { date, label: dayLabel(date, today) };
+    return { date, label: dayLabel(date, today, language) };
   });
 }
 
@@ -195,7 +228,9 @@ export function kitchenOpenState(
   schedule: ScheduleState | null,
   now: Date,
   special: SpecialDay | null = null,
+  language: Language = "en",
 ): KitchenOpenState {
+  const time = (value: string) => formatHoursTime(value, language);
   const at = schedule ? kitchenClock(now, schedule.timezoneId) : null;
   // As the server decides: a special day's hours (none when closed all day) replace the week's for that date.
   const today =
@@ -224,12 +259,11 @@ export function kitchenOpenState(
     closedReason,
     backAt:
       status === "paused" && schedule?.pausedUntil
-        ? formatHoursTime(kitchenClock(new Date(schedule.pausedUntil), schedule.timezoneId).time)
+        ? time(kitchenClock(new Date(schedule.pausedUntil), schedule.timezoneId).time)
         : null,
-    opensAt: closedReason === "outside-hours" && next ? formatHoursTime(next.opensAt) : null,
-    hoursToday: today.length
-      ? `${formatHoursTime(today[0].opensAt)} – ${formatHoursTime(today[today.length - 1].closesAt)}`
-      : null,
+    opensAt: closedReason === "outside-hours" && next ? time(next.opensAt) : null,
+    // Every range, so a lunch-to-dinner break isn't hidden inside one long span.
+    hoursToday: today.length ? summarizeRanges(today, true, language).join(", ") : null,
     closedAllDay: closedReason === "outside-hours" && !!special?.closed,
     takingOrders: status === "open" || status === "paused" || closedReason === "outside-hours",
   });

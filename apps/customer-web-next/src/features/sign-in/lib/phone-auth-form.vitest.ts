@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 // The shared phone sign-in form (/sign-in, /chef/sign-in); no OTP service is called.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { PhoneAuthForm } from "../components/phone-auth-form";
+import { LanguageProvider } from "@/shared/i18n/language-context";
+import type { Language } from "@/shared/i18n/language";
+
+// createElement passes children as its third argument; the cast only makes that prop optional.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
 
 const mocks = vi.hoisted(() => ({ msg91: vi.fn() }));
+// Only the chef language provider uses the router (to redraw server text after a change).
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = vi.fn(); clear = vi.fn(); }, signInWithPhoneNumber: vi.fn() }));
 vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
@@ -69,6 +76,29 @@ it("explains an invalid number under the field and keeps Send OTP enabled", asyn
   expect((await screen.findByRole("alert")).textContent).toBe("Indian mobile numbers start with 6, 7, 8 or 9.");
   expect(send.hasAttribute("disabled")).toBe(false);
   expect(mocks.msg91).not.toHaveBeenCalled();
+});
+
+it("speaks a chef's language, including the reasons from the shared error helpers", async () => {
+  render(createElement(Provider, { initial: "te", chosen: true }, createElement(PhoneAuthForm, { returnTo: "/chef" })));
+  expect(screen.getByRole("heading", { name: "మీ వంటగదిలోకి సైన్ ఇన్ చేయండి" })).toBeTruthy();
+  expect(screen.getByText("OTP పొందడానికి మీ మొబైల్ నంబర్ ఇవ్వండి.")).toBeTruthy();
+  const input = screen.getByLabelText("మొబైల్ నంబర్") as HTMLInputElement;
+  expect(input.placeholder).toBe("10 అంకెల నంబర్");
+  const send = screen.getByRole("button", { name: "OTP పంపండి" });
+  fireEvent.click(send);
+  expect((await screen.findByRole("alert")).textContent).toBe("10 అంకెల మొబైల్ నంబర్ ఇవ్వండి.");
+
+  type(input, "9876543210");
+  mocks.msg91.mockRejectedValueOnce(new Error("OTP_UNAVAILABLE"));
+  fireEvent.click(send);
+  expect(await screen.findByText("ఫోన్ సైన్ ఇన్ ప్రస్తుతం పని చేయడం లేదు. కొంతసేపటి తర్వాత మళ్లీ ప్రయత్నించండి.")).toBeTruthy();
+
+  mocks.msg91.mockResolvedValueOnce({ confirm: vi.fn() });
+  fireEvent.click(send);
+  // Telugu puts the number first.
+  await waitFor(() => expect(document.getElementById("otp-sent-to")?.textContent).toBe("+91 98765 43210 కు పంపాము"));
+  expect(screen.getByLabelText("6 అంకెల OTP")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "30 సెకన్ల తర్వాత మళ్లీ పంపండి" })).toBeTruthy();
 });
 
 it("shows a signed-in number as +91 98765 43210", () => {

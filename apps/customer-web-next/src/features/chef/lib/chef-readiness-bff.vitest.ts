@@ -37,6 +37,16 @@ describe("Chef application readiness contract and authenticated proxy", () => {
       expect(parseChefApplicationReadiness(payload)).toBeNull();
     }
   });
+  it("reads an approved kitchen whose FSSAI number Craves hasn't recorded yet (was a 502 on craves.in)", () => {
+    const approved = { ...ready(), applicationStatus: "APPROVED", approvalReady: false,
+      documents: ready().documents.map(document => ({ ...document, status: "UPLOADED" })), approvedDocumentCount: 0,
+      blockingIssues: [{ code: "FSSAI_VERIFICATION_REQUIRED", documentType: null }, ...ready().documents.map(document => ({ code: "DOCUMENT_AWAITING_REVIEW", documentType: document.documentType }))] };
+    expect(parseChefApplicationReadiness(approved)?.applicationStatus).toBe("APPROVED");
+    // The FSSAI check also keeps a pending application from reading as ready for approval.
+    const pending = { ...ready(), blockingIssues: [{ code: "FSSAI_VERIFICATION_REQUIRED", documentType: null }] };
+    expect(parseChefApplicationReadiness(pending)).toBeNull();
+    expect(parseChefApplicationReadiness({ ...pending, approvalReady: false })?.approvalReady).toBe(false);
+  });
   it("preserves rejected evidence and its repair reason", () => {
     const payload = ready();
     const rejected = { ...payload, approvalReady: false, approvedDocumentCount: 3,

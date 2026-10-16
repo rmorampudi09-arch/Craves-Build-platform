@@ -8,13 +8,14 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-// ?plan= comes from a plan card (&from=menu when it is in the Menu tab): only that plan's days count. Without it, More opened the page.
+// ?plan= comes from a plan card (&from=menu when it is in the Menu tab): only that plan's days count.
+// Without it, the Menu tab (?from=menu) or More opened the page.
 export default async function ChefCapacityPage({ searchParams }: { searchParams: Promise<{ plan?: string | string[]; from?: string | string[] }> }) {
   const { plan, from } = await searchParams;
   const planId = typeof plan === "string" && isUuid(plan) ? plan : null;
-  const back = !planId ? { href: "/chef/profile", label: "More" }
-    : from === "menu" ? { href: "/chef/menu?view=plans", label: "Menu" }
-    : { href: "/chef/meal-plans", label: "Meal plans" };
+  const back = planId
+    ? from === "menu" ? { href: "/chef/menu?view=plans", label: "Menu" } : { href: "/chef/meal-plans", label: "Meal plans" }
+    : from === "menu" ? { href: "/chef/menu", label: "Menu" } : { href: "/chef/profile", label: "More" };
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>

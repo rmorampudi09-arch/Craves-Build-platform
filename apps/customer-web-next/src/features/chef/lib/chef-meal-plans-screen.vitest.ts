@@ -2,9 +2,14 @@
 // Rendered plan list and editor against a fixture BFF; no backend is contacted.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { Language } from "@/shared/i18n/language";
+import { LanguageProvider } from "@/shared/i18n/language-context";
 import { ChefSubscriptionPlanManager } from "../components/chef-subscription-plan-manager";
+
+// LanguageProvider types children as a prop; createElement passes them as its third argument.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -349,6 +354,23 @@ describe("Chef meal plans", { timeout: 20_000 }, () => {
     expect(screen.getByRole("link", { name: "Daily limits" }).getAttribute("href")).toBe(
       `/chef/capacity?plan=${PLAN_ID}&from=menu`,
     );
+  });
+
+  it("reads in Telugu, and the old Meal plans page leads back to the Menu tab", async () => {
+    plans = [base];
+    render(createElement(Provider, { initial: "te", chosen: true }, createElement(ChefSubscriptionPlanManager)));
+    await screen.findByText("8 సబ్‌స్క్రైబర్లు");
+    expect(screen.getByRole("heading", { name: "మీల్ ప్లాన్‌లు" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "మెనూ" }).getAttribute("href")).toBe("/chef/menu?view=plans");
+    expect(screen.getByRole("link", { name: "రోజువారీ పరిమితి" }).getAttribute("href")).toBe(
+      `/chef/capacity?plan=${PLAN_ID}`,
+    );
+    await screen.findByText("ప్రతి వారం · మధ్యాహ్న భోజనం · సోమ – శుక్ర");
+    expect(screen.getByRole("button", { name: "Home lunch, నడుస్తోంది, ₹1,499 వారానికి" })).toBeTruthy();
+    // Request bodies stay English: the switch still sends the same field.
+    fireEvent.click(screen.getByRole("switch", { name: "Home lunch — కొత్త సబ్‌స్క్రైబర్లను తీసుకుంటున్నారు" }));
+    await screen.findByText("ఇప్పుడున్న సబ్‌స్క్రైబర్లకు భోజనం వస్తూనే ఉంటుంది.");
+    expect(sent("PATCH", /accepting-subscribers$/)).toEqual([{ acceptingSubscribers: false }]);
   });
 
   it("shows a plan waiting approval read-only and sends a change request as a support ticket", async () => {

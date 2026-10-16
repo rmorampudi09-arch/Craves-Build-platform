@@ -9,7 +9,6 @@ import {
   changeKitchenSchedule,
   deleteScheduleOverride,
   fetchScheduleOverride,
-  HOURS_SAVE_FAILED,
   reloadKitchenSchedule,
   saveScheduleOverride,
   scheduleUpdate,
@@ -22,6 +21,7 @@ import { SCHEDULE_REASON_MAX } from "@/features/chef/lib/chef-schedule-contract"
 import {
   DAYS,
   dayLabel,
+  dayName,
   defaultRanges,
   formatHoursTime,
   kitchenClock,
@@ -35,12 +35,56 @@ import {
   withDayRanges,
   type TimeRange,
 } from "@/features/chef/lib/opening-hours";
+import { format, messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
 
 type SpecialDay = { date: string; closed: boolean; reason: string | null; windows: TimeRange[] };
 
 // Sheets open outside the chef page: this brings the chef controls' look into them.
 const SHEET_BODY = "chef-panel-theme chef-sheet-theme mt-5 grid gap-5";
 const ROW = "chef-row !rounded-none !border-0 !bg-transparent";
+
+const TEXT = messages({
+  en: {
+    opens: "Opens", closes: "Closes", secondTime: " (second time)", removeTime: "Remove time {number}", addTime: "Add another time",
+    saving: "Saving…", save: "Save", open: "Open", closed: "Closed",
+    daysNote: "Days with no hours are closed. Use “Also use these hours on” to set several days at once.", alsoUse: "Also use these hours on",
+    pickDate: "Pick a date", checkingDay: "Checking that day…", closedAllDay: "Closed all day", reason: "Reason", optional: "(optional)",
+    example: "For example, Diwali", removeSpecial: "Remove special day",
+    everyWeek: "Every week", noHours: "No hours set yet. Until you set them, customers can order whenever your kitchen is open.",
+    soonTitle: "Opening hours are on their way", soonText: "You will be able to set your weekly hours and special days here soon.",
+    loadFailed: "We couldn’t load your opening hours", tryAgain: "Try again", saveFailed: "We couldn’t save your hours. Please try again.",
+    hoursSaved: "Opening hours saved", specialSaved: "Special day saved", specialRemoved: "Special day removed",
+    specialDays: "Special days", specialNote: "Special days you added before show when you pick their date.",
+    addSpecial: "Add a special day", specialDay: "Special day",
+  },
+  te: {
+    opens: "తెరిచే సమయం", closes: "మూసే సమయం", secondTime: " (రెండో సమయం)", removeTime: "సమయం {number} తీసేయండి", addTime: "ఇంకో సమయం జోడించండి",
+    saving: "సేవ్ అవుతోంది…", save: "సేవ్ చేయండి", open: "తెరిచి ఉంటుంది", closed: "మూసి ఉంటుంది",
+    daysNote: "సమయాలు లేని రోజులు మూసి ఉంటాయి. చాలా రోజులకు ఒకేసారి పెట్టడానికి “ఈ సమయాలు ఈ రోజులకు కూడా” వాడండి.", alsoUse: "ఈ సమయాలు ఈ రోజులకు కూడా",
+    pickDate: "తేదీ ఎంచుకోండి", checkingDay: "ఆ రోజును చూస్తున్నాం…", closedAllDay: "రోజంతా మూసి ఉంటుంది", reason: "కారణం", optional: "(ఇష్టమైతే)",
+    example: "ఉదాహరణకు, దీపావళి", removeSpecial: "ప్రత్యేక రోజు తీసేయండి",
+    everyWeek: "ప్రతి వారం", noHours: "ఇంకా సమయాలు పెట్టలేదు. పెట్టే వరకు, మీ వంటగది తెరిచి ఉన్నప్పుడు ఎప్పుడైనా కస్టమర్లు ఆర్డర్ చేయవచ్చు.",
+    soonTitle: "వంటగది సమయాలు త్వరలో వస్తాయి", soonText: "త్వరలో ఇక్కడ మీ వారపు సమయాలు, ప్రత్యేక రోజులు పెట్టుకోవచ్చు.",
+    loadFailed: "మీ వంటగది సమయాలు లోడ్ చేయలేకపోయాం", tryAgain: "మళ్లీ ప్రయత్నించండి", saveFailed: "మీ సమయాలు సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి.",
+    hoursSaved: "వంటగది సమయాలు సేవ్ అయ్యాయి", specialSaved: "ప్రత్యేక రోజు సేవ్ అయింది", specialRemoved: "ప్రత్యేక రోజు తీసేశాం",
+    specialDays: "ప్రత్యేక రోజులు", specialNote: "ముందు జోడించిన ప్రత్యేక రోజులు, ఆ తేదీ ఎంచుకున్నప్పుడు కనిపిస్తాయి.",
+    addSpecial: "ప్రత్యేక రోజు జోడించండి", specialDay: "ప్రత్యేక రోజు",
+  },
+  kn: {
+    opens: "ತೆರೆಯುವ ಸಮಯ", closes: "ಮುಚ್ಚುವ ಸಮಯ", secondTime: " (ಎರಡನೇ ಸಮಯ)", removeTime: "ಸಮಯ {number} ತೆಗೆದುಹಾಕಿ", addTime: "ಇನ್ನೊಂದು ಸಮಯ ಸೇರಿಸಿ",
+    saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ…", save: "ಉಳಿಸಿ", open: "ತೆರೆದಿರುತ್ತದೆ", closed: "ಮುಚ್ಚಿರುತ್ತದೆ",
+    daysNote: "ಸಮಯ ಇಲ್ಲದ ದಿನಗಳು ಮುಚ್ಚಿರುತ್ತವೆ. ಹಲವು ದಿನಗಳಿಗೆ ಒಮ್ಮೆಲೇ ಹಾಕಲು “ಈ ಸಮಯ ಈ ದಿನಗಳಿಗೂ” ಬಳಸಿ.", alsoUse: "ಈ ಸಮಯ ಈ ದಿನಗಳಿಗೂ",
+    pickDate: "ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ", checkingDay: "ಆ ದಿನವನ್ನು ನೋಡುತ್ತಿದ್ದೇವೆ…", closedAllDay: "ದಿನವಿಡೀ ಮುಚ್ಚಿರುತ್ತದೆ", reason: "ಕಾರಣ", optional: "(ಬೇಕಿದ್ದರೆ)",
+    example: "ಉದಾಹರಣೆಗೆ, ದೀಪಾವಳಿ", removeSpecial: "ವಿಶೇಷ ದಿನ ತೆಗೆದುಹಾಕಿ",
+    everyWeek: "ಪ್ರತಿ ವಾರ", noHours: "ಇನ್ನೂ ಸಮಯ ಹಾಕಿಲ್ಲ. ಹಾಕುವವರೆಗೆ, ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿರುವಾಗ ಯಾವಾಗ ಬೇಕಾದರೂ ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಬಹುದು.",
+    soonTitle: "ಅಡುಗೆಮನೆ ಸಮಯ ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ", soonText: "ಶೀಘ್ರದಲ್ಲೇ ಇಲ್ಲಿ ನಿಮ್ಮ ವಾರದ ಸಮಯ ಮತ್ತು ವಿಶೇಷ ದಿನಗಳನ್ನು ಹಾಕಬಹುದು.",
+    loadFailed: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಮಯ ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", saveFailed: "ನಿಮ್ಮ ಸಮಯವನ್ನು ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    hoursSaved: "ಅಡುಗೆಮನೆ ಸಮಯ ಉಳಿಸಲಾಗಿದೆ", specialSaved: "ವಿಶೇಷ ದಿನ ಉಳಿಸಲಾಗಿದೆ", specialRemoved: "ವಿಶೇಷ ದಿನ ತೆಗೆದುಹಾಕಲಾಗಿದೆ",
+    specialDays: "ವಿಶೇಷ ದಿನಗಳು", specialNote: "ಮೊದಲು ಸೇರಿಸಿದ ವಿಶೇಷ ದಿನಗಳು, ಆ ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿದಾಗ ಕಾಣುತ್ತವೆ.",
+    addSpecial: "ವಿಶೇಷ ದಿನ ಸೇರಿಸಿ", specialDay: "ವಿಶೇಷ ದಿನ",
+  },
+});
 
 function SwitchRow({
   title,
@@ -80,6 +124,7 @@ function TimeSelect({
   closing: boolean;
   onChange(time: string): void;
 }) {
+  const { language } = useLanguage();
   return (
     <label className="grid min-w-0 flex-1 gap-1 text-sm font-semibold text-[#1A1A1A]">
       {label}
@@ -90,7 +135,7 @@ function TimeSelect({
       >
         {timeOptions([value], closing).map((time) => (
           <option key={time} value={time}>
-            {formatHoursTime(time)}
+            {formatHoursTime(time, language)}
           </option>
         ))}
       </select>
@@ -106,6 +151,7 @@ function RangesEditor({
   ranges: TimeRange[];
   onChange(next: TimeRange[]): void;
 }) {
+  const text = useText(TEXT);
   const set = (index: number, field: keyof TimeRange, time: string) =>
     onChange(ranges.map((range, other) => (other === index ? { ...range, [field]: time } : range)));
   return (
@@ -113,13 +159,13 @@ function RangesEditor({
       {ranges.map((range, index) => (
         <div key={index} className="flex items-end gap-2">
           <TimeSelect
-            label={<>Opens{index ? <span className="sr-only"> (second time)</span> : null}</>}
+            label={<>{text.opens}{index ? <span className="sr-only">{text.secondTime}</span> : null}</>}
             value={range.opensAt}
             closing={false}
             onChange={(time) => set(index, "opensAt", time)}
           />
           <TimeSelect
-            label={<>Closes{index ? <span className="sr-only"> (second time)</span> : null}</>}
+            label={<>{text.closes}{index ? <span className="sr-only">{text.secondTime}</span> : null}</>}
             value={range.closesAt}
             closing
             onChange={(time) => set(index, "closesAt", time)}
@@ -128,7 +174,7 @@ function RangesEditor({
             <button
               type="button"
               className="chef-icon-button mb-0.5 shrink-0"
-              aria-label={`Remove time ${index + 1}`}
+              aria-label={format(text.removeTime, { number: index + 1 })}
               onClick={() => onChange(ranges.filter((_, other) => other !== index))}
             >
               <X className="h-5 w-5" aria-hidden="true" />
@@ -143,7 +189,7 @@ function RangesEditor({
           onClick={() => onChange([...ranges, secondRange()])}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Add another time
+          {text.addTime}
         </button>
       ) : null}
     </div>
@@ -151,6 +197,7 @@ function RangesEditor({
 }
 
 function SaveButton({ saving, onClick }: { saving: boolean; onClick(): void }) {
+  const text = useText(TEXT);
   return (
     <button
       type="button"
@@ -159,7 +206,7 @@ function SaveButton({ saving, onClick }: { saving: boolean; onClick(): void }) {
       aria-busy={saving}
       onClick={onClick}
     >
-      {saving ? "Saving…" : "Save"}
+      {saving ? text.saving : text.save}
     </button>
   );
 }
@@ -187,6 +234,8 @@ function DayHoursForm({
   error: string;
   onSave(copyTo: number[], ranges: TimeRange[]): void;
 }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const [open, setOpen] = useState(initial.length > 0);
   const [ranges, setRanges] = useState(initial.length ? initial : defaultRanges());
   const [copyTo, setCopyTo] = useState<number[]>([]);
@@ -194,14 +243,14 @@ function DayHoursForm({
   const copyId = useId();
 
   function save() {
-    const found = open ? validateRanges(ranges) : null;
+    const found = open ? validateRanges(ranges, language) : null;
     setProblem(found ?? "");
     if (!found) onSave(copyTo, open ? ranges : []);
   }
 
   return (
     <div className={SHEET_BODY}>
-      <SwitchRow title={open ? "Open" : "Closed"} label="Open" checked={open} onChange={setOpen} />
+      <SwitchRow title={open ? text.open : text.closed} label={text.open} checked={open} onChange={setOpen} />
       {open ? (
         <RangesEditor
           ranges={ranges}
@@ -213,12 +262,12 @@ function DayHoursForm({
       ) : null}
       {weekHasHours ? null : (
         <p className="chef-section-note !text-[0.875rem]">
-          Days with no hours are closed. Use “Also use these hours on” to set several days at once.
+          {text.daysNote}
         </p>
       )}
       <div role="group" aria-labelledby={copyId}>
         <p id={copyId} className="chef-field-label">
-          Also use these hours on
+          {text.alsoUse}
         </p>
         <div className="chef-chips is-wrap mt-2">
           {DAYS.filter((other) => other.day !== day).map((other) => (
@@ -226,7 +275,7 @@ function DayHoursForm({
               key={other.day}
               type="button"
               className="chef-chip"
-              aria-label={other.name}
+              aria-label={dayName(other.day, language)}
               aria-pressed={copyTo.includes(other.day)}
               onClick={() =>
                 setCopyTo(
@@ -236,7 +285,7 @@ function DayHoursForm({
                 )
               }
             >
-              {other.short}
+              {dayName(other.day, language, true)}
             </button>
           ))}
         </div>
@@ -263,6 +312,8 @@ function SpecialDayForm({
   onSave(value: SpecialDay): void;
   onRemove(date: string): void;
 }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const [date, setDate] = useState(initial?.date ?? "");
   const [existing, setExisting] = useState(!!initial);
   const [checking, setChecking] = useState(false);
@@ -290,10 +341,10 @@ function SpecialDayForm({
       <div className={SHEET_BODY} aria-busy={checking}>
         <div role="group" aria-labelledby={pickId}>
           <p id={pickId} className="chef-field-label">
-            Pick a date
+            {text.pickDate}
           </p>
           <div className="chef-chips is-wrap mt-2">
-            {upcomingDays(today).map((day) => (
+            {upcomingDays(today, language).map((day) => (
               <button
                 key={day.date}
                 type="button"
@@ -307,14 +358,14 @@ function SpecialDayForm({
           </div>
         </div>
         <p role="status" className="chef-section-note !text-[0.875rem]">
-          {checking ? "Checking that day…" : ""}
+          {checking ? text.checkingDay : ""}
         </p>
       </div>
     );
   }
 
   function save() {
-    const found = closed ? null : validateRanges(ranges);
+    const found = closed ? null : validateRanges(ranges, language);
     setProblem(found ?? "");
     if (!found)
       onSave({ date, closed, reason: reason.trim() || null, windows: closed ? [] : ranges });
@@ -322,10 +373,10 @@ function SpecialDayForm({
 
   return (
     <div className={SHEET_BODY}>
-      <p className="text-base font-bold text-[#1A1A1A]">{dayLabel(date, today)}</p>
+      <p className="text-base font-bold text-[#1A1A1A]">{dayLabel(date, today, language)}</p>
       <SwitchRow
-        title="Closed all day"
-        label="Closed all day"
+        title={text.closedAllDay}
+        label={text.closedAllDay}
         checked={closed}
         onChange={setClosed}
       />
@@ -339,12 +390,12 @@ function SpecialDayForm({
         />
       )}
       <label className="chef-field-label">
-        Reason <span className="font-normal text-[#6B6B6B]">(optional)</span>
+        {text.reason} <span className="font-normal text-[#6B6B6B]">{text.optional}</span>
         <input
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           maxLength={SCHEDULE_REASON_MAX}
-          placeholder="For example, Diwali"
+          placeholder={text.example}
           className="mt-2 min-h-12 w-full rounded-xl px-4 text-base font-normal"
         />
       </label>
@@ -358,7 +409,7 @@ function SpecialDayForm({
             disabled={saving}
             onClick={() => onRemove(date)}
           >
-            Remove special day
+            {text.removeSpecial}
           </button>
         ) : null}
       </div>
@@ -368,6 +419,8 @@ function SpecialDayForm({
 
 /** Opening hours: the hours for each day of the week, and special days. */
 export function ChefOpeningHours() {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const view = useKitchenSchedule();
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [special, setSpecial] = useState<{ open: boolean; today: string; initial?: SpecialDay }>({
@@ -381,14 +434,14 @@ export function ChefOpeningHours() {
   const busy = useRef(false);
   const ready = view.state === "ready";
 
-  // "Change opening hours" links here with #chef-hours; the hours only exist once read.
+  // Older links carry #chef-hours; the hours only exist once read.
   useEffect(() => {
     if (ready && window.location.hash === "#chef-hours") document.getElementById("chef-hours")?.scrollIntoView();
   }, [ready]);
 
   if (view.state === "loading") {
     return (
-      <ChefSection title="Every week" flush labelledBy="chef-hours">
+      <ChefSection title={text.everyWeek} flush labelledBy="chef-hours">
         <div className="chef-list" aria-busy="true">
           {DAYS.map(({ day }) => (
             <ChefSkeletonRow key={day} media="none" trailing="value" />
@@ -400,8 +453,8 @@ export function ChefOpeningHours() {
   if (view.state === "soon") {
     return (
       <ComingSoon
-        title="Opening hours are on their way"
-        message="You will be able to set your weekly hours and special days here soon."
+        title={text.soonTitle}
+        message={text.soonText}
       />
     );
   }
@@ -410,7 +463,7 @@ export function ChefOpeningHours() {
       <ChefSection>
         <ChefEmpty
           icon={AlertTriangle}
-          title="We couldn’t load your opening hours"
+          title={text.loadFailed}
           text={view.message}
           action={
             <button
@@ -419,7 +472,7 @@ export function ChefOpeningHours() {
               className="chef-btn is-primary"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              Try again
+              {text.tryAgain}
             </button>
           }
         />
@@ -441,7 +494,7 @@ export function ChefOpeningHours() {
       await run();
       setFlash(done);
     } catch (error) {
-      setSheetError(chefErrorText(error, HOURS_SAVE_FAILED));
+      setSheetError(chefErrorText(error, text.saveFailed));
     } finally {
       busy.current = false;
       setSaving(false);
@@ -455,10 +508,10 @@ export function ChefOpeningHours() {
           scheduleUpdate(fresh, {
             weeklyWindows: withDayRanges(fresh.weeklyWindows, [day, ...copyTo], ranges),
           }),
-        HOURS_SAVE_FAILED,
+        text.saveFailed,
       );
       setEditingDay(null);
-    }, "Opening hours saved");
+    }, text.hoursSaved);
   const saveSpecial = (value: SpecialDay) =>
     save(async () => {
       await saveScheduleOverride(value.date, {
@@ -472,13 +525,13 @@ export function ChefOpeningHours() {
         ),
       );
       setSpecial((current) => ({ ...current, open: false }));
-    }, "Special day saved");
+    }, text.specialSaved);
   const removeSpecial = (date: string) =>
     save(async () => {
       await deleteScheduleOverride(date);
       setSpecials((previous) => previous.filter((item) => item.date !== date));
       setSpecial((current) => ({ ...current, open: false }));
-    }, "Special day removed");
+    }, text.specialRemoved);
   const openSpecial = (initial?: SpecialDay) => {
     setSheetError("");
     setSpecial({ open: true, today: kitchenClock(new Date(), schedule.timezoneId).date, initial });
@@ -487,22 +540,16 @@ export function ChefOpeningHours() {
   return (
     <>
       <ChefSection
-        title="Every week"
-        note={
-          weekHasHours
-            ? undefined
-            : "No hours set yet. Until you set them, customers can order whenever your kitchen is open."
-        }
+        title={text.everyWeek}
+        note={weekHasHours ? undefined : text.noHours}
         flush
         labelledBy="chef-hours"
       >
         <div className="chef-list">
           {DAYS.map((day) => {
-            const lines = summarizeRanges(
-              rangesForDay(schedule.weeklyWindows, day.day),
-              weekHasHours,
-            );
-            const set = lines[0] !== "Closed" && lines[0] !== "Not set";
+            const ranges = rangesForDay(schedule.weeklyWindows, day.day);
+            const lines = summarizeRanges(ranges, weekHasHours, language);
+            const set = ranges.length > 0;
             return (
               <button
                 key={day.day}
@@ -514,7 +561,7 @@ export function ChefOpeningHours() {
                   setEditingDay(day.day);
                 }}
               >
-                <span className="chef-row-main chef-row-title">{day.name}</span>
+                <span className="chef-row-main chef-row-title">{dayName(day.day, language)}</span>
                 <span
                   className={`text-right text-[0.875rem] ${set ? "font-semibold text-[#1A1A1A]" : "text-[#6B6B6B]"}`}
                 >
@@ -532,8 +579,8 @@ export function ChefOpeningHours() {
       </ChefSection>
 
       <ChefSection
-        title="Special days"
-        note="Special days you added before show when you pick their date."
+        title={text.specialDays}
+        note={text.specialNote}
         flush
         labelledBy="chef-special-days"
       >
@@ -552,11 +599,11 @@ export function ChefOpeningHours() {
                 </span>
                 <span className="chef-row-main">
                   <span className="chef-row-title block">
-                    {dayLabel(item.date, special.today)}
+                    {dayLabel(item.date, special.today, language)}
                     {item.reason ? ` · ${item.reason}` : ""}
                   </span>
                   <span className="chef-row-meta block">
-                    {item.closed ? "Closed" : summarizeRanges(item.windows, true).join(", ")}
+                    {item.closed ? text.closed : summarizeRanges(item.windows, true, language).join(", ")}
                   </span>
                 </span>
                 <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
@@ -572,7 +619,7 @@ export function ChefOpeningHours() {
             onClick={() => openSpecial()}
           >
             <CalendarDays className="h-4 w-4" aria-hidden="true" />
-            Add a special day
+            {text.addSpecial}
           </button>
         </div>
       </ChefSection>
@@ -582,7 +629,7 @@ export function ChefOpeningHours() {
         onOpenChange={(open) => {
           if (!open) setEditingDay(null);
         }}
-        title={editing?.name ?? ""}
+        title={editing ? dayName(editing.day, language) : ""}
         busy={saving}
       >
         {editing ? (
@@ -601,7 +648,7 @@ export function ChefOpeningHours() {
         onOpenChange={(open) => {
           if (!open) setSpecial((current) => ({ ...current, open: false }));
         }}
-        title={special.initial ? "Special day" : "Add a special day"}
+        title={special.initial ? text.specialDay : text.addSpecial}
         busy={saving}
       >
         {special.open ? (

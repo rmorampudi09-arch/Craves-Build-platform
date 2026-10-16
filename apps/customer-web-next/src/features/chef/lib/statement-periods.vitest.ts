@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { documentRequestSchema } from "../../chef-onboarding/lib/document-contract";
 import { statementPeriodSchema } from "../../admin/finance/lib/finance-source-contract";
-import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel } from "./statement-periods";
+import { STATEMENT_PRESETS, dayAfter, indiaDate, periodLabel, presetPeriod, referencePeriodLabel, statementPresets } from "./statement-periods";
 
 describe("statement periods", () => {
   it("builds Monday weeks and calendar months as [from, to)", () => {
@@ -27,6 +27,12 @@ describe("statement periods", () => {
         expect(documentRequestSchema.safeParse({ type: "CHEF_EARNINGS_STATEMENT", ...period }).success, `${value} ${today}`).toBe(true);
       }
     }
+  });
+
+  it("names the same periods in the chef's language", () => {
+    expect(STATEMENT_PRESETS.map(({ label }) => label)).toEqual(["This week", "Last week", "This month", "Last month"]);
+    expect(statementPresets("te").map(({ label }) => label)).toEqual(["ఈ వారం", "గత వారం", "ఈ నెల", "గత నెల"]);
+    expect(statementPresets("kn").map(({ value }) => value)).toEqual(STATEMENT_PRESETS.map(({ value }) => value));
   });
 
   it("reads periods and saved references as India dates", () => {

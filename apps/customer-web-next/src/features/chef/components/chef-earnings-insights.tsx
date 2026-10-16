@@ -35,6 +35,8 @@ import {
 } from "@/features/chef/lib/chef-earnings-insights";
 import { parseChefMenuItems } from "@/features/chef/lib/chef-menu-contract";
 import { parseChefOrdersResponse, type ChefOrder } from "@/features/chef/lib/chef-order-contract";
+import { format, messages, type Language } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { sessionFetch } from "@/shared/lib/session-fetch";
@@ -43,34 +45,92 @@ import { secondaryActionClass, Sheet } from "@/shared/ui/overlays/overlay";
 /** The earnings read's limit (src/app/api/chef/earnings): a list this long may be missing its oldest entries. */
 const EARNINGS_LIMIT = 200;
 const HISTORY_PAGE = 50;
-const MAX_LABELLED_BARS = 14;
-const PRESETS = [
-  { range: "today", label: "Today" },
-  { range: "week", label: "This week" },
-  { range: "month", label: "This month" },
-] as const;
-/** Words for the chosen period: the orders card title, the "no sales" line and what the % compares with. */
-const PERIOD_WORDS = {
-  today: { orders: "Orders today", none: "No sales today", previous: "yesterday" },
-  week: { orders: "Orders this week", none: "No sales this week", previous: "last week" },
-  month: { orders: "Orders this month", none: "No sales this month", previous: "last month" },
-  custom: {
-    orders: "Orders in this period",
-    none: "No sales in this period",
-    previous: "the days before",
+// A week of bars fits a phone; a longer range scrolls sideways with finger-sized bars.
+const BARS_THAT_FIT = 7;
+const PRESETS = ["today", "week", "month"] as const;
+
+const TEXT = messages({
+  en: {
+    today: "Today", week: "This week", month: "This month", pickDates: "Pick dates", up: "Up", down: "Down",
+    earnedEachDay: "Earned each day", eachDay: "Each day: open a day to see its orders", topDishes: "Top dishes", sold: "{count} sold",
+    delivered: "delivered", cancelled: "cancelled", rejected: "rejected",
+    pickToday: "Pick days up to today.", pickUpTo: "Pick up to {count} days.", pickDescription: "Choose the first and last day, up to {count} days.",
+    cancel: "Cancel", show: "Show", firstDay: "First day", lastDay: "Last day",
+    sales: "Sales", period: "Period", loading: "Loading your sales",
+    earningsFailed: "We couldn’t load your earnings.", ordersFailed: "We couldn’t load your orders.", checkConnection: "Check your connection and try again.", tryAgain: "Try again",
+    youEarned: "You earned", trendMoney: "{value}% vs {previous}", trendCount: "{value} vs {previous}", ordersDelivered: "Orders delivered", averageOrder: "Average order",
+    latestEarnings: "Based on your latest {count} earnings.", olderFailed: "Couldn’t load older orders.",
+    latestOrders: "Showing your latest {count} orders.", latestOnly: "Showing your latest orders only.",
+    noSales: "No sales yet", emptyText: "Your earnings, best sellers and daily sales show up here once orders are delivered.", goToMenu: "Go to your menu",
+    orders: "Orders", ordersOn: "Orders · {day}", noOrdersDay: "No orders this day.",
   },
-} as const;
+  te: {
+    today: "ఈరోజు", week: "ఈ వారం", month: "ఈ నెల", pickDates: "తేదీలు ఎంచుకోండి", up: "పెరిగింది", down: "తగ్గింది",
+    earnedEachDay: "ప్రతి రోజు సంపాదన", eachDay: "ప్రతి రోజు: ఆ రోజు ఆర్డర్లు చూడడానికి నొక్కండి", topDishes: "ఎక్కువగా అమ్ముడైన వంటకాలు", sold: "{count} అమ్ముడయ్యాయి",
+    delivered: "డెలివరీ అయ్యాయి", cancelled: "రద్దయ్యాయి", rejected: "తిరస్కరించారు",
+    pickToday: "ఈరోజు వరకు ఉన్న రోజులే ఎంచుకోండి.", pickUpTo: "{count} రోజుల వరకు మాత్రమే ఎంచుకోండి.", pickDescription: "మొదటి, చివరి రోజు ఎంచుకోండి — {count} రోజుల వరకు.",
+    cancel: "రద్దు చేయండి", show: "చూపించండి", firstDay: "మొదటి రోజు", lastDay: "చివరి రోజు",
+    sales: "అమ్మకాలు", period: "ఏ రోజులు", loading: "మీ అమ్మకాలు లోడ్ అవుతున్నాయి",
+    earningsFailed: "మీ సంపాదన లోడ్ కాలేదు.", ordersFailed: "మీ ఆర్డర్లు లోడ్ కాలేదు.", checkConnection: "ఇంటర్నెట్ చూసుకుని మళ్లీ ప్రయత్నించండి.", tryAgain: "మళ్లీ ప్రయత్నించండి",
+    youEarned: "మీరు సంపాదించింది", trendMoney: "{previous} {value}%", trendCount: "{previous} {value}", ordersDelivered: "డెలివరీ అయిన ఆర్డర్లు", averageOrder: "సగటు ఆర్డర్",
+    latestEarnings: "మీ తాజా {count} సంపాదనల ఆధారంగా.", olderFailed: "పాత ఆర్డర్లు లోడ్ కాలేదు.",
+    latestOrders: "మీ తాజా {count} ఆర్డర్లు చూపిస్తున్నాం.", latestOnly: "మీ తాజా ఆర్డర్లు మాత్రమే చూపిస్తున్నాం.",
+    noSales: "ఇంకా అమ్మకాలు లేవు", emptyText: "ఆర్డర్లు డెలివరీ అయిన తర్వాత మీ సంపాదన, ఎక్కువగా అమ్ముడైనవి, రోజువారీ అమ్మకాలు ఇక్కడ కనిపిస్తాయి.", goToMenu: "మీ మెనూకి వెళ్లండి",
+    orders: "ఆర్డర్లు", ordersOn: "ఆర్డర్లు · {day}", noOrdersDay: "ఆ రోజు ఆర్డర్లు లేవు.",
+  },
+  kn: {
+    today: "ಇಂದು", week: "ಈ ವಾರ", month: "ಈ ತಿಂಗಳು", pickDates: "ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ", up: "ಏರಿಕೆ", down: "ಇಳಿಕೆ",
+    earnedEachDay: "ಪ್ರತಿ ದಿನದ ಗಳಿಕೆ", eachDay: "ಪ್ರತಿ ದಿನ: ಆ ದಿನದ ಆರ್ಡರ್ ನೋಡಲು ಒತ್ತಿ", topDishes: "ಹೆಚ್ಚು ಮಾರಾಟವಾದ ಖಾದ್ಯಗಳು", sold: "{count} ಮಾರಾಟವಾಗಿವೆ",
+    delivered: "ಡೆಲಿವರಿ ಆಗಿದೆ", cancelled: "ರದ್ದಾಗಿದೆ", rejected: "ತಿರಸ್ಕರಿಸಲಾಗಿದೆ",
+    pickToday: "ಇಂದಿನವರೆಗಿನ ದಿನಗಳನ್ನು ಮಾತ್ರ ಆಯ್ಕೆಮಾಡಿ.", pickUpTo: "ಗರಿಷ್ಠ {count} ದಿನಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ.", pickDescription: "ಮೊದಲ ಮತ್ತು ಕೊನೆಯ ದಿನ ಆಯ್ಕೆಮಾಡಿ — ಗರಿಷ್ಠ {count} ದಿನಗಳು.",
+    cancel: "ರದ್ದುಮಾಡಿ", show: "ತೋರಿಸಿ", firstDay: "ಮೊದಲ ದಿನ", lastDay: "ಕೊನೆಯ ದಿನ",
+    sales: "ಮಾರಾಟ", period: "ಯಾವ ದಿನಗಳು", loading: "ನಿಮ್ಮ ಮಾರಾಟ ಲೋಡ್ ಆಗುತ್ತಿದೆ",
+    earningsFailed: "ನಿಮ್ಮ ಗಳಿಕೆ ಲೋಡ್ ಆಗಲಿಲ್ಲ.", ordersFailed: "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ.", checkConnection: "ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    youEarned: "ನೀವು ಗಳಿಸಿದ್ದು", trendMoney: "{previous} {value}%", trendCount: "{previous} {value}", ordersDelivered: "ಡೆಲಿವರಿ ಆದ ಆರ್ಡರ್‌ಗಳು", averageOrder: "ಸರಾಸರಿ ಆರ್ಡರ್",
+    latestEarnings: "ನಿಮ್ಮ ಇತ್ತೀಚಿನ {count} ಗಳಿಕೆಗಳ ಆಧಾರದ ಮೇಲೆ.", olderFailed: "ಹಳೆಯ ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ.",
+    latestOrders: "ನಿಮ್ಮ ಇತ್ತೀಚಿನ {count} ಆರ್ಡರ್‌ಗಳನ್ನು ತೋರಿಸಲಾಗುತ್ತಿದೆ.", latestOnly: "ನಿಮ್ಮ ಇತ್ತೀಚಿನ ಆರ್ಡರ್‌ಗಳನ್ನು ಮಾತ್ರ ತೋರಿಸಲಾಗುತ್ತಿದೆ.",
+    noSales: "ಇನ್ನೂ ಮಾರಾಟ ಇಲ್ಲ", emptyText: "ಆರ್ಡರ್‌ಗಳು ಡೆಲಿವರಿ ಆದ ನಂತರ ನಿಮ್ಮ ಗಳಿಕೆ, ಹೆಚ್ಚು ಮಾರಾಟವಾದವು ಮತ್ತು ದಿನದ ಮಾರಾಟ ಇಲ್ಲಿ ಕಾಣುತ್ತವೆ.", goToMenu: "ನಿಮ್ಮ ಮೆನುಗೆ ಹೋಗಿ",
+    orders: "ಆರ್ಡರ್‌ಗಳು", ordersOn: "ಆರ್ಡರ್‌ಗಳು · {day}", noOrdersDay: "ಆ ದಿನ ಆರ್ಡರ್‌ಗಳಿಲ್ಲ.",
+  },
+});
+
+type PeriodWords = { orders: string; none: string; previous: string };
+/**
+ * Words for the chosen period: the orders card title, the "no sales" line and what the % compares with.
+ * Telugu and Kannada put the comparison first ("గత వారం కంటే 50%"), so `previous` carries its own "than".
+ */
+const PERIOD_WORDS: Record<Language, Record<"today" | "week" | "month" | "custom", PeriodWords>> = {
+  en: {
+    today: { orders: "Orders today", none: "No sales today", previous: "yesterday" },
+    week: { orders: "Orders this week", none: "No sales this week", previous: "last week" },
+    month: { orders: "Orders this month", none: "No sales this month", previous: "last month" },
+    custom: { orders: "Orders in this period", none: "No sales in this period", previous: "the days before" },
+  },
+  te: {
+    today: { orders: "ఈరోజు ఆర్డర్లు", none: "ఈరోజు అమ్మకాలు లేవు", previous: "నిన్నటి కంటే" },
+    week: { orders: "ఈ వారం ఆర్డర్లు", none: "ఈ వారం అమ్మకాలు లేవు", previous: "గత వారం కంటే" },
+    month: { orders: "ఈ నెల ఆర్డర్లు", none: "ఈ నెల అమ్మకాలు లేవు", previous: "గత నెల కంటే" },
+    custom: { orders: "ఈ రోజుల్లో ఆర్డర్లు", none: "ఈ రోజుల్లో అమ్మకాలు లేవు", previous: "ముందు రోజుల కంటే" },
+  },
+  kn: {
+    today: { orders: "ಇಂದಿನ ಆರ್ಡರ್‌ಗಳು", none: "ಇಂದು ಮಾರಾಟ ಇಲ್ಲ", previous: "ನಿನ್ನೆಗಿಂತ" },
+    week: { orders: "ಈ ವಾರದ ಆರ್ಡರ್‌ಗಳು", none: "ಈ ವಾರ ಮಾರಾಟ ಇಲ್ಲ", previous: "ಕಳೆದ ವಾರಕ್ಕಿಂತ" },
+    month: { orders: "ಈ ತಿಂಗಳ ಆರ್ಡರ್‌ಗಳು", none: "ಈ ತಿಂಗಳು ಮಾರಾಟ ಇಲ್ಲ", previous: "ಕಳೆದ ತಿಂಗಳಿಗಿಂತ" },
+    custom: { orders: "ಈ ದಿನಗಳ ಆರ್ಡರ್‌ಗಳು", none: "ಈ ದಿನಗಳಲ್ಲಿ ಮಾರಾಟ ಇಲ್ಲ", previous: "ಹಿಂದಿನ ದಿನಗಳಿಗಿಂತ" },
+  },
+};
 
 type History = { orders: ChefOrder[]; cursor: string | null; hasMore: boolean; failed: boolean };
 
-function Trend({ change, text }: { change: number | null; text: string }) {
+function Trend({ change, label }: { change: number | null; label: string }) {
+  const text = useText(TEXT);
   if (!change) return null;
   return (
     <p
       className={`mt-0.5 text-[0.8125rem] font-semibold ${change > 0 ? "text-[#0E6B4C]" : "text-[#C4200F]"}`}
     >
       <span aria-hidden="true">{change > 0 ? "▲" : "▼"}</span>
-      <span className="sr-only">{change > 0 ? "Up" : "Down"}</span> {text}
+      <span className="sr-only">{change > 0 ? text.up : text.down}</span> {label}
     </p>
   );
 }
@@ -87,12 +147,20 @@ function EarnedEachDay({
   now: number;
   onSelect(day: number): void;
 }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const [picked, setPicked] = useState<number | null>(null);
   const selected = picked !== null && picked < byDay.length ? picked : byDay.length - 1;
   const top = Math.max(...byDay.map((day) => day.amount), 1);
+  const scrolls = byDay.length > BARS_THAT_FIT;
+  const row = useRef<HTMLDivElement>(null);
+  // Open on the latest day, at the right end of a scrolling row.
+  useEffect(() => {
+    if (scrolls && row.current) row.current.scrollLeft = row.current.scrollWidth;
+  }, [scrolls, byDay.length]);
   return (
     <ChefSection
-      title="Earned each day"
+      title={text.earnedEachDay}
       labelledBy="chef-earned-each-day"
       action={
         <p className="shrink-0 text-[0.8125rem] text-[#6B6B6B]" aria-live="polite">
@@ -103,36 +171,35 @@ function EarnedEachDay({
       }
     >
       <div
-        className="flex items-end gap-1"
+        ref={row}
+        className={`flex items-end gap-1${scrolls ? " overflow-x-auto pb-1" : ""}`}
         role="group"
-        aria-label="Each day: open a day to see its orders"
+        aria-label={text.eachDay}
       >
         {byDay.map((item, index) => (
           <button
             key={item.day}
             type="button"
-            aria-label={`${istDayName(item.day, now)}, ${formatInr(item.amount)}`}
+            aria-label={`${istDayName(item.day, now, language)}, ${formatInr(item.amount)}`}
             aria-pressed={index === selected}
             onClick={() => {
               setPicked(index);
               onSelect(item.day);
             }}
-            className="flex min-w-0 flex-1 flex-col items-stretch gap-1 !rounded-md !border-0 !bg-transparent !p-0 !shadow-none"
+            // A week drops the site-wide 3rem button minimum to fit a phone; a scrolling row keeps it for the finger.
+            className={`flex ${scrolls ? "" : "!min-w-0 "}flex-1 flex-col items-stretch gap-1 !rounded-md !border-0 !bg-transparent !p-0 !shadow-none`}
           >
             <span className="flex h-32 items-end" aria-hidden="true">
               <span
-                className={`block w-full rounded-t-[4px] ${index === selected ? "bg-flame-red" : "bg-flame-red/35"}`}
+                // Explicit colours: the flame-red theme token isn't in the Tailwind build, so bg-flame-red drew nothing.
+                // Other days are grey, not faded red (no pink tint in chef screens).
+                className={`block w-full rounded-t-[4px] ${index === selected ? "bg-[#F62E18]" : "bg-[#D0D5DB]"}`}
                 style={{ height: `${Math.max(3, (item.amount / top) * 100)}%` }}
               />
             </span>
-            {byDay.length <= MAX_LABELLED_BARS ? (
-              <span
-                className="truncate text-center text-[0.6875rem] text-[#6B6B6B]"
-                aria-hidden="true"
-              >
-                {item.label}
-              </span>
-            ) : null}
+            <span className="truncate text-center text-[0.6875rem] text-[#6B6B6B]" aria-hidden="true">
+              {item.label}
+            </span>
           </button>
         ))}
       </div>
@@ -147,8 +214,9 @@ function TopDishes({
   dishes: EarningsSummary["topDishes"];
   photos: Record<string, string>;
 }) {
+  const text = useText(TEXT);
   return (
-    <ChefSection title="Top dishes" labelledBy="chef-top-dishes" flush>
+    <ChefSection title={text.topDishes} labelledBy="chef-top-dishes" flush>
       <ol className="chef-list border-t border-[#E3E6EA]">
         {dishes.map((dish, index) => (
           <li key={dish.name} className="chef-row">
@@ -167,7 +235,7 @@ function TopDishes({
             )}
             <span className="chef-row-main">
               <span className="chef-row-title line-clamp-2 block">{dish.name}</span>
-              <span className="chef-row-meta block">{dish.sold} sold</span>
+              <span className="chef-row-meta block">{format(text.sold, { count: dish.sold })}</span>
             </span>
             {dish.amount > 0 ? (
               <span className="chef-row-value chef-amount">{formatInr(dish.amount)}</span>
@@ -180,11 +248,12 @@ function TopDishes({
 }
 
 function OrdersSplit({ title, split }: { title: string; split: EarningsSummary["split"] }) {
+  const words = useText(TEXT);
   const parts = [
     { key: "delivered", count: split.delivered, bar: "bg-[#17803D]", text: "text-[#1A1A1A]" },
     { key: "cancelled", count: split.cancelled, bar: "bg-[#B7791F]", text: "text-[#8A5300]" },
     { key: "rejected", count: split.rejected, bar: "bg-[#C4200F]", text: "text-[#C4200F]" },
-  ];
+  ] as const;
   return (
     <ChefSection title={title} labelledBy="chef-orders-split">
       <div aria-hidden="true" className="flex h-2 gap-px overflow-hidden rounded-full bg-[#E3E6EA]">
@@ -197,7 +266,7 @@ function OrdersSplit({ title, split }: { title: string; split: EarningsSummary["
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.875rem]">
         {parts.map((part) => (
           <li key={part.key} className={part.text}>
-            <strong className="font-extrabold">{part.count}</strong> {part.key}
+            <strong className="font-extrabold">{part.count}</strong> {words[part.key]}
           </li>
         ))}
       </ul>
@@ -217,6 +286,7 @@ function DateRangeSheet({
   now: number;
   onApply(range: { from: number; to: number }): void;
 }) {
+  const text = useText(TEXT);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const today = istInputValue(now);
@@ -226,9 +296,9 @@ function DateRangeSheet({
     first === null || last === null
       ? ""
       : Math.max(first, last) > istDayStart(now)
-        ? "Pick days up to today."
+        ? text.pickToday
         : Math.abs(last - first) / DAY_MS + 1 > MAX_RANGE_DAYS
-          ? `Pick up to ${MAX_RANGE_DAYS} days.`
+          ? format(text.pickUpTo, { count: MAX_RANGE_DAYS })
           : "";
   return (
     <Sheet
@@ -236,12 +306,12 @@ function DateRangeSheet({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Pick dates"
-      description={`Choose the first and last day, up to ${MAX_RANGE_DAYS} days.`}
+      title={text.pickDates}
+      description={format(text.pickDescription, { count: MAX_RANGE_DAYS })}
       footer={
         <>
           <button type="button" className={secondaryActionClass} onClick={onClose}>
-            Cancel
+            {text.cancel}
           </button>
           <button
             type="button"
@@ -249,7 +319,7 @@ function DateRangeSheet({
             disabled={first === null || last === null || !!error}
             onClick={() => first !== null && last !== null && onApply({ from: first, to: last })}
           >
-            Show
+            {text.show}
           </button>
         </>
       }
@@ -259,8 +329,8 @@ function DateRangeSheet({
       <div className="mt-4 grid grid-cols-2 gap-3">
         {(
           [
-            ["First day", from, setFrom],
-            ["Last day", to, setTo],
+            [text.firstDay, from, setFrom],
+            [text.lastDay, to, setTo],
           ] as const
         ).map(([label, value, change]) => (
           <label key={label} className="chef-field-label">
@@ -287,7 +357,7 @@ function DateRangeSheet({
 }
 
 /**
- * Sales for a period, above the ledger: what was earned and delivered against the period before, each day's earnings
+ * Sales for a period, on the Money tab: what was earned and delivered against the period before, each day's earnings
  * (a day opens its orders), the best sellers and how orders ended. Days are India days. The ledger hands in its
  * entries; the orders are the latest ones plus older pages, read only as far back as the period before needs.
  */
@@ -302,6 +372,8 @@ export function ChefEarningsInsights({
   failed: boolean;
   onRetry(): void;
 }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const [range, setRange] = useState<EarningsRange>("week");
   const [now, setNow] = useState(() => Date.now());
   const [live, setLive] = useState<{ orders: ChefOrder[]; status: "loading" | "ready" | "failed" }>(
@@ -422,12 +494,13 @@ export function ChefEarningsInsights({
         now,
         earningsLimit: EARNINGS_LIMIT,
         ordersCutOff: historyIncomplete,
+        language,
       }),
-    [orders, entries, range, now, historyIncomplete],
+    [orders, entries, range, now, historyIncomplete, language],
   );
 
   const custom = typeof range === "object";
-  const words = PERIOD_WORDS[custom ? "custom" : range];
+  const words = PERIOD_WORDS[language][custom ? "custom" : range];
   const period = periodText(bounds);
   const ordersFailed = live.status === "failed" && orders.length === 0;
   const oldestEntry =
@@ -441,17 +514,17 @@ export function ChefEarningsInsights({
   const dayOrders = sheet !== null && sheet !== "dates" ? ordersOnDay(orders, sheet.day) : [];
 
   return (
-    <section aria-label="Sales" className="chef-stack">
-      <div className="chef-chips" role="group" aria-label="Period">
+    <section aria-label={text.sales} className="chef-stack">
+      <div className="chef-chips" role="group" aria-label={text.period}>
         {PRESETS.map((preset) => (
           <button
-            key={preset.range}
+            key={preset}
             type="button"
             className="chef-chip"
-            aria-pressed={range === preset.range}
-            onClick={() => setRange(preset.range)}
+            aria-pressed={range === preset}
+            onClick={() => setRange(preset)}
           >
-            {preset.label}
+            {text[preset]}
           </button>
         ))}
         <button
@@ -461,12 +534,12 @@ export function ChefEarningsInsights({
           onClick={() => setSheet("dates")}
         >
           <CalendarDays className="h-4 w-4" aria-hidden="true" />
-          {custom ? period : "Pick dates"}
+          {custom ? period : text.pickDates}
         </button>
       </div>
 
       {loading || live.status === "loading" ? (
-        <div className="chef-stack" role="status" aria-label="Loading your sales">
+        <div className="chef-stack" role="status" aria-label={text.loading}>
           <ChefSkeleton className="h-28 w-full" />
           <ChefSkeleton className="h-52 w-full" />
         </div>
@@ -474,15 +547,15 @@ export function ChefEarningsInsights({
         <ChefSection>
           <ChefEmpty
             icon={AlertTriangle}
-            title={failed ? "We couldn’t load your earnings." : "We couldn’t load your orders."}
-            text="Check your connection and try again."
+            title={failed ? text.earningsFailed : text.ordersFailed}
+            text={text.checkConnection}
             action={
               <button
                 type="button"
                 className="chef-btn"
                 onClick={() => (failed ? onRetry() : void loadLive())}
               >
-                Try again
+                {text.tryAgain}
               </button>
             }
           />
@@ -492,44 +565,44 @@ export function ChefEarningsInsights({
           <ChefSection flush>
             <div className="chef-stats is-three">
               <div className="chef-stat">
-                <p className="chef-stat-label">You earned</p>
+                <p className="chef-stat-label">{text.youEarned}</p>
                 <p className="chef-stat-value chef-amount">{formatInr(summary.earned)}</p>
                 <Trend
                   change={summary.changeVsPrevious}
-                  text={`${Math.abs(summary.changeVsPrevious ?? 0)}% vs ${words.previous}`}
+                  label={format(text.trendMoney, { value: Math.abs(summary.changeVsPrevious ?? 0), previous: words.previous })}
                 />
               </div>
               <div className="chef-stat">
-                <p className="chef-stat-label">Orders delivered</p>
+                <p className="chef-stat-label">{text.ordersDelivered}</p>
                 <p className="chef-stat-value">{summary.delivered}</p>
                 <Trend
                   change={summary.deliveredChange}
-                  text={`${Math.abs(summary.deliveredChange ?? 0)} vs ${words.previous}`}
+                  label={format(text.trendCount, { value: Math.abs(summary.deliveredChange ?? 0), previous: words.previous })}
                 />
               </div>
               <div className="chef-stat">
-                <p className="chef-stat-label">Average order</p>
+                <p className="chef-stat-label">{text.averageOrder}</p>
                 <p className="chef-stat-value chef-amount">{formatInr(summary.averageOrder)}</p>
               </div>
             </div>
           </ChefSection>
           <div className="text-[0.8125rem] text-[#6B6B6B]" aria-live="polite">
-            {cutOff ? <p>Based on your latest {EARNINGS_LIMIT} earnings.</p> : null}
+            {cutOff ? <p>{format(text.latestEarnings, { count: EARNINGS_LIMIT })}</p> : null}
             {history.failed ? (
               <p>
-                Couldn’t load older orders.{" "}
+                {text.olderFailed}{" "}
                 <button
                   type="button"
                   className="!border-0 !bg-transparent !p-0 font-bold text-[#C4200F] underline"
                   onClick={() => setHistory((current) => ({ ...current, failed: false }))}
                 >
-                  Try again
+                  {text.tryAgain}
                 </button>
               </p>
             ) : missing && history.orders.length >= MAX_HISTORY_ORDERS ? (
-              <p>Showing your latest {MAX_HISTORY_ORDERS} orders.</p>
+              <p>{format(text.latestOrders, { count: MAX_HISTORY_ORDERS })}</p>
             ) : latestOnly ? (
-              <p>Showing your latest orders only.</p>
+              <p>{text.latestOnly}</p>
             ) : null}
           </div>
 
@@ -537,12 +610,12 @@ export function ChefEarningsInsights({
             <ChefSection>
               <ChefEmpty
                 icon={BadgeIndianRupee}
-                title={entries.length === 0 && orders.length === 0 ? "No sales yet" : words.none}
-                text="Your earnings, best sellers and daily sales show up here once orders are delivered."
+                title={entries.length === 0 && orders.length === 0 ? text.noSales : words.none}
+                text={text.emptyText}
                 action={
                   entries.length === 0 && orders.length === 0 ? (
                     <Link href="/chef/menu" className="chef-btn">
-                      Go to your menu
+                      {text.goToMenu}
                     </Link>
                   ) : undefined
                 }
@@ -574,15 +647,15 @@ export function ChefEarningsInsights({
           if (!open) setSheet(null);
         }}
         title={
-          sheet !== null && sheet !== "dates" ? `Orders · ${istDayName(sheet.day, now)}` : "Orders"
+          sheet !== null && sheet !== "dates" ? format(text.ordersOn, { day: istDayName(sheet.day, now, language) }) : text.orders
         }
       >
         {dayOrders.length === 0 ? (
-          <p className="mt-4 text-[0.9375rem] text-[#6B6B6B]">No orders this day.</p>
+          <p className="mt-4 text-[0.9375rem] text-[#6B6B6B]">{text.noOrdersDay}</p>
         ) : (
           <ul className="chef-panel-theme chef-sheet-theme chef-list mt-4 overflow-hidden rounded-xl border border-[#E3E6EA]">
             {dayOrders.map((order) => {
-              const state = chefOrderStatus(order.status);
+              const state = chefOrderStatus(order.status, language);
               const title = [`#${shortOrderNumber(order.id)}`, order.deliveryAddress?.recipientName]
                 .filter(Boolean)
                 .join(" · ");

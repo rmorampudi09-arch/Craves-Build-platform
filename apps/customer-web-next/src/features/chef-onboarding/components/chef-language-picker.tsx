@@ -3,8 +3,16 @@
 import { useId, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, ChevronDown, Languages } from "lucide-react";
+import { messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 import { Sheet } from "@/shared/ui/overlays/overlay";
 import { ONBOARDING_LANGUAGES } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
+
+const TEXT = messages({
+  en: { title: "Video language", description: "Choose the language you are most comfortable in." },
+  te: { title: "వీడియో భాష", description: "మీకు బాగా అర్థమయ్యే భాషను ఎంచుకోండి." },
+  kn: { title: "ವೀಡಿಯೊ ಭಾಷೆ", description: "ನಿಮಗೆ ಚೆನ್ನಾಗಿ ಅರ್ಥವಾಗುವ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ." },
+});
 
 // "हिन्दी · Hindi": each language in its own script, with its English name for anyone helping.
 // A fixed list: browsers' own names miss some (Chromium has none for Bodo, Kashmiri or Santali).
@@ -30,6 +38,7 @@ export function LanguagePicker({
   disabled?: boolean;
   onChange: (code: string) => void;
 }) {
+  const text = useText(TEXT);
   const [open, setOpen] = useState(false);
   const reduceMotion = useReducedMotion();
   const valueId = useId();
@@ -55,7 +64,7 @@ export function LanguagePicker({
         <ChevronDown size={20} aria-hidden="true" />
       </button>
 
-      <Sheet open={open} onOpenChange={setOpen} title="Video language" description="Choose the language you are most comfortable in.">
+      <Sheet open={open} onOpenChange={setOpen} title={text.title} description={text.description}>
         <ul role="list" className="mt-3 grid max-h-[60vh] gap-1 overflow-y-auto overscroll-contain pr-1">
           {ONBOARDING_LANGUAGES.map(([code, label], index) => {
             const selected = code === current[0];

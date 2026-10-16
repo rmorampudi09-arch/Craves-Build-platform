@@ -3,6 +3,8 @@ import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, X } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
+import { messages, type Language } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 
 /** ₹1,234.50 — amounts arrive as numbers or as decimal strings ("2384.76") from finance. */
 export function formatInr(
@@ -24,8 +26,8 @@ export function formatInr(
 }
 
 /** The app's words, as on chef tickets and notifications: "Just now", "12 min ago", "3 hr ago", "Yesterday", "13 Oct". */
-export function timeAgo(iso: string, now: number = Date.now()): string {
-  return formatRelativeTime(iso, new Date(now));
+export function timeAgo(iso: string, now: number = Date.now(), language: Language = "en"): string {
+  return formatRelativeTime(iso, new Date(now), language);
 }
 
 /** 1:31 pm in India time. */
@@ -51,28 +53,47 @@ export function sentenceCase(code: string | null | undefined): string {
 
 export type ChefTone = "attention" | "active" | "success" | "warning" | "muted" | "danger";
 
+const ORDER_STATUS = messages({
+  en: { new: "New order", cooking: "Cooking", ready: "Ready for pickup", onTheWay: "On the way", delivered: "Delivered", declined: "Declined", cancelled: "Cancelled", refunded: "Refunded", unpaid: "Not paid yet" },
+  te: { new: "కొత్త ఆర్డర్", cooking: "వంట అవుతోంది", ready: "తీసుకెళ్లడానికి సిద్ధం", onTheWay: "దారిలో ఉంది", delivered: "డెలివరీ అయింది", declined: "తిరస్కరించారు", cancelled: "రద్దయింది", refunded: "డబ్బు తిరిగి ఇచ్చారు", unpaid: "ఇంకా చెల్లించలేదు" },
+  kn: { new: "ಹೊಸ ಆರ್ಡರ್", cooking: "ಅಡುಗೆ ಆಗುತ್ತಿದೆ", ready: "ತೆಗೆದುಕೊಂಡು ಹೋಗಲು ಸಿದ್ಧ", onTheWay: "ದಾರಿಯಲ್ಲಿದೆ", delivered: "ಡೆಲಿವರಿ ಆಗಿದೆ", declined: "ತಿರಸ್ಕರಿಸಲಾಗಿದೆ", cancelled: "ರದ್ದಾಗಿದೆ", refunded: "ಹಣ ಹಿಂದಿರುಗಿಸಲಾಗಿದೆ", unpaid: "ಇನ್ನೂ ಪಾವತಿಸಿಲ್ಲ" },
+});
+
+/** The customer hasn't paid yet: nothing for the chef to cook, so chef lists leave these out. */
+export function isUnpaidOrder(status: string): boolean {
+  return status === "PAYMENT_PENDING" || status === "PAID" || status === "CREATED";
+}
+
+/** Answering, cooking or handing over: the only time a chef needs the customer's name, phone and address.
+ * A cancelled order may never have been paid, so it keeps them private too. */
+export function needsCustomerContact(status: string): boolean {
+  return ["CHEF_ACCEPTANCE_PENDING", "CHEF_ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"].includes(status);
+}
+
 /** Order states in the words a chef uses, with the tone the order list shows. */
-export function chefOrderStatus(status: string): { label: string; tone: ChefTone } {
+export function chefOrderStatus(status: string, language: Language = "en"): { label: string; tone: ChefTone } {
+  const words = ORDER_STATUS[language];
   switch (status) {
     case "CHEF_ACCEPTANCE_PENDING":
-      return { label: "New order", tone: "attention" };
+      return { label: words.new, tone: "attention" };
     case "CHEF_ACCEPTED":
     case "PREPARING":
-      return { label: "Cooking", tone: "active" };
+      return { label: words.cooking, tone: "active" };
     case "READY_FOR_PICKUP":
-      return { label: "Ready for pickup", tone: "success" };
+      return { label: words.ready, tone: "success" };
     case "OUT_FOR_DELIVERY":
-      return { label: "On the way", tone: "active" };
+      return { label: words.onTheWay, tone: "active" };
     case "DELIVERED":
-      return { label: "Delivered", tone: "muted" };
+      return { label: words.delivered, tone: "muted" };
     case "CHEF_REJECTED":
-      return { label: "Declined", tone: "danger" };
+      return { label: words.declined, tone: "danger" };
     case "CANCELLED":
-      return { label: "Cancelled", tone: "danger" };
+      return { label: words.cancelled, tone: "danger" };
     default:
+      // "Waiting" told the chef nothing: an order before payment is not theirs to cook yet.
       return status.startsWith("REFUND")
-        ? { label: "Refunded", tone: "muted" }
-        : { label: "Waiting", tone: "muted" };
+        ? { label: words.refunded, tone: "muted" }
+        : { label: words.unpaid, tone: "muted" };
   }
 }
 
@@ -189,6 +210,12 @@ export function ChefEmpty({
   );
 }
 
+const FLASH_TEXT = messages({
+  en: { close: "Close message" },
+  te: { close: "సందేశం మూసివేయండి" },
+  kn: { close: "ಸಂದೇಶ ಮುಚ್ಚಿ" },
+});
+
 /**
  * The short message after an action, floating above the tab bar. Success leaves by itself after
  * 3.5 s and waits while it is pointed at or focused: CSS times it (.chef-flash), so it needs no
@@ -211,6 +238,7 @@ export function ChefFlash({
   id?: string;
 }) {
   const Icon = tone === "danger" ? AlertTriangle : CheckCircle2;
+  const closeLabel = useText(FLASH_TEXT).close;
   return (
     <div id={id} className="chef-flash-region" role={announce && tone === "success" ? "status" : undefined}>
       {message ? (
@@ -224,7 +252,7 @@ export function ChefFlash({
         >
           <Icon aria-hidden="true" />
           <p>{message}</p>
-          <button type="button" className="chef-flash-close" aria-label="Close message" onClick={onClose}>
+          <button type="button" className="chef-flash-close" aria-label={closeLabel} onClick={onClose}>
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>

@@ -3,6 +3,7 @@ import {
   parseChefEvidenceList,
   type ChefEvidenceMetadata,
 } from "./chef-application-evidence-contract.ts";
+import { messages } from "../../../shared/i18n/language.ts";
 
 export const ONBOARDING_LANGUAGES = [
   ["en", "English"],
@@ -36,6 +37,22 @@ export const PROOF_OPTIONS = [
   ["OTHER_GOVERNMENT_ID", "Other government ID"],
 ] as const;
 export type ProofKind = (typeof PROOF_OPTIONS)[number][0];
+/** Proof names in the chef's language; PROOF_OPTIONS keeps the English that admin screens show. */
+export const PROOF_LABELS = messages({
+  en: Object.fromEntries(PROOF_OPTIONS) as Record<ProofKind, string>,
+  te: {
+    AADHAAR: "ఆధార్ కార్డు",
+    PAN: "PAN కార్డు",
+    BANK_STATEMENT: "బ్యాంక్ స్టేట్‌మెంట్",
+    OTHER_GOVERNMENT_ID: "వేరే ప్రభుత్వ గుర్తింపు కార్డు",
+  },
+  kn: {
+    AADHAAR: "ಆಧಾರ್ ಕಾರ್ಡ್",
+    PAN: "PAN ಕಾರ್ಡ್",
+    BANK_STATEMENT: "ಬ್ಯಾಂಕ್ ಸ್ಟೇಟ್‌ಮೆಂಟ್",
+    OTHER_GOVERNMENT_ID: "ಬೇರೆ ಸರ್ಕಾರಿ ಗುರುತಿನ ಚೀಟಿ",
+  },
+});
 export type OnboardingStep =
   | "personal"
   | "kitchen"

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ChevronDown,
+  Clock3,
   LifeBuoy,
   MapPin,
   MessageSquare,
@@ -21,6 +22,8 @@ import {
   chefOrderStatus,
   dateTime,
   formatInr,
+  isUnpaidOrder,
+  needsCustomerContact,
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
@@ -32,8 +35,47 @@ import {
   type ChefOrder,
 } from "@/features/chef/lib/chef-order-contract";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
+import { format, messages, type Language } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
 
-const FOOD_TYPE: Record<string, string> = { VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg" };
+const TEXT = messages({
+  en: {
+    unavailable: "This order isn’t available for your kitchen.", loadFailed: "We couldn’t load this order right now.", readFailed: "We couldn’t read this order. Please refresh it.",
+    loading: "Loading chef order", orders: "Orders", order: "Order", openFailed: "This order couldn’t open", tryAgain: "Try again", backToOrders: "Back to orders",
+    orderNumber: "Order #{number}", getHelp: "Get help", placed: "Placed {date}", minPrep: "{minutes} min prep", whereItIs: "Where this order is",
+    unpaid: "The customer hasn’t paid yet. Nothing to cook now. If they pay, it rings as a new order.",
+    toCookOne: "{count} item to cook", toCookMany: "{count} items to cook", delivery: "Delivery", call: "Call {phone}", message: "Message customer",
+    bill: "Customer’s bill", food: "Food", platformFee: "Platform fee", tax: "Tax", customerPaid: "Customer paid", orderTotal: "Order total",
+    billNote: "This is what the customer paid, not your earning. Your earning for this order appears in Earnings once it is delivered.",
+    refreshOrder: "Refresh order", updated: "Updated {time}",
+  },
+  te: {
+    unavailable: "ఈ ఆర్డర్ మీ వంటగదికి అందుబాటులో లేదు.", loadFailed: "ఇప్పుడు ఈ ఆర్డర్ లోడ్ చేయలేకపోయాం.", readFailed: "ఈ ఆర్డర్ చదవలేకపోయాం. దయచేసి మళ్లీ చూడండి.",
+    loading: "ఆర్డర్ లోడ్ అవుతోంది", orders: "ఆర్డర్లు", order: "ఆర్డర్", openFailed: "ఈ ఆర్డర్ తెరుచుకోలేదు", tryAgain: "మళ్లీ ప్రయత్నించండి", backToOrders: "ఆర్డర్లకు వెనక్కి వెళ్లండి",
+    orderNumber: "ఆర్డర్ #{number}", getHelp: "సహాయం పొందండి", placed: "ఆర్డర్ చేసిన సమయం: {date}", minPrep: "వంటకు {minutes} నిమి", whereItIs: "ఈ ఆర్డర్ ఎక్కడ ఉంది",
+    unpaid: "కస్టమర్ ఇంకా చెల్లించలేదు. ఇప్పుడు వండాల్సింది ఏమీ లేదు. వాళ్లు చెల్లిస్తే, కొత్త ఆర్డర్‌గా మోగుతుంది.",
+    toCookOne: "వండాల్సినవి: {count} ఐటమ్", toCookMany: "వండాల్సినవి: {count} ఐటమ్‌లు", delivery: "డెలివరీ", call: "{phone} కి కాల్ చేయండి", message: "కస్టమర్‌కు మెసేజ్ చేయండి",
+    bill: "కస్టమర్ బిల్లు", food: "ఆహారం", platformFee: "ప్లాట్‌ఫామ్ ఫీజు", tax: "పన్ను", customerPaid: "కస్టమర్ చెల్లించినది", orderTotal: "ఆర్డర్ మొత్తం",
+    billNote: "ఇది కస్టమర్ చెల్లించిన మొత్తం, మీ సంపాదన కాదు. ఈ ఆర్డర్ డెలివరీ అయిన తర్వాత మీ సంపాదన 'సంపాదన'లో కనిపిస్తుంది.",
+    refreshOrder: "ఆర్డర్ మళ్లీ చూడండి", updated: "{time} కి అప్‌డేట్ అయింది",
+  },
+  kn: {
+    unavailable: "ಈ ಆರ್ಡರ್ ನಿಮ್ಮ ಅಡುಗೆಮನೆಗೆ ಲಭ್ಯವಿಲ್ಲ.", loadFailed: "ಈಗ ಈ ಆರ್ಡರ್ ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ.", readFailed: "ಈ ಆರ್ಡರ್ ಓದಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ನೋಡಿ.",
+    loading: "ಆರ್ಡರ್ ಲೋಡ್ ಆಗುತ್ತಿದೆ", orders: "ಆರ್ಡರ್‌ಗಳು", order: "ಆರ್ಡರ್", openFailed: "ಈ ಆರ್ಡರ್ ತೆರೆಯಲಿಲ್ಲ", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", backToOrders: "ಆರ್ಡರ್‌ಗಳಿಗೆ ಹಿಂತಿರುಗಿ",
+    orderNumber: "ಆರ್ಡರ್ #{number}", getHelp: "ಸಹಾಯ ಪಡೆಯಿರಿ", placed: "ಆರ್ಡರ್ ಮಾಡಿದ ಸಮಯ: {date}", minPrep: "ಅಡುಗೆಗೆ {minutes} ನಿಮಿ", whereItIs: "ಈ ಆರ್ಡರ್ ಎಲ್ಲಿದೆ",
+    unpaid: "ಗ್ರಾಹಕರು ಇನ್ನೂ ಪಾವತಿಸಿಲ್ಲ. ಈಗ ಅಡುಗೆ ಮಾಡಬೇಕಾದ್ದು ಏನೂ ಇಲ್ಲ. ಅವರು ಪಾವತಿಸಿದರೆ, ಹೊಸ ಆರ್ಡರ್ ಆಗಿ ರಿಂಗ್ ಆಗುತ್ತದೆ.",
+    toCookOne: "ಅಡುಗೆ ಮಾಡಬೇಕಾದ್ದು: {count} ಐಟಮ್", toCookMany: "ಅಡುಗೆ ಮಾಡಬೇಕಾದ್ದು: {count} ಐಟಮ್‌ಗಳು", delivery: "ಡೆಲಿವರಿ", call: "{phone} ಗೆ ಕರೆ ಮಾಡಿ", message: "ಗ್ರಾಹಕರಿಗೆ ಮೆಸೇಜ್ ಮಾಡಿ",
+    bill: "ಗ್ರಾಹಕರ ಬಿಲ್", food: "ಆಹಾರ", platformFee: "ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ಶುಲ್ಕ", tax: "ತೆರಿಗೆ", customerPaid: "ಗ್ರಾಹಕರು ಪಾವತಿಸಿದ್ದು", orderTotal: "ಆರ್ಡರ್ ಒಟ್ಟು",
+    billNote: "ಇದು ಗ್ರಾಹಕರು ಪಾವತಿಸಿದ ಮೊತ್ತ, ನಿಮ್ಮ ಗಳಿಕೆ ಅಲ್ಲ. ಈ ಆರ್ಡರ್ ಡೆಲಿವರಿ ಆದ ನಂತರ ನಿಮ್ಮ ಗಳಿಕೆ 'ಗಳಿಕೆ'ಯಲ್ಲಿ ಕಾಣುತ್ತದೆ.",
+    refreshOrder: "ಆರ್ಡರ್ ಮತ್ತೆ ನೋಡಿ", updated: "{time} ಕ್ಕೆ ಅಪ್‌ಡೇಟ್ ಆಗಿದೆ",
+  },
+});
+
+const FOOD_TYPE = messages({
+  en: { VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg" },
+  te: { VEG: "వెజ్", NON_VEG: "నాన్-వెజ్", EGG: "ఎగ్" },
+  kn: { VEG: "ವೆಜ್", NON_VEG: "ನಾನ್-ವೆಜ್", EGG: "ಎಗ್" },
+});
 /** Orders on the normal path show the picture steps; declined or refunded ones don't. */
 const PROGRESS_STATES = {
   CHEF_ACCEPTANCE_PENDING: true,
@@ -44,13 +86,16 @@ const PROGRESS_STATES = {
   DELIVERED: true,
 };
 
-function itemMetadata(item: ChefOrder["items"][number]): string {
-  return [item.category, item.foodType ? FOOD_TYPE[item.foodType] ?? item.foodType : null]
+function itemMetadata(item: ChefOrder["items"][number], language: Language = "en"): string {
+  const foodTypes: Record<string, string> = FOOD_TYPE[language];
+  return [item.category, item.foodType ? foodTypes[item.foodType] ?? item.foodType : null]
     .filter((value): value is string => Boolean(value))
     .join(" · ");
 }
 
 export function ChefOrderDetails({ orderId }: { orderId: string }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const [order, setOrder] = useState<ChefOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,22 +111,22 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
       const body = await response.json().catch(() => null);
       if (!response.ok) {
         throw chefApiError(response, body, response.status === 404 || response.status === 403
-          ? "This order isn’t available for your kitchen."
-          : "We couldn’t load this order right now.");
+          ? text.unavailable
+          : text.loadFailed);
       }
       const parsed = parseChefOrderResponse(body);
       if (!parsed || parsed.id.toLowerCase() !== orderId.toLowerCase()) {
-        throw new ChefError("We couldn’t read this order. Please refresh it.", "INVALID_CHEF_ORDER_RESPONSE", response.status);
+        throw new ChefError(text.readFailed, "INVALID_CHEF_ORDER_RESPONSE", response.status);
       }
       setOrder(parsed);
       setLastUpdatedAt(new Date());
     } catch (caught) {
-      setError(chefErrorText(caught, "We couldn’t load this order right now."));
+      setError(chefErrorText(caught, text.loadFailed));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [orderId]);
+  }, [orderId, text]);
 
   useEffect(() => {
     void load();
@@ -97,21 +142,21 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
     setLastUpdatedAt(new Date());
   });
 
-  if (loading) return <ChefLoading shape="order" label="Loading chef order" />;
+  if (loading) return <ChefLoading shape="order" label={text.loading} />;
 
   if (!order) {
     return (
       <div>
-        <ChefPageHead back={{ href: "/chef/orders", label: "Orders" }} title="Order" />
+        <ChefPageHead back={{ href: "/chef/orders", label: text.orders }} title={text.order} />
         <ChefSection>
           <ChefEmpty
             icon={AlertTriangle}
-            title="This order couldn’t open"
+            title={text.openFailed}
             text={error}
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <button type="button" onClick={() => void load()} className="chef-btn is-primary">Try again</button>
-                <Link href="/chef/orders" className="chef-btn">Back to orders</Link>
+                <button type="button" onClick={() => void load()} className="chef-btn is-primary">{text.tryAgain}</button>
+                <Link href="/chef/orders" className="chef-btn">{text.backToOrders}</Link>
               </div>
             }
           />
@@ -135,43 +180,47 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
     : null;
   const phone = order.deliveryAddress?.contactPhoneNumber.replace(/[^\d+]/g, "");
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
-  const status = chefOrderStatus(order.status);
+  const status = chefOrderStatus(order.status, language);
   const currency = { currency: order.currency };
+  // Not paid yet: nothing to cook, and the customer's contact details stay private until they pay.
+  const unpaid = isUnpaidOrder(order.status);
 
   return (
     <div>
       <ChefPageHead
-        back={{ href: "/chef/orders", label: "Orders" }}
-        title={`Order #${shortOrderNumber(order.id)}`}
+        back={{ href: "/chef/orders", label: text.orders }}
+        title={format(text.orderNumber, { number: shortOrderNumber(order.id) })}
         action={
           <Link href={`/chef/support?orderId=${order.id}`} className="chef-btn">
             <LifeBuoy className="h-4 w-4" aria-hidden="true" />
-            Get help
+            {text.getHelp}
           </Link>
         }
         subtitle={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <ChefPill tone={status.tone} icon={chefStatusIcon(order.status)}>{status.label}</ChefPill>
-            <span>Placed {dateTime(order.createdAt)}{order.prepTimeMinutes ? ` · ${order.prepTimeMinutes} min prep` : ""}</span>
+            <span>{format(text.placed, { date: dateTime(order.createdAt) })}{order.prepTimeMinutes ? ` · ${format(text.minPrep, { minutes: order.prepTimeMinutes })}` : ""}</span>
           </span>
         }
       />
 
       <div className="chef-stack">
-        {order.status in PROGRESS_STATES ? (
-          <section className="chef-section px-2 py-4" aria-label="Where this order is">
+        {unpaid ? (
+          <ChefNotice icon={Clock3}>{text.unpaid}</ChefNotice>
+        ) : order.status in PROGRESS_STATES ? (
+          <section className="chef-section px-2 py-4" aria-label={text.whereItIs}>
             <ChefOrderProgress status={order.status} />
           </section>
         ) : null}
         <ChefSection
-          title={`${itemCount} item${itemCount === 1 ? "" : "s"} to cook`}
+          title={format(itemCount === 1 ? text.toCookOne : text.toCookMany, { count: itemCount })}
           flush
           labelledBy="chef-order-items"
           action={<span className="chef-amount text-[0.9375rem] font-bold">{formatInr(order.foodSubtotal, currency)}</span>}
         >
           <ul className="chef-list border-t border-[#E3E6EA]">
             {order.items.map((item) => {
-              const metadata = itemMetadata(item);
+              const metadata = itemMetadata(item, language);
               return (
                 <li key={item.id} className="chef-row items-start">
                   <span className="chef-amount grid h-9 min-w-9 shrink-0 place-items-center rounded-xl bg-[#F1F3F5] px-2 text-[0.9375rem] font-bold text-[#1A1A1A]">{item.quantity}×</span>
@@ -184,7 +233,7 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
               );
             })}
           </ul>
-          {order.customerNote ? (
+          {order.customerNote && !unpaid ? (
             <div className="border-t border-[#E3E6EA] px-4 py-3 md:px-5">
               <CustomerNote note={order.customerNote} />
             </div>
@@ -194,19 +243,19 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
           </div>
         </ChefSection>
 
-        <ChefOrderActions order={order} onUpdated={setOrder} />
+        {unpaid ? null : <ChefOrderActions order={order} onUpdated={setOrder} />}
 
-        {order.deliveryAddress && address ? (
-          <ChefSection title="Delivery" labelledBy="chef-order-delivery">
+        {order.deliveryAddress && address && needsCustomerContact(order.status) ? (
+          <ChefSection title={text.delivery} labelledBy="chef-order-delivery">
             <p className="font-semibold text-[#1A1A1A]">{order.deliveryAddress.recipientName}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <a href={`tel:${phone}`} className="chef-btn is-small">
                 <Phone className="h-4 w-4" aria-hidden="true" />
-                Call {order.deliveryAddress.contactPhoneNumber}
+                {format(text.call, { phone: order.deliveryAddress.contactPhoneNumber })}
               </a>
               <a href={`sms:${phone}`} className="chef-btn is-small">
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                Message customer
+                {text.message}
               </a>
             </div>
             <p className="mt-2 flex gap-2 text-[0.9375rem] leading-6 text-[#6B6B6B]"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />{address}</p>
@@ -215,25 +264,25 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
 
         <details className="chef-section group">
           <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 font-semibold text-[#1A1A1A] md:px-5 [&::-webkit-details-marker]:hidden">
-            Customer’s bill
+            {text.bill}
             <ChevronDown className="h-5 w-5 text-[#6B6B6B] transition-transform group-open:rotate-180" aria-hidden="true" />
           </summary>
           <dl className="space-y-2.5 border-t border-[#E3E6EA] px-4 py-4 text-[0.9375rem] md:px-5">
-            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Food</dt><dd className="chef-amount font-semibold">{formatInr(order.foodSubtotal, currency)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Platform fee</dt><dd className="chef-amount font-semibold">{formatInr(order.platformFee, currency)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Tax</dt><dd className="chef-amount font-semibold">{formatInr(order.taxAmount, currency)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">Delivery</dt><dd className="chef-amount font-semibold">{formatInr(order.deliveryFee, currency)}</dd></div>
-            <div className="flex justify-between gap-3 border-t border-[#E3E6EA] pt-2.5"><dt className="font-semibold">Customer paid</dt><dd className="chef-amount font-bold">{formatInr(order.grandTotal, currency)}</dd></div>
-            <p className="pt-1 text-[0.8125rem] leading-5 text-[#6B6B6B]">This is what the customer paid, not your earning. Your earning for this order appears in Earnings once it is delivered.</p>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">{text.food}</dt><dd className="chef-amount font-semibold">{formatInr(order.foodSubtotal, currency)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">{text.platformFee}</dt><dd className="chef-amount font-semibold">{formatInr(order.platformFee, currency)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">{text.tax}</dt><dd className="chef-amount font-semibold">{formatInr(order.taxAmount, currency)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[#6B6B6B]">{text.delivery}</dt><dd className="chef-amount font-semibold">{formatInr(order.deliveryFee, currency)}</dd></div>
+            <div className="flex justify-between gap-3 border-t border-[#E3E6EA] pt-2.5"><dt className="font-semibold">{isUnpaidOrder(order.status) ? text.orderTotal : text.customerPaid}</dt><dd className="chef-amount font-bold">{formatInr(order.grandTotal, currency)}</dd></div>
+            <p className="pt-1 text-[0.8125rem] leading-5 text-[#6B6B6B]">{text.billNote}</p>
           </dl>
         </details>
 
         <div className="flex flex-col items-center gap-2 pt-1">
           <button type="button" disabled={refreshing} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
-            Refresh order
+            {text.refreshOrder}
           </button>
-          {lastUpdatedAt ? <p className="text-[0.8125rem] text-[#6B6B6B]">Updated {lastUpdatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase()}</p> : null}
+          {lastUpdatedAt ? <p className="text-[0.8125rem] text-[#6B6B6B]">{format(text.updated, { time: lastUpdatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase() })}</p> : null}
         </div>
         {error ? <ChefNotice icon={AlertTriangle} tone="danger" role="alert">{error}</ChefNotice> : null}
       </div>

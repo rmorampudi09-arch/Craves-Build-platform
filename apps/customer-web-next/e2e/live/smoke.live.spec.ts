@@ -15,6 +15,9 @@ test("release answers and the chef sign-in illustration loads", async ({ page, r
   expect((await version.json()).commitSha).toMatch(/^[0-9a-f]{40}$/);
 
   await page.goto("/chef/sign-in");
+  // A new device is asked for its language first (saved only in a cookie on this device).
+  await expect(page.getByRole("heading", { level: 1, name: "Choose your language" })).toBeVisible();
+  await page.getByRole("button", { name: /^English/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Sign in to your kitchen" })).toBeVisible();
   // Regression: on 12 Oct the optimised pack-delivery image answered 504 after 30 s.
   const hero = page.getByRole("img", { name: /home chef packing/i });
@@ -29,7 +32,7 @@ test.describe("approved chef", () => {
     ["/chef", /^Good (morning|afternoon|evening)/],
     ["/chef/orders", "Orders"],
     ["/chef/menu", "Menu"],
-    ["/chef/earnings", "Earnings"],
+    ["/chef/earnings", "Money"],
     ["/chef/finance", "Balance & payouts"],
     ["/chef/bank", "Bank account"],
     ["/chef/statements", "Statements"],

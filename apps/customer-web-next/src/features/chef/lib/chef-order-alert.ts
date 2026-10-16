@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { parseChefOrdersResponse, type ChefOrder } from "@/features/chef/lib/chef-order-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { LANGUAGE_NAMES, format, messages, savedLanguage, type Language } from "@/shared/i18n/language";
 
 /**
  * New-order alerts for chefs who are cooking, not watching the screen: the phone rings,
@@ -117,29 +118,60 @@ export function canSpeak(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
 }
 
+const SPOKEN = messages({
+  en: { pieces: "pieces", order: "Order {number}", newOrder: "New order", newOrders: "{count} new orders. First order", sample: "New order. 2 Chicken Biryani. 1 Rasmalai." },
+  te: { pieces: "ముక్కలు", order: "ఆర్డర్ {number}", newOrder: "కొత్త ఆర్డర్", newOrders: "{count} కొత్త ఆర్డర్లు. మొదటి ఆర్డర్", sample: "కొత్త ఆర్డర్. 2 చికెన్ బిర్యానీ. 1 రసమలై." },
+  kn: { pieces: "ತುಂಡುಗಳು", order: "ಆರ್ಡರ್ {number}", newOrder: "ಹೊಸ ಆರ್ಡರ್", newOrders: "{count} ಹೊಸ ಆರ್ಡರ್‌ಗಳು. ಮೊದಲ ಆರ್ಡರ್", sample: "ಹೊಸ ಆರ್ಡರ್. 2 ಚಿಕನ್ ಬಿರಿಯಾನಿ. 1 ರಸಮಲೈ." },
+});
+
 /** "(4 pcs)" reads as "4 pieces"; brackets and symbols are not read out. */
-function spokenName(name: string): string {
+function spokenName(name: string, language: Language = "en"): string {
   return name
-    .replace(/\(\s*(\d+)\s*pcs?\.?\s*\)/gi, " $1 pieces")
+    .replace(/\(\s*(\d+)\s*pcs?\.?\s*\)/gi, ` $1 ${SPOKEN[language].pieces}`)
     .replace(/[()[\]{}#*_/\\|]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-export function orderWords(order: ChefOrder, intro: string): string {
-  const items = order.items.map((item) => `${item.quantity} ${spokenName(item.itemName)}`);
+export function orderWords(order: ChefOrder, intro: string, language: Language = "en"): string {
+  const items = order.items.map((item) => `${item.quantity} ${spokenName(item.itemName, language)}`);
   return [intro, ...items].join(". ") + ".";
 }
 
-/** Reads the order in Indian English. Returns false when this phone can't speak. */
-export function speakOrder(order: ChefOrder, intro: string): boolean {
-  if (!canSpeak()) return false;
-  const utterance = new SpeechSynthesisUtterance(orderWords(order, intro));
-  utterance.lang = "en-IN";
+/**
+ * The chef's language when this phone has a voice for it, else Indian English (a Telugu sentence
+ * read by an English voice is noise). Voices load after the first call, so the first order may be in English.
+ */
+function speechLanguage(): Language {
+  const saved = savedLanguage();
+  if (!saved || saved === "en") return "en";
+  const prefix = LANGUAGE_NAMES[saved].locale.slice(0, 2);
+  return window.speechSynthesis.getVoices().some((voice) => voice.lang.toLowerCase().startsWith(prefix)) ? saved : "en";
+}
+
+function speak(text: string, language: Language): void {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = LANGUAGE_NAMES[language].locale;
   utterance.rate = 0.9;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
+}
+
+/** Reads the order aloud: "Order 1A2B…" or, for new orders, "New order" first. False when this phone can't speak. */
+export function speakOrder(order: ChefOrder, intro: { number: string } | { count: number }): boolean {
+  if (!canSpeak()) return false;
+  const language = speechLanguage();
+  const words = SPOKEN[language];
+  const opening = "number" in intro ? format(words.order, intro) : intro.count > 1 ? format(words.newOrders, intro) : words.newOrder;
+  speak(orderWords(order, opening, language), language);
   return true;
+}
+
+/** The sample on Test the sound, in the voice a real order would use. */
+export function speakSample(): void {
+  if (!canSpeak()) return;
+  const language = speechLanguage();
+  speak(SPOKEN[language].sample, language);
 }
 
 // ---------- Which waiting orders are new ----------
@@ -164,7 +196,7 @@ let baseTitle: string | null = null;
 function flagTitle(count: number): void {
   if (typeof document === "undefined" || !document.hidden) return;
   baseTitle ??= document.title;
-  document.title = `(${count}) New order · ${baseTitle}`;
+  document.title = `(${count}) ${SPOKEN[savedLanguage() ?? "en"].newOrder} · ${baseTitle}`;
   const restore = () => {
     if (document.hidden) return;
     if (baseTitle) document.title = baseTitle;
@@ -174,12 +206,53 @@ function flagTitle(count: number): void {
   document.addEventListener("visibilitychange", restore);
 }
 
+// ---------- Orders waiting for an answer: the red count on the Orders tab ----------
+
+let waitingIds: ReadonlySet<string> = new Set();
+const waitingListeners = new Set<() => void>();
+
+function setWaiting(next: ReadonlySet<string>): void {
+  if (next.size === waitingIds.size && [...next].every((id) => waitingIds.has(id))) return;
+  waitingIds = next;
+  for (const listener of waitingListeners) listener();
+}
+
+// Answers the server already accepted: a check that left before the answer may still list the order as waiting.
+const answeredAt = new Map<string, number>();
+const ANSWER_GRACE_MS = 60_000;
+
+/** Waiting for the chef's answer, and not one the chef answered moments ago. */
+export function isAwaitingAnswer(order: ChefOrder): boolean {
+  if (order.status !== "CHEF_ACCEPTANCE_PENDING") return false;
+  const at = answeredAt.get(order.id);
+  return at === undefined || Date.now() - at > ANSWER_GRACE_MS;
+}
+
+/** After the chef answers an order on any screen, it stops counting at once (the next check confirms it). */
+export function noteOrderAnswered(order: ChefOrder): void {
+  if (order.status === "CHEF_ACCEPTANCE_PENDING") return;
+  answeredAt.set(order.id, Date.now());
+  if (waitingIds.has(order.id)) setWaiting(new Set([...waitingIds].filter((id) => id !== order.id)));
+}
+
+export function useWaitingOrderCount(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      waitingListeners.add(listener);
+      return () => waitingListeners.delete(listener);
+    },
+    () => waitingIds.size,
+    () => 0,
+  );
+}
+
 /**
  * Remembers which waiting orders this tab has seen and alerts for the rest. The first check
  * after Chef Mode opens only remembers: the chef is already looking at the screen.
  */
 export function noticeNewOrders(orders: ChefOrder[]): ChefOrder[] {
   if (typeof window === "undefined") return [];
+  setWaiting(new Set(orders.filter(isAwaitingAnswer).map((order) => order.id)));
   const ids = seenIds();
   const fresh = orders.filter((order) => order.status === "CHEF_ACCEPTANCE_PENDING" && !ids.has(order.id));
   for (const order of fresh) ids.add(order.id);
@@ -195,7 +268,7 @@ export function noticeNewOrders(orders: ChefOrder[]): ChefOrder[] {
   if (fresh.length > 0) {
     const prefs = readAlertPrefs();
     if (prefs.ring) ringForNewOrder();
-    if (prefs.speak) speakOrder(fresh[0]!, fresh.length > 1 ? `${fresh.length} new orders. First order` : "New order");
+    if (prefs.speak) speakOrder(fresh[0]!, { count: fresh.length });
     flagTitle(fresh.length);
   }
   return fresh;
@@ -289,6 +362,8 @@ export function useChefOrderPolling(
 /** For tests: forget what this tab has seen. */
 export function resetOrderAlertsForTests(): void {
   seen = null;
+  waitingIds = new Set();
+  answeredAt.clear();
   primed = false;
   prefsCache = null;
   baseTitle = null;

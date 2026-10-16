@@ -2,9 +2,16 @@
 // Rendered Daily limits against a fixture BFF; no backend is contacted.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { Language } from "@/shared/i18n/language";
+import { LanguageProvider } from "@/shared/i18n/language-context";
 import { ChefDailyLimits } from "../components/chef-daily-limits";
+
+// LanguageProvider types children as a prop; createElement passes them as its third argument.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const PLAN_ID = "7f639200-0000-4000-8000-0000000000a1";
 const CHEF = "1d000000-0000-4000-8000-000000000001";
@@ -114,9 +121,11 @@ describe("Chef daily limits", { timeout: 20_000 }, () => {
   it("opens on the plan's meal and days, shows booked plates and saves each day with the switch", async () => {
     render(createElement(ChefDailyLimits, { planId: PLAN_ID }));
     await screen.findByRole("heading", { name: "Dinner on Mon, Wed" });
-    expect(
-      screen.getByText("5 subscriber plates booked · 7 free · 18 for normal orders"),
-    ).toBeTruthy();
+    const caption = screen.getByText("5 subscriber plates booked · 7 free · 18 for normal orders");
+    // The booked bar is ink on a neutral track: never Flame Red or a pink tint.
+    const bar = caption.previousElementSibling!.innerHTML;
+    expect(bar).toContain("bg-[#1A1A1A]");
+    expect(bar).not.toMatch(/F62E18/i);
     fireEvent.click(screen.getByRole("button", { name: "Fewer total plates" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Kept for subscribers" }), {
       target: { value: "40" },
@@ -194,6 +203,14 @@ describe("Chef daily limits", { timeout: 20_000 }, () => {
     expect(
       screen.getByRole("switch", { name: "New subscribers can join" }).matches(":disabled"),
     ).toBe(true);
+  });
+
+  it("reads in Kannada", async () => {
+    render(createElement(Provider, { initial: "kn", chosen: true }, createElement(ChefDailyLimits, { planId: PLAN_ID })));
+    await screen.findByRole("heading", { name: "ರಾತ್ರಿ ಊಟ: ಸೋಮ, ಬುಧ" });
+    expect(screen.getByText("ಚಂದಾದಾರರು ಬುಕ್ ಮಾಡಿದ ಪ್ಲೇಟ್ 5 · ಖಾಲಿ 7 · ಸಾಮಾನ್ಯ ಆರ್ಡರ್‌ಗೆ 18")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "ಒಟ್ಟು ಪ್ಲೇಟ್‌ಗಳು ಕಡಿಮೆ ಮಾಡಿ" })).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "ಹೊಸ ಚಂದಾದಾರರು ಸೇರಬಹುದು" })).toBeTruthy();
   });
 
   it("says Coming soon when the backend has no daily limits yet", async () => {

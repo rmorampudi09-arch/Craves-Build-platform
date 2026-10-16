@@ -189,7 +189,7 @@ describe("Kitchen status", () => {
     render(createElement(Host));
     expect(await screen.findByRole("heading", { name: "Closed · opens 11:00 AM" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Change opening hours" }).getAttribute("href")).toBe(
-      "/chef/operations#chef-hours",
+      "/chef/hours",
     );
     expect(screen.queryByRole("button", { name: "Pause new orders" })).toBeNull();
   });

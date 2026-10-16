@@ -242,3 +242,37 @@ test("upcoming date changes for the meal, soonest first", () => {
     ["Today", "Yesterday", "Tomorrow"],
   );
 });
+
+test("daily limits read in Telugu and Kannada, with every number filled in", () => {
+  const today = "2026-10-13";
+  assert.equal(limitHeading("LUNCH", [1, 2, 3, 4, 5], "te"), "సోమ – శుక్ర ప్రతి రోజు మధ్యాహ్న భోజనం");
+  assert.equal(limitHeading("DINNER", [1, 3], "kn"), "ರಾತ್ರಿ ಊಟ: ಸೋಮ, ಬುಧ");
+  assert.equal(
+    capacityCaption(capacityBar({ total: 20, subscriber: 10 }, 8), "te"),
+    "సబ్‌స్క్రైబర్లు బుక్ చేసిన ప్లేట్లు 8 · ఖాళీ 2 · మామూలు ఆర్డర్లకు 10",
+  );
+  assert.equal(dishLimitSummary([dishRule({})], "LUNCH", [1], name, "kn"), "Chicken curry: ದಿನಕ್ಕೆ 10 ವರೆಗೆ");
+  assert.deepEqual(
+    [dayLabel("2026-10-14", today, "te"), dayLabel("2026-10-25", today, "kn")],
+    ["రేపు", "ಭಾನು 25 ಅಕ್ಟೋಬರ್"],
+  );
+  assert.deepEqual(
+    dateChangeLines(
+      [
+        {
+          serviceDate: "2026-10-20",
+          mealSlotCode: "LUNCH",
+          totalCapacityUnits: 15,
+          subscriptionCapacityUnits: 5,
+          closed: false,
+        } as ChefCapacityDateOverride,
+      ],
+      [],
+      "LUNCH",
+      today,
+      name,
+      "te",
+    ),
+    ["మంగళ 20 అక్టోబర్ · 15 ప్లేట్లు, సబ్‌స్క్రైబర్లకు 5"],
+  );
+});

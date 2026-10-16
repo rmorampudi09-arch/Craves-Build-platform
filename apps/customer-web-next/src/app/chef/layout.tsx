@@ -1,15 +1,10 @@
 import type { ReactNode } from "react";
-import { ChefAppHeader } from "@/features/chef/components/chef-app-header";
-import { ChefWorkspaceNavigation } from "@/features/chef/components/chef-workspace-navigation";
-import { ChefOrderWatcher } from "@/features/chef/components/chef-order-watcher";
+import { ChefShell } from "@/features/chef/components/chef-shell";
+import { requestLanguage } from "@/shared/i18n/server-language";
 import "../../features/chef/styles/chef-mode.css";
 
-export default function ChefLayout({children}:{children:ReactNode}) {
- return <div className="chef-panel-theme min-h-screen">
-  <a href="#chef-content" className="chef-skip-link">Skip to content</a>
-  <ChefAppHeader/>
-  <div id="chef-content" tabIndex={-1} className="chef-panel-content">{children}</div>
-  <ChefWorkspaceNavigation placement="bottom"/>
-  <ChefOrderWatcher/>
- </div>;
+export default async function ChefLayout({ children }: { children: ReactNode }) {
+  // The chef's language comes from a cookie, so the first screen is already in it.
+  const saved = await requestLanguage();
+  return <ChefShell language={saved ?? "en"} chosen={saved !== null}>{children}</ChefShell>;
 }

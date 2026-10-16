@@ -1,3 +1,4 @@
+import { messages, type Language } from "../../../shared/i18n/language.ts";
 import type { ChefEarning, ChefEarningStatus } from "./chef-earnings-contract";
 import type { ChefOrder, ChefOrderStatus } from "./chef-order-contract";
 
@@ -35,8 +36,18 @@ const CANCELLED = new Set<ChefOrderStatus>([
   "REFUNDED",
   "REFUND_FAILED",
 ]);
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS: Record<Language, string[]> = {
+  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  te: ["ఆది", "సోమ", "మంగళ", "బుధ", "గురు", "శుక్ర", "శని"],
+  kn: ["ಭಾನು", "ಸೋಮ", "ಮಂಗಳ", "ಬುಧ", "ಗುರು", "ಶುಕ್ರ", "ಶನಿ"],
+};
+// Months stay in English, as Indian calendars print them (see src/shared/lib/relative-time.ts).
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAY_WORDS = messages({
+  en: { today: "Today", yesterday: "Yesterday" },
+  te: { today: "ఈరోజు", yesterday: "నిన్న" },
+  kn: { today: "ಇಂದು", yesterday: "ನಿನ್ನೆ" },
+});
 const TOP_DISHES = 3;
 
 /** Start of the India day holding `time`. */
@@ -66,12 +77,12 @@ export function istDayText(time: number): string {
   const date = istDate(time);
   return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
 }
-/** "Today", "Yesterday" or "Mon, 12 Oct". */
-export function istDayName(day: number, now: number): string {
+/** "Today", "Yesterday" or "Mon, 12 Oct", in the chef's words. */
+export function istDayName(day: number, now: number, language: Language = "en"): string {
   const today = istDayStart(now);
-  if (day === today) return "Today";
-  if (day === today - DAY_MS) return "Yesterday";
-  return `${WEEKDAYS[istDate(day).getUTCDay()]}, ${istDayText(day)}`;
+  if (day === today) return DAY_WORDS[language].today;
+  if (day === today - DAY_MS) return DAY_WORDS[language].yesterday;
+  return `${WEEKDAYS[language][istDate(day).getUTCDay()]}, ${istDayText(day)}`;
 }
 
 /** Whole India days a range covers. The week is the last 7 days including today; the month runs from the 1st. */
@@ -117,7 +128,7 @@ function earnedPaise(entries: readonly ChefEarning[], bounds: Bounds): number {
     .reduce((sum, entry) => sum + paise(entry.netPayable), 0);
 }
 
-/** Sales numbers for the Earnings page: money from the earnings entries, counts and dishes from the orders. */
+/** Sales numbers for the Money tab: money from the earnings entries, counts and dishes from the orders. */
 export function summarizeEarnings(input: {
   orders: readonly ChefOrder[];
   earnings: readonly ChefEarning[];
@@ -127,8 +138,10 @@ export function summarizeEarnings(input: {
   earningsLimit?: number;
   /** The older orders did not all load, so the orders of the period before may be incomplete. */
   ordersCutOff?: boolean;
+  /** The words of the day labels. */
+  language?: Language;
 }): EarningsSummary {
-  const { orders, earnings, range, now, earningsLimit, ordersCutOff } = input;
+  const { orders, earnings, range, now, earningsLimit, ordersCutOff, language = "en" } = input;
   const bounds = earningsRangeBounds(range, now);
   const previous = earningsPreviousBounds(range, now);
   const earnedTotal = earnedPaise(earnings, bounds);
@@ -153,9 +166,9 @@ export function summarizeEarnings(input: {
     const day = bounds.from + index * DAY_MS;
     const label =
       day === today
-        ? "Today"
+        ? DAY_WORDS[language].today
         : dayCount <= 7
-          ? WEEKDAYS[istDate(day).getUTCDay()]
+          ? WEEKDAYS[language][istDate(day).getUTCDay()]
           : String(istDate(day).getUTCDate());
     return { day, label, amount: earnedPaise(earnings, { from: day, to: day + DAY_MS }) / 100 };
   });

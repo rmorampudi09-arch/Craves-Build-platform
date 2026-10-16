@@ -24,7 +24,7 @@ const screens: Screen[] = [
   { name: "home", path: "/chef", h1: /^Good (morning|afternoon|evening)/, setup: approved },
   { name: "orders", path: "/chef/orders", h1: "Orders", setup: approved },
   { name: "menu", path: "/chef/menu", h1: "Menu", setup: approved },
-  { name: "earnings", path: "/chef/earnings", h1: "Earnings", setup: approved },
+  { name: "earnings", path: "/chef/earnings", h1: "Money", setup: approved },
   { name: "finance", path: "/chef/finance", h1: "Balance & payouts", setup: approved },
   { name: "bank", path: "/chef/bank", h1: "Bank account", setup: approved },
   { name: "statements", path: "/chef/statements", h1: "Statements", setup: approved },

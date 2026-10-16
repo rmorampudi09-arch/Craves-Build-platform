@@ -6,8 +6,10 @@ import {
   supportPhoneFrom,
   ticketSubject,
   ticketBack,
+  ticketStatus,
   ticketSubtitle,
   ticketTopic,
+  topicLabel,
 } from "./chef-support.ts";
 
 const now = new Date(2026, 9, 15, 14, 0);
@@ -49,6 +51,18 @@ test("ticket subtitle says who wrote last, like the app", () => {
     ticketSubtitle({ ...base, status: "CLOSED", closedAt: at(9, 2) }, now),
     "Closed · 2 Oct",
   );
+  assert.equal(ticketSubtitle(base, now, "te"), "మీరు రాశారు · 4 గంటల క్రితం");
+  assert.equal(ticketStatus("WAITING_FOR_REQUESTER", "kn").label, "ನಿಮ್ಮ ಉತ್ತರ ಬೇಕು");
+});
+
+test("topics read in the chef's language, while the ticket keeps the English topic", () => {
+  assert.equal(topicLabel("Payout not received", "te"), "డబ్బు బ్యాంక్‌కు రాలేదు");
+  assert.equal(topicLabel("General question", "kn"), "ಸಾಮಾನ್ಯ ಪ್ರಶ್ನೆ");
+  assert.equal(topicLabel("Payout not received"), "Payout not received");
+  // A subject someone else wrote (or one with an order number) stays as written.
+  assert.equal(topicLabel("Move my kitchen", "te"), "Move my kitchen");
+  assert.equal(topicLabel("constructor", "te"), "constructor");
+  assert.equal(ticketSubject("Payout not received", null), "Payout not received");
 });
 
 test("a ticket's subject is its topic and order number, within the 160 character limit", () => {

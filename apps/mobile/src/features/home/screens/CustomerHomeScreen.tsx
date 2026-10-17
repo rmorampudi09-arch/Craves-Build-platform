@@ -35,6 +35,7 @@ import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
+import {HomeFoodTypeMenu} from '../components/HomeFoodTypeMenu';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
   OfflineNotice,
@@ -73,6 +74,7 @@ import {
   discoveryFilterActions,
   getActiveDiscoveryFilterCount,
   resolveDiscoveryFilterSession,
+  type DiscoveryDietOption,
 } from '../../discoveryFilters/state/discoveryFilterSlice';
 import {
   canRequestNextSearchPage,
@@ -591,6 +593,16 @@ export function CustomerHomeScreen() {
     navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
   };
 
+  const setDiets = (diets: DiscoveryDietOption[]) => {
+    dispatch(
+      discoveryFilterActions.filtersApplied({
+        surface: 'HOME',
+        scopeKey: searchScopeKey,
+        filters: {...appliedFilters, diets},
+      }),
+    );
+  };
+
   const clearFilters = () => {
     handleClearSearch();
     setSelectedCategory(null);
@@ -739,6 +751,11 @@ export function CustomerHomeScreen() {
                 Search dishes or kitchens
               </Text>
             </Pressable>
+            <HomeFoodTypeMenu
+              diets={appliedFilters.diets}
+              onChange={setDiets}
+              style={styles.foodTypeMenuPill}
+            />
             <Pressable
               accessibilityHint="Open filter and sort options"
               accessibilityLabel="Filters"
@@ -746,7 +763,9 @@ export function CustomerHomeScreen() {
               onPress={openFilters}
               style={({pressed}) => [
                 styles.filterButton,
-                activeDiscoveryFilterCount > 0 && styles.filterButtonActive,
+                // The food type pill shows diets itself, so only other filters light this up.
+                activeDiscoveryFilterCount - appliedFilters.diets.length > 0 &&
+                  styles.filterButtonActive,
                 pressed && styles.filterButtonPressed,
               ]}>
               <Icon
@@ -758,7 +777,7 @@ export function CustomerHomeScreen() {
             </Pressable>
           </View>
 
-          <HomePromoAndKitchens />
+          <HomePromoAndKitchens diets={appliedFilters.diets} />
 
           <View style={styles.mindHeadingRow}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>
@@ -1012,6 +1031,9 @@ const styles = StyleSheet.create({
   },
   filterButtonActive: {
     borderColor: colors.flameRed,
+  },
+  foodTypeMenuPill: {
+    height: SEARCH_ROW_HEIGHT,
   },
   filterButtonPressed: {
     opacity: 0.78,

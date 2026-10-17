@@ -53,6 +53,7 @@ import {
 } from '../../kitchenProfile/api/publicKitchenReviewApi';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import type {NearbyDish} from '../api/homeFeedApi';
+import type {DiscoveryDietOption} from '../../discoveryFilters/state/discoveryFilterSlice';
 import {formatDishPrice} from '../homePresentation';
 import {useHomeBannersQuery} from '../query/homeBannerQueries';
 import type {HomeBanner} from '../api/homeBannerApi';
@@ -224,12 +225,15 @@ export function PromoCarousel({
   );
 }
 
-function buildTopKitchenCards(
+/** Kitchens with no dish of the chosen food types drop out; photos and prices use only matching dishes. */
+export function buildTopKitchenCards(
   kitchens: readonly NearbyKitchen[],
   dishes: readonly NearbyDish[],
+  diets: readonly DiscoveryDietOption[] = [],
 ): TopKitchenCardModel[] {
   const dishesByKitchen = new Map<string, NearbyDish[]>();
   for (const dish of dishes) {
+    if (diets.length > 0 && !diets.includes(dish.foodType)) continue;
     const current = dishesByKitchen.get(dish.kitchenId) ?? [];
     current.push(dish);
     dishesByKitchen.set(dish.kitchenId, current);
@@ -395,7 +399,7 @@ function TopKitchenCard({
   );
 }
 
-export function HomePromoAndKitchens() {
+export function HomePromoAndKitchens({diets = []}: {diets?: readonly DiscoveryDietOption[]}) {
   const navigation = useNavigation<HomeNavigation>();
   const focused = useIsFocused();
   const tabNavigation =
@@ -420,8 +424,8 @@ export function HomePromoAndKitchens() {
       kitchenDiscovery.data?.pages.flatMap(page => page.kitchens) ?? [];
     const nearbyDishes =
       menuDiscovery.data?.pages.flatMap(page => page.menuItems) ?? [];
-    return buildTopKitchenCards(nearbyKitchens, nearbyDishes);
-  }, [kitchenDiscovery.data?.pages, menuDiscovery.data?.pages]);
+    return buildTopKitchenCards(nearbyKitchens, nearbyDishes, diets);
+  }, [diets, kitchenDiscovery.data?.pages, menuDiscovery.data?.pages]);
 
   const reviewQueries = useQueries({
     queries: topKitchens.map(kitchen => ({

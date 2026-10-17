@@ -78,16 +78,6 @@ export function documentRows(state: OnboardingState): DocumentRow[] {
   return rows.sort((a, b) => a.order - b.order).map(({row}) => row);
 }
 
-const UPLOAD_TYPES = ['SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2'];
-
-/** The files the application takes, for "Upload another document". */
-export function uploadChoices(state: OnboardingState): {type: string; title: string}[] {
-  return UPLOAD_TYPES.map(type => ({
-    type,
-    title: titleOf({id: '', documentType: type, originalFileName: '', fileSizeBytes: 0, status: 'UPLOADED', reviewReason: null}, state.details),
-  }));
-}
-
 const PROOF_SHORT: Record<string, string> = {AADHAAR: 'Aadhaar', PAN: 'PAN', BANK_STATEMENT: 'Bank statement', OTHER_GOVERNMENT_ID: 'ID'};
 
 /** `FSSAI, Aadhaar`: what the application gave, for the Profile row's second line. */

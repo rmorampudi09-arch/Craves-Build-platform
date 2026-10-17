@@ -26,7 +26,7 @@ import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.34.5';
+export const CHEF_APP_VERSION = '1.34.6';
 
 /** The line under Opening hours: where the kitchen is right now, with today's hours. */
 function hoursLine(status: KitchenOpenState['status'], hoursToday: string | null): string | undefined {
@@ -66,6 +66,8 @@ export function ChefProfileScreen() {
 
   // Both lines are extras: when a read fails or finds nothing, the row simply has no second line.
   const onboarding = useChefOnboardingState().query.data;
+  // Documents are view-only: a chef with nothing from the application (joined on the old form) gets no Documents page.
+  const hasDocuments = Boolean(onboarding?.documents.length);
   const bank = useChefRead('chef-bank-status', signal => chefBankOnboardingApi.getStatus(signal)).query.data;
   const bankLine = bank?.lastFour ? [bank.bankName, `••${bank.lastFour}`].filter(Boolean).join(' ') : undefined;
 
@@ -140,7 +142,12 @@ export function ChefProfileScreen() {
               <StatusChip label="Paused by Craves" tone="new" />
             </View>
           ) : null}
-          {approved ? (
+          {approved && !hasDocuments ? (
+            <View style={styles.chipTap}>
+              <StatusChip label="Approved" tone="ready" />
+            </View>
+          ) : null}
+          {approved && hasDocuments ? (
             <Pressable
               accessibilityLabel="Approved. Open documents"
               accessibilityRole="button"
@@ -171,13 +178,15 @@ export function ChefProfileScreen() {
           subtitle={hoursLine(kitchenState.status, kitchenState.hoursToday)}
           title="Opening hours"
         />
-        <ListRow
-          icon="shield"
-          iconTone="red"
-          onPress={open('ChefBusinessInformation')}
-          subtitle={approved ? ['Verified', onboarding ? documentsSummary(onboarding) : ''].filter(Boolean).join(' · ') : 'See your documents'}
-          title="Documents & verification"
-        />
+        {onboarding && hasDocuments ? (
+          <ListRow
+            icon="shield"
+            iconTone="red"
+            onPress={open('ChefBusinessInformation')}
+            subtitle={approved ? ['Verified', documentsSummary(onboarding)].filter(Boolean).join(' · ') : 'See your documents'}
+            title="Documents & verification"
+          />
+        ) : null}
         <ListRow
           icon="star"
           iconTone="red"

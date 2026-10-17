@@ -76,14 +76,6 @@
    "slot": "2026-10-15T20:23",
    "items": [
     {
-     "type": "image",
-     "piece": "I1",
-     "files": [
-      "I1/I1-01.jpg"
-     ],
-     "caption": "Hyderabad home chefs: apply cheyyadaniki rendu kitchen photos, ID proof, 14-digit FSSAI number kavali.\nCustomers kosam Craves launching soon, chefs mundu join avutunnaru.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
-    },
-    {
      "type": "story",
      "piece": "ST3",
      "files": [
@@ -109,19 +101,6 @@
    "slot": "2026-10-16T11:23",
    "items": [
     {
-     "type": "carousel",
-     "piece": "C4",
-     "files": [
-      "C4/C4-01.jpg",
-      "C4/C4-02.jpg",
-      "C4/C4-03.jpg",
-      "C4/C4-04.jpg",
-      "C4/C4-05.jpg",
-      "C4/C4-06.jpg"
-     ],
-     "caption": "FSSAI says registration now covers turnover up to Rs 1.5 crore (press release, 13 Mar 2026).\nSteps and the current fee: foscos.fssai.gov.in.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #FSSAI #FSSAIRegistration #IntiVantalu #Craves"
-    },
-    {
      "type": "story",
      "piece": "ST6",
      "files": [
@@ -130,35 +109,12 @@
       "ST6/ST6-03.jpg",
       "ST6/ST6-04.jpg"
      ]
-    },
-    {
-     "type": "reel",
-     "piece": "reel-packaging",
-     "files": [
-      "reels/reel-packaging.mp4"
-     ],
-     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nFood ready ayyaka, mee kitchen nunchi pickup Craves arrange chestundi. Customers: launching soon. Chefs: joining first.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\nMusic: \"Life of Riley\" by Kevin MacLeod (incompetech.com), CC BY 4.0\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #IntiVantalu #ManaVantalu #Craves",
-     "thumb_offset": 2000
     }
    ]
   },
   {
    "slot": "2026-10-16T20:23",
    "items": [
-    {
-     "type": "carousel",
-     "piece": "C2",
-     "files": [
-      "C2/C2-01.jpg",
-      "C2/C2-02.jpg",
-      "C2/C2-03.jpg",
-      "C2/C2-04.jpg",
-      "C2/C2-05.jpg",
-      "C2/C2-06.jpg",
-      "C2/C2-07.jpg"
-     ],
-     "caption": "Craves home chef avvadaniki 5 steps: phone, kitchen, documents, review, mee menu.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #HomeChef #IntiVantalu #Craves"
-    },
     {
      "type": "story",
      "piece": "ST7",
@@ -175,20 +131,6 @@
    "slot": "2026-10-17T11:23",
    "items": [
     {
-     "type": "carousel",
-     "piece": "C5",
-     "files": [
-      "C5/C5-01.jpg",
-      "C5/C5-02.jpg",
-      "C5/C5-03.jpg",
-      "C5/C5-04.jpg",
-      "C5/C5-05.jpg",
-      "C5/C5-06.jpg",
-      "C5/C5-07.jpg"
-     ],
-     "caption": "Mee menu, mee prices. Pickup Craves arrange chestundi, approve ayyaka packaging free.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
-    },
-    {
      "type": "story",
      "piece": "ST8",
      "files": [
@@ -203,12 +145,13 @@
    "slot": "2026-10-17T20:23",
    "items": [
     {
-     "type": "image",
-     "piece": "I2",
+     "type": "reel",
+     "piece": "reel-packaging",
      "files": [
-      "I2/I2-01.jpg"
+      "reels/reel-packaging.mp4"
      ],
-     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #HomeChef #IntiVantalu #Craves"
+     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nFood ready ayyaka, mee kitchen nunchi pickup Craves arrange chestundi. Customers: launching soon. Chefs: joining first.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\nMusic: \"Life of Riley\" by Kevin MacLeod (incompetech.com), CC BY 4.0\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #IntiVantalu #ManaVantalu #Craves",
+     "thumb_offset": 2000
     },
     {
      "type": "story",
@@ -289,6 +232,20 @@
    "slot": "2026-10-19T11:23",
    "items": [
     {
+     "type": "carousel",
+     "piece": "C5",
+     "files": [
+      "C5/C5-01.jpg",
+      "C5/C5-02.jpg",
+      "C5/C5-03.jpg",
+      "C5/C5-04.jpg",
+      "C5/C5-05.jpg",
+      "C5/C5-06.jpg",
+      "C5/C5-07.jpg"
+     ],
+     "caption": "Mee menu, mee prices. Pickup Craves arrange chestundi, approve ayyaka packaging free.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
+    },
+    {
      "type": "story",
      "piece": "ST6",
      "files": [
@@ -303,6 +260,14 @@
   {
    "slot": "2026-10-19T20:23",
    "items": [
+    {
+     "type": "image",
+     "piece": "I1",
+     "files": [
+      "I1/I1-01.jpg"
+     ],
+     "caption": "Hyderabad home chefs: apply cheyyadaniki rendu kitchen photos, ID proof, 14-digit FSSAI number kavali.\nCustomers kosam Craves launching soon, chefs mundu join avutunnaru.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
+    },
     {
      "type": "story",
      "piece": "ST7",
@@ -319,6 +284,20 @@
    "slot": "2026-10-20T11:23",
    "items": [
     {
+     "type": "carousel",
+     "piece": "C2",
+     "files": [
+      "C2/C2-01.jpg",
+      "C2/C2-02.jpg",
+      "C2/C2-03.jpg",
+      "C2/C2-04.jpg",
+      "C2/C2-05.jpg",
+      "C2/C2-06.jpg",
+      "C2/C2-07.jpg"
+     ],
+     "caption": "Craves home chef avvadaniki 5 steps: phone, kitchen, documents, review, mee menu.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #HomeChef #IntiVantalu #Craves"
+    },
+    {
      "type": "story",
      "piece": "ST8",
      "files": [
@@ -333,6 +312,14 @@
    "slot": "2026-10-20T20:23",
    "items": [
     {
+     "type": "image",
+     "piece": "I2",
+     "files": [
+      "I2/I2-01.jpg"
+     ],
+     "caption": "Craves home chef ga approve ayyaka, packaging materials Craves free ga pampistundi.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #Hyderabad #HomeChef #IntiVantalu #Craves"
+    },
+    {
      "type": "story",
      "piece": "ST1",
      "files": [
@@ -346,6 +333,19 @@
   {
    "slot": "2026-10-21T11:23",
    "items": [
+    {
+     "type": "carousel",
+     "piece": "C4",
+     "files": [
+      "C4/C4-01.jpg",
+      "C4/C4-02.jpg",
+      "C4/C4-03.jpg",
+      "C4/C4-04.jpg",
+      "C4/C4-05.jpg",
+      "C4/C4-06.jpg"
+     ],
+     "caption": "FSSAI says registration now covers turnover up to Rs 1.5 crore (press release, 13 Mar 2026).\nSteps and the current fee: foscos.fssai.gov.in.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeKitchen #HomemadeFood #HyderabadFood #FSSAI #FSSAIRegistration #IntiVantalu #Craves"
+    },
     {
      "type": "story",
      "piece": "ST2",

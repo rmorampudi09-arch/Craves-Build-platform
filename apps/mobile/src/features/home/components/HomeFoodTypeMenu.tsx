@@ -52,7 +52,8 @@ export function HomeFoodTypeMenu({diets, onChange, style}: HomeFoodTypeMenuProps
     onChange(diet ? [diet] : []);
   };
 
-  // The modal's own origin can differ from the window's (status bar), so place the menu relative to it.
+  // Page coordinates, not measureInWindow: on Android that subtracts the status bar on the page but
+  // not inside the Modal, which put the menu 32 dp too high. The root offset covers a modal that doesn't start at 0.
   const menuTop = anchor && root ? anchor.y - root.y + anchor.height + spacing.xs : 0;
   const menuLeft = anchor && root
     ? Math.max(spacing.sm, Math.min(anchor.x - root.x + anchor.width - MENU_WIDTH, windowWidth - MENU_WIDTH - spacing.sm))
@@ -66,7 +67,9 @@ export function HomeFoodTypeMenu({diets, onChange, style}: HomeFoodTypeMenuProps
         accessibilityLabel={`Food type, ${label === 'All' ? 'all food' : label}`}
         accessibilityHint="Opens veg, egg and non-veg choices"
         accessibilityState={{expanded: anchor !== null}}
-        onPress={() => pillRef.current?.measureInWindow((x, y, width, height) => setAnchor({x, y, width, height}))}
+        onPress={() =>
+          pillRef.current?.measure((_x, _y, width, height, pageX, pageY) => setAnchor({x: pageX, y: pageY, width, height}))
+        }
         style={({pressed}) => [
           styles.pill,
           tone && {backgroundColor: tone.soft, borderColor: tone.border},
@@ -89,7 +92,9 @@ export function HomeFoodTypeMenu({diets, onChange, style}: HomeFoodTypeMenuProps
         <Pressable
           ref={rootRef}
           accessibilityLabel="Close food type choices"
-          onLayout={() => rootRef.current?.measureInWindow((x, y, width, height) => setRoot({x, y, width, height}))}
+          onLayout={() =>
+            rootRef.current?.measure((_x, _y, width, height, pageX, pageY) => setRoot({x: pageX, y: pageY, width, height}))
+          }
           onPress={close}
           style={StyleSheet.absoluteFill}>
           {root ? (

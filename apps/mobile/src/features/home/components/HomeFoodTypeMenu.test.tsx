@@ -12,12 +12,11 @@ jest.mock('../../../design/reducedMotion', () => ({
 
 describe('home food type menu', () => {
   let tree: renderer.ReactTestRenderer;
-  // React Native's jest View stubs measureInWindow without calling back; report a fixed frame instead.
+  // React Native's jest View stubs measure without calling back; report a fixed frame instead.
   beforeEach(() => {
     jest
-      .spyOn((View as unknown as {prototype: {measureInWindow: () => void}}).prototype, 'measureInWindow')
-      .mockImplementation(((callback: (x: number, y: number, w: number, h: number) => void) =>
-        callback(240, 120, 90, 52)) as () => void);
+      .spyOn((View as unknown as {prototype: {measure: () => void}}).prototype, 'measure')
+      .mockImplementation(((callback: (...frame: number[]) => void) => callback(0, 0, 90, 52, 240, 120)) as () => void);
   });
   afterEach(() => {
     act(() => tree?.unmount());

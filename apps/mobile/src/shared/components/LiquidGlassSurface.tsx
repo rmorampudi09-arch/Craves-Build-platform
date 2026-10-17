@@ -79,13 +79,15 @@ export function LiquidGlassSurface({
         <GlassView
           pointerEvents="none"
           colorScheme="light"
-          glassEffectStyle={home ? 'clear' : 'regular'}
+          glassEffectStyle={home && !navigation ? 'clear' : 'regular'}
           isInteractive={false}
           tintColor={
-            home
+            navigation
+              ? home
+                ? 'rgba(255,255,255,0.55)'
+                : 'rgba(255,255,255,0.16)'
+              : home
               ? 'rgba(255,255,255,0.06)'
-              : navigation
-              ? 'rgba(255,255,255,0.16)'
               : 'rgba(80,80,80,0.12)'
           }
           style={[StyleSheet.absoluteFill, home && { borderRadius: cornerRadius }]}
@@ -109,7 +111,7 @@ export function LiquidGlassSurface({
           blurMethod="dimezisBlurViewSdk31Plus"
           blurReductionFactor={homeLiquidGlass.blurReductionFactor}
           intensity={
-            home ? homeLiquidGlass.blurIntensity : navigation ? 66 : 38
+            navigation ? 66 : home ? homeLiquidGlass.blurIntensity : 38
           }
           tint={
             navigation
@@ -309,7 +311,8 @@ const styles = StyleSheet.create({
   imageWash: { backgroundColor: 'rgba(24,24,24,0.18)' },
   navigationWash: { backgroundColor: 'rgba(255,255,255,0.16)' },
   homeImageWash: { backgroundColor: 'rgba(24,24,24,0.16)' },
-  homeNavigationWash: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  // Light frost: clear glass hid the menu over food photos.
+  homeNavigationWash: { backgroundColor: 'rgba(255,255,255,0.55)' },
   imageFallback: { backgroundColor: 'rgba(40,40,40,0.28)' },
   navigationFallback: { backgroundColor: 'rgba(255,255,255,0.62)' },
 });

@@ -107,15 +107,18 @@ export const homeLiquidGlass = {
     specular: 0.45,
     edgeGlow: 0,
   },
-  /** The menu carries labels, so it starts from kube.io's searchbox (refraction 0.7, some blur), tuned on device. */
+  /**
+   * The menu carries labels, so it starts from kube.io's searchbox (refraction 0.7, some blur), tuned on device.
+   * Light frost (55% white, 14 dp blur) since 18 Oct: clear glass made the menu hard to find over food photos.
+   */
   navigationOptics: {
     refraction: 1,
-    blurRadius: 4,
+    blurRadius: 14,
     bezel: 0.18,
     thickness: 1,
     aberration: 2,
     saturation: 1.4,
-    tint: [1, 1, 1, 0.1],
+    tint: [1, 1, 1, 0.55],
     specular: 0.3,
     edgeGlow: 0,
   },

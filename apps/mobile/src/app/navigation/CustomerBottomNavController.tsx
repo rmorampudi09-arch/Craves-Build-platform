@@ -373,6 +373,8 @@ const styles = StyleSheet.create({
   },
   shell: {
     height: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(38,26,21,0.10)',
     flexDirection: 'row',
     alignItems: 'stretch',
     borderRadius: radius.pill,

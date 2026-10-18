@@ -12,3 +12,4 @@ slot,piece,type,media_ids,status,published_at_ist
 2026-10-16T20:23,ST7,story,,skipped-late (missed runs),2026-10-17 14:40
 2026-10-17T20:23,reel-packaging,reel,18014385272756604,published,2026-10-17 20:24
 2026-10-17T20:23,ST1,story,18027124433880753|18105071567305535|18117190151056328,published (frame 3 via ST1-03.jpg; ST1-03b.jpg failed once),2026-10-17 23:17
+2026-10-18T11:23,C6,carousel,18132539476783587,published late (11:23 run missed; call timed out but post went live),2026-10-18 20:34

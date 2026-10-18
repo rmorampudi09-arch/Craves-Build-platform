@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   Pressable,
@@ -96,6 +97,8 @@ const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
 /** Search pill and filter button height on the Home board. */
 const SEARCH_ROW_HEIGHT = 52;
+const HEADER_COLLAPSE_START = 10;
+const HEADER_COLLAPSE_END = 80;
 
 type HomeFeedListItem =
   | {kind: 'categories'; key: 'categories'}
@@ -350,6 +353,32 @@ export function CustomerHomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
+  // The search row spans about 12-64 dp of the list; the header morphs while it scrolls under.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerCollapse = useMemo(
+    () =>
+      scrollY.interpolate({
+        inputRange: [HEADER_COLLAPSE_START, HEADER_COLLAPSE_END],
+        outputRange: [0, 1],
+        extrapolate: 'clamp',
+      }),
+    [scrollY],
+  );
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const onFeedScroll = useMemo(
+    () =>
+      Animated.event([{nativeEvent: {contentOffset: {y: scrollY}}}], {
+        useNativeDriver: true,
+        listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+          bottomNavScroll.onScroll(event);
+          const next =
+            event.nativeEvent.contentOffset.y >
+            (HEADER_COLLAPSE_START + HEADER_COLLAPSE_END) / 2;
+          setHeaderCollapsed(current => (current === next ? current : next));
+        },
+      }),
+    [bottomNavScroll, scrollY],
+  );
 
   const searchScopeKey =
     identity?.id && selectedLocation
@@ -751,11 +780,21 @@ export function CustomerHomeScreen() {
                 Search dishes or kitchens
               </Text>
             </Pressable>
-            <HomeFoodTypeMenu
-              diets={appliedFilters.diets}
-              onChange={setDiets}
-              style={styles.foodTypeMenuPill}
-            />
+            {/* Fades as its round twin rises into the header. */}
+            <Animated.View
+              style={{
+                opacity: headerCollapse.interpolate({
+                  inputRange: [0, 0.45],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+              }}>
+              <HomeFoodTypeMenu
+                diets={appliedFilters.diets}
+                onChange={setDiets}
+                style={styles.foodTypeMenuPill}
+              />
+            </Animated.View>
             <Pressable
               accessibilityHint="Open filter and sort options"
               accessibilityLabel="Filters"
@@ -796,10 +835,24 @@ export function CustomerHomeScreen() {
           onPressLocation={() => setLocationSelectorVisible(true)}
           onPressNotifications={header.openNotifications}
           onPressMealPlans={openMealPlans}
+          collapse={selectedLocation ? headerCollapse : undefined}
+          collapsed={headerCollapsed}
+          collapsedAccessory={
+            <HomeFoodTypeMenu
+              compact
+              diets={appliedFilters.diets}
+              onChange={setDiets}
+              testID="home-food-type-header"
+            />
+          }
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.fixedHeaderLine, {opacity: headerCollapse}]}
         />
       </View>
       <View style={styles.feedContainer}>
-        <FlatList
+        <Animated.FlatList
           ref={listRef}
           data={listData}
           keyExtractor={item => item.key}
@@ -821,7 +874,7 @@ export function CustomerHomeScreen() {
           onEndReached={loadNextPage}
           onEndReachedThreshold={0.6}
           onMomentumScrollEnd={saveListOffset}
-          onScroll={bottomNavScroll.onScroll}
+          onScroll={onFeedScroll}
           stickyHeaderIndices={feed.locationRequired ? undefined : [1]}
           onScrollEndDrag={saveListOffset}
           refreshControl={
@@ -975,6 +1028,16 @@ const styles = StyleSheet.create({
   },
   fixedHeader: {
     backgroundColor: colors.white,
+    // Lets the food type circle rise over the list edge into the header.
+    zIndex: 2,
+  },
+  fixedHeaderLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
   },
   feedContainer: {
     flex: 1,

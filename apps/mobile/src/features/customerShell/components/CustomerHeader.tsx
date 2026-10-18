@@ -1,5 +1,5 @@
-import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import React, {useState, type ReactNode} from 'react';
+import {Animated, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 import {
   colors,
@@ -19,6 +19,10 @@ export type CustomerHeaderVariant = 'default' | 'compact';
 
 /** Pin and bell share one 44 dp soft-red tile. */
 const HEADER_ICON_SIZE = 44;
+/** Space between the collapsed Meal plans circle and the accessory beside it. */
+const COLLAPSED_GAP = spacing.xs;
+const MEAL_PLANS_ICON = 22;
+const MEAL_PLANS_PADDING_LEFT = 10;
 
 interface Props {
   variant?: CustomerHeaderVariant;
@@ -26,6 +30,14 @@ interface Props {
   onPressLocation: () => void;
   onPressNotifications: () => void;
   onPressMealPlans?: () => void;
+  /**
+   * Scroll-driven 0 to 1 (Home). As it rises, Meal plans shrinks to a round icon and
+   * `collapsedAccessory` rises into the freed space next to the bell. Native-driver friendly.
+   */
+  collapse?: Animated.AnimatedInterpolation<number>;
+  /** True once `collapse` passes halfway; moves the tap targets and screen reader focus. */
+  collapsed?: boolean;
+  collapsedAccessory?: ReactNode;
 }
 
 export function CustomerHeader({
@@ -34,6 +46,9 @@ export function CustomerHeader({
   onPressLocation,
   onPressNotifications,
   onPressMealPlans,
+  collapse,
+  collapsed = false,
+  collapsedAccessory,
 }: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {selectedLocation, locationDisplayName, badgeLabel} = useCustomerHeaderState();
@@ -107,22 +122,15 @@ export function CustomerHeader({
         </Text>
       ) : null}
 
-      {onPressMealPlans ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Meal plans"
-          accessibilityHint="Opens your meal plans"
-          hitSlop={spacing.xxs}
+      {onPressMealPlans && collapse ? (
+        <CollapsingMealPlans
+          accessory={collapsedAccessory}
+          collapse={collapse}
+          collapsed={collapsed}
           onPress={onPressMealPlans}
-          style={({pressed}) => [
-            styles.mealPlansButton,
-            pressed && styles.mealPlansPressed,
-          ]}>
-          <Icon name="calendar-check" size={22} color={colors.flameRed} surface={false} />
-          <Text numberOfLines={1} style={styles.mealPlansText}>
-            Meal plans
-          </Text>
-        </Pressable>
+        />
+      ) : onPressMealPlans ? (
+        <MealPlansPill onPress={onPressMealPlans} />
       ) : null}
 
       <Pressable
@@ -143,6 +151,139 @@ export function CustomerHeader({
           </View>
         ) : null}
       </Pressable>
+    </View>
+  );
+}
+
+function MealPlansPill({onPress}: {onPress: () => void}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Meal plans"
+      accessibilityHint="Opens your meal plans"
+      hitSlop={spacing.xxs}
+      onPress={onPress}
+      style={({pressed}) => [styles.mealPlansButton, pressed && styles.mealPlansPressed]}>
+      <Icon name="calendar-check" size={MEAL_PLANS_ICON} color={colors.flameRed} surface={false} />
+      <Text numberOfLines={1} style={styles.mealPlansText}>
+        Meal plans
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The pill is drawn as two end circles and a middle band, so it can shrink to a circle with
+ * transforms only (native driver, no relayout per frame): the left end slides right while the band
+ * scales down to nothing. The accessory takes the pill's right end, next to the bell.
+ */
+function CollapsingMealPlans({
+  accessory,
+  collapse,
+  collapsed,
+  onPress,
+}: {
+  accessory: ReactNode;
+  collapse: Animated.AnimatedInterpolation<number>;
+  collapsed: boolean;
+  onPress: () => void;
+}) {
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+
+  // First lay out the plain pill once to learn its width at the user's font size.
+  if (measuredWidth === 0) {
+    return (
+      <View onLayout={event => setMeasuredWidth(event.nativeEvent.layout.width)}>
+        <MealPlansPill onPress={onPress} />
+      </View>
+    );
+  }
+
+  const width = Math.max(measuredWidth, HEADER_ICON_SIZE * 2 + COLLAPSED_GAP);
+  const circleLeft = width - HEADER_ICON_SIZE * 2 - COLLAPSED_GAP;
+  const along = (to: number) => collapse.interpolate({inputRange: [0, 1], outputRange: [0, to]});
+  const iconTop = (HEADER_ICON_SIZE - MEAL_PLANS_ICON) / 2;
+
+  return (
+    <View style={{width, height: HEADER_ICON_SIZE}}>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mealCap, {left: width - HEADER_ICON_SIZE, transform: [{translateX: along(-(HEADER_ICON_SIZE + COLLAPSED_GAP))}]}]}
+      />
+      <Animated.View pointerEvents="none" style={[styles.mealCap, {left: 0, transform: [{translateX: along(circleLeft)}]}]}>
+        <Animated.View
+          style={[
+            styles.mealCapFill,
+            {opacity: collapse.interpolate({inputRange: [0.55, 1], outputRange: [0, 1], extrapolate: 'clamp'})},
+          ]}
+        />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.mealBand,
+          {
+            left: HEADER_ICON_SIZE / 2,
+            width: width - HEADER_ICON_SIZE,
+            transform: [
+              {translateX: along(circleLeft)},
+              {scaleX: collapse.interpolate({inputRange: [0, 1], outputRange: [1, 0.001]})},
+            ],
+          },
+        ]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mealIcon, {left: MEAL_PLANS_PADDING_LEFT, top: iconTop, transform: [{translateX: along(circleLeft + iconTop - MEAL_PLANS_PADDING_LEFT)}]}]}>
+        <Icon name="calendar-check" size={MEAL_PLANS_ICON} color={colors.flameRed} surface={false} />
+      </Animated.View>
+      <Animated.Text
+        numberOfLines={1}
+        style={[
+          styles.mealPlansText,
+          styles.mealText,
+          {
+            left: MEAL_PLANS_PADDING_LEFT + MEAL_PLANS_ICON + spacing.xs,
+            opacity: collapse.interpolate({inputRange: [0, 0.35], outputRange: [1, 0], extrapolate: 'clamp'}),
+            transform: [{translateX: collapse.interpolate({inputRange: [0, 0.35], outputRange: [0, circleLeft * 0.35], extrapolate: 'clamp'})}],
+          },
+        ]}>
+        Meal plans
+      </Animated.Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Meal plans"
+        accessibilityHint="Opens your meal plans"
+        hitSlop={spacing.xxs}
+        onPress={onPress}
+        style={({pressed}) => [
+          styles.mealHitArea,
+          collapsed ? {left: circleLeft, width: HEADER_ICON_SIZE} : {left: 0, width},
+          pressed && styles.mealHitPressed,
+        ]}
+        testID="customer-header-meal-plans"
+      />
+      {accessory ? (
+        <Animated.View
+          accessibilityElementsHidden={!collapsed}
+          importantForAccessibility={collapsed ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={collapsed ? 'box-none' : 'none'}
+          style={[
+            styles.mealAccessory,
+            {
+              opacity: collapse.interpolate({inputRange: [0.2, 0.6], outputRange: [0, 1], extrapolate: 'clamp'}),
+              // Rises from the search row below, where the same control sits before scrolling.
+              transform: [
+                {translateX: collapse.interpolate({inputRange: [0, 1], outputRange: [-24, 0]})},
+                {translateY: collapse.interpolate({inputRange: [0, 1], outputRange: [56, 0]})},
+                {scale: collapse.interpolate({inputRange: [0, 1], outputRange: [1.18, 1]})},
+              ],
+            },
+          ]}
+          testID="customer-header-collapsed-accessory">
+          {accessory}
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -248,6 +389,42 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
   },
+  mealCap: {
+    position: 'absolute',
+    top: 0,
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  // Covers the cap's outline too, so the collapsed circle matches the soft-red pin and bell.
+  mealCapFill: {
+    position: 'absolute',
+    top: -1,
+    left: -1,
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
+    borderRadius: radius.pill,
+    backgroundColor: colors.iconSurface,
+  },
+  // Spans cap centre to cap centre, hiding the caps' inner arcs; scales from its left edge.
+  mealBand: {
+    position: 'absolute',
+    top: 0,
+    height: HEADER_ICON_SIZE,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    transformOrigin: 'left',
+  },
+  mealIcon: {position: 'absolute'},
+  mealText: {position: 'absolute', top: 0, lineHeight: HEADER_ICON_SIZE},
+  mealHitArea: {position: 'absolute', top: 0, height: HEADER_ICON_SIZE, borderRadius: radius.pill},
+  mealHitPressed: {backgroundColor: colors.overlay},
+  mealAccessory: {position: 'absolute', top: 0, right: 0},
   notificationButton: {
     width: HEADER_ICON_SIZE,
     height: HEADER_ICON_SIZE,

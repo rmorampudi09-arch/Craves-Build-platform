@@ -33,9 +33,18 @@ interface HomeFoodTypeMenuProps {
   diets: readonly DiscoveryDietOption[];
   onChange: (diets: DiscoveryDietOption[]) => void;
   style?: StyleProp<ViewStyle>;
+  /** Round, symbol-only button for the scrolled Home header. */
+  compact?: boolean;
+  testID?: string;
 }
 
-export function HomeFoodTypeMenu({diets, onChange, style}: HomeFoodTypeMenuProps) {
+export function HomeFoodTypeMenu({
+  diets,
+  onChange,
+  style,
+  compact = false,
+  testID = 'home-food-type-pill',
+}: HomeFoodTypeMenuProps) {
   const pillRef = useRef<View>(null);
   const rootRef = useRef<View>(null);
   const [anchor, setAnchor] = useState<Frame | null>(null);
@@ -72,20 +81,31 @@ export function HomeFoodTypeMenu({diets, onChange, style}: HomeFoodTypeMenuProps
         }
         style={({pressed}) => [
           styles.pill,
+          compact && styles.circle,
           tone && {backgroundColor: tone.soft, borderColor: tone.border},
           pressed && styles.pillPressed,
           style,
         ]}
-        testID="home-food-type-pill">
+        testID={testID}>
         {diets[0] ? (
-          <VegMark type={diets[0]} />
+          <View style={compact && styles.compactMark}>
+            <VegMark type={diets[0]} />
+          </View>
         ) : (
-          <MaterialDesignIcons name="silverware-fork-knife" size={16} color={colors.flameRedAccessible} />
+          <MaterialDesignIcons
+            name="silverware-fork-knife"
+            size={compact ? 20 : 16}
+            color={colors.flameRedAccessible}
+          />
         )}
-        <Text numberOfLines={1} style={[styles.pillLabel, tone && {color: tone.text}]}>
-          {label}
-        </Text>
-        <MaterialDesignIcons name="chevron-down" size={18} color={tone?.text ?? colors.textPrimary} />
+        {compact ? null : (
+          <>
+            <Text numberOfLines={1} style={[styles.pillLabel, tone && {color: tone.text}]}>
+              {label}
+            </Text>
+            <MaterialDesignIcons name="chevron-down" size={18} color={tone?.text ?? colors.textPrimary} />
+          </>
+        )}
       </Pressable>
 
       <Modal animationType="fade" onRequestClose={close} statusBarTranslucent transparent visible={anchor !== null}>
@@ -152,6 +172,9 @@ const styles = StyleSheet.create({
     borderColor: colors.iconSurface,
     backgroundColor: colors.iconSurface,
   },
+  circle: {width: 44, height: 44, paddingHorizontal: 0, justifyContent: 'center'},
+  // The 14 dp food mark reads small alone in a 44 dp circle.
+  compactMark: {transform: [{scale: 1.3}]},
   pillPressed: {opacity: 0.78, transform: [{scale: 0.96}]},
   pillLabel: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   menu: {

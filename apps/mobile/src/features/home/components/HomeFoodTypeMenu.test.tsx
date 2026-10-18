@@ -55,6 +55,15 @@ describe('home food type menu', () => {
     expect(tree.root.findByType(Modal).props.visible).toBe(false);
   });
 
+  it('shows only the symbol in the round header version', () => {
+    act(() => {
+      tree = renderer.create(<HomeFoodTypeMenu compact diets={['EGG']} onChange={jest.fn()} testID="header" />);
+    });
+    expect(tree.root.findAll(node => node.props.children === 'Egg')).toHaveLength(0);
+    const button = tree.root.findAll(node => node.props.testID === 'header' && node.props.accessibilityRole === 'button')[0];
+    expect(button?.props.accessibilityLabel).toBe('Food type, Egg');
+  });
+
   it('clears the diet with All food and checks nothing when Filter & sort set two', () => {
     const onChange = render(['VEG', 'EGG']);
     open();

@@ -846,10 +846,6 @@ export function CustomerHomeScreen() {
             />
           }
         />
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.fixedHeaderLine, {opacity: headerCollapse}]}
-        />
       </View>
       <View style={styles.feedContainer}>
         <Animated.FlatList
@@ -1030,14 +1026,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     // Lets the food type circle rise over the list edge into the header.
     zIndex: 2,
-  },
-  fixedHeaderLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
   },
   feedContainer: {
     flex: 1,

@@ -49,7 +49,7 @@ describe('customer header collapse', () => {
     tree = undefined as unknown as renderer.ReactTestRenderer;
     const onPressMealPlans = jest.fn();
     render({collapse, collapsed: false, onPressMealPlans, collapsedAccessory: <Text>accessory</Text>});
-    const measurer = tree.root.findAll(node => typeof node.props.onLayout === 'function' && node.type === 'View')[0];
+    const measurer = tree.root.findAll(node => typeof node.props.onLayout === 'function')[0];
     act(() => measurer.props.onLayout({nativeEvent: {layout: {width: 140, height: 44}}}));
 
     const hitStyle = () =>

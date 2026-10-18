@@ -198,20 +198,6 @@
    "slot": "2026-10-18T20:23",
    "items": [
     {
-     "type": "carousel",
-     "piece": "C3-TE",
-     "files": [
-      "C3-TE/C3-TE-01.jpg",
-      "C3-TE/C3-TE-02.jpg",
-      "C3-TE/C3-TE-03.jpg",
-      "C3-TE/C3-TE-04.jpg",
-      "C3-TE/C3-TE-05.jpg",
-      "C3-TE/C3-TE-06.jpg",
-      "C3-TE/C3-TE-07.jpg"
-     ],
-     "caption": "Craves హోమ్ చెఫ్ application కోసం ఈ 5 రెడీగా ఉంచుకోండి. సేవ్ చేసుకోండి.\nడాక్యుమెంట్లు application లోనే, DM లో కాదు.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#TeluguFood #IntiVantalu #ManaVantalu #HyderabadHomeChef #HomeChefs #HomemadeFood #HyderabadFood #Hyderabad #Craves"
-    },
-    {
      "type": "story",
      "piece": "ST3",
      "files": [
@@ -362,6 +348,20 @@
   {
    "slot": "2026-10-21T20:23",
    "items": [
+    {
+     "type": "carousel",
+     "piece": "C3-TE",
+     "files": [
+      "C3-TE/C3-TE-01.jpg",
+      "C3-TE/C3-TE-02.jpg",
+      "C3-TE/C3-TE-03.jpg",
+      "C3-TE/C3-TE-04.jpg",
+      "C3-TE/C3-TE-05.jpg",
+      "C3-TE/C3-TE-06.jpg",
+      "C3-TE/C3-TE-07.jpg"
+     ],
+     "caption": "Craves హోమ్ చెఫ్ application కోసం ఈ 5 రెడీగా ఉంచుకోండి. సేవ్ చేసుకోండి.\nడాక్యుమెంట్లు application లోనే, DM లో కాదు.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#TeluguFood #IntiVantalu #ManaVantalu #HyderabadHomeChef #HomeChefs #HomemadeFood #HyderabadFood #Hyderabad #Craves"
+    },
     {
      "type": "story",
      "piece": "ST3",

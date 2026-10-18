@@ -64,6 +64,21 @@ describe('home food type menu', () => {
     expect(button?.props.accessibilityLabel).toBe('Food type, Egg');
   });
 
+  it('matches the red header, and turns solid white once a diet is chosen', () => {
+    const styleOf = (diets: ('VEG' | 'EGG' | 'NON_VEG')[]) => {
+      act(() => {
+        tree = renderer.create(<HomeFoodTypeMenu compact appearance="onRed" diets={diets} onChange={jest.fn()} testID="h" />);
+      });
+      const button = tree.root.findAll(node => node.props.testID === 'h' && typeof node.props.style === 'function')[0];
+      const style = Object.assign({}, ...[button.props.style({pressed: false})].flat().filter(Boolean));
+      act(() => tree.unmount());
+      return style;
+    };
+    expect(styleOf([]).backgroundColor).toBe('#E85D4C');
+    expect(styleOf(['VEG']).backgroundColor).toBe('#FFFFFF');
+    tree = undefined as unknown as renderer.ReactTestRenderer;
+  });
+
   it('clears the diet with All food and checks nothing when Filter & sort set two', () => {
     const onChange = render(['VEG', 'EGG']);
     open();

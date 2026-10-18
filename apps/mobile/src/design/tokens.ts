@@ -40,6 +40,20 @@ export const colors = {
   overlay: 'rgba(38,26,21,0.08)',
 } as const;
 
+/**
+ * Craves red top of the customer Home (header, the search and banner band, the pinned
+ * category row). Tiles are opaque blends of white over the red (20% fill, 35% border), so
+ * pieces that overlap while the header collapses never double up their tint.
+ */
+export const homeTop = {
+  background: '#E2341F',
+  fadeMiddle: '#FF6F52',
+  tile: '#E85D4C',
+  tileBorder: '#EC7B6D',
+  foreground: colors.white,
+  secondaryText: '#FFD9D2',
+} as const;
+
 /** Foreground colors shared only by the bottom menus. */
 export const bottomMenu = {
   activeColor: colors.flameRedAccessible,

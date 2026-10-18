@@ -45,6 +45,16 @@ describe('customer header collapse', () => {
     expect(tree.root.findAll(node => node.props.testID === 'customer-header-meal-plans')).toHaveLength(0);
   });
 
+  it('paints the red tone with white icons and a white notification badge', () => {
+    tree = undefined as unknown as renderer.ReactTestRenderer;
+    render({tone: 'red'});
+    const container = tree.root.findAll(node => typeof node.type === 'string')[0];
+    const flat = (style: unknown) => Object.assign({}, ...[style].flat(3).filter(Boolean));
+    expect(flat(container.props.style).backgroundColor).toBe('#E2341F');
+    const mealText = tree.root.findAllByType(Text).find(node => node.props.children === 'Meal plans');
+    expect(flat(mealText?.props.style).color).toBe('#FFFFFF');
+  });
+
   it('measures the pill, then moves the tap target and the accessory when collapsed', () => {
     tree = undefined as unknown as renderer.ReactTestRenderer;
     const onPressMealPlans = jest.fn();

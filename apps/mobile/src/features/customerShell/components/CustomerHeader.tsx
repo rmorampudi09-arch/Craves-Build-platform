@@ -4,6 +4,7 @@ import {useNavigation, type NavigationProp, type ParamListBase} from '@react-nav
 import {
   colors,
   fontWeight,
+  homeTop,
   radius,
   spacing,
   touchTarget,
@@ -16,6 +17,52 @@ import {
 } from '../hooks/useCustomerHeaderState';
 
 export type CustomerHeaderVariant = 'default' | 'compact';
+/** `red` sits on the Craves red Home top: white icons on see-through white circles. */
+export type CustomerHeaderTone = 'light' | 'red';
+
+interface HeaderPalette {
+  background: string;
+  tile: string;
+  icon: string;
+  title: string;
+  line: string;
+  mealBackground: string;
+  mealBorder: string;
+  mealText: string;
+  badgeBackground: string;
+  badgeText: string;
+  badgeBorder: string;
+}
+
+const PALETTES: Record<CustomerHeaderTone, HeaderPalette> = {
+  light: {
+    background: colors.white,
+    tile: colors.iconSurface,
+    icon: colors.flameRed,
+    title: colors.espressoBrown,
+    line: colors.textSecondary,
+    mealBackground: colors.white,
+    mealBorder: colors.border,
+    mealText: colors.textPrimary,
+    badgeBackground: colors.flameRedAccessible,
+    badgeText: colors.white,
+    badgeBorder: colors.white,
+  },
+  red: {
+    background: homeTop.background,
+    tile: homeTop.tile,
+    icon: homeTop.foreground,
+    title: homeTop.foreground,
+    line: homeTop.secondaryText,
+    mealBackground: homeTop.tile,
+    mealBorder: homeTop.tileBorder,
+    mealText: homeTop.foreground,
+    // A red count would vanish on the red header.
+    badgeBackground: colors.white,
+    badgeText: colors.flameRedAccessible,
+    badgeBorder: homeTop.background,
+  },
+};
 
 /** Pin and bell share one 44 dp soft-red tile. */
 const HEADER_ICON_SIZE = 44;
@@ -38,6 +85,7 @@ interface Props {
   /** True once `collapse` passes halfway; moves the tap targets and screen reader focus. */
   collapsed?: boolean;
   collapsedAccessory?: ReactNode;
+  tone?: CustomerHeaderTone;
 }
 
 export function CustomerHeader({
@@ -49,7 +97,9 @@ export function CustomerHeader({
   collapse,
   collapsed = false,
   collapsedAccessory,
+  tone = 'light',
 }: Props) {
+  const palette = PALETTES[tone];
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {selectedLocation, locationDisplayName, badgeLabel} = useCustomerHeaderState();
   const compact = variant === 'compact';
@@ -62,7 +112,7 @@ export function CustomerHeader({
     : 'Needed to show kitchens near you';
 
   return (
-    <View style={[styles.container, compact && styles.containerCompact]}>
+    <View style={[styles.container, compact && styles.containerCompact, {backgroundColor: palette.background}]}>
       {showBack ? (
         <Pressable
           accessibilityLabel="Go back"
@@ -87,8 +137,8 @@ export function CustomerHeader({
         hitSlop={spacing.xs}
         onPress={onPressLocation}
         style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
-        <View style={styles.locationIcon}>
-          <Icon name="location" size={22} color={colors.flameRed} surface={false} />
+        <View style={[styles.locationIcon, {backgroundColor: palette.tile}]}>
+          <Icon name="location" size={22} color={palette.icon} surface={false} />
         </View>
         {compact ? (
           <View style={styles.locationCopy}>
@@ -105,11 +155,16 @@ export function CustomerHeader({
           <View style={styles.locationCopy}>
             {/* The title fills the row and carries the chevron inline: some Android fonts
                 under-measure bold text, so a shrink-to-fit label gets cut to "Ho…". */}
-            <Text numberOfLines={1} style={[styles.locationText, styles.locationTitle]}>
+            <Text numberOfLines={1} style={[styles.locationText, styles.locationTitle, {color: palette.title}]}>
               {locationTitle}{' '}
-              <Icon name="chevron-down" size={18} color={colors.textPrimary} surface={false} />
+              <Icon
+                name="chevron-down"
+                size={18}
+                color={tone === 'red' ? palette.title : colors.textPrimary}
+                surface={false}
+              />
             </Text>
-            <Text numberOfLines={1} style={styles.locationLine}>
+            <Text numberOfLines={1} style={[styles.locationLine, {color: palette.line}]}>
               {locationLine}
             </Text>
           </View>
@@ -128,9 +183,10 @@ export function CustomerHeader({
           collapse={collapse}
           collapsed={collapsed}
           onPress={onPressMealPlans}
+          palette={palette}
         />
       ) : onPressMealPlans ? (
-        <MealPlansPill onPress={onPressMealPlans} />
+        <MealPlansPill onPress={onPressMealPlans} palette={palette} />
       ) : null}
 
       <Pressable
@@ -142,12 +198,15 @@ export function CustomerHeader({
         onPress={onPressNotifications}
         style={({pressed}) => [
           styles.notificationButton,
+          {backgroundColor: palette.tile},
           pressed && styles.notificationPressed,
         ]}>
-        <Icon name="bell" size={22} color={colors.flameRed} surface={false} />
+        <Icon name="bell" size={22} color={palette.icon} surface={false} />
         {badgeLabel ? (
-          <View style={styles.badge} accessibilityElementsHidden>
-            <Text style={styles.badgeText}>{badgeLabel}</Text>
+          <View
+            style={[styles.badge, {backgroundColor: palette.badgeBackground, borderColor: palette.badgeBorder}]}
+            accessibilityElementsHidden>
+            <Text style={[styles.badgeText, {color: palette.badgeText}]}>{badgeLabel}</Text>
           </View>
         ) : null}
       </Pressable>
@@ -155,7 +214,7 @@ export function CustomerHeader({
   );
 }
 
-function MealPlansPill({onPress}: {onPress: () => void}) {
+function MealPlansPill({onPress, palette}: {onPress: () => void; palette: HeaderPalette}) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -163,9 +222,13 @@ function MealPlansPill({onPress}: {onPress: () => void}) {
       accessibilityHint="Opens your meal plans"
       hitSlop={spacing.xxs}
       onPress={onPress}
-      style={({pressed}) => [styles.mealPlansButton, pressed && styles.mealPlansPressed]}>
-      <Icon name="calendar-check" size={MEAL_PLANS_ICON} color={colors.flameRed} surface={false} />
-      <Text numberOfLines={1} style={styles.mealPlansText}>
+      style={({pressed}) => [
+        styles.mealPlansButton,
+        {backgroundColor: palette.mealBackground, borderColor: palette.mealBorder},
+        pressed && styles.mealPlansPressed,
+      ]}>
+      <Icon name="calendar-check" size={MEAL_PLANS_ICON} color={palette.icon} surface={false} />
+      <Text numberOfLines={1} style={[styles.mealPlansText, {color: palette.mealText}]}>
         Meal plans
       </Text>
     </Pressable>
@@ -182,11 +245,13 @@ function CollapsingMealPlans({
   collapse,
   collapsed,
   onPress,
+  palette,
 }: {
   accessory: ReactNode;
   collapse: Animated.AnimatedInterpolation<number>;
   collapsed: boolean;
   onPress: () => void;
+  palette: HeaderPalette;
 }) {
   const [measuredWidth, setMeasuredWidth] = useState(0);
 
@@ -194,7 +259,7 @@ function CollapsingMealPlans({
   if (measuredWidth === 0) {
     return (
       <View onLayout={event => setMeasuredWidth(event.nativeEvent.layout.width)}>
-        <MealPlansPill onPress={onPress} />
+        <MealPlansPill onPress={onPress} palette={palette} />
       </View>
     );
   }
@@ -203,17 +268,19 @@ function CollapsingMealPlans({
   const circleLeft = width - HEADER_ICON_SIZE * 2 - COLLAPSED_GAP;
   const along = (to: number) => collapse.interpolate({inputRange: [0, 1], outputRange: [0, to]});
   const iconTop = (HEADER_ICON_SIZE - MEAL_PLANS_ICON) / 2;
+  const pieceColors = {backgroundColor: palette.mealBackground, borderColor: palette.mealBorder};
 
   return (
     <View style={{width, height: HEADER_ICON_SIZE}}>
       <Animated.View
         pointerEvents="none"
-        style={[styles.mealCap, {left: width - HEADER_ICON_SIZE, transform: [{translateX: along(-(HEADER_ICON_SIZE + COLLAPSED_GAP))}]}]}
+        style={[styles.mealCap, pieceColors, {left: width - HEADER_ICON_SIZE, transform: [{translateX: along(-(HEADER_ICON_SIZE + COLLAPSED_GAP))}]}]}
       />
-      <Animated.View pointerEvents="none" style={[styles.mealCap, {left: 0, transform: [{translateX: along(circleLeft)}]}]}>
+      <Animated.View pointerEvents="none" style={[styles.mealCap, pieceColors, {left: 0, transform: [{translateX: along(circleLeft)}]}]}>
         <Animated.View
           style={[
             styles.mealCapFill,
+            {backgroundColor: palette.tile},
             {opacity: collapse.interpolate({inputRange: [0.55, 1], outputRange: [0, 1], extrapolate: 'clamp'})},
           ]}
         />
@@ -222,6 +289,7 @@ function CollapsingMealPlans({
         pointerEvents="none"
         style={[
           styles.mealBand,
+          pieceColors,
           {
             left: HEADER_ICON_SIZE / 2,
             width: width - HEADER_ICON_SIZE,
@@ -235,7 +303,7 @@ function CollapsingMealPlans({
       <Animated.View
         pointerEvents="none"
         style={[styles.mealIcon, {left: MEAL_PLANS_PADDING_LEFT, top: iconTop, transform: [{translateX: along(circleLeft + iconTop - MEAL_PLANS_PADDING_LEFT)}]}]}>
-        <Icon name="calendar-check" size={MEAL_PLANS_ICON} color={colors.flameRed} surface={false} />
+        <Icon name="calendar-check" size={MEAL_PLANS_ICON} color={palette.icon} surface={false} />
       </Animated.View>
       <Animated.Text
         numberOfLines={1}
@@ -243,6 +311,7 @@ function CollapsingMealPlans({
           styles.mealPlansText,
           styles.mealText,
           {
+            color: palette.mealText,
             left: MEAL_PLANS_PADDING_LEFT + MEAL_PLANS_ICON + spacing.xs,
             opacity: collapse.interpolate({inputRange: [0, 0.35], outputRange: [1, 0], extrapolate: 'clamp'}),
             transform: [{translateX: collapse.interpolate({inputRange: [0, 0.35], outputRange: [0, circleLeft * 0.35], extrapolate: 'clamp'})}],

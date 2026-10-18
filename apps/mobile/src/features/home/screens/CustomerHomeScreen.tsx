@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  StatusBar,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -15,7 +16,8 @@ import {
 } from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {BlurTargetView} from 'expo-blur';
-import {useNavigation} from '@react-navigation/native';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
+import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
@@ -27,6 +29,7 @@ import {
   colors,
   elevation,
   fontWeight,
+  homeTop,
   radius,
   spacing,
   touchTarget,
@@ -37,6 +40,7 @@ import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
 import {comingSoonTitle} from '../../customerEmptyStates/domain/customerEmptyStateModel';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
+import {CategoryCloudFill} from '../components/CategoryCloudFill';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
 import {HomeFoodTypeMenu} from '../components/HomeFoodTypeMenu';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
@@ -101,6 +105,14 @@ const HOME_PAGE_SIZE = 20;
 const SEARCH_ROW_HEIGHT = 52;
 const HEADER_COLLAPSE_START = 10;
 const HEADER_COLLAPSE_END = 80;
+/** White search, food type and filter controls lift off the red band with a soft shadow. */
+const WHITE_CARD_SHADOW = {
+  shadowColor: colors.espressoBrown,
+  shadowOpacity: 0.14,
+  shadowRadius: 8,
+  shadowOffset: {width: 0, height: 2},
+  elevation: 3,
+} as const;
 
 type HomeFeedListItem =
   | {kind: 'categories'; key: 'categories'}
@@ -367,19 +379,52 @@ export function CustomerHomeScreen() {
     [scrollY],
   );
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  // The category row pins once the list has scrolled past everything above it (the list header).
+  const railOffsetRef = useRef(0);
+  const scrollOffsetRef = useRef(0);
+  const [railPinned, setRailPinned] = useState(false);
+  const [railCovered, setRailCovered] = useState(false);
+  const [railWidth, setRailWidth] = useState(0);
+  const [listViewportHeight, setListViewportHeight] = useState(0);
+  const [railOffset, setRailOffset] = useState(0);
   const onFeedScroll = useMemo(
     () =>
       Animated.event([{nativeEvent: {contentOffset: {y: scrollY}}}], {
         useNativeDriver: true,
         listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
           bottomNavScroll.onScroll(event);
-          const next =
-            event.nativeEvent.contentOffset.y >
-            (HEADER_COLLAPSE_START + HEADER_COLLAPSE_END) / 2;
+          const offset = event.nativeEvent.contentOffset.y;
+          scrollOffsetRef.current = offset;
+          const next = offset > (HEADER_COLLAPSE_START + HEADER_COLLAPSE_END) / 2;
           setHeaderCollapsed(current => (current === next ? current : next));
+          const pinned = railOffsetRef.current > 0 && offset >= railOffsetRef.current - 0.5;
+          setRailPinned(current => (current === pinned ? current : pinned));
         },
       }),
     [bottomNavScroll, scrollY],
+  );
+  const pinnedCategoryScrollRef = useRef(false);
+  // While the row is pinned, a new category starts its list at the first dish under the row.
+  const selectCategory = useCallback((category: string | null) => {
+    pinnedCategoryScrollRef.current =
+      railOffsetRef.current > 0 && scrollOffsetRef.current >= railOffsetRef.current - 0.5;
+    setSelectedCategory(category);
+  }, []);
+  useEffect(() => {
+    if (!pinnedCategoryScrollRef.current) return;
+    pinnedCategoryScrollRef.current = false;
+    listRef.current?.scrollToOffset({offset: railOffsetRef.current, animated: false});
+  }, [selectedCategory]);
+  const scrollToTop = useCallback(() => {
+    listRef.current?.scrollToOffset({offset: 0, animated: true});
+  }, []);
+
+  // Light status bar icons on the red top while Home is in front; popped on blur so other screens keep theirs.
+  useFocusEffect(
+    useCallback(() => {
+      const entry = StatusBar.pushStackEntry({barStyle: 'light-content'});
+      return () => StatusBar.popStackEntry(entry);
+    }, []),
   );
 
   const searchScopeKey =
@@ -765,10 +810,31 @@ export function CustomerHomeScreen() {
     );
   })();
 
+  // The red band fades to white by the bottom of the banner (search row + banner top gap + 2:1 banner).
+  const topFadeHeight = SEARCH_ROW_HEIGHT + spacing.sm + spacing.md + Math.max(280, width - spacing.md * 2) / 2;
   const headerContent = (
-    <View>
+    <View
+      onLayout={event => {
+        const headerHeight = event.nativeEvent.layout.height;
+        railOffsetRef.current = headerHeight;
+        setRailOffset(headerHeight);
+      }}>
       {selectedLocation ? (
         <>
+          <Svg
+            pointerEvents="none"
+            width="100%"
+            height={topFadeHeight}
+            style={[styles.topFade, {height: topFadeHeight}]}>
+            <Defs>
+              <LinearGradient id="homeTopFade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={homeTop.background} />
+                <Stop offset="0.45" stopColor={homeTop.fadeMiddle} />
+                <Stop offset="1" stopColor={colors.white} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height={topFadeHeight} fill="url(#homeTopFade)" />
+          </Svg>
           <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
             {/* Home only opens the search page, so the field is a button. */}
             <Pressable
@@ -792,6 +858,7 @@ export function CustomerHomeScreen() {
                 }),
               }}>
               <HomeFoodTypeMenu
+                appearance="card"
                 diets={appliedFilters.diets}
                 onChange={setDiets}
                 style={styles.foodTypeMenuPill}
@@ -831,9 +898,14 @@ export function CustomerHomeScreen() {
   );
 
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home">
+    <ScreenShell
+      backgroundColor={homeTop.background}
+      edges={['top']}
+      keyboardAvoiding={false}
+      testID="customer-home">
       <View style={styles.fixedHeader}>
         <CustomerHeader
+          tone="red"
           onPressLocation={() => setLocationSelectorVisible(true)}
           onPressNotifications={header.openNotifications}
           onPressMealPlans={openMealPlans}
@@ -842,6 +914,7 @@ export function CustomerHomeScreen() {
           collapsedAccessory={
             <HomeFoodTypeMenu
               compact
+              appearance="onRed"
               diets={appliedFilters.diets}
               onChange={setDiets}
               testID="home-food-type-header"
@@ -858,6 +931,7 @@ export function CustomerHomeScreen() {
           nestedScrollEnabled
           removeClippedSubviews={false}
           style={styles.feedList}
+          onLayout={event => setListViewportHeight(event.nativeEvent.layout.height)}
           ListFooterComponent={
             feed.isFetchingNextPage ? (
               <ActivityIndicator
@@ -865,6 +939,17 @@ export function CustomerHomeScreen() {
                 color={colors.flameRed}
                 style={styles.footerLoader}
               />
+            ) : !feed.hasNextPage && visibleDishes.length > 0 ? (
+              <Pressable
+                accessibilityHint="Scrolls back to the top of Home"
+                accessibilityLabel="Back to top"
+                accessibilityRole="button"
+                onPress={scrollToTop}
+                style={({pressed}) => [styles.backToTop, pressed && styles.backToTopPressed]}
+                testID="home-back-to-top">
+                <MaterialDesignIcons color={colors.flameRedAccessible} name="arrow-up" size={18} />
+                <Text style={styles.backToTopText}>Back to top</Text>
+              </Pressable>
             ) : null
           }
           ListHeaderComponent={headerContent}
@@ -886,10 +971,19 @@ export function CustomerHomeScreen() {
           renderItem={({item}) => {
             if (item.kind === 'categories') {
               return (
-                <View style={styles.stickyCategoryWrap}>
+                <View
+                  onLayout={event => setRailWidth(event.nativeEvent.layout.width)}
+                  style={styles.stickyCategoryWrap}>
+                  <CategoryCloudFill
+                    active={railPinned}
+                    color={homeTop.background}
+                    onCoveredChange={setRailCovered}
+                    width={railWidth}
+                  />
                   <HomeCategoryRail
+                    onColor={railCovered}
                     selectedCategory={selectedCategory}
-                    onSelect={setSelectedCategory}
+                    onSelect={selectCategory}
                   />
                 </View>
               );
@@ -964,6 +1058,8 @@ export function CustomerHomeScreen() {
           contentContainerStyle={[
             styles.listContent,
             {paddingBottom: listBottomPadding},
+            // Always room to keep the category row pinned, even for a category with one dish or none.
+            railOffset > 0 && listViewportHeight > 0 && {minHeight: railOffset + listViewportHeight},
           ]}
         />
       </View>
@@ -1017,12 +1113,20 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   fixedHeader: {
-    backgroundColor: colors.white,
+    backgroundColor: homeTop.background,
     // Lets the food type circle rise over the list edge into the header.
     zIndex: 2,
   },
   feedContainer: {
     flex: 1,
+    // The screen behind is red for the status bar area; the feed itself stays white.
+    backgroundColor: colors.white,
+  },
+  topFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   feedList: {
     flex: 1,
@@ -1051,8 +1155,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.white,
     backgroundColor: colors.white,
+    ...WHITE_CARD_SHADOW,
   },
   searchFieldPressed: {
     backgroundColor: colors.surfaceMuted,
@@ -1069,10 +1174,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.iconSurface,
-    backgroundColor: colors.iconSurface,
+    borderColor: colors.white,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...WHITE_CARD_SHADOW,
   },
   filterButtonActive: {
     borderColor: colors.flameRed,
@@ -1091,6 +1197,7 @@ const styles = StyleSheet.create({
   },
   stickyCategoryWrap: {
     backgroundColor: colors.surfaceBase,
+    overflow: 'hidden',
   },
   emptyResultSpace: {
     backgroundColor: colors.surfaceBase,
@@ -1327,6 +1434,26 @@ const styles = StyleSheet.create({
   },
   footerLoader: {
     paddingVertical: spacing.lg,
+  },
+  backToTop: {
+    alignSelf: 'center',
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  backToTopPressed: {backgroundColor: colors.surfaceMuted},
+  backToTopText: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
   },
   skeletonWrap: {
     padding: spacing.md,

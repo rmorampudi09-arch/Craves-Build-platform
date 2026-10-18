@@ -1,7 +1,7 @@
 import React, {useRef, useState} from 'react';
 import {Modal, Pressable, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle} from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, fontWeight, homeTop, radius, spacing, touchTarget, typography} from '../../../design/tokens';
 import {VegMark} from '../../chefShell/components/ui/VegMark';
 import type {DiscoveryDietOption} from '../../discoveryFilters/state/discoveryFilterSlice';
 
@@ -35,6 +35,11 @@ interface HomeFoodTypeMenuProps {
   style?: StyleProp<ViewStyle>;
   /** Round, symbol-only button for the scrolled Home header. */
   compact?: boolean;
+  /**
+   * `card`: white with a soft shadow, on the red search band. `onRed`: see-through white circle
+   * with a white icon, matching the red header; a chosen diet turns it solid white so the mark shows.
+   */
+  appearance?: 'default' | 'card' | 'onRed';
   testID?: string;
 }
 
@@ -43,6 +48,7 @@ export function HomeFoodTypeMenu({
   onChange,
   style,
   compact = false,
+  appearance = 'default',
   testID = 'home-food-type-pill',
 }: HomeFoodTypeMenuProps) {
   const pillRef = useRef<View>(null);
@@ -82,7 +88,10 @@ export function HomeFoodTypeMenu({
         style={({pressed}) => [
           styles.pill,
           compact && styles.circle,
+          appearance === 'card' && styles.card,
+          appearance === 'onRed' && styles.onRed,
           tone && {backgroundColor: tone.soft, borderColor: tone.border},
+          tone && appearance === 'onRed' && styles.onRedChosen,
           pressed && styles.pillPressed,
           style,
         ]}
@@ -95,7 +104,7 @@ export function HomeFoodTypeMenu({
           <MaterialDesignIcons
             name="silverware-fork-knife"
             size={compact ? 20 : 16}
-            color={colors.flameRedAccessible}
+            color={appearance === 'onRed' ? homeTop.foreground : colors.flameRedAccessible}
           />
         )}
         {compact ? null : (
@@ -173,6 +182,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.iconSurface,
   },
   circle: {width: 44, height: 44, paddingHorizontal: 0, justifyContent: 'center'},
+  card: {
+    backgroundColor: colors.white,
+    borderColor: colors.white,
+    shadowColor: colors.espressoBrown,
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: {width: 0, height: 2},
+    elevation: 3,
+  },
+  onRed: {backgroundColor: homeTop.tile, borderColor: homeTop.tile},
+  onRedChosen: {backgroundColor: colors.white, borderColor: colors.white},
   // The 14 dp food mark reads small alone in a 44 dp circle.
   compactMark: {transform: [{scale: 1.3}]},
   pillPressed: {opacity: 0.78, transform: [{scale: 0.96}]},

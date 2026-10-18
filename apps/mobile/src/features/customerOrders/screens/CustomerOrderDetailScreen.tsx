@@ -291,6 +291,7 @@ export function CustomerOrderDetailScreen() {
     return (
       <ScreenShell keyboardAvoiding={false} testID="customer-order-detail-error">
         <TerminalState
+          illustration={offline ? 'offline' : 'loadError'}
           title={
             offline
               ? 'You appear to be offline'

@@ -435,6 +435,10 @@ describe('MealPlansScreen', () => {
     act(() => byLabel(root, 'My plans').props.onPress());
     expect(texts(root)).toContain('No meal plans yet');
     expect(cards(root)).toEqual([]);
+    // The empty state's own button, not the header icon with the same accessibility label.
+    const howItWorks = root.find(node => node.props.label === 'How meal plans work');
+    act(() => howItWorks.props.onPress());
+    expect(navigation.navigate).toHaveBeenLastCalledWith('MealPlanHowItWorks');
     const explore = root.findAll(
       node =>
         typeof node.type !== 'string' &&

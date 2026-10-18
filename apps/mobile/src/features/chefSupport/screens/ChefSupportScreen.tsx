@@ -11,6 +11,7 @@ import {
   ChefCard,
   ChefScreen,
   ChefTopBar,
+  EmptyState,
   ListGroup,
   ListRow,
   SectionHeader,
@@ -86,18 +87,16 @@ export function ChefSupportScreen() {
 
       <SectionHeader title="Your tickets" />
       <ReadState
-        comingSoon={{title: 'Your tickets are on their way', message: 'Your chats with Craves support will be listed here soon.'}}
+        comingSoon={{compact: true, title: 'Your tickets are on their way', message: 'Your chats with Craves support will be listed here soon.'}}
         query={cases.query}>
         {() =>
           tickets.length === 0 ? (
-            <View style={styles.none}>
-              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.noneTitle}>
-                No tickets yet
-              </Text>
-              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
-                When you write to Craves support, your chats are listed here.
-              </Text>
-            </View>
+            <EmptyState
+              illustration="support"
+              message="When you write to Craves support, your chats are listed here."
+              title="No support chats yet"
+              width={180}
+            />
           ) : (
             <ListGroup>
               {tickets.map(ticket => {
@@ -126,6 +125,4 @@ const styles = StyleSheet.create({
   muted: {color: colors.textSecondary, fontSize: typography.small, textAlign: 'center'},
   buttons: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, alignSelf: 'stretch'},
   button: {flex: 1},
-  none: {alignItems: 'center', gap: spacing.xxs, paddingVertical: spacing.md},
-  noneTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
 });

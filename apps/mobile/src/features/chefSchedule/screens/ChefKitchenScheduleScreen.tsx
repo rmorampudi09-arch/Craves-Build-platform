@@ -183,7 +183,7 @@ export function ChefKitchenScheduleScreen() {
       </ChefCard>
 
       <ReadState
-        comingSoon={{title: 'Opening hours are on their way', message: 'You will be able to set your weekly hours and special days here soon.'}}
+        comingSoon={{compact: true, title: 'Opening hours are on their way', message: 'You will be able to set your weekly hours and special days here soon.'}}
         query={schedule.query}>
         {() => (
           <>

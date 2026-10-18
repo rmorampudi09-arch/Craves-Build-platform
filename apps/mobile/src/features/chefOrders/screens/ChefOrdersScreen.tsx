@@ -10,6 +10,7 @@ import type {
   ChefTabParamList,
 } from '../../../app/navigation/types';
 import {colors, fontWeight, iconSize, radius, spacing, textDefaults, typography} from '../../../design/tokens';
+import type {EmptyIllustrationName} from '../../../shared/components/EmptyIllustration';
 import {Icon} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {useChefScheduledOrdersQueue} from '../../chefScheduledOrders/query/useChefScheduledOrdersQueue';
@@ -22,6 +23,7 @@ import {
   ChefScreen,
   ChefTopBar,
   ConfirmDialog,
+  EmptyState,
   OrderCard,
   StatusChip,
   useChefToast,
@@ -31,7 +33,7 @@ import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProv
 import {FilterChips} from '../components/FilterChips';
 import {KitchenStatusCard} from '../components/KitchenStatusCard';
 import {NotPickedUpSheet} from '../components/NotPickedUpSheet';
-import {CallButton, EmptyState, PartnerRow, PrepTimerLine} from '../components/OrderCardParts';
+import {CallButton, PartnerRow, PrepTimerLine} from '../components/OrderCardParts';
 import {PastOrdersList} from '../components/PastOrdersList';
 import {RejectOrderSheet} from '../components/RejectOrderSheet';
 import {ScheduledOrdersList} from '../components/ScheduledOrdersList';
@@ -55,10 +57,10 @@ type OrdersNavigation = CompositeNavigationProp<
   CompositeNavigationProp<BottomTabNavigationProp<ChefTabParamList, 'Orders'>, NativeStackNavigationProp<ChefProductStackParamList>>
 >;
 
-const EMPTY_COPY: Record<'PREPARING' | 'READY', {icon: 'meal' | 'delivery'; title: string; message: string}> = {
-  PREPARING: {icon: 'meal', title: 'Nothing cooking', message: 'Orders you accept show up here while you cook them.'},
+const EMPTY_COPY: Record<'PREPARING' | 'READY', {illustration: EmptyIllustrationName; title: string; message: string}> = {
+  PREPARING: {illustration: 'kitchenNoDishes', title: 'Nothing cooking', message: 'Orders you accept show up here while you cook them.'},
   READY: {
-    icon: 'delivery',
+    illustration: 'orders',
     title: 'Nothing waiting for pickup',
     message: 'When you mark an order ready, it waits here for the delivery partner.',
   },
@@ -269,7 +271,7 @@ export function ChefOrdersScreen() {
       return (
         <>
           <EmptyState
-            icon="bell"
+            illustration="newOrders"
             message="New orders show up here. Keep the app open while your kitchen is open."
             title="No new orders"
           />
@@ -283,8 +285,8 @@ export function ChefOrdersScreen() {
     if (list.length === 0 && (filter === 'PREPARING' || filter === 'READY')) {
       const copy = EMPTY_COPY[filter];
       return (
-        <EmptyState icon={copy.icon} message={copy.message} title={copy.title}>
-          <ChefActionButton label="See new orders" onPress={() => showFilter('NEW')} style={styles.emptyAction} tone="neutral" />
+        <EmptyState illustration={copy.illustration} message={copy.message} title={copy.title}>
+          <ChefActionButton label="See new orders" onPress={() => showFilter('NEW')} tone="neutral" />
         </EmptyState>
       );
     }
@@ -391,7 +393,6 @@ const styles = StyleSheet.create({
   secondary: {flex: 1},
   main: {flex: 2},
   grow: {flex: 1},
-  emptyAction: {alignSelf: 'stretch', marginTop: spacing.sm},
   tip: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -473,6 +473,7 @@ export function CustomerOrdersScreen() {
       }
       return (
         <TerminalState
+          illustration="loadError"
           title="Orders could not be loaded"
           description={queryError.message}
           actionLabel="Try again"

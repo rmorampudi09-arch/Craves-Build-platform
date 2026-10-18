@@ -66,7 +66,10 @@ export function MealPlanHistoryScreen({navigation}: Props) {
             }}
           />
         ) : past.length === 0 ? (
-          <TerminalState title={FILTERS.find(option => option.key === filter)!.empty} />
+          <TerminalState
+            illustration="mealPlans"
+            title={FILTERS.find(option => option.key === filter)!.empty}
+          />
         ) : (
           <View style={styles.list}>
             {past.map((subscription, index) => {

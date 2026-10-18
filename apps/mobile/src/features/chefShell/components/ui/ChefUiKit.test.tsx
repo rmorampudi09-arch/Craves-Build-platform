@@ -12,6 +12,7 @@ import {
   ChipTap,
   ComingSoon,
   ConfirmDialog,
+  EmptyState,
   ListGroup,
   ListRow,
   OrderCard,
@@ -350,5 +351,30 @@ describe('Chef UI kit', () => {
       expect.arrayContaining(['Preparing', '₹1,240', 'Today', '12% vs last week', 'inside', 'Reviews', 'Coming soon']),
     );
     expect(pressables('Card').length).toBeGreaterThan(0);
+  });
+
+  it('shows Coming soon as a full-page drawing by default, and as the small card when compact', () => {
+    const drawings = () => tree.root.findAll(n => n.props.testID === 'empty-illustration-comingSoon').length;
+    mount(<ComingSoon title="Reviews are on their way" message="Soon." />);
+    expect(drawings()).toBeGreaterThan(0);
+    expect(tree.root.findAllByType(ChefCard)).toHaveLength(0);
+    expect(allText()).toEqual(['Coming soon', 'Reviews are on their way', 'Soon.']);
+    act(() => tree.unmount());
+
+    mount(<ComingSoon compact title="Reviews are on their way" message="Soon." />);
+    expect(drawings()).toBe(0);
+    expect(tree.root.findAllByType(ChefCard)).toHaveLength(1);
+    expect(allText()).toEqual(expect.arrayContaining(['Coming soon', 'Reviews are on their way', 'Soon.']));
+  });
+
+  it('draws an empty state with its title, message and buttons, and no card', () => {
+    mount(
+      <EmptyState illustration="menu" title="No dishes yet" message="Add your first dish.">
+        <Text>BUTTON</Text>
+      </EmptyState>,
+    );
+    expect(tree.root.findAll(n => n.props.testID === 'empty-illustration-menu').length).toBeGreaterThan(0);
+    expect(tree.root.findAllByType(ChefCard)).toHaveLength(0);
+    expect(allText()).toEqual(['No dishes yet', 'Add your first dish.', 'BUTTON']);
   });
 });

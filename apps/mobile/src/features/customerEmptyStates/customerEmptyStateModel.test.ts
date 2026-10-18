@@ -1,5 +1,6 @@
 import {customerEmptyStateAdapters} from './customerEmptyStateAdapters';
 import {
+  comingSoonTitle,
   shouldNotifyConnectivityRecovery,
   type CustomerEmptyStateType,
 } from './domain/customerEmptyStateModel';
@@ -64,5 +65,14 @@ describe('P78 customer empty state system', () => {
     expect(shouldNotifyConnectivityRecovery('ONLINE', 'ONLINE')).toBe(false);
     expect(shouldNotifyConnectivityRecovery('UNKNOWN', 'ONLINE')).toBe(false);
     expect(shouldNotifyConnectivityRecovery('OFFLINE', 'OFFLINE')).toBe(false);
+  });
+});
+
+describe('comingSoonTitle', () => {
+  it('names a short area and falls back to "your area" for a full address line or nothing', () => {
+    expect(comingSoonTitle('Madhapur')).toBe('Coming soon to Madhapur');
+    expect(comingSoonTitle('Flat 3, Road 12, Madhapur, Hyderabad')).toBe('Coming soon to your area');
+    expect(comingSoonTitle('  ')).toBe('Coming soon to your area');
+    expect(comingSoonTitle(undefined)).toBe('Coming soon to your area');
   });
 });

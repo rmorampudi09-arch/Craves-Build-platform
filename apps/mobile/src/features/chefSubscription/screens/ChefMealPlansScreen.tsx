@@ -27,7 +27,7 @@ import {Icon, type IconName} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {getChefMenuPrimaryImageUrl} from '../../chefMenu/domain/chefMenuPresentation';
 import {useChefMenuModel} from '../../chefMenu/state/useChefMenuModel';
-import {ChefActionButton, ChefCard, ChefTopBar, ChipTap, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
+import {ChefActionButton, ChefCard, ChefTopBar, ChipTap, EmptyState, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
 import {summarizeSchedule, type ScheduleItemLike} from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
 import type {ChefMealPlan} from '../api/chefSubscriptionApi';
@@ -208,33 +208,6 @@ function PlanCard({
   );
 }
 
-function CenterMessage({
-  icon,
-  title,
-  message,
-  action,
-}: {
-  icon: IconName;
-  title: string;
-  message: string;
-  action: {label: string; onPress: () => void};
-}) {
-  return (
-    <ChefCard>
-      <View style={styles.center}>
-        <Icon color={colors.textSecondary} name={icon} size={iconSize.xxl} surface={false} />
-        <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.centerTitle}>
-          {title}
-        </Text>
-        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.centerMessage}>
-          {message}
-        </Text>
-        <ChefActionButton label={action.label} onPress={action.onPress} />
-      </View>
-    </ChefCard>
-  );
-}
-
 /**
  * The Meal plans side of the Menu tab. `hideHeader`: the Menu tab already draws the header, the
  * Dishes / Meal plans toggle and the "+ New plan" button above this list.
@@ -293,21 +266,18 @@ export function ChefMealPlansScreen({hideHeader = false}: {hideHeader?: boolean}
     );
   } else if (initialError) {
     body = (
-      <CenterMessage
-        action={{label: 'Try again', onPress: refresh}}
-        icon="wifi-off"
-        message="Check your connection and try again."
-        title="Couldn't load your meal plans"
-      />
+      <EmptyState illustration="loadError" message="Check your connection and try again." title="Couldn't load your meal plans">
+        <ChefActionButton label="Try again" onPress={refresh} />
+      </EmptyState>
     );
   } else if (plans.length === 0) {
     body = (
-      <CenterMessage
-        action={{label: 'Create a plan', onPress: () => navigation.navigate('ChefMealPlanEditor', {})}}
-        icon="meal"
-        message="Create a weekly or monthly plan from dishes on your menu."
-        title="No meal plans yet"
-      />
+      <EmptyState
+        illustration="chefMealPlans"
+        message="Create a weekly or monthly plan from dishes on your menu, so customers can get your food every day."
+        title="No meal plans yet">
+        <ChefActionButton label="Create a plan" onPress={() => navigation.navigate('ChefMealPlanEditor', {})} />
+      </EmptyState>
     );
   } else {
     body = (
@@ -324,12 +294,9 @@ export function ChefMealPlansScreen({hideHeader = false}: {hideHeader?: boolean}
           {pill('Drafts', 'DRAFTS', metrics.draft)}
         </ScrollView>
         {shown.length === 0 ? (
-          <CenterMessage
-            action={{label: 'Show all plans', onPress: () => setFilter('ALL')}}
-            icon="search-off"
-            message="Try another filter."
-            title="No plans here"
-          />
+          <EmptyState illustration="search" message="Try another filter." title="No plans here" width={160}>
+            <ChefActionButton label="Show all plans" onPress={() => setFilter('ALL')} />
+          </EmptyState>
         ) : (
           shown.map(plan => {
             const items = schedules[plan.id]?.items;
@@ -404,7 +371,4 @@ const styles = StyleSheet.create({
   links: {flexDirection: 'row', borderTopWidth: borderWidth.standard, borderTopColor: colors.border, paddingHorizontal: spacing.xs, paddingVertical: spacing.xxs},
   link: {flex: 1, minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs},
   linkText: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
-  center: {alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.md},
-  centerTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
-  centerMessage: {color: colors.textSecondary, fontSize: typography.body, textAlign: 'center', marginBottom: spacing.xs},
 });

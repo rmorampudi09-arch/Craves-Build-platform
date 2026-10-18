@@ -256,6 +256,7 @@ export function CustomerNotificationsScreen() {
     if (notificationsQuery.isError) {
       return (
         <TerminalState
+          illustration="loadError"
           title="Notifications could not be loaded"
           description="Check your connection and try again."
           actionLabel="Try again"
@@ -266,10 +267,9 @@ export function CustomerNotificationsScreen() {
     if (notices.length === 0) {
       return (
         <TerminalState
+          illustration="notifications"
           title="No notifications yet"
-          description="Order, offer, kitchen and account updates will appear here when they arrive."
-          actionLabel="Refresh"
-          onAction={refresh}
+          description="Order updates, offers and messages from Craves will show up here."
         />
       );
     }

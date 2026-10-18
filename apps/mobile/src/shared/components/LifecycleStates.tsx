@@ -12,6 +12,7 @@ import {
 } from '../../design/tokens';
 import {Button} from './Button';
 import type {ButtonVariant} from './Button';
+import {EmptyIllustration, type EmptyIllustrationName} from './EmptyIllustration';
 
 export interface RetryControlProps {
   label?: string;
@@ -114,6 +115,8 @@ export function OfflineNotice({
 }
 
 export interface TerminalStateProps {
+  /** A drawing above the title, for empty, offline and error screens. */
+  illustration?: EmptyIllustrationName;
   title: string;
   description?: string;
   actionLabel?: string;
@@ -126,6 +129,7 @@ export interface TerminalStateProps {
 }
 
 export function TerminalState({
+  illustration,
   title,
   description,
   actionLabel,
@@ -138,6 +142,11 @@ export function TerminalState({
 }: TerminalStateProps) {
   return (
     <View testID={testID} style={[styles.terminal, style]}>
+      {illustration ? (
+        <View style={styles.illustration}>
+          <EmptyIllustration name={illustration} />
+        </View>
+      ) : null}
       <Text
         allowFontScaling={textDefaults.allowFontScaling}
         accessibilityLiveRegion="polite"
@@ -239,6 +248,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
+  },
+  illustration: {
+    marginBottom: spacing.lg,
   },
   title: {
     color: colors.textPrimary,

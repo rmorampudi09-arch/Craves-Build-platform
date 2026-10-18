@@ -22,7 +22,10 @@ import {
   type NavigationProp,
   type RouteProp,
 } from '@react-navigation/native';
-import type {CustomerDishDetailStackParamList} from '../../../app/navigation/types';
+import type {
+  CustomerDishDetailStackParamList,
+  CustomerTabParamList,
+} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
@@ -432,6 +435,7 @@ export function CustomerKitchenProfileScreen() {
     return (
       <ScreenShell keyboardAvoiding={false} testID="customer-kitchen-profile-error">
         <TerminalState
+          illustration={offline ? 'offline' : 'loadError'}
           title={offline ? 'You appear to be offline' : 'Kitchen profile could not be loaded'}
           description={queryError?.message ?? 'Try again to load this kitchen.'}
           actionLabel="Try again"
@@ -792,12 +796,23 @@ export function CustomerKitchenProfileScreen() {
                 </View>
               ))
             ) : (
-              <View style={styles.emptyMenuCard}>
-                <Text style={styles.emptyMenuTitle}>No dishes available right now</Text>
-                <Text style={styles.emptyMenuBody}>
-                  Pull to refresh to check this kitchen again.
-                </Text>
-              </View>
+              <TerminalState
+                illustration="kitchenNoDishes"
+                title="No dishes right now"
+                description={`${kitchenName} hasn't put up today's dishes yet. Save this kitchen to find it again, or see other home chefs.`}
+                actionLabel="See other home chefs"
+                onAction={() =>
+                  navigation
+                    .getParent<NavigationProp<CustomerTabParamList>>()
+                    ?.navigate('Chefs', {screen: 'CustomerChefsRoot', pop: true})
+                }
+                secondaryActionLabel={
+                  kitchenFavorite || !favoriteKitchens.identityId ? undefined : 'Save this kitchen'
+                }
+                onSecondaryAction={handleKitchenFavorite}
+                style={styles.emptyMenu}
+                testID="customer-kitchen-empty-menu"
+              />
             )}
           </View>
         </ScrollView>
@@ -1166,23 +1181,10 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  emptyMenuCard: {
-    marginTop: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-  },
-  emptyMenuTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  emptyMenuBody: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    textAlign: 'center',
+  emptyMenu: {
+    flex: 0,
+    paddingHorizontal: spacing.none,
+    paddingVertical: spacing.lg,
   },
   pressed: {
     opacity: 0.82,

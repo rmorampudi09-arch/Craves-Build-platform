@@ -11,7 +11,7 @@ import {
 } from '../../../design/tokens';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
-import {ChefActionButton, ChipTap, ListGroup, ListRow, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
+import {ChefActionButton, ChipTap, EmptyState, ListGroup, ListRow, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
 import {formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 import {itemsSummary} from '../domain/chefOrderCard';
 import {
@@ -25,7 +25,6 @@ import {
   type PastOrderGroup,
 } from '../domain/chefOrderFilters';
 import {useChefOrderHistoryQuery} from '../query/chefOrderHistoryQueries';
-import {EmptyState} from './OrderCardParts';
 
 const CHIP_HEIGHT = 34;
 
@@ -107,13 +106,13 @@ export function PastOrdersList({orders, onOpenOrder, onSeeNew, onRefresh}: PastO
       ListEmptyComponent={
         merged.length === 0 ? (
           <EmptyState
-            icon="receipt"
+            illustration="orders"
             message="Delivered, rejected and cancelled orders show up here."
             title="No past orders yet">
-            <ChefActionButton label="See new orders" onPress={onSeeNew} style={styles.action} tone="neutral" />
+            <ChefActionButton label="See new orders" onPress={onSeeNew} tone="neutral" />
           </EmptyState>
         ) : (
-          <EmptyState icon="receipt" message="Try another filter." title={`No ${kindLabel} orders`} />
+          <EmptyState illustration="search" message="Try another filter." title={`No ${kindLabel} orders`} width={160} />
         )
       }
       ListFooterComponent={history.isFetchingNextPage ? <LoadingIndicator accessibilityLabel="Loading older orders" /> : null}
@@ -157,5 +156,4 @@ const styles = StyleSheet.create({
   chipTextOn: {color: colors.flameRedAccessible},
   group: {gap: spacing.xs},
   groupTitle: {paddingHorizontal: spacing.xxs, color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.bold},
-  action: {alignSelf: 'stretch', marginTop: spacing.sm},
 });

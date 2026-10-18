@@ -16,7 +16,7 @@ import {
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import type {ChefOperationalNotice} from '../api/chefOperationalApi';
-import {ChefActionButton, ChefCard, ChefScreen, ChefTopBar, useChefToast} from '../components/ui';
+import {ChefActionButton, ChefScreen, ChefTopBar, EmptyState, useChefToast} from '../components/ui';
 import {formatRelativeTime, formatTimeOfDay} from '../domain/chefFormat';
 import {useChefOperationalState} from '../state/ChefOperationalProvider';
 
@@ -161,26 +161,22 @@ export function ChefNotificationsScreen() {
       ) : null}
 
       {state.notificationsStatus === 'error' && notices.length === 0 ? (
-        <ChefCard>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyTitle}>
-            We couldn't load your notifications
-          </Text>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyMessage}>
-            Check your connection and try again.
-          </Text>
-          <ChefActionButton label="Try again" onPress={refresh} style={styles.retry} tone="neutral" />
-        </ChefCard>
+        <EmptyState illustration="loadError" message="Check your connection and try again." title="We couldn't load your notifications">
+          <ChefActionButton label="Try again" onPress={refresh} tone="neutral" />
+        </EmptyState>
       ) : null}
 
       {state.notificationsStatus === 'success' && visible.length === 0 ? (
-        <ChefCard>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyTitle}>
-            {filter === 'all' ? 'No notifications yet' : `No ${filterLabel} notifications`}
-          </Text>
-          <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyMessage}>
-            {filter === 'all' ? 'New orders, payouts and reviews will show up here.' : 'Try the All tab to see everything else.'}
-          </Text>
-        </ChefCard>
+        filter === 'all' ? (
+          <EmptyState illustration="notifications" message="New orders, payouts and reviews will show up here." title="No notifications yet" />
+        ) : (
+          <EmptyState
+            illustration="search"
+            message="Try the All tab to see everything else."
+            title={`No ${filterLabel} notifications`}
+            width={160}
+          />
+        )
       ) : null}
 
       {groups.map(group => (
@@ -273,7 +269,4 @@ const styles = StyleSheet.create({
   rowBody: {color: colors.textSecondary, fontSize: typography.small},
   rowTime: {marginTop: 2, color: colors.textSecondary, fontSize: typography.tiny},
   dot: {width: 9, height: 9, borderRadius: radius.pill, backgroundColor: colors.flameRedAccessible},
-  emptyTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
-  emptyMessage: {color: colors.textSecondary, fontSize: typography.small},
-  retry: {alignSelf: 'stretch', marginTop: spacing.sm},
 });

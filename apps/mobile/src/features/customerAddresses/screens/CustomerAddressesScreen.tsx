@@ -365,6 +365,7 @@ export function CustomerAddressesScreen() {
         addressesQuery.error instanceof CustomerAddressesContractError;
       return (
         <TerminalState
+          illustration="loadError"
           actionLabel="Try again"
           description={
             invalidContract

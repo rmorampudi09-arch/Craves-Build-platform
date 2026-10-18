@@ -11,7 +11,7 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Icon, type IconName} from '../../../shared/components/Icon';
+import {Icon} from '../../../shared/components/Icon';
 import type {ChefOperationalDeliveryPartner} from '../../chefShell/api/chefOperationalApi';
 import {dialablePhone} from '../domain/chefOrderDetailModel';
 import type {ChefPrepTimer} from '../domain/chefOrderTabs';
@@ -113,32 +113,6 @@ export function PartnerRow({partner}: {partner?: ChefOperationalDeliveryPartner}
   );
 }
 
-/** Centered icon, title and one line of help, with an optional next action under it. */
-export function EmptyState({
-  icon,
-  title,
-  message,
-  children,
-}: {
-  icon: IconName;
-  title: string;
-  message: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <View style={styles.empty}>
-      <Icon color={colors.borderStrong} name={icon} size={iconSize.xxl} surface={false} />
-      <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyTitle}>
-        {title}
-      </Text>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.emptyMessage}>
-        {message}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   timer: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   timerText: {fontSize: typography.small, fontWeight: fontWeight.bold},
@@ -185,7 +159,4 @@ const styles = StyleSheet.create({
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
   },
-  empty: {alignItems: 'center', gap: spacing.xs, paddingTop: spacing.xxl, paddingHorizontal: spacing.lg},
-  emptyTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
-  emptyMessage: {color: colors.textSecondary, fontSize: typography.body, textAlign: 'center'},
 });

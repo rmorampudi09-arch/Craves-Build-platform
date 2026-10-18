@@ -157,6 +157,15 @@ export function CustomerFavoritesScreen() {
     navigation.goBack();
   }, [navigation]);
 
+  const exploreHomeChefs = React.useCallback(() => {
+    const tabs = navigation.getParent<CustomerTabsNavigation>();
+    if (tabs) {
+      tabs.navigate('Chefs');
+      return;
+    }
+    navigation.goBack();
+  }, [navigation]);
+
   const refresh = React.useCallback(() => {
     Promise.all([
       favorites.refetch(),
@@ -528,6 +537,7 @@ export function CustomerFavoritesScreen() {
     if (favoriteChefs.isError || favoriteKitchens.isError) {
       return (
         <TerminalState
+          illustration="loadError"
           title="Saved home chefs could not be loaded"
           description="Check your connection and try again."
           actionLabel="Try again"
@@ -540,10 +550,11 @@ export function CustomerFavoritesScreen() {
     if (savedHomeCount === 0) {
       return (
         <TerminalState
+          illustration="saved"
           title="No saved home chefs yet"
-          description="Tap the heart on any kitchen to save its home chef here."
-          actionLabel="Browse meals"
-          onAction={browseMeals}
+          description="Tap the heart on any kitchen to keep its home chef here."
+          actionLabel="Explore home chefs"
+          onAction={exploreHomeChefs}
         />
       );
     }
@@ -602,6 +613,7 @@ export function CustomerFavoritesScreen() {
     </View>
   ) : favorites.isError ? (
     <TerminalState
+      illustration="loadError"
       title="Saved dishes could not be loaded"
       description="Check your connection and try again."
       actionLabel="Try again"
@@ -609,9 +621,10 @@ export function CustomerFavoritesScreen() {
     />
   ) : favoriteRows.length === 0 ? (
     <TerminalState
+      illustration="saved"
       title="No saved dishes yet"
-      description="Tap the heart on any dish to save it here."
-      actionLabel="Browse meals"
+      description="Tap the heart on any dish to keep it here for next time."
+      actionLabel="Browse dishes"
       onAction={browseMeals}
     />
   ) : savedCatalog.isPending ? (

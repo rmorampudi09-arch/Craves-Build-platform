@@ -599,10 +599,17 @@ export function CustomerCartScreen() {
     verifyServiceability();
   }, [verifyServiceability]);
 
-  const browseMeals = useCallback(() => {
+  const exploreHomeChefs = useCallback(() => {
     const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
-    if (tabs) tabs.navigate('Home');
+    if (tabs) tabs.navigate('Chefs');
     else navigation.goBack();
+  }, [navigation]);
+
+  // Meal plans live in the Home stack, whichever tab this cart is in.
+  const openMealPlans = useCallback(() => {
+    navigation
+      .getParent<BottomTabNavigationProp<CustomerTabParamList>>()
+      ?.navigate('Home', {screen: 'CustomerSettingsSubscription', initial: false});
   }, [navigation]);
 
   const handleMutationOutcome = useCallback((outcome: CartMutationOutcome) => {
@@ -1012,6 +1019,7 @@ export function CustomerCartScreen() {
     if (!model) {
       return (
         <TerminalState
+          illustration="loadError"
           title="Cart could not be loaded"
           description={visibleRefreshError ?? 'Refresh to load your current cart.'}
           actionLabel="Try again"
@@ -1045,7 +1053,8 @@ export function CustomerCartScreen() {
           <CustomerEmptyState
             model={customerEmptyStateAdapters.emptyCart()}
             onAction={actionId => {
-              if (actionId === 'BROWSE_MEALS') browseMeals();
+              if (actionId === 'BROWSE_MEALS') exploreHomeChefs();
+              else if (actionId === 'VIEW_MEAL_PLANS') openMealPlans();
             }}
             testID="customer-cart-empty"
           />

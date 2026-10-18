@@ -33,6 +33,8 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
+import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
+import {comingSoonTitle} from '../../customerEmptyStates/domain/customerEmptyStateModel';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
@@ -647,14 +649,12 @@ export function CustomerHomeScreen() {
     if (feed.locationRequired) {
       return (
         <View style={styles.noLocationCard}>
-          <View style={styles.noLocationIcon}>
-            <Icon color={colors.flameRed} name="location" size={36} surface={false} />
-          </View>
+          <EmptyIllustration name="location" />
           <Text accessibilityRole="header" style={styles.noLocationTitle}>
             Where should Craves deliver?
           </Text>
           <Text style={styles.noLocationBody}>
-            Home kitchens, dishes and delivery depend on your address.
+            Home chefs, dishes and delivery times depend on your address.
           </Text>
           <View style={styles.noLocationActions}>
             <Button
@@ -699,6 +699,7 @@ export function CustomerHomeScreen() {
       }
       return (
         <TerminalState
+          illustration="loadError"
           title="Meals could not be loaded"
           description={queryError.message}
           actionLabel="Try again"
@@ -718,6 +719,7 @@ export function CustomerHomeScreen() {
       if (searchActive && feed.hasNextPage) {
         return (
           <TerminalState
+            illustration="search"
             title="No match in the loaded results yet"
             description="More live nearby results are available. Search the next page or clear your search."
             actionLabel="Search next page"
@@ -744,6 +746,7 @@ export function CustomerHomeScreen() {
       }
       return (
         <TerminalState
+          illustration="search"
           title="No matching meals"
           description="Try a different category or filter."
           actionLabel="Clear filters"
@@ -753,12 +756,11 @@ export function CustomerHomeScreen() {
     }
     return (
       <TerminalState
-        title="No meals nearby yet"
-        description="Pull to refresh or choose another saved location."
-        actionLabel="Refresh"
-        onAction={retryFeed}
-        secondaryActionLabel="Change location"
-        onSecondaryAction={() => setLocationSelectorVisible(true)}
+        illustration="comingSoonArea"
+        title={comingSoonTitle(selectedLocation?.displayName)}
+        description="Home chefs don't cook near this address yet. Try another address."
+        actionLabel="Change delivery address"
+        onAction={() => setLocationSelectorVisible(true)}
       />
     );
   })();
@@ -994,14 +996,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.white,
     ...elevation.card,
-  },
-  noLocationIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   noLocationTitle: {
     color: colors.textPrimary,

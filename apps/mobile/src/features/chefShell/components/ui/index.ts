@@ -7,6 +7,7 @@ export * from './ChipTap';
 export * from './ChefTopBar';
 export * from './ComingSoon';
 export * from './ConfirmDialog';
+export * from './EmptyState';
 export * from './ListRow';
 export * from './OrderCard';
 export * from './SectionHeader';

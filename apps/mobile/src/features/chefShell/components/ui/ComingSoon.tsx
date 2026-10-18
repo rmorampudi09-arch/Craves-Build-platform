@@ -3,10 +3,24 @@ import {StyleSheet, Text, View} from 'react-native';
 import {colors, fontWeight, iconSize, radius, spacing, textDefaults, typography} from '../../../../design/tokens';
 import {Icon} from '../../../../shared/components/Icon';
 import {ChefCard} from './ChefCard';
+import {EmptyState} from './EmptyState';
 import {StatusChip} from './StatusChip';
 
-/** Inline card shown where a feature is not published for the app yet. Never an error, never a retry. */
-export function ComingSoon({title, message}: {title: string; message: string}) {
+/**
+ * Shown where a feature is not published for the app yet. Never an error, never a retry.
+ * Full page by default; `compact` keeps the small card for a section that sits among others on the page.
+ */
+export function ComingSoon({title, message, compact = false}: {title: string; message: string; compact?: boolean}) {
+  if (!compact) {
+    return (
+      <EmptyState
+        badge={<StatusChip label="Coming soon" tone="soon" />}
+        illustration="comingSoon"
+        message={message}
+        title={title}
+      />
+    );
+  }
   return (
     <ChefCard>
       <View style={styles.row}>

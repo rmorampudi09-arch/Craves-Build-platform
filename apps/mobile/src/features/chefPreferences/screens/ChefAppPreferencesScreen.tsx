@@ -106,7 +106,7 @@ export function ChefAppPreferencesScreen() {
         <ListRow right={comingSoonChip} subtitle="Loud ring until you open the order" title="New order sound" />
       </ListGroup>
       <ReadState
-        comingSoon={{title: 'Notification settings are on their way', message: 'You will be able to choose how Craves reaches you here soon.'}}
+        comingSoon={{compact: true, title: 'Notification settings are on their way', message: 'You will be able to choose how Craves reaches you here soon.'}}
         query={prefs.query}>
         {() => (
           <ListGroup>
@@ -119,7 +119,7 @@ export function ChefAppPreferencesScreen() {
 
       <SectionHeader title="Orders" />
       <ReadState
-        comingSoon={{title: 'Order settings are on their way', message: 'Automatic acceptance and a default cooking time will be here soon.'}}
+        comingSoon={{compact: true, title: 'Order settings are on their way', message: 'Automatic acceptance and a default cooking time will be here soon.'}}
         query={settings.query}>
         {() => (
           <ListGroup>

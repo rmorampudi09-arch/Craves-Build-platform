@@ -493,10 +493,13 @@ export function MealPlansScreen({navigation}: Props) {
         />
       ) : current.length === 0 ? (
         <TerminalState
+          illustration="mealPlans"
           title="No meal plans yet"
-          description="Pick a weekly, 14-day or monthly plan from a home chef near you."
+          description="Get home food every day from a chef near you. Pick a weekly, 14-day or monthly plan."
           actionLabel="Explore plans"
           onAction={() => setTab('explore')}
+          secondaryActionLabel="How meal plans work"
+          onSecondaryAction={() => navigation.navigate('MealPlanHowItWorks')}
         />
       ) : (
         current.map(subscription => (
@@ -558,6 +561,7 @@ export function MealPlansScreen({navigation}: Props) {
               <ListSkeleton count={3} />
             ) : plansQuery.isError ? null : (
               <TerminalState
+                illustration={hasLocation ? 'comingSoonArea' : 'location'}
                 title={
                   !hasLocation
                     ? 'Choose a delivery location to see meal plans near you'
@@ -567,7 +571,9 @@ export function MealPlansScreen({navigation}: Props) {
             )
           }
           ListFooterComponent={
-            noMatches ? <TerminalState title={`No plans match "${searchText.trim()}".`} /> : null
+            noMatches ? (
+              <TerminalState illustration="search" title={`No plans match "${searchText.trim()}".`} />
+            ) : null
           }
           ListHeaderComponent={header}
           renderItem={({item}) => (

@@ -6,7 +6,7 @@ Owner's call (14 Oct): recruit Hyderabad home chefs as fast as possible, with po
 
 | Part | Who | How |
 |---|---|---|
-| Feed carousels and images | Claude, automatic | A scheduled routine runs at 11:23 and 20:23 IST. It publishes the due slots in [schedule.json](schedule.json) through Windsor.ai, logs them in [published.csv](published.csv), and commits. Images are served from this public repo (`assets/`). |
+| Feed carousels and images | Claude, automatic | A scheduled routine runs at 11:23 and 20:23 IST, with catch-up runs at 13:23 and 22:23 that publish anything a missed run left undone (added 19 Oct after six runs were lost to session restarts). It publishes the due slots in [schedule.json](schedule.json) through Windsor.ai, logs them in [published.csv](published.csv), and commits. Images are served from this public repo (`assets/`). |
 | Stories (ST1, ST2, ST3, ST6, ST7, ST8) | Claude, automatic | Same routine. The API can't add link stickers, so the last frame says "craves.in/chef/application, link in bio". |
 | Interactive stories (ST4 poll, ST5 question box, ST9 slider) | Your team, from the app | Post the frames in `assets/ST4`, `assets/ST5` and `assets/ST9` and add the sticker on the blank frame (text is in [stories.json](stories.json)). Add a link sticker on the last frame. Any day works. |
 | CHEF comments | Claude, automatic | At every run, Claude replies publicly to new CHEF comments with the apply link, answers questions from the reply bank, hides spam, and logs everything in [replied.csv](replied.csv). It cannot send DMs. |
@@ -38,7 +38,7 @@ Owner's call (14 Oct): recruit Hyderabad home chefs as fast as possible, with po
 | Thu 22 (20:23) to Wed 28, 11:23 and 20:23 | Team reels, plus any LEARN graphics | One story sequence per slot, rotating ST6, ST7, ST8, ST1, ST2, ST3 |
 | Sun 25, 20:23 | Full LEARN | |
 
-The routine turns itself off after the last slot (Wed 28 Oct, 20:23).
+The routine turns itself off after the last catch-up run (Wed 28 Oct, 22:23).
 
 ## What the team must do
 

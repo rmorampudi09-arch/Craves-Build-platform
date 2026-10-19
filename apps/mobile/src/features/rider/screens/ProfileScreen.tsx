@@ -77,6 +77,7 @@ export function ProfileScreen() {
                   <View style={riderStyles.half}>
                     <Body>{doc.label}</Body>
                     {doc.expiresOn ? <Label>{p.expires(formatDay(doc.expiresOn))}</Label> : null}
+                    {doc.reason ? <Body>{doc.reason}</Body> : null}
                   </View>
                   <Badge label={label} tone={badge.tone} />
                 </View>

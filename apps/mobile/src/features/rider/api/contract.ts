@@ -36,6 +36,8 @@ export interface RiderProfile {
     label: string;
     status: 'VERIFIED' | 'PENDING' | 'REJECTED' | 'EXPIRED';
     expiresOn?: string;
+    /** Ops's reason for a rejection, shown to the rider. */
+    reason?: string;
   }[];
   payoutAccountMasked?: string;
   insurance?: {label: string; claimPhone: string; claimStatus?: string};

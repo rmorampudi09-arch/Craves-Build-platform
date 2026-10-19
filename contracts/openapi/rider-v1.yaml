@@ -147,7 +147,7 @@ components:
         vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}}}
         documents:
           type: array
-          items: {type: object, required: [label, status], properties: {label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED]}, expiresOn: {type: string, format: date}}}
+          items: {type: object, required: [label, status], properties: {label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
         payoutAccountMasked: {type: string}
         insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
     Terms:

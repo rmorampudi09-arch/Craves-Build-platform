@@ -28,13 +28,14 @@ Owner's call (14 Oct): recruit Hyderabad home chefs as fast as possible, with po
 | Sat 17, 20:23 | "Packaging free + pickup" reel | ST1 |
 | Sun 18, 11:23 | C6 FAQ (run missed; published 20:34) | ST2 (skipped, late) |
 | Sun 18, 20:23 | LEARN (C3-TE moved to Wed 21, 20:23) | ST3 (published) |
-| Mon 19, 11:23 | C5 "What Craves does for you" | ST6 |
-| Mon 19, 20:23 | I1 "Comment CHEF" poster | ST7 |
+| Mon 19, 11:23 | (run missed; C5 failed twice at 20:26 and 20:38, moved to Thu 22) | ST6 (skipped, late) |
+| Mon 19, 20:23 | I1 "Comment CHEF" poster (published) | ST7 (published) |
 | Tue 20, 11:23 | C2 "How it works" | ST8 |
 | Tue 20, 20:23 | I2 "Packaging free once approved" | ST1 |
 | Wed 21, 11:23 | C4 FSSAI 2026 | ST2 |
 | Wed 21, 20:23 | C3-TE (Telugu-script test) | ST3 |
-| Thu 22 to Wed 28, 11:23 and 20:23 | Team reels, plus any LEARN graphics | One story sequence per slot, rotating ST6, ST7, ST8, ST1, ST2, ST3 |
+| Thu 22, 11:23 | C5 "What Craves does for you" | ST6 |
+| Thu 22 (20:23) to Wed 28, 11:23 and 20:23 | Team reels, plus any LEARN graphics | One story sequence per slot, rotating ST6, ST7, ST8, ST1, ST2, ST3 |
 | Sun 25, 20:23 | Full LEARN | |
 
 The routine turns itself off after the last slot (Wed 28 Oct, 20:23).

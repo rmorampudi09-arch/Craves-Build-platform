@@ -218,6 +218,20 @@
    "slot": "2026-10-19T11:23",
    "items": [
     {
+     "type": "carousel",
+     "piece": "C5",
+     "files": [
+      "C5/C5-01.jpg",
+      "C5/C5-02.jpg",
+      "C5/C5-03.jpg",
+      "C5/C5-04.jpg",
+      "C5/C5-05.jpg",
+      "C5/C5-06.jpg",
+      "C5/C5-07.jpg"
+     ],
+     "caption": "Mee menu, mee prices. Pickup Craves arrange chestundi, approve ayyaka packaging free.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
+    },
+    {
      "type": "story",
      "piece": "ST6",
      "files": [
@@ -364,20 +378,6 @@
   {
    "slot": "2026-10-22T11:23",
    "items": [
-    {
-     "type": "carousel",
-     "piece": "C5",
-     "files": [
-      "C5/C5-01.jpg",
-      "C5/C5-02.jpg",
-      "C5/C5-03.jpg",
-      "C5/C5-04.jpg",
-      "C5/C5-05.jpg",
-      "C5/C5-06.jpg",
-      "C5/C5-07.jpg"
-     ],
-     "caption": "Mee menu, mee prices. Pickup Craves arrange chestundi, approve ayyaka packaging free.\nCustomers kosam Craves launching soon.\nComment CHEF, we'll reply with the link.\nApply: craves.in/chef/application (link in bio)\n\n#HyderabadHomeChef #HomeChefs #HomeChef #HyderabadFood #Hyderabad #HomemadeFood #IntiVantalu #ManaVantalu #HomeKitchen #Craves"
-    },
     {
      "type": "story",
      "piece": "ST6",

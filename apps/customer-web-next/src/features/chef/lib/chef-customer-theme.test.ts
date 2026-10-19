@@ -4,7 +4,7 @@ import test from "node:test";
 import postcss from "postcss";
 
 const layout = readFileSync(
-  new URL("../../../app/chef/layout.tsx", import.meta.url),
+  new URL("../components/chef-shell.tsx", import.meta.url),
   "utf8",
 );
 const header = readFileSync(
@@ -15,7 +15,7 @@ const navigation = readFileSync(
   new URL("../components/chef-workspace-navigation.tsx", import.meta.url),
   "utf8",
 );
-const moreHub = readFileSync(new URL("../../../app/chef/profile/page.tsx", import.meta.url), "utf8");
+const moreHub = readFileSync(new URL("../components/chef-more-hub.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(
   new URL("../components/chef-mode-dashboard.tsx", import.meta.url),
   "utf8",
@@ -31,11 +31,11 @@ const kitchenPage = readFileSync(
 const styles = readFileSync(new URL("../../../shared/styles/styles.css", import.meta.url), "utf8");
 const chefTheme = postcss.parse(readFileSync(new URL("../styles/chef-mode.css", import.meta.url), "utf8"));
 
+// Meal plans are reached through the Menu tab (?view=plans), not listed again in More.
 const workspaceRoutes = [
-  "/chef/application",
   "/chef/kitchen",
+  "/chef/hours",
   "/chef/menu",
-  "/chef/meal-plans",
   "/chef/orders",
   "/chef/earnings",
   "/chef/operations",
@@ -58,6 +58,8 @@ const deferredDashboardRoutes = [
 test("every chef route inherits the responsive Craves workspace shell", () => {
   assert.match(layout, /className="chef-panel-theme[^"]*min-h-screen/);
   assert.match(layout, /<ChefAppHeader\/>/);
+  // The page carries the chef's language, so screen readers and Telugu/Kannada text shaping follow it.
+  assert.match(layout, /lang=\{language\}/);
   assert.match(layout, /ChefWorkspaceNavigation/);
   assert.match(header, /className="chef-panel-header"/);
   assert.match(header, /className="chef-header-bar"/);

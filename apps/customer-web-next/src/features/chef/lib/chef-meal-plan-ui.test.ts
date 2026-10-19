@@ -14,7 +14,8 @@ test("Chef meal plans have the app's three-step editor", () => {
   assert.match(editor, /Next: Review/);
   assert.match(editor, /Submit for approval/);
   assert.match(editor, /Save as draft\?/);
-  assert.match(editor, /Copy \$\{dayLong\} to all weekdays/);
+  assert.match(editor, /copyDay: "Copy \{day\} to all weekdays"/);
+  assert.match(editor, /format\(text\.copyDay, \{ day: dayLong \}\)/);
   assert.match(manager, /New plan/);
 });
 
@@ -43,20 +44,33 @@ test("Chef meal plan controls are keyboard and screen-reader friendly", () => {
   assert.match(editor, /role="tablist"/);
   assert.match(editor, /onKeyDown=\{onDayKey\}/);
   assert.match(editor, /aria-live="polite"/);
-  assert.match(editor, /aria-label=\{`Remove \$\{label\.toLowerCase\(\)\}`\}/);
+  assert.match(editor, /removeMeal: "Remove \{meal\}"/);
+  assert.match(editor, /aria-label=\{format\(text\.removeMeal, \{ meal: label\.toLowerCase\(\) \}\)\}/);
   assert.match(manager, /role="status"/);
 });
 
-test("Chef meal plans open from More and from the Menu tab", () => {
-  const more = source("../../../app/chef/profile/page.tsx");
-  assert.match(more, /href: "\/chef\/meal-plans"/);
-  assert.match(more, /label: "Meal plans"/);
+test("Chef meal plans live in the Menu tab; the old page leads back to it", () => {
+  // More no longer lists Meal plans: one place to find them.
+  assert.doesNotMatch(source("../components/chef-more-hub.tsx"), /\/chef\/meal-plans/);
   assert.match(page, /<ChefSubscriptionPlanManager \/>/);
   assert.match(
     source("../../../app/chef/menu/page.tsx"),
     /<ChefSubscriptionPlanManager inMenu \/>/,
   );
   assert.match(source("../components/chef-menu-views.tsx"), /\/chef\/menu\?view=plans/);
+  assert.match(manager, /back=\{\{ href: "\/chef\/menu\?view=plans", label: "Menu" \}\}/);
+});
+
+test("Daily limits opens from the Menu tab and goes back where it was opened", () => {
+  assert.match(source("../components/chef-menu-manager.tsx"), /href="\/chef\/capacity\?from=menu"/);
+  const capacity = source("../../../app/chef/capacity/page.tsx");
+  for (const back of [
+    '{ href: "/chef/menu?view=plans", label: "Menu" }',
+    '{ href: "/chef/meal-plans", label: "Meal plans" }',
+    '{ href: "/chef/menu", label: "Menu" }',
+    '{ href: "/chef/profile", label: "More" }',
+  ])
+    assert.ok(capacity.includes(back), back);
 });
 
 test("Chef capacity contract supports recurring and date-specific rules", () => {

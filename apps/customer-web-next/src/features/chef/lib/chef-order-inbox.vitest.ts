@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Synthetic orders for a fixture kitchen; no backend is contacted.
 import { createElement } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderInbox } from "../components/chef-order-inbox";
 import { resetOrderAlertsForTests } from "./chef-order-alert";
@@ -60,27 +60,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("Done orders", () => {
-  it("adds older orders page by page and keeps the live copy of an order in both", async () => {
-    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = Response.json({
-      orders: [order(5, "OUT_FOR_DELIVERY"), order(3), order(4, "CHEF_REJECTED")],
+describe("Past orders", () => {
+  it("adds older orders page by page, every finished kind, and keeps the live copy of an order in both", async () => {
+    pages["/api/chef/orders/page?limit=20"] = Response.json({
+      orders: [order(5, "OUT_FOR_DELIVERY"), order(3), order(4, "CHEF_REJECTED"), order(2, "PAYMENT_PENDING")],
       nextCursor: "c2",
       hasMore: true,
     });
-    pages["/api/chef/orders/page?limit=20&cursor=c2&status=DELIVERED"] = Response.json({
+    pages["/api/chef/orders/page?limit=20&cursor=c2"] = Response.json({
       orders: [order(1)],
       nextCursor: null,
       hasMore: false,
     });
     render(createElement(ChefOrderInbox));
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }, slow));
-    await waitFor(() => expect(rows()).toEqual(["0BDE0105", "0BDE0103", "0BDE0101"]));
-    expect(screen.getByRole("button", { name: /^Done/ }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(rows()).toEqual(["0BDE0105", "0BDE0104", "0BDE0103", "0BDE0101"]));
+    expect(screen.getByRole("button", { name: /^Past/ }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 
   it("keeps the recent orders and says older ones are coming soon while the server has no paging", async () => {
-    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = Response.json(
+    pages["/api/chef/orders/page?limit=20"] = Response.json(
       { code: "FEATURE_NOT_AVAILABLE" },
       { status: 404 },
     );
@@ -91,7 +91,7 @@ describe("Done orders", () => {
 
   it("offers Try again when a page fails", async () => {
     let attempts = 0;
-    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = () =>
+    pages["/api/chef/orders/page?limit=20"] = () =>
       ++attempts === 1
         ? Response.json({ code: "CHEF_ORDER_HISTORY_FAILED" }, { status: 503 })
         : Response.json({ orders: [order(2)], nextCursor: null, hasMore: false });
@@ -102,7 +102,7 @@ describe("Done orders", () => {
 
   it("reaches past orders when nothing is live", async () => {
     live = [];
-    pages["/api/chef/orders/page?limit=20&status=DELIVERED"] = Response.json({
+    pages["/api/chef/orders/page?limit=20"] = Response.json({
       orders: [order(2)],
       nextCursor: null,
       hasMore: false,
@@ -110,5 +110,25 @@ describe("Done orders", () => {
     render(createElement(ChefOrderInbox));
     fireEvent.click(await screen.findByRole("button", { name: "See past orders" }, slow));
     await waitFor(() => expect(rows()).toEqual(["0BDE0102"]));
+  });
+});
+
+describe("tabs", () => {
+  it("are New, Cooking, Ready and Past, open on the first with orders, and count no unpaid order", async () => {
+    live = [order(9, "PAYMENT_PENDING"), order(8, "READY_FOR_PICKUP"), order(7, "REFUNDED"), order(6, "CANCELLED"), order(5)];
+    pages["/api/chef/orders/page?limit=20"] = Response.json({ orders: [], nextCursor: null, hasMore: false });
+    render(createElement(ChefOrderInbox));
+    const tabs = await screen.findByRole("navigation", { name: "Choose which orders to see" }, slow);
+    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready1", "Past3"]);
+    expect(screen.getByRole("button", { name: /^Ready/ }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
+    await waitFor(() => expect(rows()).toEqual(["0BDE0107", "0BDE0106", "0BDE0105"]), slow);
+  });
+
+  it("shows the empty kitchen when the only orders are unpaid", async () => {
+    live = [order(6, "PAYMENT_PENDING"), order(7, "PAID")];
+    render(createElement(ChefOrderInbox));
+    expect(await screen.findByRole("heading", { name: "No orders right now" }, slow)).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Choose which orders to see" })).toBeNull();
   });
 });

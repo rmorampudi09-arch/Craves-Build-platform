@@ -4,9 +4,32 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { format, messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 
+// Month names stay English in every language, as Indian calendars print them.
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const WEEKDAYS = [["S", "Sunday"], ["M", "Monday"], ["T", "Tuesday"], ["W", "Wednesday"], ["T", "Thursday"], ["F", "Friday"], ["S", "Saturday"]] as const;
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+const TEXT = messages({
+  en: {
+    choose: "Choose your date of birth", title: "Date of birth", hint: "Pick the year you were born, then the month and the day.",
+    cancel: "Cancel", done: "Done", year: "Year", otherYear: ", choose another year", monthIn: "Month in {year}",
+    previous: "Previous month, {month}", next: "Next month, {month}",
+    sun: "S", mon: "M", tue: "T", wed: "W", thu: "T", fri: "F", sat: "S",
+  },
+  te: {
+    choose: "పుట్టిన తేదీ ఎంచుకోండి", title: "పుట్టిన తేదీ", hint: "ముందు మీరు పుట్టిన సంవత్సరం, తర్వాత నెల, తర్వాత రోజు ఎంచుకోండి.",
+    cancel: "రద్దు చేయండి", done: "పూర్తయింది", year: "సంవత్సరం", otherYear: ", వేరే సంవత్సరం ఎంచుకోండి", monthIn: "{year} లో నెల",
+    previous: "మునుపటి నెల, {month}", next: "తర్వాతి నెల, {month}",
+    sun: "ఆది", mon: "సోమ", tue: "మంగళ", wed: "బుధ", thu: "గురు", fri: "శుక్ర", sat: "శని",
+  },
+  kn: {
+    choose: "ಹುಟ್ಟಿದ ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ", title: "ಹುಟ್ಟಿದ ದಿನಾಂಕ", hint: "ಮೊದಲು ನೀವು ಹುಟ್ಟಿದ ವರ್ಷ, ನಂತರ ತಿಂಗಳು, ನಂತರ ದಿನ ಆಯ್ಕೆಮಾಡಿ.",
+    cancel: "ರದ್ದುಮಾಡಿ", done: "ಮುಗಿದಿದೆ", year: "ವರ್ಷ", otherYear: ", ಬೇರೆ ವರ್ಷ ಆಯ್ಕೆಮಾಡಿ", monthIn: "{year} ರ ತಿಂಗಳು",
+    previous: "ಹಿಂದಿನ ತಿಂಗಳು, {month}", next: "ಮುಂದಿನ ತಿಂಗಳು, {month}",
+    sun: "ಭಾನು", mon: "ಸೋಮ", tue: "ಮಂಗಳ", wed: "ಬುಧ", thu: "ಗುರು", fri: "ಶುಕ್ರ", sat: "ಶನಿ",
+  },
+});
 const EASE = [0.22, 1, 0.36, 1] as const;
 // The sheet renders outside the application's styles: every button names its own look.
 const PLAIN = "!border-0 !shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A] focus-visible:ring-offset-1";
@@ -49,6 +72,7 @@ export function DateOfBirthPicker({
   describedBy?: string;
   onChange: (value: string) => void;
 }) {
+  const text = useText(TEXT);
   const latest = parse(max)!;
   const earliest = parse(min)!;
   const picked = parse(value);
@@ -141,7 +165,7 @@ export function DateOfBirthPicker({
         className="cob-input cob-date-trigger"
       >
         <span id={valueId} className={picked ? "" : "cob-date-placeholder"}>
-          {picked ? spoken(picked) : "Choose your date of birth"}
+          {picked ? spoken(picked) : text.choose}
         </span>
         <CalendarDays size={20} aria-hidden="true" />
       </button>
@@ -149,12 +173,12 @@ export function DateOfBirthPicker({
       <Sheet
         open={open}
         onOpenChange={setOpen}
-        title="Date of birth"
-        description={draft ? spoken(draft) : "Pick the year you were born, then the month and the day."}
+        title={text.title}
+        description={draft ? spoken(draft) : text.hint}
         footer={
           <>
             <button type="button" className={secondaryActionClass} onClick={() => setOpen(false)}>
-              Cancel
+              {text.cancel}
             </button>
             <button
               type="button"
@@ -166,7 +190,7 @@ export function DateOfBirthPicker({
                 setOpen(false);
               }}
             >
-              Done
+              {text.done}
             </button>
           </>
         }
@@ -174,8 +198,8 @@ export function DateOfBirthPicker({
         <div className="mt-4 min-h-[21.5rem]">
           {view === "year" ? (
             <motion.div key="year" initial={enter} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.18, ease: EASE }}>
-              <p className="mb-2 text-sm font-semibold text-[#6B6B6B]">Year</p>
-              <div ref={yearList} role="group" aria-label="Year" className="grid max-h-[19rem] grid-cols-4 gap-2 overflow-y-auto overscroll-contain pr-1">
+              <p className="mb-2 text-sm font-semibold text-[#6B6B6B]">{text.year}</p>
+              <div ref={yearList} role="group" aria-label={text.year} className="grid max-h-[19rem] grid-cols-4 gap-2 overflow-y-auto overscroll-contain pr-1">
                 {years.map((year) => {
                   const current = year === (draft?.year ?? shown.year);
                   // Filled only once chosen; the year being browsed (or the starting point) is outlined.
@@ -207,9 +231,9 @@ export function DateOfBirthPicker({
               <button type="button" onClick={() => setView("year")} className={`${PLAIN} mb-3 inline-flex min-h-11 items-center gap-1 rounded-full !bg-[#F1F3F5] px-4 text-base font-bold tabular-nums !text-[#1A1A1A]`}>
                 {shown.year}
                 <ChevronDown size={18} aria-hidden="true" />
-                <span className="sr-only">, choose another year</span>
+                <span className="sr-only">{text.otherYear}</span>
               </button>
-              <div role="group" aria-label={`Month in ${shown.year}`} className="grid grid-cols-3 gap-2">
+              <div role="group" aria-label={format(text.monthIn, { year: shown.year })} className="grid grid-cols-3 gap-2">
                 {MONTHS.map((name, month) => {
                   const enabled = monthAllowed(shown.year, month);
                   const current = draft?.year === shown.year && draft.month === month;
@@ -241,7 +265,7 @@ export function DateOfBirthPicker({
               <div className="mb-2 flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  aria-label={`Previous month, ${MONTHS[prevMonth.getMonth()]} ${prevMonth.getFullYear()}`}
+                  aria-label={format(text.previous, { month: `${MONTHS[prevMonth.getMonth()]} ${prevMonth.getFullYear()}` })}
                   disabled={!monthAllowed(prevMonth.getFullYear(), prevMonth.getMonth())}
                   onClick={() => step(-1)}
                   className={`${PLAIN} grid h-11 w-11 place-items-center rounded-full !bg-transparent !text-[#1A1A1A] hover:!bg-[#F1F3F5] disabled:!text-[#B9BEC5]`}
@@ -255,11 +279,11 @@ export function DateOfBirthPicker({
                 >
                   <span aria-live="polite">{MONTHS[shown.month]} {shown.year}</span>
                   <ChevronDown size={18} aria-hidden="true" />
-                  <span className="sr-only">, choose another year</span>
+                  <span className="sr-only">{text.otherYear}</span>
                 </button>
                 <button
                   type="button"
-                  aria-label={`Next month, ${MONTHS[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`}
+                  aria-label={format(text.next, { month: `${MONTHS[nextMonth.getMonth()]} ${nextMonth.getFullYear()}` })}
                   disabled={!monthAllowed(nextMonth.getFullYear(), nextMonth.getMonth())}
                   onClick={() => step(1)}
                   className={`${PLAIN} grid h-11 w-11 place-items-center rounded-full !bg-transparent !text-[#1A1A1A] hover:!bg-[#F1F3F5] disabled:!text-[#B9BEC5]`}
@@ -268,8 +292,8 @@ export function DateOfBirthPicker({
                 </button>
               </div>
               <div className="grid grid-cols-7 text-center text-xs font-semibold text-[#6B6B6B]" aria-hidden="true">
-                {WEEKDAYS.map(([letter, name]) => (
-                  <span key={name} className="py-1.5">{letter}</span>
+                {WEEKDAYS.map((day) => (
+                  <span key={day} className="py-1.5">{text[day]}</span>
                 ))}
               </div>
               <div className="overflow-hidden">

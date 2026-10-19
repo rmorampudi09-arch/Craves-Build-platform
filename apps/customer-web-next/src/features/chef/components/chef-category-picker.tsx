@@ -4,7 +4,24 @@ import { useId, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, ChevronDown, LayoutGrid } from "lucide-react";
 import { Sheet } from "@/shared/ui/overlays/overlay";
-import { DISH_CATEGORIES, knownCategory } from "@/features/chef/lib/dish-categories";
+import { categoryLabel, DISH_CATEGORIES, knownCategory } from "@/features/chef/lib/dish-categories";
+import { messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
+
+const TEXT = messages({
+  en: {
+    label: "Category", choose: "Choose a category", sheetText: "Customers find your dish under this category on Craves.",
+    group: "Categories", other: "Not in the list? Type it", otherExample: "For example, Andhra meals", use: "Use this",
+  },
+  te: {
+    label: "రకం", choose: "రకం ఎంచుకోండి", sheetText: "Craves లో కస్టమర్లు మీ వంటకాన్ని ఈ రకంలో చూస్తారు.",
+    group: "రకాలు", other: "లిస్ట్‌లో లేదా? టైప్ చేయండి", otherExample: "ఉదాహరణకు, Andhra meals", use: "ఇది వాడండి",
+  },
+  kn: {
+    label: "ವಿಭಾಗ", choose: "ವಿಭಾಗ ಆಯ್ಕೆಮಾಡಿ", sheetText: "Craves ನಲ್ಲಿ ಗ್ರಾಹಕರು ನಿಮ್ಮ ಖಾದ್ಯವನ್ನು ಈ ವಿಭಾಗದಲ್ಲಿ ನೋಡುತ್ತಾರೆ.",
+    group: "ವಿಭಾಗಗಳು", other: "ಪಟ್ಟಿಯಲ್ಲಿ ಇಲ್ಲವೇ? ಟೈಪ್ ಮಾಡಿ", otherExample: "ಉದಾಹರಣೆಗೆ, Andhra meals", use: "ಇದನ್ನು ಬಳಸಿ",
+  },
+});
 
 /**
  * Category for a dish: a field that opens a sheet of the categories customers browse, with their
@@ -23,6 +40,8 @@ export function ChefCategoryPicker({
   invalid?: boolean;
   describedBy?: string;
 }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const known = knownCategory(value);
   const [custom, setCustom] = useState(known ? "" : value);
@@ -39,7 +58,7 @@ export function ChefCategoryPicker({
   return (
     <>
       <label id={labelId} htmlFor={id} className="chef-field-label">
-        Category
+        {text.label}
       </label>
       <button
         type="button"
@@ -66,7 +85,7 @@ export function ChefCategoryPicker({
           </span>
         )}
         <span id={valueId} className={`min-w-0 flex-1 truncate text-base ${value.trim() ? "font-semibold text-[#1A1A1A]" : "text-[#6B6B6B]"}`}>
-          {value.trim() || "Choose a category"}
+          {categoryLabel(value, language) || text.choose}
         </span>
         <ChevronDown className="h-5 w-5 shrink-0 text-[#6B6B6B]" aria-hidden="true" />
       </button>
@@ -74,10 +93,10 @@ export function ChefCategoryPicker({
       <Sheet
         open={open}
         onOpenChange={setOpen}
-        title="Choose a category"
-        description="Customers find your dish under this category on Craves."
+        title={text.choose}
+        description={text.sheetText}
       >
-        <div role="group" aria-label="Categories" className="mt-4 grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-4">
+        <div role="group" aria-label={text.group} className="mt-4 grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-4">
           {DISH_CATEGORIES.map((category, index) => {
             const selected = known?.name === category.name;
             return (
@@ -104,7 +123,7 @@ export function ChefCategoryPicker({
                   ) : null}
                 </span>
                 <span className={`text-center text-sm leading-tight ${selected ? "font-bold text-[#1A1A1A]" : "font-semibold text-[#1A1A1A]"}`}>
-                  {category.name}
+                  {categoryLabel(category.name, language)}
                 </span>
               </motion.button>
             );
@@ -121,7 +140,7 @@ export function ChefCategoryPicker({
           }}
         >
           <label htmlFor={otherId} className="chef-field-label">
-            Not in the list? Type it
+            {text.other}
           </label>
           <div className="mt-2 flex gap-2">
             <input
@@ -129,7 +148,7 @@ export function ChefCategoryPicker({
               value={custom}
               maxLength={80}
               onChange={(event) => setCustom(event.target.value)}
-              placeholder="For example, Andhra meals"
+              placeholder={text.otherExample}
               autoComplete="off"
               className="block min-h-12 min-w-0 flex-1 rounded-xl border border-[#D3D7DD] bg-white px-4 text-base text-[#1A1A1A] placeholder:text-[#6B6B6B] focus:border-[#1A1A1A] focus:outline-none focus:ring-1 focus:ring-[#1A1A1A]"
             />
@@ -139,7 +158,7 @@ export function ChefCategoryPicker({
               disabled={!custom.trim()}
               className="inline-flex min-h-12 shrink-0 items-center rounded-xl !border !border-[#1A1A1A] !bg-[#1A1A1A] px-4 text-base font-semibold !text-white !shadow-none transition-[scale,opacity] duration-100 active:scale-[0.98] disabled:!border-[#D3D7DD] disabled:!bg-[#F1F3F5] disabled:!text-[#8A8F98]"
             >
-              Use this
+              {text.use}
             </button>
           </div>
         </form>

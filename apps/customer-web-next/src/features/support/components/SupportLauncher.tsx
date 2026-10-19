@@ -9,6 +9,15 @@ import { AssistantAvatar, SupportChat, type SupportChatRole } from "./SupportCha
 // These pages already show the chat (/assistant is the chat itself, framed by the landing page), or are admin.
 const HIDDEN_PATH_PREFIXES = ["/support", "/chef/support", "/assistant", "/admin"];
 
+/**
+ * The chef workspace has Help in its header (and the chat inside it), so the floating button would only
+ * cover dish switches and order buttons there. Sign-in and the application keep it.
+ */
+export function hidesSupportLauncher(pathname: string): boolean {
+  if (HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  return (pathname === "/chef" || pathname.startsWith("/chef/")) && pathname !== "/chef/sign-in" && !pathname.startsWith("/chef/application");
+}
+
 /** Signed-out visitors get the guest assistant; on chef pages a chef chats as their kitchen. */
 export function supportRole(user: CravesUser | null, pathname: string): SupportChatRole {
   if (!user || user.status !== "ACTIVE") return "GUEST";
@@ -71,7 +80,7 @@ export function SupportLauncher() {
   const role = useSupportRole(pathname, started);
   const button = useRef<HTMLButtonElement>(null);
   const bar = useBottomBarHeight(pathname);
-  const hidden = HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  const hidden = hidesSupportLauncher(pathname);
 
   useEffect(() => {
     if (!open) return;

@@ -19,6 +19,8 @@ import {
   parseNotificationPage,
   type CustomerNotification,
 } from "@/features/notifications/lib/notification-contract";
+import { format, messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 import { isFeatureUnavailable } from "@/shared/lib/feature-availability";
 import { NOTICES_READ_EVENT } from "@/shared/lib/notice-events";
 import { sessionFetch } from "@/shared/lib/session-fetch";
@@ -34,8 +36,39 @@ const CATEGORY: Record<
   plans: { icon: CalendarCheck, color: "text-[#1A1A1A]" },
   other: { icon: Bell, color: "text-[#6B6B6B]" },
 };
-const MARK_ALL_FAILED = "We couldn't mark your notifications as read. Try again.";
-const MARK_ALL_PARTIAL = "Some notifications could not be marked as read.";
+// Filter words by filter id (chef-notices.ts keeps the English ones), then the screen's own.
+const TEXT = messages({
+  en: {
+    all: "All", orders: "Orders", money: "Money", reviews: "Reviews",
+    markAllFailed: "We couldn't mark your notifications as read. Try again.", markAllPartial: "Some notifications could not be marked as read.",
+    moreFailed: "More notifications didn’t load. Try again.", today: "Today", earlier: "Earlier", loading: "Loading notifications",
+    failedTitle: "We couldn't load your notifications", checkConnection: "Check your connection and try again.", tryAgain: "Try again",
+    none: "No notifications yet", noneFor: "No {filter} notifications", noneText: "New orders, payouts and reviews will show up here.",
+    tryAll: "Try the All tab to see everything else.", unread: ", unread", unreadLabel: "{title}. {body}. {time}. Unread, mark as read",
+    showAbout: "Show notifications about", filterUnread: "{label}, {count} unread", marking: "Marking as read…", markAll: "Mark all read",
+    loadingMore: "Loading…", loadMore: "Load more",
+  },
+  te: {
+    all: "అన్నీ", orders: "ఆర్డర్లు", money: "డబ్బు", reviews: "రివ్యూలు",
+    markAllFailed: "మీ నోటిఫికేషన్లను చదివినట్లు గుర్తించలేకపోయాం. మళ్లీ ప్రయత్నించండి.", markAllPartial: "కొన్ని నోటిఫికేషన్లను చదివినట్లు గుర్తించలేకపోయాం.",
+    moreFailed: "మరిన్ని నోటిఫికేషన్లు లోడ్ కాలేదు. మళ్లీ ప్రయత్నించండి.", today: "ఈరోజు", earlier: "ఇంతకుముందు", loading: "నోటిఫికేషన్లు లోడ్ అవుతున్నాయి",
+    failedTitle: "మీ నోటిఫికేషన్లు లోడ్ చేయలేకపోయాం", checkConnection: "ఇంటర్నెట్ చూసుకుని మళ్లీ ప్రయత్నించండి.", tryAgain: "మళ్లీ ప్రయత్నించండి",
+    none: "ఇంకా నోటిఫికేషన్లు లేవు", noneFor: "{filter} నోటిఫికేషన్లు లేవు", noneText: "కొత్త ఆర్డర్లు, బ్యాంక్‌కు పంపిన డబ్బు, రివ్యూలు ఇక్కడ కనిపిస్తాయి.",
+    tryAll: "మిగతావన్నీ చూడటానికి “అన్నీ” నొక్కండి.", unread: ", చదవలేదు", unreadLabel: "{title}. {body}. {time}. చదవలేదు, చదివినట్లు గుర్తించండి",
+    showAbout: "వీటి గురించి నోటిఫికేషన్లు చూపించండి", filterUnread: "{label}, {count} చదవలేదు", marking: "చదివినట్లు గుర్తిస్తున్నాం…", markAll: "అన్నీ చదివినట్లు గుర్తించండి",
+    loadingMore: "లోడ్ అవుతోంది…", loadMore: "ఇంకా చూపించండి",
+  },
+  kn: {
+    all: "ಎಲ್ಲಾ", orders: "ಆರ್ಡರ್‌ಗಳು", money: "ಹಣ", reviews: "ರಿವ್ಯೂಗಳು",
+    markAllFailed: "ನಿಮ್ಮ ಅಧಿಸೂಚನೆಗಳನ್ನು ಓದಿದಂತೆ ಗುರುತಿಸಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", markAllPartial: "ಕೆಲವು ಅಧಿಸೂಚನೆಗಳನ್ನು ಓದಿದಂತೆ ಗುರುತಿಸಲು ಆಗಲಿಲ್ಲ.",
+    moreFailed: "ಇನ್ನಷ್ಟು ಅಧಿಸೂಚನೆಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", today: "ಇಂದು", earlier: "ಹಿಂದಿನವು", loading: "ಅಧಿಸೂಚನೆಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ",
+    failedTitle: "ನಿಮ್ಮ ಅಧಿಸೂಚನೆಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ", checkConnection: "ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    none: "ಇನ್ನೂ ಅಧಿಸೂಚನೆಗಳಿಲ್ಲ", noneFor: "{filter} ಅಧಿಸೂಚನೆಗಳಿಲ್ಲ", noneText: "ಹೊಸ ಆರ್ಡರ್‌ಗಳು, ಬ್ಯಾಂಕ್‌ಗೆ ಕಳುಹಿಸಿದ ಹಣ, ರಿವ್ಯೂಗಳು ಇಲ್ಲಿ ಕಾಣುತ್ತವೆ.",
+    tryAll: "ಉಳಿದೆಲ್ಲವನ್ನೂ ನೋಡಲು “ಎಲ್ಲಾ” ಒತ್ತಿ.", unread: ", ಓದಿಲ್ಲ", unreadLabel: "{title}. {body}. {time}. ಓದಿಲ್ಲ, ಓದಿದಂತೆ ಗುರುತಿಸಿ",
+    showAbout: "ಇವುಗಳ ಬಗ್ಗೆ ಅಧಿಸೂಚನೆ ತೋರಿಸಿ", filterUnread: "{label}, {count} ಓದಿಲ್ಲ", marking: "ಓದಿದಂತೆ ಗುರುತಿಸುತ್ತಿದ್ದೇವೆ…", markAll: "ಎಲ್ಲಾ ಓದಿದಂತೆ ಗುರುತಿಸಿ",
+    loadingMore: "ಲೋಡ್ ಆಗುತ್ತಿದೆ…", loadMore: "ಇನ್ನಷ್ಟು ತೋರಿಸಿ",
+  },
+});
 
 type Page = { notices: CustomerNotification[]; cursor: string | null };
 
@@ -66,6 +99,7 @@ async function readPage(cursor: string | null): Promise<Page> {
 
 /** Chef Mode notifications, like the app: Orders, Money and Reviews filters, and each notice opens its page. */
 export default function ChefNotifications() {
+  const text = useText(TEXT);
   const [notices, setNotices] = useState<CustomerNotification[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -109,7 +143,7 @@ export default function ChefNotifications() {
       ]);
       setCursor(page.cursor);
     } catch {
-      setMessage("More notifications didn’t load. Try again.");
+      setMessage(text.moreFailed);
     } finally {
       setLoadingMore(false);
     }
@@ -142,9 +176,9 @@ export default function ChefNotifications() {
       const marked = await markEachRead(unread, markRead);
       markLocally(marked);
       window.dispatchEvent(new Event(NOTICES_READ_EVENT));
-      if (marked.length < unread.length) setMessage(MARK_ALL_PARTIAL);
+      if (marked.length < unread.length) setMessage(text.markAllPartial);
     } catch {
-      setMessage(MARK_ALL_FAILED);
+      setMessage(text.markAllFailed);
     } finally {
       setMarkingAll(false);
     }
@@ -156,15 +190,14 @@ export default function ChefNotifications() {
     [filter, notices],
   );
   const groups = [
-    { title: "Today", rows: visible.filter((notice) => isToday(notice.createdAt, now)) },
-    { title: "Earlier", rows: visible.filter((notice) => !isToday(notice.createdAt, now)) },
+    { id: "Today", title: text.today, rows: visible.filter((notice) => isToday(notice.createdAt, now)) },
+    { id: "Earlier", title: text.earlier, rows: visible.filter((notice) => !isToday(notice.createdAt, now)) },
   ].filter((group) => group.rows.length > 0);
-  const filterLabel = CHEF_NOTICE_FILTERS.find((item) => item.id === filter)?.label ?? "All";
 
   let body: ReactNode;
   if (status === "loading") {
     body = (
-      <div className="grid gap-3" role="status" aria-label="Loading notifications">
+      <div className="grid gap-3" role="status" aria-label={text.loading}>
         {[0, 1, 2].map((item) => (
           <div
             key={item}
@@ -177,9 +210,9 @@ export default function ChefNotifications() {
   } else if (status === "error") {
     body = (
       <section className="chef-section chef-section-body">
-        <h2 className="chef-section-title">We couldn&apos;t load your notifications</h2>
+        <h2 className="chef-section-title">{text.failedTitle}</h2>
         <p role="alert" className="mt-1 text-[0.875rem] text-[#6B6B6B]">
-          Check your connection and try again.
+          {text.checkConnection}
         </p>
         <button
           type="button"
@@ -187,7 +220,7 @@ export default function ChefNotifications() {
           onClick={() => setReload((value) => value + 1)}
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Try again
+          {text.tryAgain}
         </button>
       </section>
     );
@@ -198,20 +231,16 @@ export default function ChefNotifications() {
           <Bell className="h-6 w-6" aria-hidden="true" />
         </span>
         <h2 className="chef-empty-title">
-          {filter === "all" ? "No notifications yet" : `No ${filterLabel} notifications`}
+          {filter === "all" ? text.none : format(text.noneFor, { filter: text[filter] })}
         </h2>
-        <p className="chef-empty-text">
-          {filter === "all"
-            ? "New orders, payouts and reviews will show up here."
-            : "Try the All tab to see everything else."}
-        </p>
+        <p className="chef-empty-text">{filter === "all" ? text.noneText : text.tryAll}</p>
       </section>
     );
   } else {
     body = groups.map((group) => (
-      <section key={group.title} aria-labelledby={`notices-${group.title}`}>
+      <section key={group.id} aria-labelledby={`notices-${group.id}`}>
         <h2
-          id={`notices-${group.title}`}
+          id={`notices-${group.id}`}
           className="mb-2 px-1 text-[0.8125rem] font-semibold text-[#6B6B6B]"
         >
           {group.title}
@@ -235,7 +264,7 @@ export default function ChefNotifications() {
                   <span className="chef-row-meta block">{notice.body}</span>
                   <span className="mt-0.5 block text-xs text-[#6B6B6B]">
                     {time}
-                    {notice.readAt ? null : <span className="sr-only">, unread</span>}
+                    {notice.readAt ? null : <span className="sr-only">{text.unread}</span>}
                   </span>
                 </span>
                 {notice.readAt ? null : (
@@ -260,7 +289,7 @@ export default function ChefNotifications() {
                     type="button"
                     className={rowClass}
                     onClick={() => open(notice)}
-                    aria-label={`${notice.title}. ${notice.body}. ${time}. Unread, mark as read`}
+                    aria-label={format(text.unreadLabel, { title: notice.title, body: notice.body, time })}
                   >
                     {inner}
                   </button>
@@ -276,8 +305,9 @@ export default function ChefNotifications() {
   return (
     <div className="chef-stack" aria-busy={status === "loading"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="chef-chips" role="group" aria-label="Show notifications about">
-          {CHEF_NOTICE_FILTERS.map(({ id, label }) => {
+        <div className="chef-chips" role="group" aria-label={text.showAbout}>
+          {CHEF_NOTICE_FILTERS.map(({ id }) => {
+            const label = text[id];
             const count =
               id === "all"
                 ? 0
@@ -288,7 +318,7 @@ export default function ChefNotifications() {
                 type="button"
                 className="chef-chip"
                 aria-pressed={filter === id}
-                aria-label={count ? `${label}, ${count} unread` : undefined}
+                aria-label={count ? format(text.filterUnread, { label, count }) : undefined}
                 onClick={() => setFilter(id)}
               >
                 {label}
@@ -308,7 +338,7 @@ export default function ChefNotifications() {
             onClick={() => void markAll()}
           >
             <Check className="h-4 w-4" aria-hidden="true" />
-            {markingAll ? "Marking as read…" : "Mark all read"}
+            {markingAll ? text.marking : text.markAll}
           </button>
         ) : null}
       </div>
@@ -327,7 +357,7 @@ export default function ChefNotifications() {
           aria-busy={loadingMore}
           onClick={() => void loadMore()}
         >
-          {loadingMore ? "Loading…" : "Load more"}
+          {loadingMore ? text.loadingMore : text.loadMore}
         </button>
       ) : null}
     </div>

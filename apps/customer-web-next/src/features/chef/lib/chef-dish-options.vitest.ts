@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
 import { NextRequest } from "next/server";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChefMenuItem } from "./chef-menu-contract";
 const upstream = vi.hoisted(() => vi.fn());
@@ -16,7 +16,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 import { DELETE as deleteDish } from "@/app/api/chef/menu/[menuItemId]/route";
+import type { Language } from "@/shared/i18n/language";
+import { LanguageProvider } from "@/shared/i18n/language-context";
 import { ChefMenuManager } from "../components/chef-menu-manager";
+
+// LanguageProvider types children as a prop; createElement passes them as its third argument.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
 
 const DISH_ID = "11111111-1111-4111-8111-111111111111";
 const dish: ChefMenuItem = {
@@ -226,5 +231,48 @@ describe("Dish options", { timeout: 20_000 }, () => {
     fireEvent.click(await screen.findByRole("button", { name: "Delete dish" }));
     expect(await screen.findByText("Deleting dishes is coming soon.")).toBeTruthy();
     expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe("Fixture dish");
+  });
+
+  describe("the dish list", () => {
+    it("says customers can't order while no dish is on, and links Daily limits", async () => {
+      stored = [{ ...dish, available: false }];
+      render(createElement(ChefMenuManager));
+      await screen.findByRole("heading", { name: "No dish is on today" });
+      expect(
+        screen.getByText("Customers can’t order. Turn on the dishes you are cooking today."),
+      ).toBeTruthy();
+      expect(screen.getByRole("link", { name: /^Daily limits/ }).getAttribute("href")).toBe(
+        "/chef/capacity?from=menu",
+      );
+      // The switch says which dish it turns on, so its state doesn't rest on colour.
+      expect(
+        screen.getByRole("switch", { name: "Fixture dish available to order" }).getAttribute("aria-checked"),
+      ).toBe("false");
+      cleanup();
+      stored = [dish];
+      render(createElement(ChefMenuManager));
+      await screen.findByRole("button", { name: "Edit Fixture dish" });
+      expect(screen.queryByRole("heading", { name: "No dish is on today" })).toBeNull();
+    });
+
+    it("shows our categories in Telugu but saves the English name", async () => {
+      stored = [];
+      render(createElement(Provider, { initial: "te", chosen: true }, createElement(ChefMenuManager)));
+      fireEvent.click(await screen.findByRole("button", { name: "మీ మొదటి వంటకం జోడించండి" }));
+      fireEvent.change(screen.getByLabelText("వంటకం పేరు"), { target: { value: "Pappu" } });
+      fireEvent.click(screen.getByRole("button", { name: /^రకం/ }));
+      fireEvent.click(await screen.findByRole("button", { name: "భోజనం" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      fireEvent.click(screen.getByRole("radio", { name: "వెజ్" }));
+      fireEvent.change(screen.getByLabelText("ధర"), { target: { value: "120" } });
+      fireEvent.change(screen.getByLabelText(/ప్యాక్ చేసిన బరువు/), { target: { value: "400" } });
+      fireEvent.click(screen.getByRole("button", { name: "సేవ్ చేయండి" }));
+      await screen.findByText("వంటకం జోడించాం");
+      const created = JSON.parse(
+        String(fetcher.mock.calls.find(([, options]) => options?.method === "POST")![1]!.body),
+      );
+      expect(created.category).toBe("Meals");
+      expect(await screen.findByRole("heading", { name: /^భోజనం/ })).toBeTruthy();
+    });
   });
 });

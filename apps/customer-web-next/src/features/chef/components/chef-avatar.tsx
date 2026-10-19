@@ -12,6 +12,26 @@ import {
   chefAvatarUrl,
 } from "@/features/chef/lib/chef-kitchen-contract";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { format, messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
+
+const TEXT = messages({
+  en: {
+    pictures: "Pictures", picture: "Picture {number}", opening: "Opening Chef Mode", title: "Choose your profile picture",
+    subtitle: "Customers see this picture with your name on your kitchen page. You can change it any time.",
+    failed: "We couldn’t save your picture. Please try again.", saving: "Saving…", tryAgain: "Try again", continue: "Continue", notNow: "Not now",
+  },
+  te: {
+    pictures: "చిత్రాలు", picture: "చిత్రం {number}", opening: "చెఫ్ మోడ్ తెరుస్తున్నాం", title: "మీ ప్రొఫైల్ చిత్రం ఎంచుకోండి",
+    subtitle: "మీ వంటగది పేజీలో మీ పేరుతో పాటు కస్టమర్లకు ఈ చిత్రం కనిపిస్తుంది. ఎప్పుడైనా మార్చుకోవచ్చు.",
+    failed: "మీ చిత్రం సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి.", saving: "సేవ్ అవుతోంది…", tryAgain: "మళ్లీ ప్రయత్నించండి", continue: "కొనసాగండి", notNow: "ఇప్పుడు వద్దు",
+  },
+  kn: {
+    pictures: "ಚಿತ್ರಗಳು", picture: "ಚಿತ್ರ {number}", opening: "ಚೆಫ್ ಮೋಡ್ ತೆರೆಯುತ್ತಿದ್ದೇವೆ", title: "ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಚಿತ್ರ ಆಯ್ಕೆಮಾಡಿ",
+    subtitle: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಪುಟದಲ್ಲಿ ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ಗ್ರಾಹಕರಿಗೆ ಈ ಚಿತ್ರ ಕಾಣುತ್ತದೆ. ಯಾವಾಗ ಬೇಕಾದರೂ ಬದಲಾಯಿಸಬಹುದು.",
+    failed: "ನಿಮ್ಮ ಚಿತ್ರ ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ…", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", continue: "ಮುಂದುವರಿಸಿ", notNow: "ಈಗ ಬೇಡ",
+  },
+});
 
 /** The 18 drawn faces as radio buttons (arrow keys move between them); the picked one gets a red ring and a tick. */
 export function ChefAvatarGrid({
@@ -23,9 +43,10 @@ export function ChefAvatarGrid({
   onSelect(id: string): void;
   disabled?: boolean;
 }) {
+  const text = useText(TEXT);
   const name = useId();
   return (
-    <div role="radiogroup" aria-label="Pictures" className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+    <div role="radiogroup" aria-label={text.pictures} className="grid grid-cols-3 gap-3 sm:grid-cols-4">
       {CHEF_AVATAR_IDS.map((id, index) => (
         <label
           key={id}
@@ -38,7 +59,7 @@ export function ChefAvatarGrid({
             checked={selectedId === id}
             disabled={disabled}
             onChange={() => onSelect(id)}
-            aria-label={`Picture ${index + 1}`}
+            aria-label={format(text.picture, { number: index + 1 })}
             className="sr-only"
           />
           <ChefFace photoUrl={chefAvatarUrl(id)} className="!h-auto !w-full aspect-square" />
@@ -64,6 +85,7 @@ const letIn = new Set<string>();
  * chefAvatarGateStep, and "Not now" after a failed save lets them in until the next page load.
  */
 export function ChefAvatarGate({ children }: { children: ReactNode }) {
+  const text = useText(TEXT);
   const chefId = getSession()?.id ?? "";
   const shape = chefLoadingShapeFor(usePathname());
   const [step, setStep] = useState<"wait" | "ask" | "open">(() =>
@@ -112,21 +134,19 @@ export function ChefAvatarGate({ children }: { children: ReactNode }) {
 
   if (step === "open") return <>{children}</>;
   if (step === "wait")
-    return <ChefLoading shape={shape} label="Opening Chef Mode" head={shape !== "chat"} />;
+    return <ChefLoading shape={shape} label={text.opening} head={shape !== "chat"} />;
   return (
     <section className="chef-section p-5 md:p-7" aria-labelledby="chef-avatar-title">
       <h1 id="chef-avatar-title" className="chef-page-title">
-        Choose your profile picture
+        {text.title}
       </h1>
-      <p className="chef-page-subtitle">
-        Customers see this picture with your name on your kitchen page. You can change it any time.
-      </p>
+      <p className="chef-page-subtitle">{text.subtitle}</p>
       <div className="mt-6">
         <ChefAvatarGrid selectedId={selected} onSelect={setSelected} disabled={saving} />
       </div>
       {failed ? (
         <p role="alert" className="chef-field-error mt-5 text-center">
-          We couldn’t save your picture. Please try again.
+          {text.failed}
         </p>
       ) : null}
       <div className="mt-6 grid gap-2">
@@ -137,11 +157,11 @@ export function ChefAvatarGate({ children }: { children: ReactNode }) {
           aria-busy={saving}
           onClick={() => void save()}
         >
-          {saving ? "Saving…" : failed ? "Try again" : "Continue"}
+          {saving ? text.saving : failed ? text.tryAgain : text.continue}
         </button>
         {failed ? (
           <button type="button" className="chef-btn is-block" disabled={saving} onClick={open}>
-            Not now
+            {text.notNow}
           </button>
         ) : null}
       </div>

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefModeGuard, isOpenInChefMode } from "../components/ChefModeGuard";
-import ChefLayout from "../../../app/chef/layout";
+import { ChefShell } from "../components/chef-shell";
 import ChefMorePage from "../../../app/chef/profile/page";
 import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
@@ -144,7 +144,7 @@ describe("Chef Mode shell", () => {
   it("gives applicants the account menu without workspace tabs", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/application/status");
     setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
-    render(createElement(ChefLayout, null, createElement("main", null, "Application hub")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Application hub")));
     expect(screen.getByRole("button", { name: "Account menu" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Craves Chef home" }).getAttribute("href")).toBe("/chef");
     expect(screen.queryByRole("navigation")).toBeNull();
@@ -152,7 +152,7 @@ describe("Chef Mode shell", () => {
 
   it("shows no shell around the Chef Mode sign-in page", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/sign-in");
-    render(createElement(ChefLayout, null, createElement("main", null, "Sign in")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Sign in")));
     expect(screen.queryByRole("banner")).toBeNull();
     expect(screen.queryByRole("button", { name: "Account menu" })).toBeNull();
   });
@@ -164,18 +164,22 @@ describe("More hub", () => {
     vi.stubGlobal("window", new Proxy(browser, { get: (target, key) => key === "location" ? { assign: mocks.assign, replace: mocks.locationReplace, pathname: "/chef/profile", search: "" } : Reflect.get(target, key, target) }));
   });
 
-  it("lists every chef page that is not a tab", async () => {
+  it("lists every chef page that is not a tab, grouped by job, and leaves the tabs' pages to the tabs", async () => {
     render(createElement(ChefMorePage));
     await screen.findByRole("heading", { name: "Asha Rao" });
     // One read of the links: a name query per row is too slow for this long list.
     const links = screen.getAllByRole("link").map((link) => [link.querySelector(".chef-row-title")?.textContent, link.getAttribute("href")]);
     for (const [label, href] of [
-      ["Kitchen details", "/chef/kitchen"], ["Can customers find you?", "/chef/operations"], ["Opening hours", "/chef/operations#chef-hours"], ["Daily limits", "/chef/capacity"],
-      ["Meal plans", "/chef/meal-plans"], ["Documents", "/chef/documents"], ["Earnings", "/chef/earnings"],
-      ["Balance & payouts", "/chef/finance"], ["Payout history", "/chef/earnings/payouts"], ["Edit bank account details", "/chef/bank"],
-      ["Statements", "/chef/statements"], ["Refer a chef", "/chef/referrals"], ["Preferences", "/chef/preferences"], ["Your application", "/chef/application/status"],
-      ["Notifications", "/chef/notifications"], ["Help & support", "/chef/support"], ["Login & security", "/chef/security"],
+      ["Kitchen details & photos", "/chef/kitchen"], ["Opening hours", "/chef/hours"], ["Daily limits", "/chef/capacity"],
+      ["Can customers find you?", "/chef/operations"], ["Documents", "/chef/documents"], ["Order settings", "/chef/preferences"],
+      ["Help & support", "/chef/support"], ["Refer a chef", "/chef/referrals"], ["Login & security", "/chef/security"],
+      ["Your application", "/chef/application/status"],
     ]) expect(links.find(([title]) => title === label)?.[1], label).toBe(href);
+    // Money pages live in the Money tab, Meal plans in Menu and Notifications behind the bell: More doesn't repeat them.
+    for (const href of ["/chef/earnings", "/chef/finance", "/chef/statements", "/chef/earnings/payouts", "/chef/meal-plans", "/chef/notifications"])
+      expect(links.some(([, target]) => target === href), href).toBe(false);
+    for (const group of ["My kitchen", "Orders", "Help", "Account"]) expect(screen.getByRole("heading", { name: group })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Language/ })).toBeTruthy();
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 

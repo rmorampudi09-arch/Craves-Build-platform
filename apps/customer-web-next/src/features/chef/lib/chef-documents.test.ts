@@ -75,6 +75,38 @@ test("one row per document, in the app's order, with its state in words", () => 
   );
 });
 
+test("once the application is approved, files still waiting read as sent and accepted with it, never under review", () => {
+  const approved = state(
+    {
+      documents: [
+        document("1", "SELECTED_PROOF_FRONT", "UPLOADED"),
+        document("2", "SELECTED_PROOF_BACK", "REJECTED", "The photo is blurred"),
+        document("3", "KITCHEN_PHOTO_1", "APPROVED"),
+      ],
+    },
+    { status: "APPROVED", reviewedAt: new Date(2026, 6, 8, 12).toISOString() },
+  );
+  assert.deepEqual(
+    documentRows(approved).map((row) => [row.title, row.subtitle, row.chip.label, row.chip.tone]),
+    [
+      ["Aadhaar card · front", "Sent with your application", "Accepted", "success"],
+      ["Aadhaar card · back", "The photo is blurred", "Needs update", "attention"],
+      ["FSSAI registration", "1234 5678 9012 34", "Accepted", "success"],
+      ["Kitchen photo", "Checked by Craves", "Approved", "success"],
+    ],
+  );
+  assert.equal(verificationBanner(approved).message, "Approved by Craves on 8 Jul 2026");
+  // The same rows in Telugu: the chef's own words for the state, the reviewer's reason as written.
+  assert.deepEqual(
+    documentRows(approved, "te").slice(0, 2).map((row) => [row.title, row.subtitle, row.chip.label]),
+    [
+      ["ఆధార్ కార్డు · ముందు వైపు", "మీ దరఖాస్తుతో పంపారు", "అంగీకరించారు"],
+      ["ఆధార్ కార్డు · వెనుక వైపు", "The photo is blurred", "మార్చాలి"],
+    ],
+  );
+  assert.equal(verificationBanner(approved, "kn").message, "8 Jul 2026 ರಂದು Craves ಅನುಮೋದಿಸಿದೆ");
+});
+
 test("the FSSAI line shows Approved once Craves verified it, and is left out without a number", () => {
   const verified = state({
     progress: { status: "", reason: null, nextAction: "", fssaiVerified: true, termsVersion: "" },

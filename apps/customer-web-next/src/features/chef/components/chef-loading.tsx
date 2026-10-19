@@ -3,6 +3,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ChefSkeleton } from "@/features/chef/components/chef-ui";
+import { messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
+
+const TEXT = messages({
+  en: { slow: "Still loading. Check your internet connection." },
+  te: { slow: "ఇంకా లోడ్ అవుతోంది. ఇంటర్నెట్ చూసుకోండి." },
+  kn: { slow: "ಇನ್ನೂ ಲೋಡ್ ಆಗುತ್ತಿದೆ. ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ." },
+});
 
 /** Each Chef Mode page loads in its own shape, so the page fills in without jumping. */
 export type ChefLoadingShape =
@@ -446,6 +454,7 @@ export function ChefLoading({
   label: string;
   head?: boolean;
 }) {
+  const text = useText(TEXT);
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => setSlow(true), 10_000);
@@ -462,7 +471,7 @@ export function ChefLoading({
             : "sr-only"
         }
       >
-        {slow ? "Still loading. Check your internet connection." : label}
+        {slow ? text.slow : label}
       </p>
       {head ? <Head shape={shape} /> : null}
       <div className="chef-stack" aria-hidden="true">

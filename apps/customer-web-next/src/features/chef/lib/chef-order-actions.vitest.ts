@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderActions } from "../components/chef-order-actions";
+import { noticeNewOrders, resetOrderAlertsForTests, useWaitingOrderCount } from "./chef-order-alert";
 import type { ChefOrder } from "./chef-order-contract";
 
 const ID = "0bde0101-0000-4000-8000-000000000101";
@@ -44,6 +45,10 @@ function order(patch: Partial<ChefOrder> = {}): ChefOrder {
 }
 const show = (value: ChefOrder, onUpdated = vi.fn()) =>
   render(createElement(ChefOrderActions, { order: value, onUpdated, inline: true }));
+/** The red count on the Orders tab. */
+function WaitingCount() {
+  return createElement("output", null, useWaitingOrderCount());
+}
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -85,6 +90,19 @@ describe("new order", () => {
     const [path, init] = fetchMock.mock.calls[1];
     expect(path).toBe(`/api/chef/orders/${ID}/accept`);
     expect(JSON.parse(String(init?.body))).toMatchObject({ prepTimeMinutes: 35, note: null });
+  });
+
+  it("takes the order off the red count on the Orders tab as soon as the answer is saved", async () => {
+    resetOrderAlertsForTests();
+    noticeNewOrders([order()]);
+    fetchMock.mockImplementation(async (input) => String(input).endsWith("/accept")
+      ? Response.json(order({ status: "CHEF_ACCEPTED", prepTimeMinutes: 15 }))
+      : Response.json({}, { status: 404 }));
+    render(createElement(WaitingCount));
+    show(order());
+    expect(document.querySelector("output")?.textContent).toBe("1");
+    fireEvent.click(await screen.findByRole("button", { name: "Accept · ready in 15 min" }));
+    await waitFor(() => expect(document.querySelector("output")?.textContent).toBe("0"));
   });
 
   it("falls back to 15 minutes when the menu can't be read, and keeps the picker one tap away", async () => {

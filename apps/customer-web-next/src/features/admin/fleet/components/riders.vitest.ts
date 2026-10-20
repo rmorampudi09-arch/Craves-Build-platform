@@ -100,19 +100,86 @@ describe("rider detail", () => {
     expect(screen.queryByText("No admin actions recorded yet.")).toBeNull();
   });
 
-  it("accepts a document and approves the new phone", async () => {
+  it("accepts a document with the expiry it shows and approves the new phone", async () => {
     answer = (method, path) => method === "POST" && path.endsWith("/approve")
       ? json(path.includes("devices") ? { ...device, state: "BOUND", approvedBy: "Asha", approvedAt: at } : { ...document, status: "VERIFIED", reviewedBy: "Asha", reviewedAt: at })
       : path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json(detail);
     render(createElement(RiderDetailView, { riderId: RIDER }));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept document" }));
+    expect((await screen.findByLabelText("Driving licence expiry date (as printed)") as HTMLInputElement).value).toBe("2030-01-31");
+    fireEvent.click(button("Accept document"));
     expect(await screen.findByText("Document accepted.")).toBeTruthy();
     fireEvent.click(button("Approve this phone"));
     expect(await screen.findByText("New phone approved.")).toBeTruthy();
     expect(posts().map(call => [call.path, call.body])).toEqual([
-      [`riders/${RIDER}/documents/${DOC}/approve`, undefined],
+      [`riders/${RIDER}/documents/${DOC}/approve`, { expiresOn: "2030-01-31" }],
       [`riders/${RIDER}/devices/${DEVICE}/approve`, undefined],
     ]);
+  });
+
+  it("needs a current expiry date for a PUC certificate and shows the server's refusal", async () => {
+    const puc = { ...document, type: "PUC", expiresOn: null };
+    answer = (_, path) => path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json({ ...detail, documents: [puc] });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    await screen.findByText("PUC certificate");
+    fireEvent.click(button("Accept document"));
+    expect(screen.getByRole("alert").textContent).toBe("Enter the expiry date printed on the document.");
+    type("PUC certificate expiry date (as printed)", "2020-03-31");
+    fireEvent.click(button("Accept document"));
+    expect(screen.getByRole("alert").textContent).toBe("This document has expired. Reject it so the rider uploads a new one.");
+    expect(posts()).toHaveLength(0);
+
+    let finish!: (response: Response) => void;
+    answer = (method) => method === "POST" ? new Promise(resolve => { finish = resolve; }) : json({ ...detail, documents: [puc] });
+    type("PUC certificate expiry date (as printed)", "2031-03-31");
+    fireEvent.click(button("Accept document"));
+    expect(await screen.findByText("Saving…")).toBeTruthy();
+    expect(button("Accept document").disabled).toBe(true);
+    expect(posts()[0]).toMatchObject({ path: `riders/${RIDER}/documents/${DOC}/approve`, body: { expiresOn: "2031-03-31" } });
+    expect(posts()[0].key).toMatch(UUID);
+    finish(json({ code: "EXPIRY_REQUIRED", message: "Add the expiry date printed on the PUC certificate." }, 422));
+    expect((await screen.findByRole("alert")).textContent).toBe("Add the expiry date printed on the PUC certificate.");
+  });
+
+  it("accepts a document that doesn't expire without asking for a date", async () => {
+    const pan = { ...document, type: "PAN", expiresOn: null };
+    answer = (method, path) => method === "POST" ? json({ ...pan, status: "VERIFIED", reviewedBy: "Asha", reviewedAt: at })
+      : path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json({ ...detail, documents: [pan] });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    await screen.findByText("PAN card");
+    expect(screen.queryByLabelText(/expiry date/)).toBeNull();
+    fireEvent.click(button("Accept document"));
+    expect(await screen.findByText("Document accepted.")).toBeTruthy();
+    expect(posts()[0]).toMatchObject({ path: `riders/${RIDER}/documents/${DOC}/approve`, body: undefined });
+  });
+
+  it("saves the vehicle through every state", async () => {
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    await screen.findByText("No vehicle recorded yet.", { exact: false });
+    type("Vehicle (make and model)", "Honda Activa 6G");
+    type("Registration number", "TS 09 E 12");
+    fireEvent.click(button("Save vehicle"));
+    expect(screen.getByRole("alert").textContent).toBe("Enter the registration number, like TS09EA1234.");
+    expect(posts()).toHaveLength(0);
+
+    answer = (method) => method === "PUT" ? json({ code: "FORBIDDEN", message: "OPERATIONS_ADMIN required" }, 403) : json(detail);
+    type("Registration number", "ts-09-ea-1234");
+    fireEvent.click(button("Save vehicle"));
+    expect((await screen.findByRole("alert")).textContent).toBe("Your admin role can't do this.");
+
+    answer = (method) => method === "PUT" ? json({ code: "FLEET_UNAVAILABLE", message: "The fleet service is busy. Try again." }, 503) : json(detail);
+    fireEvent.click(button("Save vehicle"));
+    expect((await screen.findByRole("alert")).textContent).toBe("The fleet service is busy. Try again.");
+
+    let finish!: (response: Response) => void;
+    answer = (method) => method === "PUT" ? new Promise(resolve => { finish = resolve; }) : json({ ...detail, rider: { ...detail.rider, vehicleNumberMasked: "TS09xx1234" } });
+    fireEvent.click(button("Save vehicle"));
+    expect(await screen.findByText("Saving…")).toBeTruthy();
+    finish(json({ label: "Honda Activa 6G", regNumberMasked: "TS09xx1234" }));
+    expect(await screen.findByText("Vehicle saved. The rider sees it on their profile.")).toBeTruthy();
+    expect(await screen.findByText("Registration TS09xx1234.", { exact: false })).toBeTruthy();
+    expect(posts().map(call => [call.method, call.path, call.body])).toEqual(Array(3).fill(["PUT", `riders/${RIDER}/vehicle`, { label: "Honda Activa 6G", regNumber: "TS09EA1234" }]));
+    // The same save after a refusal keeps its Idempotency-Key.
+    expect(new Set(posts().map(call => call.key)).size).toBe(1);
   });
 
   it("rejects a document only with a reason, shows the server's refusal and retries with the same key", async () => {

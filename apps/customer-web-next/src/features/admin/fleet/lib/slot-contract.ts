@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { day, id, instant, personName, reasonBody, UUID, type FleetRoute } from "./fleet-common";
+import { addDays } from "./payout-contract";
 
 const paise = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const slotTime = z.string().datetime({ offset: true, message: "Pick the date, the start time and the end time." });
@@ -26,6 +27,42 @@ export const zoneBannerSchema = z.object({
 export type Slot = z.infer<typeof slotSchema>;
 export type SlotInput = z.infer<typeof slotInputSchema>;
 export type ZoneBanner = z.infer<typeof zoneBannerSchema>;
+export type SlotForm = { riderId: string; zoneName: string; date: string; startTime: string; endTime: string; rupeesPerHour: string };
+
+/** A datetime-local value read as IST, the zone the console shows times in, whatever the PC is set to; "" if it isn't one. */
+export function istInstant(local: string): string {
+  const value = new Date(`${local}:00+05:30`);
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local) && Number.isFinite(value.getTime()) ? value.toISOString() : "";
+}
+
+/** Rupees as typed ("80", "80.5", "80.50") to integer paise, without floating point; null if it isn't an amount. */
+export function rupeesToPaise(text: string): number | null {
+  const match = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(text.trim());
+  return match ? Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0")) : null;
+}
+
+/** The create-slot form (one IST day, start and end times, rupees an hour) as the API body, or the first problem. */
+export function slotFromForm(form: SlotForm): SlotInput | string {
+  const parsed = slotInputSchema.safeParse({
+    riderId: form.riderId, zoneName: form.zoneName,
+    startsAt: istInstant(`${form.date}T${form.startTime}`), endsAt: istInstant(`${form.date}T${form.endTime}`),
+    guaranteedPerHourPaise: rupeesToPaise(form.rupeesPerHour) ?? 0,
+  });
+  return parsed.success ? parsed.data : parsed.error.issues[0]?.message ?? "Check the details.";
+}
+
+/** The list covers at most 31 IST days. */
+export function slotRangeProblem(from: string, to: string): string | null {
+  if (!day.safeParse(from).success || !day.safeParse(to).success) return "Pick both dates.";
+  if (to < from) return "The last day must be on or after the first day.";
+  return to > addDays(from, 30) ? "Show at most 31 days at a time." : null;
+}
+
+export function bannerFromForm(form: { tone: string; text: string; until: string }, now = Date.now()): ZoneBanner | string {
+  const parsed = zoneBannerSchema.safeParse({ tone: form.tone, text: form.text, until: istInstant(form.until) });
+  if (!parsed.success) return parsed.error.issues[0]?.message ?? "Check the details.";
+  return Date.parse(parsed.data.until) > now ? parsed.data : "Pick a time in the future.";
+}
 
 export const SLOT_ROUTES: readonly FleetRoute[] = [
   { method: "GET", path: "slots", response: slotsSchema, query: { from: day, to: day, riderId: id } },

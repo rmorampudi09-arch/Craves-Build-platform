@@ -16,7 +16,7 @@ export async function fleetGet<T>(path: string, schema: z.ZodType<T>): Promise<T
   return read(await adminFetch(`/api/admin/fleet/${path}`, { cache: "no-store" }), schema);
 }
 
-export async function fleetSend<T>(method: "POST" | "PUT", path: string, key: string, schema: z.ZodType<T>, body?: unknown): Promise<T> {
+export async function fleetSend<T>(method: "POST" | "PUT" | "DELETE", path: string, key: string, schema: z.ZodType<T>, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "Idempotency-Key": key };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   return read(await adminFetch(`/api/admin/fleet/${path}`, {

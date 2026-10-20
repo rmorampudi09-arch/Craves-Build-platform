@@ -4,14 +4,21 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { formatAdminTimestamp } from "@/features/admin/shell/lib/admin-navigation";
 import { readableFleetValue } from "@/features/admin/fleet/lib/fleet-common";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
+import { istDay } from "@/features/admin/fleet/lib/payout-contract";
 import {
-  auditPageSchema, payoutAccountInputSchema, payoutAccountSchema, riderDetailSchema, riderDeviceSchema, riderDocumentSchema,
-  statusEventProblem, statusEventSchema, STATUS_EVENT_KINDS, type AuditEntry, type RiderDetail, type StatusEventInput,
+  auditPageSchema, EXPIRING_DOCUMENTS, expiryProblem, payoutAccountInputSchema, payoutAccountSchema, riderDetailSchema, riderDeviceSchema,
+  riderDocumentSchema, riderVehicleInputSchema, riderVehicleSchema, statusEventProblem, statusEventSchema, STATUS_EVENT_KINDS,
+  type AuditEntry, type RiderDetail, type StatusEventInput,
 } from "@/features/admin/fleet/lib/rider-contract";
 import { ActionMessage, fieldClass, labelClass, ReasonAction, useFleetAction } from "./fleet-action";
 
 type Document = RiderDetail["documents"][number];
 type Device = RiderDetail["devices"][number];
+
+const DOCUMENT_LABELS: Record<Document["type"], string> = {
+  DRIVING_LICENCE: "Driving licence", VEHICLE_RC: "Vehicle RC", VEHICLE_INSURANCE: "Vehicle insurance", PUC: "PUC certificate",
+  PAN: "PAN card", PHOTO: "Photo", ADDRESS_PROOF: "Address proof", BANK_PROOF: "Bank proof",
+};
 
 const KIND_LABELS: Record<StatusEventInput["kind"], string> = {
   SAFETY_PAUSE: "Safety pause (starts now, review within 72 hours)",
@@ -74,6 +81,8 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
         : detail.documents.map(document => <DocumentRow key={document.documentId} riderId={riderId} document={document} onDone={reload} />)}
     </section>
 
+    <VehicleForm riderId={riderId} current={rider.vehicleNumberMasked ?? null} onDone={reload} />
+
     <section className="cr-panel space-y-3">
       <h2 className="text-lg font-bold">Phones</h2>
       <p className="cr-muted">A rider has one approved phone. Approving a new one stops the old phone from going online.</p>
@@ -123,26 +132,65 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
 
 function DocumentRow({ riderId, document, onDone }: { riderId: string; document: Document; onDone: () => Promise<void> }) {
   const action = useFleetAction();
+  const [expiresOn, setExpiresOn] = useState(document.expiresOn ?? "");
+  const expiring = EXPIRING_DOCUMENTS.includes(document.type);
+  const label = DOCUMENT_LABELS[document.type];
   const base = `riders/${riderId}/documents/${document.documentId}`;
-  async function decide(verb: "approve" | "reject", reason?: string) {
-    const done = await action.run("POST", `${base}/${verb}`, riderDocumentSchema, reason === undefined ? undefined : { reason },
+  async function decide(verb: "approve" | "reject", body?: { reason: string } | { expiresOn: string }) {
+    const done = await action.run("POST", `${base}/${verb}`, riderDocumentSchema, body,
       verb === "approve" ? "Document accepted." : "Document rejected. The rider sees your reason.");
     if (done) await onDone();
   }
+  function accept(event: FormEvent) {
+    event.preventDefault();
+    if (!expiring) return void decide("approve");
+    const problem = expiryProblem(expiresOn);
+    if (problem) return action.refuse(problem);
+    void decide("approve", { expiresOn });
+  }
   return <article className="rounded-xl border border-slate-200 p-3 text-sm">
     <div className="flex flex-wrap items-center gap-3">
-      <strong>{readableFleetValue(document.type)}</strong><span className="cr-status">{readableFleetValue(document.status)}</span>
+      <strong>{label}</strong><span className="cr-status">{readableFleetValue(document.status)}</span>
       <span>Expires: {document.expiresOn ?? "—"}</span>
       <a className="underline" href={`/api/admin/fleet/${base}/content`} target="_blank" rel="noreferrer">Open file</a>
     </div>
     {document.reason && <p className="mt-1">Reason: {document.reason}</p>}
     {document.reviewedBy && <p className="cr-muted">Reviewed by {document.reviewedBy} · {when(document.reviewedAt)}</p>}
-    {document.status === "PENDING" && <div className="mt-2 flex flex-wrap items-start gap-2">
-      <button type="button" className="cr-button cr-primary" disabled={action.busy} onClick={() => void decide("approve")}>Accept document</button>
-      <ReasonAction label="Reject document" action={action} onSubmit={reason => void decide("reject", reason)} />
+    {document.status === "PENDING" && <div className="mt-2 flex flex-wrap items-end gap-2">
+      <form noValidate className="flex flex-wrap items-end gap-2" onSubmit={accept}>
+        {expiring && <label className={labelClass}>{label} expiry date (as printed)<input className={fieldClass} type="date" min={istDay()} value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></label>}
+        <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Accept document</button>
+      </form>
+      <ReasonAction label="Reject document" action={action} onSubmit={reason => void decide("reject", { reason })} />
     </div>}
     <ActionMessage state={action.state} />
   </article>;
+}
+
+function VehicleForm({ riderId, current, onDone }: { riderId: string; current: string | null; onDone: () => Promise<void> }) {
+  const [form, setForm] = useState({ label: "", regNumber: "" });
+  const action = useFleetAction();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const parsed = riderVehicleInputSchema.safeParse({ label: form.label, regNumber: form.regNumber.toUpperCase().replace(/[\s-]/g, "") });
+    if (!parsed.success) return action.refuse(parsed.error.issues[0]?.message ?? "Check the details.");
+    if (await action.run("PUT", `riders/${riderId}/vehicle`, riderVehicleSchema, parsed.data, "Vehicle saved. The rider sees it on their profile.")) {
+      setForm({ label: "", regNumber: "" });
+      await onDone();
+    }
+  }
+
+  return <form noValidate className="cr-panel space-y-3" onSubmit={event => void submit(event)}>
+    <h2 className="text-lg font-bold">Vehicle</h2>
+    <p className="text-sm">{current ? `Registration ${current}.` : "No vehicle recorded yet."} Check it against the RC before you save.</p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className={labelClass}>Vehicle (make and model)<input className={fieldClass} value={form.label} maxLength={60} placeholder="Honda Activa 6G" onChange={event => setForm({ ...form, label: event.target.value })} /></label>
+      <label className={labelClass}>Registration number<input className={fieldClass} value={form.regNumber} maxLength={16} autoComplete="off" placeholder="TS09EA1234" onChange={event => setForm({ ...form, regNumber: event.target.value })} /></label>
+    </div>
+    <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Save vehicle</button>
+    <ActionMessage state={action.state} />
+  </form>;
 }
 
 function DeviceRow({ riderId, device, onDone }: { riderId: string; device: Device; onDone: () => Promise<void> }) {

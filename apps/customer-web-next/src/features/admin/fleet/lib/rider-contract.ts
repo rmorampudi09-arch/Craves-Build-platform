@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { day, id, instant, personName, reasonBody, reasonText, type FleetRoute } from "./fleet-common";
+import { istDay } from "./payout-contract";
 
 export const RIDER_STATUSES = ["NOT_RIDER", "PENDING", "ACTIVE", "SUSPENDED", "DEACTIVATED"] as const;
 export const riderStatusSchema = z.enum(RIDER_STATUSES);
@@ -60,6 +61,13 @@ export const riderVehicleSchema = z.object({ label: z.string().max(60), regNumbe
 
 /** Approve sends {expiresOn} for documents that expire and no body for the rest. */
 export const approveDocumentSchema = z.object({ expiresOn: day }).optional();
+export const EXPIRING_DOCUMENTS: readonly (typeof DOCUMENT_TYPES)[number][] = ["DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC"];
+
+/** An expiring document is accepted only with the date printed on it, and not once that date has passed in IST. */
+export function expiryProblem(expiresOn: string, today = istDay()): string | null {
+  if (!day.safeParse(expiresOn).success) return "Enter the expiry date printed on the document.";
+  return expiresOn < today ? "This document has expired. Reject it so the rider uploads a new one." : null;
+}
 export const riderVehicleInputSchema = z.object({
   label: z.string().trim().min(2, "Enter the vehicle, like Honda Activa 6G.").max(60, "Keep the vehicle to 60 characters."),
   regNumber: z.string().regex(/^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/, "Enter the registration number, like TS09EA1234."),

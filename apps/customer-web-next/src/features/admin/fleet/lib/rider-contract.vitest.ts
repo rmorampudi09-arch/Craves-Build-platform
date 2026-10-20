@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  approveDocumentSchema, payoutAccountInputSchema, riderDetailSchema, riderDocumentSchema, riderPageSchema, riderVehicleInputSchema, riderVehicleSchema,
+  approveDocumentSchema, expiryProblem, payoutAccountInputSchema, riderDetailSchema, riderDocumentSchema, riderPageSchema, riderVehicleInputSchema, riderVehicleSchema,
   statusEventProblem, type StatusEventInput,
 } from "./rider-contract";
 
@@ -49,6 +49,12 @@ describe("document expiry and vehicle", () => {
     expect(approveDocumentSchema.parse(undefined)).toBeUndefined();
     expect(approveDocumentSchema.parse({ expiresOn: "2027-04-30", reviewer: "x" })).toEqual({ expiresOn: "2027-04-30" });
     expect(approveDocumentSchema.safeParse({ expiresOn: "30-04-2027" }).success).toBe(false);
+  });
+
+  it("need the printed expiry date, today (IST) or later", () => {
+    expect(expiryProblem("2026-10-21", "2026-10-21")).toBeNull();
+    expect(expiryProblem("2026-10-20", "2026-10-21")).toBe("This document has expired. Reject it so the rider uploads a new one.");
+    expect(expiryProblem("", "2026-10-21")).toBe("Enter the expiry date printed on the document.");
   });
 
   it("read the masked vehicle and drop the full registration number", () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SLOT_ROUTES, slotsSchema, slotSchema, zoneBannerSchema } from "./slot-contract";
+import {
+  bannerFromForm, istInstant, rupeesToPaise, SLOT_ROUTES, slotFromForm, slotRangeProblem, slotsSchema, slotSchema, zoneBannerSchema,
+} from "./slot-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
 const SLOT = "77777777-7777-4777-8777-777777777777";
@@ -42,5 +44,44 @@ describe("zone banner parser", () => {
     expect(response("DELETE").safeParse(null).success).toBe(true);
     expect(response("PUT").safeParse(null).success).toBe(false);
     expect(response("GET").parse({ ...banner, extra: 1 })).toEqual(banner);
+  });
+});
+
+describe("slot and banner forms", () => {
+  const form = { riderId: RIDER, zoneName: " Madhapur ", date: "2026-10-21", startTime: "18:00", endTime: "22:00", rupeesPerHour: "80" };
+
+  it("read form times as IST and rupees as integer paise", () => {
+    expect(istInstant("2026-10-21T18:00")).toBe("2026-10-21T12:30:00.000Z");
+    expect(istInstant("2026-10-21T00:15")).toBe("2026-10-20T18:45:00.000Z");
+    expect(istInstant("2026-10-21")).toBe("");
+    expect(istInstant("2026-10-21T25:00")).toBe("");
+    expect(["80", "80.5", "80.50", "0.05", " 120 "].map(rupeesToPaise)).toEqual([8000, 8050, 8050, 5, 12000]);
+    expect(["", "80.505", "-80", "₹80", "1e3", "80,00"].map(rupeesToPaise)).toEqual([null, null, null, null, null, null]);
+  });
+
+  it("build the slot body or name the first problem", () => {
+    expect(slotFromForm(form)).toEqual({ riderId: RIDER, zoneName: "Madhapur", startsAt: "2026-10-21T12:30:00.000Z", endsAt: "2026-10-21T16:30:00.000Z", guaranteedPerHourPaise: 8000 });
+    expect(slotFromForm({ ...form, riderId: "" })).toBe("Choose the rider.");
+    expect(slotFromForm({ ...form, zoneName: "  " })).toBe("Enter the zone name.");
+    expect(slotFromForm({ ...form, startTime: "" })).toBe("Pick the date, the start time and the end time.");
+    expect(slotFromForm({ ...form, endTime: "17:59" })).toBe("The slot must end after it starts.");
+    expect(slotFromForm({ ...form, endTime: "18:00" })).toBe("The slot must end after it starts.");
+    expect(slotFromForm({ ...form, rupeesPerHour: "0" })).toBe("Enter the guarantee in rupees an hour, like 80 or 80.50.");
+  });
+
+  it("list at most 31 days, last day not before the first", () => {
+    expect(slotRangeProblem("2026-10-01", "2026-10-31")).toBeNull();
+    expect(slotRangeProblem("2026-10-21", "2026-10-21")).toBeNull();
+    expect(slotRangeProblem("2026-10-01", "2026-11-01")).toBe("Show at most 31 days at a time.");
+    expect(slotRangeProblem("2026-10-21", "2026-10-20")).toBe("The last day must be on or after the first day.");
+    expect(slotRangeProblem("", "2026-10-20")).toBe("Pick both dates.");
+  });
+
+  it("build the banner or name the first problem", () => {
+    const now = Date.parse("2026-10-21T10:00:00Z");
+    expect(bannerFromForm({ tone: "warning", text: " Rain ahead ", until: "2026-10-21T22:00" }, now)).toEqual({ tone: "warning", text: "Rain ahead", until: "2026-10-21T16:30:00.000Z" });
+    expect(bannerFromForm({ tone: "info", text: "Rain", until: "2026-10-21T15:00" }, now)).toBe("Pick a time in the future.");
+    expect(bannerFromForm({ tone: "info", text: "Rain", until: "" }, now)).toBe("Pick until when the banner shows.");
+    expect(bannerFromForm({ tone: "info", text: "x".repeat(161), until: "2026-10-21T22:00" }, now)).toBe("Keep the banner to 160 characters.");
   });
 });

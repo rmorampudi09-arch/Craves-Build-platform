@@ -69,9 +69,15 @@ public class DeliveryStatusEventValidator {
         if (hasHandoffProvider) {
             requireText(data.handoffFromProviderId(), "handoffFromProviderId");
             requireText(data.handoffFromProviderDeliveryId(), "handoffFromProviderDeliveryId");
-            if (!"borzo".equalsIgnoreCase(data.handoffFromProviderId())
-                || !"pidge".equalsIgnoreCase(data.providerId())) {
-                throw new DeliveryStatusValidationException("Only a Borzo to Pidge handoff is supported");
+            boolean borzoToPidge = "borzo".equalsIgnoreCase(data.handoffFromProviderId())
+                && "pidge".equalsIgnoreCase(data.providerId());
+            // A Craves rider who went silent before pickup hands the order to Borzo or Pidge; never as a continuation.
+            boolean riderToCourier = DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID.equalsIgnoreCase(data.handoffFromProviderId())
+                && ("borzo".equalsIgnoreCase(data.providerId()) || "pidge".equalsIgnoreCase(data.providerId()))
+                && !Boolean.TRUE.equals(data.handoffContinuation());
+            if (!borzoToPidge && !riderToCourier) {
+                throw new DeliveryStatusValidationException(
+                    "Only a Borzo to Pidge or a Craves rider to Borzo or Pidge handoff is supported");
             }
             if (data.handoffFromProviderDeliveryId().equals(data.providerDeliveryId())) {
                 throw new DeliveryStatusValidationException("Delivery handoff requires a new provider delivery identifier");

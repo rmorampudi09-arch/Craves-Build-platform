@@ -52,10 +52,18 @@ class DeliveryHandoffEligibilityServiceTest {
     }
 
     @Test
+    void onlyACourierOfThisBorzoDeliveryCountsNotACravesRiderEarlierOnTheJob() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        new DeliveryHandoffEligibilityService(jdbc).check(chefSubOrderId, checkoutId, deliveryJobId, borzoProviderDeliveryId);
+        org.mockito.Mockito.verify(jdbc).query(contains("AND h.provider_delivery_id = ?"), any(RowMapper.class), eq(deliveryJobId),
+            eq(borzoProviderDeliveryId), eq(chefSubOrderId), eq(checkoutId));
+    }
+
+    @Test
     void missingOrWrongCheckoutReturnsFalse() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(contains("FROM order_schema.customer_order"),
-            any(RowMapper.class), eq(deliveryJobId), eq(chefSubOrderId), eq(checkoutId)))
+            any(RowMapper.class), eq(deliveryJobId), eq(borzoProviderDeliveryId), eq(chefSubOrderId), eq(checkoutId)))
             .thenReturn(List.of());
 
         assertThat(new DeliveryHandoffEligibilityService(jdbc)
@@ -105,7 +113,7 @@ class DeliveryHandoffEligibilityServiceTest {
         when(row.getString("delivery_provider_delivery_id")).thenReturn(projectedDeliveryId);
         when(row.getBoolean("courier_previously_assigned")).thenReturn(courierPreviouslyAssigned);
         when(jdbc.query(contains("FROM order_schema.customer_order"),
-            any(RowMapper.class), eq(deliveryJobId), eq(chefSubOrderId), eq(checkoutId)))
+            any(RowMapper.class), eq(deliveryJobId), eq(borzoProviderDeliveryId), eq(chefSubOrderId), eq(checkoutId)))
             .thenAnswer(invocation -> {
                 RowMapper<?> mapper = invocation.getArgument(1);
                 return List.of(mapper.mapRow(row, 0));

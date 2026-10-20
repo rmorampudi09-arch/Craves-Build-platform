@@ -78,6 +78,28 @@ class DeliveryStatusEventValidatorTest {
     }
 
     @Test
+    void aCravesRiderHandsOverOnlyToBorzoOrPidgeAndNeverAsAContinuation() {
+        EventEnvelope<DeliveryStatusChangedData> ordinary = event("SEARCHING", null);
+        DeliveryStatusChangedData data = ordinary.data();
+        for (String courier : java.util.List.of("borzo", "pidge")) {
+            assertThatCode(() -> validator.validate(withData(ordinary, new DeliveryStatusChangedData(
+                data.deliveryJobId(), data.orderId(), data.chefSubOrderId(), courier, courier + "-order-1", "SEARCHING", null,
+                data.observedAt(), "craves_fleet", "trip-1")))).doesNotThrowAnyException();
+        }
+        for (DeliveryStatusChangedData refused : java.util.List.of(
+            new DeliveryStatusChangedData(data.deliveryJobId(), data.orderId(), data.chefSubOrderId(), "shiprocket", "s-1",
+                "SEARCHING", null, data.observedAt(), "craves_fleet", "trip-1"),
+            new DeliveryStatusChangedData(data.deliveryJobId(), data.orderId(), data.chefSubOrderId(), "borzo", "borzo-order-1",
+                "SEARCHING", null, data.observedAt(), "craves_fleet", "trip-1", true),
+            new DeliveryStatusChangedData(data.deliveryJobId(), data.orderId(), data.chefSubOrderId(), "craves_fleet", "trip-1",
+                "COURIER_ASSIGNED", null, data.observedAt(), "borzo", "borzo-order-1"))) {
+            assertThatThrownBy(() -> validator.validate(withData(ordinary, refused)))
+                .isInstanceOf(DeliveryStatusEventValidator.DeliveryStatusValidationException.class)
+                .hasMessageContaining("handoff is supported");
+        }
+    }
+
+    @Test
     void continuationRequiresPriorBorzoIdentity() {
         EventEnvelope<DeliveryStatusChangedData> ordinary = event("SEARCHING", null);
         DeliveryStatusChangedData data = ordinary.data();

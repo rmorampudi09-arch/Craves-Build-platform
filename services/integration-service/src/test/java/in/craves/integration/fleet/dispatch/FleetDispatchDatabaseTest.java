@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
@@ -23,6 +24,7 @@ import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.trip.FleetTripModels;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.ArgumentCaptor;
 
 /** The fleet stage of the dispatch chain (PLAN F8a, F9) against a real database. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
@@ -75,7 +78,7 @@ class FleetDispatchDatabaseTest {
     }
 
     @Test
-    void liveOffersTheThreeNearestEligibleRidersWithLockedPayAndWaits() {
+    void liveOffersTheThreeNearestEligibleRidersWithLockedPayAndWaits() throws Exception {
         FleetDispatchFixtures.policy(fleet.db, "live");
         UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
         UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
@@ -113,8 +116,19 @@ class FleetDispatchDatabaseTest {
         });
         // 111 m x 1.3 = 144 m pickup: inside the free km, so 4000 base + 1350 drop km.
         assertThat(offers.get(0).get("pay_paise")).isEqualTo(5350L);
-        verify(push, timeout(2000)).offer(eq("fcm-+919800000001"), org.mockito.ArgumentMatchers.any(), anyString(), eq("New order: ₹53.50"),
+        ArgumentCaptor<String> pushed = ArgumentCaptor.forClass(String.class);
+        verify(push, timeout(2000)).offer(eq("fcm-+919800000001"), org.mockito.ArgumentMatchers.any(), pushed.capture(), eq("New order: ₹53.50"),
             eq("Madhapur to Kondapur"), anyInt());
+        // The push carries the rider-v1 Offer from the same mapping as /locations.
+        JsonNode rung = json.readTree(pushed.getValue());
+        assertThat(rung.fieldNames()).toIterable().containsExactlyInAnyOrder("offerId", "tripId", "expiresAt", "expiresInSec", "payPaise",
+            "pickupDistanceM", "dropDistanceM", "kitchenArea", "customerLocality", "estMinutes", "itemsCount", "payLines");
+        assertThat(rung.get("tripId").asText()).isEqualTo(trip.get("id").toString());
+        assertThat(rung.get("expiresInSec").asLong()).isBetween(35L, 40L);
+        assertThat(rung.get("payPaise").asLong()).isEqualTo(5350L);
+        assertThat(rung.get("itemsCount").asInt()).isEqualTo(3);
+        assertThat(rung.get("estMinutes").asInt()).isEqualTo(FleetTripModels.estMinutes(rung.get("pickupDistanceM").asInt(), 3500));
+        assertThat(rung.get("payLines").get(0).get("label").asText()).isEqualTo("base");
         assertThat(List.of(fourth, mock, stale, far, notListed, busy)).doesNotContainAnyElementsOf(
             offers.stream().map(offer -> (UUID) offer.get("rider_id")).toList());
     }
@@ -194,7 +208,7 @@ class FleetDispatchDatabaseTest {
     @Test
     void theOrderCodeIsTheFirstEightCharactersTheChefAndCustomerSee() {
         assertThat(FleetDispatcher.orderCode(UUID.fromString("0bde0101-aaaa-4bbb-8ccc-dddddddddddd"))).isEqualTo("#0BDE0101");
-        assertThat(FleetDispatcher.estMinutes(1800, 3500)).isEqualTo(21);
+        assertThat(FleetTripModels.estMinutes(1800, 3500)).isEqualTo(21);
     }
 
     private int count(String table) {

@@ -200,12 +200,14 @@ class FleetLocationApiDatabaseTest {
             .get("offers").get(0);
         assertThat(offer.get("offerId").asText()).isEqualTo(live.toString());
         assertThat(offer.get("tripId").asText()).isEqualTo(trip.toString());
-        assertThat(offer.get("expiresInSec").asInt()).isBetween(25, 29);
+        assertThat(offer.get("expiresInSec").asInt()).isBetween(25, 30);
         assertThat(offer.get("payPaise").asLong()).isEqualTo(5800);
-        assertThat(offer.get("payLines").get(1).get("label").asText()).isEqualTo("₹18 drop distance");
+        assertThat(offer.get("payLines").get(1).get("label").asText()).isEqualTo("drop distance");
+        assertThat(offer.get("payLines").get(1).get("amountPaise").asLong()).isEqualTo(1800);
         assertThat(offer.get("kitchenArea").asText()).isEqualTo("Madhapur");
         assertThat(offer.get("customerLocality").asText()).isEqualTo("Kondapur");
-        assertThat(offer.get("estMinutes").asInt()).isEqualTo(28);
+        assertThat(offer.get("estMinutes").asInt()).isEqualTo(20);
+        assertThat(offer.get("itemsCount").asInt()).isEqualTo(2);
     }
 
     @Test
@@ -297,8 +299,9 @@ class FleetLocationApiDatabaseTest {
     UUID offer(UUID rider, UUID trip, String expiresAt) {
         UUID id = UUID.randomUUID();
         fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m, "
-            + "drop_distance_m, offered_at, expires_at) VALUES (?, ?, ?, 5800, '[{\"label\":\"₹40 base\",\"amountPaise\":4000},"
-            + "{\"label\":\"₹18 drop distance\",\"amountPaise\":1800}]', '2026-10-v1', 900, 4000, now() - INTERVAL '30 seconds', " + expiresAt + ")",
+            + "drop_distance_m, offered_at, expires_at) VALUES (?, ?, ?, 5800, '[{\"component\":\"base\",\"label\":\"base\",\"amountPaise\":4000},"
+            + "{\"component\":\"drop-km\",\"label\":\"drop distance\",\"amountPaise\":1800}]', '2026-10-v1', 900, 4000, "
+            + "now() - INTERVAL '30 seconds', " + expiresAt + ")",
             id, trip, rider);
         return id;
     }

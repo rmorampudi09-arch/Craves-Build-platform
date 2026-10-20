@@ -17,6 +17,7 @@ import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.pay.FleetPay;
 import in.craves.integration.fleet.pay.FleetPay.PayQuote;
 import in.craves.integration.fleet.rider.FleetRiderService;
+import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -270,21 +271,20 @@ public class FleetDispatcher implements FleetStage {
         Instant deadline = jdbc.queryForObject("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, deadline_at) "
             + "VALUES (?, ?, 1, 'CRAVES_FLEET', now() + make_interval(secs => ?)) RETURNING deadline_at",
             (row, n) -> row.getTimestamp("deadline_at").toInstant(), UUID.randomUUID(), tripId, policy.fleetStageSeconds());
-        List<RingingOffer> offers = new ArrayList<>();
+        int offered = 0;
         for (Planned planned : plan.offers()) {
             // One ACTIVE offer per rider: a rider another order reached first is skipped, not doubled up.
-            offers.addAll(jdbc.query("""
-                    INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m,
-                      drop_distance_m, expires_at)
-                    VALUES (?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, now() + make_interval(secs => ?))
-                    ON CONFLICT (rider_id) WHERE state = 'ACTIVE' DO NOTHING
-                    RETURNING id, expires_at, GREATEST(0, ceil(EXTRACT(EPOCH FROM expires_at - now())))::bigint AS seconds_left""",
-                    (row, n) -> offer(planned, tripId, row.getTimestamp("expires_at").toInstant(), row.getLong("seconds_left"),
-                        text(kitchen.area() != null ? kitchen.area() : command.area(), 160, ""), text(drop.area(), 160, "")),
-                    planned.offerId(), tripId, planned.riderId(), planned.quote().totalPaise(), write(planned.quote().lines()),
-                    planned.quote().rateCardVersion(), planned.quote().pickupDistanceM(), planned.quote().dropDistanceM(),
-                    policy.offerSeconds()));
+            offered += jdbc.update("""
+                INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m,
+                  drop_distance_m, expires_at)
+                VALUES (?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, now() + make_interval(secs => ?))
+                ON CONFLICT (rider_id) WHERE state = 'ACTIVE' DO NOTHING""",
+                planned.offerId(), tripId, planned.riderId(), planned.quote().totalPaise(), write(planned.quote().lines()),
+                planned.quote().rateCardVersion(), planned.quote().pickupDistanceM(), planned.quote().dropDistanceM(), policy.offerSeconds());
         }
+        List<RingingOffer> offers = offered == 0 ? List.of() : jdbc.query("SELECT " + FleetTripModels.OFFER_COLUMNS
+                + " FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id WHERE o.trip_id = ? AND o.state = 'ACTIVE'",
+            (row, n) -> new RingingOffer(row.getObject("rider_id", UUID.class), FleetTripModels.offer(row, json)), tripId);
         if (offers.isEmpty()) {
             closeFleetStage(tripId, plan.offers().isEmpty() ? plan.outcome() : "RIDERS_BUSY", borzoNext, policy.pidgeStageSeconds());
             return new Opened(List.of(), deadline);
@@ -309,18 +309,6 @@ public class FleetDispatcher implements FleetStage {
         } catch (RuntimeException | JsonProcessingException exception) {
             LOGGER.warn("FLEET_OFFER_PUSH offer={} failed: {}", offer.offer().offerId(), exception.getClass().getSimpleName());
         }
-    }
-
-    private RingingOffer offer(Planned planned, UUID tripId, Instant expiresAt, long secondsLeft, String kitchenArea, String customerLocality) {
-        PayQuote quote = planned.quote();
-        return new RingingOffer(planned.riderId(), new Offer(planned.offerId().toString(), tripId.toString(), expiresAt, secondsLeft,
-            quote.totalPaise(), quote.pickupDistanceM(), quote.dropDistanceM(), kitchenArea, customerLocality,
-            estMinutes(quote.pickupDistanceM(), quote.dropDistanceM()), quote.lines()));
-    }
-
-    /** About 20 km/h on a two-wheeler plus 5 minutes at the kitchen and the door: the rider's own time, not the customer's promise. */
-    static int estMinutes(int pickupDistanceM, int dropDistanceM) {
-        return (int) Math.ceil((pickupDistanceM + dropDistanceM) / 333.0) + 5;
     }
 
     /** "#" + the first 8 characters of the chef sub-order id without dashes, uppercase: the number the chef and customer see. */

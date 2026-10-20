@@ -337,7 +337,7 @@ public class FleetTripService {
         Long lockedPay = (Long) row.getObject("pay_paise");
         Integer freeMinutes = (Integer) row.getObject("wait_free_minutes");
         Integer unreachableMinutes = (Integer) row.getObject("unreachable_wait_minutes");
-        return new Trip(row.getObject("id", UUID.class).toString(), row.getInt("version"), step(row.getString("state")),
+        return new Trip(row.getObject("id", UUID.class).toString(), row.getInt("version"), FleetTripModels.step(row.getString("state")),
             row.getString("order_code"), row.getInt("items_count"), finalPay != null ? finalPay : lockedPay != null ? lockedPay : 0,
             new Kitchen(row.getString("kitchen_area"), row.getString("kitchen_address"), row.getString("kitchen_landmark"),
                 row.getDouble("kitchen_lat"), row.getDouble("kitchen_lng"), row.getString("kitchen_name"), row.getString("chef_phone")),
@@ -424,14 +424,6 @@ public class FleetTripService {
 
     static FleetApiException otpLockedError() {
         return new FleetApiException(423, "OTP_LOCKED", "Too many wrong OTPs. Use the photo option; ops will check it.");
-    }
-
-    static String step(String state) {
-        return switch (state) {
-            case "ASSIGNED" -> "TO_KITCHEN";
-            case "AT_PICKUP" -> "AT_KITCHEN";
-            default -> state; // PICKED_UP, AT_DROP, DELIVERED, FAILED, CANCELLED
-        };
     }
 
     private Trip notWon(UUID offerId, Rider rider) {

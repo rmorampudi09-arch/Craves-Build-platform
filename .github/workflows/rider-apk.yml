@@ -1,9 +1,12 @@
 name: Craves Rider APK
 
 # Builds the rider app (com.cravesapp.rider) as an installable APK for phone testing.
-# Demo builds use mock data and never call Firebase or the Craves API.
+# Mock builds use demo data and never call Firebase or the Craves API. Live builds sign in with Firebase and call
+# CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
+# Which one: a manual run picks api_mode (default mock); pull requests use the repo variable CRAVES_RIDER_API_MODE
+# (mock when unset). The mode is in the APK's name and the PR comment.
 # Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
-# RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key). Optional variable: CRAVES_RIDER_API_MODE (mock|live).
+# RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key).
 
 on:
   pull_request:
@@ -13,6 +16,14 @@ on:
       - 'apps/mobile/**'
       - '.github/workflows/rider-apk.yml'
   workflow_dispatch:
+    inputs:
+      api_mode:
+        description: 'Rider API: mock (demo data) or live (Firebase sign-in and the Craves API)'
+        type: choice
+        options:
+          - mock
+          - live
+        default: mock
 
 permissions:
   contents: read
@@ -20,7 +31,8 @@ permissions:
   issues: write
 
 concurrency:
-  group: rider-apk-${{ github.ref }}
+  # A mock and a live build of the same branch can run side by side.
+  group: rider-apk-${{ github.ref }}-${{ inputs.api_mode || 'pr' }}
   cancel-in-progress: true
 
 jobs:
@@ -70,13 +82,35 @@ jobs:
             exit 1
           fi
 
+      - name: API mode
+        id: mode
+        shell: bash
+        env:
+          INPUT_MODE: ${{ inputs.api_mode }}
+          VARIABLE_MODE: ${{ vars.CRAVES_RIDER_API_MODE }}
+        run: |
+          set -euo pipefail
+          # Manual runs: the api_mode input. Pull requests have no input: the repo variable, else mock.
+          mode="${INPUT_MODE:-${VARIABLE_MODE:-mock}}"
+          case "$mode" in
+            mock|live) ;;
+            *) echo "ERROR: api mode must be mock or live, got '$mode' (check the CRAVES_RIDER_API_MODE variable)" >&2; exit 1 ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Rider API mode: $mode"
+
       - name: Firebase config for the rider app
         shell: bash
         env:
           RIDER_GOOGLE_SERVICES_JSON: ${{ secrets.RIDER_GOOGLE_SERVICES_JSON }}
+          MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
           target=android/app/src/rider/google-services.json
+          if [[ "$MODE" == live && -z "${RIDER_GOOGLE_SERVICES_JSON:-}" ]]; then
+            echo 'ERROR: a live build needs the RIDER_GOOGLE_SERVICES_JSON secret; phone sign-in cannot work with the placeholder.' >&2
+            exit 1
+          fi
           if [[ -n "${RIDER_GOOGLE_SERVICES_JSON:-}" ]]; then
             printf '%s' "$RIDER_GOOGLE_SERVICES_JSON" > "$target"
             echo 'Using the real rider Firebase config.'
@@ -99,11 +133,12 @@ jobs:
 
       - name: App settings
         shell: bash
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
-          mode="${{ vars.CRAVES_RIDER_API_MODE || 'mock' }}"
-          printf 'CRAVES_ENVIRONMENT=production\nCRAVES_API_BASE_URL=https://api.craves.in\nCRAVES_RIDER_API_MODE=%s\n' "$mode" > .env
-          echo "CRAVES_RIDER_API_MODE=$mode"
+          printf 'CRAVES_ENVIRONMENT=production\nCRAVES_API_BASE_URL=https://api.craves.in\nCRAVES_RIDER_API_MODE=%s\n' "$MODE" > .env
+          echo "CRAVES_RIDER_API_MODE=$MODE"
 
       - name: Restore the pilot signing key
         id: key-cache
@@ -146,9 +181,11 @@ jobs:
       - name: Name the APK
         id: apk
         shell: bash
+        env:
+          MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
-          name="craves-rider-$(git rev-parse --short HEAD).apk"
+          name="craves-rider-${MODE}-$(git rev-parse --short HEAD).apk"
           cp android/app/build/outputs/apk/rider/release/app-rider-release.apk "$name"
           ls -lh "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
@@ -166,18 +203,20 @@ jobs:
         env:
           OUTCOME: ${{ job.status }}
           APK: ${{ steps.apk.outputs.name }}
+          MODE: ${{ steps.mode.outputs.mode }}
         with:
           script: |
             const fs = require('fs');
             const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             let body;
             if (process.env.OUTCOME === 'success') {
-              body = `Rider APK built: **${process.env.APK}**. Download it from the "craves-rider-apk" artifact on [this run](${run}) (kept 14 days).`;
+              const mode = process.env.MODE === 'live' ? '**live** (Firebase sign-in, real Craves API)' : '**mock** (demo data, no sign-in or API calls)';
+              body = `Rider APK built: **${process.env.APK}**, API mode ${mode}. Download it from the "craves-rider-apk" artifact on [this run](${run}) (kept 14 days).`;
             } else {
               let tail = '(no Gradle log: an earlier step failed; see the run)';
               try {
                 tail = fs.readFileSync('apps/mobile/rider-build.log', 'utf8').split('\n').slice(-80).join('\n');
               } catch {}
-              body = `Rider APK build **${process.env.OUTCOME}**: [run](${run}).\n\n<details><summary>Last 80 lines of the Gradle log</summary>\n\n\`\`\`\n${tail}\n\`\`\`\n</details>`;
+              body = `Rider APK build (${process.env.MODE || 'mode not set'}) **${process.env.OUTCOME}**: [run](${run}).\n\n<details><summary>Last 80 lines of the Gradle log</summary>\n\n\`\`\`\n${tail}\n\`\`\`\n</details>`;
             }
             await github.rest.issues.createComment({...context.repo, issue_number: context.payload.pull_request.number, body});

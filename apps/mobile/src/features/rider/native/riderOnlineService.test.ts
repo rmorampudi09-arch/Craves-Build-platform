@@ -113,6 +113,21 @@ describe('riderOnlineService in live mode with the native module', () => {
     expect(await service.pendingOffer()).toBeNull();
   });
 
+  it('keeps an offer that came while nothing listened (activity gone, JS running) for pendingOffer', async () => {
+    const native = nativeModule();
+    const {service, emitter} = load('live', native);
+    native.getPendingOffer.mockResolvedValue(null as never);
+    emitter.emit('riderOffer', {offer: JSON.stringify(offer), receivedAtMs: 5000, channel: 'locations'});
+    expect(await service.pendingOffer()).toEqual({offer, receivedAtMs: 5000});
+    expect(await service.pendingOffer()).toBeNull(); // handed over once
+
+    // With RiderRuntime listening, the offer is its own and isn't kept.
+    const off = service.onOffer(jest.fn());
+    emitter.emit('riderOffer', {offer: JSON.stringify({...offer, offerId: 'o2'}), receivedAtMs: 6000, channel: 'fcm'});
+    off();
+    expect(await service.pendingOffer()).toBeNull();
+  });
+
   it('ignores a launch intent whose offer id is not an id (another app can set the extras)', async () => {
     const native = nativeModule();
     const {service} = load('live', native);

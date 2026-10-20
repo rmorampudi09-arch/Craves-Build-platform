@@ -176,6 +176,15 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       fix = fix ?? saved ?? undefined;
     })
     .catch(() => undefined);
+  // Native counts an offer as delivered once JS runs, but with the activity gone (swiped away while online) nothing
+  // listens: keep the newest such offer for pendingOffer(), as native does for one that came before JS started.
+  let listening = 0;
+  let unheard: ReceivedOffer | null = null;
+  on<NativeOffer>('riderOffer', event => {
+    if (listening === 0) {
+      unheard = parseOffer(event) ?? unheard;
+    }
+  });
 
   return {
     start: (shift?: ShiftStart) =>
@@ -183,20 +192,30 @@ function createNativeOnlineService(native: NativeRiderOnline) {
     stop: () => native.stop(),
     testRing: () => native.testRing(),
     lastFix: () => fix,
-    onOffer: (cb: (offer: Offer, receivedAtMs: number) => void) =>
-      on<NativeOffer>('riderOffer', event => {
+    onOffer(cb: (offer: Offer, receivedAtMs: number) => void) {
+      listening += 1;
+      const off = on<NativeOffer>('riderOffer', event => {
         const received = parseOffer(event);
         if (received) {
           cb(received.offer, received.receivedAtMs);
         }
-      }),
+      });
+      return () => {
+        listening -= 1;
+        off();
+      };
+    },
     onTripChanged: (cb: (change: TripChange) => void) => on('riderTripChanged', cb),
     onStatus: (cb: (status: RiderOnlineStatus) => void) => on('riderStatus', cb),
     fcmToken: () => native.getFcmToken().catch(() => null),
     onFcmToken: (cb: (token: string) => void) => on<{token: string}>('riderFcmToken', event => cb(event.token)),
     async pendingOffer() {
       const event = await native.getPendingOffer().catch(() => null);
-      return event ? parseOffer(event) : null;
+      const tapped = event ? parseOffer(event) : null;
+      const held = unheard;
+      unheard = null;
+      // The newer of the two; RiderRuntime drops it if it has expired.
+      return tapped && held ? (held.receivedAtMs > tapped.receivedAtMs ? held : tapped) : tapped ?? held;
     },
     /** The dev panel exists only in mock builds, which use the JS loop. */
     pollNow: async () => undefined,

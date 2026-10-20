@@ -60,7 +60,7 @@ The app always posts a visible notification on channel `rider_offers` (high impo
 | `testRing()` | Posts a test notification on `rider_offers` (phone setup) |
 | `lastFix()` | The latest fix, or null |
 | `getFcmToken()` | The FCM token from `FirebaseMessaging.getToken()`, which keeps the current token itself. Rejects `FCM_TOKEN` in demo builds with the placeholder Firebase config |
-| `getPendingOffer()` | The offer whose notification opened the app, or one that arrived while JS wasn't running; null once expired. Read once |
+| `getPendingOffer()` | The offer whose notification opened the app, or one that arrived while JS wasn't running; null once expired. Read once. JS's `pendingOffer()` also returns a `riderOffer` that came while no screen listened (the activity swiped away while online) |
 
 | Event | Payload |
 |---|---|

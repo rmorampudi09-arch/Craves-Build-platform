@@ -1,14 +1,15 @@
 // Screens 15–21: Earnings, Trip pay, Payouts, SOS, Notice, Profile and Help, in every state.
 import React from 'react';
-import {Text} from 'react-native';
+import {Alert, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
-import type {EarningsPage, TripEarning} from '../api/contract';
+import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderProfile, TripEarning} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {EarningsScreen} from './EarningsScreen';
+import {PayoutsScreen} from './PayoutsScreen';
 import {TripDetailScreen} from './TripDetailScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn()};
@@ -60,6 +61,39 @@ const page = (trips: TripEarning[], extra: Partial<EarningsPage> = {}) => ({
   pages: [{rangeLabel: 'Today', totalPaise: 41400, trips, ...extra}],
   pageParams: [undefined],
 });
+const me: RiderMe = {
+  riderId: 'r1',
+  name: 'Ravi Kumar',
+  phoneMasked: '+91 ••••• •4321',
+  status: 'ACTIVE',
+  termsVersion: 'v1',
+  acceptedTermsVersion: 'v1',
+  language: 'en',
+  minAppVersion: '1.0.0',
+  supportPhone: '+910000000000',
+  supportWhatsappUrl: 'https://chat.whatsapp.com/demo',
+  features: {payoutsEnabled: true, withdrawEnabled: true},
+};
+const home: HomeSummary = {online: false, todayEarningsPaise: 41400, todayTrips: 6};
+const profile: RiderProfile = {
+  vehicle: {label: 'Honda Activa 6G', regNumberMasked: 'TS 09 •• ••12'},
+  documents: [],
+  payoutAccountMasked: 'UPI ••••@okhdfc',
+};
+const payouts: PayoutsPage = {
+  nextPayoutOn: '2026-10-26',
+  withdrawablePaise: 82200,
+  payouts: [
+    {
+      payoutId: 'p1',
+      periodLabel: 'Week of 12 to 18 Oct',
+      amountPaise: 324000,
+      status: 'PAID',
+      utr: '629318472051',
+      paidAt: at(19, 11, 20),
+    },
+  ],
+};
 const offline = () => new AppApiError('NETWORK_ERROR', 'No internet connection.', undefined, undefined, true);
 
 let tree: renderer.ReactTestRenderer;
@@ -213,5 +247,93 @@ describe('Trip pay (16)', () => {
     await settle();
     expect(riderApi.getTripEarning).toHaveBeenCalledTimes(3);
     expect(allText()).toContain('Madhapur to Kondapur');
+  });
+});
+
+describe('Payouts (17)', () => {
+  const seed = (overrides: Partial<RiderMe['features']> = {}, data: PayoutsPage = payouts): Array<[readonly unknown[], unknown]> => [
+    [riderKeys.me, {...me, features: {...me.features, ...overrides}}],
+    [riderKeys.home, home],
+    [riderKeys.profile, profile],
+    [riderKeys.payouts, data],
+  ];
+  // Pressing the dialog's last button confirms.
+  const confirmAlerts = () =>
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.[buttons.length - 1].onPress?.();
+    });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('shows the withdraw card, the next weekly payout and the paid list', async () => {
+    await render(<PayoutsScreen />, seed());
+    const text = allText();
+    expect(text).toContain('You can withdraw now | ₹822');
+    expect(text).toContain("Pay from trips more than 24 hours ago. Today's ₹414 can be withdrawn from tomorrow.");
+    expect(text).toContain('Withdraw ₹822 | Free, once a day. Reaches you by 1 pm tomorrow.');
+    expect(text).toContain('Next weekly payout: Mon 26 Oct, by 3 pm');
+    expect(text).toContain('Your whole balance goes to UPI ••••@okhdfc. No minimum amount.');
+    expect(text).toContain('Paid | Week of 12 to 18 Oct | ₹3,240 | Paid | Mon 19 Oct, 11:20 am | Bank ref (UTR) 629318472051');
+    expect(text).toContain('Craves never takes fees, deposits or penalties from your pay.');
+  });
+
+  it('withdraws once a day with a repeatable key and confirms', async () => {
+    confirmAlerts();
+    (riderApi.requestWithdrawal as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<PayoutsScreen />, seed());
+    await press('rider-withdraw');
+    await settle();
+    const day = new Date().toISOString().slice(0, 10);
+    expect(riderApi.requestWithdrawal).toHaveBeenCalledWith(82200, `rider-withdraw-${day}-r1`);
+    expect(allText()).toContain('Withdrawal requested. It reaches you by 1 pm tomorrow.');
+    expect(has('rider-withdraw')).toBe(false);
+  });
+
+  it("shows the server's reason when a withdrawal fails", async () => {
+    confirmAlerts();
+    (riderApi.requestWithdrawal as jest.Mock).mockRejectedValueOnce(new AppApiError('ALREADY_WITHDRAWN', 'You already withdrew today.', 409));
+    await render(<PayoutsScreen />, seed());
+    await press('rider-withdraw');
+    await settle();
+    expect(allText()).toContain('You already withdrew today.');
+    expect(has('rider-withdraw')).toBe(true);
+  });
+
+  it('explains when daily withdrawals are off, and when payouts have not started', async () => {
+    await render(<PayoutsScreen />, seed({withdrawEnabled: false}));
+    expect(allText()).toContain("Daily withdrawals aren't on yet.");
+    expect(has('rider-withdraw')).toBe(false);
+    act(() => tree.unmount());
+    await render(<PayoutsScreen />, seed({payoutsEnabled: false}));
+    expect(allText()).toContain('Payouts will appear here once they start.');
+  });
+
+  it('reports a problem with a payout from its card', async () => {
+    (riderApi.reportIssue as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<PayoutsScreen />, seed());
+    await press('rider-report');
+    await press('rider-report-PAYOUT_NOT_RECEIVED');
+    await press('rider-report-send');
+    expect(riderApi.reportIssue).toHaveBeenCalledWith({payoutId: 'p1', category: 'PAYOUT_NOT_RECEIVED'});
+    expect(allText()).toContain('Sent. Support replies within 24 hours.');
+  });
+
+  it('lists a withdrawal on the way apart from paid ones', async () => {
+    const processing = {payoutId: 'w1', periodLabel: 'Withdrawal', amountPaise: 82200, status: 'PROCESSING' as const};
+    await render(<PayoutsScreen />, seed({}, {withdrawablePaise: 0, payouts: [processing]}));
+    expect(allText()).toContain('On the way | Withdrawal | ₹822 | Processing');
+    expect(allText()).toContain('Paid | No payouts yet.');
+    expect(has('rider-withdraw')).toBe(false);
+  });
+
+  it('shows a skeleton, then an offline error with retry', async () => {
+    await render(<PayoutsScreen />, [[riderKeys.me, me]]);
+    expect(has('rider-payouts-loading')).toBe(true);
+    act(() => tree.unmount());
+    (riderApi.getPayouts as jest.Mock).mockRejectedValueOnce(offline());
+    await render(<PayoutsScreen />, [[riderKeys.me, me]]);
+    await settle();
+    expect(allText()).toContain("You're offline.");
+    expect(has('rider-retry')).toBe(true);
   });
 });

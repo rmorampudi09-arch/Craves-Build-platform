@@ -332,14 +332,27 @@ export const en = {
   },
   payouts: {
     title: 'Payouts',
-    next: (day: string) => `Next payout: Monday ${day}`,
+    canWithdraw: 'You can withdraw now',
+    // The server decides what is withdrawable; this only explains the 24-hour rule.
+    withdrawNote: (today?: string) =>
+      today
+        ? `Pay from trips more than 24 hours ago. Today's ${today} can be withdrawn from tomorrow.`
+        : 'Pay from trips more than 24 hours ago.',
+    withdraw: (amount: string) => `Withdraw ${amount}`,
+    withdrawFree: 'Free, once a day. Reaches you by 1 pm tomorrow.',
+    withdrawConfirm: 'Free, once a day. It reaches you by 1 pm tomorrow.',
+    withdrawDone: 'Withdrawal requested. It reaches you by 1 pm tomorrow.',
+    withdrawOff: "Daily withdrawals aren't on yet. Your balance goes out with the weekly payout.",
+    next: (day: string) => `Next weekly payout: ${day}, by 3 pm`,
+    nextBody: (account?: string) =>
+      `Your whole balance goes to ${account ?? 'your payout account'}. No minimum amount.`,
+    paid: 'Paid',
+    onTheWay: 'On the way',
     notStarted: 'Payouts will appear here once they start.',
     empty: 'No payouts yet.',
-    utr: 'Bank ref (UTR)',
+    utr: (utr: string) => `Bank ref (UTR) ${utr}`,
     status: {SCHEDULED: 'Scheduled', PROCESSING: 'Processing', PAID: 'Paid', FAILED: 'Failed'},
-    withdraw: (amount: string) => `Withdraw ${amount}`,
-    withdrawConfirm: 'It reaches your account by 1 pm tomorrow. Withdrawals are free.',
-    withdrawDone: 'Withdrawal requested.',
+    noFees: 'Craves never takes fees, deposits or penalties from your pay.',
   },
   profile: {
     title: 'Profile',

@@ -59,6 +59,8 @@ public class FleetTripService {
     // is the signal; switch to an order-cancelled event if order-service ever cancels without a refund (meal-plan orders).
     public static final String ORDER_REFUNDED = "EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = t.chef_sub_order_id)";
     static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
+    /** OTP_LOCKED reason for an order order-service has no delivery code for (accepted before codes existed). */
+    static final String NO_CODE = "NO_CODE";
     /** Step: the state it needs, the state it leaves the trip in. */
     private static final Map<String, String[]> STEPS = Map.of("arrived-pickup", new String[] {"ASSIGNED", "AT_PICKUP"},
         "food-not-ready", new String[] {"AT_PICKUP", "AT_PICKUP"}, "picked-up", new String[] {"AT_PICKUP", "PICKED_UP"},
@@ -185,7 +187,8 @@ public class FleetTripService {
     /**
      * Delivered with the customer's code, checked by order-service (never retried; the code is never stored or logged).
      * Wrong: 422 OTP_INVALID with attemptsLeft (4 to 1). The fifth wrong code and every code after it: 423 OTP_LOCKED, and
-     * the photo route opens. A repeated Idempotency-Key gets the first answer without asking order-service again.
+     * the photo route opens; so it does at once for an order accepted before delivery codes existed (order-service 404),
+     * whose customer has no code. A repeated Idempotency-Key gets the first answer without asking order-service again.
      */
     public Trip deliveredByOtp(UUID identityId, UUID tripId, String otp, String key) {
         if (otp == null || !otp.matches("[0-9]{4}")) {
@@ -201,11 +204,13 @@ public class FleetTripService {
             return view(tripId);
         }
         requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
-        if (otpLocked(tripId)) {
-            throw otpLockedError();
+        Optional<String> lockedFor = jdbc.queryForList("SELECT COALESCE(detail ->> 'reason', '') FROM fleet_schema.trip_event WHERE trip_id = ? "
+            + "AND kind = 'OTP_LOCKED' LIMIT 1", String.class, tripId).stream().findFirst();
+        if (lockedFor.isPresent()) {
+            throw otpLockedError(lockedFor.get());
         }
         DeliveryCodeClient.Result result = codes.verify(trip.chefSubOrderId(), otp);
-        if (result.outcome() == DeliveryCodeClient.Outcome.NOT_FOUND || result.outcome() == DeliveryCodeClient.Outcome.UNAVAILABLE) {
+        if (result.outcome() == DeliveryCodeClient.Outcome.UNAVAILABLE) {
             throw new FleetApiException(503, "OTP_UNAVAILABLE", "We couldn't check the OTP just now. Try again, or call rider support.");
         }
         Optional<FleetApiException> refusal = transaction.execute(status -> {
@@ -218,10 +223,11 @@ public class FleetTripService {
                 deliver(tripId, rider.id(), key, Map.of("method", "OTP"), false, null);
                 return Optional.<FleetApiException>empty();
             }
-            boolean lockedNow = result.outcome() == DeliveryCodeClient.Outcome.LOCKED || result.attemptsLeft() < 1;
+            String reason = result.outcome() == DeliveryCodeClient.Outcome.NOT_FOUND ? NO_CODE : "";
+            boolean lockedNow = !reason.isEmpty() || result.outcome() == DeliveryCodeClient.Outcome.LOCKED || result.attemptsLeft() < 1;
             event(tripId, lockedNow ? "OTP_LOCKED" : "OTP_INVALID", rider.id(), key,
-                lockedNow ? Map.of() : Map.of("attemptsLeft", result.attemptsLeft()));
-            return Optional.of(lockedNow ? otpLockedError() : otpInvalid(result.attemptsLeft()));
+                !lockedNow ? Map.of("attemptsLeft", result.attemptsLeft()) : reason.isEmpty() ? Map.of() : Map.of("reason", reason));
+            return Optional.of(lockedNow ? otpLockedError(reason) : otpInvalid(result.attemptsLeft()));
         });
         if (refusal.isPresent()) {
             throw refusal.get(); // after the attempt is stored, so a retried key gets the same answer
@@ -394,13 +400,14 @@ public class FleetTripService {
             throw otpInvalid(((Number) earlier.get().get("attempts_left")).intValue());
         }
         if (earlier.isPresent() && "OTP_LOCKED".equals(earlier.get().get("kind"))) {
-            throw otpLockedError();
+            throw otpLockedError((String) earlier.get().get("reason"));
         }
     }
 
     private Optional<Map<String, Object>> replayed(UUID tripId, String key) {
-        return key == null ? Optional.empty() : jdbc.queryForList("SELECT kind, (detail ->> 'attemptsLeft')::int AS attempts_left "
-            + "FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = ?", tripId, key).stream().findFirst();
+        return key == null ? Optional.empty() : jdbc.queryForList("SELECT kind, (detail ->> 'attemptsLeft')::int AS attempts_left, "
+            + "COALESCE(detail ->> 'reason', '') AS reason FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = ?", tripId, key)
+            .stream().findFirst();
     }
 
     private boolean otpLocked(UUID tripId) {
@@ -445,7 +452,12 @@ public class FleetTripService {
     }
 
     static FleetApiException otpLockedError() {
-        return new FleetApiException(423, "OTP_LOCKED", "Too many wrong OTPs. Use the photo option; ops will check it.");
+        return otpLockedError("");
+    }
+
+    static FleetApiException otpLockedError(String reason) {
+        return new FleetApiException(423, "OTP_LOCKED", NO_CODE.equals(reason) ? "This order has no OTP. Use the photo option; ops will check it."
+            : "Too many wrong OTPs. Use the photo option; ops will check it.");
     }
 
     private Trip notWon(UUID offerId, Rider rider) {

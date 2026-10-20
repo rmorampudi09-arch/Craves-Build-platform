@@ -16,6 +16,7 @@ in.craves.integration.fleet.admin.FleetAdminController
 in.craves.integration.fleet.admin.FleetSlotController
 in.craves.integration.fleet.rider.FleetLocationController
 in.craves.integration.fleet.rider.FleetRiderController
+in.craves.integration.fleet.trip.FleetTripController
 in.craves.integration.referrals.ReferralOperationsController
 in.craves.integration.referrals.checkout.ReferralCheckoutRecoveryController
 in.craves.integration.referrals.payout.ReferralFinanceController

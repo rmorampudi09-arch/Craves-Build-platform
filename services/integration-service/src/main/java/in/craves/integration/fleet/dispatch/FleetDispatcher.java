@@ -166,6 +166,12 @@ public class FleetDispatcher implements FleetStage {
             seconds, tripId);
     }
 
+    /** Riders who could take an order at this kitchen now (the policy radius, else 5 km); test mode applies. */
+    int ridersNear(double lat, double lng) {
+        int radius = policies.currentDispatchPolicy().map(DispatchPolicy::radiusM).orElse(5000);
+        return (int) nearbyRiders(lat, lng, radius).stream().filter(rider -> testMode.riderAllowed(rider.riderId())).count();
+    }
+
     int pidgeSeconds() {
         return policies.currentDispatchPolicy().map(DispatchPolicy::pidgeStageSeconds).orElse(600);
     }

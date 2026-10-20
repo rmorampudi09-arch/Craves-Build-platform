@@ -27,8 +27,11 @@ export interface RiderApi {
   getTerms(): Promise<Terms>;
   acceptTerms(version: string): Promise<void>;
   getHome(): Promise<HomeSummary>;
-  /** The Go Online selfie is checked by ops in the pilot. */
-  startShift(selfieUri: string): Promise<ShiftStart>;
+  /**
+   * The Go Online selfie is checked by ops in the pilot. installationId goes in the X-Craves-Installation-Id header;
+   * a phone that isn't the rider's bound one gets 409 DEVICE_NOT_BOUND.
+   */
+  startShift(selfieUri: string, installationId: string | null): Promise<ShiftStart>;
   endShift(): Promise<void>;
   /** After sign-in and whenever the FCM token changes. Rejects with 409 DEVICE_NOT_BOUND on an unapproved phone. */
   registerDevice(device: DeviceRegistration): Promise<void>;

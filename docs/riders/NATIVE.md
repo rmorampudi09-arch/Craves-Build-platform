@@ -69,7 +69,9 @@ The app always posts a visible notification on channel `rider_offers` (high impo
 | `riderStatus` | `{state: "ONLINE" \| "OFFLINE" \| "ERROR", lastFix?, message?}` after every upload and when the service stops |
 | `riderFcmToken` | `{token}` |
 
-JS sends the token with `POST /api/v1/rider/devices` `{fcmToken, appVersion, model}` from `RiderRuntime` once the gate is ready and on every token change. A 409 `DEVICE_NOT_BOUND` shows "This phone isn't approved".
+JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken, appVersion, model}` from `RiderRuntime` once the gate is ready and on every token change. A 409 `DEVICE_NOT_BOUND` shows "This phone isn't approved".
+
+`installationId` is `Settings.Secure.ANDROID_ID`, from `CravesRiderDevice.getInstallationId()` (null if the phone has none; JS then registers nothing and sends no header). The server binds the first one; `POST /shift/start` sends it again as `X-Craves-Installation-Id`, and Go online shows the server's message on 409 `DEVICE_NOT_BOUND`. ANDROID_ID depends on the signing key: a build signed with another key looks like a new phone, so keep one rider signing key (see RELEASE.md).
 
 ## Rules the code keeps
 

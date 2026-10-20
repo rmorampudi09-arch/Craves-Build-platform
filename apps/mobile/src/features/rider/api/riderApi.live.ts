@@ -33,10 +33,14 @@ export const liveRiderApi: RiderApi = {
     await apiClient.post(`${BASE}/terms/accept`, {version});
   },
   getHome: () => get('/home'),
-  async startShift(selfieUri) {
+  async startShift(selfieUri, installationId) {
     const form = new FormData();
     form.append('selfie', imagePart(selfieUri, 'selfie.jpg'));
-    return (await apiClient.post(`${BASE}/shift/start`, form, multipart)).data;
+    // Without an id the server can't match the bound phone and answers 409 DEVICE_NOT_BOUND.
+    const headers = installationId
+      ? {...multipart.headers, 'X-Craves-Installation-Id': installationId}
+      : multipart.headers;
+    return (await apiClient.post(`${BASE}/shift/start`, form, {...multipart, headers})).data;
   },
   async endShift() {
     await apiClient.post(`${BASE}/shift/end`);

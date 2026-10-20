@@ -13,6 +13,7 @@ interface NativeRiderDevice {
   openBatterySettings(): Promise<boolean>;
   openAutostartSettings(): Promise<boolean>;
   openAppSettings(): Promise<boolean>;
+  getInstallationId(): Promise<string | null>;
 }
 
 // Present only in the rider flavor (android/app/src/rider); undefined in the customer app and in Jest.
@@ -32,6 +33,14 @@ export const riderDevice = {
   openBatterySettings: async () => (native ? native.openBatterySettings() : false),
   openAutostartSettings: async () => (native ? native.openAutostartSettings() : false),
   openAppSettings: async () => (native ? native.openAppSettings() : false),
+  /** Android's ANDROID_ID, which binds the rider to this phone; null without the rider native module (no made-up id). */
+  async installationId(): Promise<string | null> {
+    try {
+      return (native && (await native.getInstallationId())) || null;
+    } catch {
+      return null;
+    }
+  },
   locationGranted: () => PermissionsAndroid.check(ACCESS_FINE_LOCATION),
   async requestLocation(): Promise<boolean> {
     return (await PermissionsAndroid.request(ACCESS_FINE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;

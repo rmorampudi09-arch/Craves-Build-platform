@@ -54,6 +54,7 @@ jest.mock('../native/riderDevice', () => ({
     openBatterySettings: jest.fn(async () => true),
     openAutostartSettings: jest.fn(async () => true),
     openAppSettings: jest.fn(async () => true),
+    installationId: jest.fn(async () => 'android-id-1'),
   },
 }));
 jest.mock('../api/riderApi', () => {
@@ -496,7 +497,7 @@ describe('Go online', () => {
     expect(allText()).toContain("Ops checks it's you. Customers never see this photo.");
     await act(async () => press('rider-selfie-shutter').props.onPress());
     expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'front'}));
-    expect(riderApi.startShift).toHaveBeenCalledWith('file:///photo.jpg');
+    expect(riderApi.startShift).toHaveBeenCalledWith('file:///photo.jpg', 'android-id-1');
     expect(riderOnlineService.start).toHaveBeenCalledWith(shift);
     expect(mockNavigation.goBack).toHaveBeenCalled();
   });
@@ -528,6 +529,17 @@ describe('Go online', () => {
     expect(riderOnlineService.start).not.toHaveBeenCalled();
     expect(mockNavigation.goBack).not.toHaveBeenCalled();
     expect(press('rider-selfie-shutter')).toBeTruthy();
+  });
+
+  it("shows the server's message when this phone isn't the rider's bound phone", async () => {
+    (riderApi.startShift as jest.Mock).mockRejectedValueOnce(
+      new AppApiError('DEVICE_NOT_BOUND', "This phone isn't approved yet. Call rider support to approve it.", 409),
+    );
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(allText()).toContain("This phone isn't approved yet. Call rider support to approve it.");
+    expect(riderOnlineService.start).not.toHaveBeenCalled();
+    expect(mockNavigation.goBack).not.toHaveBeenCalled();
   });
 
   it('closes without going online', async () => {

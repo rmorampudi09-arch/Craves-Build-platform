@@ -7,7 +7,7 @@ function setup() {
 }
 
 async function acceptFirstOffer(mock: ReturnType<typeof setup>) {
-  await mock.api.startShift('file:///selfie.jpg');
+  await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
   mock.advance(13_000);
   const { offers } = await mock.api.postLocations([]);
   expect(offers).toHaveLength(1);
@@ -26,7 +26,7 @@ describe('mock rider server', () => {
 
   it('expires an offer after 40 seconds', async () => {
     const mock = setup();
-    await mock.api.startShift('file:///selfie.jpg');
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
     mock.advance(13_000);
     const { offers } = await mock.api.postLocations([]);
     mock.advance(41_000);
@@ -37,7 +37,7 @@ describe('mock rider server', () => {
 
   it('reports a lost race as 409', async () => {
     const mock = setup();
-    await mock.api.startShift('file:///selfie.jpg');
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
     mock.advance(13_000);
     const { offers } = await mock.api.postLocations([]);
     mock.controls.loseNextRace();
@@ -124,12 +124,13 @@ describe('mock rider server', () => {
 
   it('returns an opaque shift credential and refuses an unapproved phone once', async () => {
     const mock = setup();
-    const shift = await mock.api.startShift('file:///selfie.jpg');
+    const shift = await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
     expect(shift.shiftCredential).toEqual(expect.any(String));
     expect(Date.parse(shift.expiresAt)).toBe(
       new Date(2026, 9, 19, 24, 0).getTime(),
     ); // 12 hours after noon
     const device = {
+      installationId: 'android-id-1',
       fcmToken: 'token',
       appVersion: '1.0.0',
       model: 'Redmi Note 13',
@@ -143,6 +144,18 @@ describe('mock rider server', () => {
     await expect(mock.api.registerDevice(device)).resolves.toBeUndefined();
   });
 
+  it('refuses a shift from an unapproved phone once, like the dev panel says', async () => {
+    const mock = setup();
+    mock.controls.failNextDeviceCheck();
+    await expect(
+      mock.api.startShift('file:///selfie.jpg', 'android-id-2'),
+    ).rejects.toMatchObject({ code: 'DEVICE_NOT_BOUND', status: 409 });
+    expect((await mock.api.getHome()).online).toBe(false);
+    await expect(
+      mock.api.startShift('file:///selfie.jpg', 'android-id-2'),
+    ).resolves.toMatchObject({ shiftCredential: expect.any(String) });
+  });
+
   it('has demo data for every screen: slot, rest point, banner, pay lines, sealed bag, WhatsApp', async () => {
     const mock = setup();
     expect(await mock.api.getHome()).toMatchObject({
@@ -154,7 +167,7 @@ describe('mock rider server', () => {
     expect((await mock.api.getMe()).supportWhatsappUrl).toBe(
       'https://chat.whatsapp.com/demo',
     );
-    await mock.api.startShift('file:///selfie.jpg');
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
     mock.advance(13_000);
     const [offer] = (await mock.api.postLocations([])).offers;
     expect(offer.payLines[0]).toEqual({ label: 'base', amountPaise: 4000 });
@@ -214,7 +227,7 @@ describe('mock rider server', () => {
 
   it('stops the shift when ops ends it', async () => {
     const mock = setup();
-    await mock.api.startShift('file:///selfie.jpg');
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
     mock.controls.stopShift();
     expect(await mock.api.postLocations([])).toMatchObject({ stop: true });
     expect((await mock.api.getHome()).online).toBe(false);

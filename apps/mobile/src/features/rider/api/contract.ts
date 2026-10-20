@@ -193,8 +193,13 @@ export interface ShiftStart {
   expiresAt: string;
 }
 
-/** POST /devices. 409 DEVICE_NOT_BOUND: a different phone, which ops must approve first. */
+/**
+ * POST /devices. The first installationId a rider sends is bound; another one gets 409 DEVICE_NOT_BOUND and waits for
+ * ops to approve it. The same installationId with a new fcmToken only updates the token.
+ */
 export interface DeviceRegistration {
+  /** Android's Settings.Secure.ANDROID_ID for this app; also sent as X-Craves-Installation-Id on POST /shift/start. */
+  installationId: string;
   fcmToken: string;
   appVersion: string;
   model: string;

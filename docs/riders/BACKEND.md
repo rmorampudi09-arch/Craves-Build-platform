@@ -152,6 +152,9 @@ Admin fleet API (`/api/v1/admin/fleet`, fleet flag), scoped admin roles per `adm
 | `POST /payout-batches/{id}/payouts/{payoutId}/utr`, `/fail` | `{utr}` (12 to 22 letters and digits, stored in capitals): PAID and posted to the journal; 409 `UTR_IN_USE`, `PAYOUT_NOT_PENDING`, `BATCH_NOT_SENT`; 503 `LEDGER_POSTING_OFF` while the journal is off. `{reason}`: FAILED, the money back in the balance, the rider's payouts paused. The file closes once no payout is pending. |
 | `GET /support-issues?state=OPEN\|ACKNOWLEDGED\|FIXED`, `GET /sos-events` | (`FleetSupportAdminController`) Operations, support and audit admins: issues oldest first; SOS presses of the last 7 days, newest first, with the last fix and the masked phone. |
 | `GET /holds?state=ACTIVE\|RELEASED`, `POST /holds`, `POST /holds/{holdId}/release` | Pay holds (`FleetMoneyAdminController`): reads for payments, operations and audit admins; changes for payments admins. `POST {tripId, reason, releaseOn}`: 404 `TRIP_NOT_FOUND`, 409 `HOLD_EXISTS` (one hold per trip, ever), 409 `EARNING_ALREADY_PAID` (the pay was already withdrawable when a payout or withdrawal was made), 422 `RELEASE_DATE_OUT_OF_RANGE`; release: 409 `HOLD_NOT_ACTIVE`. |
+| `GET /trips` | Orders not yet delivered, failed or cancelled, oldest first, with the courier they have now (`FleetOpsController`): the open stage while booking, Borzo or Pidge (state from their status) once they hold the job, else the rider's trip. Support and audit read too. |
+| `POST /trips/{id}/reassign` | `{riderId}` or `{provider: BORZO\|PIDGE}`, with a reason; see "Ops reassign and cancel" below. 409 `TRIP_NOT_REASSIGNABLE`, `RIDER_NOT_AVAILABLE`. |
+| `POST /trips/{id}/cancel` | Ends the delivery; see below. 409 `TRIP_ALREADY_FINISHED`, or `TRIP_NOT_CANCELLABLE` while Borzo or Pidge holds it (cancel with them or cancel the order). |
 
 ### Due process (two tracks)
 
@@ -224,6 +227,19 @@ Both APIs are published on the mobile gateway (`api.craves.in`) by `scripts/apim
 6. Cancellation: integration-service hears that the customer or the chef cancelled only as the refund order-service then requests (`payment_schema.refund` for the sub-order). From then on an accept is refused with 409 `ORDER_CANCELLED` ("This order was cancelled. Watch for the next one."), and the next tick ends the trip through `FleetTripService.cancel`, the adapter's cancel path: open offers withdrawn, every open stage closed (so no courier is booked or queued by the tick), and a rider already on the trip paid for the state reached, not held. The delivery command of an order cancelled before any rider took it books nobody and fails until its retries run out. A Borzo or Pidge courier already booked is not cancelled: no order has that path yet.
 
 `craves_fleet` (`CravesFleetAdapter`) is inactive in the catalog: routing never quotes or creates it. `track()` maps the trip to the pipeline (below); `cancel()` ends a trip as in step 6, with the pay rule for its state.
+
+### Ops reassign and cancel (P5)
+
+Both go through the dispatch chain, in one transaction, audited and idempotent, so an order never has two couriers recorded:
+
+- The stage that is open closes first, by the same conditional update an accept or the dispatch tick uses, and its offers are withdrawn; a late accept then gets 410.
+- **To a rider** (`riderId`): only an order no rider holds yet: still searching, or in the Borzo, Pidge or ops-queue stage with no courier booked. Outside the fleet stage the delivery command is taken over first, and only if it is not booking right now (else 409, try again in a minute). The rider must be ACTIVE, on shift, free (no trip, no open offer), sending real fixes (45 s) and allowed by test mode. Pay is locked from the trip's rate card, the drop distance and the rider's straight line × detour, as an accepted offer; then the usual `COURIER_ASSIGNED`. Call the rider first: nothing rings on the phone; the trip appears on their next location call.
+- **To Borzo or Pidge** (`provider`): a rider's trip before pickup ends for that rider with pay for the trip so far (pickup leg, plus the cancellation fee and waiting at the kitchen; not held) and the stage opens; the dispatch tick books it as for a lost rider. An order still searching gets that stage; the delivery command books it (Borzo gets a fresh 120-second window; Pidge means Borzo's window is over). With the Borzo-then-Pidge routing off, routing picks the courier.
+- Refused: a rider's trip to another rider (a trip row is one rider's pay record: hand it to Borzo or Pidge), anything after pickup (cancel instead), and any order Borzo or Pidge already holds.
+- **Cancel**: a rider's trip ends with the trip-state pay rule (not held) and `CANCELLED` reaches the order. An order still searching stops: the stage closes, offers are withdrawn and the delivery command is marked `DEAD_LETTER` so nobody is booked. A released rider's order being rebooked is cancelled under the delivery job's lock; a courier booked at that moment is not recorded and ops gets `FLEET_COURIER_UNRECORDED` to cancel it.
+- The reason goes to the audit trail. A released rider sees a fixed line ("Craves ops gave this order to another courier. You're paid for the trip so far."), never the ops reason.
+
+`FleetStatusBridge` publishes a trip's statuses while its latest stage is the fleet's, so an order ops gives back to a rider reaches the customer again.
 
 ## Trip steps and statuses
 

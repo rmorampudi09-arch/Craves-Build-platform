@@ -29,7 +29,8 @@ import org.springframework.stereotype.Component;
  * Fleet trips through the existing delivery-status pipeline (PLAN F10) with providerId craves_fleet, so the customer
  * gets the rider card and the delivery code and the chef sees the partner. An accept creates the delivery job and its
  * COURIER_ASSIGNED event; later steps go through DeliveryStatusUpdateService.processTracking, like a provider's tracking.
- * Nothing is published for a trip a later stage took over.
+ * Nothing is published for a trip a later stage took over (its latest stage is not the fleet's; ops can give an order back to a
+ * rider, which ends with a fleet stage again).
  */
 @Component
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -38,7 +39,7 @@ public class FleetStatusBridge {
     private static final String TRIP = """
         SELECT t.id, t.chef_sub_order_id, t.order_id, t.state, t.order_code, t.rider_id, t.updated_at, t.picked_up_at, t.pickup_distance_m,
                r.name AS rider_name, r.phone AS rider_phone, p.lat, p.lng, p.mock, p.received_at,
-               EXISTS (SELECT 1 FROM fleet_schema.trip_stage s WHERE s.trip_id = t.id AND s.provider <> 'CRAVES_FLEET') AS superseded
+               (SELECT s.provider FROM fleet_schema.trip_stage s WHERE s.trip_id = t.id ORDER BY s.seq DESC LIMIT 1) <> 'CRAVES_FLEET' AS superseded
         FROM fleet_schema.trip t
         LEFT JOIN fleet_schema.rider r ON r.id = t.rider_id
         LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = t.rider_id

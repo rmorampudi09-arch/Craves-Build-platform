@@ -24,7 +24,7 @@ Orders count when their dispatch started on the IST dates given and their kitche
 
 ### What it does per order, in time order
 
-1. Synthetic riders (seeded, start at random points in the circle) are on shift during the given IST hours. A rider who takes an order is busy for the trip's estimated minutes (`FleetDispatcher.estMinutes`) and then waits at the drop.
+1. Synthetic riders (seeded, start at random points in the circle) are on shift during the given IST hours. A rider who takes an order is busy for the trip's estimated minutes (`FleetTripModels.estMinutes`) and then waits at the drop.
 2. Eligible riders: on shift, free, inside the policy radius of the kitchen. The 3 nearest that pass the cost guard get the offer, as in `FleetDispatcher`.
 3. Pay is locked per rider with `FleetPay.quote`: drop km = straight line × 1.3 (no Ola call), pickup km = straight line × the policy's detour.
 4. The cost guard compares pay + the per-order overhead with the cheapest recorded quote + the premium. No recorded quote: riders may go.

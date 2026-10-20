@@ -5,6 +5,7 @@ import in.craves.integration.fleet.FleetPolicyStore.RateCard;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.pay.FleetPay;
 import in.craves.integration.fleet.pay.FleetPay.PayQuote;
+import in.craves.integration.fleet.trip.FleetTripModels;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -178,7 +179,7 @@ public final class FleetReplay {
             String outcome = near.isEmpty() ? "NO_RIDERS" : !anyPassed ? "COST_GUARD" : taker == null ? "DECLINED" : "OFFERED";
             PayQuote shown = takerPay != null ? takerPay : nearestPay;
             if (taker != null) {
-                taker.rider().busyUntil = order.at().plusSeconds(60L * FleetDispatcher.estMinutes(takerPay.pickupDistanceM(), dropM));
+                taker.rider().busyUntil = order.at().plusSeconds(60L * FleetTripModels.estMinutes(takerPay.pickupDistanceM(), dropM));
                 taker.rider().lat = order.dropLat();
                 taker.rider().lng = order.dropLng();
             }

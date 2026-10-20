@@ -18,6 +18,7 @@ import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
 import in.craves.integration.fleet.trip.FleetTripPay;
+import in.craves.integration.fleet.trip.FleetTripService;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -39,6 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * The dispatch chain's clock, every 5 s on the fleet pool (only with CRAVES_FLEET_ENABLED; with dispatch_policy off there
  * are no trips and nothing to do):
  * - offers expire on the server after their 40 s;
+ * - a cancelled order's trip ends (cancelledOrders);
  * - the watchdog: a rider who accepted but whose locations stopped for 90 s before pickup loses the trip (pickup-leg pay,
  *   held for ops), ops is alerted and the order goes to the next stage; CANCELLED is never published for it;
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
@@ -59,6 +61,7 @@ public class FleetDispatchJobs {
     private final TransactionTemplate transaction;
     private final FleetDispatcher dispatcher;
     private final FleetTripPay tripPay;
+    private final FleetTripService trips;
     private final RiderPushClient alerts;
     private final DeliveryProviderRouter router;
     private final DeliveryCommandRepository commands;
@@ -68,13 +71,14 @@ public class FleetDispatchJobs {
     private final ObjectMapper json;
 
     public FleetDispatchJobs(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetDispatcher dispatcher, FleetTripPay tripPay,
-                             RiderPushClient alerts, DeliveryProviderRouter router, DeliveryCommandRepository commands,
+                             FleetTripService trips, RiderPushClient alerts, DeliveryProviderRouter router, DeliveryCommandRepository commands,
                              DeliveryAssignmentRepository assignments, BorzoPidgeHandoffRepository handoffs, DeliveryOutboxRepository outbox,
                              ObjectMapper json) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.dispatcher = dispatcher;
         this.tripPay = tripPay;
+        this.trips = trips;
         this.alerts = alerts;
         this.router = router;
         this.commands = commands;
@@ -87,8 +91,29 @@ public class FleetDispatchJobs {
     @Scheduled(scheduler = FleetConfiguration.FLEET_SCHEDULER, fixedDelayString = "${craves.fleet.dispatch-tick-ms:5000}")
     public void tick() {
         expireOffers();
+        cancelledOrders();
         watchdog();
         courierStages();
+    }
+
+    /**
+     * Orders the customer or the chef cancelled: the trip ends through the craves_fleet adapter's cancel path (offers
+     * withdrawn, stages closed, the rider paid for the state reached). Unfinished trips and those with an open stage only.
+     */
+    int cancelledOrders() {
+        List<UUID> cancelled = jdbc.queryForList("SELECT t.id FROM fleet_schema.trip t WHERE t.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED') "
+            + "AND " + FleetTripService.ORDER_REFUNDED + " UNION SELECT s.trip_id FROM fleet_schema.trip_stage s "
+            + "JOIN fleet_schema.trip t ON t.id = s.trip_id WHERE s.state = 'OPEN' AND " + FleetTripService.ORDER_REFUNDED + " LIMIT 20",
+            UUID.class);
+        for (UUID tripId : cancelled) {
+            try {
+                trips.cancel(tripId, FleetTripService.ORDER_CANCELLED);
+                LOGGER.info("FLEET_ORDER_CANCELLED trip={}", tripId);
+            } catch (RuntimeException exception) {
+                LOGGER.warn("FLEET_ORDER_CANCELLED trip={} failed: {}", tripId, exception.getMessage());
+            }
+        }
+        return cancelled.size();
     }
 
     int expireOffers() {

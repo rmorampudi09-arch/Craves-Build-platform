@@ -316,9 +316,11 @@ public class FleetDispatcher implements FleetStage {
         return "#" + chefSubOrderId.toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
+    /** The rider's delivery job. A fleet trip that ended with none was cancelled before any rider took it: nobody is booked. */
     private UUID deliveryJob(UUID chefSubOrderId) {
         return jdbc.queryForList("SELECT id FROM delivery_schema.delivery_job WHERE chef_sub_order_id = ?", UUID.class, chefSubOrderId)
-            .stream().findFirst().orElseThrow(() -> new IllegalStateException("A rider took the order but its delivery job is missing"));
+            .stream().findFirst().orElseThrow(() -> new IllegalStateException(
+                "The order's Craves rider trip has no delivery job: it was cancelled before a rider took it, so no courier is booked"));
     }
 
     private Optional<TripState> trip(UUID chefSubOrderId) {

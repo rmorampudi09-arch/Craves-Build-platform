@@ -52,6 +52,11 @@ public class FleetTripService {
     static final int MAX_PHOTO_BYTES = 10 * 1024 * 1024;
     static final Set<String> FAIL_REASONS = Set.of("CUSTOMER_UNREACHABLE", "WRONG_ADDRESS", "CUSTOMER_REFUSED", "UNSAFE");
     static final String PHOTO_HOLD = "Delivered with a photo. Ops checks the photo before this pay is released.";
+    /** The cancel reason riders see when the customer or the chef cancelled the order. */
+    public static final String ORDER_CANCELLED = "The order was cancelled.";
+    // shortcut: integration-service hears of a cancelled order only as the refund order-service requests for it, so that
+    // is the signal; switch to an order-cancelled event if order-service ever cancels without a refund (meal-plan orders).
+    public static final String ORDER_REFUNDED = "EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = t.chef_sub_order_id)";
     static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
     /** Step: the state it needs, the state it leaves the trip in. */
     private static final Map<String, String[]> STEPS = Map.of("arrived-pickup", new String[] {"ASSIGNED", "AT_PICKUP"},
@@ -77,18 +82,22 @@ public class FleetTripService {
         this.transaction = new TransactionTemplate(transactions);
     }
 
-    /** 200 with the trip for the winner; 409 OFFER_TAKEN for a lost race; 410 OFFER_EXPIRED; a repeat by the winner gets the trip. */
+    /**
+     * 200 with the trip for the winner; 409 OFFER_TAKEN for a lost race; 409 ORDER_CANCELLED once the order is cancelled;
+     * 410 OFFER_EXPIRED; a repeat by the winner gets the trip.
+     */
     @Transactional
     public Trip accept(UUID identityId, UUID offerId, String idempotencyKey) {
         Rider rider = activeRider(identityId);
-        // The one decisive statement: it closes the order's open fleet stage, only for a live offer of this rider. A second
-        // accept waits on the same stage row, then finds it closed. The stage's deadline makes a late accept fail here too.
+        // The one decisive statement: it closes the order's open fleet stage, only for a live offer of this rider and an
+        // order still going. A second accept waits on the same stage row, then finds it closed. The stage's deadline makes a
+        // late accept fail here too.
         List<UUID> won = jdbc.queryForList("""
             UPDATE fleet_schema.trip_stage s SET state = 'CLOSED', outcome = 'ACCEPTED', closed_at = now()
-            FROM fleet_schema.trip_offer o
+            FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
             WHERE o.id = ? AND o.rider_id = ? AND o.state = 'ACTIVE' AND o.expires_at > now()
               AND s.trip_id = o.trip_id AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN' AND s.deadline_at > now()
-            RETURNING s.trip_id""", UUID.class, offerId, rider.id());
+              AND NOT\s""" + ORDER_REFUNDED + " RETURNING s.trip_id", UUID.class, offerId, rider.id());
         if (won.isEmpty()) {
             return notWon(offerId, rider);
         }
@@ -299,24 +308,31 @@ public class FleetTripService {
     }
 
     /**
-     * Ops or the order cancelled a rider's trip before delivery (the craves_fleet adapter's cancel): the PLAN pay rule
-     * for the trip's state. Riding to the kitchen: pickup-leg pay; at the kitchen: cancellation fee plus pickup leg;
-     * after pickup: full pay plus the return. Not held: the rider did nothing wrong.
+     * Ends the order's fleet trip: the customer or chef cancelled the order, or ops cancelled the trip (the craves_fleet
+     * adapter's cancel). Open offers are withdrawn and every open stage is closed, so no rider can accept and the dispatch
+     * tick books no courier after this. A rider on the trip gets the PLAN pay for its state: riding to the kitchen, the
+     * pickup leg; at the kitchen, the cancellation fee plus the pickup leg; after pickup, full pay plus the return. Not
+     * held: the rider did nothing wrong. Empty for an unknown trip; else the trip's state after this.
      */
     @Transactional
     public Optional<String> cancel(UUID tripId, String reason) {
-        List<String> states = jdbc.queryForList("SELECT state FROM fleet_schema.trip WHERE id = ? AND provider = 'CRAVES_FLEET' FOR UPDATE",
-            String.class, tripId);
+        List<String> states = jdbc.queryForList("SELECT state FROM fleet_schema.trip WHERE id = ? FOR UPDATE", String.class, tripId);
         if (states.isEmpty()) {
             return Optional.empty();
         }
         String state = states.get(0);
-        if (!List.of("ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP").contains(state)) {
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
+        jdbc.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'CANCELLED', closed_at = now() WHERE trip_id = ? "
+            + "AND state = 'OPEN'", tripId);
+        if (!"SEARCHING".equals(state) && !List.of("ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP").contains(state)) {
             return Optional.of(state);
         }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
             + "updated_at = now() WHERE id = ?", reason, tripId);
         event(tripId, "CANCELLED", null, null, Map.of("stateBefore", state));
+        if ("SEARCHING".equals(state)) {
+            return Optional.of("CANCELLED"); // no rider took it: nothing to pay
+        }
         pay.finalizePay(tripId, switch (state) {
             case "ASSIGNED" -> Ending.CANCELLED_TO_KITCHEN;
             case "AT_PICKUP" -> Ending.CANCELLED_AT_KITCHEN;
@@ -427,11 +443,16 @@ public class FleetTripService {
     }
 
     private Trip notWon(UUID offerId, Rider rider) {
-        Map<String, Object> offer = jdbc.queryForList("SELECT o.state, o.trip_id, t.rider_id AS trip_rider FROM fleet_schema.trip_offer o "
-            + "JOIN fleet_schema.trip t ON t.id = o.trip_id WHERE o.id = ? AND o.rider_id = ?", offerId, rider.id())
+        Map<String, Object> offer = jdbc.queryForList("SELECT o.state, o.trip_id, t.rider_id AS trip_rider, t.state AS trip_state, "
+            + ORDER_REFUNDED + " AS order_cancelled FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + "WHERE o.id = ? AND o.rider_id = ?", offerId, rider.id())
             .stream().findFirst().orElseThrow(FleetTripService::offerNotFound);
         if ("ACCEPTED".equals(offer.get("state"))) {
             return view((UUID) offer.get("trip_id")); // the winner's repeat: the first answer again
+        }
+        if (Boolean.TRUE.equals(offer.get("order_cancelled"))
+            || ("CANCELLED".equals(offer.get("trip_state")) && offer.get("trip_rider") == null)) {
+            throw FleetApiException.conflict("ORDER_CANCELLED", "This order was cancelled. Watch for the next one.");
         }
         if ("LOST".equals(offer.get("state")) || (offer.get("trip_rider") != null && !rider.id().equals(offer.get("trip_rider")))) {
             throw taken();

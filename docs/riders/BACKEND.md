@@ -95,7 +95,7 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `POST /shift/end` | Goes offline: closes the open shift and revokes its credential. 204 even when nothing is open. |
 | `POST /devices` | `{installationId, fcmToken, appVersion, model}`, with a RIDER JWT or the shift credential. 204 for the bound phone; 409 `DEVICE_NOT_BOUND` for another. See "Phones". |
 | `POST /locations` | Location ingest flag. Header `X-Craves-Shift-Credential` (the native service) or a RIDER JWT. Up to 5 fixes; answers offers, the trip and a stop signal. See "Location ingest". |
-| `POST /offers/{offerId}/accept` | One conditional update decides the winner: 200 Trip; 409 `OFFER_TAKEN` to the rider who lost; 410 `OFFER_EXPIRED` after 40 s or once the fleet stage closed; the winner's repeat gets the trip again. |
+| `POST /offers/{offerId}/accept` | One conditional update decides the winner: 200 Trip; 409 `OFFER_TAKEN` to the rider who lost; 409 `ORDER_CANCELLED` once the order is cancelled; 410 `OFFER_EXPIRED` after 40 s or once the fleet stage closed; the winner's repeat gets the trip again. |
 | `POST /offers/{offerId}/decline` | 204. Free, no reason, changes nothing else. |
 | `GET /trips/active` | The trip in progress, or 204. |
 | `POST /trips/{tripId}/{action}` | `arrived-pickup`, `food-not-ready`, `picked-up`, `arrived-drop`, `delivered`, `failed`; see the trip steps below. |
@@ -198,7 +198,9 @@ EXPLAIN (Postgres 16, 2,000 riders, 62,000 shifts, 200,500 trips and offers, 42,
 4. The dispatch tick (`FleetDispatchJobs`, every 5 s on the fleet pool) expires offers, moves `BORZO` to `PIDGE` at its deadline and closes a stage when its courier is assigned. A Pidge stage past its deadline, a courier who cancelled, or an uncertain create (never retried) goes to `OPS_QUEUE` with an ops alert `FLEET_DISPATCH_QUEUE`.
 5. Watchdog: an accepted rider with no location received for 90 s before pickup loses the trip (`CANCELLED`, pickup-leg pay held for ops), ops gets `FLEET_RIDER_LOST`, the next stage opens and the tick books Borzo or Pidge through the router and hands the delivery job over with `handoffFromProviderId: craves_fleet`. CANCELLED is never published for it. order-service accepts that hand-over only from a rider before pickup (its projection `craves_fleet` with the trip id, status `COURIER_ASSIGNED`, `COURIER_TO_PICKUP` or `AT_PICKUP`) to Borzo or Pidge, clears the rider card the chef sees, and the customer's delivery code goes with it (shown only for `craves_fleet`). A later Borzo to Pidge hand-over counts only couriers of that Borzo delivery, not the rider before it. Deploy order-service with this change before any policy goes `live`.
 
-`craves_fleet` (`CravesFleetAdapter`) is inactive in the catalog: routing never quotes or creates it. `track()` maps the trip to the pipeline (below); `cancel()` ends a trip with the pay rule for its state.
+6. Cancellation: integration-service hears that the customer or the chef cancelled only as the refund order-service then requests (`payment_schema.refund` for the sub-order). From then on an accept is refused with 409 `ORDER_CANCELLED` ("This order was cancelled. Watch for the next one."), and the next tick ends the trip through `FleetTripService.cancel`, the adapter's cancel path: open offers withdrawn, every open stage closed (so no courier is booked or queued by the tick), and a rider already on the trip paid for the state reached, not held. The delivery command of an order cancelled before any rider took it books nobody and fails until its retries run out. A Borzo or Pidge courier already booked is not cancelled: no order has that path yet.
+
+`craves_fleet` (`CravesFleetAdapter`) is inactive in the catalog: routing never quotes or creates it. `track()` maps the trip to the pipeline (below); `cancel()` ends a trip as in step 6, with the pay rule for its state.
 
 ## Trip steps and statuses
 
@@ -211,7 +213,7 @@ EXPLAIN (Postgres 16, 2,000 riders, 62,000 shifts, 200,500 trips and offers, 42,
 | `AT_DROP` | `AT_DROP` | `AT_DROPOFF` | `arrived-drop` |
 | `DELIVERED` | `DELIVERED` | `DELIVERED` | `delivered` (OTP, or photo) |
 | `FAILED` | `FAILED` | `FAILED` | `failed` after pickup |
-| `CANCELLED` | `CANCELLED` | `CANCELLED`, unless another stage took the order | ops cancel, watchdog |
+| `CANCELLED` | `CANCELLED` | `CANCELLED`, unless another stage took the order | order cancelled, ops cancel, watchdog |
 
 Each step is idempotent (a repeated key, or a step already taken, returns the trip), in order (else 409 `STEP_CONFLICT`; an ended trip is 409 `TRIP_NOT_ACTIVE`), and moves `trip.version`. The rider card is the first name and initial ("Ravi K.") and the rider's phone (no relay exists yet); no photo URL. `sealed` is false: orders have no sealed flag yet.
 

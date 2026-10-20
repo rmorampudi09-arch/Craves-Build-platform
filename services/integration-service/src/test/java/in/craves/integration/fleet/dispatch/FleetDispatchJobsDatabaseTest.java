@@ -34,8 +34,13 @@ import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
+import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.client.DeliveryCodeClient;
+import in.craves.integration.fleet.trip.FleetStatusBridge;
 import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripPayFinalized;
+import in.craves.integration.fleet.trip.FleetTripService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,8 +70,13 @@ class FleetDispatchJobsDatabaseTest {
         FleetPolicyStore policies = new FleetPolicyStore(fleet.db, json);
         FleetDispatcher dispatcher = new FleetDispatcher(fleet.db, fleet.transactions, policies,
             new FleetTestMode(fleet.db, FleetDatabase.properties(true)), mock(RoadDistanceClient.class), alerts, json);
-        jobs = new FleetDispatchJobs(fleet.db, fleet.transactions, dispatcher, new FleetTripPay(fleet.db, policies, json, events::add),
-            alerts, router, commands, assignments, handoffs, new DeliveryOutboxRepository(fleet.db, json), json);
+        FleetTripPay tripPay = new FleetTripPay(fleet.db, policies, json, events::add);
+        FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands,
+            mock(DeliveryStatusUpdateService.class), json);
+        FleetTripService trips = new FleetTripService(fleet.db, tripPay, bridge, json, mock(DeliveryCodeClient.class), mock(FleetStorage.class),
+            fleet.transactions);
+        jobs = new FleetDispatchJobs(fleet.db, fleet.transactions, dispatcher, tripPay, trips, alerts, router, commands, assignments,
+            handoffs, new DeliveryOutboxRepository(fleet.db, json), json);
         FleetDispatchFixtures.policy(fleet.db, "live");
         rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
     }
@@ -199,6 +209,46 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(jobs.courierStages()).isEqualTo(1);
         assertThat(stages(lateTrip)).as("a courier booked after all clears the ops queue")
             .containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "PIDGE:CLOSED:NO_COURIER", "OPS_QUEUE:CLOSED:ASSIGNED");
+    }
+
+    @Test
+    void aCancelledOrderEndsItsTripOnTheNextTickWithOffersWithdrawnStagesClosedAndPayForTheStateReached() {
+        UUID atKitchenOrder = UUID.randomUUID();
+        UUID atKitchen = acceptedTrip(atKitchenOrder, "AT_PICKUP");
+        UUID offeredOrder = UUID.randomUUID();
+        UUID offered = fleet.trip(offeredOrder);
+        fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, deadline_at) VALUES (?, ?, 1, 'CRAVES_FLEET', "
+            + "now() + INTERVAL '50 seconds')", UUID.randomUUID(), offered);
+        UUID other = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, rate_card_version, pickup_distance_m, "
+            + "drop_distance_m, expires_at) VALUES (?, ?, ?, 5350, '2026-10-v1', 200, 3500, now() + INTERVAL '30 seconds')",
+            UUID.randomUUID(), offered, other);
+        UUID queuedOrder = UUID.randomUUID();
+        UUID queued = courierTrip(queuedOrder, "OPS_QUEUE", false);
+        UUID goingOn = fleet.trip(UUID.randomUUID());
+        fleet.refundRequested(atKitchenOrder);
+        fleet.refundRequested(offeredOrder);
+        fleet.refundRequested(queuedOrder);
+
+        assertThat(jobs.cancelledOrders()).isEqualTo(3);
+
+        Map<String, Object> paid = fleet.db.queryForMap("SELECT state, cancel_reason, final_pay_paise, pay_held FROM fleet_schema.trip "
+            + "WHERE id = ?", atKitchen);
+        assertThat(paid).containsEntry("state", "CANCELLED").containsEntry("cancel_reason", FleetTripService.ORDER_CANCELLED)
+            .containsEntry("final_pay_paise", 2720L).as("the rider did nothing wrong").containsEntry("pay_held", false);
+        assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, event -> assertThat(event.held()).isFalse());
+        assertThat(fleet.db.queryForMap("SELECT state, final_pay_paise FROM fleet_schema.trip WHERE id = ?", offered))
+            .containsEntry("state", "CANCELLED").as("no rider took it").containsEntry("final_pay_paise", null);
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_offer WHERE trip_id = ?", String.class, offered))
+            .isEqualTo("WITHDRAWN");
+        assertThat(stages(offered)).containsExactly("CRAVES_FLEET:CLOSED:CANCELLED");
+        assertThat(stages(queued)).as("no courier is booked or queued for a cancelled order")
+            .containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "OPS_QUEUE:CLOSED:CANCELLED");
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip WHERE id = ?", String.class, goingOn))
+            .as("an order nobody cancelled").isEqualTo("SEARCHING");
+        assertThat(jobs.cancelledOrders()).as("each trip ends once").isZero();
+        assertThat(jobs.courierStages()).isZero();
+        verify(alerts, never()).opsAlert(anyString(), anyString(), anyString(), anyMap());
     }
 
     private UUID acceptedTrip(UUID chefSubOrderId, String state) {

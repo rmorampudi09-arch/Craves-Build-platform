@@ -178,6 +178,31 @@ class FleetOfferDatabaseTest {
     }
 
     @Test
+    void anAcceptForACancelledOrderIsRefusedWithARiderSafeMessage() {
+        fleet.refundRequested(chefSubOrderId);
+        refused(() -> transaction.execute(status -> trips.accept(firstIdentity, offerOf(first), "rider-accept-1")), 409, "ORDER_CANCELLED");
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip", String.class))
+            .as("refused before the dispatch tick ends the trip").isEqualTo("SEARCHING");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+    }
+
+    @Test
+    void cancellingWhileRidersDecideWithdrawsTheOffersAndNobodyIsBooked() {
+        UUID trip = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip", UUID.class);
+        assertThat(trips.cancel(trip, "Cancelled by Craves ops.")).contains("CANCELLED");
+
+        assertThat(fleet.db.queryForList("SELECT state FROM fleet_schema.trip_offer", String.class)).containsOnly("WITHDRAWN");
+        assertThat(fleet.db.queryForList("SELECT state || ':' || outcome FROM fleet_schema.trip_stage", String.class))
+            .containsExactly("CLOSED:CANCELLED");
+        refused(() -> transaction.execute(status -> trips.accept(secondIdentity, offerOf(second), "rider-accept-2")), 409, "ORDER_CANCELLED");
+        assertThatThrownBy(() -> dispatcher.run(FleetDispatchFixtures.command(chefSubOrderId), OptionalLong::empty, true))
+            .as("the delivery command books no courier").isInstanceOf(IllegalStateException.class).hasMessageContaining("cancelled");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_stage", Integer.class)).isEqualTo(1);
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+        assertThat(trips.cancel(trip, "Again")).as("a second cancel changes nothing").contains("CANCELLED");
+    }
+
+    @Test
     void onlyAnActiveRiderCanAccept() {
         fleet.db.update("UPDATE fleet_schema.rider SET status = 'SUSPENDED' WHERE id = ?", first);
         refused(() -> transaction.execute(status -> trips.accept(firstIdentity, offerOf(first), "k1")), 403, "RIDER_NOT_ACTIVE");

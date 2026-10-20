@@ -42,8 +42,10 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -113,11 +115,12 @@ public class FleetEarnings {
     private final LedgerPostingService ledger;
     private final FleetAdminService admin;
     private final TransactionTemplate fresh;
+    private final TaskExecutor background;
     private final Tds tds;
     private final boolean ledgerOn;
 
     public FleetEarnings(JdbcTemplate jdbc, ObjectMapper json, LedgerPostingService ledger, FleetAdminService admin,
-                         PlatformTransactionManager transactions,
+                         PlatformTransactionManager transactions, @Qualifier(FleetConfiguration.FLEET_SCHEDULER) TaskExecutor background,
                          @Value("${craves.fleet.tds.enabled:false}") boolean tdsEnabled,
                          @Value("${craves.fleet.tds.section:}") String tdsSection,
                          @Value("${craves.fleet.tds.rate-basis-points:0}") int tdsRateBasisPoints,
@@ -129,17 +132,22 @@ public class FleetEarnings {
         this.admin = admin;
         this.fresh = new TransactionTemplate(transactions);
         this.fresh.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.background = background;
         this.tds = new Tds(tdsEnabled, tdsSection, tdsRateBasisPoints, tdsAnnualThresholdPaise);
         this.ledgerOn = ledgerOn;
     }
 
     /**
-     * After the trip's own transaction commits, so a failed credit never undoes a delivery: the money job retries it.
-     * Runs at once when published outside a transaction.
+     * After the trip's own transaction commits, so a failed credit never undoes a delivery (the money job retries it), and
+     * on the fleet pool: the rider's request never waits for a second database connection while it still holds its own.
      */
     @TransactionalEventListener(fallbackExecution = true)
     public void onTripPayFinalized(FleetTripPayFinalized event) {
-        safely("trip", event.tripId(), () -> creditTrip(event.tripId()));
+        try {
+            background.execute(() -> safely("trip", event.tripId(), () -> creditTrip(event.tripId())));
+        } catch (RuntimeException rejected) {
+            LOGGER.warn("FLEET_CREDIT_DEFERRED trip={} (the money job credits it)", event.tripId());
+        }
     }
 
     /** Credits trips and slot top-ups still waiting (a crash, a failure, the ledger off), and releases holds that are due. */

@@ -65,7 +65,7 @@ class FleetPayoutsDatabaseTest {
     void setUp() {
         admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class), cipher);
         LedgerPostingService ledger = new LedgerPostingService(fleet.db, json, true);
-        earnings = new FleetEarnings(fleet.db, json, ledger, admin, fleet.transactions, false, "", 0, 0, true);
+        earnings = new FleetEarnings(fleet.db, json, ledger, admin, fleet.transactions, Runnable::run, false, "", 0, 0, true);
         payouts = new FleetPayouts(fleet.db, ledger, admin, earnings, cipher, FleetDatabase.properties(true), 500, true);
         pay = new FleetTripPay(fleet.db, new FleetPolicyStore(fleet.db, json), json,
             event -> earnings.onTripPayFinalized((FleetTripPayFinalized) event));

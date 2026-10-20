@@ -86,7 +86,7 @@ class FleetSupportDatabaseTest {
         FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
             mock(BankDataCipher.class));
         LedgerPostingService ledger = new LedgerPostingService(fleet.db, json, true);
-        FleetEarnings earnings = new FleetEarnings(fleet.db, json, ledger, admin, fleet.transactions, false, "", 0, 0, true);
+        FleetEarnings earnings = new FleetEarnings(fleet.db, json, ledger, admin, fleet.transactions, Runnable::run, false, "", 0, 0, true);
         FleetPayouts payouts = new FleetPayouts(fleet.db, ledger, admin, earnings, mock(BankDataCipher.class), FleetDatabase.properties(true),
             50000, true);
         fleet.db.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', rate_card_version = '2026-10-v1', final_pay_lines = "

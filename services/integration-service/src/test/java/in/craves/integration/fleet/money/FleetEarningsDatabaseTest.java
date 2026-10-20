@@ -65,7 +65,7 @@ class FleetEarningsDatabaseTest {
     void setUp() {
         admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class), mock(BankDataCipher.class));
         earnings = earnings(false, true);
-        // The trip code publishes FleetTripPayFinalized; here it reaches the listener directly.
+        // The trip code publishes FleetTripPayFinalized; here it reaches the listener directly, and the credit runs at once.
         pay = new FleetTripPay(fleet.db, new FleetPolicyStore(fleet.db, json), json,
             event -> earnings.onTripPayFinalized((FleetTripPayFinalized) event));
         rider = fleet.rider("Ravi Kumar", "+919876543210");
@@ -73,7 +73,7 @@ class FleetEarningsDatabaseTest {
 
     /** TDS: 1% once the year passes ₹100. */
     FleetEarnings earnings(boolean tds, boolean ledgerOn) {
-        return new FleetEarnings(fleet.db, json, new LedgerPostingService(fleet.db, json, ledgerOn), admin, fleet.transactions, tds,
+        return new FleetEarnings(fleet.db, json, new LedgerPostingService(fleet.db, json, ledgerOn), admin, fleet.transactions, Runnable::run, tds,
             "393(1) Table Sl. 6(i)", 100, 10_000, ledgerOn);
     }
 

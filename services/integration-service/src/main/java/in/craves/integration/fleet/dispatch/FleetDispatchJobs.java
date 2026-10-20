@@ -42,7 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * - the watchdog: a rider who accepted but whose locations stopped for 90 s before pickup loses the trip (pickup-leg pay,
  *   held for ops), ops is alerted and the order goes to the next stage; CANCELLED is never published for it;
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
- *   ops alert. A watchdog order is booked with Borzo or Pidge here, through the router, and its delivery job is handed
+ *   ops alert; a queued order closes there too once a courier is assigned after all. A watchdog order is booked with Borzo or Pidge here, through the router, and its delivery job is handed
  *   over with handoffFromProviderId craves_fleet.
  */
 @Component
@@ -150,7 +150,7 @@ public class FleetDispatchJobs {
                    t.order_code, j.id AS job_id, j.provider_id AS job_provider, j.status AS job_status
             FROM fleet_schema.trip_stage s JOIN fleet_schema.trip t ON t.id = s.trip_id
             LEFT JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = t.chef_sub_order_id
-            WHERE s.state = 'OPEN' AND s.provider IN ('BORZO', 'PIDGE') ORDER BY s.deadline_at LIMIT 50""", (row, n) -> courierStage(row));
+            WHERE s.state = 'OPEN' AND s.provider IN ('BORZO', 'PIDGE', 'OPS_QUEUE') ORDER BY s.deadline_at LIMIT 50""", (row, n) -> courierStage(row));
         int moved = 0;
         for (CourierStage stage : open) {
             try {
@@ -163,10 +163,16 @@ public class FleetDispatchJobs {
     }
 
     private boolean advance(CourierStage stage) {
+        boolean assigned = stage.jobStatus() != null && !"craves_fleet".equals(stage.jobProvider())
+            && BorzoPidgeHandoffWorker.isAccepted(status(stage.jobStatus()));
+        if ("OPS_QUEUE".equals(stage.provider())) {
+            // A courier the delivery command booked after all still clears the queue, so ops does not book a second one.
+            return assigned && Boolean.TRUE.equals(transaction.execute(status -> close(stage, "ASSIGNED")));
+        }
         if ("craves_fleet".equals(stage.jobProvider())) {
             return book(stage);
         }
-        if (stage.jobStatus() != null && BorzoPidgeHandoffWorker.isAccepted(status(stage.jobStatus()))) {
+        if (assigned) {
             return Boolean.TRUE.equals(transaction.execute(status -> close(stage, "ASSIGNED")));
         }
         if (stage.jobStatus() != null && COURIER_GAVE_UP.contains(stage.jobStatus())) {

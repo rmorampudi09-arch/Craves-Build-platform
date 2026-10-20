@@ -177,7 +177,8 @@ class FleetDispatchJobsDatabaseTest {
     @Test
     void borzoMovesToPidgeAtItsDeadlinePidgeToTheOpsQueueAndAnAssignedCourierClosesTheStage() {
         UUID waitingTrip = courierTrip(UUID.randomUUID(), "BORZO", true);
-        UUID lateTrip = courierTrip(UUID.randomUUID(), "PIDGE", true);
+        UUID lateSubOrder = UUID.randomUUID();
+        UUID lateTrip = courierTrip(lateSubOrder, "PIDGE", true);
         UUID assignedSubOrder = UUID.randomUUID();
         UUID assignedTrip = courierTrip(assignedSubOrder, "BORZO", false);
         fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, provider_delivery_id, status) "
@@ -192,6 +193,12 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(stages(assignedTrip)).containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "BORZO:CLOSED:ASSIGNED");
         verify(alerts).opsAlert(eq("FLEET_DISPATCH_QUEUE"), anyString(), anyString(), anyMap());
         assertThat(jobs.courierStages()).as("a stage that is not due waits").isZero();
+
+        fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, provider_delivery_id, status) "
+            + "VALUES (?, ?, ?, 'pidge', 'P-9', 'COURIER_ASSIGNED')", UUID.randomUUID(), lateSubOrder, UUID.randomUUID());
+        assertThat(jobs.courierStages()).isEqualTo(1);
+        assertThat(stages(lateTrip)).as("a courier booked after all clears the ops queue")
+            .containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "PIDGE:CLOSED:NO_COURIER", "OPS_QUEUE:CLOSED:ASSIGNED");
     }
 
     private UUID acceptedTrip(UUID chefSubOrderId, String state) {

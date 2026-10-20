@@ -26,4 +26,4 @@ CREATE TABLE IF NOT EXISTS fleet_schema.chef_ready (
 );
 
 CREATE INDEX IF NOT EXISTS trip_stage_open_courier ON fleet_schema.trip_stage (deadline_at)
-    WHERE state = 'OPEN' AND provider IN ('BORZO', 'PIDGE');
+    WHERE state = 'OPEN' AND provider IN ('BORZO', 'PIDGE', 'OPS_QUEUE');

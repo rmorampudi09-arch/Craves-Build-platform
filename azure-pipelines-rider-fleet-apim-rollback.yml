@@ -1,0 +1,36 @@
+# Removes the rider API (craves-rider-v1) and the admin fleet API (craves-admin-fleet-v1) from the mobile gateway, as they
+# were before the first configure. Manual runs from main only. Backends, flags and data are untouched.
+# To restore an earlier version instead, run azure-pipelines-rider-fleet-apim.yml at that main commit.
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmApimRollback
+    type: boolean
+    default: false
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: bash -n scripts/apim/rollback-rider-fleet-apim.sh
+    displayName: Validate rider fleet APIM rollback script
+
+  - task: AzureCLI@2
+    displayName: Remove rider and admin fleet APIM routes
+    condition: and(succeeded(), eq('${{ parameters.confirmApimRollback }}', 'True'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        [[ "$BUILD_REASON" == Manual && "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'Only a manual run from main may write the gateway.' >&2; exit 2; }
+        CONFIRM_APIM_ROLLBACK=true bash scripts/apim/rollback-rider-fleet-apim.sh

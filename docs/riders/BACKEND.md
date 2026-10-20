@@ -207,6 +207,10 @@ A stop runs statement 1 and one shift update. `FleetLocationApiDatabaseTest.twoH
 
 EXPLAIN (Postgres 16, 2,000 riders, 62,000 shifts, 200,500 trips and offers, 42,000 slots) shows an index for every table: `rider_shift_credential_hash_key` (the credential, cast to `CHAR(64)` so the unique index applies), `rider_identity_id_key` and `rider_shift_one_open` (JWT), `rider_position_latest_pkey`, `rider_pkey`, `trip_one_active_per_rider`, `trip_pkey`, `rider_slot_rider`, `trip_offer_one_active_per_rider` and `rider_shift_pkey` for the updates; the upsert resolves on `rider_position_latest_pkey`, and the track insert goes straight to the day's partition.
 
+## Gateway (P5)
+
+Both APIs are published on the mobile gateway (`api.craves.in`) by `scripts/apim/configure-rider-fleet-apim.sh`: `craves-rider-v1` (`api/v1/rider`) and `craves-admin-fleet-v1` (`api/v1/admin/fleet`), with status and rollback scripts and four manual pipelines. Policies, rate limits and how a person deploys or rolls back: `infra/apim/rider-fleet/README.md`.
+
 ## Dispatch chain (P3)
 
 `dispatch_policy` mode governs it; with no published policy in force, or mode `off`, nothing below happens for a new order and Borzo and Pidge run exactly as before.

@@ -1,0 +1,23 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      sudo apt-get update -qq
+      sudo apt-get install -y --no-install-recommends libxml2-utils
+      python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
+      bash -n scripts/apim/configure-rider-fleet-apim.sh
+      bash -n scripts/apim/status-rider-fleet-apim.sh
+      bash -n scripts/apim/rollback-rider-fleet-apim.sh
+      for policy in infra/apim/rider-fleet/*.xml; do xmllint --noout "$policy"; done
+      bash scripts/release/validate-apim-assets.sh .
+      python3 -m unittest discover -s scripts/apim/tests -p 'test_rider_fleet_apim.py' -v
+      DRY_RUN=true bash scripts/apim/configure-rider-fleet-apim.sh
+    displayName: Validate rider fleet APIM scripts, policies and the route table against the contracts

@@ -318,14 +318,18 @@ public class FleetTripService {
      */
     @Transactional
     public Optional<String> cancel(UUID tripId, String reason) {
+        // Stage and offers before the trip, the order an accept locks them in, so a cancel racing an accept waits instead of
+        // deadlocking; the stage again once the trip is held, for one the watchdog opened while it held the trip.
+        String closeStages = "UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'CANCELLED', closed_at = now() WHERE trip_id = ? "
+            + "AND state = 'OPEN'";
+        jdbc.update(closeStages, tripId);
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
         List<String> states = jdbc.queryForList("SELECT state FROM fleet_schema.trip WHERE id = ? FOR UPDATE", String.class, tripId);
         if (states.isEmpty()) {
             return Optional.empty();
         }
+        jdbc.update(closeStages, tripId);
         String state = states.get(0);
-        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
-        jdbc.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'CANCELLED', closed_at = now() WHERE trip_id = ? "
-            + "AND state = 'OPEN'", tripId);
         if (!"SEARCHING".equals(state) && !List.of("ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP").contains(state)) {
             return Optional.of(state);
         }

@@ -204,6 +204,37 @@ class FleetOfferDatabaseTest {
     }
 
     @Test
+    void aCancelRacingAnAcceptWaitsForItInsteadOfDeadlocking() throws Exception {
+        UUID trip = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip", UUID.class);
+        UUID offer = offerOf(first);
+        CountDownLatch stageHeld = new CountDownLatch(1);
+        // An accept's locks in its order (FleetTripService.accept): the fleet stage, then the offer and the trip.
+        Future<Object> accepting = threads.submit(() -> transaction.execute(status -> {
+            fleet.db.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'ACCEPTED', closed_at = now() WHERE trip_id = ?", trip);
+            stageHeld.countDown();
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'ACCEPTED', decided_at = now() WHERE id = ?", offer);
+            fleet.db.update("UPDATE fleet_schema.trip SET state = 'ASSIGNED', rider_id = ?, accepted_at = now(), pickup_distance_m = 200 "
+                + "WHERE id = ?", first, trip);
+            return null;
+        }));
+        assertThat(stageHeld.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+        Future<Object> cancelling = threads.submit(() -> transaction.execute(status -> trips.cancel(trip, FleetTripService.ORDER_CANCELLED)));
+
+        accepting.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(cancelling.get(20, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(java.util.Optional.of("CANCELLED"));
+        assertThat(fleet.db.queryForMap("SELECT state, rider_id, pay_finalized_at IS NOT NULL AS paid FROM fleet_schema.trip"))
+            .containsEntry("state", "CANCELLED").containsEntry("rider_id", first).containsEntry("paid", true);
+        assertThat(fleet.db.queryForList("SELECT state FROM fleet_schema.trip_offer ORDER BY state", String.class))
+            .containsExactly("ACCEPTED", "WITHDRAWN");
+    }
+
+    @Test
     void goingOfflineWithdrawsTheOfferAndARiderWhoseShiftRanOutCannotAccept() {
         new FleetShiftService(fleet.db, FleetDatabase.properties(true), mock(FleetStorage.class)).end(firstIdentity);
         assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_offer WHERE rider_id = ?", String.class, first))

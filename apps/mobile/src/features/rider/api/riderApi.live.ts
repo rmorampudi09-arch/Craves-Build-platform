@@ -1,4 +1,5 @@
 import {apiClient} from '../../../core/http/apiClient';
+import {AppApiError} from '../../../core/http/apiError';
 import type {RiderApi} from './riderApi';
 import type {DeliverBody} from './contract';
 
@@ -19,6 +20,14 @@ async function fileExists(uri: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** The server answers 423 once no tries are left; a 422 with attemptsLeft 0 means the same, so the rider never sees "0 tries left". */
+function lockAtZero(error: unknown): never {
+  if (error instanceof AppApiError && error.code === 'OTP_INVALID' && error.attemptsLeft === 0) {
+    throw new AppApiError('OTP_LOCKED', error.message, 423, error.correlationId);
+  }
+  throw error;
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -54,6 +63,7 @@ export const liveRiderApi: RiderApi = {
     form.append('photo', imagePart(photoUri, 'document.jpg'));
     await apiClient.post(`${BASE}/documents`, form, multipart);
   },
+  // Live builds upload fixes from the native service, which holds the shift credential; JS calls this only in mock mode.
   async postLocations(fixes) {
     return (await apiClient.post(`${BASE}/locations`, {fixes})).data;
   },
@@ -83,7 +93,7 @@ export const liveRiderApi: RiderApi = {
       }
       return (await apiClient.post(url, form, {...multipart, headers: {...multipart.headers, 'Idempotency-Key': key}})).data;
     }
-    return (await apiClient.post(url, body, keyed(key))).data;
+    return (await apiClient.post(url, body, keyed(key)).catch(lockAtZero)).data;
   },
   getEarnings: (range, cursor) =>
     get(`/earnings?range=${range}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),

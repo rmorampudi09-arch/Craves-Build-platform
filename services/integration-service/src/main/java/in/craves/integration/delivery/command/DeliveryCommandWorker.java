@@ -54,9 +54,12 @@ public class DeliveryCommandWorker {
             return new WorkerReceipt(existingJob.get(), true, "ALREADY_COMPLETED");
         }
 
+        // Until the fleet stage answers, a provider wait is Craves riders deciding: it must not lengthen the courier back-off.
+        boolean ridersDeciding = true;
         try {
             // Craves riders first (off unless the fleet and dispatch_policy say so); Borzo's window starts only after.
             Optional<UUID> fleetJob = router.fleetStage(command.message());
+            ridersDeciding = false;
             if (fleetJob.isPresent()) {
                 commands.markCompleted(message.commandId());
                 return new WorkerReceipt(fleetJob.get(), true, "craves_fleet");
@@ -91,19 +94,24 @@ public class DeliveryCommandWorker {
                 retryAt = ex.policyDeadline().isAfter(Instant.now())
                     ? ex.policyDeadline() : Instant.now().plusSeconds(1);
             }
-            boolean stored = commands.markProviderWait(command.id(), retryAt, safeMessage(ex));
+            boolean stored = ridersDeciding
+                ? commands.markProviderWait(command.id(), retryAt, safeMessage(ex), false)
+                : commands.markProviderWait(command.id(), retryAt, safeMessage(ex));
+            // The count stays put while riders decide, so each such wait needs its own Service Bus message id.
+            String waitKey = ridersDeciding ? "fleet-wait-" + command.id() + "-" + retryAt.toEpochMilli()
+                : "provider-wait-" + command.id() + "-" + providerWaitAttempt;
             if (!stored) {
                 throw new DeliveryCommandTransientException(
                     "Provider wait state could not be persisted",
                     Instant.now().plus(retryProperties.claimContentionDelay()),
-                    "provider-wait-store-" + command.id() + "-" + providerWaitAttempt,
+                    waitKey.replaceFirst("-wait-", "-wait-store-"),
                     ex
                 );
             }
             throw new DeliveryCommandDeferredException(
                 safeMessage(ex),
                 retryAt,
-                "provider-wait-" + command.id() + "-" + providerWaitAttempt,
+                waitKey,
                 ex
             );
         } catch (DeliveryRoutingException ex) {

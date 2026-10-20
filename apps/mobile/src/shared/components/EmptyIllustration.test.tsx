@@ -5,7 +5,7 @@ import {TerminalState} from './LifecycleStates';
 
 const NAMES: EmptyIllustrationName[] = [
   'cart', 'orders', 'comingSoonArea', 'location', 'search', 'kitchenNoDishes', 'saved', 'addresses', 'mealPlans', 'notifications',
-  'offline', 'loadError', 'newOrders', 'menu', 'earnings', 'payouts', 'reviews', 'chefMealPlans', 'support', 'comingSoon',
+  'offline', 'loadError', 'newOrders', 'menu', 'earnings', 'payouts', 'reviews', 'chefMealPlans', 'support', 'comingSoon', 'session',
 ];
 
 describe('EmptyIllustration', () => {

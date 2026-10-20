@@ -23,7 +23,8 @@ export type EmptyIllustrationName =
   | 'reviews'
   | 'chefMealPlans'
   | 'support'
-  | 'comingSoon';
+  | 'comingSoon'
+  | 'session';
 
 const INK = colors.espresso;
 const RED = colors.flameRed;
@@ -413,6 +414,22 @@ const DRAWINGS: Record<EmptyIllustrationName, () => React.ReactElement> = {
         <Rect x={76} y={44} width={88} height={12} rx={6} fill={CREAM_DEEP} />
         <Rect x={76} y={152} width={88} height={12} rx={6} fill={CREAM_DEEP} />
       </G>
+    </>
+  ),
+  session: () => (
+    <>
+      <Backdrop ground={{cx: 124, rx: 60}} sparkles={[{x: 48, y: 56, kind: 'big'}, {x: 196, y: 64, kind: 'ring'}, {x: 52, y: 136, kind: 'dot'}]} />
+      <G {...line}>
+        <Rect x={84} y={36} width={72} height={132} rx={14} fill={WHITE} />
+        <Rect x={92} y={52} width={56} height={98} rx={6} fill={TINT} stroke="none" />
+        <Path d="M112 44 H128" />
+        <Path d="M108 98 V88 a12 12 0 0 1 24 0 V98" />
+        <Rect x={102} y={98} width={36} height={30} rx={7} fill={RED} />
+      </G>
+      <Circle cx={120} cy={110} r={4} fill={WHITE} />
+      <Path d="M120 112 V119" stroke={WHITE} strokeWidth={3} strokeLinecap="round" />
+      <Circle cx={166} cy={142} r={18} fill={WHITE} stroke={INK} strokeWidth={2.5} />
+      <Path d="M174 142 a8 8 0 1 1 -3 -6.2 M171 129 L171 135.8 L177.5 135" fill="none" stroke={RED} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
 };

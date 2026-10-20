@@ -22,3 +22,4 @@ slot,piece,type,media_ids,status,published_at_ist
 2026-10-20T11:23,C2,carousel,18179712484445638,published (call timed out; went live 11:57; confirmed via last_3dT),2026-10-20 11:57
 2026-10-20T11:23,ST8,story,18114048410156912|17913066900550846,partial (frames 1-2; frame 3 stalled on an approval prompt and the run then stopped after a restart),2026-10-20 20:24
 2026-10-20T20:23,I2,image,18119946874957760,published,2026-10-20 20:25
+2026-10-20T20:23,ST1,story,18143921170590556,partial (frame 1 only so far; frames 2-3 being finished in the 22:23 catch-up),2026-10-20 22:24

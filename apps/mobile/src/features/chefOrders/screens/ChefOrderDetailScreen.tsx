@@ -25,6 +25,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
+import {shortOrderNumber} from '../../../utils/orderNumber';
 import {
   formatChefOrderStatus,
   maskChefOrderContactPhone,
@@ -36,10 +37,6 @@ type Props = NativeStackScreenProps<ChefProductStackParamList, 'ChefOrderDetail'
 
 function money(currency: string, value: number): string {
   return `${currency} ${value.toFixed(2)}`;
-}
-
-function shortOrderId(orderId: string): string {
-  return `#${orderId.replace(/-/g, '').slice(-8).toUpperCase()}`;
 }
 
 function displayTimestamp(value: string): string {
@@ -204,7 +201,7 @@ export function ChefOrderDetailScreen({navigation, route}: Props) {
           <View style={styles.rowBetween}>
             <View>
               <Text style={styles.eyebrow}>Order</Text>
-              <Text style={styles.orderId}>{shortOrderId(order.id)}</Text>
+              <Text style={styles.orderId}>#{shortOrderNumber(order.id)}</Text>
             </View>
             <View style={[styles.statusBadge, actionable && styles.statusBadgeNew]}>
               <Text style={[styles.statusText, actionable && styles.statusTextNew]}>

@@ -199,8 +199,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
   return (
     <div className="min-h-screen bg-white pb-16 text-[#1A1A1A]">
       <TrackingHeader
-        // The header only displays this: pass the short number customers see everywhere.
-        orderId={shortOrderNumber(id)}
+        orderNumber={shortOrderNumber(id)}
         onBack={() => navigate({ to: `/orders/${id}` })}
         backLabel="Back to order details"
         onRefresh={() => void refresh(id, true)}

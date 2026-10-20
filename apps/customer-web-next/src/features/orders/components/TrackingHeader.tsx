@@ -4,7 +4,8 @@ import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 interface TrackingHeaderProps {
-  orderId: string;
+  /** Already short: shortOrderNumber(id). */
+  orderNumber: string;
   /** The page's one h1. */
   title?: string;
   onBack: () => void;
@@ -14,7 +15,7 @@ interface TrackingHeaderProps {
 }
 
 export function TrackingHeader({
-  orderId,
+  orderNumber,
   title = "Track order",
   onBack,
   backLabel = "Back to orders",
@@ -46,7 +47,7 @@ export function TrackingHeader({
             {title}
           </h1>
           <p className="mt-0.5 truncate text-xs text-[#6B6B6B]">
-            Order #{orderId.slice(-8).toUpperCase()}
+            Order #{orderNumber}
           </p>
         </div>
 

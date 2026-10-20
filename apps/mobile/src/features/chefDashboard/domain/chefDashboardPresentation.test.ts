@@ -18,11 +18,11 @@ describe('chefDashboardPresentation', () => {
     );
   });
 
-  it('creates a short non-empty display reference from an order id', () => {
+  it('shows the same order number as the customer and web', () => {
     expect(
       shortChefDashboardOrderReference(
-        '11111111-1111-4111-8111-123456abcdef',
+        '0bde0000-0000-4000-8000-000000000101',
       ),
-    ).toBe('#ABCDEF');
+    ).toBe('#0BDE0000');
   });
 });

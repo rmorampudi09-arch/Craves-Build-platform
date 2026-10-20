@@ -253,7 +253,7 @@ export function CustomerOrderStatus({
   const header = (
     <TrackingHeader
       title="Order details"
-      orderId={shortOrderNumber(orderId)}
+      orderNumber={shortOrderNumber(orderId)}
       onBack={() => router.push(returnToListPath() ?? "/orders")}
       onRefresh={() => void refresh(true)}
       refreshing={refreshing || (loading && !order)}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
 import { formatAdminTimestamp, readableAdminStatus } from "@/features/admin/shell/lib/admin-navigation";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 
 const STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "RESOLVED", "CLOSED"] as const;
 type SupportStatus = (typeof STATUSES)[number];
@@ -77,7 +78,7 @@ export function AdminSupportInbox() {
             </div>
             <span className="text-xs text-slate-500">{formatAdminTimestamp(item.updatedAt)}</span>
           </div>
-          <p className="mt-2 text-sm text-slate-600">{requesterLabel(item.requesterRole)}{item.orderId ? ` · Order ${item.orderId.slice(-8).toUpperCase()}` : ""} · {item.assignedToIdentityId ? "Assigned" : "Unassigned"}</p>
+          <p className="mt-2 text-sm text-slate-600">{requesterLabel(item.requesterRole)}{item.orderId ? ` · Order #${shortOrderNumber(item.orderId)}` : ""} · {item.assignedToIdentityId ? "Assigned" : "Unassigned"}</p>
         </Link>
       </li>)}
     </ul>

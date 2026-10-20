@@ -73,7 +73,8 @@ const styles = StyleSheet.create({
   logo: {
     width: 40,
     height: 40,
-    borderRadius: spacing.sm,
+    // ≈12 in 01-SignIn.png, between radius.sm and radius.md.
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.flameRedAccessible,

@@ -19,6 +19,7 @@ import {tripQueue, usePendingActions} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
 import {Banner} from '../components/Banner';
 import {AtKitchen, ToKitchen} from './trip/Pickup';
+import {ToCustomer} from './trip/Dropoff';
 import {call, navigateTo} from './trip/parts';
 
 const ENDED: TripStep[] = ['DELIVERED', 'FAILED', 'CANCELLED'];
@@ -196,14 +197,6 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     );
   }
 
-  const orderCard = (
-    <Card>
-      <Label>{t.orderCode}</Label>
-      <Value>{trip.orderCode}</Value>
-      <Label>{t.items(trip.itemsCount, trip.sealed)}</Label>
-    </Card>
-  );
-
   if (step === 'TO_KITCHEN') {
     return <ToKitchen trip={trip} run={run} syncing={pending > 0} />;
   }
@@ -237,17 +230,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   );
 
   if (step === 'PICKED_UP') {
-    return (
-      <RiderScreen
-        header={header}
-        testID="rider-to-customer"
-        footer={<BottomAction label={t.reachedCustomer} onPress={() => run('arrived-drop', 'AT_DROP')} testID="rider-reached-customer" />}>
-        {syncNote}
-        {customerCard}
-        {orderCard}
-        {contactButtons}
-      </RiderScreen>
-    );
+    return <ToCustomer trip={trip} run={run} syncing={pending > 0} />;
   }
 
   // AT_DROP: the customer's OTP first; the photo only after two calls and the wait.

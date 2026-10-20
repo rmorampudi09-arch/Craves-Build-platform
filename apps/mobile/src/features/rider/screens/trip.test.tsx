@@ -287,3 +287,32 @@ describe('Trip: at the kitchen (step 2)', () => {
     expect(byId('rider-food-not-ready').props.disabled).toBeFalsy();
   });
 });
+
+describe('Trip: to the customer (step 3)', () => {
+  const toCustomer: Trip = {...trip, step: 'PICKED_UP'};
+
+  it('shows the customer, the order and the no-deadline note, never a time', async () => {
+    await render(toCustomer);
+    const text = allText();
+    expect(text).toContain('Go to the customer');
+    expect(text).toContain('Deliver to');
+    expect(text).toContain('Anil');
+    expect(text).toContain('Flat 302, Sai Residency, Kothaguda, Kondapur');
+    expect(text).toContain('Landmark: opposite Botanical Garden gate');
+    expect(text).toContain('2, in a sealed bag');
+    expect(text).not.toContain('₹67'); // no pay row on this step
+    expect(text).toContain("Ride at your own pace. There's no delivery deadline on this screen");
+    expect(text).not.toMatch(/\d{1,2}:\d{2}\s?(am|pm)/); // no promised time anywhere
+    expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 3 of 4');
+  });
+
+  it('calls the customer, navigates, and reports arrival', async () => {
+    await render(toCustomer);
+    await press('rider-call-customer');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+913333333333');
+    await press('rider-navigate');
+    expect(Linking.openURL).toHaveBeenCalledWith('google.navigation:q=17.4615,78.3657&mode=l');
+    await press('rider-reached-customer');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-drop'}));
+  });
+});

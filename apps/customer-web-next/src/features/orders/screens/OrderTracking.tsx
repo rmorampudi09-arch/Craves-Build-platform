@@ -24,6 +24,7 @@ import { shortOrderNumber } from "@/shared/lib/order-number";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { CurrentStatusCard } from "@/features/orders/components/CurrentStatusCard";
+import { DeliveryCodeCard } from "@/features/orders/components/DeliveryCodeCard";
 import { OrderTimeline } from "@/features/orders/components/OrderTimeline";
 import { DeliveryAddressCard } from "@/features/orders/components/DeliveryAddressCard";
 import { TrackingOrderSummaryCard } from "@/features/orders/components/TrackingOrderSummaryCard";
@@ -261,6 +262,8 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
                   label={currentPresentation.label}
                   desc={currentPresentation.description}
                 />
+
+                {delivery?.deliveryCode && <DeliveryCodeCard code={delivery.deliveryCode} />}
 
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">

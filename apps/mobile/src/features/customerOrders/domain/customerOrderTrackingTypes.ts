@@ -33,4 +33,6 @@ export interface CustomerOrderTracking {
   trackingUrl: string | null;
   observedAt: string | null;
   history: readonly CustomerDeliveryHistoryEntry[];
+  /** Set only while a Craves rider carries the order. Never store or log it. */
+  deliveryCode: string | null;
 }

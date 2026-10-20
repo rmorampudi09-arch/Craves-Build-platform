@@ -48,6 +48,7 @@ const trackingSchema = z.object({
   trackingUrl: safeTrackingUrlSchema,
   observedAt: nullableTimestampSchema,
   history: z.array(historySchema).max(100),
+  deliveryCode: z.string().regex(/^[0-9]{4}$/).nullable().catch(null),
 });
 
 export function parseCustomerOrderTrackingResponse(

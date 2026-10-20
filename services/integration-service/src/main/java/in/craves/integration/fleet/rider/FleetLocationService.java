@@ -54,14 +54,14 @@ public class FleetLocationService {
                r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
                p.trip_id AS last_trip_id, a.id AS trip_id, a.state AS trip_state, a.version AS trip_version,
                e.rider_id AS last_trip_rider_id, e.state AS last_trip_state, e.version AS last_trip_version,
-               z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now
+               z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now
         FROM fleet_schema.rider_shift s
         JOIN fleet_schema.rider r ON r.id = s.rider_id
         LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = s.rider_id
         LEFT JOIN fleet_schema.trip a ON a.rider_id = s.rider_id AND a.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
         LEFT JOIN fleet_schema.trip e ON e.id = p.trip_id
-        LEFT JOIN LATERAL (SELECT starts_at, ends_at FROM fleet_schema.rider_slot
-          WHERE rider_id = s.rider_id AND starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1) z ON true
+        LEFT JOIN LATERAL (SELECT id, starts_at, ends_at FROM fleet_schema.rider_slot
+          WHERE rider_id = s.rider_id AND status = 'BOOKED' AND starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1) z ON true
         WHERE %s
         FOR UPDATE OF s""";
     private static final String UPSERT = """
@@ -128,7 +128,12 @@ public class FleetLocationService {
             }
             long seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
             if (seconds > 0) {
-                jdbc.update("UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ? WHERE id = ?", seconds, shift.shiftId());
+                // One statement: the shift's counter (the console's shift list) and the slot's, which settles the guarantee.
+                // A slot that settled meanwhile is COMPLETED and keeps its settled seconds.
+                jdbc.update("""
+                    WITH shift AS (UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ? WHERE id = ?)
+                    UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED'""",
+                    seconds, shift.shiftId(), seconds, shift.slotId());
             }
         }
         List<Offer> offers = jdbc.query(OFFERS, (row, n) -> FleetTripModels.offer(row, json), shift.riderId());
@@ -177,8 +182,8 @@ public class FleetLocationService {
 
     /**
      * In-zone seconds for the slot guarantee. Zone model: P1 stores a slot's zone as a name and a time window, with no
-     * geometry, so a gap between two consecutive non-mock fixes counts while one of the rider's slots runs, at most
-     * MAX_GAP per gap. shortcut: the position is not checked against the zone; add zone geometry (centre and radius)
+     * geometry, so a gap between two consecutive non-mock fixes counts while one of the rider's BOOKED slots runs, clipped
+     * to that slot and at most MAX_GAP per gap. shortcut: the position is not checked against the zone; add zone geometry (centre and radius)
      * when ops draws the pilot area and test each fix against it.
      *
      * @param previousAt the stored fix of this shift that the first fresh fix follows, or null
@@ -229,7 +234,8 @@ public class FleetLocationService {
             row.getObject("last_shift_id", UUID.class), instant(row, "last_at"), (Boolean) row.getObject("last_mock"),
             row.getObject("last_trip_id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("trip_state"),
             (Integer) row.getObject("trip_version"), row.getObject("last_trip_rider_id", UUID.class), row.getString("last_trip_state"),
-            (Integer) row.getObject("last_trip_version"), instant(row, "slot_starts_at"), instant(row, "slot_ends_at"), instant(row, "db_now"));
+            (Integer) row.getObject("last_trip_version"), row.getObject("slot_id", UUID.class), instant(row, "slot_starts_at"),
+            instant(row, "slot_ends_at"), instant(row, "db_now"));
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
@@ -239,6 +245,7 @@ public class FleetLocationService {
 
     record Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
                    UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
-                   UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, Instant slotStart, Instant slotEnd, Instant now) {
+                   UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, UUID slotId, Instant slotStart, Instant slotEnd,
+                   Instant now) {
     }
 }

@@ -176,16 +176,21 @@ class FleetLocationApiDatabaseTest {
     }
 
     @Test
-    void inZoneSecondsCountOnlyNonMockFixesWhileASlotRuns() throws Exception {
+    void inZoneSecondsCountOnlyNonMockFixesWhileABookedSlotRunsAndGoToThatSlot() throws Exception {
         OnShift rider = onShift();
         Instant t = Instant.now().minusSeconds(600).truncatedTo(ChronoUnit.MILLIS);
         locations(rider, List.of(fix(t, false), fix(t.plusSeconds(10), false))).andExpect(status().isOk());
         assertThat(inZone(rider)).as("no slot").isZero();
-        fleet.db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at) "
-            + "VALUES (?, ?, 'Madhapur', now() - INTERVAL '1 hour', now() + INTERVAL '2 hours')", UUID.randomUUID(), rider.id());
+        UUID earlier = slot(rider, "now() - INTERVAL '3 hours'", "now() - INTERVAL '1 hour'", "BOOKED");
+        UUID running = slot(rider, "now() - INTERVAL '1 hour'", "now() + INTERVAL '2 hours'", "CANCELLED");
+        locations(rider, List.of(fix(t.plusSeconds(15), false))).andExpect(status().isOk());
+        assertThat(inZone(rider)).as("a cancelled slot counts nothing").isZero();
+        fleet.db.update("UPDATE fleet_schema.rider_slot SET status = 'BOOKED' WHERE id = ?", running);
         locations(rider, List.of(fix(t.plusSeconds(20), false), fix(t.plusSeconds(30), false), fix(t.plusSeconds(40), true),
             fix(t.plusSeconds(50), false), fix(t.plusSeconds(200), false))).andExpect(status().isOk());
-        assertThat(inZone(rider)).isEqualTo(80);
+        assertThat(inZone(rider)).as("5 + 10, nothing either side of the mock fix, 60 of the 150 s gap").isEqualTo(75);
+        assertThat(slotSeconds(running)).as("the running slot's own count settles its guarantee").isEqualTo(75);
+        assertThat(slotSeconds(earlier)).as("another slot of the same shift").isZero();
     }
 
     @Test
@@ -276,6 +281,8 @@ class FleetLocationApiDatabaseTest {
         assertThat(total).isLessThanOrEqualTo(200 * 5);
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE trip_id = ?", Integer.class, trip)).isEqualTo(1000);
         assertThat(inZone(rider)).as("999 gaps of 3 s").isEqualTo(2997);
+        assertThat(fleet.db.queryForObject("SELECT in_zone_seconds FROM fleet_schema.rider_slot WHERE rider_id = ?", Integer.class, rider.id()))
+            .isEqualTo(2997);
     }
 
     ResultActions locations(OnShift rider, List<String> fixes) throws Exception {
@@ -290,6 +297,17 @@ class FleetLocationApiDatabaseTest {
             .isZero();
         assertThat(fleet.db.queryForObject("SELECT ended_at IS NOT NULL AND credential_revoked_at IS NOT NULL FROM fleet_schema.rider_shift "
             + "WHERE id = ?", Boolean.class, rider.shift())).isTrue();
+    }
+
+    UUID slot(OnShift rider, String startsAt, String endsAt, String status) {
+        UUID id = UUID.randomUUID();
+        fleet.db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, status) VALUES (?, ?, 'Madhapur', "
+            + startsAt + ", " + endsAt + ", ?)", id, rider.id(), status);
+        return id;
+    }
+
+    int slotSeconds(UUID slot) {
+        return fleet.db.queryForObject("SELECT in_zone_seconds FROM fleet_schema.rider_slot WHERE id = ?", Integer.class, slot);
     }
 
     int inZone(OnShift rider) {

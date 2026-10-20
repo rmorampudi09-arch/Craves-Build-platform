@@ -36,19 +36,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class FleetSlotService {
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetSlotService.class);
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
-    /**
-     * Seconds online inside the zone during slot s, from location ingest's per-shift in-zone counter (non-mock fixes only).
-     * shortcut: the counter is per shift, so a shift reaching past the slot counts at most its overlap with the slot, not
-     * when inside the shift it was in the zone; count per slot during location ingest if riders work long shifts around slots.
-     */
-    static final String ONLINE_IN_ZONE_SECONDS = """
-        (SELECT COALESCE(SUM(LEAST(sh.in_zone_seconds::bigint, GREATEST(0, EXTRACT(EPOCH FROM
-                  LEAST(COALESCE(sh.ended_at, now()), s.ends_at) - GREATEST(sh.started_at, s.starts_at)))::bigint)), 0)::int
-           FROM fleet_schema.rider_shift sh
-          WHERE sh.rider_id = s.rider_id AND sh.started_at < s.ends_at AND COALESCE(sh.ended_at, now()) > s.starts_at)""";
     private static final String SLOT = "SELECT s.id, s.rider_id, r.name, s.zone_name, s.starts_at, s.ends_at, s.guaranteed_per_hour_paise, "
         + "s.status, st.online_in_zone_seconds AS settled_seconds, st.top_up_paise, "
-        + "CASE WHEN s.status = 'BOOKED' AND s.starts_at <= now() THEN " + ONLINE_IN_ZONE_SECONDS + " END AS live_seconds "
+        // Seconds online inside the zone during the slot: location ingest counts them per BOOKED slot from non-mock fixes.
+        + "CASE WHEN s.status = 'BOOKED' AND s.starts_at <= now() THEN s.in_zone_seconds END AS live_seconds "
         + "FROM fleet_schema.rider_slot s JOIN fleet_schema.rider r ON r.id = s.rider_id "
         + "LEFT JOIN fleet_schema.rider_slot_settlement st ON st.slot_id = s.id ";
 
@@ -143,7 +134,7 @@ public class FleetSlotService {
 
     private boolean settleOne() {
         List<Due> due = jdbc.query("SELECT s.id, s.rider_id, s.starts_at, s.ends_at, s.guaranteed_per_hour_paise, "
-            + ONLINE_IN_ZONE_SECONDS + " AS seconds FROM fleet_schema.rider_slot s WHERE s.status = 'BOOKED' AND s.ends_at <= now() "
+            + "s.in_zone_seconds AS seconds FROM fleet_schema.rider_slot s WHERE s.status = 'BOOKED' AND s.ends_at <= now() "
             + "ORDER BY s.ends_at LIMIT 1 FOR UPDATE OF s SKIP LOCKED", (row, n) -> new Due(row.getObject("id", UUID.class),
             row.getObject("rider_id", UUID.class), row.getTimestamp("starts_at"), row.getTimestamp("ends_at"),
             (Long) row.getObject("guaranteed_per_hour_paise"), row.getInt("seconds")));

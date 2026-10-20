@@ -90,10 +90,12 @@ class FleetSlotDatabaseTest {
         UUID slot = UUID.randomUUID();
         fleet.db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, guaranteed_per_hour_paise) "
             + "VALUES (?, ?, 'Madhapur', ?, ?, 8000)", slot, rider, java.sql.Timestamp.from(start), java.sql.Timestamp.from(end));
-        // 1.5 hours online inside the zone (non-mock fixes, counted by location ingest) during a shift covering the slot.
+        // 1.5 hours online inside the zone during the slot (non-mock fixes, counted per slot by location ingest). The shift
+        // around it also ran an earlier slot, so its own counter is higher and plays no part.
+        fleet.db.update("UPDATE fleet_schema.rider_slot SET in_zone_seconds = 5400 WHERE id = ?", slot);
         fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, ended_at, "
-            + "in_zone_seconds) VALUES (?, ?, ?, ?, ?, ?, 5400)", UUID.randomUUID(), rider, "a".repeat(64),
-            java.sql.Timestamp.from(start.plus(8, ChronoUnit.HOURS)), java.sql.Timestamp.from(start.minus(10, ChronoUnit.MINUTES)),
+            + "in_zone_seconds) VALUES (?, ?, ?, ?, ?, ?, 9000)", UUID.randomUUID(), rider, "a".repeat(64),
+            java.sql.Timestamp.from(start.plus(8, ChronoUnit.HOURS)), java.sql.Timestamp.from(start.minus(60, ChronoUnit.MINUTES)),
             java.sql.Timestamp.from(end));
         UUID trip = fleet.trip(UUID.randomUUID());
         fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'DELIVERED', final_pay_paise = 5000, finished_at = ? WHERE id = ?",

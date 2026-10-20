@@ -64,7 +64,7 @@ Operational values live in versioned tables, not variables: `dispatch_policy` (s
 | `rider_slot_settlement` (V154) | One per finished slot: online in-zone seconds, the guarantee, trip pay in the slot and the top-up; `credited_at` is set by the money phase. |
 | `chef_ready` (V155) | The chef's ready time per sub-order, kept even when it arrives before the trip. |
 
-V154 also adds the trip's final pay (`final_pay_lines`, `final_pay_paise`, `pay_held`, `hold_reason`, `pay_finalized_at`) and the slot's own `guaranteed_per_hour_paise` and `status`. V155 adds `trip.accepted_at` and registers `craves_fleet` in `delivery_schema.delivery_provider`, inactive, so a rider's delivery job can reference it while routing never quotes it.
+V154 also adds the trip's final pay (`final_pay_lines`, `final_pay_paise`, `pay_held`, `hold_reason`, `pay_finalized_at`) and the slot's own `guaranteed_per_hour_paise` and `status`; V153 adds the slot's own `in_zone_seconds`. V155 adds `trip.accepted_at` and registers `craves_fleet` in `delivery_schema.delivery_provider`, inactive, so a rider's delivery job can reference it while routing never quotes it.
 
 Money is BIGINT paise. The migration is re-runnable because database tests drop `payment_schema` and migrate again.
 
@@ -170,18 +170,18 @@ Push (P3) sends offers to the BOUND phone's `fcm_token`. `/shift/start` requires
 
 - **Who.** With `X-Craves-Shift-Credential` the shift is the one whose `credential_hash` matches (unknown: 401 `SHIFT_CREDENTIAL_INVALID`). Without it, a JWT with the RIDER role and the rider's open shift (none: a stop). Spring Security lets only this route and `POST /devices` through without a JWT; `FleetShiftCredentialSecurityTest` walks every rider and admin route with only a credential and only these two answer.
 - **Fixes.** Fixes with impossible values, from before the shift started or more than 5 minutes ahead of the database clock are dropped. Only fixes newer than the stored latest fix of this shift are used, so a resent batch writes nothing twice. `at` is the phone's fix time, so a phone whose clock runs more than 5 minutes fast sends no usable fixes (its heartbeat, offers and stop still work); riders should keep automatic time on.
-- **Writes.** `rider_position_latest`: the newest fix wins (one row per rider, with its `mock` flag, `shift_id` and `trip_id` = the trip in progress, else null). `trip_track`: every new fix, with its `mock` flag, only while the rider has a trip in progress (ASSIGNED to AT_DROP). `rider_shift.in_zone_seconds`: see the zone model.
+- **Writes.** `rider_position_latest`: the newest fix wins (one row per rider, with its `mock` flag, `shift_id` and `trip_id` = the trip in progress, else null). `trip_track`: every new fix, with its `mock` flag, only while the rider has a trip in progress (ASSIGNED to AT_DROP). `rider_slot.in_zone_seconds` and `rider_shift.in_zone_seconds`: see the zone model.
 - **Answer.** `{offers, activeTrip?, stop?, stopReason?}`. `offers`: the rider's ACTIVE `trip_offer` rows not yet expired, as rider-v1 Offers built by `FleetTripModels.offer`, the one mapping the offer push uses too: `expiresInSec` counted by the database clock (rounded up), `kitchenArea`, `customerLocality` and `itemsCount` (left out while 0) from the trip, `payLines` from `trip_offer.pay_lines` (`[{component, label, amountPaise}]`), and `estMinutes` = (pickup m + drop m) / 333 rounded up, + 5. `activeTrip`: the trip in progress as `{tripId, step, version}`, the step a rider-v1 TripStep (`FleetTripModels.step`: ASSIGNED is TO_KITCHEN, AT_PICKUP is AT_KITCHEN, anything that never reached the rider is CANCELLED); when it has ended, or ops gave it to another rider, it is reported once more with its final step (CANCELLED for a reassignment) so the app leaves trip mode.
 - **Stop.** `{offers: [], stop: true, stopReason}` and the shift is closed, nothing else written, when: the rider is not ACTIVE; the shift was ended (`/shift/end`); its credential was revoked (ops approved another phone); or its 12 hours are up.
 
-**Zone model.** P1 has no zone geometry: `rider_slot` holds a zone name and a time window, `dispatch_policy` only a radius. So the gap between two consecutive non-mock fixes of the shift counts toward `in_zone_seconds` while one of the rider's slots is running, at most 60 seconds per gap (a phone that sleeps longer gets 60). The position is not checked against the zone. Upgrade: add zone geometry (centre and radius) when ops draws the pilot area and test each fix against it. When slots gain a status (P3), only BOOKED slots should count.
+**Zone model.** P1 has no zone geometry: `rider_slot` holds a zone name and a time window, `dispatch_policy` only a radius. So the gap between two consecutive non-mock fixes of the shift counts while one of the rider's BOOKED slots is running, clipped to that slot and at most 60 seconds per gap (a phone that sleeps longer gets 60). It is added to that slot's `in_zone_seconds` (what the guarantee settles on) and to the shift's (the console's shift list), in one statement; a slot that settled meanwhile keeps its settled seconds. The position is not checked against the zone. Upgrade: add zone geometry (centre and radius) when ops draws the pilot area and test each fix against it.
 
 **Statement budget.** One call runs at most 5 statements, inside one transaction:
 
 1. read the shift, rider, latest position, trip in progress, previous trip and running slot, locking the shift row (`FOR UPDATE OF s`, so two calls for one shift run one after the other);
 2. upsert `rider_position_latest`;
 3. one multi-row `trip_track` insert, only on a trip;
-4. add to `in_zone_seconds`, only when there is time to add;
+4. add to the running slot's and the shift's `in_zone_seconds`, only when there is time to add;
 5. read the offers.
 
 A stop runs statement 1 and one shift update. `FleetLocationApiDatabaseTest.twoHundredCallsStayWithinFiveStatementsEach` counts every statement over 200 calls on a trip, in a slot, with an offer open (5 fixes each). The PLAN's load target, 20 calls a second for 10 minutes, is 12,000 calls: at most 5 × 12,000 = 60,000 statements (100 a second), plus each call's BEGIN and COMMIT, on one pooled connection per call for a few milliseconds.
@@ -224,7 +224,7 @@ Pay (`FleetPay`): base + drop km after the base km + pickup km after the free km
 
 ## Slots
 
-Ops books a rider into a zone with a guaranteed hourly minimum inside the rate card's declared range. Home shows the next booked slot and its guarantee. Each minute (`FleetSlotService.settleDue`, fleet pool) a finished slot settles once: top-up = max(0, guarantee × online in-zone hours − trip pay that finished in the slot) into `rider_slot_settlement`. In-zone seconds come from the shifts' non-mock counter, at most each shift's overlap with the slot. Declines never enter it.
+Ops books a rider into a zone with a guaranteed hourly minimum inside the rate card's declared range. Home shows the next booked slot and its guarantee. Each minute (`FleetSlotService.settleDue`, fleet pool) a finished slot settles once: top-up = max(0, guarantee × online in-zone hours − trip pay that finished in the slot) into `rider_slot_settlement`. In-zone seconds are the slot's own counter (see the zone model), so a shift that runs across several slots pays each slot only for its own minutes. Declines never enter it.
 
 ## Daily export
 

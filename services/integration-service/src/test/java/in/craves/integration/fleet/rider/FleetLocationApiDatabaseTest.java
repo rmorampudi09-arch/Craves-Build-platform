@@ -218,12 +218,16 @@ class FleetLocationApiDatabaseTest {
     @Test
     void aShiftThatEndedWasRevokedOrExpiredOrARiderNoLongerActiveGetsAStopAndTheShiftCloses() throws Exception {
         OnShift ended = onShift();
+        UUID endedOffer = offer(ended.id(), fleet.trip(UUID.randomUUID()), "now() + INTERVAL '30 seconds'");
         mvc.perform(post("/api/v1/rider/shift/end").header("Authorization", "Bearer " + ended.token())).andExpect(status().isNoContent());
         stop(ended, "You're offline. Go online again to get orders.");
 
         OnShift revoked = onShift();
+        UUID revokedOffer = offer(revoked.id(), fleet.trip(UUID.randomUUID()), "now() + INTERVAL '30 seconds'");
         fleet.db.update("UPDATE fleet_schema.rider_shift SET credential_revoked_at = now() - INTERVAL '1 minute' WHERE id = ?", revoked.shift());
         stop(revoked, "Your shift was stopped on this phone. Go online again from your approved phone.");
+        assertThat(fleet.db.queryForList("SELECT state FROM fleet_schema.trip_offer WHERE id IN (?, ?)", String.class, endedOffer, revokedOffer))
+            .as("an order offered to a rider who went offline goes to the next courier").containsOnly("WITHDRAWN");
         assertThat(fleet.db.queryForObject("SELECT ended_at = credential_revoked_at FROM fleet_schema.rider_shift WHERE id = ?", Boolean.class,
             revoked.shift())).isTrue();
 

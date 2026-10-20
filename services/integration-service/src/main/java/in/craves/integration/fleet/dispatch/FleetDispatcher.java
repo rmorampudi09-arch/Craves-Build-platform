@@ -17,6 +17,7 @@ import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.pay.FleetPay;
 import in.craves.integration.fleet.pay.FleetPay.PayQuote;
 import in.craves.integration.fleet.rider.FleetRiderService;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import java.sql.Timestamp;
@@ -231,7 +232,8 @@ public class FleetDispatcher implements FleetStage {
         double dLng = radiusM / (111_320.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));
         return jdbc.query("""
                 SELECT r.id, p.lat, p.lng FROM fleet_schema.rider r
-                JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL
+                JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
+                  AND s.credential_expires_at > now()
                 JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
                 WHERE r.status = 'ACTIVE' AND NOT p.mock AND p.received_at > now() - make_interval(secs => ?)
                   AND p.lat BETWEEN ? AND ? AND p.lng BETWEEN ? AND ?
@@ -273,14 +275,18 @@ public class FleetDispatcher implements FleetStage {
             (row, n) -> row.getTimestamp("deadline_at").toInstant(), UUID.randomUUID(), tripId, policy.fleetStageSeconds());
         int offered = 0;
         for (Planned planned : plan.offers()) {
-            // One ACTIVE offer per rider: a rider another order reached first is skipped, not doubled up.
+            // One ACTIVE offer per rider: a rider another order reached first is skipped, not doubled up, and so is one who
+            // went offline or took a trip while the plan fetched distances and quotes.
             offered += jdbc.update("""
                 INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m,
                   drop_distance_m, expires_at)
-                VALUES (?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, now() + make_interval(secs => ?))
+                SELECT ?, ?, r.id, ?, CAST(? AS jsonb), ?, ?, ?, now() + make_interval(secs => ?) FROM fleet_schema.rider r
+                WHERE r.id = ? AND\s""" + FleetShiftService.ON_SHIFT.formatted("r.id") + """
+                 AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = r.id
+                                  AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
                 ON CONFLICT (rider_id) WHERE state = 'ACTIVE' DO NOTHING""",
-                planned.offerId(), tripId, planned.riderId(), planned.quote().totalPaise(), write(planned.quote().lines()),
-                planned.quote().rateCardVersion(), planned.quote().pickupDistanceM(), planned.quote().dropDistanceM(), policy.offerSeconds());
+                planned.offerId(), tripId, planned.quote().totalPaise(), write(planned.quote().lines()), planned.quote().rateCardVersion(),
+                planned.quote().pickupDistanceM(), planned.quote().dropDistanceM(), policy.offerSeconds(), planned.riderId());
         }
         List<RingingOffer> offers = offered == 0 ? List.of() : jdbc.query("SELECT " + FleetTripModels.OFFER_COLUMNS
                 + " FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id WHERE o.trip_id = ? AND o.state = 'ACTIVE'",

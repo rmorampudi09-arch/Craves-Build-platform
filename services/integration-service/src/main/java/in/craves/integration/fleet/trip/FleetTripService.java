@@ -8,6 +8,7 @@ import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Customer;
 import in.craves.integration.fleet.trip.FleetTripModels.Kitchen;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
@@ -89,15 +90,16 @@ public class FleetTripService {
     @Transactional
     public Trip accept(UUID identityId, UUID offerId, String idempotencyKey) {
         Rider rider = activeRider(identityId);
-        // The one decisive statement: it closes the order's open fleet stage, only for a live offer of this rider and an
-        // order still going. A second accept waits on the same stage row, then finds it closed. The stage's deadline makes a
-        // late accept fail here too.
+        // The one decisive statement: it closes the order's open fleet stage, only for a live offer of this rider, still on
+        // shift, and an order still going. A second accept waits on the same stage row, then finds it closed. The stage's
+        // deadline makes a late accept fail here too.
         List<UUID> won = jdbc.queryForList("""
             UPDATE fleet_schema.trip_stage s SET state = 'CLOSED', outcome = 'ACCEPTED', closed_at = now()
             FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
             WHERE o.id = ? AND o.rider_id = ? AND o.state = 'ACTIVE' AND o.expires_at > now()
               AND s.trip_id = o.trip_id AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN' AND s.deadline_at > now()
-              AND NOT\s""" + ORDER_REFUNDED + " RETURNING s.trip_id", UUID.class, offerId, rider.id());
+              AND\s""" + FleetShiftService.ON_SHIFT.formatted("o.rider_id") + " AND NOT " + ORDER_REFUNDED + " RETURNING s.trip_id",
+            UUID.class, offerId, rider.id());
         if (won.isEmpty()) {
             return notWon(offerId, rider);
         }

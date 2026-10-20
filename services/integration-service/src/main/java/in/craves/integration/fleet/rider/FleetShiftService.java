@@ -40,6 +40,9 @@ public class FleetShiftService {
     /** Closes a shift at its expiry or revocation if that came first, else now; its credential stops working. */
     static final String END_SHIFT = "ended_at = LEAST(now(), credential_expires_at, COALESCE(credential_revoked_at, now())), "
         + "credential_revoked_at = COALESCE(credential_revoked_at, now())";
+    /** The rider (a SQL expression, formatted in) has a shift whose credential still works: only such a rider gets or takes an order. */
+    public static final String ON_SHIFT = "EXISTS (SELECT 1 FROM fleet_schema.rider_shift h WHERE h.rider_id = %s AND h.ended_at IS NULL "
+        + "AND h.credential_revoked_at IS NULL AND h.credential_expires_at > now())";
     // Riding needs these four, each verified by ops with an expiry date (IST) that has not passed.
     private static final String MISSING_DOCUMENTS = """
         SELECT t.type FROM unnest(ARRAY['DRIVING_LICENCE', 'VEHICLE_RC', 'VEHICLE_INSURANCE', 'PUC']) WITH ORDINALITY AS t(type, n)
@@ -120,8 +123,14 @@ public class FleetShiftService {
     /** Goes offline and revokes the credential. Idempotent: with no open shift it changes nothing. */
     @Transactional
     public void end(UUID identityId) {
-        jdbc.update("UPDATE fleet_schema.rider_shift SET " + END_SHIFT + " WHERE ended_at IS NULL "
-            + "AND rider_id = (SELECT id FROM fleet_schema.rider WHERE identity_id = ?)", identityId);
+        jdbc.update(endShifts("rider_id = (SELECT id FROM fleet_schema.rider WHERE identity_id = ?)"), identityId);
+    }
+
+    /** Ends the open shifts that match the condition and withdraws their riders' open offers, so the next courier is not kept waiting. */
+    static String endShifts(String condition) {
+        return "WITH ended AS (UPDATE fleet_schema.rider_shift SET " + END_SHIFT + " WHERE ended_at IS NULL AND " + condition
+            + " RETURNING rider_id) UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() "
+            + "WHERE state = 'ACTIVE' AND rider_id IN (SELECT rider_id FROM ended)";
     }
 
     /**

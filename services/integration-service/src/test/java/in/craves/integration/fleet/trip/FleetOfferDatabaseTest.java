@@ -25,6 +25,7 @@ import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
 import in.craves.integration.fleet.dispatch.FleetDispatcher;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
 import java.util.ArrayList;
 import java.util.List;
@@ -200,6 +201,19 @@ class FleetOfferDatabaseTest {
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_stage", Integer.class)).isEqualTo(1);
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
         assertThat(trips.cancel(trip, "Again")).as("a second cancel changes nothing").contains("CANCELLED");
+    }
+
+    @Test
+    void goingOfflineWithdrawsTheOfferAndARiderWhoseShiftRanOutCannotAccept() {
+        new FleetShiftService(fleet.db, FleetDatabase.properties(true), mock(FleetStorage.class)).end(firstIdentity);
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_offer WHERE rider_id = ?", String.class, first))
+            .isEqualTo("WITHDRAWN");
+        refused(() -> transaction.execute(status -> trips.accept(firstIdentity, offerOf(first), "rider-accept-1")), 410, "OFFER_EXPIRED");
+
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET credential_expires_at = now() - INTERVAL '1 second' WHERE rider_id = ?", second);
+        refused(() -> transaction.execute(status -> trips.accept(secondIdentity, offerOf(second), "rider-accept-2")), 410, "OFFER_EXPIRED");
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_stage", String.class)).isEqualTo("OPEN");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
     }
 
     @Test

@@ -9,7 +9,8 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     hikari:
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      # Shared database budget: scripts/release/check-db-connection-budget.py
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:3}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
       connection-timeout: 30000
   jpa:

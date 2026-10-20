@@ -10,7 +10,7 @@ Environment flags only switch code paths on. All are off by default.
 |---|---|
 | `CRAVES_FLEET_ENABLED` | Every fleet bean: admin API, policy readers, test mode, storage, the RIDER role client, the fleet scheduler pool and the daily export job. Off means no fleet bean or job exists (`FleetConfigurationTest`). |
 | `CRAVES_FLEET_RIDER_API_ENABLED` | The rider API under `/api/v1/rider` (needs `CRAVES_FLEET_ENABLED` too). |
-| `CRAVES_FLEET_LOCATION_INGEST_ENABLED` | Reserved for location ingest (P2). |
+| `CRAVES_FLEET_LOCATION_INGEST_ENABLED` | `POST /api/v1/rider/locations` and the daily `trip_track` partition job (needs the two flags above too). |
 | `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` | Reserved for payout execution (P4). |
 
 Other settings (`craves.fleet.*` in `application.yml`):
@@ -61,7 +61,7 @@ Money is BIGINT paise. The migration is re-runnable because database tests drop 
 
 ### New `trip_track` partitions
 
-V152 creates a default partition and one partition per IST day for the 8 days from the day it runs. Create each new day before it starts (a daily job comes with location ingest in P2):
+V152 creates a default partition and one partition per IST day for the 8 days from the day it runs. While location ingest is on, `FleetLocationService.createTrackDays` creates the next 7 days a minute after start-up and every 6 hours (fleet pool), never today. A failure logs `CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED`. By hand:
 
 ```sql
 CREATE TABLE IF NOT EXISTS fleet_schema.trip_track_20261028 PARTITION OF fleet_schema.trip_track
@@ -84,6 +84,7 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
 | `POST /shift/start` | Goes online: multipart `selfie` (JPEG, 5 MB) and header `X-Craves-Installation-Id`. Returns `{shiftCredential, expiresAt}` once. Refusals below. |
 | `POST /shift/end` | Goes offline: closes the open shift and revokes its credential. 204 even when nothing is open. |
+| `POST /locations` | Location ingest flag. Header `X-Craves-Shift-Credential` (the native service) or a RIDER JWT. Up to 5 fixes; answers offers, the trip and a stop signal. See "Location ingest". |
 
 ### Shifts and the shift credential
 
@@ -132,6 +133,30 @@ Name match: the holder name matches the KYC name when both have the same words, 
 ### Publishing a rate card or dispatch policy
 
 `FleetPolicyStore.publishRateCard` and `publishDispatchPolicy` refuse a version that starts less than 14 days after publishing or has a value outside the declared ranges (those of the newest published version; a first version uses its own). The admin contract has no publish endpoint yet, so this is service code only; the table's CHECK also refuses fewer than 14 days.
+
+### Location ingest
+
+`POST /api/v1/rider/locations` body `{fixes: [{lat, lng, accuracyM, at, mock}]}`, 0 to 5 fixes (more is 400; an empty list is the heartbeat).
+
+- **Who.** With `X-Craves-Shift-Credential` the shift is the one whose `credential_hash` matches (unknown: 401 `SHIFT_CREDENTIAL_INVALID`). Without it, a JWT with the RIDER role and the rider's open shift (none: a stop). Spring Security lets only this route through without a JWT; `FleetShiftCredentialSecurityTest` walks every rider and admin route with only a credential and only this one answers.
+- **Fixes.** Fixes with impossible values, from before the shift started or more than 5 minutes ahead of the database clock are dropped. Only fixes newer than the stored latest fix of this shift are used, so a resent batch writes nothing twice.
+- **Writes.** `rider_position_latest`: the newest fix wins (one row per rider, with its `mock` flag, `shift_id` and `trip_id` = the trip in progress, else null). `trip_track`: every new fix, with its `mock` flag, only while the rider has a trip in progress (ASSIGNED to AT_DROP). `rider_shift.in_zone_seconds`: see the zone model.
+- **Answer.** `{offers, activeTrip?, stop?, stopReason?}`. `offers`: the rider's ACTIVE `trip_offer` rows not yet expired, as rider-v1 Offers; `expiresInSec` is computed by the database clock, `kitchenArea` and `customerLocality` come from the trip, `payLines` from `trip_offer.pay_lines`, which must hold `[{label, amountPaise}]`, and `estMinutes` = 12 + (pickup m + drop m) / 300, rounded (the app mock's estimate; dispatch should use the same). `activeTrip`: the trip in progress as `{tripId, step, version}` (ASSIGNED is TO_KITCHEN, AT_PICKUP is AT_KITCHEN); when it has ended, or ops gave it to another rider, it is reported once more with its final step (CANCELLED for a reassignment) so the app leaves trip mode.
+- **Stop.** `{offers: [], stop: true, stopReason}` and the shift is closed, nothing else written, when: the rider is not ACTIVE; the shift was ended (`/shift/end`); its credential was revoked (ops approved another phone); or its 12 hours are up.
+
+**Zone model.** P1 has no zone geometry: `rider_slot` holds a zone name and a time window, `dispatch_policy` only a radius. So the gap between two consecutive non-mock fixes of the shift counts toward `in_zone_seconds` while one of the rider's slots is running, at most 60 seconds per gap (a phone that sleeps longer gets 60). The position is not checked against the zone. Upgrade: add zone geometry (centre and radius) when ops draws the pilot area and test each fix against it. When slots gain a status (P3), only BOOKED slots should count.
+
+**Statement budget.** One call runs at most 5 statements, inside one transaction:
+
+1. read the shift, rider, latest position, trip in progress, previous trip and running slot, locking the shift row (`FOR UPDATE OF s`, so two calls for one shift run one after the other);
+2. upsert `rider_position_latest`;
+3. one multi-row `trip_track` insert, only on a trip;
+4. add to `in_zone_seconds`, only when there is time to add;
+5. read the offers.
+
+A stop runs statement 1 and one shift update. `FleetLocationApiDatabaseTest.twoHundredCallsStayWithinFiveStatementsEach` counts every statement over 200 calls on a trip, in a slot, with an offer open (5 fixes each). The PLAN's load target, 20 calls a second for 10 minutes, is 12,000 calls: at most 5 × 12,000 = 60,000 statements (100 a second), plus each call's BEGIN and COMMIT, on one pooled connection per call for a few milliseconds.
+
+EXPLAIN (Postgres 16, 2,000 riders, 62,000 shifts, 200,500 trips and offers, 42,000 slots) shows an index for every table: `rider_shift_credential_hash_key` (the credential, cast to `CHAR(64)` so the unique index applies), `rider_identity_id_key` and `rider_shift_one_open` (JWT), `rider_position_latest_pkey`, `rider_pkey`, `trip_one_active_per_rider`, `trip_pkey`, `rider_slot_rider`, `trip_offer_one_active_per_rider` and `rider_shift_pkey` for the updates; the upsert resolves on `rider_position_latest_pkey`, and the track insert goes straight to the day's partition.
 
 ## Daily export
 

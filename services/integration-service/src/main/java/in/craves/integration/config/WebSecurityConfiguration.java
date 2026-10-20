@@ -5,6 +5,7 @@ import in.craves.integration.security.internalcall.InternalCallFilter;
 import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -33,6 +34,9 @@ public class WebSecurityConfiguration {
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
+                // The native location service sends a shift credential instead of a JWT, here only: the controller
+                // requires that credential or a RIDER JWT. The credential authenticates nothing else.
+                .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations").permitAll()
                 // Any signed-in user may ask whether they are a rider; every other rider route needs RIDER.
                 .requestMatchers("/api/v1/rider/me").authenticated()
                 .requestMatchers("/api/v1/rider/**").hasRole("RIDER")

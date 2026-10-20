@@ -95,6 +95,15 @@ public class FleetRiderController {
         return principal.identityId();
     }
 
+    /** The signed-in identity holding the RIDER role, for the routes Spring Security lets through for the shift credential. */
+    static UUID riderIdentity(CravesPrincipal principal) {
+        UUID identity = identity(principal);
+        if (!principal.hasRole("RIDER")) {
+            throw FleetApiException.forbidden();
+        }
+        return identity;
+    }
+
     static <T> ResponseEntity<T> noStore(T body) {
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(body);
     }

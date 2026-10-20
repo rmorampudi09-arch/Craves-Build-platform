@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.SchedulerLagWatchdog;
 import in.craves.integration.fleet.admin.FleetAdminController;
+import in.craves.integration.fleet.rider.FleetLocationController;
+import in.craves.integration.fleet.rider.FleetLocationService;
 import in.craves.integration.fleet.rider.FleetRiderController;
 import in.craves.integration.payout.bank.BankDataCipher;
 import java.util.Arrays;
@@ -72,6 +74,14 @@ class FleetConfigurationTest {
             assertThat(context).doesNotHaveBean(FleetRiderController.class));
         runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true").run(context ->
             assertThat(context).hasNotFailed().hasSingleBean(FleetRiderController.class));
+    }
+
+    @Test
+    void locationIngestNeedsItsOwnFlagToo() {
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true").run(context ->
+            assertThat(context).hasNotFailed().doesNotHaveBean(FleetLocationController.class).doesNotHaveBean(FleetLocationService.class));
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true", "craves.fleet.location-ingest-enabled=true")
+            .run(context -> assertThat(context).hasNotFailed().hasSingleBean(FleetLocationController.class));
     }
 
     @Test

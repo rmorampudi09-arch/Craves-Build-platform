@@ -28,6 +28,9 @@ Other settings (`craves.fleet.*` in `application.yml`):
 | `CRAVES_USER_CHEF_INTERNAL_BASE_URL` | empty | user-chef-service root, for the drop's road distance (`POST /internal/v1/maps/road-distance`). Unset: straight line × 1.3. |
 | `CRAVES_FLEET_ORDER_BASE_URL` | empty | order-service root, for the customer's delivery code (`POST /internal/v1/orders/{id}/delivery-code/verify`). Unset: OTP delivery answers 503 `OTP_UNAVAILABLE`. |
 | `CRAVES_NOTIFICATION_INTERNAL_BASE_URL` | empty | notification-service root, for offer pushes (`/internal/v1/push/realtime`) and ops alerts (`/internal/v1/ops-alerts`). Unset: offers reach the app on `/locations` only; alerts are `CRAVES_ALERT` log lines. |
+| `CRAVES_LEDGER_POSTING_ENABLED` | `false` | The existing financial-journal gate. Rider credits post to the journal, so they wait (`CRAVES_ALERT alert=FLEET_CREDITS_WAITING`) until it is on; the money job then credits them. |
+| `CRAVES_FLEET_TDS_ENABLED`, `CRAVES_FLEET_TDS_SECTION`, `CRAVES_FLEET_TDS_RATE_BASIS_POINTS`, `CRAVES_FLEET_TDS_ANNUAL_THRESHOLD_PAISE` | off, empty, 0, 0 | TDS on rider pay (see Money). The CA sets the section, the rate (100 = 1%) and the yearly threshold; on without a section or a rate of 1 to 10000, credits fail with `FLEET_TDS_MISCONFIGURED` and wait. |
+| `CRAVES_FLEET_MONEY_INTERVAL_MS` | `60000` | The money job (fleet pool): credits waiting trips and slot top-ups, releases holds that are due. |
 
 All three use `CRAVES_INTERNAL_SERVICE_KEY` (`X-Craves-Internal-Secret`, or `X-Craves-Internal-Key` for notification-service), have explicit timeouts, and are never retried: a code check could count a wrong code twice, and an offer push outlives its offer.
 
@@ -55,7 +58,7 @@ Operational values live in versioned tables, not variables: `dispatch_policy` (s
 | `trip_offer` | Offers with locked pay; one `ACTIVE` offer per rider and one `ACCEPTED` per trip. |
 | `trip_event` | Trip steps, unique per trip and idempotency key. |
 | `trip_stage` | The dispatch chain; one `OPEN` stage per trip. |
-| `rider_earning` | Pay lines, unique key `fleet-trip-pay/{tripId}/{component}/{revision}`, net = gross − withheld. |
+| `rider_earning` | Pay lines, unique key `fleet-trip-pay/{tripId}/{component}/{revision}`, net = gross − withheld. V156: a slot top-up's key is `fleet-slot-pay/{slotId}/slot-top-up/1`; `label`; `reason` (required on revisions after 1, except `tds`). |
 | `rider_payout_instruction` | Weekly payouts and daily withdrawals with UTRs. |
 | `rider_withdrawal_day` | One withdrawal per rider per IST day. |
 | `support_issue` | Problems riders report, with acknowledge-by and fix-by times. |
@@ -63,6 +66,7 @@ Operational values live in versioned tables, not variables: `dispatch_policy` (s
 | `admin_audit` | Append-only trail of every ops action; mutations also keep their Idempotency-Key and first response. |
 | `rider_slot_settlement` (V154) | One per finished slot: online in-zone seconds, the guarantee, trip pay in the slot and the top-up; `credited_at` is set by the money phase. |
 | `chef_ready` (V155) | The chef's ready time per sub-order, kept even when it arrives before the trip. |
+| `rider_pay_hold` (V156) | One hold per trip, ever: reason, `release_on` (today to 7 days ahead, IST), who placed and released it. V156 also adds `trip.pay_credited_at` and the journal accounts `RIDER_PAYABLE` and `RIDER_TDS_PAYABLE`. |
 
 V154 also adds the trip's final pay (`final_pay_lines`, `final_pay_paise`, `pay_held`, `hold_reason`, `pay_finalized_at`) and the slot's own `guaranteed_per_hour_paise` and `status`; V153 adds the slot's own `in_zone_seconds`. V155 adds `trip.accepted_at` and registers `craves_fleet` in `delivery_schema.delivery_provider`, inactive, so a rider's delivery job can reference it while routing never quotes it.
 
@@ -87,7 +91,7 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 |---|---|
 | `GET /me` | Any signed-in user. Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts. |
 | `GET /profile` | Latest document per type, vehicle, masked payout account, insurance. PENDING riders too (no RIDER role needed). |
-| `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId` (trip in progress), the running or next booked slot with its own guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, and the ops banner until its `until`. Earnings fields are zero until P4. |
+| `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId` (trip in progress), the running or next booked slot with its own guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, the ops banner until its `until`, and `todayEarningsPaise` (net of TDS) and `todayTrips` from credited pay. |
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING. PENDING riders too. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language. |
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
@@ -99,6 +103,8 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `POST /offers/{offerId}/decline` | 204. Free, no reason, changes nothing else. |
 | `GET /trips/active` | The trip in progress, or 204. |
 | `POST /trips/{tripId}/{action}` | `arrived-pickup`, `food-not-ready`, `picked-up`, `arrived-drop`, `delivered`, `failed`; see the trip steps below. |
+| `GET /earnings?range=today\|week&cursor=` | Trips with credited pay (`FleetMoneyController`), newest first, 20 a page; `totalPaise` is the whole range, slot top-ups included. The week is Monday 00:00 to Sunday 23:59 IST. |
+| `GET /earnings/trips/{tripId}` | One trip: lines (TDS and adjustments are lines too), distances, `rateCardVersion`, status `CREDITED`, `HELD` (`holdReason`, `releaseOn`) or `ADJUSTED`. 404 `TRIP_NOT_FOUND` for another rider's trip. |
 
 Offer and trip POSTs need an `Idempotency-Key` (the app sends `rider-{action}-{offerId or tripId}-{riderId}[-{attempt}]`).
 
@@ -133,6 +139,7 @@ Admin fleet API (`/api/v1/admin/fleet`, fleet flag), scoped admin roles per `adm
 | `GET /audit` | The trail, newest first, optionally for one rider. |
 | `GET /exports/rider-joins-exits?date=` | CSV of joins and exits on one IST date, for the government portal. |
 | `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots (`FleetSlotController`): 409 `SLOT_OVERLAP`; 422 `GUARANTEE_OUT_OF_RANGE` outside the current rate card's declared range, `SLOT_END_NOT_AFTER_START`; 409 `SLOT_NOT_BOOKED`. Audited and idempotent. |
+| `GET /holds?state=ACTIVE\|RELEASED`, `POST /holds`, `POST /holds/{holdId}/release` | Pay holds (`FleetMoneyAdminController`): reads for payments, operations and audit admins; changes for payments admins. `POST {tripId, reason, releaseOn}`: 404 `TRIP_NOT_FOUND`, 409 `HOLD_EXISTS` (one hold per trip, ever), 409 `EARNING_ALREADY_PAID` (the pay was already withdrawable when a payout or withdrawal was made), 422 `RELEASE_DATE_OUT_OF_RANGE`; release: 409 `HOLD_NOT_ACTIVE`. |
 
 ### Due process (two tracks)
 
@@ -227,6 +234,30 @@ Pay (`FleetPay`): base + drop km after the base km + pickup km after the free km
 ## Slots
 
 Ops books a rider into a zone with a guaranteed hourly minimum inside the rate card's declared range. Home shows the next booked slot and its guarantee. Each minute (`FleetSlotService.settleDue`, fleet pool) a finished slot settles once: top-up = max(0, guarantee × online in-zone hours − trip pay that finished in the slot) into `rider_slot_settlement`. In-zone seconds are the slot's own counter (see the zone model), so a shift that runs across several slots pays each slot only for its own minutes. Declines never enter it.
+
+## Money (P4)
+
+### Earnings ledger
+
+`FleetEarnings` (fleet flag) turns pay into money:
+
+1. A trip that ends with pay publishes `FleetTripPayFinalized` (P3). After the trip's transaction commits, the listener credits it in a new transaction, so a failed credit never undoes a delivery. The money job (every `CRAVES_FLEET_MONEY_INTERVAL_MS`, fleet pool) credits any finished trip still without `trip.pay_credited_at`, and every slot settlement without `credited_at`.
+2. Each pay line becomes a `rider_earning` row with key `fleet-trip-pay/{tripId}/{component}/{revision}` (revision 1) and one balanced journal in the immutable ledger with the same `business_event_key`: debit `DELIVERY_EXPENSE`, credit the pooled `RIDER_PAYABLE`, lines tagged `delivery_attempt_id` = trip and `provider_id` = `craves_fleet`. The unique key (in both tables) makes a second credit impossible, and every trip's journal lines net to zero. A slot top-up is its own component, `slot-top-up`.
+3. A row is pending until `withdrawable_at`, 24 h after the delivery. It counts towards the balance only once past that, with no active hold on its trip and no open support issue raised on the trip before then (an issue blocks that trip's pay until it is FIXED or 7 days pass).
+4. A held trip (photo delivery, failed delivery, rider lost before pickup) gets a hold at credit: its own reason, released at 00:00 IST 7 days after the trip at the latest. Ops can place one hold per trip (`POST /holds`) and release it early. The money job releases holds on their date. Holds touch that trip only.
+5. Adjustments are later revisions of a component (2 and up) with the reason the rider sees: `FleetEarnings.adjustTrip`, service code only because `admin-fleet-v1` has no adjustment endpoint. A negative one is debt (journal: debit `RIDER_PAYABLE`, credit `DELIVERY_EXPENSE`), recovered only from future pay (payouts, below).
+6. TDS (off by default): when on, each credit withholds `rate × the rider's gross this financial year (from 1 April IST) − TDS already withheld this year`, nothing while the year's gross is at or under the threshold, at most the credit itself. It is its own row (`component` `tds`, `net` = −withheld) and journal: debit `RIDER_PAYABLE`, credit `RIDER_TDS_PAYABLE`. A negative adjustment lowers the year's gross, so later credits withhold less; nothing is refunded.
+
+Postings for one ₹67 trip on the draft rate card (drop 4.2 km, pickup 1.8 km):
+
+| Key | Debit | Credit | ₹ |
+|---|---|---|---|
+| `fleet-trip-pay/{trip}/base/1` | `DELIVERY_EXPENSE` | `RIDER_PAYABLE` | 40.00 |
+| `fleet-trip-pay/{trip}/drop-km/1` | `DELIVERY_EXPENSE` | `RIDER_PAYABLE` | 19.80 |
+| `fleet-trip-pay/{trip}/pickup-km/1` | `DELIVERY_EXPENSE` | `RIDER_PAYABLE` | 7.20 |
+| `fleet-trip-pay/{trip}/tds/1` (TDS on, threshold crossed, 1%) | `RIDER_PAYABLE` | `RIDER_TDS_PAYABLE` | 0.67 |
+
+A photo delivery posts the same journals; only the hold differs (the pay stays out of the balance until released).
 
 ## Daily export
 

@@ -13,9 +13,12 @@ import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.admin.FleetAdminController;
+import in.craves.integration.fleet.money.FleetEarnings;
+import in.craves.integration.fleet.money.FleetMoneyController;
 import in.craves.integration.fleet.rider.FleetLocationController;
 import in.craves.integration.fleet.rider.FleetLocationService;
 import in.craves.integration.fleet.rider.FleetRiderController;
+import in.craves.integration.ledger.LedgerPostingService;
 import in.craves.integration.payout.bank.BankDataCipher;
 import java.util.Arrays;
 import java.util.List;
@@ -50,6 +53,8 @@ class FleetConfigurationTest {
         .withBean(RestClient.Builder.class, RestClient::builder)
         .withBean(BankDataCipher.class, () -> mock(BankDataCipher.class))
         .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
+        // Rider pay is posted to the existing financial journal.
+        .withBean(LedgerPostingService.class, () -> mock(LedgerPostingService.class))
         // Dispatch hands orders on to Borzo and Pidge through the existing delivery beans.
         .withBean(DeliveryProviderRouter.class, () -> mock(DeliveryProviderRouter.class))
         .withBean(DeliveryCommandRepository.class, () -> mock(DeliveryCommandRepository.class))
@@ -81,7 +86,7 @@ class FleetConfigurationTest {
     void theFleetFlagStartsTheReadersTestModeAndAWatchedPool() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context -> {
             assertThat(context).hasNotFailed().hasSingleBean(FleetPolicyStore.class).hasSingleBean(FleetTestMode.class)
-                .hasSingleBean(FleetAdminController.class).hasSingleBean(FleetApiAdvice.class);
+                .hasSingleBean(FleetAdminController.class).hasSingleBean(FleetApiAdvice.class).hasSingleBean(FleetEarnings.class);
             assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER)).isInstanceOf(SchedulerLagWatchdog.MonitoredTaskScheduler.class);
             assertThat(context.getBean(FleetProperties.class).testMode()).as("test mode is on unless switched off").isTrue();
         });
@@ -90,9 +95,9 @@ class FleetConfigurationTest {
     @Test
     void theRiderApiNeedsBothFlags() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
-            assertThat(context).doesNotHaveBean(FleetRiderController.class));
+            assertThat(context).doesNotHaveBean(FleetRiderController.class).doesNotHaveBean(FleetMoneyController.class));
         runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true").run(context ->
-            assertThat(context).hasNotFailed().hasSingleBean(FleetRiderController.class));
+            assertThat(context).hasNotFailed().hasSingleBean(FleetRiderController.class).hasSingleBean(FleetMoneyController.class));
     }
 
     @Test
@@ -115,7 +120,7 @@ class FleetConfigurationTest {
                         .map(method -> type.getSimpleName() + "#" + method.getName()))
                     .toList();
                 assertThat(jobs).containsExactlyInAnyOrder("RiderJoinsExitsExport#writeYesterday", "FleetSlotService#settleDue",
-                    "FleetDispatchJobs#tick", "FleetLocationService#createTrackDays");
+                    "FleetDispatchJobs#tick", "FleetLocationService#createTrackDays", "FleetEarnings#tick");
                 assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER, ThreadPoolTaskScheduler.class).getPoolSize())
                     .isEqualTo(jobs.size());
             });

@@ -583,7 +583,7 @@ public class FleetAdminService {
         return value == null ? null : Timestamp.from(value);
     }
 
-    static String reason(String reason) {
+    public static String reason(String reason) {
         String text = reason == null ? "" : reason.trim();
         if (text.length() < 3 || text.length() > 1000) {
             throw FleetApiException.invalid("Write a reason of 3 to 1,000 characters.");
@@ -626,12 +626,12 @@ public class FleetAdminService {
     }
 
     /** Opaque page cursor: the last row's time and id. */
-    record Cursor(Instant at, UUID id) {
-        String encode() {
+    public record Cursor(Instant at, UUID id) {
+        public String encode() {
             return Base64.getUrlEncoder().withoutPadding().encodeToString((at + "|" + id).getBytes(StandardCharsets.UTF_8));
         }
 
-        static Cursor parse(String value) {
+        public static Cursor parse(String value) {
             if (value == null || value.isBlank()) {
                 return null;
             }

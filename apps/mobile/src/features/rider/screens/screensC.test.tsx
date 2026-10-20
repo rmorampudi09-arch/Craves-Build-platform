@@ -1,6 +1,6 @@
 // Screens 15–21: Earnings, Trip pay, Payouts, SOS, Notice, Profile and Help, in every state.
 import React from 'react';
-import {Alert, Text} from 'react-native';
+import {Alert, Linking, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -10,6 +10,7 @@ import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {EarningsScreen} from './EarningsScreen';
 import {PayoutsScreen} from './PayoutsScreen';
+import {SosScreen} from './SosScreen';
 import {TripDetailScreen} from './TripDetailScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn()};
@@ -21,6 +22,9 @@ jest.mock('@react-navigation/native', () => ({
 }));
 // FlashList needs real layout; FlatList renders the same props in the test renderer.
 jest.mock('@shopify/flash-list', () => ({FlashList: require('react-native').FlatList}));
+jest.mock('../native/riderOnlineService', () => ({
+  riderOnlineService: {lastFix: () => ({lat: 17.4615, lng: 78.3657, accuracyM: 10, at: '2026-10-21T10:00:00Z'})},
+}));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
   return {
@@ -335,5 +339,45 @@ describe('Payouts (17)', () => {
     await settle();
     expect(allText()).toContain("You're offline.");
     expect(has('rider-retry')).toBe(true);
+  });
+});
+
+describe('SOS (18)', () => {
+  const screen = (tripId?: string) => (
+    <SosScreen route={{key: 'Sos', name: 'Sos', params: {tripId}}} navigation={mockNavigation as never} />
+  );
+  beforeEach(() => jest.spyOn(Linking, 'openURL').mockResolvedValue(true));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('sends the location on open, then offers both calls and the accident promise', async () => {
+    (riderApi.sendSos as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(screen('t1'), [[riderKeys.me, me]]);
+    await settle();
+    expect(riderApi.sendSos).toHaveBeenCalledWith({tripId: 't1', fix: expect.objectContaining({lat: 17.4615})});
+    const text = allText();
+    expect(text).toContain('Emergency | Stop somewhere safe first if you can. | Craves ops has your location');
+    expect(text).toContain('Call 112 | Police, fire, ambulance');
+    expect(text).toContain("If you've had an accident | Ops calls you back within 15 minutes.");
+    await press('rider-sos-ops');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+910000000000');
+    await press('rider-sos-112');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:112');
+    await press('rider-sos-close');
+    expect(mockNavigation.goBack).toHaveBeenCalled();
+  });
+
+  it('says while it is sending', async () => {
+    await render(screen(), [[riderKeys.me, me]]);
+    expect(allText()).toContain('Sending your location to Craves ops…');
+  });
+
+  it('says when the location did not reach ops and sends it again', async () => {
+    (riderApi.sendSos as jest.Mock).mockRejectedValueOnce(offline()).mockResolvedValueOnce(undefined);
+    await render(screen(), [[riderKeys.me, me]]);
+    await settle();
+    expect(allText()).toContain("Couldn't send your location. Call ops and tell them where you are.");
+    await press('rider-sos-again');
+    expect(riderApi.sendSos).toHaveBeenCalledTimes(2);
+    expect(has('rider-sos-shared')).toBe(true);
   });
 });

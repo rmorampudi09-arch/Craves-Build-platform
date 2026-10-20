@@ -1,14 +1,13 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
-import {Badge, SectionSkeleton} from '../../../shared/components';
+import {SectionSkeleton} from '../../../shared/components';
 import {AppApiError} from '../../../core/http/apiError';
 import type {DeliverBody, FailBody, Trip, TripAction, TripStep} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, Money, RateRow, RiderScreen, Title} from '../components/ui';
-import {formatRupees} from '../domain/format';
+import {RiderScreen, Title} from '../components/ui';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
 import {tripQueue, usePendingActions} from '../state/tripQueue';
@@ -17,8 +16,7 @@ import {Deliver, ToCustomer, type OtpError} from './trip/Dropoff';
 import {NotAnswering} from './trip/NotAnswering';
 import {call} from './trip/parts';
 import {AtKitchen, ToKitchen} from './trip/Pickup';
-
-const ENDED: TripStep[] = ['DELIVERED', 'FAILED', 'CANCELLED'];
+import {TripEnd} from './trip/TripEnd';
 
 export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const {strings} = useStrings();
@@ -126,27 +124,16 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     navigation.popTo('Tabs');
   }
 
-  const header = <RiderHeader title={ENDED.includes(step) ? undefined : t.titles[step as keyof typeof t.titles]} tripId={trip.tripId} />;
-  const syncNote = pending > 0 ? <Badge label={strings.common.savedWillSync} tone="info" /> : null;
-
-  if (ENDED.includes(step)) {
-    const title = step === 'DELIVERED' ? t.completeTitle : step === 'CANCELLED' ? t.cancelledTitle : t.failedTitle;
+  if (step === 'DELIVERED' || step === 'FAILED' || step === 'CANCELLED') {
     return (
-      <RiderScreen header={header} footer={<BottomAction label={t.backToWaiting} onPress={backToWaiting} testID="rider-back-to-waiting" />}>
-        <Title>{title}</Title>
-        {syncNote}
-        {trip.cancelReason ? <Body>{trip.cancelReason}</Body> : null}
-        <Card>
-          <Label>{t.youEarned}</Label>
-          <Money paise={step === 'DELIVERED' ? trip.payPaise : (trip.payLines ?? []).reduce((s, l) => s + l.amountPaise, 0)} />
-          {trip.payLines ? (
-            trip.payLines.map(line => <RateRow key={line.label} label={line.label} value={formatRupees(line.amountPaise)} />)
-          ) : (
-            <Label>{t.linesPending}</Label>
-          )}
-        </Card>
-        {photoDelivery ? <Body>{t.photoHeld}</Body> : null}
-      </RiderScreen>
+      <TripEnd
+        trip={trip}
+        step={step}
+        syncing={pending > 0}
+        photoDelivery={photoDelivery}
+        onReport={() => navigation.navigate('TripDetail', {tripId: trip.tripId})}
+        onBack={backToWaiting}
+      />
     );
   }
 

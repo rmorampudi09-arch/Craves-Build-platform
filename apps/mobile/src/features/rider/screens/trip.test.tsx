@@ -560,3 +560,86 @@ describe('Trip: customer not answering', () => {
     expect(has('rider-came-out')).toBe(false);
   });
 });
+
+describe('Trip: complete, failed and cancelled', () => {
+  const lines = [
+    {label: 'Base pay, first 2 km', amountPaise: 4000},
+    {label: 'Drop distance, 2.0 km more at ₹9', amountPaise: 1800},
+    {label: 'Ride to the kitchen, 1.0 km at ₹9', amountPaise: 900},
+  ];
+  const delivered: Trip = {...trip, step: 'DELIVERED', payLines: lines};
+
+  it('shows what was earned, with the lines from the server, and today so far', async () => {
+    await render(delivered);
+    const text = allText();
+    expect(text).toContain('Trip complete');
+    expect(text).toMatch(/CR-4107 delivered to Anil at \d{1,2}:\d{2} (am|pm)/);
+    expect(tree.root.findByProps({testID: 'rider-earned'}).props.paise).toBe(6700);
+    expect(text).toContain('₹67');
+    expect(text).toContain('Drop distance, 2.0 km more at ₹9 | ₹18');
+    expect(text).toContain('Credited now. You can withdraw it 24 hours from now.');
+    expect(text).toContain('₹414');
+    expect(text).toContain('6 trips');
+    expect(has('rider-step-bar')).toBe(false);
+  });
+
+  it('shows the order code exactly as the server sends it', async () => {
+    await render({...delivered, orderCode: '#0BDE0101'});
+    expect(allText()).toMatch(/\| #0BDE0101 delivered to Anil at /);
+  });
+
+  it('reports a problem on this trip and goes back to waiting', async () => {
+    await render(delivered);
+    await press('rider-report');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('TripDetail', {tripId: 't1'});
+    await press('rider-back-to-waiting');
+    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs');
+    expect(client.getQueryData(riderKeys.activeTrip)).toBeNull();
+  });
+
+  it('while offline says it will sync and holds the credited note and today', async () => {
+    await render({...trip, step: 'AT_DROP'});
+    mockPending.count = 1;
+    await act(async () => tree.root.findByType(TextInput).props.onChangeText('4719'));
+    await press('rider-delivered');
+    const text = allText();
+    expect(text).toContain('Trip complete');
+    expect(text).toContain('Saved · will sync');
+    expect(text).toContain('Pay details appear once this syncs.');
+    expect(text).not.toContain('Credited now');
+    expect(text).not.toContain('₹414');
+  });
+
+  it('says a photo delivery is paid after ops checks the photo', async () => {
+    jest.useFakeTimers();
+    await render({...trip, step: 'AT_DROP'});
+    await press('rider-unreachable');
+    await press('rider-call-1');
+    await press('rider-call-2');
+    await act(async () => {
+      jest.advanceTimersByTime(8 * 60_000);
+    });
+    (tripQueue.enqueue as jest.Mock).mockResolvedValueOnce({kind: 'sent', trip: delivered});
+    await press('rider-leave-photo');
+    expect(allText()).toContain('Pay for a photo delivery is released after ops checks the photo.');
+    expect(allText()).not.toContain('Credited now');
+  });
+
+  it('shows a failed delivery in the same layout, with the reason and the held pay', async () => {
+    await render({...delivered, step: 'FAILED', cancelReason: 'WRONG_ADDRESS'});
+    const text = allText();
+    expect(text).toContain('Delivery not completed');
+    expect(text).toContain('Wrong address');
+    expect(text).toContain('₹67');
+    expect(text).toContain('Ops checks what happened before this pay is released.');
+  });
+
+  it('shows a cancelled trip with the reason and no made-up total', async () => {
+    await render({...trip, step: 'CANCELLED', cancelReason: 'The chef cancelled this order.'});
+    const text = allText();
+    expect(text).toContain('Trip cancelled');
+    expect(text).toContain('The chef cancelled this order.');
+    expect(has('rider-earned')).toBe(false);
+    expect(text).not.toContain('You earned');
+  });
+});

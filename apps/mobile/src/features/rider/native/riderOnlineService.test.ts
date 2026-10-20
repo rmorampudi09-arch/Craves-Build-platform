@@ -35,6 +35,8 @@ function nativeModule() {
     stop: jest.fn(async () => undefined),
     testRing: jest.fn(async () => undefined),
     lastFix: jest.fn(async () => ({lat: 17.4, lng: 78.3, accuracyM: 9, at: '2026-10-19T09:59:00.000Z', mock: false})),
+    getFcmToken: jest.fn(async () => 'fcm-1'),
+    getPendingOffer: jest.fn(async () => ({offer: JSON.stringify(offer), receivedAtMs: 1234, channel: 'fcm'})),
   };
 }
 
@@ -94,6 +96,23 @@ describe('riderOnlineService in live mode with the native module', () => {
     expect(service.lastFix()).toEqual(fix);
   });
 
+  it('reads the FCM token, its changes and the offer that opened the app', async () => {
+    const native = nativeModule();
+    const {service, emitter} = load('live', native);
+    const tokens = jest.fn();
+    service.onFcmToken(tokens);
+    emitter.emit('riderFcmToken', {token: 'fcm-2'});
+
+    expect(await service.fcmToken()).toBe('fcm-1');
+    expect(tokens).toHaveBeenCalledWith('fcm-2');
+    expect(await service.pendingOffer()).toEqual({offer, receivedAtMs: 1234});
+
+    native.getFcmToken.mockRejectedValueOnce(new Error('no Firebase'));
+    native.getPendingOffer.mockResolvedValueOnce(null as never);
+    expect(await service.fcmToken()).toBeNull();
+    expect(await service.pendingOffer()).toBeNull();
+  });
+
   it('starts with the fix the native service already has', async () => {
     const {service} = load('live', nativeModule());
     await Promise.resolve();
@@ -118,6 +137,9 @@ describe('riderOnlineService without the native module', () => {
     expect(postLocations).toHaveBeenCalledTimes(1);
     expect(offers).toHaveBeenCalledWith(offer, expect.any(Number));
     expect(statuses.mock.calls.map(([status]) => status.state)).toEqual(['ONLINE', 'OFFLINE']);
+    // Demo builds register a fixed token with the mock server and never have a pending offer.
+    expect(await service.fcmToken()).toBe('mock-fcm-token');
+    expect(await service.pendingOffer()).toBeNull();
   });
 
   it('refuses to go online in live mode when the native module is missing', async () => {

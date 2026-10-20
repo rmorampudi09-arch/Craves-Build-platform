@@ -3,6 +3,7 @@ import {getRuntimeConfig} from '../../../core/config/runtimeConfig';
 import type {Offer, RiderFix, ShiftStart, TripStep} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {mockRider} from '../api/riderApi.mock';
+import type {ReceivedOffer} from '../domain/offerTiming';
 import {riderApiMode} from '../riderConfig';
 
 export interface RiderOnlineStatus {
@@ -27,6 +28,11 @@ export interface RiderOnlineService {
   onOffer(cb: (offer: Offer, receivedAtMs: number) => void): () => void;
   onTripChanged(cb: (change: TripChange) => void): () => void;
   onStatus(cb: (status: RiderOnlineStatus) => void): () => void;
+  /** The FCM token for POST /devices; null when Firebase can't give one. */
+  fcmToken(): Promise<string | null>;
+  onFcmToken(cb: (token: string) => void): () => void;
+  /** The offer whose notification opened the app, or one that rang while JS wasn't running. */
+  pendingOffer(): Promise<ReceivedOffer | null>;
 }
 
 const UPLOAD_EVERY_MS = 10_000;
@@ -114,6 +120,10 @@ function createJsOnlineService() {
     onOffer: offers.add,
     onTripChanged: trips.add,
     onStatus: statuses.add,
+    // The mock server ignores the token; a fixed one lets demo builds show the "phone not approved" check.
+    fcmToken: async () => 'mock-fcm-token',
+    onFcmToken: (_cb: (token: string) => void) => () => undefined,
+    pendingOffer: async (): Promise<ReceivedOffer | null> => null,
     /** Dev panel: poll now instead of waiting up to 10 seconds. */
     pollNow: poll,
     isRunning: () => timer !== null,
@@ -127,6 +137,8 @@ interface NativeRiderOnline {
   stop(): Promise<void>;
   testRing(): Promise<void>;
   lastFix(): Promise<RiderFix | null>;
+  getFcmToken(): Promise<string>;
+  getPendingOffer(): Promise<NativeOffer | null>;
 }
 
 /** A riderOffer event: the Offer JSON exactly as FCM or /locations delivered it, and which came first. */
@@ -136,10 +148,12 @@ interface NativeOffer {
   channel: 'fcm' | 'locations';
 }
 
-function parseOffer(event: NativeOffer): Offer | null {
+function parseOffer(event: NativeOffer): ReceivedOffer | null {
   try {
     const offer = JSON.parse(event.offer) as Offer;
-    return typeof offer.offerId === 'string' && typeof offer.expiresInSec === 'number' ? offer : null;
+    return typeof offer.offerId === 'string' && typeof offer.expiresInSec === 'number'
+      ? {offer, receivedAtMs: event.receivedAtMs}
+      : null;
   } catch {
     return null;
   }
@@ -170,13 +184,19 @@ function createNativeOnlineService(native: NativeRiderOnline) {
     lastFix: () => fix,
     onOffer: (cb: (offer: Offer, receivedAtMs: number) => void) =>
       on<NativeOffer>('riderOffer', event => {
-        const offer = parseOffer(event);
-        if (offer) {
-          cb(offer, event.receivedAtMs);
+        const received = parseOffer(event);
+        if (received) {
+          cb(received.offer, received.receivedAtMs);
         }
       }),
     onTripChanged: (cb: (change: TripChange) => void) => on('riderTripChanged', cb),
     onStatus: (cb: (status: RiderOnlineStatus) => void) => on('riderStatus', cb),
+    fcmToken: () => native.getFcmToken().catch(() => null),
+    onFcmToken: (cb: (token: string) => void) => on<{token: string}>('riderFcmToken', event => cb(event.token)),
+    async pendingOffer() {
+      const event = await native.getPendingOffer().catch(() => null);
+      return event ? parseOffer(event) : null;
+    },
     /** The dev panel exists only in mock builds, which use the JS loop. */
     pollNow: async () => undefined,
   };

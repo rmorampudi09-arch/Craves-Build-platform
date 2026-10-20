@@ -55,6 +55,9 @@ class FleetRiderSecurityTest {
         mvc.perform(multipart("/api/v1/rider/shift/start").file(new MockMultipartFile("selfie", new byte[] {1}))
             .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/rider/shift/end").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/devices").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"installationId\":\"9774d56d682e549c\",\"fcmToken\":\"t\",\"appVersion\":\"1.0.0\",\"model\":\"Redmi\"}"))
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verifyNoInteractions(service, shifts);
     }
 

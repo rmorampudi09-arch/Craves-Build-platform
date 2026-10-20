@@ -3,6 +3,7 @@ package in.craves.integration.fleet.rider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
 import in.craves.integration.config.WebSecurityConfiguration;
@@ -10,6 +11,7 @@ import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.RiderJoinsExitsExport;
+import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.JwtVerifier;
@@ -72,8 +74,10 @@ class FleetShiftCredentialSecurityTest {
             }
         }
         assertThat(walked).contains("GET /api/v1/rider/home", "POST /api/v1/rider/shift/end", "GET /api/v1/admin/fleet/riders").hasSizeGreaterThan(20);
-        assertThat(answered).containsExactly("POST /api/v1/rider/locations");
+        assertThat(answered).containsExactly("POST /api/v1/rider/devices", "POST /api/v1/rider/locations");
         verify(locations).ingest(null, CREDENTIAL, new LocationBatch(List.of()));
-        verifyNoInteractions(riders, shifts, admin, joinsExits);
+        verify(shifts).registerDevice(null, CREDENTIAL, new DeviceRegistration(null, null, null, null));
+        verifyNoMoreInteractions(shifts);
+        verifyNoInteractions(riders, admin, joinsExits);
     }
 }

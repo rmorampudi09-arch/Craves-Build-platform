@@ -105,7 +105,7 @@ public class FleetLocationService {
             (row, n) -> context(row), byCredential ? FleetShiftService.hash(credential) : identityId).stream().findFirst().orElse(null);
         if (shift == null) {
             if (byCredential) {
-                throw new FleetApiException(401, "SHIFT_CREDENTIAL_INVALID", "Your shift has ended. Go online again.");
+                throw FleetShiftService.credentialInvalid();
             }
             return stop("You're offline. Go online to get orders.");
         }

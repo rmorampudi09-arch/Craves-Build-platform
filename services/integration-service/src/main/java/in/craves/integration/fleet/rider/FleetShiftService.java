@@ -3,6 +3,7 @@ package in.craves.integration.fleet.rider;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import java.io.IOException;
 import java.io.InputStream;
@@ -121,6 +122,43 @@ public class FleetShiftService {
     public void end(UUID identityId) {
         jdbc.update("UPDATE fleet_schema.rider_shift SET " + END_SHIFT + " WHERE ended_at IS NULL "
             + "AND rider_id = (SELECT id FROM fleet_schema.rider WHERE identity_id = ?)", identityId);
+    }
+
+    /**
+     * Registers the phone for offer pushes. The rider's first installation is bound; the same one updates its token,
+     * app version and model; any other (a replaced phone coming back too) is kept PENDING_APPROVAL until ops approves
+     * it, and the answer is false, which the controller turns into 409 DEVICE_NOT_BOUND after this commits.
+     */
+    @Transactional
+    public boolean registerDevice(UUID identityId, String credential, DeviceRegistration device) {
+        if (device == null || device.installationId() == null || !device.installationId().matches("^[A-Za-z0-9._:-]{8,128}$")
+            || device.fcmToken() == null || device.fcmToken().isBlank() || device.fcmToken().length() > 4096
+            || device.appVersion() == null || !device.appVersion().matches(VERSION)
+            || device.model() == null || device.model().isBlank() || device.model().trim().length() > 120) {
+            throw FleetApiException.invalid("Check the phone details and try again.");
+        }
+        // The rider row lock lets one registration at a time decide whether a phone is the first.
+        UUID riderId = (credential != null
+            ? jdbc.queryForList("SELECT r.id FROM fleet_schema.rider r JOIN fleet_schema.rider_shift s ON s.rider_id = r.id "
+                + "WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL "
+                + "AND s.credential_expires_at > now() FOR UPDATE OF r", UUID.class, hash(credential))
+            : jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE identity_id = ? FOR UPDATE", UUID.class, identityId))
+            .stream().findFirst().orElseThrow(() -> credential != null ? credentialInvalid()
+                : new FleetApiException(403, "NOT_A_RIDER", "This account is not a Craves rider."));
+        String state = jdbc.queryForObject("""
+                INSERT INTO fleet_schema.rider_device AS d (id, rider_id, fcm_token, app_version, model, state)
+                VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (SELECT 1 FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND')
+                  THEN 'PENDING_APPROVAL' ELSE 'BOUND' END)
+                ON CONFLICT (id) DO UPDATE SET fcm_token = excluded.fcm_token, app_version = excluded.app_version, model = excluded.model,
+                  last_seen_at = now(), state = CASE WHEN d.state = 'REPLACED' THEN 'PENDING_APPROVAL' ELSE d.state END
+                RETURNING state""",
+            String.class, deviceId(riderId, device.installationId()), riderId, device.fcmToken(), device.appVersion(), device.model().trim(),
+            riderId);
+        return "BOUND".equals(state);
+    }
+
+    static FleetApiException credentialInvalid() {
+        return new FleetApiException(401, "SHIFT_CREDENTIAL_INVALID", "Your shift has ended. Go online again.");
     }
 
     /** The rider_device id of one app installation: name-based, so the installation id itself is never stored. */

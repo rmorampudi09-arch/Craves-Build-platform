@@ -2,6 +2,7 @@ package in.craves.integration.fleet.rider;
 
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.rider.FleetRiderModels.AcceptTerms;
+import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderMe;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderProfile;
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -74,6 +76,22 @@ public class FleetRiderController {
     @PostMapping("/shift/end")
     public ResponseEntity<Void> endShift(@AuthenticationPrincipal CravesPrincipal principal) {
         shifts.end(identity(principal));
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * The phone's FCM token, with a RIDER JWT or the shift credential. 204 for the rider's bound phone; 409
+     * DEVICE_NOT_BOUND for another, which is kept for ops to approve.
+     */
+    @PostMapping("/devices")
+    public ResponseEntity<Void> registerDevice(@AuthenticationPrincipal CravesPrincipal principal,
+                                               @RequestHeader(name = FleetShiftService.SHIFT_CREDENTIAL, required = false) String credential,
+                                               @RequestBody DeviceRegistration body) {
+        boolean bound = StringUtils.hasText(credential) ? shifts.registerDevice(null, credential, body)
+            : shifts.registerDevice(riderIdentity(principal), null, body);
+        if (!bound) {
+            throw FleetShiftService.deviceNotBound();
+        }
         return ResponseEntity.noContent().build();
     }
 

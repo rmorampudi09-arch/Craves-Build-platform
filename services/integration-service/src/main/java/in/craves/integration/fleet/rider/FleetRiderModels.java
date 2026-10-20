@@ -66,6 +66,14 @@ public final class FleetRiderModels {
     public record AcceptTerms(String version) {
     }
 
+    /** installationId is Android's ANDROID_ID for the rider app. */
+    public record DeviceRegistration(String installationId, String fcmToken, String appVersion, String model) {
+        @Override
+        public String toString() {
+            return "DeviceRegistration[redacted, appVersion=" + appVersion + ", model=" + model + "]";
+        }
+    }
+
     /** One phone fix; mock is Android's mock-location flag, stored with the fix and never used for pay. */
     public record RiderFix(Double lat, Double lng, Double accuracyM, Instant at, Boolean mock) {
     }

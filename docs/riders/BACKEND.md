@@ -84,6 +84,7 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
 | `POST /shift/start` | Goes online: multipart `selfie` (JPEG, 5 MB) and header `X-Craves-Installation-Id`. Returns `{shiftCredential, expiresAt}` once. Refusals below. |
 | `POST /shift/end` | Goes offline: closes the open shift and revokes its credential. 204 even when nothing is open. |
+| `POST /devices` | `{installationId, fcmToken, appVersion, model}`, with a RIDER JWT or the shift credential. 204 for the bound phone; 409 `DEVICE_NOT_BOUND` for another. See "Phones". |
 | `POST /locations` | Location ingest flag. Header `X-Craves-Shift-Credential` (the native service) or a RIDER JWT. Up to 5 fixes; answers offers, the trip and a stop signal. See "Location ingest". |
 
 ### Shifts and the shift credential
@@ -134,11 +135,22 @@ Name match: the holder name matches the KYC name when both have the same words, 
 
 `FleetPolicyStore.publishRateCard` and `publishDispatchPolicy` refuse a version that starts less than 14 days after publishing or has a value outside the declared ranges (those of the newest published version; a first version uses its own). The admin contract has no publish endpoint yet, so this is service code only; the table's CHECK also refuses fewer than 14 days.
 
+### Phones
+
+One bound phone per rider. `installationId` is the rider app's Android `ANDROID_ID`; the `rider_device` id is a name-based UUID of the rider id and the installation id, so the installation id itself is never stored and needs no column.
+
+- The rider's first installation is BOUND. The same installation again updates `fcm_token`, `app_version`, `model` and `last_seen_at`.
+- Any other installation is stored PENDING_APPROVAL and answered 409 `DEVICE_NOT_BOUND` (validation problems are 400 `VALIDATION_FAILED`). A REPLACED phone that registers again goes back to PENDING_APPROVAL.
+- Ops approves it with `POST /api/v1/admin/fleet/riders/{riderId}/devices/{deviceId}/approve`: it becomes the one BOUND phone, the old one REPLACED, and an open shift's credential is revoked (the old phone gets a stop on its next `/locations`).
+- With the shift credential instead of a JWT, the rider is the credential's (it must be live: not ended, revoked or expired, else 401).
+
+Push (P3) sends offers to the BOUND phone's `fcm_token`. `/shift/start` requires its header `X-Craves-Installation-Id` to be the BOUND phone, and compares the BOUND phone's `app_version` with `minAppVersion`.
+
 ### Location ingest
 
 `POST /api/v1/rider/locations` body `{fixes: [{lat, lng, accuracyM, at, mock}]}`, 0 to 5 fixes (more is 400; an empty list is the heartbeat).
 
-- **Who.** With `X-Craves-Shift-Credential` the shift is the one whose `credential_hash` matches (unknown: 401 `SHIFT_CREDENTIAL_INVALID`). Without it, a JWT with the RIDER role and the rider's open shift (none: a stop). Spring Security lets only this route through without a JWT; `FleetShiftCredentialSecurityTest` walks every rider and admin route with only a credential and only this one answers.
+- **Who.** With `X-Craves-Shift-Credential` the shift is the one whose `credential_hash` matches (unknown: 401 `SHIFT_CREDENTIAL_INVALID`). Without it, a JWT with the RIDER role and the rider's open shift (none: a stop). Spring Security lets only this route and `POST /devices` through without a JWT; `FleetShiftCredentialSecurityTest` walks every rider and admin route with only a credential and only these two answer.
 - **Fixes.** Fixes with impossible values, from before the shift started or more than 5 minutes ahead of the database clock are dropped. Only fixes newer than the stored latest fix of this shift are used, so a resent batch writes nothing twice.
 - **Writes.** `rider_position_latest`: the newest fix wins (one row per rider, with its `mock` flag, `shift_id` and `trip_id` = the trip in progress, else null). `trip_track`: every new fix, with its `mock` flag, only while the rider has a trip in progress (ASSIGNED to AT_DROP). `rider_shift.in_zone_seconds`: see the zone model.
 - **Answer.** `{offers, activeTrip?, stop?, stopReason?}`. `offers`: the rider's ACTIVE `trip_offer` rows not yet expired, as rider-v1 Offers; `expiresInSec` is computed by the database clock, `kitchenArea` and `customerLocality` come from the trip, `payLines` from `trip_offer.pay_lines`, which must hold `[{label, amountPaise}]`, and `estMinutes` = 12 + (pickup m + drop m) / 300, rounded (the app mock's estimate; dispatch should use the same). `activeTrip`: the trip in progress as `{tripId, step, version}` (ASSIGNED is TO_KITCHEN, AT_PICKUP is AT_KITCHEN); when it has ended, or ops gave it to another rider, it is reported once more with its final step (CANCELLED for a reassignment) so the app leaves trip mode.

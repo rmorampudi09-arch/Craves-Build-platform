@@ -34,9 +34,9 @@ public class WebSecurityConfiguration {
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
-                // The native location service sends a shift credential instead of a JWT, here only: the controller
-                // requires that credential or a RIDER JWT. The credential authenticates nothing else.
-                .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations").permitAll()
+                // The native location service sends a shift credential instead of a JWT, on these two routes only: their
+                // controllers require that credential or a RIDER JWT. The credential authenticates nothing else.
+                .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations", "/api/v1/rider/devices").permitAll()
                 // Any signed-in user may ask whether they are a rider; every other rider route needs RIDER.
                 .requestMatchers("/api/v1/rider/me").authenticated()
                 .requestMatchers("/api/v1/rider/**").hasRole("RIDER")

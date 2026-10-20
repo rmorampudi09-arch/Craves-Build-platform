@@ -1,46 +1,67 @@
-import React, {useEffect, useState} from 'react';
-import {Button, InputField} from '../../../shared/components';
+import React, {memo, useEffect, useState} from 'react';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {colors, spacing, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
-import {Label, RiderScreen, Title} from '../../../features/rider/components/ui';
+import {BottomAction} from '../../../features/rider/components/BottomAction';
+import {Label, Title} from '../../../features/rider/components/ui';
 import type {RiderScreenProps} from '../../../features/rider/navigation';
 import {isDemo} from '../../../features/rider/riderConfig';
 import {useStrings} from '../../../features/rider/strings/StringsProvider';
 import {useRiderSession} from '../useRiderSession';
+import {SignInField, SignInFrame} from './SignInFrame';
 
-const RESEND_AFTER_S = 30;
+const RESEND_AFTER_MS = 30_000;
 
-export function RiderOtpScreen({route}: RiderScreenProps<'Otp'>) {
+/** "+919848012345" → "+91 98480 12345". */
+const spaced = (phone: string) => phone.replace(/^\+91(\d{5})(\d{5})$/, '+91 $1 $2');
+
+/** Owns the once-a-second tick, so only this button re-renders while the resend wait runs. */
+const ResendCode = memo(function ResendCodeView({sentAt, onResend}: {sentAt: number; onResend: () => Promise<void>}) {
+  const s = useStrings().strings.signIn;
+  const [now, setNow] = useState(Date.now());
+  // A resend moves sentAt past the last tick; never show more than the full wait.
+  const left = Math.max(0, Math.ceil((sentAt + RESEND_AFTER_MS - Math.max(now, sentAt)) / 1000));
+  useEffect(() => {
+    if (left <= 0) {
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), 1000);
+    return () => clearTimeout(timer);
+  }, [left, now]);
+  return (
+    <BottomAction
+      label={left > 0 ? s.resendIn(left) : s.resend}
+      variant="ghost"
+      size="compact"
+      disabled={left > 0}
+      onPress={onResend}
+      testID="rider-resend"
+    />
+  );
+});
+
+export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
   const {strings} = useStrings();
   const s = strings.signIn;
   const session = useRiderSession();
   const {phone} = route.params;
   const [code, setCode] = useState('');
   const [error, setError] = useState<string>();
-  const [busy, setBusy] = useState(false);
-  const [wait, setWait] = useState(RESEND_AFTER_S);
-
-  useEffect(() => {
-    if (wait <= 0) {
-      return;
-    }
-    const timer = setTimeout(() => setWait(w => w - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [wait]);
+  const [sentAt, setSentAt] = useState(Date.now);
 
   async function verify() {
-    setBusy(true);
     setError(undefined);
     try {
       await session.confirmOtp(code);
       // Success swaps the whole navigator to the signed-in stack.
     } catch (failure) {
       setError(failure instanceof AppApiError ? failure.message : s.wrongCode);
-      setBusy(false);
     }
   }
 
   async function resend() {
-    setWait(RESEND_AFTER_S);
+    setSentAt(Date.now());
+    setError(undefined);
     try {
       await session.beginPhone(phone);
     } catch (failure) {
@@ -49,26 +70,47 @@ export function RiderOtpScreen({route}: RiderScreenProps<'Otp'>) {
   }
 
   return (
-    <RiderScreen
+    <SignInFrame
       testID="rider-sign-in-otp"
       footer={
         <>
-          <Button label={s.verify} onPress={verify} loading={busy} disabled={code.length !== 6} testID="rider-verify" />
-          <Button label={wait > 0 ? s.resendIn(wait) : s.resend} variant="ghost" disabled={wait > 0} onPress={resend} />
+          <BottomAction label={s.verify} onPress={verify} disabled={code.length !== 6} testID="rider-verify" />
+          <ResendCode sentAt={sentAt} onResend={resend} />
         </>
       }>
       <Title>{s.otpTitle}</Title>
-      <Label>{s.otpSentTo(phone)}</Label>
-      <InputField
+      <View style={styles.sentTo}>
+        <Text style={styles.sentText}>{s.otpSentTo(spaced(phone))}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={s.changeNumber}
+          hitSlop={{top: 14, bottom: 14}}
+          onPress={() => navigation.goBack()}
+          testID="rider-change-number">
+          <Text style={[styles.sentText, styles.link]}>{s.changeNumber}</Text>
+        </Pressable>
+      </View>
+      <SignInField
         label={s.otpLabel}
         value={code}
         onChangeText={value => setCode(value.replace(/\D/g, '').slice(0, 6))}
         keyboardType="number-pad"
+        autoComplete="sms-otp"
+        textContentType="oneTimeCode"
         maxLength={6}
+        autoFocus
+        returnKeyType="done"
+        onSubmitEditing={() => (code.length === 6 ? verify() : undefined)}
         error={error}
         testID="rider-code-input"
       />
       {isDemo ? <Label>{s.demoHint}</Label> : null}
-    </RiderScreen>
+    </SignInFrame>
   );
 }
+
+const styles = StyleSheet.create({
+  sentTo: {marginTop: -spacing.xs, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.xxs},
+  sentText: {fontSize: typography.body, color: colors.textSecondary},
+  link: {color: colors.flameRedAccessible, textDecorationLine: 'underline'},
+});

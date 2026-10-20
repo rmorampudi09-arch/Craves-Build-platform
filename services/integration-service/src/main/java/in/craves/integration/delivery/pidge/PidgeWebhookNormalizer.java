@@ -12,6 +12,7 @@ public class PidgeWebhookNormalizer implements DeliveryWebhookNormalizer {
     @Override public ProviderStatusUpdate normalize(JsonNode payload) {
         String id = PidgeApiClient.requiredId(payload.path("id").asText(null));
         return new ProviderStatusUpdate(providerId(), id, id, PidgeStatusMapper.map(payload),
-            PidgeStatusMapper.providerStatus(payload), null, Instant.parse(payload.path("updated_at").asText()), payload.deepCopy());
+            PidgeStatusMapper.providerStatus(payload), null, Instant.parse(payload.path("updated_at").asText()), payload.deepCopy(),
+            PidgeApiClient.courier(payload));
     }
 }

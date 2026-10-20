@@ -16,6 +16,7 @@ import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
+import in.craves.integration.delivery.pidge.PidgeWebhookNormalizer;
 import in.craves.integration.delivery.provider.DeliveryWebhookNormalizer;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.DeliveryJobState;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
@@ -70,6 +71,38 @@ class DeliveryStatusUpdateServiceTest {
         assertThat(data.path("handoffFromProviderDeliveryId").asText())
             .isEqualTo("borzo-24");
         assertThat(data.path("handoffContinuation").asBoolean()).isTrue();
+    }
+
+    @Test
+    void pidgeWebhookWithARiderPublishesTheCourierNameAndPhoneForTheChef() throws Exception {
+        var repository = mock(DeliveryStatusRepository.class);
+        var outbox = mock(DeliveryOutboxRepository.class);
+        UUID jobId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        var work = new WebhookWorkItem(UUID.randomUUID(), "pidge", "event-7", objectMapper.readTree("""
+            {"id":"order-1","status":"fulfilled","updated_at":"2026-09-12T08:00:00Z",
+             "fulfillment":{"status":"OUT_FOR_PICKUP","rider":{"id":"r-7","name":"Ravi Kumar","mobile":"9000000001"}}}
+            """), 1);
+        var job = new DeliveryJobState(jobId, orderId, UUID.randomUUID(), "pidge", "order-1",
+            "COURIER_ASSIGNED", "fulfilled", null, Instant.parse("2026-09-12T07:59:00Z"));
+        when(repository.findJobByProviderOrder("pidge", "order-1")).thenReturn(Optional.of(job));
+        when(repository.lockJob(jobId)).thenReturn(Optional.of(job));
+        when(repository.insertEventIfAbsent(any(), any(), any(), any(), any(), any(),
+            any(), any(), any(), eq(true), isNull())).thenReturn(true);
+        var service = new DeliveryStatusUpdateService(List.of(new PidgeWebhookNormalizer()), repository,
+            outbox, new DeliveryCommandProperties(), objectMapper);
+
+        assertThat(service.processWebhook(work).applied()).isTrue();
+
+        ArgumentCaptor<com.fasterxml.jackson.databind.JsonNode> payload =
+            ArgumentCaptor.forClass(com.fasterxml.jackson.databind.JsonNode.class);
+        verify(outbox).enqueue(eq("DELIVERY_STATUS_CHANGED"), eq(jobId), eq(orderId), payload.capture());
+        var data = payload.getValue().path("data");
+        assertThat(data.path("status").asText()).isEqualTo("COURIER_TO_PICKUP");
+        assertThat(data.path("courierName").asText()).isEqualTo("Ravi Kumar");
+        assertThat(data.path("courierPhone").asText()).isEqualTo("9000000001");
+        assertThat(data.has("courierPhotoUrl")).isFalse();
+        assertThat(data.has("pickupEtaAt")).isFalse();
     }
 
     @Test

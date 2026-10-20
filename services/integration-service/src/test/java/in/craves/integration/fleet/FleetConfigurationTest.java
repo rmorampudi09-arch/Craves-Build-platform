@@ -19,6 +19,7 @@ import in.craves.integration.fleet.money.FleetPayouts;
 import in.craves.integration.fleet.rider.FleetLocationController;
 import in.craves.integration.fleet.rider.FleetLocationService;
 import in.craves.integration.fleet.rider.FleetRiderController;
+import in.craves.integration.fleet.support.FleetSupportController;
 import in.craves.integration.ledger.LedgerPostingService;
 import in.craves.integration.payout.RazorpayXPayoutClient;
 import in.craves.integration.payout.bank.BankDataCipher;
@@ -97,9 +98,11 @@ class FleetConfigurationTest {
     @Test
     void theRiderApiNeedsBothFlags() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
-            assertThat(context).doesNotHaveBean(FleetRiderController.class).doesNotHaveBean(FleetMoneyController.class));
+            assertThat(context).doesNotHaveBean(FleetRiderController.class).doesNotHaveBean(FleetMoneyController.class)
+                .doesNotHaveBean(FleetSupportController.class));
         runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true").run(context ->
-            assertThat(context).hasNotFailed().hasSingleBean(FleetRiderController.class).hasSingleBean(FleetMoneyController.class));
+            assertThat(context).hasNotFailed().hasSingleBean(FleetRiderController.class).hasSingleBean(FleetMoneyController.class)
+                .hasSingleBean(FleetSupportController.class));
     }
 
     @Test

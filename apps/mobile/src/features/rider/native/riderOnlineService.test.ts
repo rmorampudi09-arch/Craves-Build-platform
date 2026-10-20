@@ -113,6 +113,17 @@ describe('riderOnlineService in live mode with the native module', () => {
     expect(await service.pendingOffer()).toBeNull();
   });
 
+  it('ignores a launch intent whose offer id is not an id (another app can set the extras)', async () => {
+    const native = nativeModule();
+    const {service} = load('live', native);
+    native.getPendingOffer.mockResolvedValueOnce({
+      offer: JSON.stringify({...offer, offerId: '../../withdrawals'}),
+      receivedAtMs: 1234,
+      channel: 'fcm',
+    });
+    expect(await service.pendingOffer()).toBeNull();
+  });
+
   it('starts with the fix the native service already has', async () => {
     const {service} = load('live', nativeModule());
     await Promise.resolve();

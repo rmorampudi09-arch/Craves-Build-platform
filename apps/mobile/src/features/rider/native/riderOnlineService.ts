@@ -151,7 +151,8 @@ interface NativeOffer {
 function parseOffer(event: NativeOffer): ReceivedOffer | null {
   try {
     const offer = JSON.parse(event.offer) as Offer;
-    return typeof offer.offerId === 'string' && typeof offer.expiresInSec === 'number'
+    // A tapped offer comes from launch-intent extras, which any app can set, and its id goes into the accept URL.
+    return typeof offer.offerId === 'string' && /^[\w-]{1,64}$/.test(offer.offerId) && typeof offer.expiresInSec === 'number'
       ? {offer, receivedAtMs: event.receivedAtMs}
       : null;
   } catch {

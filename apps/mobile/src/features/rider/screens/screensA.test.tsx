@@ -4,7 +4,8 @@ import React from 'react';
 import {AccessibilityInfo, Alert, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
-import {AppApiError} from '../../../core/http/apiError';
+import {AxiosError} from 'axios';
+import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from '../../../app/rider/signIn/RiderOtpScreen';
 import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
 import * as ImagePicker from 'expo-image-picker';
@@ -521,16 +522,39 @@ describe('Go online', () => {
     expect(mockNavigation.goBack).not.toHaveBeenCalled();
   });
 
-  it("shows the server's reason when it refuses the shift", async () => {
-    (riderApi.startShift as jest.Mock).mockRejectedValueOnce(
-      new AppApiError('DOCUMENTS_EXPIRED', 'Your vehicle insurance has expired. Upload the new policy first.', 403),
-    );
+  /** What the API client makes of the server's refusal: a 403 keeps its code but not its message. */
+  const refusal = (status: number, code: string, message: string) =>
+    toAppApiError(new AxiosError('refused', 'ERR_BAD_REQUEST', undefined, undefined, {status, data: {code, message}, headers: {}} as never));
+
+  it.each([
+    ['DOCUMENTS_EXPIRED', 'A document has expired. Upload the new one in Profile, then go online.'],
+    ['APP_UPDATE_REQUIRED', 'Update the Craves Rider app to go online.'],
+    ['RIDER_NOT_ACTIVE', "Your account can't go online right now. Open your account page to see why."],
+  ])('says why the server refused the shift (403 %s)', async (code, text) => {
+    (riderApi.startShift as jest.Mock).mockRejectedValueOnce(refusal(403, code, 'Renew these before going online: Insurance'));
     await render(<GoOnlineScreen {...props} />);
     await act(async () => press('rider-selfie-shutter').props.onPress());
-    expect(allText()).toContain('Your vehicle insurance has expired. Upload the new policy first.');
+    expect(allText()).toContain(text);
     expect(riderOnlineService.start).not.toHaveBeenCalled();
     expect(mockNavigation.goBack).not.toHaveBeenCalled();
     expect(press('rider-selfie-shutter')).toBeTruthy();
+  });
+
+  it("shows the server's words for a refused selfie", async () => {
+    (riderApi.startShift as jest.Mock).mockRejectedValueOnce(refusal(422, 'SELFIE_INVALID', 'Take a clear photo of your face and try again.'));
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(allText()).toContain('Take a clear photo of your face and try again.');
+  });
+
+  it("ends the server's shift when the online service can't start on this phone", async () => {
+    (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
+    (riderOnlineService.start as jest.Mock).mockRejectedValueOnce(new Error('Allow location to go online.'));
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(riderApi.endShift).toHaveBeenCalled();
+    expect(allText()).toContain('Allow location to go online.');
+    expect(mockNavigation.goBack).not.toHaveBeenCalled();
   });
 
   it("shows the server's message when this phone isn't the rider's bound phone", async () => {
@@ -628,6 +652,16 @@ describe('Offer', () => {
     await act(async () => press('rider-offer-accept').props.onPress());
     expect(allText()).toContain('Offer expired');
     expect(press('rider-offer-accept')).toBeUndefined();
+  });
+
+  it("shows the server's words for a 409 that isn't a lost race", async () => {
+    (riderApi.acceptOffer as jest.Mock).mockRejectedValueOnce(
+      new AppApiError('TRIP_IN_PROGRESS', 'Finish your current trip before you take another order.', 409),
+    );
+    await render(<OfferScreen {...props()} />);
+    await act(async () => press('rider-offer-accept').props.onPress());
+    expect(allText()).toContain('Finish your current trip before you take another order.');
+    expect(allText()).not.toContain('Taken by another rider');
   });
 
   it('shows just the lock when the server sends no breakdown', async () => {

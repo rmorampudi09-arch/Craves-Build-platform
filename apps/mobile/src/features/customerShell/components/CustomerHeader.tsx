@@ -86,6 +86,8 @@ interface Props {
   collapsed?: boolean;
   collapsedAccessory?: ReactNode;
   tone?: CustomerHeaderTone;
+  /** Draw no background, for a screen that paints its own behind the header (Home's red and clouds). */
+  transparent?: boolean;
 }
 
 export function CustomerHeader({
@@ -98,6 +100,7 @@ export function CustomerHeader({
   collapsed = false,
   collapsedAccessory,
   tone = 'light',
+  transparent = false,
 }: Props) {
   const palette = PALETTES[tone];
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -112,7 +115,12 @@ export function CustomerHeader({
     : 'Needed to show kitchens near you';
 
   return (
-    <View style={[styles.container, compact && styles.containerCompact, {backgroundColor: palette.background}]}>
+    <View
+      style={[
+        styles.container,
+        compact && styles.containerCompact,
+        {backgroundColor: transparent ? 'transparent' : palette.background},
+      ]}>
       {showBack ? (
         <Pressable
           accessibilityLabel="Go back"

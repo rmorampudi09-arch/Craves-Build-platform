@@ -40,7 +40,7 @@ import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
 import {comingSoonTitle} from '../../customerEmptyStates/domain/customerEmptyStateModel';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
-import {CategoryCloudFill} from '../components/CategoryCloudFill';
+import {CloudFill} from '../components/CloudFill';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
 import {HomeFoodTypeMenu} from '../components/HomeFoodTypeMenu';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
@@ -383,8 +383,9 @@ export function CustomerHomeScreen() {
   const railOffsetRef = useRef(0);
   const scrollOffsetRef = useRef(0);
   const [railPinned, setRailPinned] = useState(false);
-  const [railCovered, setRailCovered] = useState(false);
-  const [railWidth, setRailWidth] = useState(0);
+  // White clouds cover the red header while the row is pinned; then the header switches to its white look.
+  const [headerWhite, setHeaderWhite] = useState(false);
+  const [headerSize, setHeaderSize] = useState({width: 0, height: 0});
   const [listViewportHeight, setListViewportHeight] = useState(0);
   const [railOffset, setRailOffset] = useState(0);
   const onFeedScroll = useMemo(
@@ -419,13 +420,30 @@ export function CustomerHomeScreen() {
     listRef.current?.scrollToOffset({offset: 0, animated: true});
   }, []);
 
-  // Light status bar icons on the red top while Home is in front; popped on blur so other screens keep theirs.
+  // Status bar icons follow the header (light on red, dark on white) while Home is in front;
+  // the entry is popped on blur so other screens keep theirs.
+  const statusEntryRef = useRef<ReturnType<typeof StatusBar.pushStackEntry> | null>(null);
+  const homeFocusedRef = useRef(false);
+  const headerWhiteRef = useRef(headerWhite);
+  headerWhiteRef.current = headerWhite;
+  const applyStatusBar = useCallback((white: boolean) => {
+    if (statusEntryRef.current) StatusBar.popStackEntry(statusEntryRef.current);
+    statusEntryRef.current = StatusBar.pushStackEntry({barStyle: white ? 'dark-content' : 'light-content'});
+  }, []);
   useFocusEffect(
     useCallback(() => {
-      const entry = StatusBar.pushStackEntry({barStyle: 'light-content'});
-      return () => StatusBar.popStackEntry(entry);
-    }, []),
+      homeFocusedRef.current = true;
+      applyStatusBar(headerWhiteRef.current);
+      return () => {
+        homeFocusedRef.current = false;
+        if (statusEntryRef.current) StatusBar.popStackEntry(statusEntryRef.current);
+        statusEntryRef.current = null;
+      };
+    }, [applyStatusBar]),
   );
+  useEffect(() => {
+    if (homeFocusedRef.current) applyStatusBar(headerWhite);
+  }, [applyStatusBar, headerWhite]);
 
   const searchScopeKey =
     identity?.id && selectedLocation
@@ -898,14 +916,30 @@ export function CustomerHomeScreen() {
   );
 
   return (
-    <ScreenShell
-      backgroundColor={homeTop.background}
-      edges={['top']}
-      keyboardAvoiding={false}
-      testID="customer-home">
-      <View style={styles.fixedHeader}>
+    <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
+      {/* The header pads itself under the status bar, so the clouds can cover the status bar too. */}
+      <View
+        onLayout={event => {
+          const {width: headerWidth, height: headerHeight} = event.nativeEvent.layout;
+          setHeaderSize(current =>
+            current.width === headerWidth && current.height === headerHeight
+              ? current
+              : {width: headerWidth, height: headerHeight},
+          );
+        }}
+        style={[styles.fixedHeader, {paddingTop: insets.top}]}>
+        <CloudFill
+          active={railPinned}
+          color={colors.white}
+          edge="bottom"
+          height={headerSize.height}
+          onCoveredChange={setHeaderWhite}
+          testID="home-header-cloud"
+          width={headerSize.width}
+        />
         <CustomerHeader
-          tone="red"
+          tone={headerWhite ? 'light' : 'red'}
+          transparent
           onPressLocation={() => setLocationSelectorVisible(true)}
           onPressNotifications={header.openNotifications}
           onPressMealPlans={openMealPlans}
@@ -914,7 +948,7 @@ export function CustomerHomeScreen() {
           collapsedAccessory={
             <HomeFoodTypeMenu
               compact
-              appearance="onRed"
+              appearance={headerWhite ? 'default' : 'onRed'}
               diets={appliedFilters.diets}
               onChange={setDiets}
               testID="home-food-type-header"
@@ -971,17 +1005,8 @@ export function CustomerHomeScreen() {
           renderItem={({item}) => {
             if (item.kind === 'categories') {
               return (
-                <View
-                  onLayout={event => setRailWidth(event.nativeEvent.layout.width)}
-                  style={styles.stickyCategoryWrap}>
-                  <CategoryCloudFill
-                    active={railPinned}
-                    color={homeTop.background}
-                    onCoveredChange={setRailCovered}
-                    width={railWidth}
-                  />
+                <View style={styles.stickyCategoryWrap}>
                   <HomeCategoryRail
-                    onColor={railCovered}
                     selectedCategory={selectedCategory}
                     onSelect={selectCategory}
                   />
@@ -1119,7 +1144,6 @@ const styles = StyleSheet.create({
   },
   feedContainer: {
     flex: 1,
-    // The screen behind is red for the status bar area; the feed itself stays white.
     backgroundColor: colors.white,
   },
   topFade: {
@@ -1197,7 +1221,6 @@ const styles = StyleSheet.create({
   },
   stickyCategoryWrap: {
     backgroundColor: colors.surfaceBase,
-    overflow: 'hidden',
   },
   emptyResultSpace: {
     backgroundColor: colors.surfaceBase,

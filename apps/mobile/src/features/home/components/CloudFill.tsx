@@ -9,10 +9,10 @@ const PUFF_COUNT = 9;
 /** Share of the run each puff takes to grow; the latest one starts at 0.42, so all end by 1. */
 const PUFF_GROW = 0.58;
 const MAX_DELAY = 1 - PUFF_GROW;
-/** The solid layer fades in over the last part, so the row ends evenly coloured. */
+/** The solid layer fades in over the last part, so the area ends evenly coloured. */
 const BASE_FROM = 0.78;
-/** Labels switch to white once the cloud covers most of the row. */
-export const CLOUD_LABELS_ON_COLOR_AT = 0.62;
+/** The area counts as covered (content can switch colours) once the cloud is this far along. */
+export const CLOUD_COVERED_AT = 0.62;
 
 export interface Puff {
   x: number;
@@ -21,40 +21,58 @@ export interface Puff {
   delay: number;
 }
 
-/** Puffs spread along the top edge with jitter, so each pin gives a slightly different cloud. */
-export function makeCloudPuffs(width: number, random: () => number = Math.random): Puff[] {
-  return Array.from({length: PUFF_COUNT}, (_, index) => ({
-    x: ((index + 0.5) * width) / PUFF_COUNT + (random() - 0.5) * 30,
-    y: -18 + random() * 26,
-    size: 150 + random() * 120,
-    delay: 0.01 + random() * (MAX_DELAY - 0.01),
-  }));
+/**
+ * Puffs spread along one edge with jitter, so each run gives a slightly different cloud.
+ * They're sized from the area's height, so even a tall header ends fully covered.
+ */
+export function makeCloudPuffs(
+  width: number,
+  height: number,
+  edge: 'top' | 'bottom',
+  random: () => number = Math.random,
+): Puff[] {
+  return Array.from({length: PUFF_COUNT}, (_, index) => {
+    const reach = -18 + random() * 26;
+    return {
+      x: ((index + 0.5) * width) / PUFF_COUNT + (random() - 0.5) * 30,
+      y: edge === 'top' ? reach : height - reach,
+      size: Math.max(150, height * 1.7) + random() * 120,
+      delay: 0.01 + random() * (MAX_DELAY - 0.01),
+    };
+  });
 }
 
 // Ease-out cubic as interpolation points: the native driver can't run an easing function here.
 const GROW_POINTS = [0, 0.25, 0.5, 0.75, 1];
 const GROW_VALUES = [0.001, 0.578, 0.875, 0.984, 1];
 
-interface CategoryCloudFillProps {
+interface CloudFillProps {
   active: boolean;
   color: string;
   width: number;
-  /** Called when the row becomes mostly coloured (true) or mostly white again (false). */
+  height: number;
+  /** The edge the cloud rises from. */
+  edge: 'top' | 'bottom';
+  /** Called when the area becomes mostly covered (true) or mostly clear again (false). */
   onCoveredChange?: (covered: boolean) => void;
+  testID?: string;
 }
 
 /**
- * Fills the pinned category row with the header colour as soft cloud puffs that grow at
- * different times, then a solid layer evens it out. Transforms and opacity only (native driver).
+ * Covers an area with a colour as soft cloud puffs that grow at different times, then a solid
+ * layer evens it out. Transforms and opacity only (native driver).
  */
-export function CategoryCloudFill({active, color, width, onCoveredChange}: CategoryCloudFillProps) {
+export function CloudFill({active, color, width, height, edge, onCoveredChange, testID}: CloudFillProps) {
   const progress = useRef(new Animated.Value(0)).current;
   const atRest = useRef(true);
   const [seed, setSeed] = useState(0);
-  const puffs = useMemo(() => (width > 0 ? makeCloudPuffs(width) : []), [width, seed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const puffs = useMemo(
+    () => (width > 0 && height > 0 ? makeCloudPuffs(width, height, edge) : []),
+    [width, height, edge, seed], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   useEffect(() => {
-    // A fresh pin from fully white gets a new cloud shape.
+    // A fresh run from fully clear gets a new cloud shape.
     if (active && atRest.current) setSeed(value => value + 1);
     atRest.current = false;
     const animation = Animated.timing(progress, {
@@ -68,7 +86,7 @@ export function CategoryCloudFill({active, color, width, onCoveredChange}: Categ
     });
     const timer = setTimeout(
       () => onCoveredChange?.(active),
-      active ? CLOUD_FILL_MS * CLOUD_LABELS_ON_COLOR_AT : CLOUD_CLEAR_MS * (1 - CLOUD_LABELS_ON_COLOR_AT),
+      active ? CLOUD_FILL_MS * CLOUD_COVERED_AT : CLOUD_CLEAR_MS * (1 - CLOUD_COVERED_AT),
     );
     return () => {
       animation.stop();
@@ -77,7 +95,7 @@ export function CategoryCloudFill({active, color, width, onCoveredChange}: Categ
   }, [active, onCoveredChange, progress]);
 
   return (
-    <View pointerEvents="none" style={styles.fill} testID="home-category-cloud">
+    <View pointerEvents="none" style={styles.fill} testID={testID}>
       {puffs.map((puff, index) => (
         <Animated.View
           key={`${seed}-${index}`}

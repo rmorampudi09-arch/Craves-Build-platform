@@ -31,14 +31,11 @@ const CATEGORY_IMAGES: Record<CustomerMenuCategory, ImageSourcePropType> = {
 interface HomeCategoryRailProps {
   selectedCategory: string | null;
   onSelect: (category: string | null) => void;
-  /** White labels and selection ring, for when the pinned row has filled with the header red. */
-  onColor?: boolean;
 }
 
 export function HomeCategoryRail({
   selectedCategory,
   onSelect,
-  onColor = false,
 }: HomeCategoryRailProps) {
   return (
     <ScrollView
@@ -67,11 +64,11 @@ export function HomeCategoryRail({
               accessibilityIgnoresInvertColors
               resizeMode="cover"
               source={CATEGORY_IMAGES[category]}
-              style={[styles.image, selected && styles.imageSelected, selected && onColor && styles.onColorRing]}
+              style={[styles.image, selected && styles.imageSelected]}
             />
             <Text
               numberOfLines={2}
-              style={[styles.label, selected && styles.labelSelected, onColor && styles.onColorLabel]}>
+              style={[styles.label, selected && styles.labelSelected]}>
               {menuCategoryLabel(category)}
             </Text>
           </Pressable>
@@ -122,6 +119,4 @@ const styles = StyleSheet.create({
     color: colors.flameRedAccessible,
     fontWeight: fontWeight.bold,
   },
-  onColorRing: {borderColor: colors.white},
-  onColorLabel: {color: colors.white},
 });

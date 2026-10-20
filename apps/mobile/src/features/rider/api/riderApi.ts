@@ -32,6 +32,8 @@ export interface RiderApi {
   endShift(): Promise<void>;
   /** After sign-in and whenever the FCM token changes. Rejects with 409 DEVICE_NOT_BOUND on an unapproved phone. */
   registerDevice(device: DeviceRegistration): Promise<void>;
+  /** A new photo of one document (multipart "photo"); ops reviews it by hand. */
+  uploadDocument(type: string, photoUri: string): Promise<void>;
   postLocations(fixes: RiderFix[]): Promise<LocationBatchResponse>;
   acceptOffer(offerId: string, key: string): Promise<Trip>;
   declineOffer(offerId: string, key: string): Promise<void>;

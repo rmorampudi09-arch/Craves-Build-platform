@@ -44,6 +44,12 @@ export const liveRiderApi: RiderApi = {
   async registerDevice(device) {
     await apiClient.post(`${BASE}/devices`, device);
   },
+  async uploadDocument(type, photoUri) {
+    const form = new FormData();
+    form.append('type', type);
+    form.append('photo', imagePart(photoUri, 'document.jpg'));
+    await apiClient.post(`${BASE}/documents`, form, multipart);
+  },
   async postLocations(fixes) {
     return (await apiClient.post(`${BASE}/locations`, {fixes})).data;
   },

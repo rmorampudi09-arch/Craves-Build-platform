@@ -11,6 +11,12 @@ export interface RiderNotice {
   reason: string;
   deadline?: string;
   appealPhone: string;
+  /** When ops sent it. */
+  sentAt?: string;
+  /** What ops is checking, in plain words. */
+  checking?: string;
+  /** The one trip whose pay is on hold, if any. */
+  tripId?: string;
 }
 
 export interface RiderMe {
@@ -35,6 +41,8 @@ export interface RiderMe {
 export interface RiderProfile {
   vehicle: {label: string; regNumberMasked?: string};
   documents: {
+    /** DL, RC, INSURANCE, PUC, PAN or BANK; used to upload a new photo. */
+    type?: string;
     label: string;
     status: 'VERIFIED' | 'PENDING' | 'REJECTED' | 'EXPIRED';
     expiresOn?: string;
@@ -123,6 +131,8 @@ export interface Trip {
   waitFreeSeconds: number;
   /** How long the rider waits at the door, after two calls, before the photo fallback unlocks. */
   unreachableWaitSeconds: number;
+  /** Waiting pay per minute after the free wait, from the locked rate card (shown, never calculated). */
+  waitPayPerMinutePaise?: Paise;
   cancelReason?: string;
   payLines?: PayLine[];
   /** The chef ticked "sealed" on the bag. */

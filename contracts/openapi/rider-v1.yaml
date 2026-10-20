@@ -33,6 +33,11 @@ paths:
       responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}}
   /shift/end:
     post: {summary: Go offline; revokes the shift credential, responses: {'204': {description: Offline}}}
+  /documents:
+    post:
+      summary: A new photo of one document; ops reviews it by hand and the document shows as PENDING until then
+      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [type, photo], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, photo: {type: string, format: binary}}}}}}
+      responses: {'204': {description: Uploaded}, '422': {$ref: '#/components/responses/Error'}}
   /devices:
     post:
       summary: Register this phone's FCM token after sign-in and whenever it changes. One active phone per rider; 409 DEVICE_NOT_BOUND for a different phone until ops approves it.
@@ -135,7 +140,7 @@ components:
       type: object
       description: A suspension, a 7-day notice or a hold (Telangana Act 21 of 2026, s.14)
       required: [title, reason, appealPhone]
-      properties: {title: {type: string}, reason: {type: string}, deadline: {type: string, format: date-time}, appealPhone: {type: string}}
+      properties: {title: {type: string}, reason: {type: string}, deadline: {type: string, format: date-time}, appealPhone: {type: string}, sentAt: {type: string, format: date-time}, checking: {type: string}, tripId: {type: string, description: The one trip whose pay is on hold}}
     RiderMe:
       type: object
       required: [riderId, name, phoneMasked, status, termsVersion, language, minAppVersion, supportPhone, features]
@@ -162,7 +167,7 @@ components:
         vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}}}
         documents:
           type: array
-          items: {type: object, required: [label, status], properties: {label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
+          items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
         payoutAccountMasked: {type: string}
         insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
     Terms:
@@ -224,6 +229,7 @@ components:
         arrivedKitchenAt: {type: string, format: date-time}
         waitFreeSeconds: {type: integer}
         unreachableWaitSeconds: {type: integer}
+        waitPayPerMinutePaise: {$ref: '#/components/schemas/Paise'}
         cancelReason: {type: string}
         payLines: {type: array, items: {$ref: '#/components/schemas/PayLine'}}
         sealed: {type: boolean, description: The chef ticked "sealed" on the bag}

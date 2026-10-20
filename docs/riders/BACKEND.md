@@ -243,6 +243,10 @@ Both go through the dispatch chain, in one transaction, audited and idempotent, 
 
 `FleetStatusBridge` publishes a trip's statuses while its latest stage is the fleet's, so an order ops gives back to a rider reaches the customer again.
 
+## Replay and shadow (P5)
+
+`FleetReplayRunner` (test scope, run by hand) replays recorded orders and Borzo/Pidge quotes for a date range and pilot area through the fleet stage's decisions with synthetic riders, read-only, and writes a markdown and CSV report with the break-even u* = C_h ÷ (P_eff − v). Shadow mode (`dispatch_policy` mode `shadow`) stays off until people switch it after the customer launch. How to run and switch: `docs/riders/REPLAY.md`.
+
 ## Trip steps and statuses
 
 | Trip state | App step | Delivery status published | Reached by |

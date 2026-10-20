@@ -25,6 +25,10 @@ public class WebSecurityConfiguration {
                 .requestMatchers("/api/v1/admin/operations/delivery-intelligence/**").hasAnyRole(
                     "ADMIN", "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
+                // Rider fleet ops console: COMPLIANCE_ADMIN reads riders too; FleetAdminController checks each operation's roles.
+                .requestMatchers("/api/v1/admin/fleet/**").hasAnyRole(
+                    "PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN"
+                )
                 .requestMatchers("/api/v1/admin/**").hasAnyRole(
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )

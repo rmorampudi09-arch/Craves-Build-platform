@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.SchedulerLagWatchdog;
+import in.craves.integration.fleet.admin.FleetAdminController;
+import in.craves.integration.payout.bank.BankDataCipher;
 import java.util.Arrays;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.web.client.RestClient;
 
 /** With CRAVES_FLEET_ENABLED off, no fleet bean, pool or job exists. */
 class FleetConfigurationTest {
@@ -29,7 +32,9 @@ class FleetConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
         .withUserConfiguration(FleetPackage.class)
         .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
-        .withBean(ObjectMapper.class, ObjectMapper::new);
+        .withBean(ObjectMapper.class, ObjectMapper::new)
+        .withBean(RestClient.Builder.class, RestClient::builder)
+        .withBean(BankDataCipher.class, () -> mock(BankDataCipher.class));
 
     @Test
     void withEveryFlagOffNoFleetBeanOrJobExists() {
@@ -53,7 +58,8 @@ class FleetConfigurationTest {
     @Test
     void theFleetFlagStartsTheReadersTestModeAndAWatchedPool() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context -> {
-            assertThat(context).hasNotFailed().hasSingleBean(FleetPolicyStore.class).hasSingleBean(FleetTestMode.class);
+            assertThat(context).hasNotFailed().hasSingleBean(FleetPolicyStore.class).hasSingleBean(FleetTestMode.class)
+                .hasSingleBean(FleetAdminController.class).hasSingleBean(FleetApiAdvice.class);
             assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER)).isInstanceOf(SchedulerLagWatchdog.MonitoredTaskScheduler.class);
             assertThat(context.getBean(FleetProperties.class).testMode()).as("test mode is on unless switched off").isTrue();
         });
@@ -71,7 +77,7 @@ class FleetConfigurationTest {
     @Test
     void withTestModeOffEveryRiderAndKitchenIsAllowedWithoutALookup() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        FleetTestMode open = new FleetTestMode(jdbc, new FleetProperties(true, false, false, false, false));
+        FleetTestMode open = new FleetTestMode(jdbc, FleetDatabase.properties(false));
         assertThat(open.riderAllowed(UUID.randomUUID())).isTrue();
         assertThat(open.kitchenAllowed(UUID.randomUUID())).isTrue();
         verifyNoInteractions(jdbc);

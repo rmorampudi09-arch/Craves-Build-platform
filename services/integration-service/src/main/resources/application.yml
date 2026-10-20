@@ -26,6 +26,12 @@ craves:
     payout-execution-enabled: ${CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED:false}
     # While on, dispatch touches only riders and kitchens in fleet_schema.test_mode_rider / test_mode_kitchen.
     test-mode: ${CRAVES_FLEET_TEST_MODE:true}
+    # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
+    auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
+    internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}
+    # Private document storage, the same settings as user-chef-service's KYC documents.
+    storage-endpoint: ${CRAVES_STORAGE_ENDPOINT_VALUE:}
+    storage-container: ${CRAVES_STORAGE_DOCUMENTS_CONTAINER:documents}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

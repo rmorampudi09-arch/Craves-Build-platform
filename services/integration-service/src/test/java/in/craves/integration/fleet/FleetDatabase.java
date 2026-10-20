@@ -32,6 +32,11 @@ public final class FleetDatabase {
             .locations("classpath:db/migration").load().migrate();
     }
 
+    /** Fleet on, with the given test mode and nothing configured outside this service. */
+    public static FleetProperties properties(boolean testMode) {
+        return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents");
+    }
+
     public UUID rider(String name, String phone) {
         UUID id = UUID.randomUUID();
         db.update("INSERT INTO fleet_schema.rider (id, name, phone, created_by) VALUES (?, ?, ?, ?)", id, name, phone, UUID.randomUUID());

@@ -48,7 +48,7 @@ class FleetPolicyStoreDatabaseTest {
 
     @Test
     void testModeTouchesOnlyAllowListedRidersAndKitchens() {
-        FleetTestMode testMode = new FleetTestMode(fleet.db, new FleetProperties(true, false, false, false, true));
+        FleetTestMode testMode = new FleetTestMode(fleet.db, FleetDatabase.properties(true));
         UUID listed = fleet.rider("Ravi Kumar", "+919876543210");
         UUID other = fleet.rider("Sita Devi", "+919876543211");
         UUID kitchen = UUID.randomUUID();

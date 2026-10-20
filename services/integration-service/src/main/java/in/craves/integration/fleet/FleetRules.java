@@ -1,0 +1,125 @@
+package in.craves.integration.fleet;
+
+import java.text.Normalizer;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
+
+/** Pure fleet rules: masking, the KYC name match and the two due-process tracks. */
+public final class FleetRules {
+    public static final Duration NOTICE_PERIOD = Duration.ofDays(7);
+    public static final Duration SAFETY_REVIEW = Duration.ofHours(72);
+    private static final Set<String> HONORIFICS = Set.of("MR", "MRS", "MS", "MISS", "SHRI", "SMT", "KUMARI", "DR");
+
+    private FleetRules() {
+    }
+
+    /** "+919876543210" becomes "+91 98xxxxx210". */
+    public static String maskPhone(String phone) {
+        if (phone == null || !phone.matches("\\+91[0-9]{10}")) {
+            return "+91 xxxxxxxxxx";
+        }
+        return "+91 " + phone.substring(3, 5) + "xxxxx" + phone.substring(10);
+    }
+
+    /** The JWT carries no name, so admins are shown by their masked phone. */
+    public static String adminName(String phone, UUID identityId) {
+        return phone != null && phone.matches("\\+91[0-9]{10}") ? "Admin " + maskPhone(phone)
+            : "Admin " + identityId.toString().substring(0, 8);
+    }
+
+    /** "TS09EA1234" becomes "TS09xx1234". */
+    public static String maskVehicle(String registration) {
+        String plate = registration.replace(" ", "");
+        return plate.length() <= 8 ? plate : plate.substring(0, 4) + "xx" + plate.substring(plate.length() - 4);
+    }
+
+    public static String maskAccount(String accountNumber) {
+        return "xxxxxx" + accountNumber.substring(accountNumber.length() - 4);
+    }
+
+    /** "ravi.kumar@okaxis" becomes "ra****@okaxis". */
+    public static String maskUpi(String upiId) {
+        int at = upiId.indexOf('@');
+        return upiId.substring(0, Math.min(2, at)) + "****" + upiId.substring(at);
+    }
+
+    /**
+     * The payout holder name matches the KYC name when both have the same words, in any order, after removing
+     * accents, case, punctuation and the titles Mr, Mrs, Ms, Miss, Shri, Smt, Kumari and Dr. Initials stay words,
+     * so "R Kumar" does not match "Ravi Kumar".
+     */
+    public static boolean sameName(String holderName, String kycName) {
+        List<String> holder = nameWords(holderName);
+        return !holder.isEmpty() && holder.equals(nameWords(kycName));
+    }
+
+    static List<String> nameWords(String name) {
+        if (name == null) {
+            return List.of();
+        }
+        String folded = Normalizer.normalize(name, Normalizer.Form.NFKD).replaceAll("\\p{M}", "").toUpperCase(Locale.ROOT);
+        return Arrays.stream(folded.split("[^\\p{L}]+")).filter(word -> !word.isEmpty() && !HONORIFICS.contains(word))
+            .sorted().toList();
+    }
+
+    /**
+     * The rider status after a status event, or a refusal. A person always decides (this runs only for an admin's
+     * request) and nothing here blocks anyone automatically.
+     * SAFETY_PAUSE: ACTIVE to SUSPENDED now, with a review within 72 h. NOTICE: changes nothing, deadline at least
+     * 7 days ahead. RESTORE: back to ACTIVE (also activates a PENDING rider). DEACTIVATE: after a safety pause, or
+     * once an open notice's deadline has passed; never without one of them.
+     *
+     * @param openNoticeDeadline the deadline of the latest NOTICE not yet followed by RESTORE or DEACTIVATE, or null
+     */
+    public static String statusAfter(String kind, String current, Instant deadline, Instant reviewBy, String appealPhone,
+                                     Instant openNoticeDeadline, Instant now) {
+        if (!"RESTORE".equals(kind) && (appealPhone == null || appealPhone.isBlank())) {
+            throw FleetApiException.unprocessable("APPEAL_PHONE_REQUIRED", "Add the phone number the rider can call to appeal.");
+        }
+        switch (kind) {
+            case "SAFETY_PAUSE" -> {
+                if (reviewBy == null || !reviewBy.isAfter(now) || reviewBy.isAfter(now.plus(SAFETY_REVIEW))) {
+                    throw FleetApiException.unprocessable("REVIEW_BY_TOO_LATE", "The safety review must be within the next 72 hours.");
+                }
+                return require("ACTIVE".equals(current), "SUSPENDED");
+            }
+            case "NOTICE" -> {
+                if (deadline == null || deadline.isBefore(now.plus(NOTICE_PERIOD))) {
+                    throw FleetApiException.unprocessable("NOTICE_DEADLINE_TOO_SOON", "The notice deadline must be at least 7 days from now.");
+                }
+                return require("ACTIVE".equals(current) || "SUSPENDED".equals(current), current);
+            }
+            case "RESTORE" -> {
+                boolean openNotice = openNoticeDeadline != null;
+                return require(List.of("PENDING", "SUSPENDED", "DEACTIVATED").contains(current)
+                    || ("ACTIVE".equals(current) && openNotice), "ACTIVE");
+            }
+            case "DEACTIVATE" -> {
+                if ("SUSPENDED".equals(current)) {
+                    return "DEACTIVATED";
+                }
+                if (!"ACTIVE".equals(current)) {
+                    return require(false, null);
+                }
+                if (openNoticeDeadline == null || openNoticeDeadline.isAfter(now)) {
+                    throw FleetApiException.unprocessable("NOTICE_REQUIRED",
+                        "Send a notice and wait for its deadline, or pause the rider for a safety review first.");
+                }
+                return "DEACTIVATED";
+            }
+            default -> throw FleetApiException.invalid("Choose SAFETY_PAUSE, NOTICE, RESTORE or DEACTIVATE.");
+        }
+    }
+
+    private static String require(boolean allowed, String after) {
+        if (!allowed) {
+            throw FleetApiException.conflict("INVALID_STATUS_TRANSITION", "This change does not apply to the rider's current status.");
+        }
+        return after;
+    }
+}

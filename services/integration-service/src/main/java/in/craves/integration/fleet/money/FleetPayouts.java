@@ -75,8 +75,8 @@ public class FleetPayouts {
     static final String BALANCE = """
         SELECT
           COALESCE((SELECT SUM(e.net_paise) FROM fleet_schema.rider_earning e
-                     WHERE e.rider_id = r.id AND NOT (e.component <> 'tds' AND e.net_paise < 0) AND """ + FleetEarnings.RELEASED + """
-                   ), 0) AS released,
+                     WHERE e.rider_id = r.id AND NOT (e.component <> 'tds' AND e.net_paise < 0) AND (""" + FleetEarnings.RELEASED + """
+                   )), 0) AS released,
           COALESCE((SELECT SUM(-e.net_paise) FROM fleet_schema.rider_earning e
                      WHERE e.rider_id = r.id AND e.component <> 'tds' AND e.net_paise < 0), 0) AS debt,
           COALESCE((SELECT SUM(i.amount_paise) FROM fleet_schema.rider_payout_instruction i

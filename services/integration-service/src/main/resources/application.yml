@@ -17,6 +17,15 @@ spring:
     table: flyway_schema_history
 
 craves:
+  # Rider fleet (in.craves.integration.fleet, docs/riders/BACKEND.md). The flags only switch code paths on; with
+  # CRAVES_FLEET_ENABLED off no fleet bean or job exists. Dispatch mode and pay live in fleet_schema tables.
+  fleet:
+    enabled: ${CRAVES_FLEET_ENABLED:false}
+    rider-api-enabled: ${CRAVES_FLEET_RIDER_API_ENABLED:false}
+    location-ingest-enabled: ${CRAVES_FLEET_LOCATION_INGEST_ENABLED:false}
+    payout-execution-enabled: ${CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED:false}
+    # While on, dispatch touches only riders and kitchens in fleet_schema.test_mode_rider / test_mode_kitchen.
+    test-mode: ${CRAVES_FLEET_TEST_MODE:true}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

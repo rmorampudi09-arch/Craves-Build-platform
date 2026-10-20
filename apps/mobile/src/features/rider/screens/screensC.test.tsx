@@ -1,6 +1,6 @@
 // Screens 15–21: Earnings, Trip pay, Payouts, SOS, Notice, Profile and Help, in every state.
 import React from 'react';
-import {Alert, Linking, Text} from 'react-native';
+import {AccessibilityInfo, Alert, Animated, Linking, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,6 +11,7 @@ import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
 import {EarningsScreen} from './EarningsScreen';
+import {HelpScreen} from './HelpScreen';
 import {PayoutsScreen} from './PayoutsScreen';
 import {NoticeScreen} from './NoticeScreen';
 import {ProfileScreen} from './ProfileScreen';
@@ -542,5 +543,74 @@ describe('Profile (20)', () => {
     await settle();
     expect(has('rider-retry')).toBe(true);
     expect(has('rider-sign-out')).toBe(true);
+  });
+});
+
+describe('Help (21)', () => {
+  const week = (trips: TripEarning[]) => ({pages: [{rangeLabel: 'This week', totalPaise: 0, trips}], pageParams: [undefined]});
+  const recent = [credited, {...credited, tripId: 't2', kitchenArea: 'Gachibowli', amountPaise: 7900}, held, {...credited, tripId: 't5'}];
+  const questions = () => tree.root.findAll(node => node.props.accessibilityState?.expanded !== undefined && typeof node.props.onPress === 'function');
+  beforeEach(() => jest.spyOn(Linking, 'openURL').mockResolvedValue(true));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('offers a person to talk to, the questions and the last three trips', async () => {
+    await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week(recent)]]);
+    const text = allText();
+    expect(text).toContain('Talk to a person | Rider support answers in every slot, in Telugu, Hindi or English. | Call rider support');
+    expect(text).toContain("Open the riders' WhatsApp group");
+    expect(text).toContain('Do I lose anything if I decline an offer? | No. Declining, or letting an offer run out, is free');
+    expect(text).not.toContain('Every Monday by 3 pm');
+    expect(text).toContain('21 Oct, Madhapur to Kondapur | ₹67 | 21 Oct, Gachibowli to Kondapur | ₹79 | 21 Oct, Ameerpet to Kukatpally | ₹58');
+    expect(has('rider-help-trip-t5')).toBe(false);
+    await press('rider-help-call');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+910000000000');
+    await press('rider-help-whatsapp');
+    expect(Linking.openURL).toHaveBeenCalledWith('https://chat.whatsapp.com/demo');
+    await press('rider-help-trip-t4');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('TripDetail', {tripId: 't4'});
+  });
+
+  it('opens one answer at a time and says which is expanded', async () => {
+    await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week([])]]);
+    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([true, false, false, false]);
+    await act(async () => questions()[3].props.onPress());
+    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([false, false, false, true]);
+    expect(allText()).toContain('Every Monday by 3 pm');
+    await act(async () => questions()[3].props.onPress());
+    expect(questions().every(node => !node.props.accessibilityState.expanded)).toBe(true);
+    expect(allText()).toContain('No recent trips.');
+  });
+
+  it('animates only opacity and transform, natively, in 200 ms or less, unless reduce motion is on', async () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+    const timing = jest.spyOn(Animated, 'timing');
+    await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week([])]]);
+    await settle();
+    timing.mockClear();
+    await act(async () => questions()[1].props.onPress());
+    expect(timing).toHaveBeenCalled();
+    timing.mock.calls.forEach(([, config]) => {
+      expect(config.useNativeDriver).toBe(true);
+      expect(config.duration).toBeLessThanOrEqual(200);
+    });
+    act(() => tree.unmount());
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+    await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week([])]]);
+    await settle();
+    timing.mockClear();
+    await act(async () => questions()[1].props.onPress());
+    expect(timing).not.toHaveBeenCalled();
+  });
+
+  it('hides WhatsApp without a group link, and handles loading and errors for recent trips', async () => {
+    await render(<HelpScreen />, [[riderKeys.me, {...me, supportWhatsappUrl: undefined}]]);
+    expect(has('rider-help-whatsapp')).toBe(false);
+    expect(has('rider-help-loading')).toBe(true);
+    act(() => tree.unmount());
+    (riderApi.getEarnings as jest.Mock).mockRejectedValueOnce(offline());
+    await render(<HelpScreen />, [[riderKeys.me, me]]);
+    await settle();
+    expect(allText()).toContain("You're offline.");
+    expect(has('rider-retry')).toBe(true);
   });
 });

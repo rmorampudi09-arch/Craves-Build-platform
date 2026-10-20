@@ -383,26 +383,31 @@ export const en = {
   },
   help: {
     title: 'Help',
+    talkTitle: 'Talk to a person',
+    talkBody: 'Rider support answers in every slot, in Telugu, Hindi or English.',
+    callSupport: 'Call rider support',
+    whatsapp: "Open the riders' WhatsApp group",
     faqTitle: 'Common questions',
     faqs: [
       {
         q: 'Do I lose anything if I decline an offer?',
-        a: 'No. Declining or letting an offer expire is free and never changes your future offers.',
+        a: 'No. Declining, or letting an offer run out, is free and never changes your future offers.',
       },
       {
         q: 'When does waiting pay start?',
-        a: 'After the free minutes shown at the kitchen. Tap "Food not ready" if the order is late.',
+        a: 'After the free minutes at the kitchen. The timer there shows when it starts. Tap "Food not ready" if the order is late.',
       },
       {
         q: "What if the customer doesn't answer?",
-        a: 'Call twice, wait for the timer, then take a photo and leave the order. You are still paid.',
+        a: "Call twice, wait for the timer, then take a photo and leave the order. You're paid for the trip either way.",
       },
       {
         q: 'When am I paid?',
-        a: 'Every Monday for the week before. Each payout shows its bank reference (UTR).',
+        a: 'Every Monday by 3 pm, for the week before. You can also withdraw once a day, free, 24 hours after a trip.',
       },
     ],
-    reportTitle: 'Report a problem with a recent trip',
+    reportTitle: 'Problem with a recent trip?',
+    tripRow: (day: string, route: string) => `${day}, ${route}`,
     noTrips: 'No recent trips.',
   },
   sos: {

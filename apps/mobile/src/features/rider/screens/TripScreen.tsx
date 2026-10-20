@@ -1,66 +1,24 @@
-import React, {memo, useEffect, useState} from 'react';
-import {Alert, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
-import * as ImagePicker from 'expo-image-picker';
-import {Badge, Button, Chip, SectionSkeleton} from '../../../shared/components';
+import {Badge, SectionSkeleton} from '../../../shared/components';
+import {AppApiError} from '../../../core/http/apiError';
 import type {DeliverBody, FailBody, Trip, TripAction, TripStep} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
+import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, Money, RateRow, RiderScreen, riderStyles, Title, Value} from '../components/ui';
-import {AppApiError} from '../../../core/http/apiError';
-import {formatRupees, formatTimer} from '../domain/format';
-import {riderOnlineService} from '../native/riderOnlineService';
+import {Body, Card, Label, Money, RateRow, RiderScreen, Title} from '../components/ui';
+import {formatRupees} from '../domain/format';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
 import {tripQueue, usePendingActions} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
-import {Banner} from '../components/Banner';
-import {AtKitchen, ToKitchen} from './trip/Pickup';
 import {Deliver, ToCustomer, type OtpError} from './trip/Dropoff';
+import {NotAnswering} from './trip/NotAnswering';
 import {call} from './trip/parts';
+import {AtKitchen, ToKitchen} from './trip/Pickup';
 
 const ENDED: TripStep[] = ['DELIVERED', 'FAILED', 'CANCELLED'];
-const FAIL_REASONS = ['CUSTOMER_UNREACHABLE', 'WRONG_ADDRESS', 'CUSTOMER_REFUSED', 'UNSAFE'] as const;
-
-/** Counts down from a start time; only this leaf re-renders each second. */
-const Countdown = memo(function CountdownView({
-  from,
-  seconds,
-  running,
-  done,
-}: {
-  from: number;
-  seconds: number;
-  running: (left: string) => string;
-  done: string;
-}) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  const left = seconds - (now - from) / 1000;
-  return <Label>{left > 0 ? running(formatTimer(left)) : done}</Label>;
-});
-
-function useElapsed(from: number | null, seconds: number): boolean {
-  const [elapsed, setElapsed] = useState(false);
-  useEffect(() => {
-    if (from === null) {
-      setElapsed(false);
-      return;
-    }
-    const wait = from + seconds * 1000 - Date.now();
-    if (wait <= 0) {
-      setElapsed(true);
-      return;
-    }
-    const timer = setTimeout(() => setElapsed(true), wait);
-    return () => clearTimeout(timer);
-  }, [from, seconds]);
-  return elapsed;
-}
 
 export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const {strings} = useStrings();
@@ -74,11 +32,9 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const [localStep, setLocalStep] = useState<TripStep | null>(null);
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<OtpError | null>(null);
-  const [unreachableFrom, setUnreachableFrom] = useState<number | null>(null);
-  // When the rider tapped Call at the door: the customer-not-answering steps show each time.
+  const [notAnswering, setNotAnswering] = useState(false);
+  // When the rider tapped Call at the door; the customer-not-answering steps show each time.
   const [callTimes, setCallTimes] = useState<number[]>([]);
-  const calls = callTimes.length;
-  const [failReason, setFailReason] = useState<string | null>(null);
   const [photoDelivery, setPhotoDelivery] = useState(false);
   const pending = usePendingActions(riderId, trip?.tripId);
 
@@ -106,7 +62,8 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     };
   }, [tripId]);
 
-  const waitOver = useElapsed(unreachableFrom, trip?.unreachableWaitSeconds ?? 0);
+  // Stable, so the not-answering view keeps one system Back listener.
+  const showDeliver = useCallback(() => setNotAnswering(false), []);
 
   if (!trip) {
     if (active.isLoading) {
@@ -163,24 +120,6 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     return outcome.kind !== 'rejected';
   }
 
-  async function deliverWithPhoto() {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
-    const shot = await ImagePicker.launchCameraAsync({mediaTypes: ['images'], quality: 0.5});
-    if (shot.canceled) {
-      return;
-    }
-    setPhotoDelivery(true);
-    await run('delivered', 'DELIVERED', {
-      method: 'PHOTO',
-      photoUri: shot.assets[0]?.uri,
-      callsMade: calls,
-      fix: riderOnlineService.lastFix(),
-    });
-  }
-
   function backToWaiting() {
     queryClient.setQueryData(riderKeys.activeTrip, null);
     queryClient.invalidateQueries({queryKey: riderKeys.all});
@@ -224,66 +163,37 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   }
 
   // AT_DROP: the customer's OTP first; the photo only after two calls and the wait.
-  function callCustomer() {
+  const callCustomer = () => {
     setCallTimes(list => [...list, Date.now()]);
-    call(trip!.customer.phone);
-  }
+    call(trip.customer.phone);
+  };
 
-  if (unreachableFrom === null) {
+  if (notAnswering) {
     return (
-      <Deliver
+      <NotAnswering
         trip={trip}
         run={run}
         syncing={pending > 0}
-        otp={otp}
-        setOtp={setOtp}
-        otpError={otpError}
+        callTimes={callTimes}
         onCall={callCustomer}
-        onNotAnswering={() => setUnreachableFrom(Date.now())}
+        supportPhone={supportPhone}
+        otpLocked={otpError?.lockedMessage !== undefined}
+        onBack={showDeliver}
+        onPhotoSent={() => setPhotoDelivery(true)}
       />
     );
   }
 
-  const photoUnlocked = calls >= 2 && waitOver;
-
   return (
-    <RiderScreen header={header} testID="rider-deliver">
-      {syncNote}
-      {(
-        <Card>
-          <Value>{t.unreachableTitle}</Value>
-          <Body>{t.unreachableSteps}</Body>
-          <Label>{t.callsMade(calls)}</Label>
-          <Countdown from={unreachableFrom} seconds={trip.unreachableWaitSeconds} running={t.waitLeft} done="" />
-          <Body>{t.photoHint}</Body>
-          <Button label={t.leavePhoto} disabled={!photoUnlocked} onPress={deliverWithPhoto} testID="rider-leave-photo" />
-          {supportPhone ? (
-            <Button label={strings.common.callSupport} variant="outline" onPress={() => call(supportPhone)} />
-          ) : null}
-          {photoUnlocked ? (
-            <>
-              <Label>{t.failTitle}</Label>
-              <View style={riderStyles.rowGap}>
-                {FAIL_REASONS.map(reason => (
-                  <Chip key={reason} label={t.failReasons[reason]} selected={failReason === reason} onPress={() => setFailReason(reason)} />
-                ))}
-              </View>
-              <Button
-                label={t.markFailed}
-                variant="ghost"
-                disabled={!failReason}
-                onPress={() =>
-                  Alert.alert(t.markFailed, failReason ? t.failReasons[failReason as keyof typeof t.failReasons] : undefined, [
-                    {text: strings.common.cancel, style: 'cancel'},
-                    {text: t.confirmFail, style: 'destructive', onPress: () => run('failed', 'FAILED', {reason: failReason ?? 'OTHER'})},
-                  ])
-                }
-              />
-            </>
-          ) : null}
-        </Card>
-      )}
-    </RiderScreen>
+    <Deliver
+      trip={trip}
+      run={run}
+      syncing={pending > 0}
+      otp={otp}
+      setOtp={setOtp}
+      otpError={otpError}
+      onCall={callCustomer}
+      onNotAnswering={() => setNotAnswering(true)}
+    />
   );
 }
-

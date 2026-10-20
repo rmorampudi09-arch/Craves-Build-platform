@@ -1,5 +1,6 @@
 import React from 'react';
-import {Alert, Linking, Text, TextInput} from 'react-native';
+import {Alert, BackHandler, Linking, Text, TextInput} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -434,5 +435,128 @@ describe('RiderRuntime', () => {
     expect(Alert.alert).not.toHaveBeenCalled();
     act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'TRIP_NOT_ACTIVE', message: 'Ended'})));
     expect(Alert.alert).toHaveBeenCalledWith('Ended');
+  });
+});
+
+describe('Trip: customer not answering', () => {
+  const atDrop: Trip = {...trip, step: 'AT_DROP', version: 4};
+  const NOW = Date.parse('2026-10-20T13:00:00Z');
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+  });
+
+  async function openSteps() {
+    await render(atDrop);
+    await press('rider-unreachable');
+  }
+
+  it('shows the paid-either-way steps with the photo locked', async () => {
+    await openSteps();
+    const text = allText();
+    expect(text).toContain('Customer not answering');
+    expect(text).toContain("Follow these steps and you're paid for this trip either way.");
+    expect(text).toContain('Call Anil');
+    expect(text).toContain('Unlocks when the timer ends');
+    expect(text).toContain('Anil gets it straight away, with a button to say it didn');
+    expect(text).toContain('Not safe to leave it?');
+    expect(has('rider-step-bar')).toBe(false);
+    expect(byId('rider-leave-photo').props.disabled).toBe(true);
+    expect(has('rider-fail')).toBe(false);
+    expect(byId('rider-call-2')).toBeUndefined(); // "Call again" waits for the first call
+  });
+
+  it('records each call, waits at the door, then unlocks the photo', async () => {
+    await openSteps();
+    await press('rider-call-1');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+913333333333');
+    expect(allText()).toMatch(/\d{1,2}:\d{2} (am|pm), no answer/);
+    await act(async () => {
+      jest.advanceTimersByTime(2 * 60_000);
+    });
+    await press('rider-call-2');
+    expect(tree.root.findByProps({testID: 'rider-door-wait-left'}).props.children).toBe('8:00');
+    expect(byId('rider-leave-photo').props.disabled).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(5 * 60_000 + 42_000);
+    });
+    expect(tree.root.findByProps({testID: 'rider-door-wait-left'}).props.children).toBe('2:18');
+    await act(async () => {
+      jest.advanceTimersByTime(2 * 60_000 + 18_000);
+    });
+    expect(byId('rider-leave-photo').props.disabled).toBe(false);
+    expect(allText()).toContain('You can leave the order now');
+    await press('rider-leave-photo');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'delivered',
+        body: expect.objectContaining({method: 'PHOTO', photoUri: 'file:///photo.jpg', callsMade: 2}),
+      }),
+    );
+  });
+
+  it('counts a call made from the OTP screen as the first call', async () => {
+    await render(atDrop);
+    await press('rider-call-customer');
+    await press('rider-unreachable');
+    expect(allText()).toMatch(/no answer/);
+    expect(byId('rider-call-2')).toBeDefined();
+  });
+
+  async function unlock() {
+    await openSteps();
+    await press('rider-call-1');
+    await press('rider-call-2');
+    await act(async () => {
+      jest.advanceTimersByTime(8 * 60_000);
+    });
+  }
+
+  it('explains how to allow the camera when it was denied', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValueOnce({granted: false});
+    jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    await unlock();
+    await press('rider-leave-photo');
+    expect(allText()).toContain('Allow the camera to take the photo.');
+    expect(tripQueue.enqueue).not.toHaveBeenCalled();
+    await press('rider-open-settings');
+    expect(Linking.openSettings).toHaveBeenCalled();
+  });
+
+  it('marks the trip failed with a reason, after asking', async () => {
+    await unlock();
+    expect(byId('rider-mark-failed').props.disabled).toBe(true);
+    await press('rider-fail-WRONG_ADDRESS');
+    await press('rider-mark-failed');
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as Array<{style?: string; onPress?: () => void}>;
+    expect(tripQueue.enqueue).not.toHaveBeenCalled();
+    await act(async () => buttons.find(button => button.style === 'destructive')?.onPress?.());
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'failed', body: {reason: 'WRONG_ADDRESS'}}));
+  });
+
+  it('goes back to the OTP boxes when the customer comes out, or on system Back', async () => {
+    const back = jest.spyOn(BackHandler, 'addEventListener');
+    await openSteps();
+    await press('rider-came-out');
+    expect(has('rider-deliver')).toBe(true);
+    await press('rider-unreachable');
+    const handler = back.mock.calls[back.mock.calls.length - 1][1] as () => boolean;
+    let handled = false;
+    await act(async () => {
+      handled = handler();
+    });
+    expect(handled).toBe(true);
+    expect(has('rider-deliver')).toBe(true);
+  });
+
+  it('drops "enter the OTP" once the OTP is locked', async () => {
+    await render(atDrop);
+    await act(async () => {
+      mockRejected.forEach(listener => listener({tripId: 't1', action: 'delivered'}, {code: 'OTP_LOCKED', message: 'Locked'}));
+    });
+    await press('rider-photo-route');
+    expect(has('rider-not-answering')).toBe(true);
+    expect(has('rider-came-out')).toBe(false);
   });
 });

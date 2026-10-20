@@ -227,7 +227,7 @@ describe('Trip', () => {
   it('keeps the photo fallback locked until two calls and the wait', async () => {
     await render(<TripScreen {...props} />, [[riderKeys.activeTrip, trip], [riderKeys.me, me], [riderKeys.home, home]]);
     await act(async () => byId('rider-unreachable').props.onPress());
-    expect(allText()).toContain('Calls made: 0 of 2');
+    expect(allText()).toContain('Unlocks when the timer ends');
     expect(byId('rider-leave-photo').props.disabled).toBe(true);
   });
 

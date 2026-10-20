@@ -11,7 +11,7 @@ Environment flags only switch code paths on. All are off by default.
 | `CRAVES_FLEET_ENABLED` | Every fleet bean: admin API, policy readers, test mode, storage, the RIDER role client, the fleet scheduler pool, the daily export job, slot settlement, and dispatch (the fleet stage, the `craves_fleet` adapter, the dispatch tick). Off means no fleet bean or job exists (`FleetConfigurationTest`). |
 | `CRAVES_FLEET_RIDER_API_ENABLED` | The rider API under `/api/v1/rider` (needs `CRAVES_FLEET_ENABLED` too). |
 | `CRAVES_FLEET_LOCATION_INGEST_ENABLED` | `POST /api/v1/rider/locations` and the daily `trip_track` partition job (needs the two flags above too). |
-| `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` | Reserved for payout execution (P4). |
+| `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` | Keep it false. Payouts are manual in this phase and RazorpayX is never called: no automated execution exists. The only reader is a guard in `FleetPayouts` that, when it is true, starts nothing and logs `CRAVES_ALERT alert=FLEET_PAYOUT_EXECUTION_REFUSED`. |
 
 Other settings (`craves.fleet.*` in `application.yml`):
 
@@ -31,6 +31,7 @@ Other settings (`craves.fleet.*` in `application.yml`):
 | `CRAVES_LEDGER_POSTING_ENABLED` | `false` | The existing financial-journal gate. Rider credits post to the journal, so they wait (`CRAVES_ALERT alert=FLEET_CREDITS_WAITING`) until it is on; the money job then credits them. |
 | `CRAVES_FLEET_TDS_ENABLED`, `CRAVES_FLEET_TDS_SECTION`, `CRAVES_FLEET_TDS_RATE_BASIS_POINTS`, `CRAVES_FLEET_TDS_ANNUAL_THRESHOLD_PAISE` | off, empty, 0, 0 | TDS on rider pay (see Money). The CA sets the section, the rate (100 = 1%) and the yearly threshold; on without a section or a rate of 1 to 10000, credits fail with `FLEET_TDS_MISCONFIGURED` and wait. |
 | `CRAVES_FLEET_MONEY_INTERVAL_MS` | `60000` | The money job (fleet pool): credits waiting trips and slot top-ups, releases holds that are due. |
+| `CRAVES_FLEET_RECOVERY_WEEKLY_CAP_PAISE` | `50000` | Debt from a negative adjustment is recovered from future pay, at most this much a week (₹500 is a placeholder business input). |
 
 All three use `CRAVES_INTERNAL_SERVICE_KEY` (`X-Craves-Internal-Secret`, or `X-Craves-Internal-Key` for notification-service), have explicit timeouts, and are never retried: a code check could count a wrong code twice, and an offer push outlives its offer.
 
@@ -66,6 +67,7 @@ Operational values live in versioned tables, not variables: `dispatch_policy` (s
 | `admin_audit` | Append-only trail of every ops action; mutations also keep their Idempotency-Key and first response. |
 | `rider_slot_settlement` (V154) | One per finished slot: online in-zone seconds, the guarantee, trip pay in the slot and the top-up; `credited_at` is set by the money phase. |
 | `chef_ready` (V155) | The chef's ready time per sub-order, kept even when it arrives before the trip. |
+| `rider_payout_batch` (V157) | A payout file: kind, date (WEEKLY on a Monday), status `CREATED` → `APPROVED` → `SENT` → `CLOSED`, maker and checker (the table refuses the maker as approver). V157 also adds `rider_payout_instruction.batch_id` (a payout is in one file only), the account's `payouts_paused_at` and `paused_reason`, the withdrawal's `idem_key`, and `rider_recovery` (one debt recovery per rider per week). |
 | `rider_pay_hold` (V156) | One hold per trip, ever: reason, `release_on` (today to 7 days ahead, IST), who placed and released it. V156 also adds `trip.pay_credited_at` and the journal accounts `RIDER_PAYABLE` and `RIDER_TDS_PAYABLE`. |
 
 V154 also adds the trip's final pay (`final_pay_lines`, `final_pay_paise`, `pay_held`, `hold_reason`, `pay_finalized_at`) and the slot's own `guaranteed_per_hour_paise` and `status`; V153 adds the slot's own `in_zone_seconds`. V155 adds `trip.accepted_at` and registers `craves_fleet` in `delivery_schema.delivery_provider`, inactive, so a rider's delivery job can reference it while routing never quotes it.
@@ -104,6 +106,8 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `GET /trips/active` | The trip in progress, or 204. |
 | `POST /trips/{tripId}/{action}` | `arrived-pickup`, `food-not-ready`, `picked-up`, `arrived-drop`, `delivered`, `failed`; see the trip steps below. |
 | `GET /earnings?range=today\|week&cursor=` | Trips with credited pay (`FleetMoneyController`), newest first, 20 a page; `totalPaise` is the whole range, slot top-ups included. The week is Monday 00:00 to Sunday 23:59 IST. |
+| `GET /payouts` | `nextPayoutOn` (Monday; today until 15:00 IST on a Monday), `withdrawablePaise`, and the latest 50 payouts: `SCHEDULED` (requested or in an unsent file), `PROCESSING` (file sent), `PAID` with `utr` and `paidAt`, `FAILED`. |
+| `POST /withdrawals` | `{amountPaise}` with `Idempotency-Key`. 204, paid in the next day's file (by 13:00). 409: `WITHDRAWAL_LIMIT` (one a day, IST), `AMOUNT_OVER_BALANCE`, `PAYOUT_ACCOUNT_REQUIRED`, `PAYOUTS_PAUSED`, `IDEMPOTENCY_KEY_REUSED` (same key, other amount); the same key and amount answers 204 again. Free. |
 | `GET /earnings/trips/{tripId}` | One trip: lines (TDS and adjustments are lines too), distances, `rateCardVersion`, status `CREDITED`, `HELD` (`holdReason`, `releaseOn`) or `ADJUSTED`. 404 `TRIP_NOT_FOUND` for another rider's trip. |
 
 Offer and trip POSTs need an `Idempotency-Key` (the app sends `rider-{action}-{offerId or tripId}-{riderId}[-{attempt}]`).
@@ -139,6 +143,10 @@ Admin fleet API (`/api/v1/admin/fleet`, fleet flag), scoped admin roles per `adm
 | `GET /audit` | The trail, newest first, optionally for one rider. |
 | `GET /exports/rider-joins-exits?date=` | CSV of joins and exits on one IST date, for the government portal. |
 | `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots (`FleetSlotController`): 409 `SLOT_OVERLAP`; 422 `GUARANTEE_OUT_OF_RANGE` outside the current rate card's declared range, `SLOT_END_NOT_AFTER_START`; 409 `SLOT_NOT_BOOKED`. Audited and idempotent. |
+| `GET /payout-batches`, `POST /payout-batches`, `GET /payout-batches/{id}` | Payout files (`FleetMoneyAdminController`): reads for payments and audit admins, changes for payments admins. `POST {kind: WEEKLY or DAILY_WITHDRAWAL, payoutDate}`: 409 `BATCH_EXISTS`, 422 `NOTHING_TO_PAY`, `NOT_A_MONDAY`. The list leaves out the payout rows. |
+| `GET /payout-batches/{id}/file` | The bank's CSV (`payoutId,holderName,accountOrUpiId,ifsc,amountRupees`) with full account numbers, decrypted only here; cells starting with `=`, `+`, `-`, `@`, tab or CR get a leading apostrophe; attachment, `no-store`; every download is audited (`PAYOUT_FILE_DOWNLOADED`, no numbers in the audit). |
+| `POST /payout-batches/{id}/approve`, `/mark-sent` | The second approver (403 `SAME_APPROVER` for the maker; 409 `BATCH_NOT_CREATED`); sent only after approval (409 `BATCH_NOT_APPROVED`). |
+| `POST /payout-batches/{id}/payouts/{payoutId}/utr`, `/fail` | `{utr}` (12 to 22 letters and digits, stored in capitals): PAID and posted to the journal; 409 `UTR_IN_USE`, `PAYOUT_NOT_PENDING`, `BATCH_NOT_SENT`; 503 `LEDGER_POSTING_OFF` while the journal is off. `{reason}`: FAILED, the money back in the balance, the rider's payouts paused. The file closes once no payout is pending. |
 | `GET /holds?state=ACTIVE\|RELEASED`, `POST /holds`, `POST /holds/{holdId}/release` | Pay holds (`FleetMoneyAdminController`): reads for payments, operations and audit admins; changes for payments admins. `POST {tripId, reason, releaseOn}`: 404 `TRIP_NOT_FOUND`, 409 `HOLD_EXISTS` (one hold per trip, ever), 409 `EARNING_ALREADY_PAID` (the pay was already withdrawable when a payout or withdrawal was made), 422 `RELEASE_DATE_OUT_OF_RANGE`; release: 409 `HOLD_NOT_ACTIVE`. |
 
 ### Due process (two tracks)
@@ -258,6 +266,34 @@ Postings for one ₹67 trip on the draft rate card (drop 4.2 km, pickup 1.8 km):
 | `fleet-trip-pay/{trip}/tds/1` (TDS on, threshold crossed, 1%) | `RIDER_PAYABLE` | `RIDER_TDS_PAYABLE` | 0.67 |
 
 A photo delivery posts the same journals; only the hold differs (the pay stays out of the balance until released).
+
+### Payouts
+
+`FleetPayouts` (fleet flag). Nothing moves money by itself; a person uploads every file to the bank.
+
+- **Balance.** available = released pay (net of TDS) − payouts that did not fail (requested withdrawals included) − debt recovered. Withdrawable = available − this week's recovery (outstanding debt, at most `CRAVES_FLEET_RECOVERY_WEEKLY_CAP_PAISE`), never below zero. A failed payout's money is back in the balance by itself.
+- **Weekly payout.** A WEEKLY file on a Monday pays every rider with a verified, unpaused account their whole withdrawable balance, by IMPS, no minimum. Making it records this week's recovery (`rider_recovery`, once a week) from what is there. Riders with nothing, a negative balance or no account are left out. Debt is never debited from a bank.
+- **Daily withdrawal.** One a day per rider (IST), free, up to the withdrawable balance. It is a payout (`DAILY_WITHDRAWAL`, date = tomorrow) at once, so the balance drops at once; the DAILY_WITHDRAWAL file for a date takes every request for that date or before not yet in a file, to the rider's current account.
+- **Never twice.** A payout belongs to one file. A sent payout stays PENDING (processing) until ops marks its UTR or a final failure; nothing re-sends it, and its money is not in the balance meanwhile.
+- **Failure.** Marked FAILED with the bank's reason: the money stays in the balance, and the account is paused (`features` false, `PAYOUTS_PAUSED`, left out of files) until ops sets a new account in person.
+- **Ledger.** Only a UTR posts: `fleet-payout/{payoutId}/paid`, debit `RIDER_PAYABLE`, credit `BANK`, evidence `utr/{UTR}`. So `RIDER_PAYABLE` = all rider pay − paid payouts, and `BANK` credits from rider payouts = paid payout amounts.
+
+Posting for one weekly payout of ₹84 (two ₹67 trips, less a ₹50 withdrawal paid separately):
+
+| Key | Debit | Credit | ₹ |
+|---|---|---|---|
+| `fleet-payout/{payoutId}/paid` | `RIDER_PAYABLE` | `BANK` | 84.00 |
+
+### Payout runbook for ops (RIDER-PLAYBOOK 5.8, R11 6.4)
+
+Weekly: on Monday, approved by 13:00, sent by 15:00 IST. Daily withdrawals: every morning, paid by 13:00.
+
+1. **Create the file.** A payments admin (the maker) makes it in the console from the database: Payouts → WEEKLY with Monday's date, or DAILY_WITHDRAWAL with today's date. Never type amounts or build a file in a spreadsheet.
+2. **Download** the bank file (audited). Check the total and the count against the console.
+3. **Second approver.** Another payments admin (the checker) reviews: file total against the console; count against riders with a balance; any payout above twice the rider's usual week; any payout account changed in the last 7 days; any payout that already has a UTR. Then approves. The maker cannot approve (403 `SAME_APPROVER`).
+4. **Bank upload.** Upload the approved file once to the bank's IMPS bulk upload (use the bank's own two-user approval if it has one), then **mark sent**. Never upload a file twice, and never re-send a payout the bank still shows as processing (it can take up to T+3 working days).
+5. **Mark UTRs.** For each payout the bank confirms, enter its UTR within 2 hours; the rider sees it. For a final failure (account closed, invalid), mark it failed with the bank's reason: the money stays in the rider's balance and their payouts pause; set a new account with the rider in person, and the next file includes them.
+6. **Reconcile** daily: for every UTR on the bank statement, the payout with that UTR has the same amount; the file total equals the PAID payouts of the file plus those still pending; `RIDER_PAYABLE` debits for `RIDER_PAYOUT_PAID` equal the PAID payouts; no file stays SENT with pending payouts past T+3 working days without a call to the bank.
 
 ## Daily export
 

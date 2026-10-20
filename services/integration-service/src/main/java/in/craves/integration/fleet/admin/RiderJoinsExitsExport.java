@@ -67,7 +67,7 @@ public class RiderJoinsExitsExport {
     }
 
     /** RFC 4180 quoting; a cell that a spreadsheet would read as a formula starts with an apostrophe instead. */
-    static String csv(List<List<String>> rows) {
+    public static String csv(List<List<String>> rows) {
         StringBuilder out = new StringBuilder();
         for (List<String> row : rows) {
             for (int i = 0; i < row.size(); i++) {

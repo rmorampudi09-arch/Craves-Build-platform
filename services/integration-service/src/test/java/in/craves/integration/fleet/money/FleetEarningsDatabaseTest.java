@@ -38,10 +38,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The earnings ledger (PLAN F12) against a real database: one credit per trip, pending for 24 h, holds on the flagged
@@ -238,7 +240,7 @@ class FleetEarningsDatabaseTest {
     @Test
     void anAdjustmentIsTheNextRevisionWithItsReasonAndCanTakePayBack() {
         UUID trip = deliveredTrip(false);
-        earnings.adjustTrip(ops, trip, "drop-km", -500, "The drop was 3.6 km, not 4.2 km");
+        tx(() -> earnings.adjustTrip(ops, trip, "drop-km", -500, "The drop was 3.6 km, not 4.2 km"));
         assertThat(fleet.db.queryForMap("SELECT business_key, net_paise, reason FROM fleet_schema.rider_earning WHERE trip_id = ? "
             + "AND revision = 2", trip)).containsEntry("business_key", "fleet-trip-pay/" + trip + "/drop-km/2")
             .containsEntry("net_paise", -500L).containsEntry("reason", "The drop was 3.6 km, not 4.2 km");
@@ -252,9 +254,9 @@ class FleetEarningsDatabaseTest {
             "fleet-trip-pay/" + trip + "/drop-km/2")).containsEntry("event_type", "RIDER_PAY_ADJUSTED").containsEntry("actor_type", "HUMAN");
         assertThat(count("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'PAY_ADJUSTED'")).isEqualTo(1);
 
-        refused(() -> earnings.adjustTrip(ops, trip, "tds", 100, "Wrong tax"), 400, "VALIDATION_FAILED");
-        refused(() -> earnings.adjustTrip(ops, trip, "base", 0, "Nothing"), 400, "VALIDATION_FAILED");
-        refused(() -> earnings.adjustTrip(ops, UUID.randomUUID(), "base", 100, "Missing base"), 404, "TRIP_NOT_FOUND");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, trip, "tds", 100, "Wrong tax")), 400, "VALIDATION_FAILED");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, trip, "base", 0, "Nothing")), 400, "VALIDATION_FAILED");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), "base", 100, "Missing base")), 404, "TRIP_NOT_FOUND");
     }
 
     @Test
@@ -358,6 +360,18 @@ class FleetEarningsDatabaseTest {
     BigDecimal payable(UUID trip) {
         return fleet.db.queryForObject("SELECT sum(credit_amount) - sum(debit_amount) FROM payment_schema.ledger_line "
             + "WHERE delivery_attempt_id = ? AND account_code = 'RIDER_PAYABLE'", BigDecimal.class, trip);
+    }
+
+    /** Service calls run in a transaction, as Spring runs them; the journal checks its balance at commit. */
+    void tx(Runnable call) {
+        tx(() -> {
+            call.run();
+            return null;
+        });
+    }
+
+    <T> T tx(Supplier<T> call) {
+        return new TransactionTemplate(fleet.transactions).execute(status -> call.get());
     }
 
     int count(String sql, Object... args) {

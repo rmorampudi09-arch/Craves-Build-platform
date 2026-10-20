@@ -37,4 +37,35 @@ public final class FleetMoneyModels {
 
     public record HoldInput(UUID tripId, String reason, LocalDate releaseOn) {
     }
+
+    /** rider-v1 Payout: SCHEDULED until the bank file is sent, then PROCESSING until ops marks it PAID (with the UTR) or FAILED. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record RiderPayout(String payoutId, String periodLabel, long amountPaise, String status, String utr, Instant paidAt) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record PayoutsPage(LocalDate nextPayoutOn, long withdrawablePaise, List<RiderPayout> payouts) {
+    }
+
+    public record WithdrawalInput(Long amountPaise) {
+    }
+
+    /** admin-fleet-v1 PayoutBatchSummary, and PayoutBatch when payouts is set (the list leaves it out). */
+    public record PayoutBatch(UUID batchId, String kind, LocalDate payoutDate, String status, long totalPaise, int payoutCount,
+                              String createdBy, boolean createdByMe, Instant createdAt, String approvedBy, Instant approvedAt,
+                              Instant sentAt, @JsonInclude(JsonInclude.Include.NON_NULL) List<Payout> payouts) {
+    }
+
+    public record BatchPage(List<PayoutBatch> batches) {
+    }
+
+    public record Payout(UUID payoutId, UUID riderId, String riderName, long amountPaise, String maskedAccount, String status, String utr,
+                         String failureReason, String markedBy, Instant markedAt) {
+    }
+
+    public record BatchInput(String kind, LocalDate payoutDate) {
+    }
+
+    public record UtrInput(String utr) {
+    }
 }

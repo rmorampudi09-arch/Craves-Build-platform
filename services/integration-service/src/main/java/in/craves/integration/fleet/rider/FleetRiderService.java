@@ -126,10 +126,10 @@ public class FleetRiderService {
             rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, features(rider.id()));
     }
 
-    /** Payouts and withdrawals show once the rider has a payout account ops verified in person. */
+    /** Payouts and withdrawals show once the rider has a payout account ops verified in person, and no failed payout paused it. */
     private Features features(UUID riderId) {
         boolean verified = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
-            + "WHERE rider_id = ? AND state = 'ACTIVE')", Boolean.class, riderId));
+            + "WHERE rider_id = ? AND state = 'ACTIVE' AND payouts_paused_at IS NULL)", Boolean.class, riderId));
         return new Features(verified, verified);
     }
 

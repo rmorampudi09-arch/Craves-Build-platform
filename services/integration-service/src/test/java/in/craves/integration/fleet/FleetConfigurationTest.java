@@ -15,10 +15,12 @@ import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.money.FleetMoneyController;
+import in.craves.integration.fleet.money.FleetPayouts;
 import in.craves.integration.fleet.rider.FleetLocationController;
 import in.craves.integration.fleet.rider.FleetLocationService;
 import in.craves.integration.fleet.rider.FleetRiderController;
 import in.craves.integration.ledger.LedgerPostingService;
+import in.craves.integration.payout.RazorpayXPayoutClient;
 import in.craves.integration.payout.bank.BankDataCipher;
 import java.util.Arrays;
 import java.util.List;
@@ -124,6 +126,14 @@ class FleetConfigurationTest {
                 assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER, ThreadPoolTaskScheduler.class).getPoolSize())
                     .isEqualTo(jobs.size());
             });
+    }
+
+    @Test
+    void askingForAutomatedPayoutsStartsNothingThatCouldPayRazorpayX() {
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.payout-execution-enabled=true").run(context -> {
+            assertThat(context).hasNotFailed().hasSingleBean(FleetPayouts.class).doesNotHaveBean(RazorpayXPayoutClient.class);
+            assertThat(context.getBean(FleetProperties.class).payoutExecutionEnabled()).isTrue();
+        });
     }
 
     @Test

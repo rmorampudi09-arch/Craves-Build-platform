@@ -147,6 +147,11 @@ public final class ApiDtos {
         Instant createdAt,
         Instant updatedAt
     ) {
+        public MenuItemResponse withImages(List<MenuItemImageResponse> itemImages) {
+            return new MenuItemResponse(id, kitchenId, itemName, description, category, foodType, price, currency, servesCount,
+                preparationTimeMinutes, spiceLevel, unitPackageWeightGrams, thermoboxRequired, available, status, itemImages,
+                createdAt, updatedAt);
+        }
     }
 
     public record MenuItemImageResponse(

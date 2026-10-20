@@ -53,6 +53,17 @@ class MenuImageDatabaseTest {
         assertEquals(1,images().stream().filter(MenuItemImageResponse::primary).count());
     }
 
+    // The Hikari pool is 2 per replica; reading photos inside the row mapper took a second connection per request.
+    @Test void menuReadsWorkOnAPoolOfOneConnection() {
+        catalog.uploadMenuItemImage(owner,dish,file,false);
+        try (var one=new com.zaxxer.hikari.HikariDataSource()) {
+            one.setJdbcUrl(System.getenv("CATALOG_TEST_JDBC_URL")); one.setUsername("postgres");
+            one.setPassword(System.getenv("CATALOG_TEST_DB_PASSWORD")); one.setMaximumPoolSize(1); one.setConnectionTimeout(250);
+            var pooled=new CatalogService(new JdbcTemplate(one),media,new CatalogDiscoveryProperties(),mock(CatalogFinanceEligibility.class));
+            assertEquals(1,pooled.listMyMenuItems(owner).getFirst().images().size());
+        }
+    }
+
     @Test void coverMovesAndRemovingTheCoverPromotesTheNextPhoto() {
         for (int i=0;i<3;i++) catalog.uploadMenuItemImage(owner,dish,file,false);
         var all=images(); assertTrue(all.get(0).primary());

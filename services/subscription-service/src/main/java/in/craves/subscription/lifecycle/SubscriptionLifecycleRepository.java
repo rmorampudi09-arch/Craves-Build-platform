@@ -86,6 +86,8 @@ public class SubscriptionLifecycleRepository {
         ).stream().findFirst();
     }
 
+    // Nested reads in the row mapper share this transaction's connection instead of taking a second one from the pool.
+    @Transactional(readOnly = true)
     public List<CustomerOccurrenceResponse> listOccurrences(UUID subscriptionId, UUID customerIdentityId, int limit) {
         if (findOwned(subscriptionId, customerIdentityId).isEmpty()) {
             return List.of();

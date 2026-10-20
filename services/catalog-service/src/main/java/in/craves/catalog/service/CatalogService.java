@@ -583,7 +583,8 @@ public class CatalogService {
 
     private List<MenuItemResponse> findMenuItems(String whereClause, Object... args) {
         String sql = "SELECT * FROM catalog_schema.menu_item " + whereClause;
-        return jdbcTemplate.query(sql, this::mapMenuItem, args);
+        // Images are read after the item rows: a read inside the row mapper needs a second connection from a small pool.
+        return jdbcTemplate.query(sql, this::mapMenuItem, args).stream().map(item -> item.withImages(listImages(item.id()))).toList();
     }
 
     private List<MenuItemImageResponse> listImages(UUID menuItemId) {
@@ -677,7 +678,7 @@ public class CatalogService {
             booleanOrNull(rs, "thermobox_required"),
             rs.getBoolean("is_available"),
             MenuItemStatus.valueOf(rs.getString("status")),
-            listImages(menuItemId),
+            List.of(),
             instant(rs, "created_at"),
             instant(rs, "updated_at")
         );

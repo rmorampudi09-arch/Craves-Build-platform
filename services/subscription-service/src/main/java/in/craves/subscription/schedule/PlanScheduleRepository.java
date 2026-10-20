@@ -39,11 +39,14 @@ public class PlanScheduleRepository {
         ).stream().findFirst();
     }
 
+    // Nested reads in the row mapper share this transaction's connection instead of taking a second one from the pool.
+    @Transactional(readOnly = true)
     public Optional<PlanScheduleResponse> find(UUID planId) {
         Optional<PlanScheduleResponse> draft = findDraft(planId);
         return draft.isPresent() ? draft : findCurrent(planId);
     }
 
+    @Transactional(readOnly = true)
     public Optional<PlanScheduleResponse> findActive(UUID planId) {
         return jdbcTemplate.query(
             "SELECT * FROM subscription_schema.subscription_plan_schedule WHERE plan_id = ? AND status = 'ACTIVE'",

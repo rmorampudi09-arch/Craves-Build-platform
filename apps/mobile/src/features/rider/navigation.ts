@@ -10,11 +10,13 @@ export type RiderStackParamList = {
   Terms: {mode: 'accept' | 'view'};
   Tabs: NavigatorScreenParams<RiderTabParamList> | undefined;
   PhoneSetup: undefined;
+  GoOnline: undefined;
   Offer: {offer: Offer; receivedAtMs: number};
   Trip: undefined;
   TripDetail: {tripId: string};
   Payouts: undefined;
   Help: undefined;
+  Notice: undefined;
   Sos: {tripId?: string};
   DevPanel: undefined;
 };

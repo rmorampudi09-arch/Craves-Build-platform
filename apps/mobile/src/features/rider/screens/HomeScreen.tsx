@@ -1,43 +1,112 @@
 import React, {memo, useEffect, useState} from 'react';
-import {Alert} from 'react-native';
+import {Alert, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
-import * as ImagePicker from 'expo-image-picker';
-import {Button, OfflineNotice, RecoverableErrorBanner, SectionSkeleton} from '../../../shared/components';
+import {Icon, SectionSkeleton} from '../../../shared/components';
+import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
+import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
+import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, Money, RiderScreen, riderStyles, Value} from '../components/ui';
-import {formatClock, formatTimer} from '../domain/format';
+import {Card, Money, RiderScreen} from '../components/ui';
+import {formatClock, formatRupees} from '../domain/format';
 import {riderOnlineService} from '../native/riderOnlineService';
 import type {RiderNav} from '../navigation';
 import {riderKeys, useActiveTrip, useRiderHome, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {usePhoneReadiness} from './PhoneSetupScreen';
 
+const ENDED = ['DELIVERED', 'FAILED', 'CANCELLED'];
+const two = (n: number) => String(n).padStart(2, '0');
+
+/** "0:42:15": the shift clock always shows hours (07-HomeOnline.png). */
+function shiftClock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 3600)}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}`;
+}
+
+/** Only this leaf re-renders each second. */
 const ShiftTimer = memo(function ShiftTimerView({startedAt}: {startedAt: string}) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  return <Value>{formatTimer((now - Date.parse(startedAt)) / 1000)}</Value>;
+  return (
+    <Text style={styles.timer} testID="rider-shift-timer">
+      {shiftClock(now - Date.parse(startedAt))}
+    </Text>
+  );
 });
 
-/** Opens the front camera; resolves to the photo URI, or null if the rider backed out. */
-async function takeSelfie(deniedMessage: string): Promise<string | null> {
-  const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) {
-    Alert.alert(deniedMessage);
-    return null;
-  }
-  const result = await ImagePicker.launchCameraAsync({
-    cameraType: ImagePicker.CameraType.front,
-    mediaTypes: ['images'],
-    quality: 0.5,
-  });
-  return result.canceled ? null : result.assets[0]?.uri ?? null;
+/** Offline (05-HomeOffline.png): today so far, then the next slot and its guaranteed hourly pay from the server. */
+function OfflineCards({home}: {home: HomeSummary}) {
+  const h = useStrings().strings.home;
+  const slot = home.nextSlot;
+  return (
+    <>
+      <Card>
+        <Text style={styles.small}>{h.today}</Text>
+        <Money paise={home.todayEarningsPaise} testID="rider-today-earnings" />
+        <Text style={styles.small}>{h.trips(home.todayTrips)}</Text>
+      </Card>
+      {slot ? (
+        <Card style={styles.slot}>
+          <View style={styles.tight}>
+            <Text style={styles.small}>{h.nextSlot}</Text>
+            <Text style={styles.heading}>{h.slotTime(formatClock(slot.startsAt), formatClock(slot.endsAt))}</Text>
+            <Text style={styles.body}>{slot.zoneName}</Text>
+          </View>
+          {home.guaranteedPerHourPaise ? (
+            <Banner tone="success" inset text={h.guaranteed(formatRupees(home.guaranteedPerHourPaise))} />
+          ) : null}
+        </Card>
+      ) : null}
+    </>
+  );
+}
+
+/** Online (07-HomeOnline.png): the shift, today, where to rest, and that offers ring with the screen off. */
+function OnlineCards({home}: {home: HomeSummary}) {
+  const h = useStrings().strings.home;
+  return (
+    <>
+      <Card style={styles.slot}>
+        <View style={styles.tight}>
+          <View style={styles.spread}>
+            <Text style={styles.small}>{h.onShift}</Text>
+            {home.slotEndsAt ? <Text style={styles.small}>{h.slotEnds(formatClock(home.slotEndsAt))}</Text> : null}
+          </View>
+          {home.shiftStartedAt ? <ShiftTimer startedAt={home.shiftStartedAt} /> : null}
+          {home.zoneName ? <Text style={styles.body}>{home.zoneName}</Text> : null}
+        </View>
+        {home.guaranteedPerHourPaise ? (
+          <Banner tone="success" inset text={h.waitingPaid(formatRupees(home.guaranteedPerHourPaise))} />
+        ) : null}
+      </Card>
+      <Card style={styles.spread}>
+        <View>
+          <Text style={styles.small}>{h.today}</Text>
+          <Text style={styles.hero} testID="rider-today-earnings">
+            {formatRupees(home.todayEarningsPaise)}
+          </Text>
+        </View>
+        <Text style={styles.secondary}>{h.trips(home.todayTrips)}</Text>
+      </Card>
+      {home.restPoint ? (
+        <Card style={styles.iconCard}>
+          <Icon name="map-marker-outline" size={iconSize.lg} color={colors.textPrimary} surface={false} />
+          <View style={styles.flex}>
+            <Text style={styles.strong}>{h.restPoint(home.restPoint.name, home.restPoint.area)}</Text>
+            <Text style={styles.secondary}>{h.restPointBody}</Text>
+          </View>
+        </Card>
+      ) : null}
+      <Text style={[styles.small, styles.center]}>{h.ringsScreenOff}</Text>
+    </>
+  );
 }
 
 export function HomeScreen() {
@@ -50,7 +119,7 @@ export function HomeScreen() {
   const trip = useActiveTrip();
   const phone = usePhoneReadiness();
 
-  const tripInProgress = Boolean(trip.data && !['DELIVERED', 'FAILED', 'CANCELLED'].includes(trip.data.step));
+  const tripInProgress = Boolean(trip.data && !ENDED.includes(trip.data.step));
   const online = home.data?.online ?? false;
   const refresh = () => queryClient.invalidateQueries({queryKey: riderKeys.all});
 
@@ -61,30 +130,8 @@ export function HomeScreen() {
     }
   }, [online]);
 
-  async function goOnline() {
-    if (!phone.ready) {
-      navigation.navigate('PhoneSetup');
-      return;
-    }
-    Alert.alert(h.selfieTitle, h.selfieWhy, [
-      {text: strings.common.cancel, style: 'cancel'},
-      {
-        text: h.goOnline,
-        onPress: async () => {
-          try {
-            const selfie = await takeSelfie(h.cameraDenied);
-            if (!selfie) {
-              return;
-            }
-            await riderOnlineService.start(await riderApi.startShift(selfie));
-          } catch (error) {
-            Alert.alert(error instanceof Error ? error.message : strings.common.error);
-          } finally {
-            refresh();
-          }
-        },
-      },
-    ]);
+  function goOnline() {
+    navigation.navigate(phone.ready ? 'GoOnline' : 'PhoneSetup');
   }
 
   async function goOffline() {
@@ -109,10 +156,12 @@ export function HomeScreen() {
     phone.device?.powerSaveMode ? h.batterySaver : null,
     !phone.notifications || phone.device?.notificationsEnabled === false ? h.notificationsOff : null,
   ].filter((w): w is string => Boolean(w));
+  const banner = home.data?.banner;
+  const firstName = me.data?.name.split(' ')[0];
 
   return (
     <RiderScreen
-      header={<RiderHeader />}
+      header={<RiderHeader title={firstName ? h.greeting(firstName) : strings.tabs.home} />}
       testID="rider-home"
       footer={
         online ? (
@@ -121,49 +170,66 @@ export function HomeScreen() {
           <BottomAction label={h.goOnline} onPress={goOnline} disabled={!home.data} testID="rider-go-online" />
         )
       }>
-      {offline ? <OfflineNotice message={strings.common.offline} onRetry={refresh} /> : null}
-      {home.isError && !offline ? <RecoverableErrorBanner message={strings.common.error} onRetry={refresh} /> : null}
-      {me.data?.notice ? (
-        <Card>
-          <Value>{h.noticeTitle}</Value>
-          <Body>{me.data.notice.title}</Body>
-          <Button label={h.openNotice} variant="outline" onPress={() => navigation.navigate('AccountStatus')} />
-        </Card>
+      {home.isError ? (
+        <View>
+          <Banner tone="warning" icon={offline ? 'wifi-off' : 'alert'} text={offline ? strings.common.offline : strings.common.error} />
+          <BottomAction label={strings.common.retry} variant="ghost" size="compact" onPress={refresh} testID="rider-home-retry" />
+        </View>
       ) : null}
       {tripInProgress ? (
         <Card>
-          <Value>{h.resumeTitle}</Value>
-          <Button label={h.resume} onPress={() => navigation.navigate('Trip')} testID="rider-resume-trip" />
+          <Text style={styles.strong}>{h.resumeTitle}</Text>
+          <BottomAction label={h.resume} onPress={() => navigation.navigate('Trip')} testID="rider-resume-trip" />
+        </Card>
+      ) : null}
+      {me.data?.notice ? (
+        <Card>
+          <Text style={styles.strong}>{h.noticeTitle}</Text>
+          <Text style={styles.body}>{me.data.notice.title}</Text>
+          <BottomAction
+            label={h.openNotice}
+            variant="outline"
+            size="compact"
+            onPress={() => navigation.navigate('Notice')}
+            testID="rider-open-notice"
+          />
         </Card>
       ) : null}
       {!phone.ready ? (
         <Card>
-          <Body>{h.setupNeeded}</Body>
-          <Button label={h.openSetup} variant="outline" onPress={() => navigation.navigate('PhoneSetup')} />
+          <Text style={styles.body}>{h.setupNeeded}</Text>
+          <BottomAction label={h.openSetup} variant="outline" size="compact" onPress={() => navigation.navigate('PhoneSetup')} />
         </Card>
       ) : null}
       {warnings.map(warning => (
-        <RecoverableErrorBanner key={warning} message={warning} />
+        <Banner key={warning} tone="warning" text={warning} />
       ))}
+      {banner ? <Banner tone={banner.tone} text={banner.text} testID="rider-home-banner" /> : null}
       {home.data ? (
-        <>
-          <Card>
-            <Label>{h.today}</Label>
-            <Money paise={home.data.todayEarningsPaise} testID="rider-today-earnings" />
-            <Label>{h.trips(home.data.todayTrips)}</Label>
-          </Card>
-          {online ? (
-            <Card style={riderStyles.gap}>
-              <Label>{h.onShift}</Label>
-              {home.data.shiftStartedAt ? <ShiftTimer startedAt={home.data.shiftStartedAt} /> : null}
-              {home.data.zoneName ? <Body>{`${h.zone}: ${home.data.zoneName}`}</Body> : null}
-              {home.data.slotEndsAt ? <Label>{h.slotEnds(formatClock(home.data.slotEndsAt))}</Label> : null}
-            </Card>
-          ) : null}
-        </>
+        online ? (
+          <OnlineCards home={home.data} />
+        ) : (
+          <OfflineCards home={home.data} />
+        )
       ) : home.isLoading ? (
         <SectionSkeleton />
       ) : null}
     </RiderScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: {flex: 1},
+  tight: {gap: spacing.xxs},
+  slot: {gap: spacing.md},
+  spread: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
+  iconCard: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
+  center: {textAlign: 'center'},
+  small: {fontSize: typography.small, color: colors.textSecondary},
+  body: {fontSize: typography.body, color: colors.textPrimary},
+  secondary: {fontSize: typography.body, color: colors.textSecondary},
+  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  hero: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+  timer: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+});

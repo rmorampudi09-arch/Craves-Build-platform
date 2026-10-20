@@ -18,6 +18,7 @@ import {useStrings} from '../../features/rider/strings/StringsProvider';
 import {AccountStatusScreen} from '../../features/rider/screens/AccountStatusScreen';
 import {DevPanelScreen} from '../../features/rider/screens/DevPanelScreen';
 import {EarningsScreen} from '../../features/rider/screens/EarningsScreen';
+import {GoOnlineScreen} from '../../features/rider/screens/GoOnlineScreen';
 import {HelpScreen} from '../../features/rider/screens/HelpScreen';
 import {HomeScreen} from '../../features/rider/screens/HomeScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
@@ -144,6 +145,7 @@ function SignedIn() {
             <Stack.Screen name="TripDetail" component={TripDetailScreen} />
             <Stack.Screen name="Payouts" component={PayoutsScreen} />
             <Stack.Screen name="PhoneSetup" component={PhoneSetupScreen} />
+            <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} />

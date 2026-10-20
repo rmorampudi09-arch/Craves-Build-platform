@@ -141,7 +141,7 @@ describe('Home', () => {
     expect(allText()).toContain('₹1,234');
     expect(allText()).toContain('Offline');
     await act(async () => byId('rider-go-online').props.onPress());
-    expect(Alert.alert).toHaveBeenCalledWith('Take a quick selfie to go online', expect.any(String), expect.any(Array));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
   });
 
   it('sends the rider to phone setup when a required check fails', async () => {

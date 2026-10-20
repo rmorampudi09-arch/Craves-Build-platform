@@ -8,7 +8,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from '../../../app/rider/signIn/RiderOtpScreen';
 import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
 import * as ImagePicker from 'expo-image-picker';
-import type {RiderMe, RiderProfile, Terms} from '../api/contract';
+import type {HomeSummary, RiderMe, RiderProfile, Terms} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {riderDevice, type DeviceState} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
@@ -16,6 +16,8 @@ import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
 import {AccountStatusScreen} from './AccountStatusScreen';
+import {GoOnlineScreen} from './GoOnlineScreen';
+import {HomeScreen} from './HomeScreen';
 import {phoneBrand, PhoneSetupScreen} from './PhoneSetupScreen';
 import {TermsScreen} from './TermsScreen';
 
@@ -403,5 +405,134 @@ describe('Phone setup', () => {
     await render(<PhoneSetupScreen {...props} />);
     await act(async () => press('rider-setup-home').props.onPress());
     expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs', {screen: 'Home'});
+  });
+});
+
+describe('Home', () => {
+  // Built in local time so the 12-hour clock reads the same in every time zone.
+  const at = (hours: number) => new Date(2026, 9, 20, hours, 0).toISOString();
+  const offlineHome: HomeSummary = {
+    online: false,
+    todayEarningsPaise: 34700,
+    todayTrips: 5,
+    nextSlot: {startsAt: at(19), endsAt: at(22), zoneName: 'Madhapur and Kondapur'},
+    guaranteedPerHourPaise: 8000,
+    restPoint: {name: "Lakshmi's Kitchen", area: 'Madhapur'},
+    banner: {tone: 'warning', text: 'Heavy rain expected after 8 pm.'},
+  };
+  const onlineHome: HomeSummary = {
+    ...offlineHome,
+    online: true,
+    shiftStartedAt: new Date(Date.now() - 42 * 60_000).toISOString(),
+    slotEndsAt: at(22),
+    zoneName: 'Madhapur and Kondapur',
+  };
+  const seed = (home: HomeSummary, rider: RiderMe = me): Array<[readonly unknown[], unknown]> => [
+    [riderKeys.home, home],
+    [riderKeys.me, rider],
+    [riderKeys.activeTrip, null],
+  ];
+
+  it('offline: the server banner, today, and the next slot with its guaranteed pay from the server', async () => {
+    await render(<HomeScreen />, seed(offlineHome));
+    const text = allText();
+    expect(text).toContain('Hi, Ravi');
+    expect(text).toContain('Heavy rain expected after 8 pm.');
+    expect(text).toContain('Today | ₹347 | 5 trips');
+    expect(text).toContain('Your next slot | 7:00 pm to 10:00 pm | Madhapur and Kondapur');
+    expect(text).toContain("At least ₹80 an hour while you're online in this slot, even when orders are slow.");
+    await act(async () => press('rider-go-online').props.onPress());
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
+  });
+
+  it('never makes up a guaranteed rate the server did not send', async () => {
+    await render(<HomeScreen />, seed({...offlineHome, guaranteedPerHourPaise: undefined}));
+    expect(allText()).toContain('Your next slot');
+    expect(allText()).not.toContain('an hour');
+  });
+
+  it('online: the shift with paid waiting, today, the rest point, and Go offline', async () => {
+    await render(<HomeScreen />, seed(onlineHome));
+    const text = allText();
+    expect(text).toContain('Online · waiting for orders');
+    expect(text).toContain('On shift | Slot ends 10:00 pm');
+    expect(tree.root.findByProps({testID: 'rider-shift-timer'}).props.children).toMatch(/^0:4[23]:\d\d$/);
+    expect(text).toContain('Waiting is paid: at least ₹80 an hour in this slot.');
+    expect(text).toContain("Rest point: Lakshmi's Kitchen, Madhapur");
+    expect(text).toContain('Offers ring even with the screen off.');
+    (riderApi.endShift as jest.Mock).mockResolvedValueOnce(undefined);
+    await act(async () => press('rider-go-offline').props.onPress());
+    expect(riderOnlineService.stop).toHaveBeenCalled();
+    expect(riderApi.endShift).toHaveBeenCalled();
+  });
+
+  it('opens the notice on its own screen', async () => {
+    const notice = {title: 'Review of a delivery', reason: 'A customer says it did not arrive.', appealPhone: '+910000000000'};
+    await render(<HomeScreen />, seed(offlineHome, {...me, notice}));
+    expect(allText()).toContain('You have a notice | Review of a delivery');
+    await act(async () => press('rider-open-notice').props.onPress());
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Notice');
+  });
+
+  it('says when it is offline and offers a retry', async () => {
+    (riderApi.getHome as jest.Mock).mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'No internet', undefined, undefined, true));
+    await render(<HomeScreen />, [[riderKeys.me, me], [riderKeys.activeTrip, null]]);
+    await flush();
+    expect(allText()).toContain("You're offline. Changes sync when you're back online.");
+    expect(press('rider-home-retry')).toBeTruthy();
+    expect(press('rider-go-online').props.disabled).toBe(true);
+  });
+});
+
+describe('Go online', () => {
+  const props = {route: {key: 'GoOnline', name: 'GoOnline' as const, params: undefined}, navigation: mockNavigation as never};
+  const shift = {shiftCredential: 'opaque', expiresAt: '2026-10-20T22:00:00Z'};
+
+  it('explains the selfie, then starts the shift with the front-camera photo', async () => {
+    (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
+    await render(<GoOnlineScreen {...props} />);
+    expect(allText()).toContain('Take off your helmet and look at the camera');
+    expect(allText()).toContain("Ops checks it's you. Customers never see this photo.");
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'front'}));
+    expect(riderApi.startShift).toHaveBeenCalledWith('file:///photo.jpg');
+    expect(riderOnlineService.start).toHaveBeenCalledWith(shift);
+    expect(mockNavigation.goBack).toHaveBeenCalled();
+  });
+
+  it('asks for the camera when it is denied', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValueOnce({granted: false});
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(allText()).toContain('Allow the camera to take the selfie.');
+    expect(allText()).toContain('Open settings');
+    expect(riderApi.startShift).not.toHaveBeenCalled();
+  });
+
+  it('stays put when the rider backs out of the camera', async () => {
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValueOnce({canceled: true, assets: null});
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(riderApi.startShift).not.toHaveBeenCalled();
+    expect(mockNavigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it("shows the server's reason when it refuses the shift", async () => {
+    (riderApi.startShift as jest.Mock).mockRejectedValueOnce(
+      new AppApiError('DOCUMENTS_EXPIRED', 'Your vehicle insurance has expired. Upload the new policy first.', 403),
+    );
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(allText()).toContain('Your vehicle insurance has expired. Upload the new policy first.');
+    expect(riderOnlineService.start).not.toHaveBeenCalled();
+    expect(mockNavigation.goBack).not.toHaveBeenCalled();
+    expect(press('rider-selfie-shutter')).toBeTruthy();
+  });
+
+  it('closes without going online', async () => {
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-go-online-close').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalled();
+    expect(ImagePicker.launchCameraAsync).not.toHaveBeenCalled();
   });
 });

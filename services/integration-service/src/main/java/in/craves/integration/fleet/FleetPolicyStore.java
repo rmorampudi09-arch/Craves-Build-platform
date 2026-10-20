@@ -55,22 +55,31 @@ public class FleetPolicyStore {
     /** The policy in force. Empty means dispatch is off: drafts never drive dispatch. */
     public Optional<DispatchPolicy> currentDispatchPolicy() {
         return jdbc.query("""
-            SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m FROM fleet_schema.dispatch_policy
+            SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
+                   per_order_overhead_paise, cost_guard_premium_paise FROM fleet_schema.dispatch_policy
             WHERE status = 'PUBLISHED' AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1""",
             (row, n) -> new DispatchPolicy(row.getString("version"), row.getTimestamp("effective_from").toInstant(),
-                row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m")))
+                row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m"),
+                row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise")))
             .stream().findFirst();
+    }
+
+    /** A rate card by version, for pay locked on an offer. */
+    public Optional<RateCard> rateCard(String version) {
+        return jdbc.query("SELECT * FROM fleet_schema.rate_card WHERE version = ?", (row, n) -> rateCard(row), version).stream().findFirst();
     }
 
     @Transactional
     public void publishRateCard(String version, UUID publishedBy) {
         publish("rate_card", version, publishedBy, List.of("base_paise", "base_drop_m", "drop_per_km_paise", "pickup_free_m",
-            "pickup_per_km_paise", "wait_free_minutes", "wait_per_minute_paise", "slot_guarantee_per_hour_paise"));
+            "pickup_per_km_paise", "wait_free_minutes", "wait_per_minute_paise", "slot_guarantee_per_hour_paise",
+            "cancellation_fee_paise", "return_per_km_paise", "unreachable_wait_minutes"));
     }
 
     @Transactional
     public void publishDispatchPolicy(String version, UUID publishedBy) {
-        publish("dispatch_policy", version, publishedBy, List.of("offer_seconds", "fleet_stage_seconds", "radius_m"));
+        publish("dispatch_policy", version, publishedBy, List.of("offer_seconds", "fleet_stage_seconds", "radius_m",
+            "pickup_detour_percent", "per_order_overhead_paise", "cost_guard_premium_paise"));
     }
 
     private void publish(String table, String version, UUID publishedBy, List<String> columns) {
@@ -122,22 +131,40 @@ public class FleetPolicyStore {
                 row.getLong("drop_per_km_paise"), row.getInt("pickup_free_m"), row.getLong("pickup_per_km_paise"),
                 row.getInt("wait_free_minutes"), row.getLong("wait_per_minute_paise"), row.getLong("slot_guarantee_per_hour_paise"),
                 json.readValue(row.getString("ranges"), RANGES), json.readValue(row.getString("summary_of_changes"), TEXT),
-                row.getString("full_text_url"));
+                row.getString("full_text_url"), row.getLong("cancellation_fee_paise"), row.getLong("return_per_km_paise"),
+                row.getInt("unreachable_wait_minutes"));
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             throw new IllegalStateException("Rate card " + row.getString("version") + " has unreadable JSON", exception);
         }
     }
 
+    /** cancellationFeePaise and returnPerKmPaise are the event fees; unreachableWaitMinutes the wait before the photo or "failed". */
     public record RateCard(
         String version, boolean draft, Instant effectiveFrom,
         long basePaise, int baseDropM, long dropPerKmPaise, int pickupFreeM, long pickupPerKmPaise,
         int waitFreeMinutes, long waitPerMinutePaise, long slotGuaranteePerHourPaise,
-        Map<String, List<Long>> ranges, Map<String, List<String>> summaryOfChanges, String fullTextUrl
+        Map<String, List<Long>> ranges, Map<String, List<String>> summaryOfChanges, String fullTextUrl,
+        long cancellationFeePaise, long returnPerKmPaise, int unreachableWaitMinutes
     ) {
+        /** The P1 shape, with the seeded draft's event fees. */
+        public RateCard(String version, boolean draft, Instant effectiveFrom, long basePaise, int baseDropM, long dropPerKmPaise,
+                        int pickupFreeM, long pickupPerKmPaise, int waitFreeMinutes, long waitPerMinutePaise,
+                        long slotGuaranteePerHourPaise, Map<String, List<Long>> ranges, Map<String, List<String>> summaryOfChanges,
+                        String fullTextUrl) {
+            this(version, draft, effectiveFrom, basePaise, baseDropM, dropPerKmPaise, pickupFreeM, pickupPerKmPaise, waitFreeMinutes,
+                waitPerMinutePaise, slotGuaranteePerHourPaise, ranges, summaryOfChanges, fullTextUrl, 2000, 900, 10);
+        }
     }
 
-    /** mode is off, shadow or live; times in seconds; radius in metres. */
+    /**
+     * mode is off, shadow or live; times in seconds; radius in metres. Pickup km = straight line x pickupDetourPercent / 100;
+     * the cost guard compares locked pay + perOrderOverheadPaise with the courier quote + costGuardPremiumPaise.
+     */
     public record DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds,
-                                 int radiusM) {
+                                 int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise) {
+        /** The P1 shape, with the seeded draft's detour and cost-guard values. */
+        public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM) {
+            this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, 130, 500, 1000);
+        }
     }
 }

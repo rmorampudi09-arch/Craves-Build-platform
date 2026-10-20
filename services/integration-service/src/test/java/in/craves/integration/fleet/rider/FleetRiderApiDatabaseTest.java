@@ -182,8 +182,11 @@ class FleetRiderApiDatabaseTest {
     @Test
     void homeShowsTheNextSlotItsGuaranteeTheRestPointAndTheBanner() throws Exception {
         String token = rider("ACTIVE", "en");
-        db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, rest_point_name, rest_point_area) "
-            + "SELECT ?, id, 'Madhapur and Kondapur', now() + INTERVAL '2 hours', now() + INTERVAL '5 hours', 'Amma''s Kitchen', 'Madhapur' "
+        db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, rest_point_name, rest_point_area, "
+            + "guaranteed_per_hour_paise) SELECT ?, id, 'Madhapur and Kondapur', now() + INTERVAL '2 hours', now() + INTERVAL '5 hours', "
+            + "'Amma''s Kitchen', 'Madhapur', 8000 FROM fleet_schema.rider WHERE identity_id = ?", UUID.randomUUID(), UUID.fromString(token));
+        db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, guaranteed_per_hour_paise, status) "
+            + "SELECT ?, id, 'Cancelled zone', now() + INTERVAL '1 hour', now() + INTERVAL '2 hours', 9000, 'CANCELLED' "
             + "FROM fleet_schema.rider WHERE identity_id = ?", UUID.randomUUID(), UUID.fromString(token));
         db.update("INSERT INTO fleet_schema.ops_banner (id, tone, text, starts_at, ends_at) VALUES (?, 'warning', "
             + "'Heavy rain expected after 8 pm. Stop whenever you need to.', now() - INTERVAL '1 minute', now() + INTERVAL '1 hour')",

@@ -22,6 +22,7 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestClient;
 
 /** With CRAVES_FLEET_ENABLED off, no fleet bean, pool or job exists. */
@@ -37,7 +38,8 @@ class FleetConfigurationTest {
         .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
         .withBean(ObjectMapper.class, ObjectMapper::new)
         .withBean(RestClient.Builder.class, RestClient::builder)
-        .withBean(BankDataCipher.class, () -> mock(BankDataCipher.class));
+        .withBean(BankDataCipher.class, () -> mock(BankDataCipher.class))
+        .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class));
 
     @Test
     void withEveryFlagOffNoFleetBeanOrJobExists() {

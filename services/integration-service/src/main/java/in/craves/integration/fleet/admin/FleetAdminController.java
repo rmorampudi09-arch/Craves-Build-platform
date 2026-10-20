@@ -39,7 +39,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/admin/fleet")
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
 public class FleetAdminController {
-    private static final String[] READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"};
+    // Payments admins read riders too: they open the rider to set the payout account in person.
+    private static final String[] READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "SUPPORT_ADMIN",
+        "AUDIT_ADMIN"};
     private static final String[] OPERATORS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN"};
     private static final String[] FILE_READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN"};
     private static final String[] PAYMENTS = {"PLATFORM_ADMIN", "PAYMENTS_ADMIN"};

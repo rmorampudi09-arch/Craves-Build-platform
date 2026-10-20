@@ -234,7 +234,7 @@ Ops books a rider into a zone with a guaranteed hourly minimum inside the rate c
 
 ## Test mode for one rider and one kitchen
 
-1. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true` and `CRAVES_FLEET_RIDER_API_ENABLED=true`.
+1. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true` (dispatch offers only to riders whose real fix arrived in the last 45 s, through `/locations`).
 2. Ops creates the rider in the console (`POST /riders`); the rider signs in to the app once so `/me` links them; ops activates them with `RESTORE`.
 3. Allow-list both, by SQL on the integration database:
 

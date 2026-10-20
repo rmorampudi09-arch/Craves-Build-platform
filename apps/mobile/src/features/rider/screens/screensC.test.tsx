@@ -4,12 +4,13 @@ import {Alert, Linking, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
-import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderProfile, TripEarning} from '../api/contract';
+import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderNotice, RiderProfile, TripEarning} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {EarningsScreen} from './EarningsScreen';
 import {PayoutsScreen} from './PayoutsScreen';
+import {NoticeScreen} from './NoticeScreen';
 import {SosScreen} from './SosScreen';
 import {TripDetailScreen} from './TripDetailScreen';
 
@@ -379,5 +380,71 @@ describe('SOS (18)', () => {
     await press('rider-sos-again');
     expect(riderApi.sendSos).toHaveBeenCalledTimes(2);
     expect(has('rider-sos-shared')).toBe(true);
+  });
+});
+
+describe('Notice (19)', () => {
+  const notice: RiderNotice = {
+    title: 'Review of a delivery',
+    reason: "The customer for order CR-4093 says it didn't arrive. ₹58 is on hold while we check.",
+    deadline: at(28, 18, 0),
+    appealPhone: '+911111111111',
+    sentAt: at(21, 18, 5),
+    checking: 'Your photo at the door (1:24 pm), your two call attempts and your location on that trip.',
+    tripId: 't4',
+  };
+  const side = () => tree.root.findAll(node => node.props.testID === 'rider-notice-side' && typeof node.props.onChangeText === 'function')[0];
+  beforeEach(() => jest.spyOn(Linking, 'openURL').mockResolvedValue(true));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('explains the notice, keeps the rider working and sets out what happens next', async () => {
+    await render(<NoticeScreen />, [[riderKeys.me, {...me, notice}]]);
+    const text = allText();
+    expect(text).toContain('Notice | SOS | Review of a delivery | Sent Wed 21 Oct, 6:05 pm');
+    expect(text).toContain('You can keep working. Your account is not paused. Only the pay for this one order is on hold.');
+    expect(text).toContain("What happened | The customer for order CR-4093 says it didn't arrive.");
+    expect(text).toContain("What we're checking | Your photo at the door (1:24 pm)");
+    expect(tree.root.findAll(node => node.props.accessibilityLabel === '1. Tell us your side by Wed 28 Oct.').length).toBeGreaterThan(0);
+    expect(text).toContain('Wed 28 Oct');
+    expect(text).toContain('A person at Craves looks at everything. The app never decides on its own.');
+    expect(text).toContain('Telangana Grievance Redressal Officer');
+    await press('rider-notice-call');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+911111111111');
+  });
+
+  it('takes the rider’s side in writing and sends it for this trip', async () => {
+    (riderApi.reportIssue as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<NoticeScreen />, [[riderKeys.me, {...me, notice}]]);
+    await press('rider-notice-give');
+    expect(tree.root.findAll(node => node.props.testID === 'rider-notice-send')[0].props.disabled).toBe(true);
+    await act(async () => side().props.onChangeText('  I left it at the door and called twice.  '));
+    await press('rider-notice-send');
+    expect(riderApi.reportIssue).toHaveBeenCalledWith({category: 'OTHER', tripId: 't4', note: 'I left it at the door and called twice.'});
+    expect(allText()).toContain('Sent. A person at Craves reads it before deciding.');
+    expect(has('rider-notice-give')).toBe(false);
+    expect(has('rider-notice-side')).toBe(false);
+  });
+
+  it('keeps what the rider wrote when sending fails', async () => {
+    (riderApi.reportIssue as jest.Mock).mockRejectedValueOnce(offline());
+    await render(<NoticeScreen />, [[riderKeys.me, {...me, notice}]]);
+    await press('rider-notice-give');
+    await act(async () => side().props.onChangeText('My side'));
+    await press('rider-notice-send');
+    expect(allText()).toContain('Something went wrong. Try again.');
+    expect(side().props.value).toBe('My side');
+  });
+
+  it('does not say "keep working" to a paused rider', async () => {
+    await render(<NoticeScreen />, [[riderKeys.me, {...me, status: 'SUSPENDED', notice: {...notice, deadline: undefined}}]]);
+    expect(has('rider-notice-keep-working')).toBe(false);
+    expect(allText()).toContain('Tell us your side.');
+  });
+
+  it('shows an empty state without a notice', async () => {
+    await render(<NoticeScreen />, [[riderKeys.me, me]]);
+    expect(allText()).toContain('No notices');
+    expect(has('rider-notice-give')).toBe(false);
+    expect(has('rider-notice-call')).toBe(true);
   });
 });

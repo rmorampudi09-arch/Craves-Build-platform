@@ -410,6 +410,29 @@ export const en = {
       'Ops calls you back within 15 minutes. Craves pays the first hospital bill and files the insurance claim for you. Your booked slots are paid while you recover.',
     close: 'Close',
   },
+  notice: {
+    title: 'Notice',
+    sent: (when: string) => `Sent ${when}`,
+    keepWorking: 'You can keep working. Your account is not paused. Only the pay for this one order is on hold.',
+    whatHappened: 'What happened',
+    checking: "What we're checking",
+    next: 'What happens next',
+    // [before, the date in bold, after], so a translation can move the date.
+    sideBy: (day: string) => ['Tell us your side by ', day, '.'] as const,
+    sideNow: 'Tell us your side.',
+    person: 'A person at Craves looks at everything. The app never decides on its own.',
+    writing: 'You get the decision in writing, with the reasons.',
+    appeal:
+      'Disagree with the decision? Call rider support to appeal. You can also take it to the Telangana Grievance Redressal Officer.',
+    giveSide: 'Give your side',
+    sideLabel: 'Your side',
+    sidePlaceholder: 'What happened on this delivery, in your own words',
+    sendSide: 'Send your side',
+    sideSent: 'Sent. A person at Craves reads it before deciding.',
+    callSupport: 'Call rider support',
+    emptyTitle: 'No notices',
+    emptyBody: 'If ops ever needs to tell you something about your account or pay, you will see it here.',
+  },
   languages: {en: 'English', te: 'తెలుగు', hi: 'हिन्दी'},
 };
 

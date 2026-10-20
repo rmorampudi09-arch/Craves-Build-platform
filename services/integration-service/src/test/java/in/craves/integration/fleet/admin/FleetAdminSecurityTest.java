@@ -39,6 +39,7 @@ class FleetAdminSecurityTest {
     static final String RIDERS = "/api/v1/admin/fleet/riders";
     @Autowired MockMvc mvc;
     @MockBean FleetAdminService service;
+    @MockBean RiderJoinsExitsExport joinsExits;
     @MockBean JwtVerifier verifier;
     final UUID rider = UUID.randomUUID();
 
@@ -79,7 +80,9 @@ class FleetAdminSecurityTest {
             .contentType(MediaType.APPLICATION_JSON).content("{\"kind\":\"NOTICE\"}")).andExpect(status().isForbidden());
         mvc.perform(as(get(RIDERS + "/" + rider + "/documents/" + UUID.randomUUID() + "/content"), "SUPPORT_ADMIN"))
             .andExpect(status().isForbidden());
-        verifyNoInteractions(service);
+        mvc.perform(as(get("/api/v1/admin/fleet/exports/rider-joins-exits").param("date", "2026-10-20"), "SUPPORT_ADMIN"))
+            .andExpect(status().isForbidden());
+        verifyNoInteractions(service, joinsExits);
     }
 
     @Test

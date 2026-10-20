@@ -9,8 +9,11 @@ import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccountInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.ReasonInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
 import in.craves.integration.security.CravesPrincipal;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,15 +36,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class FleetAdminController {
     private static final String[] READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"};
     private static final String[] OPERATORS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN"};
-    private static final String[] DOCUMENT_READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN"};
+    private static final String[] FILE_READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN"};
     private static final String[] PAYMENTS = {"PLATFORM_ADMIN", "PAYMENTS_ADMIN"};
     private static final String[] AUDITORS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN"};
     private static final String KEY = "Idempotency-Key";
 
     private final FleetAdminService service;
+    private final RiderJoinsExitsExport joinsExits;
 
-    public FleetAdminController(FleetAdminService service) {
+    public FleetAdminController(FleetAdminService service, RiderJoinsExitsExport joinsExits) {
         this.service = service;
+        this.joinsExits = joinsExits;
     }
 
     @GetMapping("/riders")
@@ -68,7 +73,7 @@ public class FleetAdminController {
     @GetMapping("/riders/{riderId}/documents/{documentId}/content")
     public ResponseEntity<byte[]> documentContent(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID riderId,
                                                   @PathVariable UUID documentId) {
-        return file(service.documentContent(admin(principal, DOCUMENT_READERS), riderId, documentId));
+        return file(service.documentContent(admin(principal, FILE_READERS), riderId, documentId));
     }
 
     @PostMapping("/riders/{riderId}/documents/{documentId}/approve")
@@ -132,6 +137,17 @@ public class FleetAdminController {
                                         @RequestParam(required = false) String cursor) {
         admin(principal, AUDITORS);
         return json(200, service.audit(riderId, cursor));
+    }
+
+    /** Riders who joined or exited on one IST date, for the government portal. Audited as a download. */
+    @GetMapping("/exports/rider-joins-exits")
+    public ResponseEntity<byte[]> riderJoinsExits(@AuthenticationPrincipal CravesPrincipal principal,
+                                                  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        Admin admin = admin(principal, FILE_READERS);
+        byte[] csv = joinsExits.csv(date).getBytes(StandardCharsets.UTF_8);
+        service.audit(admin, "EXPORT_DOWNLOADED", null, date.toString(), "Downloaded rider joins and exits for " + date + ".");
+        return ResponseEntity.ok().header("Cache-Control", "no-store").header("Content-Type", "text/csv; charset=UTF-8")
+            .header("Content-Disposition", "attachment; filename=\"rider-joins-exits-" + date + ".csv\"").body(csv);
     }
 
     static Admin admin(CravesPrincipal principal, String... roles) {

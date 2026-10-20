@@ -49,7 +49,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 /** The admin fleet API against a real database: due-process rules, payout account rules, idempotency and the audit. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 @WebMvcTest(FleetAdminController.class)
-@ContextConfiguration(classes = {FleetAdminController.class, FleetAdminService.class, FleetApiAdvice.class,
+@ContextConfiguration(classes = {FleetAdminController.class, FleetAdminService.class, RiderJoinsExitsExport.class, FleetApiAdvice.class,
     WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class, FleetAdminApiDatabaseTest.Database.class})
 @TestPropertySource(properties = "craves.fleet.enabled=true")
 class FleetAdminApiDatabaseTest {
@@ -208,6 +208,23 @@ class FleetAdminApiDatabaseTest {
         assertThat(db.queryForObject("SELECT state FROM fleet_schema.rider_device WHERE id = ?", String.class, old)).isEqualTo("REPLACED");
         send(post(FLEET + "/riders/" + rider + "/devices/" + old + "/approve"), "ops", UUID.randomUUID(), null)
             .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEVICE_NOT_PENDING"));
+    }
+
+    @Test
+    void theJoinsAndExitsExportIsACsvDownloadAndIsAudited() throws Exception {
+        UUID rider = activeRider();
+        String today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toString();
+        String csv = mvc.perform(get(FLEET + "/exports/rider-joins-exits").param("date", today).header("Authorization", "Bearer ops"))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                .string("Content-Disposition", "attachment; filename=\"rider-joins-exits-" + today + ".csv\""))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentTypeCompatibleWith("text/csv"))
+            .andReturn().getResponse().getContentAsString();
+        assertThat(csv).startsWith("date,riderId,name,phoneMasked,event,reason\r\n").contains(rider + ",Ravi Kumar,").contains(",JOINED,");
+        assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'EXPORT_DOWNLOADED' AND target_id = ?",
+            Integer.class, today)).isPositive();
+        mvc.perform(get(FLEET + "/exports/rider-joins-exits").param("date", "20-10-2026").header("Authorization", "Bearer ops"))
+            .andExpect(status().isBadRequest());
     }
 
     private ResultActions statusEvent(UUID rider, String kind, String timing) throws Exception {

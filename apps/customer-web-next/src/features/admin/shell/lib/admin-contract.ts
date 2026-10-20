@@ -3,6 +3,8 @@ export type AdminIdentity = {
   email: string | null;
   status: string;
   adminEnabled: boolean;
+  /** Internal admin roles only, used to show the modules a role can use. Each API still authorizes. */
+  roles: string[];
 };
 
 // Java Auth's authoritative internal roles. ADMIN is not an internal role.
@@ -16,6 +18,16 @@ function text(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const result = value.trim();
   return result && result.length <= max ? result : null;
+}
+
+function internalRoles(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((role): role is string => typeof role === "string")
+        .map(role => role.trim().toUpperCase())
+        .filter(role => INTERNAL_ADMIN_ROLES.has(role))
+        .slice(0, 10)
+    : [];
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -35,6 +47,7 @@ export function parseAdminIdentity(value: unknown): AdminIdentity | null {
       email: text(envelope.email, 320),
       status: safeStatus,
       adminEnabled: safeStatus === "ACTIVE" && envelope.adminEnabled,
+      roles: internalRoles(envelope.roles),
     };
   }
 
@@ -56,6 +69,7 @@ export function parseAdminIdentity(value: unknown): AdminIdentity | null {
     displayName: text(raw.displayName, 160),
     email: text(raw.email, 320),
     status,
-    adminEnabled: status === "ACTIVE" && roles.some(role => INTERNAL_ADMIN_ROLES.has(role))
+    adminEnabled: status === "ACTIVE" && roles.some(role => INTERNAL_ADMIN_ROLES.has(role)),
+    roles: internalRoles(roles),
   };
 }

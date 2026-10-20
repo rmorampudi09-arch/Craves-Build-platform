@@ -7,6 +7,7 @@ const admin = {
   email: "admin@example.com",
   status: "ACTIVE",
   adminEnabled: true,
+  roles: ["OPERATIONS_ADMIN"],
 };
 
 function response(status: number, body: unknown): Response {

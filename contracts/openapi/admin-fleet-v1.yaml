@@ -21,7 +21,7 @@ paths:
   /api/v1/admin/fleet/riders:
     get:
       operationId: listRiders
-      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, PAYMENTS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
       description: Riders, newest first. search matches the name or the last digits of the phone.
       parameters:
         - { name: status, in: query, schema: { $ref: '#/components/schemas/RiderStatus' } }
@@ -69,7 +69,7 @@ paths:
   /api/v1/admin/fleet/riders/{riderId}:
     get:
       operationId: getRider
-      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, PAYMENTS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
       description: Profile, documents, phones, masked payout account, the last 20 shifts and every status event.
       parameters: [{ $ref: '#/components/parameters/RiderId' }]
       responses:

@@ -85,6 +85,12 @@ class AdminFleetContractTest(unittest.TestCase):
         self.assertIn("SAME_APPROVER", approve["responses"]["403"]["description"])
         self.assertIn("createdByMe", schemas["PayoutBatchSummary"]["required"])
 
+    def test_payments_admins_can_open_the_rider_whose_payout_account_they_set(self):
+        paths = self.spec["paths"]
+        setters = set(paths["/api/v1/admin/fleet/riders/{riderId}/payout-account"]["put"]["x-roles"])
+        for path in ("/api/v1/admin/fleet/riders", "/api/v1/admin/fleet/riders/{riderId}"):
+            self.assertLessEqual(setters, set(paths[path]["get"]["x-roles"]), path)
+
 
 if __name__ == "__main__":
     unittest.main()

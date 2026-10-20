@@ -3,7 +3,7 @@ import test from "node:test";
 import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION, type AdminAuthorization } from "./admin-authorization.ts";
 import type { AdminIdentity } from "./admin-contract.ts";
 
-const admin: AdminIdentity = { displayName: "Test administrator", email: null, status: "ACTIVE", adminEnabled: true, roles: ["PLATFORM_ADMIN"] };
+const admin: AdminIdentity = { displayName: "Test administrator", email: null, status: "ACTIVE", adminEnabled: true };
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;

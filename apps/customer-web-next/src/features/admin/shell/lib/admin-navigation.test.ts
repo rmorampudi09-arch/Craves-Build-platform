@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ADMIN_MODULES, adminMetricCsv, formatAdminTimestamp, isAdminDestination, matchesAdminRoute, searchAdminModules, visibleAdminModules } from "./admin-navigation.ts";
+import { ADMIN_MODULES, adminMetricCsv, formatAdminTimestamp, isAdminDestination, matchesAdminRoute, searchAdminModules } from "./admin-navigation.ts";
 
 test("every workspace has a unique stable destination", () => {
   assert.equal(ADMIN_MODULES.length, 23);
@@ -23,19 +23,6 @@ test("module search covers work language without pretending to search customer d
   assert.ok(searchAdminModules("courier").some(module => module.id === "delivery"));
   assert.equal(searchAdminModules("no-such-control-12947").length, 0);
   assert.equal(searchAdminModules("").length, ADMIN_MODULES.length);
-});
-
-test("rider fleet modules are shown only to their scoped roles, never the legacy ADMIN role", () => {
-  const ids = (roles: string[]) => visibleAdminModules(roles).map(module => module.id).filter(id => ["riders", "fleet-trips", "fleet-payouts"].includes(id));
-  assert.deepEqual(ids(["OPERATIONS_ADMIN"]), ["riders", "fleet-trips"]);
-  assert.deepEqual(ids(["PAYMENTS_ADMIN"]), ["riders", "fleet-payouts"]);
-  assert.deepEqual(ids(["AUDIT_ADMIN"]), ["riders", "fleet-trips", "fleet-payouts"]);
-  assert.deepEqual(ids(["SUPPORT_ADMIN"]), ["riders", "fleet-trips"]);
-  assert.deepEqual(ids(["PLATFORM_ADMIN"]), ["riders", "fleet-trips", "fleet-payouts"]);
-  assert.deepEqual(ids(["CHEF_ADMIN"]), []);
-  assert.deepEqual(ids(["ADMIN"]), []);
-  assert.equal(visibleAdminModules(["CHEF_ADMIN"]).length, ADMIN_MODULES.length - 3);
-  for (const entry of ADMIN_MODULES) assert.equal(entry.roles?.includes("ADMIN") ?? false, false, entry.id);
 });
 
 test("standalone delivery application uses its canonical mount", () => {

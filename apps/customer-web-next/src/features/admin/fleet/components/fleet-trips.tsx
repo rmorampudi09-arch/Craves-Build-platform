@@ -20,15 +20,19 @@ export function FleetTrips() {
   const [message, setMessage] = useState("Loading trips…");
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [positionsError, setPositionsError] = useState("");
 
   const load = useCallback(async () => {
     try {
       const [nextTrips, nextQueue, nextPositions] = await Promise.all([
-        fleetGet("trips", tripsSchema), fleetGet("dispatch-queue", dispatchQueueSchema), fleetGet("positions", positionsSchema),
+        fleetGet("trips", tripsSchema), fleetGet("dispatch-queue", dispatchQueueSchema),
+        // Positions are for operations admins only; support and audit admins still get trips and the queue.
+        fleetGet("positions", positionsSchema).catch((error: unknown) => error instanceof Error ? error : new Error("Rider positions are unavailable.")),
       ]);
       setTrips(nextTrips.trips);
       setQueue([...nextQueue.items].sort((a, b) => LEVEL_ORDER[a.alertLevel] - LEVEL_ORDER[b.alertLevel] || a.queuedAt.localeCompare(b.queuedAt)));
-      setPositions(nextPositions.positions);
+      setPositions(nextPositions instanceof Error ? [] : nextPositions.positions);
+      setPositionsError(nextPositions instanceof Error ? nextPositions.message : "");
       setLoadedAt(new Date().toISOString());
       setMessage("");
     } catch (error) {
@@ -87,7 +91,7 @@ export function FleetTrips() {
 
     <section className="cr-panel" aria-labelledby="fleet-positions-title">
       <h2 id="fleet-positions-title" className="text-lg font-bold">Rider positions</h2>
-      {positions.length === 0 ? <p className="cr-empty">No rider has sent a location in the last 12 hours.</p> : <div className="cr-table-scroll"><table className="cr-table">
+      {positionsError ? <p className="cr-empty" role="status">{positionsError}</p> : positions.length === 0 ? <p className="cr-empty">No rider has sent a location in the last 12 hours.</p> : <div className="cr-table-scroll"><table className="cr-table">
         <thead><tr><th scope="col">Rider</th><th scope="col">Last fix</th><th scope="col">Shift</th><th scope="col">Location</th></tr></thead>
         <tbody>{positions.map(position => <tr key={position.riderId}>
           <td><Link className="underline" href={`/admin/riders/${position.riderId}`}>{position.riderName}</Link></td>

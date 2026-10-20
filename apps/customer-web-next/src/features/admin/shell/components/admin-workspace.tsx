@@ -10,7 +10,7 @@ import {
 import { observeAdminSession, logoutAdminSession } from "@/features/admin/shell/lib/admin-renewal";
 import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION } from "@/features/admin/shell/lib/admin-authorization";
 import { loadAdminIdentity } from "@/features/admin/shell/lib/admin-session";
-import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules, visibleAdminModules, type AdminModule } from "@/features/admin/shell/lib/admin-navigation";
+import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules } from "@/features/admin/shell/lib/admin-navigation";
 import { AdminModuleLink } from "@/features/admin/shell/components/admin-module-link";
 import { SyncfusionLicense } from "@/features/admin/shell/components/syncfusion-license";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
@@ -26,11 +26,11 @@ const icons = {
   riders: Bike, "fleet-trips": Route, "fleet-payouts": Wallet
 };
 
-function Navigation({ pathname, modules, close }: { pathname: string; modules: readonly AdminModule[]; close?: () => void }) {
-  const groups = [...new Set(modules.map(module => module.group))];
+function Navigation({ pathname, close }: { pathname: string; close?: () => void }) {
+  const groups = [...new Set(ADMIN_MODULES.map(module => module.group))];
   return <nav className="cr-navigation" aria-label="Administration modules">
     {groups.map(group => <div className="cr-nav-group" key={group}><p className="cr-nav-label">{group}</p>
-      {modules.filter(module => module.group === group).map(module => {
+      {ADMIN_MODULES.filter(module => module.group === group).map(module => {
         const Icon = icons[module.id as keyof typeof icons] ?? LayoutDashboard;
         return <AdminModuleLink key={module.id} module={module} className="cr-nav-link" current={matchesAdminRoute(pathname, module.href)} onNavigate={close}>
           <Icon size={18} aria-hidden="true"/><span>{module.label}</span>{module.externalApp && <ArrowRight size={14} aria-hidden="true"/>}
@@ -109,8 +109,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
   }
 
   const current = ADMIN_MODULES.find(module => matchesAdminRoute(pathname, module.href));
-  const modules = visibleAdminModules(identity?.roles ?? []);
-  const results = searchAdminModules(query, modules);
+  const results = searchAdminModules(query);
   const accessScreen = <main className="cr-admin cr-session-screen">
     <section className="cr-session-card"><CravesLogo size="lg" priority/><p className="cr-eyebrow">Craves administration</p>
       <h1>{sessionState === "reconnecting" ? "Reconnecting securely" : "Your control center starts here"}</h1>
@@ -130,7 +129,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
       <SyncfusionLicense/>
       <a className="cr-skip" href="#cr-admin-content">Skip to workspace</a>
       <aside className="cr-sidebar">
-        <Brand/><Navigation pathname={pathname} modules={modules}/>
+        <Brand/><Navigation pathname={pathname}/>
         <div className="cr-sidebar-account"><div className="cr-person"><CircleUserRound size={28} aria-hidden="true"/><div><strong>{identity.displayName || "Administrator"}</strong><span>{identity.email || "Craves administrator"}</span></div></div>
           <span className="cr-badge"><ShieldCheck size={13} aria-hidden="true"/>Admin access verified</span>
           <button type="button" className="cr-button cr-signout" onClick={() => void signOut()} disabled={signingOut}><LogOut size={16} aria-hidden="true"/>{signingOut ? "Signing out…" : "Sign out"}</button>
@@ -149,7 +148,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
       </div>
       <dialog ref={menu} className="cr-dialog cr-menu-dialog" aria-label="Admin navigation" onClick={event => { if (event.target === event.currentTarget) menu.current?.close(); }}>
         <div className="cr-menu-inner"><div className="cr-dialog-heading"><Brand/><button className="cr-icon-button" onClick={() => menu.current?.close()} aria-label="Close navigation"><X size={20}/></button></div>
-          <Navigation pathname={pathname} modules={modules} close={() => menu.current?.close()}/>
+          <Navigation pathname={pathname} close={() => menu.current?.close()}/>
           <button className="cr-button" onClick={() => void signOut()} disabled={signingOut}><LogOut size={16} aria-hidden="true"/>{signingOut ? "Signing out…" : "Sign out"}</button>
           {logoutError && <p role="alert" className="cr-error-text">{logoutError}</p>}
         </div>

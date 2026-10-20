@@ -42,7 +42,7 @@ describe("Java identity contract at the shared administrator BFF", () => {
     const identity = await adminIdentity(request("/api/admin/me"));
     expect(identity.status).toBe(200);
     expect(identity.headers.get("cache-control")).toContain("no-store");
-    expect(await identity.json()).toEqual({ displayName: "Test administrator", email: null, status: "ACTIVE", adminEnabled: true, roles: [role] });
+    expect(await identity.json()).toEqual({ displayName: "Test administrator", email: null, status: "ACTIVE", adminEnabled: true });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher.mock.calls.every(call => call[0] === "https://api.example.com/api/v1/auth/me")).toBe(true);
   });

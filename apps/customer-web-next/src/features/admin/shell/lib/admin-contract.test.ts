@@ -19,7 +19,7 @@ test("enables an active platform administrator from the Java auth/me identity en
   assert.equal(parsed?.displayName, "Admin");
   assert.equal(parsed?.email, "admin@example.com");
   assert.equal("id" in (parsed ?? {}), false);
-  assert.deepEqual(parsed?.roles, ["PLATFORM_ADMIN"]);
+  assert.equal("roles" in (parsed ?? {}), false);
   assert.equal("phoneNumber" in (parsed ?? {}), false);
   assert.equal("firebaseUid" in (parsed ?? {}), false);
 });
@@ -42,12 +42,10 @@ test("accepts the privacy-reduced admin BFF response", () => {
     email: "admin@example.com",
     status: "ACTIVE",
     adminEnabled: true,
-    roles: ["OPERATIONS_ADMIN", "CUSTOMER"],
   });
 
   assert.equal(parsed?.adminEnabled, true);
   assert.equal(parsed?.displayName, "Operations Admin");
-  assert.deepEqual(parsed?.roles, ["OPERATIONS_ADMIN"]);
 });
 
 test("does not enable inactive or non-admin identity", () => {

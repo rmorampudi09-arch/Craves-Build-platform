@@ -53,6 +53,15 @@ describe("trips and dispatch", () => {
     expect(within(table).getByText("Ravi Kumar").closest("tr")?.textContent).toContain("On a trip");
   });
 
+  it("still shows trips and the queue to a role that can't see positions", async () => {
+    answer = (method, path) => path === "positions" ? json({ code: "FORBIDDEN", message: "Your admin role can't do this." }, 403) : json(lists[path]);
+    render(createElement(FleetTrips));
+    expect(await screen.findByText("2 trips without a courier after fleet, Borzo and Pidge · 1 critical.")).toBeTruthy();
+    expect(screen.getByText("#0BDE0107")).toBeTruthy();
+    expect(screen.getByText("Your admin role can't do this.")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
   it("reassigns only to an idle, real rider or a 3PL, with a reason and a confirmation", async () => {
     render(createElement(FleetTrips));
     const card = (await screen.findByText("WARNING alert for #0BDE0101")).closest("article") as HTMLElement;

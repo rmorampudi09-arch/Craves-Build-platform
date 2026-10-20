@@ -35,10 +35,9 @@ const posts = () => calls.filter(call => call.method !== "GET");
 const button = (name: string | RegExp) => screen.getByRole("button", { name }) as HTMLButtonElement;
 const field = (label: string | RegExp) => screen.getByLabelText(label) as HTMLInputElement;
 const type = (label: string | RegExp, value: string) => fireEvent.change(field(label), { target: { value } });
+/** The IST wall time the form expects, whatever zone the test machine uses. */
 function localInput(hoursAhead: number) {
-  const date = new Date(Date.now() + hoursAhead * 3_600_000);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return new Date(Date.now() + hoursAhead * 3_600_000 + 330 * 60_000).toISOString().slice(0, 16);
 }
 
 beforeEach(() => {
@@ -92,6 +91,15 @@ describe("riders list", () => {
 });
 
 describe("rider detail", () => {
+  it("keeps an audit refusal in the audit section for roles that can open the rider", async () => {
+    answer = (_, path) => path.startsWith("audit?") ? json({ code: "FORBIDDEN", message: "Your admin role can't do this." }, 403) : json(detail);
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    expect(await screen.findByText("Your admin role can't do this.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Accept document" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("No admin actions recorded yet.")).toBeNull();
+  });
+
   it("accepts a document and approves the new phone", async () => {
     answer = (method, path) => method === "POST" && path.endsWith("/approve")
       ? json(path.includes("devices") ? { ...device, state: "BOUND", approvedBy: "Asha", approvedAt: at } : { ...document, status: "VERIFIED", reviewedBy: "Asha", reviewedAt: at })
@@ -142,12 +150,13 @@ describe("rider detail", () => {
 
     answer = (method, path) => method === "POST" ? json(event, 201) : path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json(detail);
     fireEvent.change(field("Action"), { target: { value: "NOTICE" } });
-    type(/^Deadline/, localInput(8 * 24));
+    type(/^Deadline/, "2030-01-15T10:00");
     fireEvent.click(button("Record status change"));
     expect(await screen.findByText("Status change recorded.")).toBeTruthy();
     expect(posts()[0].path).toBe(`riders/${RIDER}/status-events`);
     expect(posts()[0].body).toMatchObject({ kind: "NOTICE", reason: "Cash not handed over twice", evidenceSummary: "Two customer calls and the trip log", appealPhone: "+914012345678" });
-    expect(Date.parse((posts()[0].body as { deadline: string }).deadline) - Date.now()).toBeGreaterThan(7 * 24 * 3_600_000);
+    // 10:00 IST, even when the PC is set to another zone.
+    expect((posts()[0].body as { deadline: string }).deadline).toBe("2030-01-15T04:30:00.000Z");
   });
 
   it("sets the payout account in person and shows a name mismatch from the server", async () => {

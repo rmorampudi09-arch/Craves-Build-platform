@@ -8,8 +8,6 @@ export type AdminModule = {
   access: string;
   keywords: string;
   externalApp?: boolean;
-  /** Only these internal roles see the module; the owning API still authorizes every call. */
-  roles?: readonly string[];
 };
 
 export const ADMIN_MODULES: readonly AdminModule[] = [
@@ -27,9 +25,9 @@ export const ADMIN_MODULES: readonly AdminModule[] = [
   { id: "chef-onboarding", label: "Chef onboarding help", group: "People & kitchens", href: "/admin/chef-onboarding", description: "Publish FSSAI articles and videos by language and track chef help requests.", access: "Chef onboarding roles", keywords: "fssai licence license videos articles languages kitchen assistance support" },
   { id: "support", label: "Support inbox", group: "People & kitchens", href: "/admin/support", description: "Reply to customer and chef support tickets, add internal notes and update case status.", access: "Support admin roles", keywords: "support tickets cases help customer chef complaints assistant" },
   { id: "accounts", label: "Account security", group: "People & kitchens", href: "/admin/accounts", description: "Open controlled account-security and intervention workflows.", access: "Backend-authorized actions", keywords: "customer chef account recovery security access" },
-  { id: "riders", label: "Riders", group: "Riders & fleet", href: "/admin/riders", description: "Approve riders by hand: documents, go-online selfies, new phones, payout accounts and status changes with due process.", access: "Operations, compliance, payments, support and audit admins", keywords: "rider delivery partner fleet kyc documents selfie phone payout account notice pause suspend audit", roles: ["PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"] },
-  { id: "fleet-trips", label: "Fleet trips & dispatch", group: "Riders & fleet", href: "/admin/fleet-trips", description: "Active trips, the dispatch queue with alerts, reassign or cancel, and where riders are.", access: "Operations, support and audit admins", keywords: "rider trips dispatch queue alerts reassign cancel courier positions location borzo pidge", roles: ["PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"] },
-  { id: "fleet-payouts", label: "Rider payouts", group: "Riders & fleet", href: "/admin/fleet-payouts", description: "Weekly and daily IMPS payout files with a second approver, UTRs, failed payouts and pay holds.", access: "Payments and audit admins", keywords: "rider payout imps utr bank file holds withdrawal second approver", roles: ["PLATFORM_ADMIN", "PAYMENTS_ADMIN", "AUDIT_ADMIN"] },
+  { id: "riders", label: "Riders", group: "Riders & fleet", href: "/admin/riders", description: "Approve riders by hand: documents, go-online selfies, new phones, payout accounts and status changes with due process.", access: "Operations, compliance, payments, support and audit admins", keywords: "rider delivery partner fleet kyc documents selfie phone payout account notice pause suspend audit" },
+  { id: "fleet-trips", label: "Fleet trips & dispatch", group: "Riders & fleet", href: "/admin/fleet-trips", description: "Active trips, the dispatch queue with alerts, reassign or cancel, and where riders are.", access: "Operations, support and audit admins", keywords: "rider trips dispatch queue alerts reassign cancel courier positions location borzo pidge" },
+  { id: "fleet-payouts", label: "Rider payouts", group: "Riders & fleet", href: "/admin/fleet-payouts", description: "Weekly and daily IMPS payout files with a second approver, UTRs, failed payouts and pay holds.", access: "Payments and audit admins", keywords: "rider payout imps utr bank file holds withdrawal second approver" },
   { id: "finance", label: "Finance control center", group: "Finance & subscriptions", href: "/admin/finance", description: "Policy versions, taxes, payout schedules, chef holds and subscription price previews.", access: "Guarded finance workflows", keywords: "ledger earnings commission bank payout statement settlement tax pricing policy" },
   { id: "plans", label: "Subscription plans", group: "Finance & subscriptions", href: "/admin/subscription-plans", description: "Manage the subscription-plan controls exposed by the owning service.", access: "Backend-authorized changes", keywords: "plan menu price subscription" },
   { id: "subscriptions", label: "Subscriptions", group: "Finance & subscriptions", href: "/admin/subscriptions", description: "Inspect subscription status and use existing operational actions.", access: "Backend-authorized actions", keywords: "subscriber recurring status" },
@@ -42,13 +40,9 @@ export function matchesAdminRoute(pathname: string, href: string): boolean {
   return href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function visibleAdminModules(roles: readonly string[]): readonly AdminModule[] {
-  return ADMIN_MODULES.filter(module => !module.roles || module.roles.some(role => roles.includes(role)));
-}
-
-export function searchAdminModules(query: string, modules: readonly AdminModule[] = ADMIN_MODULES): readonly AdminModule[] {
+export function searchAdminModules(query: string): readonly AdminModule[] {
   const words = query.trim().toLocaleLowerCase("en-IN").split(/\s+/).filter(Boolean);
-  return modules.filter(module => {
+  return ADMIN_MODULES.filter(module => {
     const haystack = `${module.label} ${module.group} ${module.description} ${module.keywords}`.toLocaleLowerCase("en-IN");
     return words.every(word => haystack.includes(word));
   });

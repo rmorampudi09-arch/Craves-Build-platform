@@ -27,11 +27,18 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [message, setMessage] = useState("Loading rider…");
+  const [auditMessage, setAuditMessage] = useState("");
 
+  // Not every role that can open a rider can read the audit trail; that refusal stays in its own section.
   const loadAudit = useCallback(async (after: string | null) => {
-    const page = await fleetGet(`audit?riderId=${riderId}${after ? `&cursor=${encodeURIComponent(after)}` : ""}`, auditPageSchema);
-    setAudit(current => after ? [...current, ...page.entries] : page.entries);
-    setAuditCursor(page.nextCursor);
+    try {
+      const page = await fleetGet(`audit?riderId=${riderId}${after ? `&cursor=${encodeURIComponent(after)}` : ""}`, auditPageSchema);
+      setAudit(current => after ? [...current, ...page.entries] : page.entries);
+      setAuditCursor(page.nextCursor);
+      setAuditMessage("");
+    } catch (error) {
+      setAuditMessage(error instanceof Error ? error.message : "The audit trail is unavailable.");
+    }
   }, [riderId]);
 
   const reload = useCallback(async () => {
@@ -105,10 +112,11 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
 
     <section className="cr-panel">
       <h2 className="text-lg font-bold">Audit trail</h2>
-      {audit.length === 0 ? <p className="cr-empty">No admin actions recorded yet.</p> : <ul className="mt-3 space-y-2 text-sm">
+      {auditMessage && <p className="cr-empty" role="status">{auditMessage}</p>}
+      {audit.length === 0 ? !auditMessage && <p className="cr-empty">No admin actions recorded yet.</p> : <ul className="mt-3 space-y-2 text-sm">
         {audit.map(entry => <li key={entry.entryId}><strong>{readableFleetValue(entry.action)}</strong> · {entry.actorName} · {when(entry.at)}<br /><span className="cr-muted">{entry.summary}</span></li>)}
       </ul>}
-      {auditCursor && <button type="button" className="cr-button mt-3" onClick={() => void loadAudit(auditCursor).catch(error => setMessage(error instanceof Error ? error.message : "The audit trail is unavailable."))}>Load more</button>}
+      {auditCursor && <button type="button" className="cr-button mt-3" onClick={() => void loadAudit(auditCursor)}>Load more</button>}
     </section>
   </div>;
 }
@@ -192,7 +200,8 @@ function StatusActionForm({ riderId, riderName, onDone }: { riderId: string; rid
   const empty = { kind: "NOTICE" as StatusEventInput["kind"], reason: "", evidenceSummary: "", deadline: "", reviewBy: "", appealPhone: "" };
   const [form, setForm] = useState(empty);
   const action = useFleetAction();
-  const iso = (local: string) => local && Number.isFinite(Date.parse(local)) ? new Date(local).toISOString() : undefined;
+  // datetime-local has no zone: read it as IST, the zone every time on this console is shown in, whatever the PC is set to.
+  const iso = (local: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(local) ? new Date(`${local}+05:30`).toISOString() : undefined;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -219,8 +228,8 @@ function StatusActionForm({ riderId, riderName, onDone }: { riderId: string; rid
     </select></label>
     <label className={labelClass}>Reason (the rider sees it)<textarea className={fieldClass} rows={2} maxLength={1000} value={form.reason} onChange={event => setForm({ ...form, reason: event.target.value })} /></label>
     <label className={labelClass}>Evidence summary<textarea className={fieldClass} rows={3} maxLength={2000} value={form.evidenceSummary} onChange={event => setForm({ ...form, evidenceSummary: event.target.value })} /></label>
-    {form.kind === "NOTICE" && <label className={labelClass}>Deadline (at least 7 days from now)<input className={fieldClass} type="datetime-local" value={form.deadline} onChange={event => setForm({ ...form, deadline: event.target.value })} /></label>}
-    {form.kind === "SAFETY_PAUSE" && <label className={labelClass}>Review by (within 72 hours)<input className={fieldClass} type="datetime-local" value={form.reviewBy} onChange={event => setForm({ ...form, reviewBy: event.target.value })} /></label>}
+    {form.kind === "NOTICE" && <label className={labelClass}>Deadline, IST (at least 7 days from now)<input className={fieldClass} type="datetime-local" value={form.deadline} onChange={event => setForm({ ...form, deadline: event.target.value })} /></label>}
+    {form.kind === "SAFETY_PAUSE" && <label className={labelClass}>Review by, IST (within 72 hours)<input className={fieldClass} type="datetime-local" value={form.reviewBy} onChange={event => setForm({ ...form, reviewBy: event.target.value })} /></label>}
     {form.kind !== "RESTORE" && <label className={labelClass}>Appeal phone<input className={fieldClass} inputMode="tel" maxLength={13} placeholder="+91" value={form.appealPhone} onChange={event => setForm({ ...form, appealPhone: event.target.value.replace(/\s/g, "") })} /></label>}
     <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Record status change</button>
     <ActionMessage state={action.state} />

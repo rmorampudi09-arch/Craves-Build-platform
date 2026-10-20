@@ -13,8 +13,15 @@ import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetSlotController;
 import in.craves.integration.fleet.admin.FleetSlotService;
 import in.craves.integration.fleet.admin.RiderJoinsExitsExport;
+import in.craves.integration.fleet.money.FleetEarnings;
+import in.craves.integration.fleet.money.FleetMoneyAdminController;
+import in.craves.integration.fleet.money.FleetMoneyController;
+import in.craves.integration.fleet.money.FleetPayouts;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
+import in.craves.integration.fleet.support.FleetSupportAdminController;
+import in.craves.integration.fleet.support.FleetSupportController;
+import in.craves.integration.fleet.support.FleetSupportService;
 import in.craves.integration.fleet.trip.FleetTripController;
 import in.craves.integration.fleet.trip.FleetTripService;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
@@ -39,9 +46,11 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 
 /** Walks every rider and admin fleet route with only a shift credential: the routes that take it are the only ones that answer. */
 @WebMvcTest(controllers = {FleetRiderController.class, FleetLocationController.class, FleetTripController.class, FleetAdminController.class,
-    FleetSlotController.class})
+    FleetSlotController.class, FleetMoneyController.class, FleetMoneyAdminController.class, FleetSupportController.class,
+    FleetSupportAdminController.class})
 @ContextConfiguration(classes = {FleetRiderController.class, FleetLocationController.class, FleetTripController.class, FleetAdminController.class,
-    FleetSlotController.class, FleetApiAdvice.class, WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class})
+    FleetSlotController.class, FleetMoneyController.class, FleetMoneyAdminController.class, FleetSupportController.class,
+    FleetSupportAdminController.class, FleetApiAdvice.class, WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class})
 @TestPropertySource(properties = {"craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true",
     "craves.fleet.location-ingest-enabled=true"})
 class FleetShiftCredentialSecurityTest {
@@ -56,6 +65,9 @@ class FleetShiftCredentialSecurityTest {
     @MockBean RiderJoinsExitsExport joinsExits;
     @MockBean FleetTripService trips;
     @MockBean FleetSlotService slots;
+    @MockBean FleetEarnings earnings;
+    @MockBean FleetPayouts payouts;
+    @MockBean FleetSupportService support;
     @MockBean JwtVerifier verifier;
 
     @Test
@@ -81,12 +93,14 @@ class FleetShiftCredentialSecurityTest {
             }
         }
         assertThat(walked).contains("GET /api/v1/rider/home", "POST /api/v1/rider/shift/end", "GET /api/v1/admin/fleet/riders",
-            "POST /api/v1/rider/offers/{offerId}/accept", "POST /api/v1/rider/trips/{tripId}/{action}", "GET /api/v1/admin/fleet/slots")
+            "POST /api/v1/rider/offers/{offerId}/accept", "POST /api/v1/rider/trips/{tripId}/{action}", "GET /api/v1/admin/fleet/slots",
+            "GET /api/v1/rider/earnings", "POST /api/v1/rider/withdrawals", "POST /api/v1/rider/sos", "GET /api/v1/admin/fleet/payout-batches",
+            "GET /api/v1/admin/fleet/support-issues")
             .hasSizeGreaterThan(20);
         assertThat(answered).containsExactly("POST /api/v1/rider/devices", "POST /api/v1/rider/locations");
         verify(locations).ingest(null, CREDENTIAL, new LocationBatch(List.of()));
         verify(shifts).registerDevice(null, CREDENTIAL, new DeviceRegistration(null, null, null, null));
         verifyNoMoreInteractions(shifts);
-        verifyNoInteractions(riders, admin, joinsExits, trips, slots);
+        verifyNoInteractions(riders, admin, joinsExits, trips, slots, earnings, payouts, support);
     }
 }

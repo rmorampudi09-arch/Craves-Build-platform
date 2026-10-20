@@ -10,7 +10,7 @@ import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {StatusBadge} from '../components/StatusBadge';
 import {Card, HeroCard, Money, RiderScreen} from '../components/ui';
-import {formatClock, formatDay, formatRupees} from '../domain/format';
+import {formatClock, formatDay, formatRupees, istDay} from '../domain/format';
 import {useRiderShell} from '../navigation';
 import {riderKeys, usePayouts, useProfile, useRiderHome, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
@@ -32,7 +32,8 @@ export function PayoutsScreen() {
   async function request() {
     try {
       // One withdrawal a day: the key repeats within a day, so a double tap can't pay twice.
-      const day = new Date().toISOString().slice(0, 10);
+      // One withdrawal per Indian day: the key must turn over at IST midnight, not UTC.
+      const day = istDay();
       await riderApi.requestWithdrawal(withdrawable, idempotencyKey('withdraw', day, riderId));
       setWithdrawal({done: true});
     } catch (error) {

@@ -68,3 +68,8 @@ export function distanceMeters(
     Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
   return 2 * 6371000 * Math.asin(Math.sqrt(h));
 }
+
+/** Today's date in India (YYYY-MM-DD). India has no daylight saving, so a fixed +05:30 is exact. */
+export function istDay(nowMs: number = Date.now()): string {
+  return new Date(nowMs + 330 * 60_000).toISOString().slice(0, 10);
+}

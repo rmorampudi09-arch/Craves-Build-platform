@@ -7,7 +7,12 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from '../../../app/rider/signIn/RiderOtpScreen';
 import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
+import * as ImagePicker from 'expo-image-picker';
+import type {RiderMe, RiderProfile} from '../api/contract';
+import {riderApi} from '../api/riderApi';
 import {RiderShellContext} from '../navigation';
+import {riderKeys} from '../state/riderQueries';
+import {AccountStatusScreen} from './AccountStatusScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
 const mockSession = {beginPhone: jest.fn(async (_phone: string) => undefined), confirmOtp: jest.fn(async (_code: string) => undefined)};
@@ -18,6 +23,11 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
 }));
 jest.mock('../../../app/rider/useRiderSession', () => ({useRiderSession: () => mockSession}));
+jest.mock('expo-image-picker', () => ({
+  CameraType: {front: 'front', back: 'back'},
+  requestCameraPermissionsAsync: jest.fn(async () => ({granted: true})),
+  launchCameraAsync: jest.fn(async () => ({canceled: false, assets: [{uri: 'file:///photo.jpg'}]})),
+}));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
   return {
@@ -28,6 +38,28 @@ jest.mock('../api/riderApi', () => {
 
 // The first render transforms React Native and the icon font; with a cold cache (CI) that alone can pass 5 s.
 jest.setTimeout(30_000);
+
+const me: RiderMe = {
+  riderId: 'r1',
+  name: 'Ravi Kumar',
+  phoneMasked: '+91 ••••• •4321',
+  status: 'ACTIVE',
+  termsVersion: 'v1',
+  acceptedTermsVersion: 'v1',
+  language: 'en',
+  minAppVersion: '1.0.0',
+  supportPhone: '+910000000000',
+  features: {payoutsEnabled: true, withdrawEnabled: false},
+};
+const profile: RiderProfile = {
+  vehicle: {label: 'Honda Activa 6G'},
+  documents: [
+    {type: 'DL', label: 'Driving licence', status: 'VERIFIED'},
+    {type: 'PUC', label: 'Pollution certificate (PUC)', status: 'REJECTED', reason: 'The photo is blurry.'},
+    {type: 'PAN', label: 'PAN card', status: 'PENDING'},
+    {type: 'BANK', label: 'Bank account (UPI ••••@okhdfc)', status: 'VERIFIED'},
+  ],
+};
 
 const signOut = jest.fn(async () => undefined);
 let tree: renderer.ReactTestRenderer;
@@ -124,5 +156,76 @@ describe('Sign in', () => {
     await act(async () => press('rider-resend').props.onPress());
     expect(mockSession.beginPhone).toHaveBeenCalledWith('+919848012345');
     expect(allText()).toContain('Resend code in 30s');
+  });
+});
+
+describe('Account status', () => {
+  const pending = {...me, status: 'PENDING' as const};
+  // Each action refreshes the list and waits for it.
+  beforeEach(() => (riderApi.getProfile as jest.Mock).mockResolvedValue(profile));
+
+  it('lists each document with its badge, and the checks still to come', async () => {
+    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
+    const text = allText();
+    expect(text).toContain('Your sign-up is being checked');
+    expect(text).toContain('Not active yet');
+    expect(text).toContain('Driving licence | Accepted');
+    expect(text).toContain('Pollution certificate (PUC) | Not accepted | The photo is blurry.');
+    expect(text).toContain('PAN card | Checking');
+    expect(text).toContain('Name matches');
+    expect(text).toContain('Background check in progress');
+    expect(text).toContain('Then: training and a ride-along');
+    expect(press('rider-upload-DL')).toBeUndefined();
+    await act(async () => press('rider-sign-out').props.onPress());
+    expect(signOut).toHaveBeenCalled();
+  });
+
+  it('takes a new photo with the back camera and sends it', async () => {
+    const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
+    (riderApi.uploadDocument as jest.Mock).mockResolvedValueOnce(undefined);
+    const refetch = jest.spyOn(client, 'invalidateQueries');
+    await act(async () => press('rider-upload-PUC').props.onPress());
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'back'}));
+    expect(riderApi.uploadDocument).toHaveBeenCalledWith('PUC', 'file:///photo.jpg');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+  });
+
+  it('asks for the camera when it is denied, and never uploads', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValueOnce({granted: false});
+    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
+    await act(async () => press('rider-upload-PUC').props.onPress());
+    expect(Alert.alert).toHaveBeenCalledWith('Allow the camera to take a photo of the document.', undefined, expect.any(Array));
+    expect(riderApi.uploadDocument).not.toHaveBeenCalled();
+  });
+
+  it('shows the server message when the upload fails', async () => {
+    (riderApi.uploadDocument as jest.Mock).mockRejectedValueOnce(new AppApiError('TOO_LARGE', 'That photo is too large.', 413));
+    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
+    await act(async () => press('rider-upload-PUC').props.onPress());
+    expect(Alert.alert).toHaveBeenCalledWith('That photo is too large.');
+  });
+
+  it('offers a retry when the documents cannot load', async () => {
+    (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
+    await render(<AccountStatusScreen />, [[riderKeys.me, pending]]);
+    expect(allText()).toContain("Couldn't load your documents.");
+    expect(press('rider-call-support')).toBeTruthy();
+  });
+
+  it('explains a paused account with the reason and how to appeal', async () => {
+    await render(<AccountStatusScreen />, [
+      [riderKeys.me, {...me, status: 'SUSPENDED', statusReason: 'A safety report is being reviewed.'}],
+    ]);
+    const text = allText();
+    expect(text).toContain('Your account is paused');
+    expect(text).toContain('A safety report is being reviewed.');
+    expect(text).toContain('Disagree?');
+    expect(text).not.toContain('Background check');
+  });
+
+  it('asks for an update when the app is too old', async () => {
+    await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
+    expect(allText()).toContain('Update the app to continue');
+    expect(allText()).not.toContain('Disagree?');
   });
 });

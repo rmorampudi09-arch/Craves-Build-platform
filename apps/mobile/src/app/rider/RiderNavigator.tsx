@@ -151,6 +151,13 @@ function SignedIn() {
             <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
           </>
         )}
+        {gate.kind !== 'ready' ? (
+          // The account and terms screens show SOS and the demo chip too.
+          <>
+            <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
+            <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
+          </>
+        ) : null}
       </Stack.Navigator>
       {gate.kind === 'ready' ? <RiderRuntime riderId={riderId} openOffer={openOffer} /> : null}
     </RiderShellContext.Provider>

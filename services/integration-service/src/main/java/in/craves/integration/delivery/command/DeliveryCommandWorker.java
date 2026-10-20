@@ -55,6 +55,12 @@ public class DeliveryCommandWorker {
         }
 
         try {
+            // Craves riders first (off unless the fleet and dispatch_policy say so); Borzo's window starts only after.
+            Optional<UUID> fleetJob = router.fleetStage(command.message());
+            if (fleetJob.isPresent()) {
+                commands.markCompleted(message.commandId());
+                return new WorkerReceipt(fleetJob.get(), true, "craves_fleet");
+            }
             RoutingResult routingResult = router.borzoTimedPolicyReady()
                 ? router.route(command.message(), commands.startBorzoWindow(command.id()))
                 : router.route(command.message());

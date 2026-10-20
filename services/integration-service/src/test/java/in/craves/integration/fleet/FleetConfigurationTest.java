@@ -6,6 +6,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.SchedulerLagWatchdog;
+import in.craves.integration.delivery.DeliveryAssignmentRepository;
+import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import in.craves.integration.delivery.command.DeliveryOutboxRepository;
+import in.craves.integration.delivery.command.DeliveryProviderRouter;
+import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.rider.FleetLocationController;
 import in.craves.integration.fleet.rider.FleetLocationService;
@@ -39,7 +45,14 @@ class FleetConfigurationTest {
         .withBean(ObjectMapper.class, ObjectMapper::new)
         .withBean(RestClient.Builder.class, RestClient::builder)
         .withBean(BankDataCipher.class, () -> mock(BankDataCipher.class))
-        .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class));
+        .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
+        // Dispatch hands orders on to Borzo and Pidge through the existing delivery beans.
+        .withBean(DeliveryProviderRouter.class, () -> mock(DeliveryProviderRouter.class))
+        .withBean(DeliveryCommandRepository.class, () -> mock(DeliveryCommandRepository.class))
+        .withBean(DeliveryAssignmentRepository.class, () -> mock(DeliveryAssignmentRepository.class))
+        .withBean(BorzoPidgeHandoffRepository.class, () -> mock(BorzoPidgeHandoffRepository.class))
+        .withBean(DeliveryOutboxRepository.class, () -> mock(DeliveryOutboxRepository.class))
+        .withBean(DeliveryStatusUpdateService.class, () -> mock(DeliveryStatusUpdateService.class));
 
     @Test
     void withEveryFlagOffNoFleetBeanOrJobExists() {

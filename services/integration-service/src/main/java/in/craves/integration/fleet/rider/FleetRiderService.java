@@ -267,7 +267,7 @@ public class FleetRiderService {
     }
 
     /** 4000 is "₹40"; 150 is "₹1.50". */
-    static String rupees(long paise) {
+    public static String rupees(long paise) {
         return paise % 100 == 0 ? "₹" + paise / 100 : "₹" + BigDecimal.valueOf(paise, 2).toPlainString();
     }
 

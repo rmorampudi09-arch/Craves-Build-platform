@@ -56,11 +56,12 @@ public class FleetPolicyStore {
     public Optional<DispatchPolicy> currentDispatchPolicy() {
         return jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
-                   per_order_overhead_paise, cost_guard_premium_paise FROM fleet_schema.dispatch_policy
+                   per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds FROM fleet_schema.dispatch_policy
             WHERE status = 'PUBLISHED' AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1""",
             (row, n) -> new DispatchPolicy(row.getString("version"), row.getTimestamp("effective_from").toInstant(),
                 row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m"),
-                row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise")))
+                row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise"),
+                row.getInt("pidge_stage_seconds")))
             .stream().findFirst();
     }
 
@@ -79,7 +80,7 @@ public class FleetPolicyStore {
     @Transactional
     public void publishDispatchPolicy(String version, UUID publishedBy) {
         publish("dispatch_policy", version, publishedBy, List.of("offer_seconds", "fleet_stage_seconds", "radius_m",
-            "pickup_detour_percent", "per_order_overhead_paise", "cost_guard_premium_paise"));
+            "pickup_detour_percent", "per_order_overhead_paise", "cost_guard_premium_paise", "pidge_stage_seconds"));
     }
 
     private void publish(String table, String version, UUID publishedBy, List<String> columns) {
@@ -158,13 +159,15 @@ public class FleetPolicyStore {
 
     /**
      * mode is off, shadow or live; times in seconds; radius in metres. Pickup km = straight line x pickupDetourPercent / 100;
-     * the cost guard compares locked pay + perOrderOverheadPaise with the courier quote + costGuardPremiumPaise.
+     * the cost guard compares locked pay + perOrderOverheadPaise with the courier quote + costGuardPremiumPaise. After
+     * Borzo's 120-second window, Pidge has pidgeStageSeconds before the order goes to the ops queue.
      */
     public record DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds,
-                                 int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise) {
-        /** The P1 shape, with the seeded draft's detour and cost-guard values. */
+                                 int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise,
+                                 int pidgeStageSeconds) {
+        /** The P1 shape, with the seeded draft's detour, cost-guard and Pidge stage values. */
         public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM) {
-            this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, 130, 500, 1000);
+            this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, 130, 500, 1000, 600);
         }
     }
 }

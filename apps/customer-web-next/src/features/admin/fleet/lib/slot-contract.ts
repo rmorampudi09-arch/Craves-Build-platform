@@ -41,11 +41,16 @@ export function rupeesToPaise(text: string): number | null {
   return match ? Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0")) : null;
 }
 
-/** The create-slot form (one IST day, start and end times, rupees an hour) as the API body, or the first problem. */
+/** An end time before the start time is on the next IST day, so a slot can run past or up to midnight (18:00 to 00:00). */
+export const endsNextDay = (form: Pick<SlotForm, "startTime" | "endTime">) => form.endTime !== "" && form.endTime < form.startTime;
+
+/** The create-slot form (an IST day, start and end times, rupees an hour) as the API body, or the first problem. */
 export function slotFromForm(form: SlotForm): SlotInput | string {
+  const endsAt = istInstant(`${form.date}T${form.endTime}`);
   const parsed = slotInputSchema.safeParse({
-    riderId: form.riderId, zoneName: form.zoneName,
-    startsAt: istInstant(`${form.date}T${form.startTime}`), endsAt: istInstant(`${form.date}T${form.endTime}`),
+    riderId: form.riderId, zoneName: form.zoneName, startsAt: istInstant(`${form.date}T${form.startTime}`),
+    // IST has no daylight saving, so the same time on the next day is exactly 24 hours later.
+    endsAt: endsAt && endsNextDay(form) ? new Date(Date.parse(endsAt) + 86_400_000).toISOString() : endsAt,
     guaranteedPerHourPaise: rupeesToPaise(form.rupeesPerHour) ?? 0,
   });
   return parsed.success ? parsed.data : parsed.error.issues[0]?.message ?? "Check the details.";

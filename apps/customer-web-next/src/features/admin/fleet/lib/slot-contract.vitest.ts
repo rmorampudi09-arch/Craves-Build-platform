@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  bannerFromForm, istInstant, rupeesToPaise, SLOT_ROUTES, slotFromForm, slotRangeProblem, slotsSchema, slotSchema, zoneBannerSchema,
+  bannerFromForm, endsNextDay, istInstant, rupeesToPaise, SLOT_ROUTES, slotFromForm, slotRangeProblem, slotsSchema, slotSchema, zoneBannerSchema,
 } from "./slot-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
@@ -55,7 +55,7 @@ describe("slot and banner forms", () => {
     expect(istInstant("2026-10-21T00:15")).toBe("2026-10-20T18:45:00.000Z");
     expect(istInstant("2026-10-21")).toBe("");
     expect(istInstant("2026-10-21T25:00")).toBe("");
-    expect(["80", "80.5", "80.50", "0.05", " 120 "].map(rupeesToPaise)).toEqual([8000, 8050, 8050, 5, 12000]);
+    expect(["80", "80.5", "80.50", "80.10", "0.29", "0.05", " 120 "].map(rupeesToPaise)).toEqual([8000, 8050, 8050, 8010, 29, 5, 12000]);
     expect(["", "80.505", "-80", "₹80", "1e3", "80,00"].map(rupeesToPaise)).toEqual([null, null, null, null, null, null]);
   });
 
@@ -64,8 +64,18 @@ describe("slot and banner forms", () => {
     expect(slotFromForm({ ...form, riderId: "" })).toBe("Choose the rider.");
     expect(slotFromForm({ ...form, zoneName: "  " })).toBe("Enter the zone name.");
     expect(slotFromForm({ ...form, startTime: "" })).toBe("Pick the date, the start time and the end time.");
-    expect(slotFromForm({ ...form, endTime: "17:59" })).toBe("The slot must end after it starts.");
     expect(slotFromForm({ ...form, endTime: "18:00" })).toBe("The slot must end after it starts.");
+    expect(slotFromForm({ ...form, startTime: "", endTime: "02:00" })).toBe("Pick the date, the start time and the end time.");
+  });
+
+  it("end a slot on the next IST day when the end time is before the start time", () => {
+    const form = { riderId: RIDER, zoneName: "Madhapur", date: "2026-10-31", startTime: "22:00", endTime: "02:00", rupeesPerHour: "80" };
+    expect(slotFromForm(form)).toMatchObject({ startsAt: "2026-10-31T16:30:00.000Z", endsAt: "2026-10-31T20:30:00.000Z" });
+    expect(slotFromForm({ ...form, startTime: "18:00", endTime: "00:00" })).toMatchObject({ startsAt: "2026-10-31T12:30:00.000Z", endsAt: "2026-10-31T18:30:00.000Z" });
+    // Month and year ends roll over too.
+    expect(slotFromForm({ ...form, date: "2026-12-31", startTime: "23:30", endTime: "06:00" })).toMatchObject({ startsAt: "2026-12-31T18:00:00.000Z", endsAt: "2027-01-01T00:30:00.000Z" });
+    expect(endsNextDay({ startTime: "22:00", endTime: "02:00" })).toBe(true);
+    expect([endsNextDay({ startTime: "18:00", endTime: "22:00" }), endsNextDay({ startTime: "18:00", endTime: "18:00" }), endsNextDay({ startTime: "18:00", endTime: "" })]).toEqual([false, false, false]);
     expect(slotFromForm({ ...form, rupeesPerHour: "0" })).toBe("Enter the guarantee in rupees an hour, like 80 or 80.50.");
   });
 

@@ -102,6 +102,14 @@ class AdminFleetContractTest(unittest.TestCase):
         for document_type in ("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC"):
             self.assertIn(document_type, approve["description"])
 
+    def test_the_full_registration_number_is_write_only(self):
+        schemas = self.spec["components"]["schemas"]
+        self.assertEqual(set(schemas["RiderVehicleInput"]["required"]), {"label", "regNumber"})
+        self.assertTrue(schemas["RiderVehicleInput"]["properties"]["regNumber"]["writeOnly"])
+        self.assertEqual(set(schemas["RiderVehicle"]["properties"]), {"label", "regNumberMasked"})
+        put = self.spec["paths"]["/api/v1/admin/fleet/riders/{riderId}/vehicle"]["put"]
+        self.assertEqual(put["responses"]["200"]["content"]["application/json"]["schema"], {"$ref": "#/components/schemas/RiderVehicle"})
+
     def test_vehicle_slots_and_banner_writes_are_operations_only(self):
         paths = self.spec["paths"]
         writes = {

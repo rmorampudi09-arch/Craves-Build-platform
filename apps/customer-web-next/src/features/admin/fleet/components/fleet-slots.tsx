@@ -9,13 +9,14 @@ import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { addDays, formatPaise, istDay } from "@/features/admin/fleet/lib/payout-contract";
 import { riderPageSchema, type RiderSummary } from "@/features/admin/fleet/lib/rider-contract";
 import {
-  bannerFromForm, slotFromForm, slotRangeProblem, slotSchema, slotsSchema, zoneBannerSchema, type Slot, type SlotForm, type ZoneBanner,
+  bannerFromForm, endsNextDay, slotFromForm, slotRangeProblem, slotSchema, slotsSchema, zoneBannerSchema, type Slot, type SlotForm, type ZoneBanner,
 } from "@/features/admin/fleet/lib/slot-contract";
 import { ActionMessage, fieldClass, labelClass, ReasonAction, useFleetAction } from "./fleet-action";
 
 const istTime = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", timeStyle: "short" });
-// Slots booked here start and end on the same IST day, so the end needs only its time.
-const slotWindow = (slot: Slot) => `${formatAdminTimestamp(slot.startsAt).replace(/ IST$/, "")} – ${istTime.format(new Date(slot.endsAt))} IST`;
+// The end shows its date only when the slot runs past midnight IST.
+const slotWindow = (slot: Slot) => `${formatAdminTimestamp(slot.startsAt).replace(/ IST$/, "")} – ${
+  istDay(new Date(slot.startsAt)) === istDay(new Date(slot.endsAt)) ? `${istTime.format(new Date(slot.endsAt))} IST` : formatAdminTimestamp(slot.endsAt)}`;
 
 export function FleetSlots() {
   const [riders, setRiders] = useState<RiderSummary[]>([]);
@@ -26,10 +27,20 @@ export function FleetSlots() {
   const [message, setMessage] = useState("Loading slots…");
 
   useEffect(() => {
-    // shortcut: the rider pickers list the first 100 active riders; follow nextCursor once the fleet passes 100.
-    fleetGet("riders?status=ACTIVE", riderPageSchema)
-      .then(page => setRiders(page.riders))
-      .catch((error: unknown) => setRidersMessage(error instanceof Error ? error.message : "Riders are unavailable."));
+    void (async () => {
+      try {
+        const all: RiderSummary[] = [];
+        // shortcut: the pickers stop after 20 pages (1,000 riders at the server's 50 a page); use a rider search box past that.
+        for (let cursor: string | null = "", page = 0; cursor !== null && page < 20; page++) {
+          const next: z.infer<typeof riderPageSchema> = await fleetGet(`riders?status=ACTIVE${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, riderPageSchema);
+          all.push(...next.riders);
+          cursor = next.nextCursor;
+        }
+        setRiders(all.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (error) {
+        setRidersMessage(error instanceof Error ? error.message : "Riders are unavailable.");
+      }
+    })();
   }, []);
 
   const load = useCallback(async () => {
@@ -108,7 +119,7 @@ function CreateSlot({ riders, ridersMessage, onCreated }: { riders: RiderSummary
 
   return <form noValidate className="cr-panel space-y-3" onSubmit={event => void submit(event)}>
     <h2 className="text-lg font-bold">Book a slot</h2>
-    <p className="cr-muted">Times are IST. The rider is paid at least this much for each hour online in the zone, counted only from real (non-mock) locations; the server refuses an amount outside the current rate card&apos;s range.</p>
+    <p className="cr-muted">Times are IST; an end time before the start time is on the next day. The rider is paid at least this much for each hour online in the zone, counted only from real (non-mock) locations; the server refuses an amount outside the current rate card&apos;s range.</p>
     {ridersMessage && <p className="cr-empty" role="status">{ridersMessage}</p>}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       <label className={labelClass}>Rider for the slot<select className={fieldClass} value={form.riderId} onChange={set("riderId")}>
@@ -117,7 +128,7 @@ function CreateSlot({ riders, ridersMessage, onCreated }: { riders: RiderSummary
       <label className={labelClass}>Zone<input className={fieldClass} value={form.zoneName} maxLength={80} onChange={set("zoneName")} /></label>
       <label className={labelClass}>Day<input className={fieldClass} type="date" min={istDay()} value={form.date} onChange={set("date")} /></label>
       <label className={labelClass}>Starts (IST)<input className={fieldClass} type="time" value={form.startTime} onChange={set("startTime")} /></label>
-      <label className={labelClass}>Ends (IST)<input className={fieldClass} type="time" value={form.endTime} onChange={set("endTime")} /></label>
+      <label className={labelClass}>Ends (IST){endsNextDay(form) && ", next day"}<input className={fieldClass} type="time" value={form.endTime} onChange={set("endTime")} /></label>
       <label className={labelClass}>Guarantee, ₹ an hour<input className={fieldClass} inputMode="decimal" maxLength={9} value={form.rupeesPerHour} onChange={set("rupeesPerHour")} /></label>
     </div>
     <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Book slot</button>
@@ -172,7 +183,7 @@ function BannerPanel() {
       </select></label>
       <div>
         <label className={labelClass}>Banner text<input className={fieldClass} value={form.text} maxLength={160} aria-describedby="fleet-banner-count" placeholder="Heavy rain in Madhapur. Ride slowly." onChange={event => setForm({ ...form, text: event.target.value })} /></label>
-        <p id="fleet-banner-count" className="cr-muted mt-1 text-xs">{form.text.length} of 160 characters</p>
+        <p id="fleet-banner-count" className="cr-muted mt-1 text-xs">{form.text.trim().length} of 160 characters</p>
       </div>
       <label className={labelClass}>Show until (IST)<input className={fieldClass} type="datetime-local" value={form.until} onChange={event => setForm({ ...form, until: event.target.value })} /></label>
       <span className="sm:col-span-3"><button type="submit" className="cr-button cr-primary" disabled={save.busy}>{banner ? "Replace banner" : "Show banner"}</button><ActionMessage state={save.state} /></span>

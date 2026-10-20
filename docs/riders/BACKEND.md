@@ -72,14 +72,14 @@ If fixes for that day already landed in `trip_track_default`, the statement fail
 
 ## Endpoints
 
-Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role except `GET /me`.
+Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role except `GET /me` (any signed-in user), `GET /profile` and `POST /documents` (any signed-in user with a rider row, so a PENDING rider, who has no RIDER role until activation, can send documents; others get 403 `NOT_A_RIDER`), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential).
 
 | Route | Does |
 |---|---|
 | `GET /me` | Any signed-in user. Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts. |
-| `GET /profile` | Latest document per type, vehicle, masked payout account, insurance. PENDING riders too. |
+| `GET /profile` | Latest document per type, vehicle, masked payout account, insurance. PENDING riders too (no RIDER role needed). |
 | `GET /home` | Next slot, its guaranteed hourly pay, rest point and banner. Shift and earnings fields are zero until P2 and P4. |
-| `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING. |
+| `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING. PENDING riders too. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language. |
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
 | `POST /shift/start` | Goes online: multipart `selfie` (JPEG, 5 MB) and header `X-Craves-Installation-Id`. Returns `{shiftCredential, expiresAt}` once. Refusals below. |

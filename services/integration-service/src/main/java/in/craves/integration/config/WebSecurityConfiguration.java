@@ -37,8 +37,12 @@ public class WebSecurityConfiguration {
                 // The native location service sends a shift credential instead of a JWT, on these two routes only: their
                 // controllers require that credential or a RIDER JWT. The credential authenticates nothing else.
                 .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations", "/api/v1/rider/devices").permitAll()
-                // Any signed-in user may ask whether they are a rider; every other rider route needs RIDER.
+                // Any signed-in user may ask whether they are a rider. A rider ops added but has not activated (no RIDER
+                // role yet) may read their profile and send documents: FleetRiderService requires their rider row.
+                // Every other rider route needs RIDER.
                 .requestMatchers("/api/v1/rider/me").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/v1/rider/profile").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/v1/rider/documents").authenticated()
                 .requestMatchers("/api/v1/rider/**").hasRole("RIDER")
                 // Payment, webhook and readiness APIs keep their in-controller checks. Internal routes: InternalCallFilter
                 // checks the caller identity, then each route's shared secret or HMAC still applies.

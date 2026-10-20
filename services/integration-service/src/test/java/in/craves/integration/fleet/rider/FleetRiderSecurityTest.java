@@ -1,7 +1,10 @@
 package in.craves.integration.fleet.rider;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -11,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import in.craves.integration.config.WebSecurityConfiguration;
 import in.craves.integration.fleet.FleetApiAdvice;
+import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
@@ -27,7 +31,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Every rider route but GET /me needs the RIDER role (403 without it); /me needs only a sign-in. */
+/** Every rider route needs the RIDER role (403 without it) except /me, /profile and /documents (a sign-in; the service checks the rider row). */
 @WebMvcTest(FleetRiderController.class)
 @ContextConfiguration(classes = {FleetRiderController.class, FleetApiAdvice.class, WebSecurityConfiguration.class,
     CravesJwtAuthenticationFilter.class})
@@ -47,11 +51,7 @@ class FleetRiderSecurityTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"version\":\"2026-10-v1\"}")).andExpect(status().isForbidden());
         }
         mvc.perform(get("/api/v1/rider/terms")).andExpect(status().is4xxClientError());
-        for (String path : List.of("/api/v1/rider/profile", "/api/v1/rider/home")) {
-            mvc.perform(get(path).header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
-        }
-        mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", new byte[] {1})).param("type", "DL")
-            .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/rider/home").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(multipart("/api/v1/rider/shift/start").file(new MockMultipartFile("selfie", new byte[] {1}))
             .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/rider/shift/end").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
@@ -59,6 +59,32 @@ class FleetRiderSecurityTest {
             .content("{\"installationId\":\"9774d56d682e549c\",\"fcmToken\":\"t\",\"appVersion\":\"1.0.0\",\"model\":\"Redmi\"}"))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verifyNoInteractions(service, shifts);
+    }
+
+    /** A rider ops added but has not activated has no RIDER role yet: the service decides by their rider row. */
+    @Test
+    void profileAndDocumentsNeedASignInAndTheServiceChecksTheRiderRow() throws Exception {
+        UUID pending = UUID.randomUUID();
+        when(verifier.verify("pending")).thenReturn(new CravesPrincipal(pending, "+919000000000", Set.of("CUSTOMER")));
+        when(service.profile(pending)).thenReturn(new FleetRiderModels.RiderProfile(new FleetRiderModels.Vehicle("Two-wheeler", null),
+            List.of(), null, null));
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer pending")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicle.label").value("Two-wheeler"));
+        mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", new byte[] {1})).param("type", "DL")
+            .header("Authorization", "Bearer pending")).andExpect(status().isNoContent());
+        verify(service).uploadDocument(eq(pending), eq("DL"), any());
+
+        UUID stranger = UUID.randomUUID();
+        when(verifier.verify("stranger")).thenReturn(new CravesPrincipal(stranger, "+919000000001", Set.of("CUSTOMER")));
+        when(service.profile(stranger)).thenThrow(new FleetApiException(403, "NOT_A_RIDER", "This account is not a Craves rider."));
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer stranger")).andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
+        mvc.perform(get("/api/v1/rider/profile")).andExpect(status().is4xxClientError());
+        mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", new byte[] {1})).param("type", "DL"))
+            .andExpect(status().is4xxClientError());
+        verify(service).profile(pending);
+        verify(service).profile(stranger);
+        verifyNoMoreInteractions(service);
     }
 
     @Test

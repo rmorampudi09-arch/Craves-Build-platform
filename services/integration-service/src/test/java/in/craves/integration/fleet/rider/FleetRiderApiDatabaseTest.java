@@ -242,6 +242,29 @@ class FleetRiderApiDatabaseTest {
     }
 
     @Test
+    void aRiderOpsAddedReadsTheProfileAndSendsDocumentsBeforeTheRiderRoleIsGranted() throws Exception {
+        UUID identity = UUID.randomUUID();
+        String phone = phone();
+        db.update("INSERT INTO fleet_schema.rider (id, identity_id, name, phone, created_by) VALUES (?, ?, 'Sita Devi', ?, ?)",
+            UUID.randomUUID(), identity, phone, UUID.randomUUID());
+        when(verifier.verify("pending")).thenReturn(new CravesPrincipal(identity, phone, Set.of("CUSTOMER")));
+        byte[] jpeg = {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0x01};
+        mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", "dl.jpg", "image/jpeg", jpeg)).param("type", "DL")
+            .header("Authorization", "Bearer pending")).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer pending")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.documents[0].type").value("DL")).andExpect(jsonPath("$.documents[0].status").value("PENDING"));
+        for (String path : java.util.List.of("/api/v1/rider/home", "/api/v1/rider/terms")) {
+            mvc.perform(get(path).header("Authorization", "Bearer pending")).andExpect(status().isForbidden());
+        }
+
+        when(verifier.verify("stranger")).thenReturn(new CravesPrincipal(UUID.randomUUID(), "+919000000007", Set.of("CUSTOMER")));
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer stranger")).andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
+        mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", "dl.jpg", "image/jpeg", jpeg)).param("type", "AADHAAR")
+            .header("Authorization", "Bearer stranger")).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
+    }
+
+    @Test
     void aRiderRoleWithoutALinkedRiderIsRefused() throws Exception {
         UUID identity = UUID.randomUUID();
         when(verifier.verify(identity.toString())).thenReturn(new CravesPrincipal(identity, "+919000000009", Set.of("RIDER")));

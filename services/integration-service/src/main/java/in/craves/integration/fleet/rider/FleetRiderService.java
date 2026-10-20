@@ -126,7 +126,7 @@ public class FleetRiderService {
             rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, FEATURES);
     }
 
-    /** Allowed for PENDING riders too, so they can see what ops is still checking. */
+    /** Any rider ops added, before activation too (no RIDER role yet), so they can see what ops is still checking. */
     @Transactional(readOnly = true)
     public RiderProfile profile(UUID identityId) {
         Rider rider = rider(identityId);
@@ -171,15 +171,15 @@ public class FleetRiderService {
         return new HomeSummary(false, null, null, null, 0, 0, null, next, guaranteed, restPoint, banner);
     }
 
-    /** A new photo of one document; ops reviews it by hand and it shows as PENDING until then. */
+    /** A new photo of one document, from any rider ops added (before activation too); PENDING until ops reviews it by hand. */
     @Transactional
     public void uploadDocument(UUID identityId, String type, MultipartFile photo) {
+        Rider rider = rider(identityId);
         String stored = type == null ? null : DOCUMENT_TYPES.get(type);
         if (stored == null) {
             throw FleetApiException.unprocessable("DOCUMENT_TYPE_NOT_ALLOWED", "Choose DL, RC, INSURANCE, PUC, PAN or BANK. "
                 + "Craves never collects Aadhaar.");
         }
-        Rider rider = rider(identityId);
         byte[] bytes = documentBytes(photo);
         UUID id = UUID.randomUUID();
         String extension = switch (photo.getContentType()) {

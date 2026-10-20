@@ -27,7 +27,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * The rider app's API (contracts/openapi/rider-v1.yaml). WebSecurityConfiguration requires the RIDER role on
- * every route here except GET /me. Off unless CRAVES_FLEET_RIDER_API_ENABLED.
+ * every route here except GET /me, GET /profile and POST /documents (a signed-in identity; the service requires a rider
+ * row) and POST /devices (the RIDER check or the shift credential is here). Off unless CRAVES_FLEET_RIDER_API_ENABLED.
  */
 @RestController
 @RequestMapping("/api/v1/rider")

@@ -1,4 +1,5 @@
 import {createContext, useContext} from 'react';
+import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {NativeStackNavigationProp, NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {Offer} from './api/contract';
 
@@ -7,7 +8,7 @@ export type RiderStackParamList = {
   Otp: {phone: string};
   AccountStatus: undefined;
   Terms: {mode: 'accept' | 'view'};
-  Tabs: undefined;
+  Tabs: NavigatorScreenParams<RiderTabParamList> | undefined;
   PhoneSetup: undefined;
   Offer: {offer: Offer; receivedAtMs: number};
   Trip: undefined;

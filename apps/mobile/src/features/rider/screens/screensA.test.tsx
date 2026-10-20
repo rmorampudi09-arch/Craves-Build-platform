@@ -10,10 +10,13 @@ import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
 import * as ImagePicker from 'expo-image-picker';
 import type {RiderMe, RiderProfile, Terms} from '../api/contract';
 import {riderApi} from '../api/riderApi';
+import {riderDevice, type DeviceState} from '../native/riderDevice';
+import {riderOnlineService} from '../native/riderOnlineService';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
 import {AccountStatusScreen} from './AccountStatusScreen';
+import {phoneBrand, PhoneSetupScreen} from './PhoneSetupScreen';
 import {TermsScreen} from './TermsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
@@ -29,6 +32,26 @@ jest.mock('expo-image-picker', () => ({
   CameraType: {front: 'front', back: 'back'},
   requestCameraPermissionsAsync: jest.fn(async () => ({granted: true})),
   launchCameraAsync: jest.fn(async () => ({canceled: false, assets: [{uri: 'file:///photo.jpg'}]})),
+}));
+jest.mock('../native/riderOnlineService', () => ({
+  riderOnlineService: {
+    start: jest.fn(async () => undefined),
+    stop: jest.fn(async () => undefined),
+    testRing: jest.fn(async () => undefined),
+    lastFix: () => undefined,
+  },
+}));
+jest.mock('../native/riderDevice', () => ({
+  riderDevice: {
+    state: jest.fn(async () => null),
+    locationGranted: jest.fn(async () => true),
+    notificationsGranted: jest.fn(async () => true),
+    requestLocation: jest.fn(async () => true),
+    requestNotifications: jest.fn(async () => true),
+    openBatterySettings: jest.fn(async () => true),
+    openAutostartSettings: jest.fn(async () => true),
+    openAppSettings: jest.fn(async () => true),
+  },
 }));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
@@ -316,5 +339,69 @@ describe('Terms', () => {
     await flush();
     expect(allText()).toContain('Something went wrong. Try again.');
     expect(allText()).toContain('Try again');
+  });
+});
+
+describe('Phone setup', () => {
+  const props = {route: {key: 'PhoneSetup', name: 'PhoneSetup' as const, params: undefined}, navigation: mockNavigation as never};
+  const device = (manufacturer: string): DeviceState => ({
+    manufacturer,
+    ignoringBatteryOptimizations: true,
+    powerSaveMode: false,
+    locationEnabled: true,
+    notificationsEnabled: true,
+  });
+
+  it('knows each phone family', () => {
+    expect(['Xiaomi', 'redmi', 'POCO'].map(phoneBrand)).toEqual(['xiaomi', 'xiaomi', 'xiaomi']);
+    expect(['oppo', 'realme', 'OnePlus'].map(phoneBrand)).toEqual(['coloros', 'coloros', 'coloros']);
+    expect(['vivo', 'iQOO'].map(phoneBrand)).toEqual(['vivo', 'vivo']);
+    expect(['samsung', 'motorola', undefined].map(phoneBrand)).toEqual(['samsung', 'other', 'other']);
+  });
+
+  it('counts what is done and shows the steps for this phone', async () => {
+    (riderDevice.state as jest.Mock).mockResolvedValueOnce(device('xiaomi'));
+    await render(<PhoneSetupScreen {...props} />);
+    const text = allText();
+    expect(text).toContain('3 of 6 done');
+    expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Rider.');
+    expect(text).toContain('Open recent apps, press and hold the Craves Rider card, then tap the lock.');
+    expect(text).not.toContain('Allow location');
+    await act(async () => tree.root.findByProps({label: "I've locked it"}).props.onPress());
+    expect(allText()).toContain('4 of 6 done');
+  });
+
+  it('uses the Samsung steps on a Samsung', async () => {
+    (riderDevice.state as jest.Mock).mockResolvedValueOnce(device('samsung'));
+    await render(<PhoneSetupScreen {...props} />);
+    expect(allText()).toContain('On your Samsung: open Settings, then Battery, then Background usage limits');
+    expect(allText()).toContain('tap the Craves Rider icon above its card, then tap Keep open.');
+  });
+
+  it('opens the app settings when location was refused for good', async () => {
+    (riderDevice.locationGranted as jest.Mock).mockResolvedValueOnce(false);
+    (riderDevice.requestLocation as jest.Mock).mockResolvedValueOnce(false);
+    await render(<PhoneSetupScreen {...props} />);
+    expect(allText()).toContain('Tap the button and allow location while using the app.');
+    await act(async () => tree.root.findByProps({label: 'Allow location'}).props.onPress());
+    expect(riderDevice.openAppSettings).toHaveBeenCalled();
+  });
+
+  it('rings the phone, then marks the test done when the rider says it rang', async () => {
+    await render(<PhoneSetupScreen {...props} />);
+    await act(async () => tree.root.findByProps({label: 'Ring my phone'}).props.onPress());
+    expect(riderOnlineService.testRing).toHaveBeenCalled();
+    const [question, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect(question).toBe('Did your phone ring and vibrate?');
+    await act(async () => buttons[1].onPress());
+    expect(allText()).toContain('Your phone rang and vibrated');
+    await act(async () => press('rider-ring-again').props.onPress());
+    expect(riderOnlineService.testRing).toHaveBeenCalledTimes(2);
+  });
+
+  it('goes back to the Home tab', async () => {
+    await render(<PhoneSetupScreen {...props} />);
+    await act(async () => press('rider-setup-home').props.onPress());
+    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs', {screen: 'Home'});
   });
 });

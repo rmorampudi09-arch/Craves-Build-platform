@@ -43,8 +43,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 /** The rider API against a real database. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 @WebMvcTest(FleetRiderController.class)
-@ContextConfiguration(classes = {FleetRiderController.class, FleetRiderService.class, FleetPolicyStore.class, FleetApiAdvice.class,
-    WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class, FleetRiderApiDatabaseTest.Database.class})
+@ContextConfiguration(classes = {FleetRiderController.class, FleetRiderService.class, FleetShiftService.class, FleetPolicyStore.class,
+    FleetApiAdvice.class, WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class, FleetRiderApiDatabaseTest.Database.class})
 @TestPropertySource(properties = {"craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true"})
 class FleetRiderApiDatabaseTest {
     @Configuration(proxyBeanMethods = false)

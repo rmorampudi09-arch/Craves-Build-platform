@@ -54,7 +54,7 @@ public class FleetRiderService {
         .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
     private static final List<String> DOCUMENT_ORDER = List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN",
         "BANK_PROOF", "PHOTO", "ADDRESS_PROOF");
-    private static final Map<String, String> DOCUMENT_LABELS = Map.of("DRIVING_LICENCE", "Driving licence", "VEHICLE_RC", "Vehicle RC",
+    static final Map<String, String> DOCUMENT_LABELS = Map.of("DRIVING_LICENCE", "Driving licence", "VEHICLE_RC", "Vehicle RC",
         "VEHICLE_INSURANCE", "Vehicle insurance", "PUC", "PUC certificate", "PAN", "PAN card", "BANK_PROOF", "Bank proof",
         "PHOTO", "Photo", "ADDRESS_PROOF", "Address proof");
     private static final Set<String> DOCUMENT_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "application/pdf");

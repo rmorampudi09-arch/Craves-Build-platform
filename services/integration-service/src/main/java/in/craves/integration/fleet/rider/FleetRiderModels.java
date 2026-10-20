@@ -65,4 +65,12 @@ public final class FleetRiderModels {
 
     public record AcceptTerms(String version) {
     }
+
+    /** The credential is returned once and never stored in clear. */
+    public record ShiftStart(String shiftCredential, Instant expiresAt) {
+        @Override
+        public String toString() {
+            return "ShiftStart[redacted, expiresAt=" + expiresAt + "]";
+        }
+    }
 }

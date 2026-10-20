@@ -5,6 +5,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.AcceptTerms;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderMe;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderProfile;
+import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import in.craves.integration.fleet.rider.FleetRiderModels.Terms;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -30,9 +32,11 @@ import org.springframework.web.multipart.MultipartFile;
 @ConditionalOnProperty(name = {"craves.fleet.enabled", "craves.fleet.rider-api-enabled"}, havingValue = "true")
 public class FleetRiderController {
     private final FleetRiderService service;
+    private final FleetShiftService shifts;
 
-    public FleetRiderController(FleetRiderService service) {
+    public FleetRiderController(FleetRiderService service, FleetShiftService shifts) {
         this.service = service;
+        this.shifts = shifts;
     }
 
     /** Any signed-in user: NOT_RIDER when no rider matches. */
@@ -56,6 +60,20 @@ public class FleetRiderController {
     public ResponseEntity<Void> uploadDocument(@AuthenticationPrincipal CravesPrincipal principal, @RequestParam("type") String type,
                                                @RequestPart("photo") MultipartFile photo) {
         service.uploadDocument(identity(principal), type, photo);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 403 RIDER_NOT_ACTIVE, APP_UPDATE_REQUIRED or DOCUMENTS_EXPIRED; 409 DEVICE_NOT_BOUND or SHIFT_OPEN; 422 SELFIE_INVALID. */
+    @PostMapping(path = "/shift/start", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ShiftStart> startShift(@AuthenticationPrincipal CravesPrincipal principal,
+                                                 @RequestHeader(name = FleetShiftService.INSTALLATION_ID, required = false) String installationId,
+                                                 @RequestPart("selfie") MultipartFile selfie) {
+        return noStore(shifts.start(identity(principal), installationId, selfie));
+    }
+
+    @PostMapping("/shift/end")
+    public ResponseEntity<Void> endShift(@AuthenticationPrincipal CravesPrincipal principal) {
+        shifts.end(identity(principal));
         return ResponseEntity.noContent().build();
     }
 

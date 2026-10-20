@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class FleetRiderSecurityTest {
     @Autowired MockMvc mvc;
     @MockBean FleetRiderService service;
+    @MockBean FleetShiftService shifts;
     @MockBean JwtVerifier verifier;
 
     @Test
@@ -51,7 +52,10 @@ class FleetRiderSecurityTest {
         }
         mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", new byte[] {1})).param("type", "DL")
             .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
-        verifyNoInteractions(service);
+        mvc.perform(multipart("/api/v1/rider/shift/start").file(new MockMultipartFile("selfie", new byte[] {1}))
+            .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/end").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        verifyNoInteractions(service, shifts);
     }
 
     @Test

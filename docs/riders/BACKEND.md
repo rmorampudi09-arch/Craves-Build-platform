@@ -82,6 +82,23 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language. |
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
+| `POST /shift/start` | Goes online: multipart `selfie` (JPEG, 5 MB) and header `X-Craves-Installation-Id`. Returns `{shiftCredential, expiresAt}` once. Refusals below. |
+| `POST /shift/end` | Goes offline: closes the open shift and revokes its credential. 204 even when nothing is open. |
+
+### Shifts and the shift credential
+
+`POST /shift/start` checks, in this order, and answers `{code, message}`:
+
+| Status | Code | When |
+|---|---|---|
+| 403 | `RIDER_NOT_ACTIVE` | The rider is not ACTIVE. |
+| 409 | `DEVICE_NOT_BOUND` | The header is missing or is not the rider's bound phone (see `POST /devices`). |
+| 403 | `APP_UPDATE_REQUIRED` | The bound phone's `appVersion` is below `minAppVersion` (`rider.min_app_version`, else `CRAVES_FLEET_MIN_APP_VERSION`). 403, not 426: 426 means an HTTP protocol upgrade. Checked only here, so a running shift is never cut off. |
+| 403 | `DOCUMENTS_EXPIRED` | The driving licence, RC, insurance or PUC has no VERIFIED copy whose `expires_on` is today (IST) or later; a missing expiry counts as expired. The message names them. |
+| 422 | `SELFIE_INVALID` | Not a JPEG, empty, or over 5 MB. |
+| 409 | `SHIFT_OPEN` | A shift is open on another phone. |
+
+The selfie goes to `riders/<riderId>/selfies/<shiftId>.jpg` with review state PENDING (the console's selfie queue). The credential is 32 random bytes, base64url; only its SHA-256 (hex) is stored in `rider_shift.credential_hash`. It expires 12 hours after the shift started (the table's CHECK). A second start from the same phone while its shift is open (the app lost the credential) rotates the credential of that shift and keeps the first selfie. A shift past its 12 hours, or whose credential ops revoked by approving another phone, is closed at the next start (`ended_at` = expiry or revocation).
 
 Admin fleet API (`/api/v1/admin/fleet`, fleet flag), scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing. Mutations need an `Idempotency-Key` (a replay returns the first result; the same key with another body is 409 `IDEMPOTENCY_KEY_REUSED`), and every action is audited.
 

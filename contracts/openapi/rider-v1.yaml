@@ -3,11 +3,17 @@ info:
   title: Craves Rider API (draft)
   version: 0.1.0
   description: |
-    The API the rider app (apps/mobile, rider flavor) calls. Draft: the app runs against a mock
-    that follows these shapes (src/features/rider/api/contract.ts) until the fleet backend exists.
+    The API the rider app (apps/mobile, rider flavor) calls; integration-service's fleet package serves it
+    (docs/riders/BACKEND.md), and the app's mock follows the same shapes (src/features/rider/api/contract.ts).
     Money is integer paise. Every POST that changes an offer or a trip carries an Idempotency-Key
     header (rider-{action}-{offerId or tripId}-{riderId}[-{attempt}]); the server returns the first
     result for a repeated key. Declining or letting an offer expire never affects future offers.
+
+    Every route needs a Craves JWT; every route but /me, GET /profile and POST /documents also needs the RIDER role
+    (a bare 403 without it). /locations and /devices take the shift credential instead (X-Craves-Shift-Credential).
+    A refusal is ErrorBody {code, message}; the message is safe to show the rider. Each operation's description lists
+    its codes. Any route can also answer 400 VALIDATION_FAILED (a body, part or parameter it can't read),
+    401 SIGN_IN_REQUIRED and, for a sign-in with no rider row, 403 NOT_A_RIDER (not /me, which answers status NOT_RIDER).
 servers:
   - url: https://api.craves.in/api/v1/rider
 security:
@@ -16,27 +22,36 @@ paths:
   /me:
     get: {summary: The signed-in rider, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}}}
   /profile:
-    get: {summary: 'Vehicle, documents, payout account and insurance', responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}}}
+    get: {summary: 'Vehicle, documents, payout account and insurance', description: 'Also for a PENDING rider (no RIDER role yet). 403 NOT_A_RIDER.', responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}, '403': {$ref: '#/components/responses/Error'}}}
   /terms:
-    get: {summary: Current terms and rate card, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Terms'}}}}}}
+    get: {summary: Current terms and rate card, description: 503 TERMS_UNAVAILABLE while no rate card is stored., responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Terms'}}}}, '503': {$ref: '#/components/responses/Error'}}}
   /terms/accept:
     post:
       summary: Accept the version shown; 409 if the terms changed meanwhile
+      description: 409 TERMS_CHANGED for any version but the one in force; 503 TERMS_UNAVAILABLE.
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [version], properties: {version: {type: string}}}}}}
-      responses: {'204': {description: Accepted}, '409': {$ref: '#/components/responses/Error'}}
+      responses: {'204': {description: Accepted}, '409': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /home:
     get: {summary: Online state and today's totals, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/HomeSummary'}}}}}}
   /shift/start:
     post:
       summary: Go online. The selfie is reviewed by ops (pilot) or face-matched (later, after 14 days' notice). 409 DEVICE_NOT_BOUND when the phone isn't the rider's bound one.
+      description: |
+        Checked in this order: 403 RIDER_NOT_ACTIVE (the rider is not ACTIVE); 409 DEVICE_NOT_BOUND (the
+        X-Craves-Installation-Id header is missing or is not the rider's bound phone); 403 APP_UPDATE_REQUIRED (the bound
+        phone's appVersion is below minAppVersion; checked only here, never mid-shift); 403 DOCUMENTS_EXPIRED (the DL, RC,
+        insurance or PUC has no verified copy valid today; the message names them); 422 SELFIE_INVALID (not a JPEG, empty
+        or over 5 MB); 409 SHIFT_OPEN (a shift is open on another phone). A second start from the same phone while its
+        shift is open returns a new credential for that shift.
       parameters: [{$ref: '#/components/parameters/InstallationId'}]
       requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [selfie], properties: {selfie: {type: string, format: binary}}}}}}
-      responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}}
   /shift/end:
-    post: {summary: Go offline; revokes the shift credential, responses: {'204': {description: Offline}}}
+    post: {summary: Go offline; revokes the shift credential, description: 204 even when no shift is open., responses: {'204': {description: Offline}}}
   /documents:
     post:
       summary: A new photo of one document; ops reviews it by hand and the document shows as PENDING until then
+      description: Also for a PENDING rider. 422 DOCUMENT_TYPE_NOT_ALLOWED (not one of the types; Craves never collects Aadhaar) or DOCUMENT_FILE_INVALID (not a JPG, PNG or PDF, or over 10 MB).
       requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [type, photo], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, photo: {type: string, format: binary}}}}}}
       responses: {'204': {description: Uploaded}, '422': {$ref: '#/components/responses/Error'}}
   /devices:
@@ -45,23 +60,40 @@ paths:
         Register this phone's FCM token after sign-in and whenever it changes. One active phone per rider: the first
         installationId is bound; a different one gets 409 DEVICE_NOT_BOUND and is kept as a pending device until ops
         approves it. The same installationId with a new fcmToken updates the token.
+      description: |
+        With a RIDER JWT or the shift credential. 409 DEVICE_NOT_BOUND for a phone that is not the bound one (kept
+        PENDING_APPROVAL); 400 VALIDATION_FAILED for a missing or malformed field; 401 SHIFT_CREDENTIAL_INVALID for a
+        credential that is unknown, revoked, expired or of an ended shift; 403 FORBIDDEN for a JWT without the RIDER role.
+      security: [{bearer: []}, {shiftCredential: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeviceRegistration'}}}}
-      responses: {'204': {description: Registered}, '409': {$ref: '#/components/responses/Error'}}
+      responses: {'204': {description: Registered}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
   /locations:
     post:
       summary: Batched fixes; the response carries open offers, trip changes and a stop signal
+      description: |
+        The native online service sends the shift credential; a RIDER JWT works too (its open shift; none is a stop).
+        An empty list is the heartbeat. 400 VALIDATION_FAILED for more than 5 fixes; 401 SHIFT_CREDENTIAL_INVALID for an
+        unknown credential; 403 FORBIDDEN for a JWT without the RIDER role. A shift that ended, was revoked or ran 12 h
+        answers 200 {offers: [], stop: true, stopReason}.
+      security: [{bearer: []}, {shiftCredential: []}]
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [fixes], properties: {fixes: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/RiderFix'}}}}}}}
-      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/LocationBatchResponse'}}}}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/LocationBatchResponse'}}}}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
   /offers/{offerId}/accept:
     post:
       summary: Accept; 409 when another rider got it, 410 when it expired
+      description: |
+        One conditional update decides the winner; the winner's repeat gets the trip again. 409 OFFER_TAKEN (another rider
+        got it), ORDER_CANCELLED (the customer or chef cancelled) or TRIP_IN_PROGRESS (finish the current trip first);
+        410 OFFER_EXPIRED (after 40 s, or the fleet stage closed); 404 OFFER_NOT_FOUND (not this rider's offer);
+        403 RIDER_NOT_ACTIVE; 400 IDEMPOTENCY_KEY_REQUIRED.
       parameters: [{$ref: '#/components/parameters/OfferId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
-      responses: {'200': {description: The trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '409': {$ref: '#/components/responses/Error'}, '410': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: The trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '400': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '410': {$ref: '#/components/responses/Error'}}
   /offers/{offerId}/decline:
     post:
       summary: Decline. Free, no reason needed.
+      description: Repeating it is harmless. 404 OFFER_NOT_FOUND (not this rider's offer); 400 IDEMPOTENCY_KEY_REQUIRED.
       parameters: [{$ref: '#/components/parameters/OfferId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
-      responses: {'204': {description: Declined}}
+      responses: {'204': {description: Declined}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
   /trips/active:
     get:
       summary: The trip in progress, or 204
@@ -75,6 +107,14 @@ paths:
         state wins: the app drops its queued steps for this trip and shows the message.
         A wrong OTP returns 422 OTP_INVALID with attemptsLeft (4, 3, 2, 1). The fifth wrong OTP, and every
         OTP after it, returns 423 OTP_LOCKED; the photo route stays open.
+      description: |
+        A repeated key, or a step the trip already took, returns the trip. 409 STEP_CONFLICT (out of order) or
+        TRIP_NOT_ACTIVE (the trip ended or went to another courier); 404 TRIP_NOT_FOUND (not this rider's trip);
+        422 OTP_INVALID with attemptsLeft; 423 OTP_LOCKED; 503 OTP_UNAVAILABLE (the code could not be checked; try again).
+        Photo: 422 CALLS_REQUIRED (fewer than two calls), WAIT_NOT_OVER (the unreachable wait since arriving is still
+        running) or PHOTO_REQUIRED (no JPEG or PNG, or over 10 MB); once the OTP is locked the photo needs neither calls
+        nor the wait. failed: CUSTOMER_UNREACHABLE needs the drop and the wait (422 WAIT_NOT_OVER). 400 VALIDATION_FAILED
+        (unknown step, an OTP that is not 4 digits, an unknown failure reason) or IDEMPOTENCY_KEY_REQUIRED.
       parameters:
         - {$ref: '#/components/parameters/TripId'}
         - {name: action, in: path, required: true, schema: {type: string, enum: [arrived-pickup, food-not-ready, picked-up, arrived-drop, delivered, failed]}}
@@ -85,47 +125,57 @@ paths:
             schema:
               oneOf:
                 - {type: object, required: [method, otp], properties: {method: {type: string, enum: [OTP]}, otp: {type: string, pattern: '^[0-9]{4}$'}, fix: {$ref: '#/components/schemas/RiderFix'}}}
-                - {type: object, required: [reason], properties: {reason: {type: string}, note: {type: string}}}
+                - {type: object, required: [reason], properties: {reason: {type: string, enum: [CUSTOMER_UNREACHABLE, WRONG_ADDRESS, CUSTOMER_REFUSED, UNSAFE]}, note: {type: string, maxLength: 500}}}
           multipart/form-data:
             schema: {type: object, required: [method, callsMade], properties: {method: {type: string, enum: [PHOTO]}, callsMade: {type: integer, minimum: 2}, photo: {type: string, format: binary}, fix: {type: string, description: RiderFix as JSON}}}
-      responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /earnings:
     get:
       summary: Per-trip pay for today or this week (Monday to Sunday), paged
+      description: 400 VALIDATION_FAILED for another range or a cursor the server did not give.
       parameters:
         - {name: range, in: query, required: true, schema: {type: string, enum: [today, week]}}
         - {name: cursor, in: query, schema: {type: string}}
-      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/EarningsPage'}}}}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/EarningsPage'}}}}, '400': {$ref: '#/components/responses/Error'}}
   /earnings/trips/{tripId}:
     get:
+      description: 404 TRIP_NOT_FOUND for a trip that is not this rider's or has no credited pay.
       parameters: [{$ref: '#/components/parameters/TripId'}]
-      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TripEarning'}}}}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TripEarning'}}}}, '404': {$ref: '#/components/responses/Error'}}
   /payouts:
     get: {summary: Weekly payouts with UTRs, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PayoutsPage'}}}}}}
   /withdrawals:
     post:
       summary: One free withdrawal a day, paid by 13:00 the next day
+      description: |
+        The same key and amount answers 204 again. 409 WITHDRAWAL_LIMIT (one a day, IST), IDEMPOTENCY_KEY_REUSED (the same
+        key with another amount), PAYOUT_ACCOUNT_REQUIRED (ops has not verified a payout account), PAYOUTS_PAUSED (the last
+        payout failed; the money stays in the balance) or AMOUNT_OVER_BALANCE; 400 IDEMPOTENCY_KEY_REQUIRED or
+        VALIDATION_FAILED.
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [amountPaise], properties: {amountPaise: {type: integer, minimum: 1}}}}}}
-      responses: {'204': {description: Requested}, '409': {$ref: '#/components/responses/Error'}}
+      responses: {'204': {description: Requested}, '400': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
   /support/issues:
     post:
       summary: Report a problem with a trip or payout; support acknowledges within 24 hours
+      description: Support fixes it within 72 hours. 404 TRIP_NOT_FOUND or PAYOUT_NOT_FOUND (not this rider's); 400 VALIDATION_FAILED (unknown category, a note over 2,000 characters).
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SupportIssue'}}}}
-      responses: {'204': {description: Sent}}
+      responses: {'204': {description: Sent}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
   /sos:
     post:
       summary: Emergency; alerts the ops lead with the rider's last location
+      description: Never refused for a missing or odd fix or trip; without a usable fix the rider's latest position is used.
       requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {tripId: {type: string}, fix: {$ref: '#/components/schemas/RiderFix'}}}}}}
       responses: {'204': {description: Ops alerted}}
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+    shiftCredential: {type: apiKey, in: header, name: X-Craves-Shift-Credential, description: 'ShiftStart.shiftCredential, sent by the native online service; valid only for /locations and /devices, until /shift/end or 12 h'}
   parameters:
     OfferId: {name: offerId, in: path, required: true, schema: {type: string}}
     TripId: {name: tripId, in: path, required: true, schema: {type: string}}
     IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
-    InstallationId: {name: X-Craves-Installation-Id, in: header, required: true, description: "The phone's installationId (Android ANDROID_ID), as sent to POST /devices", schema: {type: string}}
+    InstallationId: {name: X-Craves-Installation-Id, in: header, required: true, description: "The phone's installationId (Android ANDROID_ID), as sent to POST /devices; missing or not the bound phone is 409 DEVICE_NOT_BOUND", schema: {type: string}}
   responses:
     Error:
       description: Refused, with a message safe to show the rider
@@ -135,12 +185,20 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: {type: string}
+        code:
+          type: string
+          description: Each operation's description says which codes it returns and with which status.
+          enum: [VALIDATION_FAILED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, SIGN_IN_REQUIRED, FORBIDDEN, NOT_A_RIDER,
+            TERMS_CHANGED, TERMS_UNAVAILABLE, DOCUMENT_TYPE_NOT_ALLOWED, DOCUMENT_FILE_INVALID,
+            RIDER_NOT_ACTIVE, DEVICE_NOT_BOUND, APP_UPDATE_REQUIRED, DOCUMENTS_EXPIRED, SELFIE_INVALID, SHIFT_OPEN, SHIFT_CREDENTIAL_INVALID,
+            OFFER_TAKEN, OFFER_EXPIRED, OFFER_NOT_FOUND, ORDER_CANCELLED, TRIP_IN_PROGRESS, TRIP_NOT_FOUND, TRIP_NOT_ACTIVE, STEP_CONFLICT,
+            OTP_INVALID, OTP_LOCKED, OTP_UNAVAILABLE, CALLS_REQUIRED, WAIT_NOT_OVER, PHOTO_REQUIRED,
+            WITHDRAWAL_LIMIT, AMOUNT_OVER_BALANCE, PAYOUT_ACCOUNT_REQUIRED, PAYOUTS_PAUSED, PAYOUT_NOT_FOUND]
         message: {type: string}
         attemptsLeft: {type: integer, minimum: 1, description: Only on 422 OTP_INVALID}
     Paise: {type: integer, description: Indian rupees x 100}
     LabelValue: {type: object, required: [label, value], properties: {label: {type: string}, value: {type: string}}}
-    PayLine: {type: object, required: [label, amountPaise], properties: {label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
+    PayLine: {type: object, required: [label, amountPaise], properties: {component: {type: string, description: 'On Offer and Trip lines: base, drop-km, pickup-km, waiting, cancellation or return-km (the earnings key); TripEarning lines leave it out'}, label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
     RiderNotice:
       type: object
       description: A suspension, a 7-day notice or a hold (Telangana Act 21 of 2026, s.14)

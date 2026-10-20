@@ -434,7 +434,8 @@ paths:
         WEEKLY (payoutDate is a Monday) pays every rider's whole withdrawable balance, with no minimum.
         DAILY_WITHDRAWAL pays the withdrawal requests (one free per rider per day) not yet in a batch.
         Riders with no payout account, a zero or negative balance are left out; a negative balance is
-        recovered from future earnings only, never from the bank.
+        recovered from future earnings only, never from the bank. payoutDate is today or earlier (IST):
+        a file made early would miss pay still coming in.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -456,7 +457,7 @@ paths:
         '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { description: "BATCH_EXISTS for this kind and date.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '422': { description: "NOTHING_TO_PAY or NOT_A_MONDAY.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "NOTHING_TO_PAY, NOT_A_MONDAY or PAYOUT_DATE_IN_FUTURE.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/payout-batches/{batchId}:
     get:
       operationId: getPayoutBatch

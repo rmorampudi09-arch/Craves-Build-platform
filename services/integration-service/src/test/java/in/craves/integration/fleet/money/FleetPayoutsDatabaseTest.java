@@ -53,7 +53,8 @@ class FleetPayoutsDatabaseTest {
     final BankDataCipher cipher = new BankDataCipher(json, "k1", "{\"k1\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}");
     final Admin maker = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx210");
     final Admin checker = new Admin(UUID.randomUUID(), "Admin +91 97xxxxx111");
-    final LocalDate monday = LocalDate.now(IST).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+    // Files are made on or after their date, so the test weeks are the last five Mondays (monday.plusWeeks(4) is this week's).
+    final LocalDate monday = LocalDate.now(IST).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).minusWeeks(4);
     FleetAdminService admin;
     FleetEarnings earnings;
     FleetPayouts payouts;
@@ -197,12 +198,18 @@ class FleetPayoutsDatabaseTest {
         assertThat(requested.amountPaise()).isEqualTo(6000);
         assertThat(requested.periodLabel()).startsWith("Withdrawal, paid by 1 pm on ");
 
-        LocalDate tomorrow = LocalDate.now(IST).plusDays(1);
-        refused(() -> tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", LocalDate.now(IST)))), 422,
+        LocalDate today = LocalDate.now(IST);
+        refused(() -> tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", today))), 422,
             "NOTHING_TO_PAY"); // today's requests are paid tomorrow
-        PayoutBatch daily = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", tomorrow)));
+        // Tomorrow's file waits for tomorrow, so a request made later today still goes in it.
+        refused(() -> tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", today.plusDays(1)))), 422,
+            "PAYOUT_DATE_IN_FUTURE");
+        refused(() -> tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("WEEKLY", monday.plusWeeks(5)))), 422,
+            "PAYOUT_DATE_IN_FUTURE");
+        fleet.db.update("UPDATE fleet_schema.rider_payout_instruction SET payout_date = ? WHERE rider_id = ?", today, ravi); // as if asked yesterday
+        PayoutBatch daily = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", today)));
         assertThat(daily.payouts()).extracting(Payout::payoutId).containsExactly(UUID.fromString(requested.payoutId()));
-        refused(() -> tx(() -> payouts.createBatch(checker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", tomorrow))), 409, "BATCH_EXISTS");
+        refused(() -> tx(() -> payouts.createBatch(checker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", today))), 409, "BATCH_EXISTS");
         payouts.approve(checker, UUID.randomUUID(), daily.batchId());
         payouts.markSent(checker, UUID.randomUUID(), daily.batchId());
         assertThat(payouts.payouts(ravi).payouts().get(0).status()).isEqualTo("PROCESSING");

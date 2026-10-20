@@ -205,13 +205,16 @@ describe('Offer', () => {
 
 describe('Trip', () => {
   const props = {route: {key: 'Trip', name: 'Trip' as const, params: undefined}, navigation: mockNavigation as never};
+  // TripScreen listens for refused OTPs; trip.test.tsx covers the screen in full.
+  beforeEach(() => Object.assign(tripQueue, {onRejected: () => () => undefined}));
+  const otpInput = () => tree.root.findAll(node => node.props.testID === 'rider-otp-input' && node.props.keyboardType)[0];
 
   it('takes the customer OTP before Delivered and sends it through the queue', async () => {
     mockPending.count = 1; // the queue reports the delivery as waiting to sync
     await render(<TripScreen {...props} />, [[riderKeys.activeTrip, trip], [riderKeys.me, me], [riderKeys.home, home]]);
     expect(allText()).toContain('Near drop point');
     expect(byId('rider-delivered').props.disabled).toBe(true);
-    await act(async () => tree.root.findByProps({testID: 'rider-otp-input'}).props.onChangeText('12a34'));
+    await act(async () => otpInput().props.onChangeText('12a34'));
     expect(byId('rider-delivered').props.disabled).toBe(false);
     await act(async () => byId('rider-delivered').props.onPress());
     expect(tripQueue.enqueue).toHaveBeenCalledWith(

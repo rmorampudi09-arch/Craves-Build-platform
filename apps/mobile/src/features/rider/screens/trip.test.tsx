@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Linking, Text} from 'react-native';
+import {Alert, Linking, Text, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -8,6 +8,7 @@ import {riderApi} from '../api/riderApi';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
+import {RiderRuntime} from '../components/RiderRuntime';
 import {TripScreen} from './TripScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
@@ -38,11 +39,18 @@ jest.mock('../state/tripQueue', () => ({
       mockRejected.add(listener);
       return () => mockRejected.delete(listener);
     }),
+    onSent: () => () => undefined,
+    flush: jest.fn(async () => new Map()),
   },
   usePendingActions: () => mockPending.count,
 }));
 jest.mock('../native/riderOnlineService', () => ({
-  riderOnlineService: {lastFix: () => mockFix.value},
+  riderOnlineService: {
+    lastFix: () => mockFix.value,
+    onOffer: () => () => undefined,
+    onTripChanged: () => () => undefined,
+    onStatus: () => () => undefined,
+  },
 }));
 const mockFix: {value: {lat: number; lng: number; accuracyM: number; at: string} | null} = {value: null};
 
@@ -314,5 +322,117 @@ describe('Trip: to the customer (step 3)', () => {
     expect(Linking.openURL).toHaveBeenCalledWith('google.navigation:q=17.4615,78.3657&mode=l');
     await press('rider-reached-customer');
     expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-drop'}));
+  });
+});
+
+describe('Trip: deliver with the OTP (step 4)', () => {
+  const atDrop: Trip = {...trip, step: 'AT_DROP', version: 4};
+  const nearFix = {lat: 17.4615, lng: 78.3657, accuracyM: 10, at: '2026-10-20T13:00:00Z'};
+  const otpInput = () => tree.root.findByType(TextInput);
+  const typeOtp = (value: string) => act(async () => otpInput().props.onChangeText(value));
+  // Like the real queue: listeners hear the refusal before enqueue resolves.
+  const refuse = (info: {code: string; message: string; attemptsLeft?: number}) =>
+    (tripQueue.enqueue as jest.Mock).mockImplementationOnce(async (entry: {tripId: string; action: string}) => {
+      mockRejected.forEach(listener => listener(entry, info));
+      return {kind: 'rejected', ...info};
+    });
+
+  it('asks for the OTP in four boxes and keeps Delivered locked until all 4 digits', async () => {
+    mockFix.value = nearFix;
+    await render(atDrop);
+    const text = allText();
+    expect(text).toContain('At the customer');
+    expect(text).toContain('Flat 302, Sai Residency, Kothaguda, Kondapur');
+    expect(text).toContain('Near drop point');
+    expect(text).toContain('Ask Anil for the 4-digit OTP');
+    expect(text).toContain('Use only the OTP Anil reads to you at the door. Craves never asks for it on a call.');
+    expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 4 of 4');
+    expect(byId('rider-delivered').props.disabled).toBe(true);
+    await typeOtp('471');
+    expect(byId('rider-delivered').props.disabled).toBe(true);
+    await typeOtp('4719');
+    expect(byId('rider-delivered').props.disabled).toBe(false);
+    await press('rider-delivered');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({action: 'delivered', body: expect.objectContaining({method: 'OTP', otp: '4719', fix: nearFix})}),
+    );
+  });
+
+  it('says how far the drop point is, or nothing without a GPS fix', async () => {
+    mockFix.value = {...nearFix, lat: 17.4483, lng: 78.3915};
+    await render(atDrop);
+    expect(allText()).toMatch(/Far from drop point · \d+\.\d km/);
+    act(() => tree.unmount());
+    mockFix.value = null;
+    await render(atDrop);
+    expect(allText()).not.toContain('drop point');
+  });
+
+  it('shows a wrong code inline with the tries left, clears the boxes and never alerts', async () => {
+    refuse({code: 'OTP_INVALID', message: "That OTP didn't match.", attemptsLeft: 4});
+    await render(atDrop);
+    await typeOtp('9999');
+    await press('rider-delivered');
+    expect(allText()).toContain('Wrong code. 4 tries left.');
+    expect(otpInput().props.value).toBe('');
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(has('rider-deliver')).toBe(true);
+  });
+
+  it('after the lock shows the server message and sends the rider to the photo steps', async () => {
+    refuse({code: 'OTP_LOCKED', message: 'Too many wrong OTPs. Use the photo option; ops will check it.'});
+    await render(atDrop);
+    await typeOtp('9999');
+    await press('rider-delivered');
+    expect(allText()).toContain('Too many wrong OTPs. Use the photo option; ops will check it.');
+    expect(otpInput().props.editable).toBe(false);
+    expect(has('rider-delivered')).toBe(false);
+    expect(has('rider-unreachable')).toBe(false);
+    await press('rider-photo-route');
+    expect(allText()).toContain('Take a photo and leave the order');
+  });
+
+  it('shows a refusal of a code that was replayed after going offline', async () => {
+    await render(atDrop);
+    act(() => {
+      mockRejected.forEach(listener => listener({tripId: 'other', action: 'delivered'}, {code: 'OTP_INVALID', message: 'x', attemptsLeft: 1}));
+    });
+    expect(allText()).not.toContain('Wrong code.');
+    act(() => {
+      mockRejected.forEach(listener => listener({tripId: 't1', action: 'delivered'}, {code: 'OTP_INVALID', message: 'x', attemptsLeft: 2}));
+    });
+    expect(allText()).toContain('Wrong code. 2 tries left.');
+  });
+
+  it('completes at once and says it will sync when offline', async () => {
+    await render(atDrop);
+    mockPending.count = 1;
+    await typeOtp('4719');
+    await press('rider-delivered');
+    expect(allText()).toContain('Trip complete');
+    expect(allText()).toContain('Saved · will sync');
+  });
+
+  it('calls the customer from the door', async () => {
+    await render(atDrop);
+    await press('rider-call-customer');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+913333333333');
+  });
+});
+
+describe('RiderRuntime', () => {
+  it('leaves wrong and locked OTPs to the trip screen and alerts other refusals', async () => {
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={new QueryClient()}>
+          <RiderRuntime riderId="r1" openOffer={jest.fn()} />
+        </QueryClientProvider>,
+      );
+    });
+    act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'OTP_INVALID', message: 'Wrong'})));
+    act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'OTP_LOCKED', message: 'Locked'})));
+    expect(Alert.alert).not.toHaveBeenCalled();
+    act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'TRIP_NOT_ACTIVE', message: 'Ended'})));
+    expect(Alert.alert).toHaveBeenCalledWith('Ended');
   });
 });

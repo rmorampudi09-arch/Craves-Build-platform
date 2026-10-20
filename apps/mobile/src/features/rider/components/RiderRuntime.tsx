@@ -42,7 +42,10 @@ export function RiderRuntime({riderId, openOffer}: {riderId: string; openOffer: 
       }),
       tripQueue.onRejected((_entry, info) => {
         refreshTrip();
-        Alert.alert(info.message);
+        // The trip screen shows a wrong or locked OTP by the code boxes.
+        if (info.code !== 'OTP_INVALID' && info.code !== 'OTP_LOCKED') {
+          Alert.alert(info.message);
+        }
       }),
     ];
     const timer = setInterval(flush, FLUSH_EVERY_MS);

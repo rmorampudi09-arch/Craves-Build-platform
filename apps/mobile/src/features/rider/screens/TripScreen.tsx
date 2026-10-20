@@ -2,28 +2,25 @@ import React, {memo, useEffect, useState} from 'react';
 import {Alert, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
-import {Badge, Button, Chip, InputField, SectionSkeleton} from '../../../shared/components';
+import {Badge, Button, Chip, SectionSkeleton} from '../../../shared/components';
 import type {DeliverBody, FailBody, Trip, TripAction, TripStep} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
-import {DEMO_OTP} from '../api/riderApi.mock';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Body, Card, Label, Money, RateRow, RiderScreen, riderStyles, Title, Value} from '../components/ui';
 import {AppApiError} from '../../../core/http/apiError';
-import {distanceMeters, formatKm, formatRupees, formatTimer} from '../domain/format';
+import {formatRupees, formatTimer} from '../domain/format';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
-import {isDemo} from '../riderConfig';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
 import {tripQueue, usePendingActions} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
 import {Banner} from '../components/Banner';
 import {AtKitchen, ToKitchen} from './trip/Pickup';
-import {ToCustomer} from './trip/Dropoff';
-import {call, navigateTo} from './trip/parts';
+import {Deliver, ToCustomer, type OtpError} from './trip/Dropoff';
+import {call} from './trip/parts';
 
 const ENDED: TripStep[] = ['DELIVERED', 'FAILED', 'CANCELLED'];
-const NEAR_DROP_M = 200;
 const FAIL_REASONS = ['CUSTOMER_UNREACHABLE', 'WRONG_ADDRESS', 'CUSTOMER_REFUSED', 'UNSAFE'] as const;
 
 /** Counts down from a start time; only this leaf re-renders each second. */
@@ -76,8 +73,11 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const [trip, setTrip] = useState<Trip | null>(active.data ?? null);
   const [localStep, setLocalStep] = useState<TripStep | null>(null);
   const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState<OtpError | null>(null);
   const [unreachableFrom, setUnreachableFrom] = useState<number | null>(null);
-  const [calls, setCalls] = useState(0);
+  // When the rider tapped Call at the door: the customer-not-answering steps show each time.
+  const [callTimes, setCallTimes] = useState<number[]>([]);
+  const calls = callTimes.length;
   const [failReason, setFailReason] = useState<string | null>(null);
   const [photoDelivery, setPhotoDelivery] = useState(false);
   const pending = usePendingActions(riderId, trip?.tripId);
@@ -87,6 +87,24 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
       setTrip(active.data);
     }
   }, [active.data]);
+
+  // A wrong or locked OTP shows by the boxes, also when the queue replays a code sent while offline.
+  const tripId = trip?.tripId;
+  useEffect(() => {
+    const off = tripQueue.onRejected((entry, info) => {
+      if (entry.tripId !== tripId || entry.action !== 'delivered') {
+        return;
+      }
+      if (info.code === 'OTP_LOCKED') {
+        setOtpError({lockedMessage: info.message});
+      } else if (info.code === 'OTP_INVALID') {
+        setOtpError({attemptsLeft: info.attemptsLeft});
+      }
+    });
+    return () => {
+      off();
+    };
+  }, [tripId]);
 
   const waitOver = useElapsed(unreachableFrom, trip?.unreachableWaitSeconds ?? 0);
 
@@ -139,12 +157,8 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
       queryClient.setQueryData(riderKeys.activeTrip, outcome.trip);
       setTrip(outcome.trip);
       setLocalStep(null);
-    } else if (outcome.kind === 'queued') {
-      if (nextStep) {
-        setLocalStep(nextStep); // the step changes on screen at once and syncs later
-      }
-    } else if (action === 'delivered') {
-      setOtp(''); // RiderRuntime shows the server's message, e.g. a wrong OTP
+    } else if (outcome.kind === 'queued' && nextStep) {
+      setLocalStep(nextStep); // the step changes on screen at once and syncs later
     }
     return outcome.kind !== 'rejected';
   }
@@ -205,75 +219,37 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     return <AtKitchen trip={trip} run={run} syncing={pending > 0} />;
   }
 
-  const customerCard = (
-    <Card>
-      <Value>{trip.customer.firstName}</Value>
-      <Body>{`${trip.customer.area} · ${trip.customer.address}`}</Body>
-      {trip.customer.landmark ? <Label>{t.landmark(trip.customer.landmark)}</Label> : null}
-    </Card>
-  );
-  const contactButtons = (
-    <View style={riderStyles.rowGap}>
-      <Button
-        label={t.callCustomer}
-        leftIcon="phone"
-        variant="outline"
-        onPress={() => {
-          if (unreachableFrom !== null) {
-            setCalls(n => n + 1);
-          }
-          call(trip.customer.phone);
-        }}
-      />
-      <Button label={t.navigate} leftIcon="location" variant="outline" onPress={() => navigateTo(trip.customer)} />
-    </View>
-  );
-
   if (step === 'PICKED_UP') {
     return <ToCustomer trip={trip} run={run} syncing={pending > 0} />;
   }
 
   // AT_DROP: the customer's OTP first; the photo only after two calls and the wait.
-  const fix = riderOnlineService.lastFix();
-  const dropDistance = fix ? distanceMeters(fix, trip.customer) : null;
+  function callCustomer() {
+    setCallTimes(list => [...list, Date.now()]);
+    call(trip!.customer.phone);
+  }
+
+  if (unreachableFrom === null) {
+    return (
+      <Deliver
+        trip={trip}
+        run={run}
+        syncing={pending > 0}
+        otp={otp}
+        setOtp={setOtp}
+        otpError={otpError}
+        onCall={callCustomer}
+        onNotAnswering={() => setUnreachableFrom(Date.now())}
+      />
+    );
+  }
+
   const photoUnlocked = calls >= 2 && waitOver;
 
   return (
-    <RiderScreen
-      header={header}
-      testID="rider-deliver"
-      footer={
-        <BottomAction
-          label={t.delivered}
-          disabled={otp.length !== 4}
-          testID="rider-delivered"
-          onPress={() => run('delivered', 'DELIVERED', {method: 'OTP', otp, fix})}
-        />
-      }>
+    <RiderScreen header={header} testID="rider-deliver">
       {syncNote}
-      {customerCard}
-      {dropDistance !== null ? (
-        <Badge
-          label={dropDistance <= NEAR_DROP_M ? t.nearDrop : t.farDrop(formatKm(dropDistance))}
-          tone={dropDistance <= NEAR_DROP_M ? 'success' : 'warning'}
-        />
-      ) : null}
-      <Card>
-        <Value>{t.otpTitle}</Value>
-        <InputField
-          label={t.otpLabel}
-          value={otp}
-          onChangeText={value => setOtp(value.replace(/\D/g, '').slice(0, 4))}
-          keyboardType="number-pad"
-          maxLength={4}
-          testID="rider-otp-input"
-        />
-        {isDemo ? <Label>{t.demoOtp(DEMO_OTP)}</Label> : null}
-      </Card>
-      {contactButtons}
-      {unreachableFrom === null ? (
-        <Button label={t.unreachable} variant="ghost" onPress={() => setUnreachableFrom(Date.now())} testID="rider-unreachable" />
-      ) : (
+      {(
         <Card>
           <Value>{t.unreachableTitle}</Value>
           <Body>{t.unreachableSteps}</Body>

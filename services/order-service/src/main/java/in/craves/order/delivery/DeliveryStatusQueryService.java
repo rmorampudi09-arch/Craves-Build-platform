@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -22,6 +23,9 @@ public class DeliveryStatusQueryService {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    // One connection for the order and history reads; the history read runs inside the outer row mapper, so without
+    // it each request holds two pool connections at once, and a few parallel polls can exhaust a small Hikari pool.
+    @Transactional(readOnly = true)
     public DeliveryStatusResponse getForCustomer(CravesPrincipal principal, UUID orderId) {
         if (principal == null || !principal.hasRole("CUSTOMER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer role is required");

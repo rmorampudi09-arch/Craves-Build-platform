@@ -1,12 +1,11 @@
-import React, {memo, useEffect, useRef, useState} from 'react';
-import {Animated, StyleSheet, Text, View} from 'react-native';
+import React, {memo, useEffect, useState} from 'react';
+import {StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Button} from '../../../shared/components';
-import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
-import {useReducedMotionPreference} from '../../../design/reducedMotion';
+import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
 import {idempotencyKey, riderApi} from '../api/riderApi';
 import {BottomAction} from '../components/BottomAction';
+import {CountdownBar} from '../components/CountdownBar';
 import {Body, Card, Label, Money, RiderScreen, Title, Value} from '../components/ui';
 import {formatKm} from '../domain/format';
 import {offerDeadlineMs, secondsLeft} from '../domain/offerTiming';
@@ -31,31 +30,17 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   const o = strings.offer;
   const {riderId} = useRiderShell();
   const queryClient = useQueryClient();
-  const reduceMotion = useReducedMotionPreference();
   const {offer} = route.params;
   const deadline = offerDeadlineMs(route.params);
   const [ended, setEnded] = useState<string | null>(null);
-  const progress = useRef(new Animated.Value(1)).current;
 
   // A newer offer can replace this one on the same screen; start it fresh.
   useEffect(() => setEnded(null), [offer.offerId]);
 
-  // One native-driver animation for the bar; the label above ticks once a second.
   useEffect(() => {
-    const leftMs = deadline - Date.now();
-    progress.setValue(Math.max(0, leftMs / (offer.expiresInSec * 1000)));
-    const animation = Animated.timing(progress, {
-      toValue: 0,
-      duration: reduceMotion ? 0 : Math.max(0, leftMs),
-      useNativeDriver: true,
-    });
-    animation.start();
-    const expiry = setTimeout(() => setEnded(o.expired), Math.max(0, leftMs));
-    return () => {
-      animation.stop();
-      clearTimeout(expiry);
-    };
-  }, [deadline, offer.expiresInSec, progress, reduceMotion, o.expired]);
+    const expiry = setTimeout(() => setEnded(o.expired), Math.max(0, deadline - Date.now()));
+    return () => clearTimeout(expiry);
+  }, [deadline, o.expired]);
 
   useEffect(() => {
     if (!ended) {
@@ -101,14 +86,12 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
       footer={
         ended ? null : (
           <>
-            <BottomAction label={o.accept} onPress={accept} testID="rider-offer-accept" />
-            <Button label={o.decline} variant="outline" onPress={decline} testID="rider-offer-decline" />
+            <BottomAction label={o.accept} size="tall" onPress={accept} testID="rider-offer-accept" />
+            <BottomAction label={o.decline} variant="outline" onPress={decline} testID="rider-offer-decline" />
           </>
         )
       }>
-      <View style={styles.track} accessibilityElementsHidden>
-        <Animated.View style={[styles.bar, {transform: [{scaleX: progress}]}]} />
-      </View>
+      <CountdownBar deadlineMs={deadline} totalMs={offer.expiresInSec * 1000} testID="rider-offer-countdown" />
       {ended ? (
         <Title>{ended}</Title>
       ) : (
@@ -139,13 +122,6 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
 }
 
 const styles = StyleSheet.create({
-  track: {height: 8, borderRadius: radius.pill, backgroundColor: colors.muted, overflow: 'hidden'},
-  bar: {
-    height: 8,
-    width: '100%',
-    backgroundColor: colors.flameRedAccessible,
-    transformOrigin: 'left',
-  },
   seconds: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
   distances: {flexDirection: 'row', gap: spacing.sm},
   half: {flex: 1},

@@ -9,7 +9,7 @@ import {idempotencyKey} from '../api/riderApi';
 import {DEMO_OTP} from '../api/riderApi.mock';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, Money, RiderScreen, Row, riderStyles, Title, Value} from '../components/ui';
+import {Body, Card, Label, Money, RateRow, RiderScreen, riderStyles, Title, Value} from '../components/ui';
 import {distanceMeters, formatKm, formatRupees, formatTimer} from '../domain/format';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
@@ -108,7 +108,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     ) : (
       <RiderScreen
         header={<RiderHeader />}
-        footer={<Button label={t.backToWaiting} onPress={() => navigation.popTo('Tabs')} />}>
+        footer={<BottomAction label={t.backToWaiting} onPress={() => navigation.popTo('Tabs')} />}>
         <Title>{t.ended}</Title>
       </RiderScreen>
     );
@@ -173,7 +173,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   if (ENDED.includes(step)) {
     const title = step === 'DELIVERED' ? t.completeTitle : step === 'CANCELLED' ? t.cancelledTitle : t.failedTitle;
     return (
-      <RiderScreen header={header} footer={<Button label={t.backToWaiting} onPress={backToWaiting} testID="rider-back-to-waiting" />}>
+      <RiderScreen header={header} footer={<BottomAction label={t.backToWaiting} onPress={backToWaiting} testID="rider-back-to-waiting" />}>
         <Title>{title}</Title>
         {syncNote}
         {trip.cancelReason ? <Body>{trip.cancelReason}</Body> : null}
@@ -181,7 +181,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
           <Label>{t.youEarned}</Label>
           <Money paise={step === 'DELIVERED' ? trip.payPaise : (trip.payLines ?? []).reduce((s, l) => s + l.amountPaise, 0)} />
           {trip.payLines ? (
-            trip.payLines.map(line => <Row key={line.label} label={line.label} value={formatRupees(line.amountPaise)} />)
+            trip.payLines.map(line => <RateRow key={line.label} label={line.label} value={formatRupees(line.amountPaise)} />)
           ) : (
             <Label>{t.linesPending}</Label>
           )}

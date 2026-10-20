@@ -5,7 +5,7 @@ import {Button, SectionSkeleton, TerminalState} from '../../../shared/components
 import {riderApi} from '../api/riderApi';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, RiderScreen, Row, Title, Value} from '../components/ui';
+import {Body, Card, Label, RateRow, RiderScreen, Title, Value} from '../components/ui';
 import {formatDay} from '../domain/format';
 import type {RiderScreenProps} from '../navigation';
 import {riderKeys, useTerms} from '../state/riderQueries';
@@ -44,7 +44,7 @@ export function TermsScreen({route, navigation}: RiderScreenProps<'Terms'>) {
         accepting ? (
           <BottomAction label={strings.terms.accept} onPress={accept} testID="rider-terms-accept" />
         ) : (
-          <Button label={strings.common.cancel} variant="ghost" onPress={() => navigation.goBack()} />
+          <BottomAction label={strings.common.cancel} variant="ghost" onPress={() => navigation.goBack()} />
         )
       }>
       <Title>{strings.terms.title}</Title>
@@ -58,14 +58,14 @@ export function TermsScreen({route, navigation}: RiderScreenProps<'Terms'>) {
       <Card>
         <Value>{strings.terms.rateCard}</Value>
         {rateCardLines.map(line => (
-          <Row key={line.label} label={line.label} value={line.value} />
+          <RateRow key={line.label} label={line.label} value={line.value} />
         ))}
         <Label>{strings.terms.notice}</Label>
       </Card>
       <Card>
         <Value>{strings.terms.grievance}</Value>
         {grievanceLines.map(line => (
-          <Row key={line.label} label={line.label} value={line.value} />
+          <RateRow key={line.label} label={line.label} value={line.value} />
         ))}
       </Card>
       {fullTextUrl ? (

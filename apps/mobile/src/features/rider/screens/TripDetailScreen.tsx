@@ -1,10 +1,11 @@
 import React, {useState} from 'react';
 import {Alert, View} from 'react-native';
-import {Badge, Button, Chip, SectionSkeleton, TerminalState} from '../../../shared/components';
+import {Button, Chip, SectionSkeleton, TerminalState} from '../../../shared/components';
 import type {SupportCategory, SupportIssue} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, Money, RiderScreen, Row, riderStyles, Value} from '../components/ui';
+import {StatusBadge} from '../components/StatusBadge';
+import {Body, Card, Label, Money, RateRow, RiderScreen, riderStyles, Value} from '../components/ui';
 import {formatClock, formatDay, formatKm, formatRupees} from '../domain/format';
 import type {RiderScreenProps} from '../navigation';
 import {useTripEarning} from '../state/riderQueries';
@@ -59,14 +60,14 @@ export function TripDetailScreen({route}: RiderScreenProps<'TripDetail'>) {
   const trip = useTripEarning(route.params.tripId);
 
   return (
-    <RiderScreen header={<RiderHeader title={e.detailTitle} />} testID="rider-trip-detail">
+    <RiderScreen header={<RiderHeader title={e.detailTitle} back />} testID="rider-trip-detail">
       {trip.data ? (
         <>
           <Card>
             <Value>{`${trip.data.kitchenArea} → ${trip.data.customerLocality}`}</Value>
             <Label>{`${e.completed} ${formatDay(trip.data.completedAt)} · ${formatClock(trip.data.completedAt)}`}</Label>
             <Money paise={trip.data.amountPaise} />
-            <Badge label={e.status[trip.data.status]} tone={trip.data.status === 'HELD' ? 'warning' : 'success'} />
+            <StatusBadge status={trip.data.status} label={e.status[trip.data.status]} />
           </Card>
           {trip.data.status === 'HELD' && trip.data.holdReason ? (
             <Card>
@@ -77,12 +78,12 @@ export function TripDetailScreen({route}: RiderScreenProps<'TripDetail'>) {
           ) : null}
           <Card>
             {trip.data.lines.map(line => (
-              <Row key={line.label} label={line.label} value={formatRupees(line.amountPaise)} />
+              <RateRow key={line.label} label={line.label} value={formatRupees(line.amountPaise)} />
             ))}
           </Card>
           <Card>
-            {trip.data.pickupDistanceM ? <Row label={e.toKitchen} value={formatKm(trip.data.pickupDistanceM)} /> : null}
-            {trip.data.dropDistanceM ? <Row label={e.toCustomer} value={formatKm(trip.data.dropDistanceM)} /> : null}
+            {trip.data.pickupDistanceM ? <RateRow label={e.toKitchen} value={formatKm(trip.data.pickupDistanceM)} /> : null}
+            {trip.data.dropDistanceM ? <RateRow label={e.toCustomer} value={formatKm(trip.data.dropDistanceM)} /> : null}
             <Label>{e.rateCard(trip.data.rateCardVersion)}</Label>
           </Card>
           <ReportProblem issue={{tripId: trip.data.tripId}} categories={TRIP_CATEGORIES} />

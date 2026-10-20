@@ -2,7 +2,7 @@
 version: 1
 slug: "screens"
 primary_target: "screens"
-related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx","screens/HelpScreen.tsx","screens/HomeScreen.tsx","screens/OfferScreen.tsx","screens/PayoutsScreen.tsx","screens/PhoneSetupScreen.tsx","screens/ProfileScreen.tsx","screens/SosScreen.tsx","screens/TermsScreen.tsx","screens/TripDetailScreen.tsx","screens/TripScreen.tsx","components/BottomAction.tsx","components/RiderHeader.tsx","components/RiderRuntime.tsx","components/ui.tsx"]
+related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx","screens/HelpScreen.tsx","screens/HomeScreen.tsx","screens/OfferScreen.tsx","screens/PayoutsScreen.tsx","screens/PhoneSetupScreen.tsx","screens/ProfileScreen.tsx","screens/SosScreen.tsx","screens/TermsScreen.tsx","screens/TripDetailScreen.tsx","screens/TripScreen.tsx","components/Banner.tsx","components/BottomAction.tsx","components/CountdownBar.tsx","components/RiderHeader.tsx","components/RiderRuntime.tsx","components/StatusBadge.tsx","components/StepBar.tsx","components/ui.tsx"]
 ---
 
 ## Scope and mode

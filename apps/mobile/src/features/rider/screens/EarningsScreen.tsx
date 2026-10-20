@@ -3,17 +3,16 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {FlashList} from '@shopify/flash-list';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {Badge, Button, ListSkeleton, SegmentedControl, TerminalState} from '../../../shared/components';
+import {Button, ListSkeleton, SegmentedControl, TerminalState} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, spacing, touchTarget, typography} from '../../../design/tokens';
 import type {EarningsRange, TripEarning} from '../api/contract';
 import {RiderHeader} from '../components/RiderHeader';
+import {StatusBadge} from '../components/StatusBadge';
 import {Label, Money} from '../components/ui';
 import {formatClock, formatDay, formatRupees} from '../domain/format';
 import type {RiderNav} from '../navigation';
 import {useEarnings} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
-
-const STATUS_TONE = {CREDITED: 'success', HELD: 'warning', ADJUSTED: 'info'} as const;
 
 const TripRow = memo(function TripRowView({
   item,
@@ -36,7 +35,7 @@ const TripRow = memo(function TripRowView({
       </View>
       <View style={styles.rowEnd}>
         <Text style={styles.amount}>{formatRupees(item.amountPaise)}</Text>
-        <Badge label={statusLabel} tone={STATUS_TONE[item.status]} />
+        <StatusBadge status={item.status} label={statusLabel} compact />
       </View>
     </Pressable>
   );

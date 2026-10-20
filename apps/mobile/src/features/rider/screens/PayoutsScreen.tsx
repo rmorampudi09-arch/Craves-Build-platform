@@ -1,18 +1,17 @@
 import React from 'react';
 import {Alert} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Badge, SectionSkeleton, TerminalState} from '../../../shared/components';
+import {SectionSkeleton, TerminalState} from '../../../shared/components';
 import {idempotencyKey, riderApi} from '../api/riderApi';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, RiderScreen, Row, Value} from '../components/ui';
+import {StatusBadge} from '../components/StatusBadge';
+import {Body, Card, Label, RateRow, RiderScreen, Value} from '../components/ui';
 import {formatDay, formatRupees} from '../domain/format';
 import {useRiderShell} from '../navigation';
 import {riderKeys, usePayouts, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {ReportProblem} from './TripDetailScreen';
-
-const TONE = {SCHEDULED: 'neutral', PROCESSING: 'info', PAID: 'success', FAILED: 'error'} as const;
 
 export function PayoutsScreen() {
   const {strings} = useStrings();
@@ -47,7 +46,7 @@ export function PayoutsScreen() {
 
   return (
     <RiderScreen
-      header={<RiderHeader title={p.title} />}
+      header={<RiderHeader title={p.title} back />}
       testID="rider-payouts"
       footer={
         features?.withdrawEnabled && withdrawable > 0 ? (
@@ -62,8 +61,8 @@ export function PayoutsScreen() {
           {payouts.data.payouts.length === 0 ? <Body>{p.empty}</Body> : null}
           {payouts.data.payouts.map(payout => (
             <Card key={payout.payoutId}>
-              <Row label={payout.periodLabel} value={formatRupees(payout.amountPaise)} />
-              <Badge label={p.status[payout.status]} tone={TONE[payout.status]} />
+              <RateRow label={payout.periodLabel} value={formatRupees(payout.amountPaise)} />
+              <StatusBadge status={payout.status} label={p.status[payout.status]} compact />
               {payout.utr ? <Label>{`${p.utr}: ${payout.utr}`}</Label> : null}
               {payout.paidAt ? <Label>{formatDay(payout.paidAt)}</Label> : null}
               <ReportProblem issue={{payoutId: payout.payoutId}} categories={['PAYOUT_NOT_RECEIVED', 'WRONG_DEDUCTION', 'OTHER']} />

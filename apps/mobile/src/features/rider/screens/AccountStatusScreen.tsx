@@ -3,6 +3,7 @@ import {Linking} from 'react-native';
 import {Button, TerminalState} from '../../../shared/components';
 import {formatDay} from '../domain/format';
 import {resolveGate} from '../domain/gate';
+import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Body, Card, Label, RiderScreen, Title, Value} from '../components/ui';
 import {useRiderShell} from '../navigation';
@@ -28,11 +29,11 @@ export function AccountStatusScreen() {
 
   return (
     <RiderScreen
-      header={<RiderHeader />}
+      header={<RiderHeader inactive={Boolean(block)} />}
       testID="rider-account-status"
       footer={
         <>
-          <Button label={strings.common.callSupport} leftIcon="phone" onPress={() => call(me.data.supportPhone)} />
+          <BottomAction label={strings.common.callSupport} leftIcon="phone-outline" onPress={() => call(me.data.supportPhone)} />
           {block ? <Button label={strings.account.signOut} variant="ghost" onPress={() => shell.signOut()} /> : null}
         </>
       }>

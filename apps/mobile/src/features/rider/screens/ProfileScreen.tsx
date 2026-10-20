@@ -1,10 +1,11 @@
 import React from 'react';
 import {Alert, Image, Linking, StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Badge, Button, Chip, SectionSkeleton} from '../../../shared/components';
+import {Button, Chip, SectionSkeleton} from '../../../shared/components';
 import {colors, spacing} from '../../../design/tokens';
 import type {Language, RiderProfile} from '../api/contract';
 import {RiderHeader} from '../components/RiderHeader';
+import {StatusBadge} from '../components/StatusBadge';
 import {Body, Card, Label, RiderScreen, riderStyles, Title, Value} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {useRiderShell, type RiderNav} from '../navigation';
@@ -18,15 +19,15 @@ const LANGUAGES: Language[] = ['en', 'te', 'hi'];
 type Doc = RiderProfile['documents'][number];
 
 /** Expired documents say so; ones expiring within 30 days warn before anything blocks the rider. */
-export function documentBadge(doc: Doc, now = Date.now()): {label: 'EXPIRED' | 'SOON' | Doc['status']; tone: 'error' | 'warning' | 'success' | 'neutral'} {
+export function documentBadge(doc: Doc, now = Date.now()): {label: 'EXPIRED' | 'SOON' | Doc['status']} {
   const expires = doc.expiresOn ? Date.parse(doc.expiresOn) : null;
   if (doc.status === 'EXPIRED' || (expires !== null && expires < now)) {
-    return {label: 'EXPIRED', tone: 'error'};
+    return {label: 'EXPIRED'};
   }
   if (expires !== null && expires - now < SOON_MS) {
-    return {label: 'SOON', tone: 'warning'};
+    return {label: 'SOON'};
   }
-  return {label: doc.status, tone: doc.status === 'VERIFIED' ? 'success' : doc.status === 'REJECTED' ? 'error' : 'neutral'};
+  return {label: doc.status};
 }
 
 export function ProfileScreen() {
@@ -79,7 +80,7 @@ export function ProfileScreen() {
                     {doc.expiresOn ? <Label>{p.expires(formatDay(doc.expiresOn))}</Label> : null}
                     {doc.reason ? <Body>{doc.reason}</Body> : null}
                   </View>
-                  <Badge label={label} tone={badge.tone} />
+                  <StatusBadge status={badge.label} label={label} />
                 </View>
               );
             })}

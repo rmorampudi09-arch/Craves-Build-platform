@@ -23,8 +23,14 @@ export function RiderScreen({
   );
 }
 
+/** White, 1 dp border, radius 14, no shadow. Never put a card inside a card. */
 export function Card({children, style}: PropsWithChildren<{style?: StyleProp<ViewStyle>}>) {
   return <View style={[styles.card, style]}>{children}</View>;
+}
+
+/** At most one per screen, for the thing the rider came for: the order code, the money to withdraw, a person to talk to. */
+export function HeroCard({children, style}: PropsWithChildren<{style?: StyleProp<ViewStyle>}>) {
+  return <View style={[styles.card, styles.hero, style]}>{children}</View>;
 }
 
 export function Title({children}: PropsWithChildren) {
@@ -55,10 +61,11 @@ export function Money({paise, testID}: {paise: number; testID?: string}) {
   );
 }
 
-export function Row({label, value}: {label: string; value: string}) {
+/** Label on the left, bold value on the right (may wrap). `divider` draws a line above it; `total` is the closing bold row. */
+export function RateRow({label, value, divider, total}: {label: string; value: string; divider?: boolean; total?: boolean}) {
   return (
-    <View style={styles.row}>
-      <Text style={[styles.body, styles.rowLabel]}>{label}</Text>
+    <View style={[styles.row, (divider || total) && styles.rowDivider]}>
+      <Text style={[styles.body, styles.rowLabel, total && styles.rowTotal]}>{label}</Text>
       <Text style={[styles.body, styles.rowValue]}>{value}</Text>
     </View>
   );
@@ -89,12 +96,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceBase,
     ...elevation.none,
   },
+  hero: {borderRadius: radius.lg, borderColor: colors.textPrimary},
   title: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary},
   label: {fontSize: typography.small, color: colors.textSecondary},
   value: {fontSize: typography.heading, fontWeight: fontWeight.semibold, color: colors.textPrimary},
   body: {fontSize: typography.body, color: colors.textPrimary},
-  money: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  money: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
   row: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
+  rowDivider: {paddingTop: spacing.xs, borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
   rowLabel: {flex: 1, color: colors.textSecondary},
-  rowValue: {fontWeight: fontWeight.semibold, textAlign: 'right'},
+  rowTotal: {color: colors.textPrimary, fontWeight: fontWeight.bold},
+  rowValue: {flexShrink: 1, fontWeight: fontWeight.bold, textAlign: 'right'},
 });

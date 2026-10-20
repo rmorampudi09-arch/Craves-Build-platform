@@ -3,8 +3,9 @@ import {Alert} from 'react-native';
 import {createNavigationContainerRef, NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Icon, TerminalState} from '../../shared/components';
-import {colors} from '../../design/tokens';
+import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
 import {resolveGate} from '../../features/rider/domain/gate';
@@ -36,15 +37,31 @@ const Tabs = createBottomTabNavigator<RiderTabParamList>();
 const navigationRef = createNavigationContainerRef<RiderStackParamList>();
 const ENDED = ['DELIVERED', 'FAILED', 'CANCELLED'];
 
-type TabIconProps = {color: string; size: number};
-const homeIcon = ({color, size}: TabIconProps) => <Icon name="home" color={color} size={size} surface={false} />;
-const walletIcon = ({color, size}: TabIconProps) => <Icon name="wallet" color={color} size={size} surface={false} />;
-const accountIcon = ({color, size}: TabIconProps) => <Icon name="account" color={color} size={size} surface={false} />;
+type TabIconProps = {color: string};
+const homeIcon = ({color}: TabIconProps) => <Icon name="home-outline" color={color} size={iconSize.lg} surface={false} />;
+const walletIcon = ({color}: TabIconProps) => <Icon name="wallet" color={color} size={iconSize.lg} surface={false} />;
+const accountIcon = ({color}: TabIconProps) => <Icon name="account-outline" color={color} size={iconSize.lg} surface={false} />;
 
+/** 64 dp above the system bar, a 1 dp top line, no shadow; the active tab is red (docs/riders/SCREENS.md 0.6). */
 function RiderTabs() {
   const {strings} = useStrings();
+  const {bottom} = useSafeAreaInsets();
   return (
-    <Tabs.Navigator screenOptions={{headerShown: false, tabBarActiveTintColor: colors.flameRedAccessible}}>
+    <Tabs.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.flameRedAccessible,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarLabelStyle: {fontSize: typography.small, fontWeight: fontWeight.bold},
+        tabBarStyle: {
+          height: 64 + bottom,
+          backgroundColor: colors.white,
+          borderTopWidth: borderWidth.standard,
+          borderTopColor: colors.border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+      }}>
       <Tabs.Screen
         name="Home"
         component={HomeScreen}

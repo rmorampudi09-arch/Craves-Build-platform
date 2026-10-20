@@ -2,6 +2,7 @@ import React from 'react';
 import {Linking} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Button} from '../../../shared/components';
+import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Body, Card, Label, RiderScreen, Value} from '../components/ui';
 import {formatDay, formatRupees} from '../domain/format';
@@ -18,13 +19,13 @@ export function HelpScreen() {
 
   return (
     <RiderScreen
-      header={<RiderHeader title={h.title} />}
+      header={<RiderHeader title={h.title} back />}
       testID="rider-help"
       footer={
         supportPhone ? (
-          <Button
+          <BottomAction
             label={strings.common.callSupport}
-            leftIcon="phone"
+            leftIcon="phone-outline"
             onPress={() => Linking.openURL(`tel:${supportPhone}`).catch(() => undefined)}
           />
         ) : null

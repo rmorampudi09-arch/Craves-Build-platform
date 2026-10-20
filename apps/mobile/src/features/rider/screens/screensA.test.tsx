@@ -1,14 +1,14 @@
 // Screens 1–8 of "Rider app P1: screens to the design": every state of sign-in, account status, terms,
 // phone setup, home, go online and the offer.
 import React from 'react';
-import {Alert, Text} from 'react-native';
+import {AccessibilityInfo, Alert, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from '../../../app/rider/signIn/RiderOtpScreen';
 import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
 import * as ImagePicker from 'expo-image-picker';
-import type {HomeSummary, RiderMe, RiderProfile, Terms} from '../api/contract';
+import type {HomeSummary, Offer, RiderMe, RiderProfile, Terms} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {riderDevice, type DeviceState} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
@@ -18,6 +18,7 @@ import {RiderStringsProvider} from '../strings/StringsProvider';
 import {AccountStatusScreen} from './AccountStatusScreen';
 import {GoOnlineScreen} from './GoOnlineScreen';
 import {HomeScreen} from './HomeScreen';
+import {OfferScreen} from './OfferScreen';
 import {phoneBrand, PhoneSetupScreen} from './PhoneSetupScreen';
 import {TermsScreen} from './TermsScreen';
 
@@ -534,5 +535,77 @@ describe('Go online', () => {
     await act(async () => press('rider-go-online-close').props.onPress());
     expect(mockNavigation.goBack).toHaveBeenCalled();
     expect(ImagePicker.launchCameraAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('Offer', () => {
+  const offer: Offer = {
+    offerId: 'o1',
+    tripId: 't1',
+    expiresAt: '2026-10-20T10:00:40Z',
+    expiresInSec: 40,
+    payPaise: 6700,
+    pickupDistanceM: 2000,
+    dropDistanceM: 4000,
+    kitchenArea: 'Madhapur',
+    customerLocality: 'Kondapur',
+    estMinutes: 28,
+    payLines: [
+      {label: 'base', amountPaise: 4000},
+      {label: 'drop distance', amountPaise: 1800},
+      {label: 'ride to the kitchen', amountPaise: 900},
+    ],
+  };
+  const props = (received = Date.now()) => ({
+    route: {key: 'Offer', name: 'Offer' as const, params: {offer, receivedAtMs: received}},
+    navigation: mockNavigation as never,
+  });
+
+  it('puts the locked pay first, in one sentence with its parts, then distances and the route', async () => {
+    await render(<OfferScreen {...props()} />);
+    const text = allText();
+    expect(text).toContain('New order | 40s left | You get at least | ₹67');
+    expect(text).toContain('₹40 base + ₹18 drop distance + ₹9 ride to the kitchen. Locked once you accept.');
+    expect(text).toContain('To the kitchen | 2.0 km | Kitchen to customer | 4.0 km');
+    expect(text).toContain('About 28 min in total');
+    expect(text).toContain('Declining is free and never affects your future offers.');
+    const pay = tree.root.findByProps({testID: 'rider-offer-pay'});
+    expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 72, fontWeight: '900'});
+    expect(pay.props.adjustsFontSizeToFit).toBe(true);
+    expect(tree.root.findByProps({accessibilityLabel: 'Madhapur to Kondapur'})).toBeTruthy();
+  });
+
+  it('declines for free and closes', async () => {
+    (riderApi.declineOffer as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<OfferScreen {...props()} />);
+    await act(async () => press('rider-offer-decline').props.onPress());
+    expect(riderApi.declineOffer).toHaveBeenCalledWith('o1', 'rider-decline-o1-r1');
+    expect(mockNavigation.goBack).toHaveBeenCalled();
+  });
+
+  it('tells TalkBack the time at 30, 20, 10 and 5 seconds only', async () => {
+    jest.useFakeTimers();
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    await render(<OfferScreen {...props()} />);
+    for (let i = 0; i < 36; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(announce.mock.calls.map(([message]) => message)).toEqual(['30s left', '20s left', '10s left', '5s left']);
+    announce.mockRestore();
+  });
+
+  it('says the offer expired when the server says so, and hides the buttons', async () => {
+    (riderApi.acceptOffer as jest.Mock).mockRejectedValueOnce(new AppApiError('OFFER_EXPIRED', 'expired', 410));
+    await render(<OfferScreen {...props()} />);
+    await act(async () => press('rider-offer-accept').props.onPress());
+    expect(allText()).toContain('Offer expired');
+    expect(press('rider-offer-accept')).toBeUndefined();
+  });
+
+  it('shows just the lock when the server sends no breakdown', async () => {
+    await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: {...offer, payLines: []}, receivedAtMs: Date.now()}}} />);
+    expect(allText()).toContain('₹67 | Locked once you accept.');
   });
 });

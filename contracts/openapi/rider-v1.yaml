@@ -215,6 +215,7 @@ components:
         kitchenArea: {type: string}
         customerLocality: {type: string}
         estMinutes: {type: integer}
+        itemsCount: {type: integer, minimum: 1, description: 'Items in the sealed bag ("About 28 min in total, 2 items")'}
         payLines: {type: array, description: 'How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance")', items: {$ref: '#/components/schemas/PayLine'}}
     Place:
       type: object

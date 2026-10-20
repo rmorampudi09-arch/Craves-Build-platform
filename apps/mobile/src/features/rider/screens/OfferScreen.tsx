@@ -137,7 +137,7 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
             <Icon name="arrow-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
             <Text style={styles.heading}>{offer.customerLocality}</Text>
           </View>
-          <Text style={styles.secondary}>{o.total(offer.estMinutes)}</Text>
+          <Text style={styles.secondary}>{o.total(offer.estMinutes, offer.itemsCount)}</Text>
         </Card>
         <View style={styles.push} />
         <Text style={styles.note}>{o.freeDecline}</Text>

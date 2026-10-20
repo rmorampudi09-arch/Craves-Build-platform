@@ -270,6 +270,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       kitchenArea: kitchen.area,
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
+      itemsCount: 1 + (n % 3),
     };
   }
 
@@ -301,7 +302,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
           .toString(16)
           .padStart(4, '0')}-1c2d-4e5f-8a9b-0c1d2e3f4a5b`,
       )}`,
-      itemsCount: 1 + (n % 3),
+      itemsCount: offer.itemsCount ?? 1,
       payPaise: offer.payPaise,
       kitchen: KITCHENS[n % KITCHENS.length],
       customer: CUSTOMERS[n % CUSTOMERS.length],

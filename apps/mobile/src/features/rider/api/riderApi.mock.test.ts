@@ -175,10 +175,24 @@ describe('mock rider server', () => {
     expect(
       offer.payLines.reduce((sum, line) => sum + line.amountPaise, 0),
     ).toBe(offer.payPaise);
+    expect(offer.itemsCount).toBeGreaterThan(0);
     const trip = await mock.api.acceptOffer(offer.offerId, 'k');
     expect(trip).toMatchObject({
       sealed: true,
       chefReadyAt: expect.any(String),
+      itemsCount: offer.itemsCount,
+    });
+  });
+
+  it("the dev panel's Send an offer now sends a whole offer, items included", async () => {
+    const mock = setup();
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
+    mock.controls.sendOfferNow();
+    const [offer] = (await mock.api.postLocations([])).offers;
+    expect(offer).toMatchObject({
+      estMinutes: expect.any(Number),
+      itemsCount: expect.any(Number),
+      payLines: expect.any(Array),
     });
   });
 

@@ -99,6 +99,8 @@ export interface Offer {
   kitchenArea: string;
   customerLocality: string;
   estMinutes: number;
+  /** Items in the sealed bag; the offer shows "About 28 min in total, 2 items". */
+  itemsCount?: number;
   /** How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance"). */
   payLines: PayLine[];
 }

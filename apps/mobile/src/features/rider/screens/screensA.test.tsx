@@ -562,6 +562,7 @@ describe('Offer', () => {
     kitchenArea: 'Madhapur',
     customerLocality: 'Kondapur',
     estMinutes: 28,
+    itemsCount: 2,
     payLines: [
       {label: 'base', amountPaise: 4000},
       {label: 'drop distance', amountPaise: 1800},
@@ -581,12 +582,21 @@ describe('Offer', () => {
     expect(text).toContain('New order | 40s left | You get at least | ₹67');
     expect(text).toContain('₹40 base + ₹18 drop distance + ₹9 ride to the kitchen. Locked once you accept.');
     expect(text).toContain('To the kitchen | 2.0 km | Kitchen to customer | 4.0 km');
-    expect(text).toContain('About 28 min in total');
+    expect(text).toContain('Madhapur | Kondapur | About 28 min in total, 2 items');
     expect(text).toContain('Declining is free and never affects your future offers.');
     const pay = tree.root.findByProps({testID: 'rider-offer-pay'});
     expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 72, fontWeight: '900'});
     expect(pay.props.adjustsFontSizeToFit).toBe(true);
     expect(tree.root.findByProps({accessibilityLabel: 'Madhapur to Kondapur'})).toBeTruthy();
+  });
+
+  it('leaves the item count off when the server sends none, and says "1 item"', async () => {
+    const withItems = (itemsCount?: number) => ({...props(), route: {...props().route, params: {offer: {...offer, itemsCount}, receivedAtMs: Date.now()}}});
+    await render(<OfferScreen {...withItems(undefined)} />);
+    expect(allText()).toContain('About 28 min in total |');
+    expect(allText()).not.toContain('items');
+    await render(<OfferScreen {...withItems(1)} />);
+    expect(allText()).toContain('About 28 min in total, 1 item |');
   });
 
   it('declines for free and closes', async () => {

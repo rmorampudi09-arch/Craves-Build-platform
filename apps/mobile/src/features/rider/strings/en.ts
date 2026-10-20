@@ -12,13 +12,16 @@ export const en = {
     cancel: 'Cancel',
     error: 'Something went wrong. Try again.',
     sos: 'SOS',
-    sosLabel: 'Emergency help',
+    sosLabel: 'SOS, emergency help',
+    back: 'Back',
   },
   tabs: {home: 'Home', earnings: 'Earnings', profile: 'Profile'},
   status: {
     offline: 'Offline',
     waiting: 'Online · waiting for orders',
     trip: (step: number) => `Trip · step ${step} of 4`,
+    notActive: 'Not active yet',
+    tripStep: (step: number) => `Trip step ${step} of 4`,
   },
   signIn: {
     title: 'Sign in to Craves Rider',

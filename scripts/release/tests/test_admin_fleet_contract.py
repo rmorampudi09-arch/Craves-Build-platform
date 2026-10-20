@@ -51,7 +51,7 @@ class AdminFleetContractTest(unittest.TestCase):
     def test_every_mutation_takes_an_idempotency_key(self):
         key = {"$ref": "#/components/parameters/IdempotencyKey"}
         for path, method, op in self.operations:
-            if method in ("post", "put"):
+            if method in ("post", "put", "delete"):
                 self.assertIn(key, op.get("parameters", []), f"{method} {path}")
         self.assertEqual(self.spec["components"]["parameters"]["IdempotencyKey"]["name"], "Idempotency-Key")
 
@@ -90,6 +90,56 @@ class AdminFleetContractTest(unittest.TestCase):
         setters = set(paths["/api/v1/admin/fleet/riders/{riderId}/payout-account"]["put"]["x-roles"])
         for path in ("/api/v1/admin/fleet/riders", "/api/v1/admin/fleet/riders/{riderId}"):
             self.assertLessEqual(setters, set(paths[path]["get"]["x-roles"]), path)
+
+    def test_expiring_documents_need_an_expiry_to_be_approved(self):
+        schemas = self.spec["components"]["schemas"]
+        self.assertIn("PUC", schemas["RiderDocument"]["properties"]["type"]["enum"])
+        approve = self.spec["paths"]["/api/v1/admin/fleet/riders/{riderId}/documents/{documentId}/approve"]["post"]
+        self.assertFalse(approve["requestBody"]["required"])
+        body = approve["requestBody"]["content"]["application/json"]["schema"]
+        self.assertEqual(body["properties"], {"expiresOn": {"type": "string", "format": "date", "description": "Expiry date printed on the document."}})
+        self.assertIn("EXPIRY_REQUIRED", approve["responses"]["422"]["description"])
+        for document_type in ("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC"):
+            self.assertIn(document_type, approve["description"])
+
+    def test_vehicle_slots_and_banner_writes_are_operations_only(self):
+        paths = self.spec["paths"]
+        writes = {
+            ("/api/v1/admin/fleet/riders/{riderId}/vehicle", "put"), ("/api/v1/admin/fleet/slots", "post"),
+            ("/api/v1/admin/fleet/slots/{slotId}/cancel", "post"), ("/api/v1/admin/fleet/banner", "put"),
+            ("/api/v1/admin/fleet/banner", "delete"),
+        }
+        for path, method in writes:
+            self.assertEqual(set(paths[path][method]["x-roles"]), {"PLATFORM_ADMIN", "OPERATIONS_ADMIN"}, f"{method} {path}")
+        reads = set(paths["/api/v1/admin/fleet/trips"]["get"]["x-roles"])
+        for path in ("/api/v1/admin/fleet/slots", "/api/v1/admin/fleet/banner"):
+            self.assertEqual(set(paths[path]["get"]["x-roles"]), reads, path)
+
+    def test_slot_rules(self):
+        schemas = self.spec["components"]["schemas"]
+        slot = schemas["Slot"]
+        self.assertEqual(set(slot["required"]), {"slotId", "riderId", "riderName", "zoneName", "startsAt", "endsAt", "guaranteedPerHourPaise", "status"})
+        self.assertEqual(slot["properties"]["status"]["enum"], ["BOOKED", "CANCELLED", "COMPLETED"])
+        self.assertTrue({"onlineInZoneMinutes", "topUpPaise"} <= set(slot["properties"]))
+        self.assertEqual(set(schemas["SlotInput"]["required"]), {"riderId", "zoneName", "startsAt", "endsAt", "guaranteedPerHourPaise"})
+        create = self.spec["paths"]["/api/v1/admin/fleet/slots"]["post"]
+        self.assertIn("SLOT_OVERLAP", create["responses"]["409"]["description"])
+        self.assertIn("GUARANTEE_OUT_OF_RANGE", create["responses"]["422"]["description"])
+        self.assertIn("SLOT_END_NOT_AFTER_START", create["responses"]["422"]["description"])
+        listing = {param["name"]: param for param in self.spec["paths"]["/api/v1/admin/fleet/slots"]["get"]["parameters"]}
+        self.assertEqual(set(listing), {"from", "to", "riderId"})
+        cancel = self.spec["paths"]["/api/v1/admin/fleet/slots/{slotId}/cancel"]["post"]
+        self.assertEqual(cancel["requestBody"], {"$ref": "#/components/requestBodies/Reason"})
+
+    def test_banner_is_short_and_can_be_absent(self):
+        banner = self.spec["components"]["schemas"]["ZoneBanner"]
+        self.assertEqual(banner["properties"]["tone"]["enum"], ["info", "warning"])
+        self.assertEqual(banner["properties"]["text"]["maxLength"], 160)
+        self.assertEqual(set(banner["required"]), {"tone", "text", "until"})
+        item = self.spec["paths"]["/api/v1/admin/fleet/banner"]
+        self.assertTrue({"200", "204"} <= set(item["get"]["responses"]))
+        self.assertIn("204", item["delete"]["responses"])
+        self.assertNotIn("requestBody", item["delete"])
 
 
 if __name__ == "__main__":

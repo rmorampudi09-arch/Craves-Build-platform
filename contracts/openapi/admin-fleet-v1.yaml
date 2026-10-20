@@ -1,5 +1,5 @@
 # Admin fleet API: the ops console for Craves riders (apps/customer-web-next /admin/riders,
-# /admin/fleet-trips and /admin/fleet-payouts). Implemented by integration-service, package
+# /admin/fleet-trips, /admin/fleet-payouts and /admin/fleet-slots). Implemented by integration-service, package
 # in.craves.integration.fleet (schema fleet_schema). The web BFF under /api/admin/fleet only forwards
 # these paths; this service is the authority for roles, validation and the audit trail.
 openapi: 3.0.3
@@ -99,17 +99,30 @@ paths:
     post:
       operationId: approveRiderDocument
       x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
-      description: Marks a PENDING document VERIFIED and records the reviewer.
+      description: >-
+        Marks a PENDING document VERIFIED and records the reviewer and the expiry date the reviewer read on it.
+        expiresOn is required for DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE and PUC; other types may omit the body.
       parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/DocumentId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                expiresOn: { type: string, format: date, description: Expiry date printed on the document. }
       responses:
         '200':
           description: Reviewed document.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RiderDocument' }
+        '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: "DOCUMENT_NOT_PENDING.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "EXPIRY_REQUIRED (a DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE or PUC approved without expiresOn).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/riders/{riderId}/documents/{documentId}/reject:
     post:
       operationId: rejectRiderDocument
@@ -169,6 +182,26 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: "PAYOUT_ACCOUNT_NOT_UNIQUE (the UPI ID or account is another rider's).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: "HOLDER_NAME_MISMATCH (holder name differs from the KYC name).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}/vehicle:
+    put:
+      operationId: setRiderVehicle
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Sets the vehicle the rider's profile shows. Replaces any earlier one. The full registration number is write-only.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RiderVehicleInput' }
+      responses:
+        '200':
+          description: The vehicle as the rider sees it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderVehicle' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/admin/fleet/riders/{riderId}/status-events:
     post:
       operationId: createRiderStatusEvent
@@ -637,6 +670,110 @@ paths:
                 properties:
                   events: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/SosEvent' } }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/slots:
+    get:
+      operationId: listSlots
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: Slots that start on the IST dates from to to (inclusive, at most 31 days), earliest first, optionally for one rider.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: riderId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Slots.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [slots]
+                properties:
+                  slots: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/Slot' } }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createSlot
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Books one rider into a zone for a time window with a guaranteed hourly minimum. The guarantee is counted
+        only from non-mock fixes in the zone; the top-up is settled when the slot ends.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotInput' }
+      responses:
+        '201':
+          description: BOOKED slot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slot' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SLOT_OVERLAP (the rider already has a booked slot in this window) or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422':
+          description: >-
+            GUARANTEE_OUT_OF_RANGE (guaranteedPerHourPaise is outside the current rate card's declared range) or
+            SLOT_END_NOT_AFTER_START (endsAt is not after startsAt).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  /api/v1/admin/fleet/slots/{slotId}/cancel:
+    post:
+      operationId: cancelSlot
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Cancels a BOOKED slot; the rider no longer has its guarantee.
+      parameters: [{ $ref: '#/components/parameters/SlotId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: CANCELLED slot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slot' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SLOT_NOT_BOOKED (already cancelled or completed).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/banner:
+    get:
+      operationId: getZoneBanner
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: The banner riders see on Home until its until time.
+      responses:
+        '200':
+          description: The showing banner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneBanner' }
+        '204': { description: No banner is showing. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: setZoneBanner
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Shows this banner on every rider's Home until until (in the future), replacing any earlier one.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ZoneBanner' }
+      responses:
+        '200':
+          description: The showing banner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneBanner' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: clearZoneBanner
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Stops showing the banner. Clearing when none is showing is also 204.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '204': { description: No banner is showing. }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -654,6 +791,7 @@ components:
     TripId: { name: tripId, in: path, required: true, schema: { type: string, format: uuid } }
     BatchId: { name: batchId, in: path, required: true, schema: { type: string, format: uuid } }
     PayoutId: { name: payoutId, in: path, required: true, schema: { type: string, format: uuid } }
+    SlotId: { name: slotId, in: path, required: true, schema: { type: string, format: uuid } }
   requestBodies:
     Reason:
       required: true
@@ -715,7 +853,7 @@ components:
         type:
           type: string
           description: Aadhaar is never collected.
-          enum: [DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE, PAN, PHOTO, ADDRESS_PROOF, BANK_PROOF]
+          enum: [DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE, PUC, PAN, PHOTO, ADDRESS_PROOF, BANK_PROOF]
         status: { type: string, enum: [PENDING, VERIFIED, REJECTED, EXPIRED] }
         expiresOn: { type: string, format: date, nullable: true }
         reason: { type: string, maxLength: 1000, nullable: true, description: Rejection reason the rider sees. }
@@ -733,6 +871,19 @@ components:
         firstSeenAt: { type: string, format: date-time }
         approvedBy: { type: string, maxLength: 120, nullable: true }
         approvedAt: { type: string, format: date-time, nullable: true }
+    RiderVehicleInput:
+      type: object
+      additionalProperties: false
+      required: [label, regNumber]
+      properties:
+        label: { type: string, minLength: 2, maxLength: 60, example: Honda Activa 6G }
+        regNumber: { type: string, pattern: '^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$', writeOnly: true, example: TS09EA1234 }
+    RiderVehicle:
+      type: object
+      required: [label, regNumberMasked]
+      properties:
+        label: { type: string, maxLength: 60 }
+        regNumberMasked: { type: string, maxLength: 20, example: TS09xx1234 }
     PayoutAccountInput:
       type: object
       additionalProperties: false
@@ -947,3 +1098,35 @@ components:
         lat: { type: number, nullable: true }
         lng: { type: number, nullable: true }
         tripId: { type: string, format: uuid, nullable: true }
+    SlotInput:
+      type: object
+      additionalProperties: false
+      required: [riderId, zoneName, startsAt, endsAt, guaranteedPerHourPaise]
+      properties:
+        riderId: { type: string, format: uuid }
+        zoneName: { type: string, minLength: 1, maxLength: 80 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, description: After startsAt. }
+        guaranteedPerHourPaise: { type: integer, format: int64, minimum: 1, description: Within the current rate card's declared range. }
+    Slot:
+      type: object
+      required: [slotId, riderId, riderName, zoneName, startsAt, endsAt, guaranteedPerHourPaise, status]
+      properties:
+        slotId: { type: string, format: uuid }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        zoneName: { type: string, maxLength: 80 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        guaranteedPerHourPaise: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, enum: [BOOKED, CANCELLED, COMPLETED] }
+        onlineInZoneMinutes: { type: integer, minimum: 0, nullable: true, description: Counted from non-mock fixes; set once the slot has started. }
+        topUpPaise: { type: integer, format: int64, minimum: 0, nullable: true, description: Paid on top of trip pay to reach the guarantee; set once COMPLETED. }
+    ZoneBanner:
+      type: object
+      additionalProperties: false
+      required: [tone, text, until]
+      properties:
+        tone: { type: string, enum: [info, warning] }
+        text: { type: string, minLength: 1, maxLength: 160, example: Heavy rain in Madhapur. Ride slowly. }
+        until: { type: string, format: date-time, description: The banner stops showing at this time. }

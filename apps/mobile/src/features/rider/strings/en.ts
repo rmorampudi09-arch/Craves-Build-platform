@@ -79,12 +79,18 @@ export const en = {
   },
   terms: {
     title: 'Terms and rate card',
-    version: (version: string, from: string) => `Version ${version} · from ${from}`,
+    language: 'Language',
+    version: (version: string, from: string) => `Version ${version}, in force from ${from}`,
+    draft: 'Draft pricing, not final',
     whatChanged: 'What changed',
     rateCard: 'Rate card',
+    notice:
+      'Any change to pay or rules appears here at least 14 days before it starts, with old and new example trips side by side.',
+    howPaidTitle: "How you're paid",
+    howPaid: 'Your whole balance goes to your bank every Monday by 3 pm. You can also take out one free withdrawal a day.',
+    noFees: 'No fees, deposits, kit costs or penalties, ever.',
     grievance: 'Complaints and appeals',
     fullText: 'Read the full terms',
-    notice: 'Any change to pay or rules is shown here at least 14 days before it starts.',
     accept: 'I accept these terms',
   },
   setup: {

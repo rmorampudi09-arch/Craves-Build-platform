@@ -8,11 +8,13 @@ import {AppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from '../../../app/rider/signIn/RiderOtpScreen';
 import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
 import * as ImagePicker from 'expo-image-picker';
-import type {RiderMe, RiderProfile} from '../api/contract';
+import type {RiderMe, RiderProfile, Terms} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
+import {RiderStringsProvider} from '../strings/StringsProvider';
 import {AccountStatusScreen} from './AccountStatusScreen';
+import {TermsScreen} from './TermsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
 const mockSession = {beginPhone: jest.fn(async (_phone: string) => undefined), confirmOtp: jest.fn(async (_code: string) => undefined)};
@@ -60,6 +62,18 @@ const profile: RiderProfile = {
     {type: 'BANK', label: 'Bank account (UPI ••••@okhdfc)', status: 'VERIFIED'},
   ],
 };
+const terms: Terms = {
+  version: '2026-10-v1',
+  effectiveFrom: '2026-10-19T12:00:00Z',
+  summaryOfChanges: ['Waiting pay now starts after 6 free minutes.'],
+  rateCardLines: [
+    {label: 'Base pay, first 2 km of the drop', value: '₹40'},
+    {label: 'Declining or missing an offer', value: 'Free'},
+  ],
+  grievanceLines: [{label: 'Craves rider support, every slot', value: '[OPS PHONE]'}],
+  fullTextUrl: 'https://craves.in/rider-terms',
+  draft: true,
+};
 
 const signOut = jest.fn(async () => undefined);
 let tree: renderer.ReactTestRenderer;
@@ -86,6 +100,11 @@ const allText = () =>
 const press = (testID: string) =>
   tree.root.findAll(node => node.props.testID === testID && typeof node.props.onPress === 'function')[0];
 const input = (testID: string) => tree.root.findByProps({testID});
+/** Lets a rejected query settle: React Query reports results on a timer. */
+const flush = () =>
+  act(async () => {
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+  });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -208,6 +227,7 @@ describe('Account status', () => {
   it('offers a retry when the documents cannot load', async () => {
     (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
     await render(<AccountStatusScreen />, [[riderKeys.me, pending]]);
+    await flush();
     expect(allText()).toContain("Couldn't load your documents.");
     expect(press('rider-call-support')).toBeTruthy();
   });
@@ -227,5 +247,74 @@ describe('Account status', () => {
     await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
     expect(allText()).toContain('Update the app to continue');
     expect(allText()).not.toContain('Disagree?');
+  });
+});
+
+describe('Terms', () => {
+  const props = (mode: 'accept' | 'view') => ({
+    route: {key: 'Terms', name: 'Terms' as const, params: {mode}},
+    navigation: mockNavigation as never,
+  });
+  const firstTime = {...me, termsVersion: '2026-10-v1', acceptedTermsVersion: undefined};
+
+  it('shows the version, the draft badge, the rate card and how pay works, then accepts that version', async () => {
+    const client = await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, firstTime]]);
+    const text = allText();
+    expect(text).toContain('Version 2026-10-v1, in force from 19 Oct');
+    expect(text).toContain('Draft pricing, not final');
+    expect(text).toContain('Base pay, first 2 km of the drop | ₹40');
+    expect(text).toContain('at least 14 days before it starts');
+    expect(text).toContain("How you're paid");
+    expect(text).toContain('Complaints and appeals');
+    expect(text).not.toContain('What changed');
+    (riderApi.acceptTerms as jest.Mock).mockResolvedValueOnce(undefined);
+    const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    await act(async () => press('rider-terms-accept').props.onPress());
+    expect(riderApi.acceptTerms).toHaveBeenCalledWith('2026-10-v1');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+  });
+
+  it('shows what changed to a rider who accepted an older version', async () => {
+    await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, {...terms, draft: false}], [riderKeys.me, me]]);
+    expect(allText()).toContain('What changed | Waiting pay now starts after 6 free minutes.');
+    expect(allText()).not.toContain('Draft pricing, not final');
+  });
+
+  it("says why accepting failed and reloads the terms", async () => {
+    (riderApi.acceptTerms as jest.Mock).mockRejectedValueOnce(new AppApiError('TERMS_CHANGED', 'The terms changed again.', 409));
+    const client = await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, firstTime]]);
+    const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    await act(async () => press('rider-terms-accept').props.onPress());
+    expect(Alert.alert).toHaveBeenCalledWith('The terms changed again.');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.terms});
+  });
+
+  it('only reads in view mode', async () => {
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
+    expect(press('rider-terms-accept')).toBeUndefined();
+    expect(press('rider-terms-full')).toBeTruthy();
+  });
+
+  it('switches the app language from the chips', async () => {
+    await render(
+      <RiderStringsProvider>
+        <TermsScreen {...props('view')} />
+      </RiderStringsProvider>,
+      [[riderKeys.terms, terms], [riderKeys.me, me]],
+    );
+    const chip = (code: string) => press(`rider-language-${code}`);
+    expect(chip('en').props.accessibilityState).toEqual({checked: true});
+    expect(allText()).toContain('తెలుగు');
+    await act(async () => chip('te').props.onPress());
+    expect(chip('te').props.accessibilityState).toEqual({checked: true});
+    expect(chip('en').props.accessibilityState).toEqual({checked: false});
+  });
+
+  it('offers a retry when the terms cannot load', async () => {
+    (riderApi.getTerms as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
+    await render(<TermsScreen {...props('accept')} />, [[riderKeys.me, firstTime]]);
+    await flush();
+    expect(allText()).toContain('Something went wrong. Try again.');
+    expect(allText()).toContain('Try again');
   });
 });

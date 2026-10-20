@@ -530,6 +530,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
               value: 'Link added when the state portal opens',
             },
           ],
+          draft: true,
         }),
       ),
     acceptTerms: version =>

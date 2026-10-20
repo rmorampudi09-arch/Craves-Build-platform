@@ -180,6 +180,7 @@ components:
         rateCardLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
         grievanceLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
         fullTextUrl: {type: string}
+        draft: {type: boolean, description: 'The rate card is draft pricing, not final; the app shows a "Draft pricing, not final" badge'}
     HomeSummary:
       type: object
       required: [online, todayEarningsPaise, todayTrips]

@@ -65,6 +65,8 @@ export interface Terms {
   rateCardLines: LabelValue[];
   grievanceLines: LabelValue[];
   fullTextUrl?: string;
+  /** The rate card is draft pricing, not final; the app shows a badge saying so. */
+  draft?: boolean;
 }
 
 export interface HomeSummary {

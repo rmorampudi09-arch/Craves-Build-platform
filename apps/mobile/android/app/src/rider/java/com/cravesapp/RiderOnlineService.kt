@@ -43,7 +43,7 @@ import org.json.JSONObject
  */
 class RiderOnlineService : Service() {
 
-  /** The shift credential stays in this app's private preferences; it never reaches JS. */
+  /** JS only hands the shift credential over from /shift/start; it is kept only in this app's private preferences. */
   class Shift(val credential: String, val expiresAtMs: Long, val apiBaseUrl: String)
 
   class Fix(val lat: Double, val lng: Double, val accuracyM: Float, val atMs: Long, val mock: Boolean) {
@@ -70,6 +70,8 @@ class RiderOnlineService : Service() {
   private var wakeLock: PowerManager.WakeLock? = null
   @Volatile private var shift: Shift? = null
   @Volatile private var stopMessage: String? = null
+  /** Set under the callback's lock in onDestroy, so the executor can't re-register location updates or report after it. */
+  @Volatile private var destroyed = false
   // Touched only on the executor thread, which also receives the location callbacks.
   private val fixes = ArrayDeque<Fix>()
   private var onTrip = false
@@ -121,7 +123,10 @@ class RiderOnlineService : Service() {
 
   override fun onDestroy() {
     running = false
-    fused.removeLocationUpdates(callback)
+    synchronized(callback) {
+      destroyed = true
+      fused.removeLocationUpdates(callback)
+    }
     executor.shutdownNow()
     wakeLock?.takeIf { it.isHeld }?.release()
     val message = stopMessage
@@ -153,7 +158,9 @@ class RiderOnlineService : Service() {
         .setMaxUpdateDelayMillis(uploadEveryMs())
         .build()
     try {
-      fused.requestLocationUpdates(request, executor, callback)
+      synchronized(callback) {
+        if (!destroyed) fused.requestLocationUpdates(request, executor, callback)
+      }
     } catch (error: SecurityException) {
       end(PERMISSION_MESSAGE)
     }
@@ -239,6 +246,8 @@ class RiderOnlineService : Service() {
   }
 
   private fun status(state: String, message: String?) {
+    // A call cut short by Go offline must not report ERROR after onDestroy's OFFLINE.
+    if (destroyed) return
     RiderEvents.emit("riderStatus") {
       Arguments.createMap().apply {
         putString("state", state)

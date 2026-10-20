@@ -75,7 +75,7 @@ JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken,
 
 ## Rules the code keeps
 
-- **The shift credential never reaches JS.** It lives only in the app's private `SharedPreferences` (`craves_rider_shift`; `allowBackup` is off), so a sticky restart can resume. It is cleared on `stop()`, a 401/403, a stop code and expiry.
+- **JS never stores the shift credential.** JS hands it from `POST /shift/start` straight to `start()`; it lives only in the app's private `SharedPreferences` (`craves_rider_shift`; `allowBackup` is off), so a sticky restart can resume. It is cleared on `stop()`, a 401/403, a stop code and expiry.
 - **Offers: first arrival wins.** Dedupe is by `offerId` across FCM and `/locations`. Each first arrival is logged with tag `CravesRiderOffer` and the channel (`adb logcat -s CravesRiderOffer`), and the other channel's later arrival with the gap in ms. The JS event carries the channel too.
 - **Countdown:** `expiresInSec` from the offer plus the receive time on the phone, never the phone clock against `expiresAt`. An offer with `expiresInSec <= 0` is dropped; the notification times out with the offer.
 - **Ringing comes from the channel, not JS,** so it works with the screen off and the app closed. The notification tap opens the launcher activity with the offer in its extras.

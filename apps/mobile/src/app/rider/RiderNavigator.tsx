@@ -134,10 +134,12 @@ function SignedIn() {
   return (
     <RiderShellContext.Provider value={shell}>
       <Stack.Navigator screenOptions={{headerShown: false}}>
+        {/* navigationKey: when the gate opens (terms accepted, account approved), the gate screen leaves the stack
+            instead of staying on top, because the working stack has screens with the same names. */}
         {gate.kind === 'account' ? (
-          <Stack.Screen name="AccountStatus" component={AccountStatusScreen} />
+          <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
         ) : gate.kind === 'terms' ? (
-          <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'accept'}} />
+          <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'accept'}} navigationKey={gate.kind} />
         ) : (
           <>
             <Stack.Screen name="Tabs" component={RiderTabs} />
@@ -149,8 +151,8 @@ function SignedIn() {
             <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Notice" component={NoticeScreen} />
-            <Stack.Screen name="AccountStatus" component={AccountStatusScreen} />
-            <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} />
+            <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
+            <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
             <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
           </>
@@ -179,7 +181,14 @@ export function RiderNavigator() {
       ) : session.status === 'authenticated' ? (
         <SignedIn />
       ) : session.status === 'error' ? (
-        <TerminalState title={strings.common.error} actionLabel={strings.account.signOut} onAction={() => session.signOut()} />
+        // A rider with no signal at start keeps the session (and any unsynced trip steps); signing out is the second choice.
+        <TerminalState
+          title={strings.common.error}
+          actionLabel={strings.common.retry}
+          onAction={session.retry}
+          secondaryActionLabel={strings.account.signOut}
+          onSecondaryAction={() => session.signOut()}
+        />
       ) : (
         <Stack.Navigator screenOptions={{headerShown: false}}>
           <Stack.Screen name="Phone" component={RiderPhoneScreen} />

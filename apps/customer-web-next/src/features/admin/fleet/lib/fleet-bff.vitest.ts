@@ -82,6 +82,14 @@ describe("admin fleet BFF", () => {
     expect((await fleetProxy(request(`riders/${RIDER}`), ["riders", RIDER])).status).toBe(502);
   });
 
+  it("refuses a reassign to two couriers before it reaches the server", async () => {
+    const path = `trips/${RIDER}/reassign`;
+    const response = await fleetProxy(request(path, { method: "POST", body: { riderId: DOC, provider: "BORZO", reason: "Faster" } }), segments(path));
+    expect(response.status).toBe(400);
+    expect((await response.json()).message).toBe("Choose one new courier: a rider, Borzo or Pidge.");
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
   it("downloads the joins and exits CSV as an attachment", async () => {
     upstream.mockResolvedValue(new Response("date,riderId\n", { headers: { "content-type": "text/csv; charset=utf-8" } }));
     const response = await fleetProxy(request("exports/rider-joins-exits?date=2026-10-19"), ["exports", "rider-joins-exits"]);

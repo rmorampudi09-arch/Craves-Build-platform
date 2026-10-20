@@ -3,8 +3,9 @@ import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 import { fleetError, matchFleetRoute, UUID, type FleetFile, type FleetRoute } from "./fleet-common";
 import { RIDER_ROUTES } from "./rider-contract";
+import { TRIP_ROUTES } from "./trip-contract";
 
-export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES];
+export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES];
 
 const NO_STORE = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
 

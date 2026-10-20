@@ -6,6 +6,7 @@ import type {
   DeliverBody,
   FailBody,
   Offer,
+  PayLine,
   Payout,
   RiderMe,
   RiderProfile,
@@ -38,10 +39,19 @@ const CUSTOMERS = [
 
 const BASE_POSITION = {lat: 17.4483, lng: 78.3915};
 
+const wholeRupees = (paise: number) => Math.round(paise / 100) * 100;
+
+/** The draft rate card: ₹40 for the first 2 km of the drop, then ₹9 a km; the ride to the kitchen after 1 km at ₹9 a km. */
+function offerPayLines(dropM: number, pickupM: number): PayLine[] {
+  return [
+    {label: 'base', amountPaise: 4000},
+    {label: 'drop distance', amountPaise: wholeRupees(900 * Math.max(0, dropM / 1000 - 2))},
+    {label: 'ride to the kitchen', amountPaise: wholeRupees(900 * Math.max(0, pickupM / 1000 - 1))},
+  ].filter(line => line.amountPaise > 0);
+}
+
 function payFor(dropM: number, pickupM: number): number {
-  const dropKm = dropM / 1000;
-  const pickupKm = pickupM / 1000;
-  return Math.round(4000 + 900 * Math.max(0, dropKm - 2) + 900 * Math.max(0, pickupKm - 1));
+  return offerPayLines(dropM, pickupM).reduce((sum, line) => sum + line.amountPaise, 0);
 }
 
 function payLines(trip: {payPaise: number}, extraWaitPaise = 0) {
@@ -77,6 +87,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       language: 'en',
       minAppVersion: '1.0.0',
       supportPhone: DEMO_PHONE,
+      supportWhatsappUrl: 'https://chat.whatsapp.com/demo',
       features: {payoutsEnabled: true, withdrawEnabled: false},
     };
   }
@@ -132,6 +143,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
     payouts: seedPayouts(),
     failNext: false,
     loseNextRace: false,
+    deviceNotBound: false,
     stopReason: null as string | null,
     tripCounter: 0,
     seen: new Map<string, unknown>(),
@@ -168,6 +180,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       expiresAt: iso(now() + 40_000),
       expiresInSec: 40,
       payPaise: payFor(dropDistanceM, pickupDistanceM),
+      payLines: offerPayLines(dropDistanceM, pickupDistanceM),
       pickupDistanceM,
       dropDistanceM,
       kitchenArea: kitchen.area,
@@ -203,6 +216,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
       waitFreeSeconds: 480,
       // Demo only: the pilot policy is 8 minutes; a minute keeps the demo short.
       unreachableWaitSeconds: 60,
+      sealed: true,
+      chefReadyAt: iso(now()),
     };
   }
 
@@ -211,6 +226,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
     const ended: Trip = {...trip, ...extra, step, version: trip.version + 1};
     state.activeTrip = null;
     state.endedTrip = ended;
+    state.otpTries = 0;
     state.nextOfferAt = now() + 30_000;
     return ended;
   }
@@ -267,18 +283,33 @@ export function createMockRiderApi(options: MockOptions = {}) {
         throw apiError('STEP_CONFLICT', 'Tap "I\'ve reached the customer" first.', 409);
       }
       if (deliver.method === 'OTP') {
+        const locked = () => apiError('OTP_LOCKED', 'Too many wrong OTPs. Use the photo option; ops will check it.', 423);
         if (state.otpTries >= MAX_OTP_TRIES) {
-          throw apiError('OTP_LOCKED', 'Too many wrong OTPs. Use the photo option; ops will check it.', 423);
+          throw locked();
         }
         if (deliver.otp !== DEMO_OTP) {
           state.otpTries += 1;
-          throw apiError('OTP_INVALID', "That OTP didn't match. Ask the customer to read it again.", 422);
+          const attemptsLeft = MAX_OTP_TRIES - state.otpTries;
+          // The fifth wrong code locks at once, so the rider never sees "0 tries left".
+          if (attemptsLeft === 0) {
+            throw locked();
+          }
+          throw new AppApiError(
+            'OTP_INVALID',
+            "That OTP didn't match. Ask the customer to read it again.",
+            422,
+            undefined,
+            false,
+            false,
+            [],
+            undefined,
+            attemptsLeft,
+          );
         }
       } else if (deliver.callsMade < 2) {
         throw apiError('CALLS_REQUIRED', 'Call the customer twice before leaving the order.', 422);
       }
       credit(trip, deliver.method === 'PHOTO');
-      state.otpTries = 0;
       return endTrip('DELIVERED', {payLines: payLines(trip)});
     }
     if (action === 'failed') {
@@ -343,14 +374,26 @@ export function createMockRiderApi(options: MockOptions = {}) {
       respond(() => {
         const todayStart = new Date(now()).setHours(0, 0, 0, 0);
         const today = state.earnings.filter(e => Date.parse(e.completedAt) >= todayStart);
+        const zoneName = 'Madhapur & Kondapur';
         return {
           online: state.online,
           shiftStartedAt: state.online ? iso(state.shiftStartedAt) : undefined,
-          zoneName: 'Madhapur & Kondapur',
+          zoneName,
           slotEndsAt: iso(new Date(now()).setHours(22, 0, 0, 0)),
           todayEarningsPaise: today.reduce((sum, e) => sum + e.amountPaise, 0),
           todayTrips: today.length,
           activeTripId: state.activeTrip?.tripId,
+          nextSlot: {
+            startsAt: iso(new Date(now()).setHours(19, 0, 0, 0)),
+            endsAt: iso(new Date(now()).setHours(22, 0, 0, 0)),
+            zoneName,
+          },
+          guaranteedPerHourPaise: 8000,
+          restPoint: {name: "Lakshmi's Kitchen", area: 'Madhapur'},
+          banner: {
+            tone: 'warning' as const,
+            text: 'Heavy rain expected after 8 pm. Stop whenever you need to. It never affects your offers.',
+          },
         };
       }),
     startShift: () =>
@@ -361,11 +404,20 @@ export function createMockRiderApi(options: MockOptions = {}) {
         state.online = true;
         state.shiftStartedAt = now();
         state.nextOfferAt = now() + 12_000;
+        // Opaque and fake; the real one lives only in the native online service.
+        return {shiftCredential: `demo-shift-${now()}`, expiresAt: iso(now() + 12 * HOUR)};
       }),
     endShift: () =>
       respond(() => {
         state.online = false;
         state.offer = null;
+      }),
+    registerDevice: () =>
+      respond(() => {
+        if (state.deviceNotBound) {
+          state.deviceNotBound = false;
+          throw apiError('DEVICE_NOT_BOUND', "This phone isn't approved yet. Call rider support to approve it.", 409);
+        }
       }),
     postLocations: () =>
       respond(() => {
@@ -485,6 +537,9 @@ export function createMockRiderApi(options: MockOptions = {}) {
     loseNextRace() {
       state.loseNextRace = true;
     },
+    failNextDeviceCheck() {
+      state.deviceNotBound = true;
+    },
     setStatus(status: RiderStatus) {
       state.me = {
         ...state.me,
@@ -538,6 +593,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
         payouts: seedPayouts(),
         failNext: false,
         loseNextRace: false,
+        deviceNotBound: false,
         stopReason: null,
       });
       state.seen.clear();

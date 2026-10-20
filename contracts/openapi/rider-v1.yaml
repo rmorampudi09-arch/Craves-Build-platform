@@ -16,7 +16,7 @@ paths:
   /me:
     get: {summary: The signed-in rider, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}}}
   /profile:
-    get: {summary: Vehicle, documents, payout account and insurance, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}}}
+    get: {summary: 'Vehicle, documents, payout account and insurance', responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}}}
   /terms:
     get: {summary: Current terms and rate card, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Terms'}}}}}}
   /terms/accept:
@@ -30,9 +30,14 @@ paths:
     post:
       summary: Go online. The selfie is reviewed by ops (pilot) or face-matched (later, after 14 days' notice).
       requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [selfie], properties: {selfie: {type: string, format: binary}}}}}}
-      responses: {'204': {description: Online}, '403': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}}
   /shift/end:
-    post: {summary: Go offline, responses: {'204': {description: Offline}}}
+    post: {summary: Go offline; revokes the shift credential, responses: {'204': {description: Offline}}}
+  /devices:
+    post:
+      summary: Register this phone's FCM token after sign-in and whenever it changes. One active phone per rider; 409 DEVICE_NOT_BOUND for a different phone until ops approves it.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeviceRegistration'}}}}
+      responses: {'204': {description: Registered}, '409': {$ref: '#/components/responses/Error'}}
   /locations:
     post:
       summary: Batched fixes; the response carries open offers, trip changes and a stop signal
@@ -59,6 +64,8 @@ paths:
         delivered takes the customer's OTP (JSON) or, only after two logged calls and the wait timer,
         a photo (multipart; pay held until ops checks it). failed takes a reason. 4xx means the server's
         state wins: the app drops its queued steps for this trip and shows the message.
+        A wrong OTP returns 422 OTP_INVALID with attemptsLeft (4, 3, 2, 1). The fifth wrong OTP, and every
+        OTP after it, returns 423 OTP_LOCKED; the photo route stays open.
       parameters:
         - {$ref: '#/components/parameters/TripId'}
         - {name: action, in: path, required: true, schema: {type: string, enum: [arrived-pickup, food-not-ready, picked-up, arrived-drop, delivered, failed]}}
@@ -112,8 +119,15 @@ components:
   responses:
     Error:
       description: Refused, with a message safe to show the rider
-      content: {application/json: {schema: {type: object, required: [code, message], properties: {code: {type: string}, message: {type: string}}}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
   schemas:
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        attemptsLeft: {type: integer, minimum: 1, description: Only on 422 OTP_INVALID}
     Paise: {type: integer, description: Indian rupees x 100}
     LabelValue: {type: object, required: [label, value], properties: {label: {type: string}, value: {type: string}}}
     PayLine: {type: object, required: [label, amountPaise], properties: {label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
@@ -137,8 +151,9 @@ components:
         termsVersion: {type: string}
         acceptedTermsVersion: {type: string}
         language: {type: string, enum: [en, te, hi]}
-        minAppVersion: {type: string, description: Blocks going online between shifts only, never mid-shift}
+        minAppVersion: {type: string, description: 'Blocks going online between shifts only, never mid-shift'}
         supportPhone: {type: string}
+        supportWhatsappUrl: {type: string, description: The riders' WhatsApp group}
         features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}}}
     RiderProfile:
       type: object
@@ -171,27 +186,32 @@ components:
         todayEarningsPaise: {$ref: '#/components/schemas/Paise'}
         todayTrips: {type: integer}
         activeTripId: {type: string}
+        nextSlot: {type: object, required: [startsAt, endsAt, zoneName], properties: {startsAt: {type: string, format: date-time}, endsAt: {type: string, format: date-time}, zoneName: {type: string}}}
+        guaranteedPerHourPaise: {$ref: '#/components/schemas/Paise'}
+        restPoint: {type: object, required: [name, area], properties: {name: {type: string}, area: {type: string}}}
+        banner: {type: object, description: 'A message from ops, e.g. a rain warning', required: [tone, text], properties: {tone: {type: string, enum: [info, warning]}, text: {type: string}}}
     Offer:
       type: object
-      required: [offerId, tripId, expiresAt, expiresInSec, payPaise, pickupDistanceM, dropDistanceM, kitchenArea, customerLocality, estMinutes]
+      required: [offerId, tripId, expiresAt, expiresInSec, payPaise, pickupDistanceM, dropDistanceM, kitchenArea, customerLocality, estMinutes, payLines]
       properties:
         offerId: {type: string}
         tripId: {type: string}
         expiresAt: {type: string, format: date-time}
-        expiresInSec: {type: integer, description: The app counts down from this, never from the phone clock}
+        expiresInSec: {type: integer, description: 'The app counts down from this, never from the phone clock'}
         payPaise: {$ref: '#/components/schemas/Paise'}
         pickupDistanceM: {type: integer}
         dropDistanceM: {type: integer}
         kitchenArea: {type: string}
         customerLocality: {type: string}
         estMinutes: {type: integer}
+        payLines: {type: array, description: 'How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance")', items: {$ref: '#/components/schemas/PayLine'}}
     Place:
       type: object
       required: [area, address, lat, lng]
       properties: {area: {type: string}, address: {type: string}, landmark: {type: string}, lat: {type: number}, lng: {type: number}}
     Trip:
       type: object
-      required: [tripId, version, step, orderCode, itemsCount, payPaise, kitchen, customer, waitFreeSeconds, unreachableWaitSeconds]
+      required: [tripId, version, step, orderCode, itemsCount, payPaise, kitchen, customer, waitFreeSeconds, unreachableWaitSeconds, sealed]
       properties:
         tripId: {type: string}
         version: {type: integer}
@@ -206,6 +226,8 @@ components:
         unreachableWaitSeconds: {type: integer}
         cancelReason: {type: string}
         payLines: {type: array, items: {$ref: '#/components/schemas/PayLine'}}
+        sealed: {type: boolean, description: The chef ticked "sealed" on the bag}
+        chefReadyAt: {type: string, format: date-time, description: When the chef marked the food ready; the free wait starts at the later of this and arrival}
     TripEarning:
       type: object
       required: [tripId, completedAt, kitchenArea, customerLocality, status, amountPaise, lines, pickupDistanceM, dropDistanceM, rateCardVersion]
@@ -247,6 +269,16 @@ components:
         nextPayoutOn: {type: string, format: date}
         withdrawablePaise: {$ref: '#/components/schemas/Paise'}
         payouts: {type: array, items: {$ref: '#/components/schemas/Payout'}}
+    ShiftStart:
+      type: object
+      required: [shiftCredential, expiresAt]
+      properties:
+        shiftCredential: {type: string, description: 'Opaque; valid only for /locations and /devices; revoked at /shift/end or after 12 h. The app keeps it in the native service only.'}
+        expiresAt: {type: string, format: date-time}
+    DeviceRegistration:
+      type: object
+      required: [fcmToken, appVersion, model]
+      properties: {fcmToken: {type: string}, appVersion: {type: string}, model: {type: string}}
     RiderFix:
       type: object
       required: [lat, lng, accuracyM, at]
@@ -255,7 +287,7 @@ components:
         lng: {type: number}
         accuracyM: {type: number}
         at: {type: string, format: date-time}
-        mock: {type: boolean, description: Android reported a mock location; logged, never used for pay decisions}
+        mock: {type: boolean, description: 'Android reported a mock location; logged, never used for pay decisions'}
     LocationBatchResponse:
       type: object
       required: [offers]

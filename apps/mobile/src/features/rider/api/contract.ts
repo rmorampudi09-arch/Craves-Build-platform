@@ -27,6 +27,8 @@ export interface RiderMe {
   language: Language;
   minAppVersion: string;
   supportPhone: string;
+  /** The riders' WhatsApp group, opened from Help. */
+  supportWhatsappUrl?: string;
   features: {payoutsEnabled: boolean; withdrawEnabled: boolean};
 }
 
@@ -65,6 +67,13 @@ export interface HomeSummary {
   todayEarningsPaise: Paise;
   todayTrips: number;
   activeTripId?: string;
+  nextSlot?: {startsAt: string; endsAt: string; zoneName: string};
+  /** The minimum paid per online hour in a booked slot. */
+  guaranteedPerHourPaise?: Paise;
+  /** Where to wait between orders: water, washroom, shade and charging. */
+  restPoint?: {name: string; area: string};
+  /** A message from ops, e.g. a rain warning. */
+  banner?: {tone: 'info' | 'warning'; text: string};
 }
 
 export interface Offer {
@@ -80,6 +89,8 @@ export interface Offer {
   kitchenArea: string;
   customerLocality: string;
   estMinutes: number;
+  /** How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance"). */
+  payLines: PayLine[];
 }
 
 export type TripStep =
@@ -114,6 +125,10 @@ export interface Trip {
   unreachableWaitSeconds: number;
   cancelReason?: string;
   payLines?: PayLine[];
+  /** The chef ticked "sealed" on the bag. */
+  sealed: boolean;
+  /** When the chef marked the food ready; the free wait starts at the later of this and arrival. */
+  chefReadyAt?: string;
 }
 
 export interface PayLine {
@@ -158,6 +173,19 @@ export interface PayoutsPage {
   nextPayoutOn?: string;
   withdrawablePaise: Paise;
   payouts: Payout[];
+}
+
+/** POST /shift/start. The credential is opaque: the native online service keeps it, JS never stores it. */
+export interface ShiftStart {
+  shiftCredential: string;
+  expiresAt: string;
+}
+
+/** POST /devices. 409 DEVICE_NOT_BOUND: a different phone, which ops must approve first. */
+export interface DeviceRegistration {
+  fcmToken: string;
+  appVersion: string;
+  model: string;
 }
 
 export interface RiderFix {

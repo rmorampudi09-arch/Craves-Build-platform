@@ -81,6 +81,11 @@ const offer: Offer = {
   kitchenArea: 'Madhapur',
   customerLocality: 'Kondapur',
   estMinutes: 28,
+  payLines: [
+    {label: 'base', amountPaise: 4000},
+    {label: 'drop distance', amountPaise: 1800},
+    {label: 'ride to the kitchen', amountPaise: 1000},
+  ],
 };
 const trip: Trip = {
   tripId: 't1',
@@ -93,6 +98,7 @@ const trip: Trip = {
   customer: {firstName: 'Anil', area: 'Kondapur', address: 'Flat 302', lat: 17.4615, lng: 78.3657, phone: '+910000000000'},
   waitFreeSeconds: 480,
   unreachableWaitSeconds: 480,
+  sealed: true,
 };
 
 const signOut = jest.fn(async () => undefined);

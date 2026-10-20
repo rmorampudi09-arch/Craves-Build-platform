@@ -12,6 +12,7 @@ const offer = (offerId: string, expiresInSec = 40): Offer => ({
   kitchenArea: 'Madhapur',
   customerLocality: 'Kondapur',
   estMinutes: 28,
+  payLines: [{label: 'base', amountPaise: 4000}],
 });
 
 describe('offer timing', () => {

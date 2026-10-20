@@ -76,8 +76,7 @@ export function HomeScreen() {
             if (!selfie) {
               return;
             }
-            await riderApi.startShift(selfie);
-            await riderOnlineService.start();
+            await riderOnlineService.start(await riderApi.startShift(selfie));
           } catch (error) {
             Alert.alert(error instanceof Error ? error.message : strings.common.error);
           } finally {

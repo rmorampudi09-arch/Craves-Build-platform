@@ -1,4 +1,5 @@
 import type {
+  DeviceRegistration,
   EarningsPage,
   EarningsRange,
   HomeSummary,
@@ -8,6 +9,7 @@ import type {
   RiderFix,
   RiderMe,
   RiderProfile,
+  ShiftStart,
   SupportIssue,
   Terms,
   Trip,
@@ -26,8 +28,10 @@ export interface RiderApi {
   acceptTerms(version: string): Promise<void>;
   getHome(): Promise<HomeSummary>;
   /** The Go Online selfie is checked by ops in the pilot. */
-  startShift(selfieUri: string): Promise<void>;
+  startShift(selfieUri: string): Promise<ShiftStart>;
   endShift(): Promise<void>;
+  /** After sign-in and whenever the FCM token changes. Rejects with 409 DEVICE_NOT_BOUND on an unapproved phone. */
+  registerDevice(device: DeviceRegistration): Promise<void>;
   postLocations(fixes: RiderFix[]): Promise<LocationBatchResponse>;
   acceptOffer(offerId: string, key: string): Promise<Trip>;
   declineOffer(offerId: string, key: string): Promise<void>;

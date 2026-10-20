@@ -32,7 +32,9 @@ import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.dispatch.FleetOpsService.Attempt;
 import in.craves.integration.fleet.dispatch.FleetOpsService.OpsTrip;
+import in.craves.integration.fleet.dispatch.FleetOpsService.QueueItem;
 import in.craves.integration.fleet.dispatch.FleetOpsService.ReassignInput;
 import in.craves.integration.fleet.trip.FleetStatusBridge;
 import in.craves.integration.fleet.trip.FleetTripPay;
@@ -247,6 +249,51 @@ class FleetOpsDatabaseTest {
         assertThat(service.trips().trips()).isEmpty();
         assertThat(events).isEmpty();
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(null, "PIDGE", "Undo")), 409, "TRIP_NOT_REASSIGNABLE");
+    }
+
+    @Test
+    void theDispatchQueueShowsQueuedOrdersOldestFirstWithTheirAttemptsAndHowUrgentTheyAre() {
+        UUID chain = tripId();
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'NO_ACCEPT', closed_at = now() - INTERVAL '9 minutes' "
+            + "WHERE trip_id = ?", chain);
+        stage(chain, 2, "PIDGE", "NO_COURIER", 8);
+        queue(chain, 3, 7);
+        UUID uncertain = fleet.trip(UUID.randomUUID());
+        stage(uncertain, 1, "PIDGE", "UNCERTAIN_CREATE_PIDGE", 2);
+        queue(uncertain, 2, 1);
+        UUID fresh = fleet.trip(UUID.randomUUID());
+        stage(fresh, 1, "BORZO", "NO_COURIER", 1);
+        queue(fresh, 2, 0);
+        UUID late = fleet.trip(UUID.randomUUID());
+        stage(late, 1, "PIDGE", "NO_COURIER", 1);
+        queue(late, 2, 0);
+        fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, provider_delivery_id, status) "
+            + "SELECT ?, chef_sub_order_id, order_id, 'pidge', 'P-9', 'COURIER_ASSIGNED' FROM fleet_schema.trip WHERE id = ?", UUID.randomUUID(), late);
+
+        List<QueueItem> items = service.dispatchQueue().items();
+
+        assertThat(items).extracting(QueueItem::tripId).containsExactly(chain, uncertain, fresh, late);
+        assertThat(items).extracting(QueueItem::alertLevel).containsExactly("CRITICAL", "CRITICAL", "WARNING", "INFO");
+        assertThat(items.get(0).attempts()).extracting(Attempt::provider, Attempt::outcome)
+            .containsExactly(org.assertj.core.groups.Tuple.tuple("CRAVES_FLEET", "NO_ACCEPT"), org.assertj.core.groups.Tuple.tuple("PIDGE", "NO_COURIER"));
+        assertThat(items.get(0).alertMessage()).contains("7 min");
+        assertThat(items.get(1).alertMessage()).contains("Check Pidge");
+        assertThat(items.get(3).alertMessage()).contains("Pidge courier took");
+        assertThat(items.get(0).orderCode()).isEqualTo("#0BDE0101");
+        assertThat(items).allSatisfy(item -> assertThat(item.alertMessage().length()).isLessThanOrEqualTo(300));
+    }
+
+    private void stage(UUID tripId, int seq, String provider, String outcome, int minutesAgo) {
+        fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, state, outcome, opened_at, deadline_at, closed_at) "
+            + "VALUES (?, ?, ?, ?, 'CLOSED', ?, now() - make_interval(mins => ?) - INTERVAL '2 minutes', now() - make_interval(mins => ?) "
+            + "- INTERVAL '1 minute', now() - make_interval(mins => ?))", UUID.randomUUID(), tripId, seq, provider, outcome, minutesAgo, minutesAgo,
+            minutesAgo);
+    }
+
+    private void queue(UUID tripId, int seq, int minutesAgo) {
+        fleet.db.update("UPDATE fleet_schema.trip SET provider = 'OPS_QUEUE' WHERE id = ? AND rider_id IS NULL", tripId);
+        fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, opened_at, deadline_at) VALUES (?, ?, ?, 'OPS_QUEUE', "
+            + "now() - make_interval(mins => ?) - make_interval(secs => ?), now() + INTERVAL '1 day')", UUID.randomUUID(), tripId, seq, minutesAgo, seq);
     }
 
     private UUID accept(UUID rider) {

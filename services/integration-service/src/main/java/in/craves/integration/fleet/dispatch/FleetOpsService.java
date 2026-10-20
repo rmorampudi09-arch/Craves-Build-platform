@@ -43,6 +43,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class FleetOpsService {
     static final Set<String> RIDER_ON_TRIP = Set.of("ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP");
     static final Set<String> COMMAND_IDLE = Set.of("SCHEDULED", "WAITING_FOR_PROVIDER", "FAILED", "DEAD_LETTER");
+    static final int QUEUE_CRITICAL_MINUTES = 5;
     static final String RELEASED = "Craves ops gave this order to another courier. You're paid for the trip so far.";
     static final String CANCELLED = "Craves ops cancelled this delivery. You're paid for the trip so far.";
     private static final String TRIPS = """
@@ -87,6 +88,56 @@ public class FleetOpsService {
               AND NOT (s.id IS NULL AND j.provider_id IS NOT NULL AND j.provider_id <> 'craves_fleet'
                        AND j.status IN ('DELIVERED', 'CANCELLED', 'FAILED', 'RETURNED'))
             ORDER BY t.created_at, t.id LIMIT 500""", (row, n) -> trip(row)));
+    }
+
+    /**
+     * Orders that went through fleet, Borzo and Pidge without a courier (an open OPS_QUEUE stage), oldest first, with each
+     * earlier stage's outcome. CRITICAL once queued QUEUE_CRITICAL_MINUTES or when a booking may exist (an uncertain create);
+     * INFO when a courier took it after all (the dispatch tick clears it within seconds); else WARNING.
+     */
+    public QueueList dispatchQueue() {
+        Map<UUID, List<Attempt>> attempts = new java.util.HashMap<>();
+        jdbc.query("""
+            SELECT a.trip_id, a.provider, COALESCE(a.outcome, 'CLOSED') AS outcome, a.closed_at FROM fleet_schema.trip_stage a
+            WHERE a.state = 'CLOSED' AND a.trip_id IN (SELECT trip_id FROM fleet_schema.trip_stage WHERE state = 'OPEN' AND provider = 'OPS_QUEUE')
+            ORDER BY a.trip_id, a.seq""", row -> {
+            attempts.computeIfAbsent(row.getObject("trip_id", UUID.class), id -> new java.util.ArrayList<>()).add(new Attempt(
+                row.getString("provider"), row.getString("outcome"), row.getTimestamp("closed_at").toInstant()));
+        });
+        return new QueueList(jdbc.query("""
+            SELECT t.id, t.order_code, t.kitchen_name, t.drop_area, s.opened_at, EXTRACT(EPOCH FROM now() - s.opened_at)::bigint AS age_seconds,
+                   j.provider_id AS job_provider, j.status AS job_status
+            FROM fleet_schema.trip_stage s JOIN fleet_schema.trip t ON t.id = s.trip_id
+            LEFT JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = t.chef_sub_order_id
+            WHERE s.state = 'OPEN' AND s.provider = 'OPS_QUEUE'
+            ORDER BY s.opened_at, t.id LIMIT 500""", (row, n) -> {
+            UUID tripId = row.getObject("id", UUID.class);
+            List<Attempt> tried = attempts.getOrDefault(tripId, List.of());
+            String[] alert = alert(tried.isEmpty() ? "" : tried.get(tried.size() - 1).outcome(), row.getLong("age_seconds"),
+                row.getString("job_provider"), row.getString("job_status"));
+            return new QueueItem(tripId, row.getString("order_code"), row.getString("kitchen_name"), row.getString("drop_area"),
+                row.getTimestamp("opened_at").toInstant(), alert[0], alert[1], tried.subList(Math.max(0, tried.size() - 10), tried.size()));
+        }));
+    }
+
+    /** {alertLevel, alertMessage} for a queued order; the message says what ops should do. */
+    static String[] alert(String lastOutcome, long ageSeconds, String jobProvider, String jobStatus) {
+        String waited = " Waiting " + Math.max(0, ageSeconds / 60) + " min.";
+        String courier = jobProvider == null ? "" : "borzo".equals(jobProvider) ? "Borzo" : "pidge".equals(jobProvider) ? "Pidge" : jobProvider;
+        if (jobProvider != null && !FleetStatusBridge.PROVIDER_ID.equals(jobProvider)
+            && !Set.of("PENDING", "SEARCHING", "DELAYED", "CANCELLED", "FAILED", "RETURNING", "RETURNED", "UNKNOWN").contains(jobStatus)) {
+            return new String[] {"INFO", "A " + courier + " courier took this order after all. It leaves the queue in a few seconds."};
+        }
+        if (lastOutcome.startsWith("UNCERTAIN_CREATE_")) {
+            String provider = lastOutcome.endsWith("BORZO") ? "Borzo" : lastOutcome.endsWith("PIDGE") ? "Pidge" : "the courier company";
+            return new String[] {"CRITICAL", "A " + provider + " booking may exist for this order. Check " + provider
+                + " before booking anyone else." + waited};
+        }
+        String why = lastOutcome.startsWith("COURIER_") ? "The " + (courier.isEmpty() ? "courier company's" : courier) + " courier gave up."
+            : "NO_DELIVERY_COMMAND".equals(lastOutcome) ? "The delivery request is missing."
+            : "Riders, Borzo and Pidge did not take this order.";
+        return new String[] {ageSeconds >= QUEUE_CRITICAL_MINUTES * 60L ? "CRITICAL" : "WARNING",
+            why + " Hand it to a rider, or book a courier by hand." + waited};
     }
 
     /**
@@ -390,6 +441,17 @@ public class FleetOpsService {
         boolean courierFinished() {
             return courierJob() && Set.of("DELIVERED", "CANCELLED", "FAILED", "RETURNED").contains(jobStatus);
         }
+    }
+
+    /** admin-fleet-v1 DispatchQueueItem. */
+    public record QueueItem(UUID tripId, String orderCode, String kitchenName, String dropArea, Instant queuedAt, String alertLevel,
+                            String alertMessage, List<Attempt> attempts) {
+    }
+
+    public record Attempt(String provider, String outcome, Instant at) {
+    }
+
+    public record QueueList(List<QueueItem> items) {
     }
 
     public record ReassignInput(UUID riderId, String provider, String reason) {

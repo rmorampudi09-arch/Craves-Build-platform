@@ -15,6 +15,7 @@ import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.dispatch.FleetOpsService;
 import in.craves.integration.fleet.dispatch.FleetOpsService.OpsTrip;
+import in.craves.integration.fleet.dispatch.FleetOpsService.QueueList;
 import in.craves.integration.fleet.dispatch.FleetOpsService.ReassignInput;
 import in.craves.integration.fleet.dispatch.FleetOpsService.TripList;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
@@ -63,6 +64,18 @@ class FleetOpsSecurityTest {
             mvc.perform(as(get(TRIPS), role)).andExpect(status().isForbidden());
         }
         mvc.perform(get(TRIPS)).andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void theDispatchQueueIsForReadersOnly() throws Exception {
+        when(ops.dispatchQueue()).thenReturn(new QueueList(List.of()));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/dispatch-queue"), role)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.items").isArray());
+        }
+        for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "RIDER")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/dispatch-queue"), role)).andExpect(status().isForbidden());
+        }
     }
 
     @Test

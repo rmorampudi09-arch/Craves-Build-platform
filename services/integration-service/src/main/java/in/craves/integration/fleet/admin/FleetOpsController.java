@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** The ops console's live view (admin-fleet-v1 /trips). Reads for support and audit too; reassign and cancel for operations. */
+/**
+ * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue). Reads for support and audit too; reassign and
+ * cancel for operations.
+ */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -35,6 +38,12 @@ public class FleetOpsController {
     public ResponseEntity<Object> trips(@AuthenticationPrincipal CravesPrincipal principal) {
         FleetAdminController.admin(principal, READERS);
         return json(ops.trips());
+    }
+
+    @GetMapping("/dispatch-queue")
+    public ResponseEntity<Object> dispatchQueue(@AuthenticationPrincipal CravesPrincipal principal) {
+        FleetAdminController.admin(principal, READERS);
+        return json(ops.dispatchQueue());
     }
 
     @PostMapping("/trips/{tripId}/reassign")

@@ -15,6 +15,7 @@ import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.dispatch.FleetOpsService;
 import in.craves.integration.fleet.dispatch.FleetOpsService.OpsTrip;
+import in.craves.integration.fleet.dispatch.FleetOpsService.PositionList;
 import in.craves.integration.fleet.dispatch.FleetOpsService.QueueList;
 import in.craves.integration.fleet.dispatch.FleetOpsService.ReassignInput;
 import in.craves.integration.fleet.dispatch.FleetOpsService.TripList;
@@ -75,6 +76,18 @@ class FleetOpsSecurityTest {
         }
         for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "RIDER")) {
             mvc.perform(as(get("/api/v1/admin/fleet/dispatch-queue"), role)).andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void livePositionsAreForOperationsOnly() throws Exception {
+        when(ops.positions()).thenReturn(new PositionList(List.of()));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/positions"), role)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.positions").isArray());
+        }
+        for (String role : List.of("SUPPORT_ADMIN", "AUDIT_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "RIDER")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/positions"), role)).andExpect(status().isForbidden());
         }
     }
 

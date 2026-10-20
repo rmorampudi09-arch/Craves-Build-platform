@@ -34,6 +34,7 @@ import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.dispatch.FleetOpsService.Attempt;
 import in.craves.integration.fleet.dispatch.FleetOpsService.OpsTrip;
+import in.craves.integration.fleet.dispatch.FleetOpsService.Position;
 import in.craves.integration.fleet.dispatch.FleetOpsService.QueueItem;
 import in.craves.integration.fleet.dispatch.FleetOpsService.ReassignInput;
 import in.craves.integration.fleet.trip.FleetStatusBridge;
@@ -281,6 +282,35 @@ class FleetOpsDatabaseTest {
         assertThat(items.get(3).alertMessage()).contains("Pidge courier took");
         assertThat(items.get(0).orderCode()).isEqualTo("#0BDE0101");
         assertThat(items).allSatisfy(item -> assertThat(item.alertMessage().length()).isLessThanOrEqualTo(300));
+    }
+
+    @Test
+    void positionsAreEachRidersLatestFixFromTheLastTwelveHoursWithShiftTripAndMockFlags() {
+        UUID tripId = accept(near);
+        FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 30, true);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now() WHERE rider_id = ?", other);
+        UUID yesterday = fleet.rider("Old Fix", "+919800000003");
+        FleetDispatchFixtures.fix(fleet.db, yesterday, KITCHEN_LAT, KITCHEN_LNG, 13 * 3600, false);
+
+        List<Position> positions = service.positions().positions();
+
+        assertThat(positions).extracting(Position::riderId).containsExactlyInAnyOrder(near, other);
+        Position onTrip = positions.stream().filter(p -> p.riderId().equals(near)).findFirst().orElseThrow();
+        assertThat(onTrip.onShift()).isTrue();
+        assertThat(onTrip.onTrip()).isTrue();
+        assertThat(onTrip.tripId()).isEqualTo(tripId);
+        assertThat(onTrip.mock()).isFalse();
+        assertThat(onTrip.riderName()).isEqualTo("Ravi Kumar");
+        assertThat(onTrip.lat()).isEqualTo(KITCHEN_LAT);
+        Position off = positions.stream().filter(p -> p.riderId().equals(other)).findFirst().orElseThrow();
+        assertThat(off.onShift()).isFalse();
+        assertThat(off.onTrip()).isFalse();
+        assertThat(off.tripId()).isNull();
+        assertThat(off.mock()).isTrue();
+        assertThat(off.ageSeconds()).isBetween(30L, 90L);
+        assertThat(Position.class.getRecordComponents()).extracting(java.lang.reflect.RecordComponent::getName)
+            .as("the rider's own fix only, never the customer's").containsExactly("riderId", "riderName", "lat", "lng", "recordedAt",
+                "ageSeconds", "onShift", "onTrip", "tripId", "mock");
     }
 
     private void stage(UUID tripId, int seq, String provider, String outcome, int minutesAgo) {

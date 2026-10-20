@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue). Reads for support and audit too; reassign and
- * cancel for operations.
+ * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue, /positions). Trips and the queue are read by
+ * support and audit too; positions, reassign and cancel are for operations.
  */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
@@ -44,6 +44,13 @@ public class FleetOpsController {
     public ResponseEntity<Object> dispatchQueue(@AuthenticationPrincipal CravesPrincipal principal) {
         FleetAdminController.admin(principal, READERS);
         return json(ops.dispatchQueue());
+    }
+
+    /** Live rider positions: operations only (contract x-roles). */
+    @GetMapping("/positions")
+    public ResponseEntity<Object> positions(@AuthenticationPrincipal CravesPrincipal principal) {
+        FleetAdminController.admin(principal, OPERATORS);
+        return json(ops.positions());
     }
 
     @PostMapping("/trips/{tripId}/reassign")

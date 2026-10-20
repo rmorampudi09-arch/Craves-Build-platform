@@ -4,8 +4,9 @@ import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server
 import { fleetError, matchFleetRoute, UUID, type FleetFile, type FleetRoute } from "./fleet-common";
 import { RIDER_ROUTES } from "./rider-contract";
 import { TRIP_ROUTES } from "./trip-contract";
+import { PAYOUT_ROUTES } from "./payout-contract";
 
-export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES];
+export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES];
 
 const NO_STORE = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
 

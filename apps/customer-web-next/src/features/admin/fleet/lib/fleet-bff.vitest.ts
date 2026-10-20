@@ -99,6 +99,18 @@ describe("admin fleet BFF", () => {
     expect((await fleetProxy(request("exports/rider-joins-exits?date=2026-10-19"), ["exports", "rider-joins-exits"])).status).toBe(502);
   });
 
+  it("downloads a payout bank file and passes a same-approver refusal through", async () => {
+    upstream.mockResolvedValue(new Response("payoutId,amount\n", { headers: { "content-type": "text/csv" } }));
+    const file = await fleetProxy(request(`payout-batches/${RIDER}/file`), ["payout-batches", RIDER, "file"]);
+    expect(file.headers.get("content-disposition")).toBe(`attachment; filename="rider-payouts-${RIDER}.csv"`);
+    upstream.mockResolvedValue(Response.json({ code: "SAME_APPROVER", message: "Another payments admin must approve this batch." }, { status: 403 }));
+    const path = `payout-batches/${RIDER}/approve`;
+    const refused = await fleetProxy(request(path, { method: "POST" }), segments(path));
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ code: "SAME_APPROVER", message: "Another payments admin must approve this batch." });
+    expect(upstream.mock.calls[1][2].headers).toEqual({ "Idempotency-Key": KEY });
+  });
+
   it("forwards only paths and methods that are in the admin fleet contract", () => {
     const yaml = readFileSync(new URL("../../../../../../../contracts/openapi/admin-fleet-v1.yaml", import.meta.url), "utf8");
     const operations = new Set<string>();

@@ -192,7 +192,37 @@ class FleetRiderApiDatabaseTest {
             .andExpect(jsonPath("$.online").value(false)).andExpect(jsonPath("$.todayEarningsPaise").value(0))
             .andExpect(jsonPath("$.todayTrips").value(0)).andExpect(jsonPath("$.nextSlot.zoneName").value("Madhapur and Kondapur"))
             .andExpect(jsonPath("$.guaranteedPerHourPaise").value(8000)).andExpect(jsonPath("$.restPoint.area").value("Madhapur"))
-            .andExpect(jsonPath("$.banner.tone").value("warning"));
+            .andExpect(jsonPath("$.banner.tone").value("warning")).andExpect(jsonPath("$.zoneName").doesNotExist())
+            .andExpect(jsonPath("$.slotEndsAt").doesNotExist()).andExpect(jsonPath("$.shiftStartedAt").doesNotExist());
+    }
+
+    @Test
+    void homeShowsTheOpenShiftTheRunningSlotAndTheTripInProgress() throws Exception {
+        String token = rider("ACTIVE", "en");
+        UUID rider = db.queryForObject("SELECT id FROM fleet_schema.rider WHERE identity_id = ?", UUID.class, UUID.fromString(token));
+        db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at) "
+            + "VALUES (?, ?, 'Madhapur and Kondapur', now() - INTERVAL '1 hour', now() + INTERVAL '2 hours')", UUID.randomUUID(), rider);
+        UUID shift = UUID.randomUUID();
+        db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at) "
+            + "VALUES (?, ?, ?, now() + INTERVAL '11 hours', now() - INTERVAL '1 hour')", shift, rider, FleetShiftService.hash(shift.toString()));
+        UUID trip = UUID.randomUUID();
+        db.update("""
+            INSERT INTO fleet_schema.trip (id, chef_sub_order_id, order_id, chef_id, order_code, items_count, kitchen_name, kitchen_area,
+              kitchen_address, kitchen_lat, kitchen_lng, chef_phone, customer_first_name, customer_phone, drop_area, drop_address, drop_lat,
+              drop_lng, state, rider_id)
+            VALUES (?, ?, ?, ?, '#0A1B2C3D', 2, 'Amma''s Kitchen', 'Madhapur', 'Road 1', 17.44, 78.39, '+919000000000', 'Priya',
+              '+919000000001', 'Kondapur', 'Flat 2', 17.46, 78.36, 'AT_PICKUP', ?)""",
+            trip, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), rider);
+        mvc.perform(get("/api/v1/rider/home").header("Authorization", "Bearer " + token)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.online").value(true)).andExpect(jsonPath("$.shiftStartedAt").exists())
+            .andExpect(jsonPath("$.zoneName").value("Madhapur and Kondapur")).andExpect(jsonPath("$.slotEndsAt").exists())
+            .andExpect(jsonPath("$.activeTripId").value(trip.toString()));
+
+        // Ops approved another phone: the shift's credential is revoked, so the rider is offline.
+        db.update("UPDATE fleet_schema.rider_shift SET credential_revoked_at = now() WHERE id = ?", shift);
+        mvc.perform(get("/api/v1/rider/home").header("Authorization", "Bearer " + token)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.online").value(false)).andExpect(jsonPath("$.shiftStartedAt").doesNotExist())
+            .andExpect(jsonPath("$.zoneName").value("Madhapur and Kondapur"));
     }
 
     @Test

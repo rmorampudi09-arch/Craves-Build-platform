@@ -147,15 +147,21 @@ public class FleetRiderService {
             rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber())), documents, payoutAccount, insurance);
     }
 
-    /** Slot, rest point and banner come from fleet_schema; shifts (P2) and earnings (P4) are not built yet, so they read as zero. */
+    /**
+     * The shift (online while an open shift's credential still works), the trip in progress, the running or next slot
+     * (zoneName and slotEndsAt only while one runs), rest point and banner. Earnings (P4) read as zero.
+     */
     @Transactional(readOnly = true)
     public HomeSummary home(UUID identityId) {
         Rider rider = rider(identityId);
-        List<Map<String, Object>> slots = jdbc.queryForList("SELECT zone_name, starts_at, ends_at, rest_point_name, rest_point_area "
-            + "FROM fleet_schema.rider_slot WHERE rider_id = ? AND ends_at > now() ORDER BY starts_at LIMIT 1", rider.id());
+        List<Map<String, Object>> slots = jdbc.queryForList("SELECT zone_name, starts_at, ends_at, rest_point_name, rest_point_area, "
+            + "starts_at <= now() AS running FROM fleet_schema.rider_slot WHERE rider_id = ? AND ends_at > now() ORDER BY starts_at LIMIT 1",
+            rider.id());
         NextSlot next = null;
         RestPoint restPoint = null;
         Long guaranteed = null;
+        String zoneName = null;
+        Instant slotEndsAt = null;
         if (!slots.isEmpty()) {
             Map<String, Object> slot = slots.get(0);
             next = new NextSlot(((Timestamp) slot.get("starts_at")).toInstant(), ((Timestamp) slot.get("ends_at")).toInstant(),
@@ -164,11 +170,21 @@ public class FleetRiderService {
                 restPoint = new RestPoint((String) slot.get("rest_point_name"), (String) slot.get("rest_point_area"));
             }
             guaranteed = policies.currentRateCard().map(RateCard::slotGuaranteePerHourPaise).orElse(null);
+            if (Boolean.TRUE.equals(slot.get("running"))) {
+                zoneName = next.zoneName();
+                slotEndsAt = next.endsAt();
+            }
         }
         Banner banner = jdbc.query("SELECT tone, text FROM fleet_schema.ops_banner WHERE starts_at <= now() AND ends_at > now() "
             + "ORDER BY starts_at DESC LIMIT 1", (row, n) -> new Banner(row.getString("tone"), row.getString("text")))
             .stream().findFirst().orElse(null);
-        return new HomeSummary(false, null, null, null, 0, 0, null, next, guaranteed, restPoint, banner);
+        Instant shiftStartedAt = jdbc.queryForList("SELECT started_at FROM fleet_schema.rider_shift WHERE rider_id = ? AND ended_at IS NULL "
+            + "AND credential_revoked_at IS NULL AND credential_expires_at > now()", Timestamp.class, rider.id()).stream().findFirst()
+            .map(Timestamp::toInstant).orElse(null);
+        String activeTripId = jdbc.queryForList("SELECT id::text FROM fleet_schema.trip WHERE rider_id = ? "
+            + "AND state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')", String.class, rider.id()).stream().findFirst().orElse(null);
+        return new HomeSummary(shiftStartedAt != null, shiftStartedAt, zoneName, slotEndsAt, 0, 0, activeTripId, next, guaranteed, restPoint,
+            banner);
     }
 
     /** A new photo of one document, from any rider ops added (before activation too); PENDING until ops reviews it by hand. */

@@ -78,7 +78,7 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 |---|---|
 | `GET /me` | Any signed-in user. Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts. |
 | `GET /profile` | Latest document per type, vehicle, masked payout account, insurance. PENDING riders too (no RIDER role needed). |
-| `GET /home` | Next slot, its guaranteed hourly pay, rest point and banner. Shift and earnings fields are zero until P2 and P4. |
+| `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId` (trip in progress), the running or next slot with its guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, and the ops banner until its `until`. Earnings fields are zero until P4. |
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING. PENDING riders too. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language. |
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
@@ -108,11 +108,13 @@ Admin fleet API (`/api/v1/admin/fleet`, fleet flag), scoped admin roles per `adm
 |---|---|
 | `GET /riders`, `POST /riders`, `GET /riders/{id}` | List (newest first, search by name or last phone digits), create a PENDING rider, detail. |
 | `GET /riders/{id}/documents/{documentId}/content` | The file, audited as a read. |
-| `POST .../documents/{documentId}/approve`, `/reject` | Review by hand; a rejection carries the reason the rider sees. |
+| `POST .../documents/{documentId}/approve`, `/reject` | Review by hand; a rejection carries the reason the rider sees. Approve takes `{expiresOn}` (the date printed on it), required for DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE and PUC (422 `EXPIRY_REQUIRED`); `/shift/start` needs all four verified and unexpired. |
+| `PUT /riders/{id}/vehicle` | `{label, regNumber}` (2 to 60 characters; an Indian or BH-series plate, spaces and dashes ignored) → `{label, regNumberMasked}`, what the rider's profile shows. |
 | `POST /riders/{id}/devices/{deviceId}/approve` | Binds the new phone, replaces the old one and revokes its shift credential. |
 | `PUT /riders/{id}/payout-account` | Set in person. Holder name must match the KYC name (422 `HOLDER_NAME_MISMATCH`); the account must not belong to another rider (409 `PAYOUT_ACCOUNT_NOT_UNIQUE`). |
 | `POST /riders/{id}/status-events` | The two tracks below. |
 | `GET /selfie-reviews`, `GET /shifts/{id}/selfie`, `POST /shifts/{id}/selfie/approve`, `/reject` | Go-online selfie review; a rejection never ends a shift or blocks anyone. |
+| `GET /banner`, `PUT /banner`, `DELETE /banner` | The zone banner on every rider's Home: `{tone: info or warning, text (1 to 160), until}`. PUT shows it from now until `until` (at least a minute ahead) and ends any earlier one; DELETE ends it (204 even when none shows); GET answers it or 204. Reads: operations, support and audit admins; changes: operations. |
 | `GET /audit` | The trail, newest first, optionally for one rider. |
 | `GET /exports/rider-joins-exits?date=` | CSV of joins and exits on one IST date, for the government portal. |
 

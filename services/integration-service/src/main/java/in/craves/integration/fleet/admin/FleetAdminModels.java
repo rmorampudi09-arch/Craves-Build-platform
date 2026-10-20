@@ -71,6 +71,21 @@ public final class FleetAdminModels {
     public record ReasonInput(String reason) {
     }
 
+    /** expiresOn is the date printed on the document; required for the driving licence, RC, insurance and PUC. */
+    public record DocumentApproval(LocalDate expiresOn) {
+    }
+
+    /** regNumber is write-only: answered and audited masked. */
+    public record VehicleInput(String label, String regNumber) {
+    }
+
+    public record RiderVehicle(String label, String regNumberMasked) {
+    }
+
+    /** The message every rider's Home shows until until. */
+    public record ZoneBanner(String tone, String text, Instant until) {
+    }
+
     public record StatusEventInput(String kind, String reason, String evidenceSummary, Instant deadline, Instant reviewBy,
                                    String appealPhone) {
     }

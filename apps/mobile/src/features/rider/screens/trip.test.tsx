@@ -51,6 +51,9 @@ jest.mock('../native/riderOnlineService', () => ({
     onOffer: () => () => undefined,
     onTripChanged: () => () => undefined,
     onStatus: () => () => undefined,
+    fcmToken: async () => null,
+    onFcmToken: () => () => undefined,
+    pendingOffer: async () => null,
   },
 }));
 const mockFix: {value: {lat: number; lng: number; accuracyM: number; at: string} | null} = {value: null};

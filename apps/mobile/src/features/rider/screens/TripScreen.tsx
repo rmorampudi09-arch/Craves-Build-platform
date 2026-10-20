@@ -1,15 +1,16 @@
-import React, {memo, useEffect, useRef, useState} from 'react';
-import {Alert, Linking, StyleSheet, Text, View} from 'react-native';
+import React, {memo, useEffect, useState} from 'react';
+import {Alert, StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Badge, Button, Chip, InputField, SectionSkeleton} from '../../../shared/components';
 import {colors, fontWeight, spacing} from '../../../design/tokens';
-import type {DeliverBody, Place, Trip, TripAction, TripStep} from '../api/contract';
+import type {DeliverBody, FailBody, Trip, TripAction, TripStep} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
 import {DEMO_OTP} from '../api/riderApi.mock';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Body, Card, Label, Money, RateRow, RiderScreen, riderStyles, Title, Value} from '../components/ui';
+import {AppApiError} from '../../../core/http/apiError';
 import {distanceMeters, formatKm, formatRupees, formatTimer} from '../domain/format';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
@@ -17,22 +18,13 @@ import {isDemo} from '../riderConfig';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
 import {tripQueue, usePendingActions} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
+import {Banner} from '../components/Banner';
+import {ToKitchen} from './trip/Pickup';
+import {call, navigateTo} from './trip/parts';
 
 const ENDED: TripStep[] = ['DELIVERED', 'FAILED', 'CANCELLED'];
 const NEAR_DROP_M = 200;
 const FAIL_REASONS = ['CUSTOMER_UNREACHABLE', 'WRONG_ADDRESS', 'CUSTOMER_REFUSED', 'UNSAFE'] as const;
-
-function call(phone: string) {
-  Linking.openURL(`tel:${phone}`).catch(() => undefined);
-}
-
-/** Two-wheeler navigation in the Google Maps app; falls back to the web link if the app is missing. */
-function navigateTo(place: Place) {
-  const at = `${place.lat},${place.lng}`;
-  Linking.openURL(`google.navigation:q=${at}&mode=l`).catch(() =>
-    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${at}&travelmode=two-wheeler`),
-  );
-}
 
 /** Counts down from a start time; only this leaf re-renders each second. */
 const Countdown = memo(function CountdownView({
@@ -89,7 +81,6 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const [calls, setCalls] = useState(0);
   const [failReason, setFailReason] = useState<string | null>(null);
   const [photoDelivery, setPhotoDelivery] = useState(false);
-  const arrivedAt = useRef<number | null>(null);
   const pending = usePendingActions(riderId, trip?.tripId);
 
   useEffect(() => {
@@ -101,11 +92,25 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const waitOver = useElapsed(unreachableFrom, trip?.unreachableWaitSeconds ?? 0);
 
   if (!trip) {
-    return active.isLoading ? (
-      <RiderScreen header={<RiderHeader />}>
-        <SectionSkeleton />
-      </RiderScreen>
-    ) : (
+    if (active.isLoading) {
+      return (
+        <RiderScreen header={<RiderHeader />} testID="rider-trip-loading">
+          <SectionSkeleton />
+        </RiderScreen>
+      );
+    }
+    if (active.isError) {
+      const offline = active.error instanceof AppApiError && (active.error.retriable || !active.error.status);
+      return (
+        <RiderScreen
+          header={<RiderHeader />}
+          testID="rider-trip-error"
+          footer={<BottomAction label={strings.common.retry} onPress={() => active.refetch()} testID="rider-trip-retry" />}>
+          <Banner tone="warning" text={offline ? strings.common.offline : t.loadFailed} />
+        </RiderScreen>
+      );
+    }
+    return (
       <RiderScreen
         header={<RiderHeader />}
         footer={<BottomAction label={t.backToWaiting} onPress={() => navigation.popTo('Tabs')} />}>
@@ -117,7 +122,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   // The optimistic step only counts while this trip still has actions waiting to sync.
   const step = pending > 0 ? localStep ?? trip.step : trip.step;
 
-  async function run(action: TripAction, nextStep: TripStep | null, body?: DeliverBody | {reason: string}) {
+  async function run(action: TripAction, nextStep: TripStep | null, body?: DeliverBody | FailBody) {
     if (!trip) {
       return;
     }
@@ -195,13 +200,17 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     <Card>
       <Label>{t.orderCode}</Label>
       <Value>{trip.orderCode}</Value>
-      <Label>{t.items(trip.itemsCount)}</Label>
+      <Label>{t.items(trip.itemsCount, trip.sealed)}</Label>
     </Card>
   );
 
-  if (step === 'TO_KITCHEN' || step === 'AT_KITCHEN') {
-    const atKitchen = step === 'AT_KITCHEN';
-    const waitFrom = arrivedAt.current ?? (trip.arrivedKitchenAt ? Date.parse(trip.arrivedKitchenAt) : Date.now());
+  if (step === 'TO_KITCHEN') {
+    return <ToKitchen trip={trip} run={run} syncing={pending > 0} />;
+  }
+
+  if (step === 'AT_KITCHEN') {
+    const atKitchen = true;
+    const waitFrom = trip.arrivedKitchenAt ? Date.parse(trip.arrivedKitchenAt) : Date.now();
     return (
       <RiderScreen
         header={header}
@@ -213,10 +222,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
             <BottomAction
               label={t.reachedKitchen}
               testID="rider-reached-kitchen"
-              onPress={() => {
-                arrivedAt.current = Date.now();
-                return run('arrived-pickup', 'AT_KITCHEN');
-              }}
+              onPress={() => run('arrived-pickup', 'AT_KITCHEN')}
             />
           )
         }>
@@ -224,7 +230,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
         <Card>
           <Value>{trip.kitchen.kitchenName}</Value>
           <Body>{`${trip.kitchen.area} · ${trip.kitchen.address}`}</Body>
-          {trip.kitchen.landmark ? <Label>{`${t.landmark}: ${trip.kitchen.landmark}`}</Label> : null}
+          {trip.kitchen.landmark ? <Label>{t.landmark(trip.kitchen.landmark)}</Label> : null}
         </Card>
         {atKitchen ? (
           <Card>
@@ -232,7 +238,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
             <Text style={styles.bigCode} testID="rider-order-code">
               {trip.orderCode}
             </Text>
-            <Label>{t.items(trip.itemsCount)}</Label>
+            <Label>{t.items(trip.itemsCount, trip.sealed)}</Label>
             <Countdown from={waitFrom} seconds={trip.waitFreeSeconds} running={t.freeWaitLeft} done={t.waitPaid} />
           </Card>
         ) : (
@@ -264,7 +270,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     <Card>
       <Value>{trip.customer.firstName}</Value>
       <Body>{`${trip.customer.area} · ${trip.customer.address}`}</Body>
-      {trip.customer.landmark ? <Label>{`${t.landmark}: ${trip.customer.landmark}`}</Label> : null}
+      {trip.customer.landmark ? <Label>{t.landmark(trip.customer.landmark)}</Label> : null}
     </Card>
   );
   const contactButtons = (

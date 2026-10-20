@@ -21,6 +21,7 @@ in.craves.order.web.ChefScheduledOrderController
 in.craves.order.web.CustomerOrderHistoryController
 in.craves.order.web.CustomerReviewController
 in.craves.order.web.DeliveryStatusController
+in.craves.order.web.InternalDeliveryCodeController
 in.craves.order.web.InternalDeliveryHandoffEligibilityController
 in.craves.order.web.InternalPaymentController
 in.craves.order.web.InternalScheduledOrderController

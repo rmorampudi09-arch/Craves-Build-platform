@@ -1,5 +1,6 @@
 package in.craves.order.service;
 
+import in.craves.order.delivery.DeliveryCodeService;
 import in.craves.order.event.ChefAcceptedOrderEventFactory;
 import in.craves.order.event.ChefAcceptedOrderEventSource;
 import in.craves.order.event.ChefAcceptedOrderEventSource.DeliveryItemSource;
@@ -30,17 +31,20 @@ public class ChefAcceptanceService {
     private final OrderService orderService;
     private final ChefAcceptedOrderEventFactory eventFactory;
     private final OrderDomainOutboxRepository outboxRepository;
+    private final DeliveryCodeService deliveryCodes;
 
     public ChefAcceptanceService(
         JdbcTemplate jdbcTemplate,
         OrderService orderService,
         ChefAcceptedOrderEventFactory eventFactory,
-        OrderDomainOutboxRepository outboxRepository
+        OrderDomainOutboxRepository outboxRepository,
+        DeliveryCodeService deliveryCodes
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.orderService = orderService;
         this.eventFactory = eventFactory;
         this.outboxRepository = outboxRepository;
+        this.deliveryCodes = deliveryCodes;
     }
 
     @Transactional
@@ -136,6 +140,8 @@ public class ChefAcceptanceService {
                 "The chef acceptance event already exists for this order."
             );
         }
+        // Same transaction as the event, so every accepted order (auto-accept too) has a code.
+        deliveryCodes.ensureCode(orderId);
 
         return orderService.getOrderForChef(principal, orderId);
     }

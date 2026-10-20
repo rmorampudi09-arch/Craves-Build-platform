@@ -18,9 +18,11 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class DeliveryStatusQueryService {
     private final JdbcTemplate jdbcTemplate;
+    private final DeliveryCodeService deliveryCodes;
 
-    public DeliveryStatusQueryService(JdbcTemplate jdbcTemplate) {
+    public DeliveryStatusQueryService(JdbcTemplate jdbcTemplate, DeliveryCodeService deliveryCodes) {
         this.jdbcTemplate = jdbcTemplate;
+        this.deliveryCodes = deliveryCodes;
     }
 
     // One connection for the order and history reads; the history read runs inside the outer row mapper, so without
@@ -67,14 +69,18 @@ public class DeliveryStatusQueryService {
         ResultSet resultSet,
         List<DeliveryStatusHistoryResponse> history
     ) throws SQLException {
+        UUID orderId = resultSet.getObject("id", UUID.class);
+        String providerId = resultSet.getString("delivery_provider_id");
+        String status = resultSet.getString("delivery_status");
         return new DeliveryStatusResponse(
-            resultSet.getObject("id", UUID.class),
+            orderId,
             resultSet.getObject("delivery_job_id", UUID.class),
-            resultSet.getString("delivery_provider_id"),
-            resultSet.getString("delivery_status"),
+            providerId,
+            status,
             resultSet.getString("delivery_tracking_url"),
             instant(resultSet, "delivery_status_observed_at"),
-            history
+            history,
+            deliveryCodes.codeForCustomer(orderId, providerId, status)
         );
     }
 

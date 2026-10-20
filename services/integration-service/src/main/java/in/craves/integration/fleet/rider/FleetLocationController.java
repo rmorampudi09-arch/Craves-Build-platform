@@ -30,9 +30,11 @@ public class FleetLocationController {
     }
 
     @PostMapping("/locations")
-    public ResponseEntity<LocationBatchResponse> locations(@AuthenticationPrincipal CravesPrincipal principal,
-                                                           @RequestHeader(name = FleetShiftService.SHIFT_CREDENTIAL, required = false) String credential,
-                                                           @RequestBody LocationBatch batch) {
+    public ResponseEntity<LocationBatchResponse> locations(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @RequestHeader(name = FleetShiftService.SHIFT_CREDENTIAL, required = false) String credential,
+        @RequestBody LocationBatch batch
+    ) {
         if (StringUtils.hasText(credential)) {
             return FleetRiderController.noStore(service.ingest(null, credential, batch));
         }

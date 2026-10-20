@@ -101,8 +101,10 @@ public class FleetLocationService {
             throw FleetApiException.invalid("Send at most 5 fixes.");
         }
         boolean byCredential = credential != null;
-        Context shift = jdbc.query(CONTEXT.formatted(byCredential ? "s.credential_hash = CAST(? AS CHAR(64))" : "r.identity_id = ? AND s.ended_at IS NULL"),
-            (row, n) -> context(row), byCredential ? FleetShiftService.hash(credential) : identityId).stream().findFirst().orElse(null);
+        // The cast keeps the credential_hash unique index usable whatever type the driver binds.
+        String where = byCredential ? "s.credential_hash = CAST(? AS CHAR(64))" : "r.identity_id = ? AND s.ended_at IS NULL";
+        Context shift = jdbc.query(CONTEXT.formatted(where), (row, n) -> context(row),
+            byCredential ? FleetShiftService.hash(credential) : identityId).stream().findFirst().orElse(null);
         if (shift == null) {
             if (byCredential) {
                 throw FleetShiftService.credentialInvalid();

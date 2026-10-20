@@ -3,14 +3,17 @@ import React from 'react';
 import {Alert, Linking, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
 import {AppApiError} from '../../../core/http/apiError';
 import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderNotice, RiderProfile, TripEarning} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
+import {RiderStringsProvider} from '../strings/StringsProvider';
 import {EarningsScreen} from './EarningsScreen';
 import {PayoutsScreen} from './PayoutsScreen';
 import {NoticeScreen} from './NoticeScreen';
+import {ProfileScreen} from './ProfileScreen';
 import {SosScreen} from './SosScreen';
 import {TripDetailScreen} from './TripDetailScreen';
 
@@ -23,6 +26,12 @@ jest.mock('@react-navigation/native', () => ({
 }));
 // FlashList needs real layout; FlatList renders the same props in the test renderer.
 jest.mock('@shopify/flash-list', () => ({FlashList: require('react-native').FlatList}));
+jest.mock('expo-image-picker', () => ({
+  CameraType: {front: 'front', back: 'back'},
+  requestCameraPermissionsAsync: jest.fn(async () => ({granted: true})),
+  launchCameraAsync: jest.fn(async () => ({canceled: false, assets: [{uri: 'file:///policy.jpg'}]})),
+}));
+jest.mock('../state/tripQueue', () => ({usePendingActions: () => 0}));
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {lastFix: () => ({lat: 17.4615, lng: 78.3657, accuracyM: 10, at: '2026-10-21T10:00:00Z'})},
 }));
@@ -446,5 +455,92 @@ describe('Notice (19)', () => {
     expect(allText()).toContain('No notices');
     expect(has('rider-notice-give')).toBe(false);
     expect(has('rider-notice-call')).toBe(true);
+  });
+});
+
+describe('Profile (20)', () => {
+  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  const full: RiderProfile = {
+    ...profile,
+    documents: [
+      {type: 'DL', label: 'Driving licence', status: 'VERIFIED', expiresOn: '2031-05-02'},
+      {type: 'INSURANCE', label: 'Vehicle insurance', status: 'VERIFIED', expiresOn: inDays(18)},
+      {type: 'PUC', label: 'Pollution certificate (PUC)', status: 'PENDING'},
+      {type: 'RC', label: 'Vehicle RC', status: 'REJECTED', reason: 'The photo is blurred. Take it in daylight.'},
+      {type: 'PAN', label: 'PAN card', status: 'VERIFIED'},
+    ],
+    insurance: {label: 'Group accident cover, 24×7', claimPhone: '+912222222222', claimStatus: 'No open claims.'},
+  };
+  const screen = () => (
+    <RiderStringsProvider>
+      <ProfileScreen />
+    </RiderStringsProvider>
+  );
+  const seed: Array<[readonly unknown[], unknown]> = [
+    [riderKeys.me, me],
+    [riderKeys.profile, full],
+  ];
+  beforeEach(() => jest.spyOn(Linking, 'openURL').mockResolvedValue(true));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('shows the rider, vehicle, documents, payout account, insurance, language and links', async () => {
+    await render(screen(), seed);
+    const text = allText();
+    expect(text).toContain('RK | Ravi Kumar | +91 ••••• •4321');
+    expect(text).toContain('Vehicle | Honda Activa 6G | TS 09 •• ••12');
+    expect(text).toContain('Driving licence | Expires 2 May 2031 | Verified');
+    expect(text).toMatch(/Vehicle insurance \| Expires \d+ \w{3} \| Expires soon \| Renew it and upload the new one before \d+ \w{3} to keep going online\. \| Upload new policy/);
+    expect(text).toContain('Pollution certificate (PUC) | Uploaded, ops checks it by hand | Checking');
+    expect(text).toContain('Vehicle RC | Not accepted | The photo is blurred. Take it in daylight. | Upload a new photo');
+    expect(text).toContain('PAN card | Verified');
+    expect(text).toContain('UPI ••••@okhdfc | To change it, visit the Craves office with your ID.');
+    expect(text).toContain('Accident insurance | Group accident cover, 24×7 | No open claims. | Call for a claim');
+    expect(has('rider-upload-DL')).toBe(false);
+    await press('rider-claim-call');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+912222222222');
+    await press('rider-language-te');
+    expect(tree.root.findByProps({testID: 'rider-language-te'}).props.accessibilityState).toEqual({checked: true});
+    expect(tree.root.findByProps({testID: 'rider-language-en'}).props.accessibilityState).toEqual({checked: false});
+    await press('rider-open-setup');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
+  });
+
+  it('uploads a new photo of a document from the back camera and refreshes', async () => {
+    (riderApi.uploadDocument as jest.Mock).mockResolvedValueOnce(undefined);
+    (riderApi.getProfile as jest.Mock).mockResolvedValueOnce(full);
+    await render(screen(), seed);
+    await press('rider-upload-INSURANCE');
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'back'}));
+    expect(riderApi.uploadDocument).toHaveBeenCalledWith('INSURANCE', 'file:///policy.jpg');
+    expect(riderApi.getProfile).toHaveBeenCalled();
+  });
+
+  it('asks for the camera, with a way to settings, when it is denied', async () => {
+    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValueOnce({granted: false});
+    const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    await render(screen(), seed);
+    await press('rider-upload-RC');
+    expect(riderApi.uploadDocument).not.toHaveBeenCalled();
+    expect(allText()).toContain('Allow the camera to take a photo of the document. | Open settings');
+    await act(async () => tree.root.findAll(node => node.props.accessibilityLabel === 'Open settings' && typeof node.props.onPress === 'function')[0].props.onPress());
+    expect(openSettings).toHaveBeenCalled();
+  });
+
+  it('says when an upload fails', async () => {
+    (riderApi.uploadDocument as jest.Mock).mockRejectedValueOnce(offline());
+    await render(screen(), seed);
+    await press('rider-upload-RC');
+    expect(allText()).toContain("Couldn't upload it. Check your internet and try again.");
+  });
+
+  it('shows a skeleton, then an error with retry, and still offers sign-out', async () => {
+    await render(screen(), [[riderKeys.me, me]]);
+    expect(has('rider-profile-loading')).toBe(true);
+    act(() => tree.unmount());
+    (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(offline());
+    await render(screen(), [[riderKeys.me, me]]);
+    await settle();
+    expect(has('rider-retry')).toBe(true);
+    expect(has('rider-sign-out')).toBe(true);
   });
 });

@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface AuthIdentityRoleRepository extends JpaRepository<AuthIdentityRole, AuthIdentityRoleId> {
     boolean existsByIdentityIdAndRoleCode(UUID identityId, String roleCode);
 
+    long deleteByIdentityIdAndRoleCode(UUID identityId, String roleCode);
+
     @Query("select r.roleCode from AuthIdentityRole r where r.identityId = :identityId order by r.roleCode")
     List<String> findRoleCodesByIdentityId(@Param("identityId") UUID identityId);
 }

@@ -38,6 +38,7 @@ import org.springframework.util.StringUtils;
 public class AuthService {
     private static final String ROLE_CUSTOMER = "CUSTOMER";
     private static final String ROLE_CHEF = "CHEF";
+    private static final String ROLE_RIDER = "RIDER";
     private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final FirebaseApp firebaseApp;
@@ -221,6 +222,33 @@ public class AuthService {
         return toIdentityResponse(identity, roles);
     }
 
+    /** Idempotent; the role reaches the JWT on the next sign-in or refresh. */
+    @Transactional
+    public IdentityResponse grantRiderRole(UUID identityId, UUID riderId) {
+        AuthIdentity identity = identityRepository.findById(identityId)
+            .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));
+        assertActive(identity);
+        if (ensureRole(identity.getId(), ROLE_RIDER)) {
+            saveAudit(identity.getId(), "RIDER_ROLE_GRANTED", "Rider role granted for rider " + riderId, null, null);
+        }
+        return toIdentityResponse(identity, identityRoleRepository.findRoleCodesByIdentityId(identity.getId()));
+    }
+
+    /**
+     * Idempotent and allowed for any account status. Bumping token_version makes services that check
+     * revocation reject access tokens still carrying RIDER; refresh sessions stay, so customer sign-in survives.
+     */
+    @Transactional
+    public IdentityResponse revokeRiderRole(UUID identityId, UUID riderId) {
+        AuthIdentity identity = identityRepository.findById(identityId)
+            .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));
+        if (identityRoleRepository.deleteByIdentityIdAndRoleCode(identity.getId(), ROLE_RIDER) > 0) {
+            identityRepository.incrementTokenVersion(identity.getId());
+            saveAudit(identity.getId(), "RIDER_ROLE_REVOKED", "Rider role revoked for rider " + riderId, null, null);
+        }
+        return toIdentityResponse(identity, identityRoleRepository.findRoleCodesByIdentityId(identity.getId()));
+    }
+
     private AuthIdentity loadOrCreateIdentity(FirebaseToken decodedToken, String phoneNumber) {
         String firebaseUid = decodedToken.getUid();
         Optional<AuthIdentity> byUid = identityRepository.findByFirebaseUid(firebaseUid);
@@ -251,13 +279,15 @@ public class AuthService {
         ensureRole(identityId, ROLE_CUSTOMER);
     }
 
-    private void ensureRole(UUID identityId, String roleCode) {
+    private boolean ensureRole(UUID identityId, String roleCode) {
         if (!roleRepository.existsById(roleCode)) {
             throw new IllegalStateException(roleCode + " role is missing from auth_role");
         }
-        if (!identityRoleRepository.existsByIdentityIdAndRoleCode(identityId, roleCode)) {
-            identityRoleRepository.save(new AuthIdentityRole(identityId, roleCode));
+        if (identityRoleRepository.existsByIdentityIdAndRoleCode(identityId, roleCode)) {
+            return false;
         }
+        identityRoleRepository.save(new AuthIdentityRole(identityId, roleCode));
+        return true;
     }
 
     private AuthTokenResponse issueTokenPair(AuthIdentity identity, List<String> roles, String userAgent, String ipAddress) {

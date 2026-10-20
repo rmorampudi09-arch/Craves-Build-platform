@@ -10,7 +10,8 @@ import {Card, RateRow} from '../../components/ui';
 import {formatRupees} from '../../domain/format';
 import {useStrings} from '../../strings/StringsProvider';
 
-export type RunStep = (action: TripAction, nextStep: TripStep | null, body?: DeliverBody | FailBody) => Promise<void>;
+/** Sends a step through the offline queue; resolves false when the server refused it. */
+export type RunStep = (action: TripAction, nextStep: TripStep | null, body?: DeliverBody | FailBody) => Promise<boolean>;
 
 /** What every trip step gets from TripScreen. */
 export interface StepProps {

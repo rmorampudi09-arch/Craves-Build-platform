@@ -112,8 +112,13 @@ async function render(seedTrip: Trip | null | undefined, seedHome: HomeSummary |
       </QueryClientProvider>,
     );
   });
-  await act(async () => new Promise<void>(resolve => setTimeout(resolve, 0))); // let a rejected fetch settle
+  if (seedTrip === undefined) {
+    await settle();
+  }
 }
+
+// Lets a query fetch resolve or reject (real timers only).
+const settle = () => act(async () => new Promise<void>(resolve => setTimeout(resolve, 0)));
 
 const allText = () =>
   tree.root
@@ -150,6 +155,7 @@ describe('Trip: loading, error and ended', () => {
     expect(allText()).toContain("Couldn't load your trip");
     (riderApi.getActiveTrip as jest.Mock).mockResolvedValueOnce(trip);
     await press('rider-trip-retry');
+    await settle();
     expect(has('rider-to-kitchen')).toBe(true);
   });
 
@@ -201,5 +207,83 @@ describe('Trip: to the kitchen (step 1)', () => {
     expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
     expect(allText()).toContain('At the kitchen');
     expect(allText()).toContain('Saved · will sync');
+  });
+});
+
+describe('Trip: at the kitchen (step 2)', () => {
+  const NOW = Date.parse('2026-10-20T13:00:00Z');
+  const atKitchen: Trip = {
+    ...trip,
+    step: 'AT_KITCHEN',
+    arrivedKitchenAt: new Date(NOW - 60_000).toISOString(),
+    chefReadyAt: new Date(NOW - 120_000).toISOString(),
+  };
+  const freeWait = () => tree.root.findByProps({testID: 'rider-free-wait'});
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+  });
+
+  it('shows the order code big, on one line, spelled out for TalkBack', async () => {
+    await render({...atKitchen, orderCode: '#0BDE0101'});
+    const code = tree.root.findByProps({testID: 'rider-order-code'});
+    expect(code.props.children).toBe('#0BDE0101');
+    expect(code.props.numberOfLines).toBe(1);
+    expect(code.props.adjustsFontSizeToFit).toBe(true);
+    expect(code.props.accessibilityLabel).toBe('Order code # 0 B D E 0 1 0 1');
+    expect(allText()).toContain("Match this code with the chef's screen");
+    expect(allText()).toContain("2 items from Lakshmi's Kitchen");
+    expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 2 of 4');
+  });
+
+  it('shows the sealed tick only when the chef sealed the bag', async () => {
+    await render(atKitchen);
+    expect(allText()).toContain('Chef marked the bag sealed');
+    act(() => tree.unmount());
+    await render({...atKitchen, sealed: false});
+    expect(has('rider-sealed')).toBe(false);
+  });
+
+  it('counts the free wait from arrival, then says waiting is paid at the server rate', async () => {
+    await render(atKitchen);
+    expect(freeWait().props.children).toBe('Free waiting ends in 7:00');
+    expect(freeWait().props.accessibilityLabel).toBe('Free waiting ends in about 7 minutes');
+    expect(allText()).toContain(
+      'Then you get ₹1.50 a minute until the chef hands over. The timer started when you arrived.',
+    );
+    act(() => jest.advanceTimersByTime(61_000));
+    expect(freeWait().props.children).toBe('Free waiting ends in 5:59');
+    act(() => jest.advanceTimersByTime(6 * 60_000));
+    expect(freeWait().props.children).toBe('Waiting pay has started');
+    expect(allText()).toContain('You get ₹1.50 a minute until the chef hands over.');
+  });
+
+  it('starts the free wait when the food is ready if that came after arrival', async () => {
+    await render({...atKitchen, chefReadyAt: new Date(NOW).toISOString(), waitPayPerMinutePaise: undefined});
+    expect(freeWait().props.children).toBe('Free waiting ends in 8:00');
+    expect(allText()).toContain('Then waiting is paid until the chef hands over. The timer started when the food was ready.');
+  });
+
+  it('waits for the chef before the free wait starts', async () => {
+    await render({...atKitchen, chefReadyAt: undefined});
+    expect(freeWait().props.children).toBe('Free waiting starts when the food is ready');
+  });
+
+  it('tells ops the food is late once, and moves on with Picked up', async () => {
+    await render(atKitchen);
+    await press('rider-food-not-ready');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'food-not-ready'}));
+    expect(byId('rider-food-not-ready').props.disabled).toBe(true);
+    expect(allText()).toContain('Ops and the chef know.');
+    await press('rider-picked-up');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'picked-up'}));
+  });
+
+  it('keeps Food not ready available when the server refused it', async () => {
+    (tripQueue.enqueue as jest.Mock).mockResolvedValueOnce({kind: 'rejected', code: 'STEP_CONFLICT', message: 'Moved on'});
+    await render(atKitchen);
+    await press('rider-food-not-ready');
+    expect(byId('rider-food-not-ready').props.disabled).toBeFalsy();
   });
 });

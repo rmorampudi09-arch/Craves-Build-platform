@@ -231,7 +231,7 @@ describe('Trip', () => {
   it('shows a big order code at the kitchen', async () => {
     await render(<TripScreen {...props} />, [[riderKeys.activeTrip, {...trip, step: 'AT_KITCHEN'}], [riderKeys.me, me], [riderKeys.home, home]]);
     expect(tree.root.findByProps({testID: 'rider-order-code'}).props.children).toBe('CR-4107');
-    expect(allText()).toContain('Free waiting ends in');
+    expect(allText()).toContain('Free waiting starts when the food is ready'); // no chefReadyAt yet
   });
 });
 

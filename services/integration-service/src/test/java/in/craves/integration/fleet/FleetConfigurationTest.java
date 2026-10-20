@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.SchedulerLagWatchdog;
 import in.craves.integration.fleet.admin.FleetAdminController;
+import in.craves.integration.fleet.rider.FleetRiderController;
 import in.craves.integration.payout.bank.BankDataCipher;
 import java.util.Arrays;
 import java.util.UUID;
@@ -63,6 +64,14 @@ class FleetConfigurationTest {
             assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER)).isInstanceOf(SchedulerLagWatchdog.MonitoredTaskScheduler.class);
             assertThat(context.getBean(FleetProperties.class).testMode()).as("test mode is on unless switched off").isTrue();
         });
+    }
+
+    @Test
+    void theRiderApiNeedsBothFlags() {
+        runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
+            assertThat(context).doesNotHaveBean(FleetRiderController.class));
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true").run(context ->
+            assertThat(context).hasNotFailed().hasSingleBean(FleetRiderController.class));
     }
 
     @Test

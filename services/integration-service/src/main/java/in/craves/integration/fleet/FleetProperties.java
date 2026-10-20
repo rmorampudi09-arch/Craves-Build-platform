@@ -7,6 +7,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * craves.fleet.* in application.yml. The four flags only switch code paths on and are all off by default.
  * authBaseUrl and internalServiceKey reach auth-service's RIDER grant; without both, no call is made.
  * storageEndpoint and storageContainer are the same settings user-chef-service uses for KYC documents.
+ * supportPhone is the rider support line shown in the terms and the app.
  */
 @ConfigurationProperties("craves.fleet")
 public record FleetProperties(
@@ -18,6 +19,7 @@ public record FleetProperties(
     String authBaseUrl,
     String internalServiceKey,
     String storageEndpoint,
-    @DefaultValue("documents") String storageContainer
+    @DefaultValue("documents") String storageContainer,
+    String supportPhone
 ) {
 }

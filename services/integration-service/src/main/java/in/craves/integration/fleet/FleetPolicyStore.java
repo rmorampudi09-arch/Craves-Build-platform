@@ -4,20 +4,31 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-/** Reads the versioned rate card and dispatch policy, so changing them needs no restart. */
+/**
+ * Reads and publishes the versioned rate card and dispatch policy, so changing them needs no restart. Publishing
+ * (Telangana Act 21 of 2026, s.13(2)) is refused when the version starts less than 14 days after publishing or a
+ * value lies outside the declared ranges: those of the newest published version, or the version's own for the first.
+ */
 @Component
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
 public class FleetPolicyStore {
     private static final TypeReference<Map<String, List<Long>>> RANGES = new TypeReference<>() { };
     private static final TypeReference<Map<String, List<String>>> TEXT = new TypeReference<>() { };
+    static final Duration NOTICE = Duration.ofDays(14);
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -49,6 +60,59 @@ public class FleetPolicyStore {
             (row, n) -> new DispatchPolicy(row.getString("version"), row.getTimestamp("effective_from").toInstant(),
                 row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m")))
             .stream().findFirst();
+    }
+
+    @Transactional
+    public void publishRateCard(String version, UUID publishedBy) {
+        publish("rate_card", version, publishedBy, List.of("base_paise", "base_drop_m", "drop_per_km_paise", "pickup_free_m",
+            "pickup_per_km_paise", "wait_free_minutes", "wait_per_minute_paise", "slot_guarantee_per_hour_paise"));
+    }
+
+    @Transactional
+    public void publishDispatchPolicy(String version, UUID publishedBy) {
+        publish("dispatch_policy", version, publishedBy, List.of("offer_seconds", "fleet_stage_seconds", "radius_m"));
+    }
+
+    private void publish(String table, String version, UUID publishedBy, List<String> columns) {
+        Map<String, Object> row = jdbc.queryForList("SELECT *, ranges::text AS declared_ranges FROM fleet_schema." + table
+            + " WHERE version = ? FOR UPDATE", version).stream().findFirst().orElseThrow(() -> FleetApiException.notFound("VERSION_NOT_FOUND", "No such version."));
+        if (!"DRAFT".equals(row.get("status"))) {
+            throw FleetApiException.conflict("VERSION_ALREADY_PUBLISHED", "This version is already published.");
+        }
+        String declared = jdbc.queryForList("SELECT ranges::text FROM fleet_schema." + table + " WHERE status = 'PUBLISHED' "
+            + "ORDER BY effective_from DESC LIMIT 1", String.class).stream().findFirst().orElse((String) row.get("declared_ranges"));
+        Map<String, Long> values = new LinkedHashMap<>();
+        columns.forEach(column -> values.put(column, ((Number) row.get(column)).longValue()));
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        List<String> problems;
+        try {
+            problems = publishProblems(values, json.readValue(declared, RANGES),
+                ((java.sql.Timestamp) row.get("effective_from")).toInstant(), now);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException("Declared ranges are unreadable", exception);
+        }
+        if (!problems.isEmpty()) {
+            throw FleetApiException.unprocessable("VERSION_REFUSED", String.join(" ", problems));
+        }
+        jdbc.update("UPDATE fleet_schema." + table + " SET status = 'PUBLISHED', published_at = ?, published_by = ? WHERE version = ?",
+            java.sql.Timestamp.from(now), publishedBy, version);
+    }
+
+    /** Why a version may not be published now; empty when it may. */
+    static List<String> publishProblems(Map<String, Long> values, Map<String, List<Long>> ranges, Instant effectiveFrom, Instant now) {
+        List<String> problems = new ArrayList<>();
+        if (effectiveFrom.isBefore(now.plus(NOTICE))) {
+            problems.add("It must start at least 14 days after it is published.");
+        }
+        values.forEach((name, value) -> {
+            List<Long> range = ranges.get(name);
+            if (range == null || range.size() != 2) {
+                problems.add(name + " has no declared range.");
+            } else if (value < range.get(0) || value > range.get(1)) {
+                problems.add(name + " " + value + " is outside the declared range " + range.get(0) + " to " + range.get(1) + ".");
+            }
+        });
+        return problems;
     }
 
     private RateCard rateCard(ResultSet row) throws SQLException {

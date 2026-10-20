@@ -32,6 +32,8 @@ craves:
     # Private document storage, the same settings as user-chef-service's KYC documents.
     storage-endpoint: ${CRAVES_STORAGE_ENDPOINT_VALUE:}
     storage-container: ${CRAVES_STORAGE_DOCUMENTS_CONTAINER:documents}
+    # Rider support line answered in every slot; set it before turning the rider API on.
+    support-phone: ${CRAVES_FLEET_SUPPORT_PHONE:}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

@@ -1,6 +1,7 @@
 package in.craves.integration.fleet;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
@@ -59,6 +60,48 @@ class FleetPolicyStoreDatabaseTest {
         assertThat(testMode.riderAllowed(other)).isFalse();
         assertThat(testMode.kitchenAllowed(kitchen)).isTrue();
         assertThat(testMode.kitchenAllowed(UUID.randomUUID())).isFalse();
+    }
+
+    @Test
+    void publishingNeedsFourteenDaysAndValuesInsideTheDeclaredRanges() {
+        UUID ops = UUID.randomUUID();
+        // The seeded draft starts on 4 Nov 2026: inside 14 days from any later date it is refused, so move it.
+        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '13 days' WHERE version = '2026-10-v1'");
+        assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOfSatisfying(FleetApiException.class,
+            error -> assertThat(error.code()).isEqualTo("VERSION_REFUSED"));
+
+        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '15 days', base_paise = 7000 "
+            + "WHERE version = '2026-10-v1'");
+        assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOf(FleetApiException.class);
+
+        fleet.db.update("UPDATE fleet_schema.rate_card SET base_paise = 4000 WHERE version = '2026-10-v1'");
+        store.publishRateCard("2026-10-v1", ops);
+        assertThat(fleet.db.queryForObject("SELECT status FROM fleet_schema.rate_card WHERE version = '2026-10-v1'", String.class))
+            .isEqualTo("PUBLISHED");
+        assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOfSatisfying(FleetApiException.class,
+            error -> assertThat(error.code()).isEqualTo("VERSION_ALREADY_PUBLISHED"));
+    }
+
+    @Test
+    void aLaterVersionCannotEscapeThePublishedRangesByDeclaringWiderOnes() {
+        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '15 days' WHERE version = '2026-10-v1'");
+        store.publishRateCard("2026-10-v1", UUID.randomUUID());
+        fleet.db.update("INSERT INTO fleet_schema.rate_card (version, effective_from, base_paise, base_drop_m, drop_per_km_paise, "
+            + "pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, "
+            + "summary_of_changes) SELECT '2026-12-v2', now() + INTERVAL '30 days', 2000, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "jsonb_set(ranges, '{base_paise}', '[1000, 6000]'), summary_of_changes FROM fleet_schema.rate_card WHERE version = '2026-10-v1'");
+        assertThatThrownBy(() -> store.publishRateCard("2026-12-v2", UUID.randomUUID())).isInstanceOfSatisfying(FleetApiException.class,
+            error -> assertThat(error.getMessage()).contains("base_paise 2000 is outside the declared range 3000 to 6000"));
+    }
+
+    @Test
+    void dispatchPolicyPublishingFollowsTheSameRules() {
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET effective_from = now() + INTERVAL '15 days', offer_seconds = 20");
+        assertThatThrownBy(() -> store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID())).isInstanceOf(FleetApiException.class);
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET offer_seconds = 40");
+        store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID());
+        assertThat(store.currentDispatchPolicy()).as("published, but not in force for 15 days").isEmpty();
     }
 
     private void insertRateCard(String version, String effectiveFrom) {

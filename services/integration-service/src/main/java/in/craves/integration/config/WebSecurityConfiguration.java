@@ -33,6 +33,7 @@ public class WebSecurityConfiguration {
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
+                .requestMatchers("/api/v1/rider/**").hasRole("RIDER")
                 // Payment, webhook and readiness APIs keep their in-controller checks. Internal routes: InternalCallFilter
                 // checks the caller identity, then each route's shared secret or HMAC still applies.
                 .requestMatchers("/api/**", "/internal/**", "/error").permitAll()

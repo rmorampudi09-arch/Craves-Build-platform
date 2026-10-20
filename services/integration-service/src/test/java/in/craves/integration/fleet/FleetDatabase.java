@@ -34,7 +34,7 @@ public final class FleetDatabase {
 
     /** Fleet on, with the given test mode and nothing configured outside this service. */
     public static FleetProperties properties(boolean testMode) {
-        return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents");
+        return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents", "+914012345678");
     }
 
     public UUID rider(String name, String phone) {

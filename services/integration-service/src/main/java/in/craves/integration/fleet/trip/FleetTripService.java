@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.client.DeliveryCodeClient;
+import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
 import in.craves.integration.fleet.trip.FleetTripModels.Customer;
 import in.craves.integration.fleet.trip.FleetTripModels.Kitchen;
@@ -15,12 +18,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Offers and trips for riders (PLAN F9, F9b; rider-v1 /offers and /trips). An accept is decided by one conditional
@@ -41,16 +48,33 @@ public class FleetTripService {
         LEFT JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version
         """;
 
+    static final int KITCHEN_ZONE_M = 300;
+    static final int MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+    static final Set<String> FAIL_REASONS = Set.of("CUSTOMER_UNREACHABLE", "WRONG_ADDRESS", "CUSTOMER_REFUSED", "UNSAFE");
+    static final String PHOTO_HOLD = "Delivered with a photo. Ops checks the photo before this pay is released.";
+    static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
+    /** Step: the state it needs, the state it leaves the trip in. */
+    private static final Map<String, String[]> STEPS = Map.of("arrived-pickup", new String[] {"ASSIGNED", "AT_PICKUP"},
+        "food-not-ready", new String[] {"AT_PICKUP", "AT_PICKUP"}, "picked-up", new String[] {"AT_PICKUP", "PICKED_UP"},
+        "arrived-drop", new String[] {"PICKED_UP", "AT_DROP"});
+
     private final JdbcTemplate jdbc;
     private final FleetTripPay pay;
     private final FleetStatusBridge bridge;
     private final ObjectMapper json;
+    private final DeliveryCodeClient codes;
+    private final FleetStorage storage;
+    private final TransactionTemplate transaction;
 
-    public FleetTripService(JdbcTemplate jdbc, FleetTripPay pay, FleetStatusBridge bridge, ObjectMapper json) {
+    public FleetTripService(JdbcTemplate jdbc, FleetTripPay pay, FleetStatusBridge bridge, ObjectMapper json, DeliveryCodeClient codes,
+                            FleetStorage storage, PlatformTransactionManager transactions) {
         this.jdbc = jdbc;
         this.pay = pay;
         this.bridge = bridge;
         this.json = json;
+        this.codes = codes;
+        this.storage = storage;
+        this.transaction = new TransactionTemplate(transactions);
     }
 
     /** 200 with the trip for the winner; 409 OFFER_TAKEN for a lost race; 410 OFFER_EXPIRED; a repeat by the winner gets the trip. */
@@ -105,6 +129,175 @@ public class FleetTripService {
         }
     }
 
+    /** The rider's trip in progress, if any (GET /trips/active). */
+    @Transactional(readOnly = true)
+    public Optional<Trip> active(UUID identityId) {
+        Rider rider = rider(identityId);
+        return jdbc.query(VIEW + "WHERE t.rider_id = ? AND t.state IN " + ACTIVE_STATES, (row, n) -> trip(row), rider.id()).stream().findFirst();
+    }
+
+    /**
+     * arrived-pickup, food-not-ready, picked-up, arrived-drop. Idempotent: a repeated key, or a step the trip already took,
+     * returns the trip. Out of order is 409 STEP_CONFLICT. The free wait starts at the later of a real arrival inside the
+     * kitchen zone (a fresh non-mock fix within 300 m) and the chef's ready time, and stops at pickup.
+     */
+    @Transactional
+    public Trip step(UUID identityId, UUID tripId, String action, String key) {
+        String[] move = STEPS.get(action);
+        if (move == null) {
+            throw FleetApiException.invalid("Unknown trip step.");
+        }
+        Rider rider = rider(identityId);
+        Locked trip = lock(tripId, rider);
+        if (replayed(tripId, key).isPresent() || (trip.state().equals(move[1]) && !"food-not-ready".equals(action))) {
+            return view(tripId);
+        }
+        requireState(trip, move[0], "This trip has moved on. Refreshing it now.");
+        Double fromKitchen = "arrived-pickup".equals(action) || "food-not-ready".equals(action) ? metresFromKitchen(rider.id(), trip) : null;
+        boolean inZone = fromKitchen != null && fromKitchen <= KITCHEN_ZONE_M;
+        jdbc.update("UPDATE fleet_schema.trip SET state = ?, version = version + 1, updated_at = now(), "
+            + "arrived_kitchen_at = CASE WHEN ? THEN COALESCE(arrived_kitchen_at, now()) ELSE arrived_kitchen_at END, "
+            + "picked_up_at = CASE WHEN ? THEN now() ELSE picked_up_at END, arrived_drop_at = CASE WHEN ? THEN now() ELSE arrived_drop_at END "
+            + "WHERE id = ?", move[1], inZone, "picked-up".equals(action), "arrived-drop".equals(action), tripId);
+        Map<String, Object> detail = new java.util.HashMap<>();
+        if (fromKitchen != null) {
+            detail.put("metresFromKitchen", Math.round(fromKitchen));
+            detail.put("insideKitchenZone", inZone);
+        }
+        event(tripId, action.toUpperCase(java.util.Locale.ROOT).replace('-', '_'), rider.id(), key, detail);
+        if (!"food-not-ready".equals(action)) {
+            bridge.publish(tripId);
+        }
+        return view(tripId);
+    }
+
+    /**
+     * Delivered with the customer's code, checked by order-service (never retried; the code is never stored or logged).
+     * Wrong: 422 OTP_INVALID with attemptsLeft (4 to 1). The fifth wrong code and every code after it: 423 OTP_LOCKED, and
+     * the photo route opens. A repeated Idempotency-Key gets the first answer without asking order-service again.
+     */
+    public Trip deliveredByOtp(UUID identityId, UUID tripId, String otp, String key) {
+        if (otp == null || !otp.matches("[0-9]{4}")) {
+            throw FleetApiException.invalid("Enter the 4-digit OTP the customer reads out.");
+        }
+        Rider rider = rider(identityId);
+        Locked trip = transaction.execute(status -> {
+            Locked locked = lock(tripId, rider);
+            replay(tripId, key);
+            return locked;
+        });
+        if ("DELIVERED".equals(trip.state())) {
+            return view(tripId);
+        }
+        requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
+        if (otpLocked(tripId)) {
+            throw otpLockedError();
+        }
+        DeliveryCodeClient.Result result = codes.verify(trip.chefSubOrderId(), otp);
+        if (result.outcome() == DeliveryCodeClient.Outcome.NOT_FOUND || result.outcome() == DeliveryCodeClient.Outcome.UNAVAILABLE) {
+            throw new FleetApiException(503, "OTP_UNAVAILABLE", "We couldn't check the OTP just now. Try again, or call rider support.");
+        }
+        Optional<FleetApiException> refusal = transaction.execute(status -> {
+            Locked now = lock(tripId, rider);
+            if ("DELIVERED".equals(now.state())) {
+                return Optional.<FleetApiException>empty();
+            }
+            requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
+            if (result.outcome() == DeliveryCodeClient.Outcome.VERIFIED) {
+                deliver(tripId, rider.id(), key, Map.of("method", "OTP"), false, null);
+                return Optional.<FleetApiException>empty();
+            }
+            boolean lockedNow = result.outcome() == DeliveryCodeClient.Outcome.LOCKED || result.attemptsLeft() < 1;
+            event(tripId, lockedNow ? "OTP_LOCKED" : "OTP_INVALID", rider.id(), key,
+                lockedNow ? Map.of() : Map.of("attemptsLeft", result.attemptsLeft()));
+            return Optional.of(lockedNow ? otpLockedError() : otpInvalid(result.attemptsLeft()));
+        });
+        if (refusal.isPresent()) {
+            throw refusal.get(); // after the attempt is stored, so a retried key gets the same answer
+        }
+        return view(tripId);
+    }
+
+    /**
+     * Delivered with a photo, for a customer who did not answer: only after two logged calls and the unreachable wait since
+     * arriving at the drop, or once the OTP is locked. The photo goes to private storage and the trip's pay is held for ops.
+     */
+    public Trip deliveredByPhoto(UUID identityId, UUID tripId, Integer callsMade, MultipartFile photo, String key) {
+        byte[] bytes = photoBytes(photo);
+        Rider rider = rider(identityId);
+        Locked trip = transaction.execute(status -> {
+            Locked locked = lock(tripId, rider);
+            replay(tripId, key);
+            return locked;
+        });
+        if ("DELIVERED".equals(trip.state())) {
+            return view(tripId);
+        }
+        requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
+        if (!otpLocked(tripId)) {
+            if (callsMade == null || callsMade < 2) {
+                throw FleetApiException.unprocessable("CALLS_REQUIRED", "Call the customer twice before leaving the order.");
+            }
+            requireUnreachableWaitOver(tripId);
+        }
+        String blob = "riders/" + rider.id() + "/trips/" + tripId + "/delivery-" + UUID.randomUUID()
+            + ("image/png".equals(photo.getContentType()) ? ".png" : ".jpg");
+        // shortcut: a trip that changes between upload and save leaves an unreferenced photo; sweep if it ever shows up.
+        storage.upload(blob, bytes, photo.getContentType(), false);
+        transaction.executeWithoutResult(status -> {
+            Locked now = lock(tripId, rider);
+            if (!"DELIVERED".equals(now.state())) {
+                requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
+                deliver(tripId, rider.id(), key, Map.of("method", "PHOTO", "photoBlob", blob, "callsMade", callsMade == null ? 0 : callsMade),
+                    true, PHOTO_HOLD);
+            }
+        });
+        return view(tripId);
+    }
+
+    /**
+     * failed {reason, note}, only after pickup. CUSTOMER_UNREACHABLE needs the drop and the unreachable wait: full pay.
+     * WRONG_ADDRESS, CUSTOMER_REFUSED, UNSAFE: full pay plus the return to the kitchen. Either way held for ops to check.
+     */
+    @Transactional
+    public Trip failed(UUID identityId, UUID tripId, String reason, String note, String key) {
+        if (reason == null || !FAIL_REASONS.contains(reason)) {
+            throw FleetApiException.invalid("Choose why the delivery failed.");
+        }
+        Rider rider = rider(identityId);
+        Locked trip = lock(tripId, rider);
+        if (replayed(tripId, key).isPresent() || "FAILED".equals(trip.state())) {
+            return view(tripId);
+        }
+        if (!"PICKED_UP".equals(trip.state()) && !"AT_DROP".equals(trip.state())) {
+            requireState(trip, "PICKED_UP", "You can only mark a trip failed after pickup.");
+        }
+        boolean unreachable = "CUSTOMER_UNREACHABLE".equals(reason);
+        if (unreachable) {
+            requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
+            requireUnreachableWaitOver(tripId);
+        }
+        jdbc.update("UPDATE fleet_schema.trip SET state = 'FAILED', cancel_reason = ?, finished_at = now(), version = version + 1, "
+            + "updated_at = now() WHERE id = ?", reason, tripId);
+        Map<String, Object> detail = new java.util.HashMap<>();
+        detail.put("reason", reason);
+        if (note != null && !note.isBlank()) {
+            detail.put("note", note.length() > 500 ? note.substring(0, 500) : note);
+        }
+        event(tripId, "FAILED", rider.id(), key, detail);
+        pay.finalizePay(tripId, unreachable ? Ending.CUSTOMER_UNREACHABLE : Ending.FAILED_AFTER_PICKUP, true, FAILED_HOLD);
+        bridge.publish(tripId);
+        return view(tripId);
+    }
+
+    private void deliver(UUID tripId, UUID riderId, String key, Map<String, ?> detail, boolean held, String holdReason) {
+        jdbc.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', finished_at = now(), version = version + 1, updated_at = now() "
+            + "WHERE id = ?", tripId);
+        event(tripId, "DELIVERED", riderId, key, detail);
+        pay.finalizePay(tripId, Ending.DELIVERED, held, holdReason);
+        bridge.publish(tripId);
+    }
+
     /**
      * Ops or the order cancelled a rider's trip before delivery (the craves_fleet adapter's cancel): the PLAN pay rule
      * for the trip's state. Riding to the kitchen: pickup-leg pay; at the kitchen: cancellation fee plus pickup leg;
@@ -153,6 +346,84 @@ public class FleetTripService {
             instant(row.getTimestamp("arrived_kitchen_at")), freeMinutes == null ? 0 : freeMinutes * 60L,
             unreachableMinutes == null ? 0 : unreachableMinutes * 60L, (Long) row.getObject("wait_per_minute_paise"),
             row.getString("cancel_reason"), lines, row.getBoolean("sealed"), instant(row.getTimestamp("chef_ready_at")));
+    }
+
+    /** The rider's own trip, row-locked for the step. A trip that ended or went to another courier is 409 TRIP_NOT_ACTIVE. */
+    private Locked lock(UUID tripId, Rider rider) {
+        return jdbc.query("SELECT state, chef_sub_order_id, kitchen_lat, kitchen_lng FROM fleet_schema.trip WHERE id = ? AND rider_id = ? "
+                + "AND provider = 'CRAVES_FLEET' FOR UPDATE", (row, n) -> new Locked(row.getString("state"),
+                row.getObject("chef_sub_order_id", UUID.class), row.getDouble("kitchen_lat"), row.getDouble("kitchen_lng")), tripId, rider.id())
+            .stream().findFirst().orElseThrow(() -> FleetApiException.notFound("TRIP_NOT_FOUND", "This trip is not yours."));
+    }
+
+    private static void requireState(Locked trip, String needed, String message) {
+        if (List.of("DELIVERED", "FAILED", "CANCELLED").contains(trip.state())) {
+            throw FleetApiException.conflict("TRIP_NOT_ACTIVE", "This trip has ended. Check Home for your next order.");
+        }
+        if (!needed.equals(trip.state())) {
+            throw FleetApiException.conflict("STEP_CONFLICT", message);
+        }
+    }
+
+    /** The first answer for a repeated Idempotency-Key: a stored wrong-OTP refusal is thrown again. */
+    private void replay(UUID tripId, String key) {
+        Optional<Map<String, Object>> earlier = replayed(tripId, key);
+        if (earlier.isPresent() && "OTP_INVALID".equals(earlier.get().get("kind"))) {
+            throw otpInvalid(((Number) earlier.get().get("attempts_left")).intValue());
+        }
+        if (earlier.isPresent() && "OTP_LOCKED".equals(earlier.get().get("kind"))) {
+            throw otpLockedError();
+        }
+    }
+
+    private Optional<Map<String, Object>> replayed(UUID tripId, String key) {
+        return key == null ? Optional.empty() : jdbc.queryForList("SELECT kind, (detail ->> 'attemptsLeft')::int AS attempts_left "
+            + "FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = ?", tripId, key).stream().findFirst();
+    }
+
+    private boolean otpLocked(UUID tripId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_event WHERE trip_id = ? "
+            + "AND kind = 'OTP_LOCKED')", Boolean.class, tripId));
+    }
+
+    private void requireUnreachableWaitOver(UUID tripId) {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT t.arrived_drop_at + make_interval(mins => rc.unreachable_wait_minutes) <= now() "
+            + "FROM fleet_schema.trip t JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version WHERE t.id = ?", Boolean.class,
+            tripId))) {
+            throw FleetApiException.unprocessable("WAIT_NOT_OVER", "Wait at the door until the timer ends, then try again.");
+        }
+    }
+
+    /** Metres from the kitchen by the rider's latest fix, if it is real (not mock) and under 2 minutes old; else null. */
+    private Double metresFromKitchen(UUID riderId, Locked trip) {
+        return jdbc.query("SELECT lat, lng FROM fleet_schema.rider_position_latest WHERE rider_id = ? AND NOT mock "
+                + "AND received_at > now() - INTERVAL '2 minutes'", (row, n) -> RoadDistanceClient.straightLineMetres(row.getDouble("lat"),
+                row.getDouble("lng"), trip.kitchenLat(), trip.kitchenLng()), riderId)
+            .stream().findFirst().orElse(null);
+    }
+
+    private static byte[] photoBytes(MultipartFile photo) {
+        if (photo == null || photo.isEmpty() || photo.getSize() > MAX_PHOTO_BYTES
+            || !List.of("image/jpeg", "image/png").contains(photo.getContentType())) {
+            throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
+        }
+        try (java.io.InputStream input = photo.getInputStream()) {
+            byte[] bytes = input.readNBytes(MAX_PHOTO_BYTES + 1);
+            if (bytes.length != photo.getSize() || !FleetStorage.signatureMatches(photo.getContentType(), bytes)) {
+                throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
+            }
+            return bytes;
+        } catch (java.io.IOException exception) {
+            throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
+        }
+    }
+
+    static FleetApiException otpInvalid(int attemptsLeft) {
+        return new FleetApiException(422, "OTP_INVALID", "That OTP didn't match. Ask the customer to read it again.", attemptsLeft);
+    }
+
+    static FleetApiException otpLockedError() {
+        return new FleetApiException(423, "OTP_LOCKED", "Too many wrong OTPs. Use the photo option; ops will check it.");
     }
 
     static String step(String state) {
@@ -229,5 +500,8 @@ public class FleetTripService {
     }
 
     record Rider(UUID id, String status) {
+    }
+
+    private record Locked(String state, UUID chefSubOrderId, double kitchenLat, double kitchenLng) {
     }
 }

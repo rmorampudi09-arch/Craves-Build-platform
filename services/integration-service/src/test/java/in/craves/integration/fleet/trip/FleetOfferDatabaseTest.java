@@ -18,7 +18,9 @@ import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.FleetTestMode;
+import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
@@ -64,7 +66,8 @@ class FleetOfferDatabaseTest {
             roads, mock(RiderPushClient.class), json);
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json),
             new DeliveryCommandRepository(fleet.db, json), mock(DeliveryStatusUpdateService.class), json);
-        trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, event -> { }), bridge, json);
+        trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, event -> { }), bridge, json,
+            mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions);
         transaction = new TransactionTemplate(fleet.transactions);
         FleetDispatchFixtures.policy(fleet.db, "live");
         first = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);

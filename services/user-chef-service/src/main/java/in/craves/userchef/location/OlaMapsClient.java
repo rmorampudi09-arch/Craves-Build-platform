@@ -51,6 +51,9 @@ public class OlaMapsClient {
     );
     private static final String REVERSE_GEOCODING = "reverse geocoding";
     private static final String AUTOCOMPLETE = "autocomplete";
+    private static final String DIRECTIONS = "directions";
+    // Pay waits on this call, so it gets a shorter deadline than address lookups; the caller falls back on timeout.
+    private static final Duration MAX_DIRECTIONS_TIMEOUT = Duration.ofSeconds(3);
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -93,7 +96,8 @@ public class OlaMapsClient {
     public ReverseGeocodedAddress reverseGeocode(BigDecimal latitude, BigDecimal longitude) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("latlng", latitude.toPlainString() + "," + longitude.toPlainString());
-        ReverseGeocodedAddress parsed = parseReverseGeocode(get(REVERSE_GEOCODING, "/places/v1/reverse-geocode", params));
+        ReverseGeocodedAddress parsed = parseReverseGeocode(
+            send(REVERSE_GEOCODING, "GET", "/places/v1/reverse-geocode", params, timeout));
         if (parsed == null) {
             throw unavailable(REVERSE_GEOCODING, "no usable address in response", null);
         }
@@ -114,10 +118,29 @@ public class OlaMapsClient {
         if (near != null) {
             params.put("location", near);
         }
-        return parseAutocomplete(get(AUTOCOMPLETE, "/places/v1/autocomplete", params));
+        return parseAutocomplete(send(AUTOCOMPLETE, "GET", "/places/v1/autocomplete", params, timeout));
     }
 
-    private JsonNode get(String operation, String path, Map<String, String> params) {
+    /**
+     * Road distance and duration between two points. Ola routes only "driving" and "walking" (no two-wheeler),
+     * so this uses its default, driving. Throws {@link ApiException} on any failure; the caller falls back.
+     */
+    public RoadDistance roadDistance(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("origin", fromLat.toPlainString() + "," + fromLng.toPlainString());
+        params.put("destination", toLat.toPlainString() + "," + toLng.toPlainString());
+        params.put("alternatives", "false");
+        params.put("steps", "false");
+        params.put("overview", "false");
+        Duration deadline = timeout.compareTo(MAX_DIRECTIONS_TIMEOUT) < 0 ? timeout : MAX_DIRECTIONS_TIMEOUT;
+        RoadDistance parsed = parseDirections(send(DIRECTIONS, "POST", "/routing/v1/directions", params, deadline));
+        if (parsed == null) {
+            throw unavailable(DIRECTIONS, "no route in response", null);
+        }
+        return parsed;
+    }
+
+    private JsonNode send(String operation, String method, String path, Map<String, String> params, Duration deadline) {
         if (apiKey == null) {
             throw unavailable(operation, "OLA_MAPS_API_KEY is not configured", null);
         }
@@ -126,13 +149,13 @@ public class OlaMapsClient {
         query.append("api_key=").append(encode(apiKey));
         String requestId = UUID.randomUUID().toString();
         HttpRequest request = HttpRequest.newBuilder(endpoint.resolve(path + "?" + query))
-            .timeout(timeout)
+            .timeout(deadline)
             .header("Accept", "application/json")
             .header("Accept-Language", "en-IN")
             .header("Origin", CRAVES_ORIGIN)
             .header("Referer", CRAVES_ORIGIN + "/")
             .header("X-Request-Id", requestId)
-            .GET()
+            .method(method, HttpRequest.BodyPublishers.noBody())
             .build();
 
         CompletableFuture<HttpResponse<byte[]>> pending =
@@ -140,7 +163,7 @@ public class OlaMapsClient {
         HttpResponse<byte[]> response;
         try {
             // Whole-exchange deadline, including a stalled body.
-            response = pending.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            response = pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {
             pending.cancel(true);
             throw unavailable(operation, "timeout", requestId);
@@ -211,6 +234,23 @@ public class OlaMapsClient {
             );
         }
         return null;
+    }
+
+    /** routes[0].legs[0].distance (metres) and duration (seconds); null when the distance is not a number. */
+    static RoadDistance parseDirections(JsonNode root) {
+        if (root == null) {
+            return null;
+        }
+        JsonNode leg = root.path("routes").path(0).path("legs").path(0);
+        JsonNode distance = leg.get("distance");
+        if (distance == null || !distance.isNumber() || !Double.isFinite(distance.asDouble()) || distance.asDouble() < 0) {
+            return null;
+        }
+        JsonNode duration = leg.get("duration");
+        Long seconds = duration != null && duration.isNumber() && duration.asDouble() >= 0
+            ? Math.round(duration.asDouble())
+            : null;
+        return new RoadDistance(Math.round(distance.asDouble()), seconds, "OLA");
     }
 
     static List<LocationSuggestion> parseAutocomplete(JsonNode root) {
@@ -351,6 +391,10 @@ public class OlaMapsClient {
         String confidence,
         boolean preciseHouseNumber
     ) {
+    }
+
+    /** source is OLA, CACHE or FALLBACK; seconds is null when unknown. */
+    public record RoadDistance(long meters, Long seconds, String source) {
     }
 
     public record LocationSuggestion(

@@ -41,7 +41,7 @@ craves:
     signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
     caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
     enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
-    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/customer-addresses/**=order;/internal/v1/chef-bank/**=integration;/internal/v1/chef-finance/**=integration;/internal/v1/auth-email/**=auth}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/customer-addresses/**=order;/internal/v1/chef-bank/**=integration;/internal/v1/chef-finance/**=integration;/internal/v1/auth-email/**=auth;/internal/v1/maps/**=integration}
   http-client:
     connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
     read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}

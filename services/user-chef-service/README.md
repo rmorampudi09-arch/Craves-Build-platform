@@ -175,6 +175,17 @@ Header: X-Craves-Internal-Secret
 
 Catalog Service pulls these to publish them on the chef's kitchen. Returns the image bytes (`no-store`) of `KITCHEN_PHOTO_1` or `KITCHEN_PHOTO_2` only when the identity's chef application is `APPROVED` and the document is neither removed nor rejected; otherwise `404 KITCHEN_PHOTO_NOT_FOUND`. No other document type is reachable.
 
+## Internal road distance (rider drop distance, PLAN F6)
+
+```text
+POST /internal/v1/maps/road-distance
+Header: X-Craves-Internal-Secret
+{"kitchenId": "<uuid, optional>", "addressId": "<uuid, optional>", "from": {"lat": 17.4483, "lng": 78.3915}, "to": {"lat": 17.4374, "lng": 78.3897}}
+→ 200 {"meters": 1900, "seconds": 480, "source": "OLA" | "CACHE" | "FALLBACK"}
+```
+
+Ola Directions (driving; 3 s deadline), cached in `road_distance_cache` per kitchen–address pair (or rounded points when no id is sent) for 30 days while both points, rounded to 4 decimals, stay the same. When Ola has no key, times out, errors or returns no route, the answer is still 200: straight-line (haversine) × 1.3, `seconds: null`, `source: "FALLBACK"`, not cached. Missing or wrong secret: 401; secret not configured: 503.
+
 ## Chef APIs
 
 ```text

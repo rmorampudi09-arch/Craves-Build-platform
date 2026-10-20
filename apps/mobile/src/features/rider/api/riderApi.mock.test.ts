@@ -112,11 +112,11 @@ describe('mock rider server', () => {
       code: 'OTP_LOCKED',
       status: 423,
     });
-    // The photo route still works after the lock.
+    // The photo route still works after the lock, at once: no calls needed, like the server.
     const done = await mock.api.tripAction(
       trip.tripId,
       'delivered',
-      { method: 'PHOTO', callsMade: 2 },
+      { method: 'PHOTO', callsMade: 0 },
       'photo',
     );
     expect(done.step).toBe('DELIVERED');

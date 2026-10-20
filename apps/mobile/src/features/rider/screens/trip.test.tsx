@@ -562,6 +562,20 @@ describe('Trip: customer not answering', () => {
     expect(has('rider-not-answering')).toBe(true);
     expect(has('rider-came-out')).toBe(false);
   });
+
+  it('opens the photo at once after the OTP lock, without the calls or the wait', async () => {
+    await render(atDrop);
+    await act(async () => {
+      mockRejected.forEach(listener => listener({tripId: 't1', action: 'delivered'}, {code: 'OTP_LOCKED', message: 'Locked'}));
+    });
+    await press('rider-photo-route');
+    expect(byId('rider-leave-photo').props.disabled).toBe(false);
+    expect(allText()).toContain('You can leave the order now');
+    await press('rider-leave-photo');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({action: 'delivered', body: expect.objectContaining({method: 'PHOTO', callsMade: 0})}),
+    );
+  });
 });
 
 describe('Trip: complete, failed and cancelled', () => {

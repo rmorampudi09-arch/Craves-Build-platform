@@ -168,6 +168,7 @@ class RiderOnlineService : Service() {
       return
     }
     val sent = fixes.toList()
+    val sentAtMs = System.currentTimeMillis()
     try {
       val body = JSONObject().put("fixes", JSONArray(sent.map { it.toJson() })).toString()
       val request =
@@ -185,7 +186,7 @@ class RiderOnlineService : Service() {
           !response.isSuccessful -> status("ERROR", RETRY_MESSAGE)
           else -> {
             fixes.clear()
-            if (!handle(JSONObject(response.body?.string() ?: "{}"))) return
+            if (!handle(JSONObject(response.body?.string() ?: "{}"), sentAtMs)) return
           }
         }
       }
@@ -200,7 +201,7 @@ class RiderOnlineService : Service() {
   }
 
   /** Applies a LocationBatchResponse; returns false when the server stopped the shift. */
-  private fun handle(response: JSONObject): Boolean {
+  private fun handle(response: JSONObject, sentAtMs: Long): Boolean {
     if (response.optBoolean("stop")) {
       end(response.optString("stopReason").ifEmpty { ENDED_MESSAGE })
       return false
@@ -212,7 +213,7 @@ class RiderOnlineService : Service() {
       open.add(offer.optString("offerId"))
       RiderOffers.receive(this, offer.toString(), "locations")
     }
-    RiderOffers.keepRinging(this, open)
+    RiderOffers.keepRinging(this, open, sentAtMs)
 
     val trip = response.optJSONObject("activeTrip")
     val step = trip?.optString("step").orEmpty()

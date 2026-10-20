@@ -108,11 +108,14 @@ object RiderOffers {
     return listOfNotNull(fromTap, held).filter { it.deadlineMs > now }.maxByOrNull { it.receivedAtMs }
   }
 
-  /** Stops ringing for offers the server no longer lists (accepted, declined, taken or expired). */
-  fun keepRinging(context: Context, openOfferIds: Set<String>) {
-    val ringing = synchronized(this) { seen.keys.toList() }
+  /**
+   * Stops ringing for offers the server no longer lists (accepted, declined, taken or expired). Offers that first
+   * arrived after the request was sent are left alone: that response can't know about them.
+   */
+  fun keepRinging(context: Context, openOfferIds: Set<String>, requestSentAtMs: Long) {
+    val gone = synchronized(this) { seen.filter { (id, first) -> first.first < requestSentAtMs && id !in openOfferIds }.keys }
     val manager = NotificationManagerCompat.from(context)
-    ringing.filterNot { it in openOfferIds }.forEach { manager.cancel(it, OFFER_NOTIFICATION_ID) }
+    gone.forEach { manager.cancel(it, OFFER_NOTIFICATION_ID) }
   }
 
   fun testRing(context: Context) {

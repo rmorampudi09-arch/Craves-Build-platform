@@ -19,3 +19,4 @@ slot,piece,type,media_ids,status,published_at_ist
 2026-10-19T20:23,ST7,story,17878560150564689|18134792914664705|18126684961801173|17920512495244034,published,2026-10-19 21:11
 2026-10-19T20:23,I1,image,18065697557757836,published,2026-10-19 21:14
 2026-10-19T11:23,C5,carousel,17963347131233972|18114267653161936,"published TWICE (both timed-out calls went live, 20:28 and 21:13; Windsor reads looked empty, so they misled the check). Duplicate 18114267653161936 to delete in the app",2026-10-19 21:13
+2026-10-20T11:23,C2,carousel,,timeout-unverified (call at 11:25 timed out; check last_3dT before any retry),2026-10-20 11:57

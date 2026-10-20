@@ -19,7 +19,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 public class FleetConfiguration {
     public static final String FLEET_SCHEDULER = "fleetScheduler";
 
-    // One thread per fleet job (joins-and-exits export, slot settlement, the dispatch tick) plus one spare for later phases.
+    // One thread per fleet job: the joins-and-exits export, slot settlement, the dispatch tick and the trip_track partitions.
     @Bean(name = FLEET_SCHEDULER)
     ThreadPoolTaskScheduler fleetScheduler() {
         ThreadPoolTaskScheduler scheduler = new SchedulerLagWatchdog.MonitoredTaskScheduler();

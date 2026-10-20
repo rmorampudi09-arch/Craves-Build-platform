@@ -111,6 +111,64 @@ describe("admin fleet BFF", () => {
     expect(upstream.mock.calls[1][2].headers).toEqual({ "Idempotency-Key": KEY });
   });
 
+  it("never passes a role refusal's own text to the browser", async () => {
+    upstream.mockResolvedValue(Response.json({ code: "FORBIDDEN", message: "OPERATIONS_ADMIN is required" }, { status: 403 }));
+    const path = `riders/${RIDER}/vehicle`;
+    const refused = await fleetProxy(request(path, { method: "PUT", body: { label: "Honda Activa 6G", regNumber: "TS09EA1234" } }), segments(path));
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ code: "FORBIDDEN", message: "Your admin role can't do this." });
+  });
+
+  it("approves a document with or without an expiry date", async () => {
+    upstream.mockImplementation(async () => Response.json({ ...document, type: "PUC", status: "VERIFIED", reason: null, expiresOn: "2027-04-30" }));
+    const path = `riders/${RIDER}/documents/${DOC}/approve`;
+    expect((await fleetProxy(request(path, { method: "POST", body: { expiresOn: "30/04/2027" } }), segments(path))).status).toBe(400);
+    expect((await fleetProxy(request(path, { method: "POST", body: { expiresOn: "2027-04-30", status: "REJECTED" } }), segments(path))).status).toBe(200);
+    expect(upstream.mock.calls[0][2].headers).toEqual({ "Idempotency-Key": KEY, "Content-Type": "application/json" });
+    expect(JSON.parse(upstream.mock.calls[0][2].body)).toEqual({ expiresOn: "2027-04-30" });
+    expect((await fleetProxy(request(path, { method: "POST" }), segments(path))).status).toBe(200);
+    expect(upstream.mock.calls[1][2]).toEqual({ method: "POST", headers: { "Idempotency-Key": KEY } });
+  });
+
+  it("checks a vehicle, a slot and a banner before they reach the server", async () => {
+    const cases: [string, string, unknown, string][] = [
+      ["PUT", `riders/${RIDER}/vehicle`, { label: "Honda Activa 6G", regNumber: "ts 09 ea 1234" }, "Enter the registration number, like TS09EA1234."],
+      ["POST", "slots", { riderId: RIDER, zoneName: "Madhapur", startsAt: "2026-10-21T12:30:00Z", endsAt: "2026-10-21T08:30:00Z", guaranteedPerHourPaise: 8000 }, "The slot must end after it starts."],
+      ["POST", "slots", { riderId: RIDER, zoneName: "Madhapur", startsAt: "2026-10-21T08:30:00Z", endsAt: "2026-10-21T12:30:00Z", guaranteedPerHourPaise: 80.5 }, "Expected integer, received float"],
+      ["POST", `slots/${DOC}/cancel`, { reason: "" }, "Write a reason of at least 3 characters."],
+      ["PUT", "banner", { tone: "danger", text: "Rain", until: "2026-10-21T12:30:00Z" }, "Invalid enum value. Expected 'info' | 'warning', received 'danger'"],
+      ["PUT", "banner", { tone: "warning", text: "x".repeat(161), until: "2026-10-21T12:30:00Z" }, "Keep the banner to 160 characters."],
+    ];
+    for (const [method, path, body, message] of cases) {
+      const response = await fleetProxy(request(path, { method, body }), segments(path));
+      expect(response.status, path).toBe(400);
+      expect((await response.json()).message, path).toBe(message);
+    }
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("lists slots by date range and rider only", async () => {
+    expect((await fleetProxy(request("slots?from=2026-10-21&to=tomorrow"), ["slots"])).status).toBe(400);
+    expect((await fleetProxy(request("slots?from=2026-10-21&zone=Madhapur"), ["slots"])).status).toBe(400);
+    upstream.mockResolvedValue(Response.json({ slots: [] }));
+    expect((await fleetProxy(request(`slots?from=2026-10-21&to=2026-10-27&riderId=${RIDER}`), ["slots"])).status).toBe(200);
+    expect(upstream.mock.calls[0][1]).toBe(`/admin/fleet/slots?from=2026-10-21&to=2026-10-27&riderId=${RIDER}`);
+  });
+
+  it("answers 204 when no banner is showing and when the banner is cleared", async () => {
+    upstream.mockResolvedValue(new Response(null, { status: 204 }));
+    const none = await fleetProxy(request("banner"), ["banner"]);
+    expect(none.status).toBe(204);
+    expect(await none.text()).toBe("");
+    const cleared = await fleetProxy(request("banner", { method: "DELETE" }), ["banner"]);
+    expect(cleared.status).toBe(204);
+    expect(upstream.mock.calls[1][2]).toEqual({ method: "DELETE", headers: { "Idempotency-Key": KEY } });
+    expect((await fleetProxy(request("banner", { method: "DELETE", key: null }), ["banner"])).status).toBe(400);
+    // 204 means "nothing" only where the contract says so.
+    const path = `slots/${DOC}/cancel`;
+    expect((await fleetProxy(request(path, { method: "POST", body: { reason: "Rider is unwell" } }), segments(path))).status).toBe(502);
+  });
+
   it("forwards only paths and methods that are in the admin fleet contract", () => {
     const yaml = readFileSync(new URL("../../../../../../../contracts/openapi/admin-fleet-v1.yaml", import.meta.url), "utf8");
     const operations = new Set<string>();
@@ -118,7 +176,7 @@ describe("admin fleet BFF", () => {
     for (const line of yaml.split("\n")) {
       const pathMatch = /^ {2}\/api\/v1\/admin\/fleet\/(\S+):$/.exec(line);
       if (pathMatch) path = pathMatch[1].replace(/\{[^}]+\}/g, ":id");
-      const method = /^ {4}(get|post|put):$/.exec(line);
+      const method = /^ {4}(get|post|put|delete):$/.exec(line);
       if (method) operations.add(`${method[1].toUpperCase()} ${path}`);
     }
     for (const route of FLEET_ROUTES) expect(operations, `${route.method} ${route.path}`).toContain(`${route.method} ${route.path}`);

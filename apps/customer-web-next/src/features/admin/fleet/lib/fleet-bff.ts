@@ -5,8 +5,9 @@ import { fleetError, matchFleetRoute, UUID, type FleetFile, type FleetRoute } fr
 import { RIDER_ROUTES } from "./rider-contract";
 import { TRIP_ROUTES } from "./trip-contract";
 import { PAYOUT_ROUTES } from "./payout-contract";
+import { SLOT_ROUTES } from "./slot-contract";
 
-export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES];
+export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES, ...SLOT_ROUTES];
 
 const NO_STORE = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
 
@@ -36,8 +37,10 @@ export async function fleetProxy(request: NextRequest, segments: string[], route
     if (route.body) {
       const parsed = route.body.safeParse(await bounded.json().catch(() => undefined));
       if (!parsed.success) return fail(400, "INVALID_FLEET_REQUEST", parsed.error.issues[0]?.message ?? "Check the details and try again.");
-      headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(parsed.data);
+      if (parsed.data !== undefined) {
+        headers["Content-Type"] = "application/json";
+        init.body = JSON.stringify(parsed.data);
+      }
     }
     init.headers = headers;
   }
@@ -50,10 +53,12 @@ export async function fleetProxy(request: NextRequest, segments: string[], route
       return fail(upstream.status >= 400 && upstream.status <= 599 ? upstream.status : 502, error.code, error.message);
     }
     if (route.file) return fileResponse(upstream, route.file, ids, query);
-    const parsed = route.response!.safeParse(await upstream.json().catch(() => null));
-    return parsed.success
-      ? NextResponse.json(parsed.data, { status: upstream.status, headers: NO_STORE })
-      : fail(502, "INVALID_FLEET_RESPONSE", "The fleet service sent an unexpected answer. Refresh and check before trying again.");
+    // 204 is a valid answer only where the route's parser accepts null (no banner, banner cleared).
+    const parsed = route.response!.safeParse(upstream.status === 204 ? null : await upstream.json().catch(() => null));
+    if (!parsed.success) return fail(502, "INVALID_FLEET_RESPONSE", "The fleet service sent an unexpected answer. Refresh and check before trying again.");
+    return upstream.status === 204
+      ? new NextResponse(null, { status: 204, headers: NO_STORE })
+      : NextResponse.json(parsed.data, { status: upstream.status, headers: NO_STORE });
   } catch (error) {
     return error instanceof SessionRequiredError
       ? fail(401, "AUTHENTICATION_REQUIRED", "Your session has ended. Sign in again.")

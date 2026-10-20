@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { payoutAccountInputSchema, riderDetailSchema, riderPageSchema, statusEventProblem, type StatusEventInput } from "./rider-contract";
+import {
+  approveDocumentSchema, payoutAccountInputSchema, riderDetailSchema, riderDocumentSchema, riderPageSchema, riderVehicleInputSchema, riderVehicleSchema,
+  statusEventProblem, type StatusEventInput,
+} from "./rider-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
 const DOC = "22222222-2222-4222-8222-222222222222";
@@ -37,6 +40,26 @@ describe("rider parsers", () => {
     expect(riderDetailSchema.safeParse({ ...riderDetail, rider: { ...riderDetail.rider, riderId: "R1" } }).success).toBe(false);
     expect(riderDetailSchema.safeParse({ ...riderDetail, documents: [{ ...riderDetail.documents[0], type: "AADHAAR" }] }).success).toBe(false);
     expect(riderDetailSchema.safeParse({ ...riderDetail, devices: undefined }).success).toBe(false);
+  });
+});
+
+describe("document expiry and vehicle", () => {
+  it("accept a PUC certificate and approve with or without an expiry date", () => {
+    expect(riderDocumentSchema.parse({ ...riderDetail.documents[0], type: "PUC" }).type).toBe("PUC");
+    expect(approveDocumentSchema.parse(undefined)).toBeUndefined();
+    expect(approveDocumentSchema.parse({ expiresOn: "2027-04-30", reviewer: "x" })).toEqual({ expiresOn: "2027-04-30" });
+    expect(approveDocumentSchema.safeParse({ expiresOn: "30-04-2027" }).success).toBe(false);
+  });
+
+  it("read the masked vehicle and drop the full registration number", () => {
+    expect(riderVehicleSchema.parse({ label: "Honda Activa 6G", regNumberMasked: "TS09xx1234", regNumber: "TS09EA1234" })).toEqual({ label: "Honda Activa 6G", regNumberMasked: "TS09xx1234" });
+    expect(riderVehicleSchema.safeParse({ label: "Honda Activa 6G" }).success).toBe(false);
+  });
+
+  it("take Indian registration numbers, including BH series", () => {
+    for (const regNumber of ["TS09EA1234", "KA011234", "22BH1234AB"]) expect(riderVehicleInputSchema.safeParse({ label: "Bike", regNumber }).success, regNumber).toBe(true);
+    for (const regNumber of ["TS-09-EA-1234", "ts09ea1234", "TS09EA12345"]) expect(riderVehicleInputSchema.safeParse({ label: "Bike", regNumber }).success, regNumber).toBe(false);
+    expect(riderVehicleInputSchema.safeParse({ label: " ", regNumber: "TS09EA1234" }).error?.issues[0]?.message).toBe("Enter the vehicle, like Honda Activa 6G.");
   });
 });
 

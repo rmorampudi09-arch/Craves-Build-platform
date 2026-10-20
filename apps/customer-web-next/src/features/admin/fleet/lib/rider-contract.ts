@@ -10,9 +10,10 @@ export const riderSummarySchema = z.object({
 });
 export const riderPageSchema = z.object({ riders: z.array(riderSummarySchema).max(100), nextCursor: z.string().max(200).nullable() });
 
+export const DOCUMENT_TYPES = ["DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "PHOTO", "ADDRESS_PROOF", "BANK_PROOF"] as const;
 export const riderDocumentSchema = z.object({
   documentId: id,
-  type: z.enum(["DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "PHOTO", "ADDRESS_PROOF", "BANK_PROOF"]),
+  type: z.enum(DOCUMENT_TYPES),
   status: z.enum(["PENDING", "VERIFIED", "REJECTED", "EXPIRED"]),
   expiresOn: day.nullable(), reason: z.string().max(1000).nullable(),
   reviewedBy: personName.nullable(), reviewedAt: instant.nullable(), uploadedAt: instant,
@@ -55,6 +56,14 @@ export const auditEntrySchema = z.object({
   riderId: id.nullable(), targetId: z.string().max(64).nullable(), summary: z.string().max(1000),
 });
 export const auditPageSchema = z.object({ entries: z.array(auditEntrySchema).max(100), nextCursor: z.string().max(200).nullable() });
+export const riderVehicleSchema = z.object({ label: z.string().max(60), regNumberMasked: z.string().max(20) });
+
+/** Approve sends {expiresOn} for documents that expire and no body for the rest. */
+export const approveDocumentSchema = z.object({ expiresOn: day }).optional();
+export const riderVehicleInputSchema = z.object({
+  label: z.string().trim().min(2, "Enter the vehicle, like Honda Activa 6G.").max(60, "Keep the vehicle to 60 characters."),
+  regNumber: z.string().regex(/^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/, "Enter the registration number, like TS09EA1234."),
+});
 
 export const createRiderSchema = z.object({
   name: z.string().trim().min(2, "Enter the rider's name as on their documents.").max(120),
@@ -104,10 +113,11 @@ export const RIDER_ROUTES: readonly FleetRoute[] = [
   { method: "POST", path: "riders", body: createRiderSchema, response: riderSummarySchema },
   { method: "GET", path: "riders/:id", response: riderDetailSchema },
   { method: "GET", path: "riders/:id/documents/:id/content", file: { types: ["application/pdf", "image/jpeg", "image/png"], maxBytes: 10 * 1024 * 1024 } },
-  { method: "POST", path: "riders/:id/documents/:id/approve", response: riderDocumentSchema },
+  { method: "POST", path: "riders/:id/documents/:id/approve", body: approveDocumentSchema, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/documents/:id/reject", body: reasonBody, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/devices/:id/approve", response: riderDeviceSchema },
   { method: "PUT", path: "riders/:id/payout-account", body: payoutAccountInputSchema, response: payoutAccountSchema },
+  { method: "PUT", path: "riders/:id/vehicle", body: riderVehicleInputSchema, response: riderVehicleSchema },
   { method: "POST", path: "riders/:id/status-events", body: statusEventInputSchema, response: statusEventSchema },
   { method: "GET", path: "selfie-reviews", response: z.object({ items: z.array(selfieReviewSchema).max(200) }),
     query: { state: z.enum(["PENDING", "APPROVED", "REJECTED"]) } },

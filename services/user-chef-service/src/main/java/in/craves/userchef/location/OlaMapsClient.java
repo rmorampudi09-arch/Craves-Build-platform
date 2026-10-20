@@ -148,14 +148,15 @@ public class OlaMapsClient {
         params.forEach((name, value) -> query.append(name).append('=').append(encode(value)).append('&'));
         query.append("api_key=").append(encode(apiKey));
         String requestId = UUID.randomUUID().toString();
-        HttpRequest request = HttpRequest.newBuilder(endpoint.resolve(path + "?" + query))
+        HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint.resolve(path + "?" + query))
             .timeout(deadline)
             .header("Accept", "application/json")
             .header("Accept-Language", "en-IN")
             .header("Origin", CRAVES_ORIGIN)
             .header("Referer", CRAVES_ORIGIN + "/")
-            .header("X-Request-Id", requestId)
-            .method(method, HttpRequest.BodyPublishers.noBody())
+            .header("X-Request-Id", requestId);
+        // GET() keeps the Places calls byte-for-byte as before; method("GET", noBody()) would add Content-Length: 0.
+        HttpRequest request = ("GET".equals(method) ? builder.GET() : builder.POST(HttpRequest.BodyPublishers.noBody()))
             .build();
 
         CompletableFuture<HttpResponse<byte[]>> pending =

@@ -141,6 +141,9 @@ class OlaMapsClientTest {
             assertEquals("17.4483,78.3915", request.query().get("latlng"));
             assertEquals(KEY, request.query().get("api_key"));
             assertEquals("https://craves.in", request.origin());
+            // Places lookups stay plain GETs without a body header, as before the Directions call was added.
+            assertEquals("GET", request.method());
+            assertNull(request.contentLength());
         }
     }
 
@@ -245,7 +248,7 @@ class OlaMapsClientTest {
         assertNull(OlaMapsClient.parseDirections(null));
     }
 
-    private record Recorded(String method, String path, Map<String, String> query, String origin) {
+    private record Recorded(String method, String path, Map<String, String> query, String origin, String contentLength) {
     }
 
     /** Local JDK HTTP stub; no live Ola request is ever made. */
@@ -265,7 +268,7 @@ class OlaMapsClientTest {
                         parts.length > 1 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "");
                 }
                 requests.add(new Recorded(exchange.getRequestMethod(), exchange.getRequestURI().getPath(), query,
-                    exchange.getRequestHeaders().getFirst("Origin")));
+                    exchange.getRequestHeaders().getFirst("Origin"), exchange.getRequestHeaders().getFirst("Content-Length")));
                 try {
                     Thread.sleep(delayMillis);
                 } catch (InterruptedException interrupted) {

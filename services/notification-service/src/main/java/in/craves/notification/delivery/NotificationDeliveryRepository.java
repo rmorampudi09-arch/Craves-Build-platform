@@ -66,9 +66,10 @@ public class NotificationDeliveryRepository {
     }
 
     public List<PushDevice> activePushDevices(UUID identityId) {
+        // Queued pushes are customer and chef notices; rider phones get only realtime pushes (V8 app column).
         return jdbcTemplate.query(
             "SELECT id, device_token, token_hash FROM notification_schema.push_device_registration " +
-                "WHERE recipient_identity_id = ? AND active = true ORDER BY last_seen_at DESC LIMIT 20",
+                "WHERE recipient_identity_id = ? AND active = true AND app = 'customer' ORDER BY last_seen_at DESC LIMIT 20",
             (rs, rowNum) -> new PushDevice(
                 rs.getObject("id", UUID.class), rs.getString("device_token"), rs.getString("token_hash")
             ),

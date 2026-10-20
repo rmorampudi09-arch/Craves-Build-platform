@@ -14,6 +14,7 @@ class NotificationDeliveryPropertiesTest {
         assertThat(properties.isWorkerEnabled()).isFalse();
         assertThat(properties.isPushEnabled()).isFalse();
         assertThat(properties.isEmailEnabled()).isFalse();
+        assertThat(properties.isRealtimePushEnabled()).isFalse();
     }
 
     @Test
@@ -24,6 +25,10 @@ class NotificationDeliveryPropertiesTest {
         assertThatThrownBy(properties::validate)
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Firebase service account secret");
+
+        NotificationDeliveryProperties realtime = new NotificationDeliveryProperties();
+        realtime.setRealtimePushEnabled(true);
+        assertThatThrownBy(realtime::validate).hasMessageContaining("Firebase service account secret");
     }
 
     @Test

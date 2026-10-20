@@ -25,8 +25,8 @@ public class DeliveryStatusQueryService {
         this.deliveryCodes = deliveryCodes;
     }
 
-    // One connection for the order and history reads; the history read runs inside the outer row mapper, so without
-    // it each request holds two pool connections at once, and a few parallel polls can exhaust a small Hikari pool.
+    // One connection for the order, history and code reads, which run inside the outer row mapper; without it each
+    // request holds two pool connections at once, and a few parallel polls can exhaust a small Hikari pool.
     @Transactional(readOnly = true)
     public DeliveryStatusResponse getForCustomer(CravesPrincipal principal, UUID orderId) {
         if (principal == null || !principal.hasRole("CUSTOMER")) {

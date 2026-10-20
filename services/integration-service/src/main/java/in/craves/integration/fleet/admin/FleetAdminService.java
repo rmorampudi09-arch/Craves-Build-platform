@@ -71,11 +71,8 @@ public class FleetAdminService {
           EXISTS (SELECT 1 FROM fleet_schema.rider_device v WHERE v.rider_id = r.id AND v.state = 'PENDING_APPROVAL') AS pending_device
         FROM fleet_schema.rider r
         """;
-    // A verified document past its expiry date (IST) shows as EXPIRED.
-    static final String DOCUMENT_STATUS =
-        "CASE WHEN status = 'VERIFIED' AND expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date THEN 'EXPIRED' ELSE status END";
-    private static final String DOCUMENT = "SELECT id, type, " + DOCUMENT_STATUS + " AS status, expires_on, reason, reviewed_by_name, "
-        + "reviewed_at, uploaded_at FROM fleet_schema.rider_document ";
+    private static final String DOCUMENT = "SELECT id, type, " + FleetRules.DOCUMENT_STATUS_SQL + " AS status, expires_on, reason, "
+        + "reviewed_by_name, reviewed_at, uploaded_at FROM fleet_schema.rider_document ";
     private static final String DEVICE = "SELECT id, model, app_version, state, first_seen_at, approved_by_name, approved_at "
         + "FROM fleet_schema.rider_device ";
     private static final String EVENT = "SELECT id, kind, reason, evidence_summary, deadline, review_by, appeal_phone, approver_name, "
@@ -439,12 +436,8 @@ public class FleetAdminService {
     }
 
     private Instant openNoticeDeadline(UUID riderId) {
-        return jdbc.query("""
-            SELECT n.deadline FROM fleet_schema.rider_status_event n
-            WHERE n.rider_id = ? AND n.kind = 'NOTICE' AND NOT EXISTS (
-              SELECT 1 FROM fleet_schema.rider_status_event e
-              WHERE e.rider_id = n.rider_id AND e.kind IN ('RESTORE', 'DEACTIVATE') AND e.created_at >= n.created_at)
-            ORDER BY n.created_at DESC LIMIT 1""", (row, n) -> instant(row, "deadline"), riderId).stream().findFirst().orElse(null);
+        return jdbc.query(FleetRules.OPEN_NOTICE_SQL, (row, n) -> instant(row, "deadline"), riderId).stream().findFirst()
+            .orElse(null);
     }
 
     private LockedRider lockRider(UUID riderId) {

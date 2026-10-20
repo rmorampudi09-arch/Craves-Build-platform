@@ -33,6 +33,8 @@ public class WebSecurityConfiguration {
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
+                // Any signed-in user may ask whether they are a rider; every other rider route needs RIDER.
+                .requestMatchers("/api/v1/rider/me").authenticated()
                 .requestMatchers("/api/v1/rider/**").hasRole("RIDER")
                 // Payment, webhook and readiness APIs keep their in-controller checks. Internal routes: InternalCallFilter
                 // checks the caller identity, then each route's shared secret or HMAC still applies.

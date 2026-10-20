@@ -9,6 +9,11 @@ spring:
       # Shared database budget: scripts/release/check-db-connection-budget.py
       maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:4}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
+  servlet:
+    multipart:
+      # Rider document photos (POST /api/v1/rider/documents), at most 10 MB each.
+      max-file-size: 10MB
+      max-request-size: 11MB
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -34,6 +39,10 @@ craves:
     storage-container: ${CRAVES_STORAGE_DOCUMENTS_CONTAINER:documents}
     # Rider support line answered in every slot; set it before turning the rider API on.
     support-phone: ${CRAVES_FLEET_SUPPORT_PHONE:}
+    support-whatsapp-url: ${CRAVES_FLEET_SUPPORT_WHATSAPP_URL:}
+    # Blocks going online below this app version, never a running shift; rider.min_app_version overrides it.
+    min-app-version: ${CRAVES_FLEET_MIN_APP_VERSION:1.0.0}
+    insurance-label: ${CRAVES_FLEET_INSURANCE_LABEL:}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

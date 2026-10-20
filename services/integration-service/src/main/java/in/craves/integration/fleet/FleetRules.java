@@ -13,6 +13,16 @@ import java.util.UUID;
 public final class FleetRules {
     public static final Duration NOTICE_PERIOD = Duration.ofDays(7);
     public static final Duration SAFETY_REVIEW = Duration.ofHours(72);
+    /** A verified document past its expiry date (IST) shows as EXPIRED. */
+    public static final String DOCUMENT_STATUS_SQL =
+        "CASE WHEN status = 'VERIFIED' AND expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date THEN 'EXPIRED' ELSE status END";
+    /** The rider's latest NOTICE, open until a RESTORE or DEACTIVATE follows it. */
+    public static final String OPEN_NOTICE_SQL = """
+        SELECT n.reason, n.evidence_summary, n.deadline, n.appeal_phone, n.created_at FROM fleet_schema.rider_status_event n
+        WHERE n.rider_id = ? AND n.kind = 'NOTICE' AND NOT EXISTS (
+          SELECT 1 FROM fleet_schema.rider_status_event e
+          WHERE e.rider_id = n.rider_id AND e.kind IN ('RESTORE', 'DEACTIVATE') AND e.created_at >= n.created_at)
+        ORDER BY n.created_at DESC LIMIT 1""";
     private static final Set<String> HONORIFICS = Set.of("MR", "MRS", "MS", "MISS", "SHRI", "SMT", "KUMARI", "DR");
 
     private FleetRules() {

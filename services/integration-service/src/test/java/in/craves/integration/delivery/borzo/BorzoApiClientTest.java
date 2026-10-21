@@ -137,8 +137,8 @@ class BorzoApiClientTest {
             .andExpect(content().json("""
                 {
                   "points": [
-                    {},
-                    {"client_order_id": "CRV-SUBORDER-123"}
+                    {"note": "Craves order #0BDE0000. Match this number with the kitchen."},
+                    {"client_order_id": "CRV-SUBORDER-123", "note": "Craves order #0BDE0000."}
                   ]
                 }
                 """, false))
@@ -311,7 +311,7 @@ class BorzoApiClientTest {
             new BigDecimal("78.3915"),
             null,
             null,
-            "Sandbox pickup"
+            "Craves order #0BDE0000. Match this number with the kitchen."
         );
         Stop dropoff = new Stop(
             "Gachibowli, Hyderabad, Telangana, India",
@@ -321,7 +321,7 @@ class BorzoApiClientTest {
             new BigDecimal("78.3489"),
             null,
             null,
-            "Sandbox dropoff"
+            "Craves order #0BDE0000."
         );
         return new QuoteRequest("Freshly prepared packaged food", 1250, true, pickup, dropoff);
     }

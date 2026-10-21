@@ -148,15 +148,16 @@ public class FleetRiderService {
     }
 
     /**
-     * The shift (online while an open shift's credential still works), the trip in progress, the running or next slot
-     * (zoneName and slotEndsAt only while one runs), rest point and banner. Earnings (P4) read as zero.
+     * The shift (online while an open shift's credential still works), the trip in progress, the running or next booked
+     * slot with its own hourly guarantee (zoneName and slotEndsAt only while one runs), rest point and banner. Earnings
+     * (P4) read as zero.
      */
     @Transactional(readOnly = true)
     public HomeSummary home(UUID identityId) {
         Rider rider = rider(identityId);
         List<Map<String, Object>> slots = jdbc.queryForList("SELECT zone_name, starts_at, ends_at, rest_point_name, rest_point_area, "
-            + "starts_at <= now() AS running FROM fleet_schema.rider_slot WHERE rider_id = ? AND ends_at > now() ORDER BY starts_at LIMIT 1",
-            rider.id());
+            + "guaranteed_per_hour_paise, starts_at <= now() AS running FROM fleet_schema.rider_slot WHERE rider_id = ? "
+            + "AND status = 'BOOKED' AND ends_at > now() ORDER BY starts_at LIMIT 1", rider.id());
         NextSlot next = null;
         RestPoint restPoint = null;
         Long guaranteed = null;
@@ -169,7 +170,7 @@ public class FleetRiderService {
             if (slot.get("rest_point_name") != null) {
                 restPoint = new RestPoint((String) slot.get("rest_point_name"), (String) slot.get("rest_point_area"));
             }
-            guaranteed = policies.currentRateCard().map(RateCard::slotGuaranteePerHourPaise).orElse(null);
+            guaranteed = slot.get("guaranteed_per_hour_paise") == null ? null : ((Number) slot.get("guaranteed_per_hour_paise")).longValue();
             if (Boolean.TRUE.equals(slot.get("running"))) {
                 zoneName = next.zoneName();
                 slotEndsAt = next.endsAt();
@@ -251,6 +252,11 @@ public class FleetRiderService {
                 : "Ride to the kitchen, each km", rupees(card.pickupPerKmPaise())),
             new LabelValue("Waiting at the kitchen, after " + card.waitFreeMinutes() + " free minutes",
                 rupees(card.waitPerMinutePaise()) + " a minute"),
+            new LabelValue("Order cancelled after you reach the kitchen", rupees(card.cancellationFeePaise())
+                + " plus the ride to the kitchen"),
+            new LabelValue("Order cancelled after pickup: return to the kitchen, each km", rupees(card.returnPerKmPaise())),
+            new LabelValue("Customer not answering: full pay after two calls and a wait of",
+                card.unreachableWaitMinutes() + " minutes"),
             new LabelValue("Guaranteed minimum in a booked slot", rupees(card.slotGuaranteePerHourPaise()) + " an hour"),
             new LabelValue("Declining or missing an offer", "Free"));
         List<LabelValue> grievance = List.of(
@@ -261,7 +267,7 @@ public class FleetRiderService {
     }
 
     /** 4000 is "₹40"; 150 is "₹1.50". */
-    static String rupees(long paise) {
+    public static String rupees(long paise) {
         return paise % 100 == 0 ? "₹" + paise / 100 : "₹" + BigDecimal.valueOf(paise, 2).toPlainString();
     }
 

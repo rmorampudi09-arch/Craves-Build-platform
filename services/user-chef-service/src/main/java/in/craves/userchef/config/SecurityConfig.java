@@ -33,6 +33,8 @@ public class SecurityConfig {
                 .requestMatchers("/internal/v1/customer-addresses/**").permitAll()
                 // Kitchen photos of approved chefs only; the controller requires the internal service secret.
                 .requestMatchers("/internal/v1/chef-kitchen-photos/**").permitAll()
+                // Rider drop distance for integration-service; the controller requires the internal service secret.
+                .requestMatchers(HttpMethod.POST, "/internal/v1/maps/road-distance").permitAll()
                 // This exact read-only operation verifies a separate short-lived HMAC in its controller.
                 .requestMatchers("/internal/v1/chef-bank/identity").permitAll()
                 .requestMatchers("/internal/v1/chef-finance/approvals").permitAll()

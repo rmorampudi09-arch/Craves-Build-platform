@@ -38,5 +38,14 @@ class PidgeWebhookTest {
         assertEquals("order-1", update.providerOrderId());
         assertEquals(Instant.parse("2026-09-12T08:00:00Z"), update.observedAt());
         assertEquals("PICKED_UP", update.status().name());
+        assertNull(update.courier());
+    }
+    @Test void normalizerReadsTheRiderSoTheChefSeesWhoIsComing() throws Exception {
+        var update = new PidgeWebhookNormalizer().normalize(mapper.readTree(
+            "{\"id\":\"order-1\",\"status\":\"fulfilled\",\"updated_at\":\"2026-09-12T08:00:00Z\","
+                + "\"fulfillment\":{\"status\":\"REACHED_PICKUP\",\"rider\":{\"id\":\"r-7\",\"name\":\"Ravi Kumar\",\"mobile\":\"9000000001\"}}}"));
+        assertEquals("AT_PICKUP", update.status().name());
+        assertEquals("Ravi Kumar", update.courier().name());
+        assertEquals("9000000001", update.courier().phone());
     }
 }

@@ -43,6 +43,12 @@ craves:
     # Blocks going online below this app version, never a running shift; rider.min_app_version overrides it.
     min-app-version: ${CRAVES_FLEET_MIN_APP_VERSION:1.0.0}
     insurance-label: ${CRAVES_FLEET_INSURANCE_LABEL:}
+    # Dispatch (P3): road distance, the delivery code check, offer pushes and ops alerts. Each client calls nothing
+    # until its URL and CRAVES_INTERNAL_SERVICE_KEY are set (road distance then uses straight line x 1.3).
+    services:
+      user-chef-base-url: ${CRAVES_USER_CHEF_INTERNAL_BASE_URL:}
+      order-base-url: ${CRAVES_FLEET_ORDER_BASE_URL:}
+      notification-base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

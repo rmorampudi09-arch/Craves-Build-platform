@@ -1,5 +1,6 @@
 package in.craves.integration.fleet;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -16,7 +17,8 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 public class FleetApiAdvice {
     @ExceptionHandler(FleetApiException.class)
     public ResponseEntity<ErrorBody> refused(FleetApiException error) {
-        return body(error.status(), error.code(), error.getMessage());
+        return ResponseEntity.status(error.status()).header("Cache-Control", "no-store")
+            .body(new ErrorBody(error.code(), error.getMessage(), error.attemptsLeft()));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
@@ -36,6 +38,10 @@ public class FleetApiAdvice {
         return ResponseEntity.status(status).header("Cache-Control", "no-store").body(new ErrorBody(code, message));
     }
 
-    public record ErrorBody(String code, String message) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ErrorBody(String code, String message, Integer attemptsLeft) {
+        public ErrorBody(String code, String message) {
+            this(code, message, null);
+        }
     }
 }

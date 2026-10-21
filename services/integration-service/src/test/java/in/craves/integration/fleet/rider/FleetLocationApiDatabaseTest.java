@@ -176,16 +176,21 @@ class FleetLocationApiDatabaseTest {
     }
 
     @Test
-    void inZoneSecondsCountOnlyNonMockFixesWhileASlotRuns() throws Exception {
+    void inZoneSecondsCountOnlyNonMockFixesWhileABookedSlotRunsAndGoToThatSlot() throws Exception {
         OnShift rider = onShift();
         Instant t = Instant.now().minusSeconds(600).truncatedTo(ChronoUnit.MILLIS);
         locations(rider, List.of(fix(t, false), fix(t.plusSeconds(10), false))).andExpect(status().isOk());
         assertThat(inZone(rider)).as("no slot").isZero();
-        fleet.db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at) "
-            + "VALUES (?, ?, 'Madhapur', now() - INTERVAL '1 hour', now() + INTERVAL '2 hours')", UUID.randomUUID(), rider.id());
+        UUID earlier = slot(rider, "now() - INTERVAL '3 hours'", "now() - INTERVAL '1 hour'", "BOOKED");
+        UUID running = slot(rider, "now() - INTERVAL '1 hour'", "now() + INTERVAL '2 hours'", "CANCELLED");
+        locations(rider, List.of(fix(t.plusSeconds(15), false))).andExpect(status().isOk());
+        assertThat(inZone(rider)).as("a cancelled slot counts nothing").isZero();
+        fleet.db.update("UPDATE fleet_schema.rider_slot SET status = 'BOOKED' WHERE id = ?", running);
         locations(rider, List.of(fix(t.plusSeconds(20), false), fix(t.plusSeconds(30), false), fix(t.plusSeconds(40), true),
             fix(t.plusSeconds(50), false), fix(t.plusSeconds(200), false))).andExpect(status().isOk());
-        assertThat(inZone(rider)).isEqualTo(80);
+        assertThat(inZone(rider)).as("5 + 10, nothing either side of the mock fix, 60 of the 150 s gap").isEqualTo(75);
+        assertThat(slotSeconds(running)).as("the running slot's own count settles its guarantee").isEqualTo(75);
+        assertThat(slotSeconds(earlier)).as("another slot of the same shift").isZero();
     }
 
     @Test
@@ -200,12 +205,14 @@ class FleetLocationApiDatabaseTest {
             .get("offers").get(0);
         assertThat(offer.get("offerId").asText()).isEqualTo(live.toString());
         assertThat(offer.get("tripId").asText()).isEqualTo(trip.toString());
-        assertThat(offer.get("expiresInSec").asInt()).isBetween(25, 29);
+        assertThat(offer.get("expiresInSec").asInt()).isBetween(25, 30);
         assertThat(offer.get("payPaise").asLong()).isEqualTo(5800);
-        assertThat(offer.get("payLines").get(1).get("label").asText()).isEqualTo("₹18 drop distance");
+        assertThat(offer.get("payLines").get(1).get("label").asText()).isEqualTo("drop distance");
+        assertThat(offer.get("payLines").get(1).get("amountPaise").asLong()).isEqualTo(1800);
         assertThat(offer.get("kitchenArea").asText()).isEqualTo("Madhapur");
         assertThat(offer.get("customerLocality").asText()).isEqualTo("Kondapur");
-        assertThat(offer.get("estMinutes").asInt()).isEqualTo(28);
+        assertThat(offer.get("estMinutes").asInt()).isEqualTo(20);
+        assertThat(offer.get("itemsCount").asInt()).isEqualTo(2);
     }
 
     @Test
@@ -274,6 +281,8 @@ class FleetLocationApiDatabaseTest {
         assertThat(total).isLessThanOrEqualTo(200 * 5);
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE trip_id = ?", Integer.class, trip)).isEqualTo(1000);
         assertThat(inZone(rider)).as("999 gaps of 3 s").isEqualTo(2997);
+        assertThat(fleet.db.queryForObject("SELECT in_zone_seconds FROM fleet_schema.rider_slot WHERE rider_id = ?", Integer.class, rider.id()))
+            .isEqualTo(2997);
     }
 
     ResultActions locations(OnShift rider, List<String> fixes) throws Exception {
@@ -290,6 +299,17 @@ class FleetLocationApiDatabaseTest {
             + "WHERE id = ?", Boolean.class, rider.shift())).isTrue();
     }
 
+    UUID slot(OnShift rider, String startsAt, String endsAt, String status) {
+        UUID id = UUID.randomUUID();
+        fleet.db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, status) VALUES (?, ?, 'Madhapur', "
+            + startsAt + ", " + endsAt + ", ?)", id, rider.id(), status);
+        return id;
+    }
+
+    int slotSeconds(UUID slot) {
+        return fleet.db.queryForObject("SELECT in_zone_seconds FROM fleet_schema.rider_slot WHERE id = ?", Integer.class, slot);
+    }
+
     int inZone(OnShift rider) {
         return fleet.db.queryForObject("SELECT in_zone_seconds FROM fleet_schema.rider_shift WHERE id = ?", Integer.class, rider.shift());
     }
@@ -297,8 +317,9 @@ class FleetLocationApiDatabaseTest {
     UUID offer(UUID rider, UUID trip, String expiresAt) {
         UUID id = UUID.randomUUID();
         fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m, "
-            + "drop_distance_m, offered_at, expires_at) VALUES (?, ?, ?, 5800, '[{\"label\":\"₹40 base\",\"amountPaise\":4000},"
-            + "{\"label\":\"₹18 drop distance\",\"amountPaise\":1800}]', '2026-10-v1', 900, 4000, now() - INTERVAL '30 seconds', " + expiresAt + ")",
+            + "drop_distance_m, offered_at, expires_at) VALUES (?, ?, ?, 5800, '[{\"component\":\"base\",\"label\":\"base\",\"amountPaise\":4000},"
+            + "{\"component\":\"drop-km\",\"label\":\"drop distance\",\"amountPaise\":1800}]', '2026-10-v1', 900, 4000, "
+            + "now() - INTERVAL '30 seconds', " + expiresAt + ")",
             id, trip, rider);
         return id;
     }

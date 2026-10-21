@@ -22,6 +22,9 @@ class FleetRiderServiceTest {
             new LabelValue("Each drop km after 2 km", "₹9"),
             new LabelValue("Ride to the kitchen, each km after the first 1 km", "₹9"),
             new LabelValue("Waiting at the kitchen, after 8 free minutes", "₹1.50 a minute"),
+            new LabelValue("Order cancelled after you reach the kitchen", "₹20 plus the ride to the kitchen"),
+            new LabelValue("Order cancelled after pickup: return to the kitchen, each km", "₹9"),
+            new LabelValue("Customer not answering: full pay after two calls and a wait of", "10 minutes"),
             new LabelValue("Guaranteed minimum in a booked slot", "₹80 an hour"),
             new LabelValue("Declining or missing an offer", "Free"));
         assertThat(terms.grievanceLines()).extracting(LabelValue::value)

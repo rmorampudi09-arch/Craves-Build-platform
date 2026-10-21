@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import in.craves.order.config.ChefAcceptanceWindowProperties;
+import in.craves.order.delivery.DeliveryCodeService;
 import in.craves.order.event.ChefAcceptedOrderEventFactory;
 import in.craves.order.exception.OrderApiException;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
@@ -139,6 +140,7 @@ class ChefAutoAcceptDatabaseTest {
         context.registerBean(NotificationOutboxRepository.class);
         context.registerBean(NotificationOutboxService.class);
         context.registerBean(ChefAcceptanceWorkRepository.class);
+        context.registerBean(DeliveryCodeService.class);
         context.registerBean(ChefAcceptanceService.class);
         context.registerBean(ChefAcceptanceInitialNotificationService.class);
         context.registerBean(ChefAutoAcceptService.class);
@@ -177,6 +179,9 @@ class ChefAutoAcceptDatabaseTest {
             "actor_identity_id", chef, "reason", "Accepted automatically")), history(id));
         assertEquals(List.of("CHEF_ACCEPTED_ORDER"), jdbc.queryForList(
             "SELECT event_type FROM order_schema.domain_event_outbox WHERE aggregate_id = ?", String.class, id));
+        // Auto-accept gets a delivery code like a manual accept.
+        assertTrue(jdbc.queryForObject("SELECT code FROM order_schema.order_delivery_code WHERE order_id = ?",
+            String.class, id).matches("[0-9]{4}"));
         // The chef is told about it, and the customer hears "chef accepted" exactly like a manual accept.
         Map<String, Object> chefNote = notification("chef-new-order-" + id);
         assertEquals(AUTO_TITLE, chefNote.get("title"));

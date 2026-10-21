@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import in.craves.integration.fleet.rider.FleetLocationService.Context;
 import in.craves.integration.fleet.rider.FleetRiderModels.ActiveTrip;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
+import in.craves.integration.fleet.trip.FleetTripModels;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -62,7 +63,16 @@ class FleetLocationServiceTest {
             .as("ops gave it to another rider").isEqualTo(new ActiveTrip(TRIP.toString(), "CANCELLED", 4));
         assertThat(FleetLocationService.activeTrip(trip(null, null, null, RIDER, "DELIVERED", UUID.randomUUID())))
             .as("from an earlier shift").isNull();
-        assertThat(FleetLocationService.estMinutes(900, 4000)).isEqualTo(28);
+        assertThat(FleetLocationService.activeTrip(trip(null, null, null, RIDER, "SEARCHING", SHIFT)).step())
+            .as("every step is a rider-v1 TripStep").isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void tripStatesMapOntoTheSevenRiderSteps() {
+        assertThat(List.of("SEARCHING", "ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP", "DELIVERED", "FAILED", "CANCELLED").stream()
+            .map(FleetTripModels::step).toList())
+            .containsExactly("CANCELLED", "TO_KITCHEN", "AT_KITCHEN", "PICKED_UP", "AT_DROP", "DELIVERED", "FAILED", "CANCELLED");
+        assertThat(FleetTripModels.estMinutes(900, 4000)).as("dispatch's estimate, on /locations and the push alike").isEqualTo(20);
     }
 
     static RiderFix fix(int seconds, boolean mock) {
@@ -71,11 +81,11 @@ class FleetLocationServiceTest {
 
     static Context context(String status, Instant ended, Instant revoked, boolean expired) {
         return new Context(SHIFT, T, ended, revoked, expired, RIDER, status, null, null, null, null, null, null, null, null, null, null, null,
-            null, T);
+            null, null, T);
     }
 
     static Context trip(UUID tripId, String state, Integer version, UUID lastTripRider, String lastState, UUID lastShift) {
         return new Context(SHIFT, T, null, null, false, RIDER, "ACTIVE", lastShift, T, false, lastTripRider == null ? null : TRIP, tripId, state,
-            version, lastTripRider, lastState, lastTripRider == null ? null : 4, null, null, T);
+            version, lastTripRider, lastState, lastTripRider == null ? null : 4, null, null, null, T);
     }
 }

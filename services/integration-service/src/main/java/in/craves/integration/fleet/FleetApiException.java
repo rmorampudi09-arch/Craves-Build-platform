@@ -4,11 +4,22 @@ package in.craves.integration.fleet;
 public class FleetApiException extends RuntimeException {
     private final int status;
     private final String code;
+    private final Integer attemptsLeft;
 
     public FleetApiException(int status, String code, String message) {
+        this(status, code, message, null);
+    }
+
+    /** attemptsLeft only for a wrong delivery OTP (rider-v1 ErrorBody). */
+    public FleetApiException(int status, String code, String message, Integer attemptsLeft) {
         super(message);
         this.status = status;
         this.code = code;
+        this.attemptsLeft = attemptsLeft;
+    }
+
+    public Integer attemptsLeft() {
+        return attemptsLeft;
     }
 
     public int status() {

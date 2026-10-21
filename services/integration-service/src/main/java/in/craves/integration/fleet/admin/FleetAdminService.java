@@ -479,7 +479,8 @@ public class FleetAdminService {
         audit(admin, action, riderId, targetId, summary, null, null, null);
     }
 
-    private Object once(Admin admin, UUID key, String action, String request, Supplier<Done> work) {
+    /** Runs work once per admin and Idempotency-Key, audited in the caller's transaction; a replay returns the first response. */
+    public Object once(Admin admin, UUID key, String action, String request, Supplier<Done> work) {
         String hash = sha256(action + "\n" + request);
         List<Map<String, Object>> previous = jdbc.queryForList("SELECT request_hash, response_body FROM fleet_schema.admin_audit "
             + "WHERE actor_id = ? AND idem_key = ?", admin.id(), key);
@@ -582,7 +583,7 @@ public class FleetAdminService {
         return value == null ? null : Timestamp.from(value);
     }
 
-    private static String reason(String reason) {
+    static String reason(String reason) {
         String text = reason == null ? "" : reason.trim();
         if (text.length() < 3 || text.length() > 1000) {
             throw FleetApiException.invalid("Write a reason of 3 to 1,000 characters.");
@@ -618,7 +619,7 @@ public class FleetAdminService {
         return FleetApiException.conflict("IDEMPOTENCY_KEY_REUSED", "This action was already sent with different details. Reload the page.");
     }
 
-    private record Done(Object body, UUID riderId, String targetId, String summary) {
+    public record Done(Object body, UUID riderId, String targetId, String summary) {
     }
 
     private record LockedRider(String name, String status, UUID identityId) {

@@ -130,6 +130,12 @@
             "items": {
               "$ref": "#/components/schemas/DeliveryStatusHistoryResponse"
             }
+          },
+          "deliveryCode": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[0-9]{4}$",
+            "description": "Code the customer tells a Craves rider at the door. Set only while a Craves rider (providerId craves_fleet) carries the order (PICKED_UP, IN_TRANSIT, AT_DROPOFF) and the code is not yet used; always null for Borzo and Pidge."
           }
         }
       },

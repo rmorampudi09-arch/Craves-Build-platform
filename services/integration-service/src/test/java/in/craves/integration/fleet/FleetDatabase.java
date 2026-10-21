@@ -44,6 +44,13 @@ public final class FleetDatabase {
         return id;
     }
 
+    /** The refund order-service requests when the customer or the chef cancels the order: the fleet's cancellation signal. */
+    public void refundRequested(UUID chefSubOrderId) {
+        db.update("INSERT INTO payment_schema.refund (id, refund_ref, amount, currency, status, reason, chef_sub_order_id, created_at, "
+            + "updated_at) VALUES (?, ?, 140.00, 'INR', 'REQUESTED', 'Order cancelled', ?, now(), now())", UUID.randomUUID(),
+            "rf-" + chefSubOrderId, chefSubOrderId);
+    }
+
     public UUID trip(UUID chefSubOrderId) {
         UUID id = UUID.randomUUID();
         db.update("""

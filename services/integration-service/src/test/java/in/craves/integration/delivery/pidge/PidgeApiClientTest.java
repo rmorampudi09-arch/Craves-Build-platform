@@ -67,6 +67,17 @@ class PidgeApiClientTest {
         assertEquals(0, body.at("/trips/0/cod_amount").asInt());
         assertEquals("9000000001", body.at("/sender_detail/mobile").asText());
     }
+    @Test void pickupNoteCarriesTheOrderNumberForTheRider() {
+        var pickup = new Stop("Test address", "Kitchen", "+919000000001", new BigDecimal("17.44"), new BigDecimal("78.38"),
+            null, null, "Craves order #0BDE0000. Match this number with the kitchen.", "Test address", null, null, null,
+            "Hyderabad", "Telangana", "500081", "IN");
+        var request = new QuoteRequest("Food order #0BDE0000", 500, false, pickup, stop("500032", "Customer"),
+            List.of(), new BigDecimal("100"), "PREPAID", null);
+        var body = client.buildOrder("ref-1", request);
+        assertEquals("Craves order #0BDE0000. Match this number with the kitchen.",
+            body.at("/sender_detail/address/instructions_to_reach").asText());
+        assertTrue(body.at("/trips/0/receiver_detail/address/instructions_to_reach").isMissingNode());
+    }
     @Test void quoteAndBookingUseTheSameConfiguredParcelMinimum() {
         properties.setDefaultVolumetricWeightGrams(1200);
         var request = request();

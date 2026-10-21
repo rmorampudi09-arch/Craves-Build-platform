@@ -45,7 +45,7 @@ craves:
     signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
     caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
     enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
-    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/payments/**=integration;/internal/v1/checkouts/**=integration;/internal/v1/delivery-handoff-eligibility/**=integration}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/payments/**=integration;/internal/v1/checkouts/**=integration;/internal/v1/delivery-handoff-eligibility/**=integration;/internal/v1/orders/*/delivery-code/**=integration}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}

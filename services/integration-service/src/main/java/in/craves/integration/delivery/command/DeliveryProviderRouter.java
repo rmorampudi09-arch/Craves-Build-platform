@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -52,6 +54,7 @@ public class DeliveryProviderRouter {
     private final ExecutorService quoteExecutor;
     private final Clock clock;
     private final BorzoProperties borzoProperties;
+    private final FleetStage fleetStage;
 
     @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
@@ -61,7 +64,8 @@ public class DeliveryProviderRouter {
                                   DeliveryCommandProperties properties,
                                   @Qualifier("deliveryQuoteExecutor") ExecutorService quoteExecutor,
                                   Clock clock,
-                                  BorzoProperties borzoProperties) {
+                                  BorzoProperties borzoProperties,
+                                  Optional<FleetStage> fleetStage) {
         Map<String, DeliveryProviderAdapter> indexed = new LinkedHashMap<>();
         for (DeliveryProviderAdapter adapter : adapters) {
             String providerId = normalize(adapter.providerId());
@@ -77,6 +81,19 @@ public class DeliveryProviderRouter {
         this.quoteExecutor = quoteExecutor;
         this.clock = clock;
         this.borzoProperties = borzoProperties;
+        this.fleetStage = fleetStage.orElse(null);
+    }
+
+    public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
+                                  DeliveryProviderCatalogRepository providerCatalog,
+                                  DeliveryIntelligenceService intelligenceService,
+                                  DeliveryAssignmentRepository assignmentRepository,
+                                  DeliveryCommandProperties properties,
+                                  ExecutorService quoteExecutor,
+                                  Clock clock,
+                                  BorzoProperties borzoProperties) {
+        this(adapters, providerCatalog, intelligenceService, assignmentRepository,
+            properties, quoteExecutor, clock, borzoProperties, Optional.empty());
     }
 
     DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
@@ -98,8 +115,36 @@ public class DeliveryProviderRouter {
             && (borzoProperties == null || borzoProperties.productionCreateReady());
     }
 
+    /**
+     * The Craves rider stage, before Borzo and Pidge. Empty when the fleet is off or its stage is closed (then route as
+     * before); a delivery job id when a rider accepted. Throws DeliveryProviderTemporarilyUnavailableException while
+     * riders are deciding, so the command waits without starting Borzo's window.
+     */
+    public Optional<java.util.UUID> fleetStage(DeliveryCommandMessage command) {
+        if (fleetStage == null) {
+            return Optional.empty();
+        }
+        return fleetStage.run(command, () -> courierQuotePaise(command), borzoTimedPolicyReady());
+    }
+
     public RoutingResult route(DeliveryCommandMessage command) {
         return route(command, null);
+    }
+
+    /** The cheapest available quote among the couriers routing would try next, in paise, for the fleet's cost guard. */
+    private OptionalLong courierQuotePaise(DeliveryCommandMessage command) {
+        String only = !properties.isBorzoPidgeHandoffEnabled() ? null : borzoTimedPolicyReady() ? "borzo" : "pidge";
+        List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
+        for (String configuredProviderId : providerCatalog.activeProviderIds()) {
+            DeliveryProviderAdapter adapter = adapters.get(normalize(configuredProviderId));
+            if (adapter != null && (only == null || only.equals(normalize(configuredProviderId)))) {
+                tasks.add(() -> quote(adapter, command));
+            }
+        }
+        return invokeQuotes(tasks, new ArrayList<>()).stream().map(QuoteOutcome::quote)
+            .filter(quote -> quote != null && quote.available() && quote.deliveryFeeAmount() != null)
+            .mapToLong(quote -> quote.deliveryFeeAmount().movePointRight(2).setScale(0, java.math.RoundingMode.HALF_UP).longValue())
+            .min();
     }
 
     public RoutingResult route(DeliveryCommandMessage command, Instant borzoWindowStartedAt) {

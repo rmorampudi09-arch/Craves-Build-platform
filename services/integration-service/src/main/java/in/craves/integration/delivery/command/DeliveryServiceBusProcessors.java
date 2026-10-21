@@ -38,6 +38,7 @@ public class DeliveryServiceBusProcessors {
     private final ServiceBusSenderClient commandRetrySender;
     private final ServiceBusProcessorClient chefAcceptedProcessor;
     private final ServiceBusProcessorClient commandProcessor;
+    private final FleetStage fleetStage;
 
     public DeliveryServiceBusProcessors(DeliveryServiceBusClientFactory factory,
                                         DeliveryCommandScheduler scheduler,
@@ -45,7 +46,9 @@ public class DeliveryServiceBusProcessors {
                                         DeliveryCommandProperties properties,
                                         ObjectMapper objectMapper,
                                         @Qualifier("deliveryCommandSender")
-                                        ServiceBusSenderClient commandRetrySender) {
+                                        ServiceBusSenderClient commandRetrySender,
+                                        java.util.Optional<FleetStage> fleetStage) {
+        this.fleetStage = fleetStage.orElse(null);
         this.scheduler = scheduler;
         this.worker = worker;
         this.properties = properties;
@@ -107,6 +110,7 @@ public class DeliveryServiceBusProcessors {
                     EventEnvelope.class, OrderReadyForPickupData.class
                 );
                 EventEnvelope<OrderReadyForPickupData> event = objectMapper.readValue(rawBody, readyType);
+                recordChefReady(event);
                 scheduler.accelerateReadyForPickup(event);
                 context.complete();
                 return;
@@ -122,6 +126,19 @@ public class DeliveryServiceBusProcessors {
             deadLetter(context, "INVALID_DELIVERY_DOMAIN_EVENT", ex);
         } catch (Exception ex) {
             retryOrDeadLetter(context, "DELIVERY_DOMAIN_EVENT_PROCESSING_FAILED", ex);
+        }
+    }
+
+    // The rider's free wait starts at the chef's ready time; a fleet failure here never holds up the courier.
+    private void recordChefReady(EventEnvelope<OrderReadyForPickupData> event) {
+        if (fleetStage == null || event == null || event.data() == null || event.data().chefSubOrderId() == null) {
+            return;
+        }
+        try {
+            fleetStage.chefReady(event.data().chefSubOrderId(),
+                event.data().readyAt() != null ? event.data().readyAt() : event.occurredAt());
+        } catch (RuntimeException ex) {
+            log.warn("Craves rider chef-ready time not recorded chefSubOrderId={}", event.data().chefSubOrderId(), ex);
         }
     }
 

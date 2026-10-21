@@ -8,7 +8,7 @@ Environment flags only switch code paths on. All are off by default.
 
 | Variable | What it switches on |
 |---|---|
-| `CRAVES_FLEET_ENABLED` | Every fleet bean: admin API, policy readers, test mode, storage, the RIDER role client, the fleet scheduler pool and the daily export job. Off means no fleet bean or job exists (`FleetConfigurationTest`). |
+| `CRAVES_FLEET_ENABLED` | Every fleet bean: admin API, policy readers, test mode, storage, the RIDER role client, the fleet scheduler pool, the daily export job, slot settlement, and dispatch (the fleet stage, the `craves_fleet` adapter, the dispatch tick). Off means no fleet bean or job exists (`FleetConfigurationTest`). |
 | `CRAVES_FLEET_RIDER_API_ENABLED` | The rider API under `/api/v1/rider` (needs `CRAVES_FLEET_ENABLED` too). |
 | `CRAVES_FLEET_LOCATION_INGEST_ENABLED` | `POST /api/v1/rider/locations` and the daily `trip_track` partition job (needs the two flags above too). |
 | `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` | Reserved for payout execution (P4). |
@@ -25,8 +25,13 @@ Other settings (`craves.fleet.*` in `application.yml`):
 | `CRAVES_FLEET_SUPPORT_WHATSAPP_URL` | empty | The riders' WhatsApp group (`/me`). |
 | `CRAVES_FLEET_MIN_APP_VERSION` | `1.0.0` | Blocks going online between shifts; `rider.min_app_version` overrides it per rider. |
 | `CRAVES_FLEET_INSURANCE_LABEL` | empty | Insurance line on the rider's profile; claims go to the support line. |
+| `CRAVES_USER_CHEF_INTERNAL_BASE_URL` | empty | user-chef-service root, for the drop's road distance (`POST /internal/v1/maps/road-distance`). Unset: straight line × 1.3. |
+| `CRAVES_FLEET_ORDER_BASE_URL` | empty | order-service root, for the customer's delivery code (`POST /internal/v1/orders/{id}/delivery-code/verify`). Unset: OTP delivery answers 503 `OTP_UNAVAILABLE`. |
+| `CRAVES_NOTIFICATION_INTERNAL_BASE_URL` | empty | notification-service root, for offer pushes (`/internal/v1/push/realtime`) and ops alerts (`/internal/v1/ops-alerts`). Unset: offers reach the app on `/locations` only; alerts are `CRAVES_ALERT` log lines. |
 
-Operational values live in versioned tables, not variables: `dispatch_policy` (seeded `2026-10-v1`, mode `off`, offers 40 s, fleet stage 60 s, radius 5 km as a placeholder) and `rate_card` (seeded draft `2026-10-v1`).
+All three use `CRAVES_INTERNAL_SERVICE_KEY` (`X-Craves-Internal-Secret`, or `X-Craves-Internal-Key` for notification-service), have explicit timeouts, and are never retried: a code check could count a wrong code twice, and an offer push outlives its offer.
+
+Operational values live in versioned tables, not variables: `dispatch_policy` (seeded `2026-10-v1`, mode `off`, offers 40 s, fleet stage 60 s, radius 5 km as a placeholder; V154/V155 add pickup detour 130%, per-order overhead ₹5, cost-guard premium ₹10, Pidge stage 600 s) and `rate_card` (seeded draft `2026-10-v1`; V154 adds the event fees: ₹20 cancellation at the kitchen, ₹9 a km to return food, a 10-minute unreachable wait). The added values are draft business inputs with declared ranges, like the rest.
 
 ## Tables (`fleet_schema`, migration V152)
 
@@ -56,6 +61,10 @@ Operational values live in versioned tables, not variables: `dispatch_policy` (s
 | `support_issue` | Problems riders report, with acknowledge-by and fix-by times. |
 | `sos_event` | SOS presses with the last fix. |
 | `admin_audit` | Append-only trail of every ops action; mutations also keep their Idempotency-Key and first response. |
+| `rider_slot_settlement` (V154) | One per finished slot: online in-zone seconds, the guarantee, trip pay in the slot and the top-up; `credited_at` is set by the money phase. |
+| `chef_ready` (V155) | The chef's ready time per sub-order, kept even when it arrives before the trip. |
+
+V154 also adds the trip's final pay (`final_pay_lines`, `final_pay_paise`, `pay_held`, `hold_reason`, `pay_finalized_at`) and the slot's own `guaranteed_per_hour_paise` and `status`; V153 adds the slot's own `in_zone_seconds`. V155 adds `trip.accepted_at` and registers `craves_fleet` in `delivery_schema.delivery_provider`, inactive, so a rider's delivery job can reference it while routing never quotes it.
 
 Money is BIGINT paise. The migration is re-runnable because database tests drop `payment_schema` and migrate again.
 
@@ -78,7 +87,7 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 |---|---|
 | `GET /me` | Any signed-in user. Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts. |
 | `GET /profile` | Latest document per type, vehicle, masked payout account, insurance. PENDING riders too (no RIDER role needed). |
-| `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId` (trip in progress), the running or next slot with its guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, and the ops banner until its `until`. Earnings fields are zero until P4. |
+| `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId` (trip in progress), the running or next booked slot with its own guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, and the ops banner until its `until`. Earnings fields are zero until P4. |
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING. PENDING riders too. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language. |
 | `POST /terms/accept` | Accepts the current version; any other is 409 `TERMS_CHANGED`. |
@@ -86,6 +95,12 @@ Rider API (`/api/v1/rider`, rider API flag): every route needs the RIDER role ex
 | `POST /shift/end` | Goes offline: closes the open shift and revokes its credential. 204 even when nothing is open. |
 | `POST /devices` | `{installationId, fcmToken, appVersion, model}`, with a RIDER JWT or the shift credential. 204 for the bound phone; 409 `DEVICE_NOT_BOUND` for another. See "Phones". |
 | `POST /locations` | Location ingest flag. Header `X-Craves-Shift-Credential` (the native service) or a RIDER JWT. Up to 5 fixes; answers offers, the trip and a stop signal. See "Location ingest". |
+| `POST /offers/{offerId}/accept` | One conditional update decides the winner: 200 Trip; 409 `OFFER_TAKEN` to the rider who lost; 409 `ORDER_CANCELLED` once the order is cancelled; 410 `OFFER_EXPIRED` after 40 s or once the fleet stage closed; the winner's repeat gets the trip again. |
+| `POST /offers/{offerId}/decline` | 204. Free, no reason, changes nothing else. |
+| `GET /trips/active` | The trip in progress, or 204. |
+| `POST /trips/{tripId}/{action}` | `arrived-pickup`, `food-not-ready`, `picked-up`, `arrived-drop`, `delivered`, `failed`; see the trip steps below. |
+
+Offer and trip POSTs need an `Idempotency-Key` (the app sends `rider-{action}-{offerId or tripId}-{riderId}[-{attempt}]`).
 
 ### Shifts and the shift credential
 
@@ -117,6 +132,7 @@ Admin fleet API (`/api/v1/admin/fleet`, fleet flag), scoped admin roles per `adm
 | `GET /banner`, `PUT /banner`, `DELETE /banner` | The zone banner on every rider's Home: `{tone: info or warning, text (1 to 160), until}`. PUT shows it from now until `until` (at least a minute ahead) and ends any earlier one; DELETE ends it (204 even when none shows); GET answers it or 204. Reads: operations, support and audit admins; changes: operations. |
 | `GET /audit` | The trail, newest first, optionally for one rider. |
 | `GET /exports/rider-joins-exits?date=` | CSV of joins and exits on one IST date, for the government portal. |
+| `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots (`FleetSlotController`): 409 `SLOT_OVERLAP`; 422 `GUARANTEE_OUT_OF_RANGE` outside the current rate card's declared range, `SLOT_END_NOT_AFTER_START`; 409 `SLOT_NOT_BOOKED`. Audited and idempotent. |
 
 ### Due process (two tracks)
 
@@ -154,23 +170,63 @@ Push (P3) sends offers to the BOUND phone's `fcm_token`. `/shift/start` requires
 
 - **Who.** With `X-Craves-Shift-Credential` the shift is the one whose `credential_hash` matches (unknown: 401 `SHIFT_CREDENTIAL_INVALID`). Without it, a JWT with the RIDER role and the rider's open shift (none: a stop). Spring Security lets only this route and `POST /devices` through without a JWT; `FleetShiftCredentialSecurityTest` walks every rider and admin route with only a credential and only these two answer.
 - **Fixes.** Fixes with impossible values, from before the shift started or more than 5 minutes ahead of the database clock are dropped. Only fixes newer than the stored latest fix of this shift are used, so a resent batch writes nothing twice. `at` is the phone's fix time, so a phone whose clock runs more than 5 minutes fast sends no usable fixes (its heartbeat, offers and stop still work); riders should keep automatic time on.
-- **Writes.** `rider_position_latest`: the newest fix wins (one row per rider, with its `mock` flag, `shift_id` and `trip_id` = the trip in progress, else null). `trip_track`: every new fix, with its `mock` flag, only while the rider has a trip in progress (ASSIGNED to AT_DROP). `rider_shift.in_zone_seconds`: see the zone model.
-- **Answer.** `{offers, activeTrip?, stop?, stopReason?}`. `offers`: the rider's ACTIVE `trip_offer` rows not yet expired, as rider-v1 Offers; `expiresInSec` is computed by the database clock, `kitchenArea` and `customerLocality` come from the trip, `payLines` from `trip_offer.pay_lines`, which must hold `[{label, amountPaise}]`, and `estMinutes` = 12 + (pickup m + drop m) / 300, rounded (the app mock's estimate; dispatch should use the same). `activeTrip`: the trip in progress as `{tripId, step, version}` (ASSIGNED is TO_KITCHEN, AT_PICKUP is AT_KITCHEN); when it has ended, or ops gave it to another rider, it is reported once more with its final step (CANCELLED for a reassignment) so the app leaves trip mode.
+- **Writes.** `rider_position_latest`: the newest fix wins (one row per rider, with its `mock` flag, `shift_id` and `trip_id` = the trip in progress, else null). `trip_track`: every new fix, with its `mock` flag, only while the rider has a trip in progress (ASSIGNED to AT_DROP). `rider_slot.in_zone_seconds` and `rider_shift.in_zone_seconds`: see the zone model.
+- **Answer.** `{offers, activeTrip?, stop?, stopReason?}`. `offers`: the rider's ACTIVE `trip_offer` rows not yet expired, as rider-v1 Offers built by `FleetTripModels.offer`, the one mapping the offer push uses too: `expiresInSec` counted by the database clock (rounded up), `kitchenArea`, `customerLocality` and `itemsCount` (left out while 0) from the trip, `payLines` from `trip_offer.pay_lines` (`[{component, label, amountPaise}]`), and `estMinutes` = (pickup m + drop m) / 333 rounded up, + 5. `activeTrip`: the trip in progress as `{tripId, step, version}`, the step a rider-v1 TripStep (`FleetTripModels.step`: ASSIGNED is TO_KITCHEN, AT_PICKUP is AT_KITCHEN, anything that never reached the rider is CANCELLED); when it has ended, or ops gave it to another rider, it is reported once more with its final step (CANCELLED for a reassignment) so the app leaves trip mode.
 - **Stop.** `{offers: [], stop: true, stopReason}` and the shift is closed, nothing else written, when: the rider is not ACTIVE; the shift was ended (`/shift/end`); its credential was revoked (ops approved another phone); or its 12 hours are up.
 
-**Zone model.** P1 has no zone geometry: `rider_slot` holds a zone name and a time window, `dispatch_policy` only a radius. So the gap between two consecutive non-mock fixes of the shift counts toward `in_zone_seconds` while one of the rider's slots is running, at most 60 seconds per gap (a phone that sleeps longer gets 60). The position is not checked against the zone. Upgrade: add zone geometry (centre and radius) when ops draws the pilot area and test each fix against it. When slots gain a status (P3), only BOOKED slots should count.
+**Zone model.** P1 has no zone geometry: `rider_slot` holds a zone name and a time window, `dispatch_policy` only a radius. So the gap between two consecutive non-mock fixes of the shift counts while one of the rider's BOOKED slots is running, clipped to that slot and at most 60 seconds per gap (a phone that sleeps longer gets 60). It is added to that slot's `in_zone_seconds` (what the guarantee settles on) and to the shift's (the console's shift list), in one statement; a slot that settled meanwhile keeps its settled seconds. The position is not checked against the zone. Upgrade: add zone geometry (centre and radius) when ops draws the pilot area and test each fix against it.
 
 **Statement budget.** One call runs at most 5 statements, inside one transaction:
 
 1. read the shift, rider, latest position, trip in progress, previous trip and running slot, locking the shift row (`FOR UPDATE OF s`, so two calls for one shift run one after the other);
 2. upsert `rider_position_latest`;
 3. one multi-row `trip_track` insert, only on a trip;
-4. add to `in_zone_seconds`, only when there is time to add;
+4. add to the running slot's and the shift's `in_zone_seconds`, only when there is time to add;
 5. read the offers.
 
 A stop runs statement 1 and one shift update. `FleetLocationApiDatabaseTest.twoHundredCallsStayWithinFiveStatementsEach` counts every statement over 200 calls on a trip, in a slot, with an offer open (5 fixes each). The PLAN's load target, 20 calls a second for 10 minutes, is 12,000 calls: at most 5 × 12,000 = 60,000 statements (100 a second), plus each call's BEGIN and COMMIT, on one pooled connection per call for a few milliseconds.
 
 EXPLAIN (Postgres 16, 2,000 riders, 62,000 shifts, 200,500 trips and offers, 42,000 slots) shows an index for every table: `rider_shift_credential_hash_key` (the credential, cast to `CHAR(64)` so the unique index applies), `rider_identity_id_key` and `rider_shift_one_open` (JWT), `rider_position_latest_pkey`, `rider_pkey`, `trip_one_active_per_rider`, `trip_pkey`, `rider_slot_rider`, `trip_offer_one_active_per_rider` and `rider_shift_pkey` for the updates; the upsert resolves on `rider_position_latest_pkey`, and the track insert goes straight to the day's partition.
+
+## Dispatch chain (P3)
+
+`dispatch_policy` mode governs it; with no published policy in force, or mode `off`, nothing below happens for a new order and Borzo and Pidge run exactly as before.
+
+1. The delivery command (`DeliveryCommandWorker`) asks `DeliveryProviderRouter.fleetStage` first. `FleetDispatcher` (the `FleetStage` bean) plans: the chef from the checkout's finance quote (`payment_schema.finance_issued_snapshot`; unknown chef: no fleet), test mode, the drop's road distance, eligible riders (ACTIVE, open shift, no active trip or open offer, a real fix received in the last 45 s, inside the policy radius), pay per rider and the cost guard (locked pay + overhead ≤ the next courier's live quote + premium; no quote: riders may go). `shadow` logs `FLEET_SHADOW` and stops there.
+2. `live`: one transaction creates the trip (`SEARCHING`, order code `#` + the first 8 characters of the sub-order id), the fleet stage (`trip_stage` seq 1, deadline = fleet stage seconds) and offers to the 3 nearest at once (one ACTIVE offer per rider; pay, rate card version and both distances locked). Each offer is pushed with TTL = seconds left. The command waits (provider wait) and looks again at least every 10 s; Borzo's 120-second window has not started.
+3. The fleet stage closes on an accept (in the accept's own transaction: delivery job `craves_fleet`, `COURIER_ASSIGNED` with the rider card, command completed) or, at its deadline or once no offer is open, by a conditional update on the same stage row; then the next stage opens (`BORZO` for 120 s when the timed policy is ready, else `PIDGE` for the Pidge stage seconds) and routing books as before. A late accept finds the stage closed: 410.
+4. The dispatch tick (`FleetDispatchJobs`, every 5 s on the fleet pool) expires offers, moves `BORZO` to `PIDGE` at its deadline and closes a stage when its courier is assigned. A Pidge stage past its deadline, a courier who cancelled, or an uncertain create (never retried) goes to `OPS_QUEUE` with an ops alert `FLEET_DISPATCH_QUEUE`.
+5. Watchdog: an accepted rider with no location received for 90 s before pickup loses the trip (`CANCELLED`, pickup-leg pay held for ops), ops gets `FLEET_RIDER_LOST`, the next stage opens and the tick books Borzo or Pidge through the router and hands the delivery job over with `handoffFromProviderId: craves_fleet`. CANCELLED is never published for it. order-service accepts that hand-over only from a rider before pickup (its projection `craves_fleet` with the trip id, status `COURIER_ASSIGNED`, `COURIER_TO_PICKUP` or `AT_PICKUP`) to Borzo or Pidge, clears the rider card the chef sees, and the customer's delivery code goes with it (shown only for `craves_fleet`). A later Borzo to Pidge hand-over counts only couriers of that Borzo delivery, not the rider before it. Deploy order-service with this change before any policy goes `live`.
+
+6. Cancellation: integration-service hears that the customer or the chef cancelled only as the refund order-service then requests (`payment_schema.refund` for the sub-order). From then on an accept is refused with 409 `ORDER_CANCELLED` ("This order was cancelled. Watch for the next one."), and the next tick ends the trip through `FleetTripService.cancel`, the adapter's cancel path: open offers withdrawn, every open stage closed (so no courier is booked or queued by the tick), and a rider already on the trip paid for the state reached, not held. The delivery command of an order cancelled before any rider took it books nobody and fails until its retries run out. A Borzo or Pidge courier already booked is not cancelled: no order has that path yet.
+
+`craves_fleet` (`CravesFleetAdapter`) is inactive in the catalog: routing never quotes or creates it. `track()` maps the trip to the pipeline (below); `cancel()` ends a trip as in step 6, with the pay rule for its state.
+
+## Trip steps and statuses
+
+| Trip state | App step | Delivery status published | Reached by |
+|---|---|---|---|
+| `SEARCHING` | (offer) | none | fleet stage open |
+| `ASSIGNED` | `TO_KITCHEN` | `COURIER_ASSIGNED` + rider card | accept |
+| `AT_PICKUP` | `AT_KITCHEN` | `AT_PICKUP` | `arrived-pickup` (and `food-not-ready`, no status) |
+| `PICKED_UP` | `PICKED_UP` | `PICKED_UP`, then `IN_TRANSIT` from tracking once a real fix arrives after pickup | `picked-up` |
+| `AT_DROP` | `AT_DROP` | `AT_DROPOFF` | `arrived-drop` |
+| `DELIVERED` | `DELIVERED` | `DELIVERED` | `delivered` (OTP, or photo) |
+| `FAILED` | `FAILED` | `FAILED` | `failed` after pickup |
+| `CANCELLED` | `CANCELLED` | `CANCELLED`, unless another stage took the order | order cancelled, ops cancel, watchdog |
+
+Each step is idempotent (a repeated key, or a step already taken, returns the trip), in order (else 409 `STEP_CONFLICT`; an ended trip is 409 `TRIP_NOT_ACTIVE`), and moves `trip.version`. The rider card is the first name and initial ("Ravi K.") and the rider's phone (no relay exists yet); no photo URL. `sealed` is false: orders have no sealed flag yet.
+
+- The free wait runs from the later of the arrival inside the kitchen zone (a real fix under 2 minutes old within 300 m, checked at `arrived-pickup` and again at `food-not-ready`) and the chef's ready time, and stops at `picked-up`.
+- `delivered` `{method: OTP, otp}` asks order-service once per attempt: 422 `OTP_INVALID` with `attemptsLeft` 4 to 1, then 423 `OTP_LOCKED` from the fifth wrong code on. A repeated key gets its first answer without asking again.
+- `delivered` multipart `{method: PHOTO, callsMade, photo}` needs two calls and the unreachable wait since `arrived-drop`, or an OTP lock. The photo goes to `riders/{riderId}/trips/{tripId}/`; the pay is held for ops.
+- `failed {reason, note}` after pickup: `CUSTOMER_UNREACHABLE` (at the drop, after the wait) is full pay; `WRONG_ADDRESS`, `CUSTOMER_REFUSED`, `UNSAFE` are full pay plus the return. Held for ops.
+
+Pay (`FleetPay`): base + drop km after the base km + pickup km after the free km (straight line × detour) + waiting after the free minutes, pro rata, in paise. Cancelled riding to the kitchen: pickup leg; at the kitchen: cancellation fee + pickup leg + waiting; after pickup: full + return. Every paid end stores the lines on the trip and publishes `FleetTripPayFinalized`; the money phase writes the ledger.
+
+## Slots
+
+Ops books a rider into a zone with a guaranteed hourly minimum inside the rate card's declared range. Home shows the next booked slot and its guarantee. Each minute (`FleetSlotService.settleDue`, fleet pool) a finished slot settles once: top-up = max(0, guarantee × online in-zone hours − trip pay that finished in the slot) into `rider_slot_settlement`. In-zone seconds are the slot's own counter (see the zone model), so a shift that runs across several slots pays each slot only for its own minutes. Declines never enter it.
 
 ## Daily export
 
@@ -178,7 +234,7 @@ EXPLAIN (Postgres 16, 2,000 riders, 62,000 shifts, 200,500 trips and offers, 42,
 
 ## Test mode for one rider and one kitchen
 
-1. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true` and `CRAVES_FLEET_RIDER_API_ENABLED=true`.
+1. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true` (dispatch offers only to riders whose real fix arrived in the last 45 s, through `/locations`).
 2. Ops creates the rider in the console (`POST /riders`); the rider signs in to the app once so `/me` links them; ops activates them with `RESTORE`.
 3. Allow-list both, by SQL on the integration database:
 
@@ -187,4 +243,8 @@ INSERT INTO fleet_schema.test_mode_rider (rider_id, note) VALUES ('<rider id>', 
 INSERT INTO fleet_schema.test_mode_kitchen (chef_id, note) VALUES ('<chef identity id>', 'pilot test kitchen');
 ```
 
-Dispatch (P3) asks `FleetTestMode.riderAllowed` and `kitchenAllowed` before it offers a trip, so nobody else is touched. Leave `dispatch_policy` in mode `off`; only people change it, through a published version.
+Dispatch asks `FleetTestMode.riderAllowed` and `kitchenAllowed` before it offers a trip, so nobody else is touched. The kitchen is known only for orders checked out with the finance quote (`finance_issued_snapshot`).
+
+4. Set `CRAVES_USER_CHEF_INTERNAL_BASE_URL`, `CRAVES_FLEET_ORDER_BASE_URL` and `CRAVES_NOTIFICATION_INTERNAL_BASE_URL`.
+5. Dispatch needs a published `dispatch_policy` version in force. A person publishes one with mode `shadow` first (it only logs `FLEET_SHADOW`); `live` only once the order-service that accepts the `craves_fleet` hand-over (above) is deployed. Publishing needs 14 days' notice and values inside the declared ranges. Agents never change the mode.
+6. The rider goes online (P2), the allow-listed kitchen accepts an order, and the offer rings within the fleet stage.

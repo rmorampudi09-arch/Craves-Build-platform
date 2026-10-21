@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.rider;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import in.craves.integration.fleet.trip.FleetTripModels;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -82,14 +83,7 @@ public final class FleetRiderModels {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record LocationBatchResponse(List<Offer> offers, ActiveTrip activeTrip, Boolean stop, String stopReason) {
-    }
-
-    public record Offer(String offerId, String tripId, Instant expiresAt, int expiresInSec, long payPaise, int pickupDistanceM,
-                        int dropDistanceM, String kitchenArea, String customerLocality, int estMinutes, List<PayLine> payLines) {
-    }
-
-    public record PayLine(String label, long amountPaise) {
+    public record LocationBatchResponse(List<FleetTripModels.Offer> offers, ActiveTrip activeTrip, Boolean stop, String stopReason) {
     }
 
     public record ActiveTrip(String tripId, String step, int version) {

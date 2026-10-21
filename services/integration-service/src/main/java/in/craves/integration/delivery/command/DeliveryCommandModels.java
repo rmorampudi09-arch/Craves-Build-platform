@@ -97,8 +97,25 @@ public final class DeliveryCommandModels {
         Instant observedAt,
         String handoffFromProviderId,
         String handoffFromProviderDeliveryId,
-        Boolean handoffContinuation
+        Boolean handoffContinuation,
+        // Courier the provider reported, for the chef's ready-for-pickup screen; same fields as order-service's record.
+        String courierName,
+        String courierPhone,
+        String courierPhotoUrl,
+        Instant pickupEtaAt
     ) {
+        public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
+                                         String providerId, String providerDeliveryId, String status,
+                                         String trackingUrl, Instant observedAt,
+                                         String handoffFromProviderId,
+                                         String handoffFromProviderDeliveryId,
+                                         Boolean handoffContinuation) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId,
+                providerDeliveryId, status, trackingUrl, observedAt,
+                handoffFromProviderId, handoffFromProviderDeliveryId, handoffContinuation,
+                null, null, null, null);
+        }
+
         public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
                                          String providerId, String providerDeliveryId, String status,
                                          String trackingUrl, Instant observedAt,

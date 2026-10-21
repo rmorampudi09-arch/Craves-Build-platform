@@ -273,6 +273,7 @@ public class DeliveryStatusUpdateService {
                 .filter(handoff -> "COMPLETED".equals(handoff.state())
                     && handoff.borzoCancelled()).orElse(null)
             : null;
+        var courier = update.courier();
         DeliveryStatusChangedData data = new DeliveryStatusChangedData(
             job.id(),
             job.orderId(),
@@ -284,7 +285,11 @@ public class DeliveryStatusUpdateService {
             update.observedAt(),
             completedHandoff == null ? null : "borzo",
             completedHandoff == null ? null : completedHandoff.borzoProviderDeliveryId(),
-            completedHandoff == null ? null : Boolean.TRUE
+            completedHandoff == null ? null : Boolean.TRUE,
+            courier == null ? null : courier.name(),
+            courier == null ? null : courier.phone(),
+            courier == null ? null : courier.photoUrl(),
+            null
         );
         EventEnvelope<DeliveryStatusChangedData> event = new EventEnvelope<>(
             UUID.randomUUID(),

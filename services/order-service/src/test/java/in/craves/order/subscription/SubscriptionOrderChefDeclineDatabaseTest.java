@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import in.craves.order.delivery.DeliveryCodeService;
 import in.craves.order.event.ChefAcceptedOrderEventFactory;
 import in.craves.order.event.RefundRequestedEventFactory;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
@@ -60,7 +61,7 @@ class SubscriptionOrderChefDeclineDatabaseTest {
         resolution = new ChefAcceptanceResolutionService(jdbc, mock(OrderService.class), new RefundRequestedEventFactory(json),
             new OrderDomainOutboxRepository(jdbc), new NotificationOutboxRepository(jdbc, json), repository);
         acceptance = new ChefAcceptanceService(jdbc, mock(OrderService.class), new ChefAcceptedOrderEventFactory(json),
-            new OrderDomainOutboxRepository(jdbc));
+            new OrderDomainOutboxRepository(jdbc), new DeliveryCodeService(jdbc));
     }
 
     UUID createOrder(Instant serviceAt) {

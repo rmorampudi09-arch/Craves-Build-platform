@@ -1,0 +1,496 @@
+package in.craves.integration.fleet.dispatch;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
+import in.craves.integration.fleet.FleetPolicyStore.RateCard;
+import in.craves.integration.fleet.FleetTestMode;
+import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
+import in.craves.integration.fleet.admin.FleetAdminService;
+import in.craves.integration.fleet.admin.FleetAdminService.Done;
+import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.pay.FleetPay;
+import in.craves.integration.fleet.pay.FleetPay.Ending;
+import in.craves.integration.fleet.pay.FleetPay.PayQuote;
+import in.craves.integration.fleet.trip.FleetStatusBridge;
+import in.craves.integration.fleet.trip.FleetTripPay;
+import in.craves.integration.fleet.trip.FleetTripService;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * The ops console's trips (admin-fleet-v1 /trips): the list, and reassign or cancel through the dispatch chain so an order
+ * never has two couriers. The stage that is open is closed in the database (the same rows an accept and the dispatch tick
+ * use) before anything else happens, and the delivery command is taken over only when no booking is in progress. A trip
+ * row belongs to one rider and one pay record, so a rider's trip is handed to Borzo or Pidge, never to a second rider.
+ * Every mutation is audited and idempotent (FleetAdminService.once).
+ */
+@Service
+@ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
+public class FleetOpsService {
+    static final Set<String> RIDER_ON_TRIP = Set.of("ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP");
+    static final Set<String> COMMAND_IDLE = Set.of("SCHEDULED", "WAITING_FOR_PROVIDER", "FAILED", "DEAD_LETTER");
+    static final int QUEUE_CRITICAL_MINUTES = 5;
+    static final String RELEASED = "Craves ops gave this order to another courier. You're paid for the trip so far.";
+    static final String CANCELLED = "Craves ops cancelled this delivery. You're paid for the trip so far.";
+    private static final String TRIPS = """
+        SELECT t.id, t.order_code, t.kitchen_name, t.drop_area, t.state, t.provider, t.rider_id, r.name AS rider_name, t.created_at,
+               GREATEST(t.updated_at, j.updated_at, s.opened_at) AS updated_at, s.provider AS open_stage, j.provider_id AS job_provider,
+               j.status AS job_status
+        FROM fleet_schema.trip t
+        LEFT JOIN fleet_schema.rider r ON r.id = t.rider_id
+        LEFT JOIN fleet_schema.trip_stage s ON s.trip_id = t.id AND s.state = 'OPEN'
+        LEFT JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = t.chef_sub_order_id
+        """;
+
+    private final JdbcTemplate jdbc;
+    private final TransactionTemplate transaction;
+    private final FleetPolicyStore policies;
+    private final FleetTestMode testMode;
+    private final FleetDispatcher dispatcher;
+    private final FleetTripService trips;
+    private final FleetTripPay pay;
+    private final FleetStatusBridge bridge;
+    private final FleetAdminService admin;
+    private final ObjectMapper json = new ObjectMapper();
+
+    public FleetOpsService(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
+                           FleetDispatcher dispatcher, FleetTripService trips, FleetTripPay pay, FleetStatusBridge bridge,
+                           FleetAdminService admin) {
+        this.jdbc = jdbc;
+        this.transaction = new TransactionTemplate(transactions);
+        this.policies = policies;
+        this.testMode = testMode;
+        this.dispatcher = dispatcher;
+        this.trips = trips;
+        this.pay = pay;
+        this.bridge = bridge;
+        this.admin = admin;
+    }
+
+    /** Orders not yet delivered, failed or cancelled, oldest first, with the courier they have now. */
+    public TripList trips() {
+        return new TripList(jdbc.query(TRIPS + """
+            WHERE (t.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED') OR s.id IS NOT NULL)
+              AND NOT (s.id IS NULL AND j.provider_id IS NOT NULL AND j.provider_id <> 'craves_fleet'
+                       AND j.status IN ('DELIVERED', 'CANCELLED', 'FAILED', 'RETURNED'))
+            ORDER BY t.created_at, t.id LIMIT 500""", (row, n) -> trip(row)));
+    }
+
+    /**
+     * Orders that went through fleet, Borzo and Pidge without a courier (an open OPS_QUEUE stage), oldest first, with each
+     * earlier stage's outcome. CRITICAL once queued QUEUE_CRITICAL_MINUTES or when a booking may exist (an uncertain create);
+     * INFO when a courier took it after all (the dispatch tick clears it within seconds); else WARNING.
+     */
+    public QueueList dispatchQueue() {
+        Map<UUID, List<Attempt>> attempts = new java.util.HashMap<>();
+        jdbc.query("""
+            SELECT a.trip_id, a.provider, COALESCE(a.outcome, 'CLOSED') AS outcome, a.closed_at FROM fleet_schema.trip_stage a
+            WHERE a.state = 'CLOSED' AND a.trip_id IN (SELECT trip_id FROM fleet_schema.trip_stage WHERE state = 'OPEN' AND provider = 'OPS_QUEUE')
+            ORDER BY a.trip_id, a.seq""", row -> {
+            attempts.computeIfAbsent(row.getObject("trip_id", UUID.class), id -> new java.util.ArrayList<>()).add(new Attempt(
+                row.getString("provider"), row.getString("outcome"), row.getTimestamp("closed_at").toInstant()));
+        });
+        return new QueueList(jdbc.query("""
+            SELECT t.id, t.order_code, t.kitchen_name, t.drop_area, s.opened_at, EXTRACT(EPOCH FROM now() - s.opened_at)::bigint AS age_seconds,
+                   j.provider_id AS job_provider, j.status AS job_status
+            FROM fleet_schema.trip_stage s JOIN fleet_schema.trip t ON t.id = s.trip_id
+            LEFT JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = t.chef_sub_order_id
+            WHERE s.state = 'OPEN' AND s.provider = 'OPS_QUEUE'
+            ORDER BY s.opened_at, t.id LIMIT 500""", (row, n) -> {
+            UUID tripId = row.getObject("id", UUID.class);
+            List<Attempt> tried = attempts.getOrDefault(tripId, List.of());
+            String[] alert = alert(tried.isEmpty() ? "" : tried.get(tried.size() - 1).outcome(), row.getLong("age_seconds"),
+                row.getString("job_provider"), row.getString("job_status"));
+            return new QueueItem(tripId, row.getString("order_code"), row.getString("kitchen_name"), row.getString("drop_area"),
+                row.getTimestamp("opened_at").toInstant(), alert[0], alert[1], tried.subList(Math.max(0, tried.size() - 10), tried.size()));
+        }));
+    }
+
+    /** {alertLevel, alertMessage} for a queued order; the message says what ops should do. */
+    static String[] alert(String lastOutcome, long ageSeconds, String jobProvider, String jobStatus) {
+        String waited = " Waiting " + Math.max(0, ageSeconds / 60) + " min.";
+        String courier = jobProvider == null ? "" : "borzo".equals(jobProvider) ? "Borzo" : "pidge".equals(jobProvider) ? "Pidge" : jobProvider;
+        if (jobProvider != null && !FleetStatusBridge.PROVIDER_ID.equals(jobProvider)
+            && !Set.of("PENDING", "SEARCHING", "DELAYED", "CANCELLED", "FAILED", "RETURNING", "RETURNED", "UNKNOWN").contains(jobStatus)) {
+            return new String[] {"INFO", "A " + courier + " courier took this order after all. It leaves the queue in a few seconds."};
+        }
+        if (lastOutcome.startsWith("UNCERTAIN_CREATE_")) {
+            String provider = lastOutcome.endsWith("BORZO") ? "Borzo" : lastOutcome.endsWith("PIDGE") ? "Pidge" : "the courier company";
+            return new String[] {"CRITICAL", "A " + provider + " booking may exist for this order. Check " + provider
+                + " before booking anyone else." + waited};
+        }
+        String why = lastOutcome.startsWith("COURIER_") ? "The " + (courier.isEmpty() ? "courier company's" : courier) + " courier gave up."
+            : "NO_DELIVERY_COMMAND".equals(lastOutcome) ? "The delivery request is missing."
+            : "Riders, Borzo and Pidge did not take this order.";
+        return new String[] {ageSeconds >= QUEUE_CRITICAL_MINUTES * 60L ? "CRITICAL" : "WARNING",
+            why + " Hand it to a rider, or book a courier by hand." + waited};
+    }
+
+    /**
+     * Each rider's latest fix received in the last 12 hours: where, how old, on shift, on a trip (which), and whether the
+     * phone said it was a mock location. Riders only; nothing about customers.
+     */
+    public PositionList positions() {
+        return new PositionList(jdbc.query("""
+            SELECT p.rider_id, r.name, p.lat, p.lng, p.recorded_at, p.mock,
+                   GREATEST(0, EXTRACT(EPOCH FROM now() - p.recorded_at))::bigint AS age_seconds,
+                   EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = p.rider_id AND s.ended_at IS NULL) AS on_shift,
+                   (SELECT t.id FROM fleet_schema.trip t WHERE t.rider_id = p.rider_id AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
+                     LIMIT 1) AS trip_id
+            FROM fleet_schema.rider_position_latest p JOIN fleet_schema.rider r ON r.id = p.rider_id
+            WHERE p.received_at > now() - INTERVAL '12 hours'
+            ORDER BY r.name, p.rider_id LIMIT 1000""", (row, n) -> {
+            UUID tripId = row.getObject("trip_id", UUID.class);
+            return new Position(row.getObject("rider_id", UUID.class), row.getString("name"), row.getDouble("lat"), row.getDouble("lng"),
+                row.getTimestamp("recorded_at").toInstant(), row.getLong("age_seconds"), row.getBoolean("on_shift"), tripId != null, tripId,
+                row.getBoolean("mock"));
+        }));
+    }
+
+    /**
+     * To one on-shift idle rider (an order no rider holds yet) or to Borzo or Pidge (an order still searching, or a rider's
+     * trip before pickup: the rider is released with pay for the trip so far, not held). 409 TRIP_NOT_REASSIGNABLE or
+     * RIDER_NOT_AVAILABLE otherwise.
+     */
+    public Object reassign(Admin by, UUID key, UUID tripId, ReassignInput input) {
+        String reason = FleetAdminService.reason(input == null ? null : input.reason());
+        if ((input.riderId() == null) == (input.provider() == null)
+            || (input.provider() != null && !Set.of("BORZO", "PIDGE").contains(input.provider()))) {
+            throw FleetApiException.invalid("Choose one rider, or Borzo or Pidge.");
+        }
+        String target = input.riderId() != null ? "rider " + input.riderId() : input.provider();
+        return transaction.execute(status -> admin.once(by, key, "TRIP_REASSIGNED", tripId + "\n" + target + "\n" + reason, () -> {
+            Current trip = current(tripId);
+            UUID released = trip.riderOnTrip() ? trip.riderId() : null;
+            if (input.riderId() != null) {
+                toRider(trip, input.riderId(), by);
+            } else {
+                toCourier(trip, input.provider(), by);
+            }
+            return new Done(view(tripId), input.riderId() != null ? input.riderId() : released, tripId.toString(),
+                "Gave order " + trip.orderCode() + " to " + target + ": " + reason);
+        }));
+    }
+
+    /**
+     * Cancels the delivery. A rider's trip ends with the trip-state pay rule (not held) and CANCELLED reaches the order; an
+     * order still searching stops: the open stage closes, offers are withdrawn and the delivery command books nobody.
+     */
+    public Object cancel(Admin by, UUID key, UUID tripId, String reason) {
+        String text = FleetAdminService.reason(reason);
+        return transaction.execute(status -> admin.once(by, key, "TRIP_CANCELLED", tripId + "\n" + text, () -> {
+            Current trip = current(tripId);
+            if (trip.riderOnTrip()) {
+                lock(trip);
+                trips.cancel(tripId, CANCELLED);
+                event(tripId, "OPS_CANCELLED", by);
+                bridge.publish(tripId);
+            } else {
+                if (trip.courierJob() && !trip.courierFinished()) {
+                    throw FleetApiException.conflict("TRIP_NOT_CANCELLABLE", "Borzo or Pidge has this order. Cancel it with them, or cancel the order.");
+                }
+                if (trip.openStage() == null) {
+                    throw FleetApiException.conflict("TRIP_ALREADY_FINISHED", "This delivery has already ended.");
+                }
+                // A released rider's job being rebooked: the dispatch tick records a booked courier only under this lock, and
+                // never after an OPS_CANCELLED stage (FleetDispatchJobs.switchJob).
+                if (trip.fleetJob() && jdbc.queryForList("SELECT id FROM delivery_schema.delivery_job WHERE chef_sub_order_id = ? "
+                    + "AND provider_id = 'craves_fleet' FOR UPDATE", UUID.class, trip.chefSubOrderId()).isEmpty()) {
+                    throw changed();
+                }
+                closeOpenStage(trip, "OPS_CANCELLED");
+                if (trip.jobProvider() == null) {
+                    takeOverCommand(trip, "DEAD_LETTER", "Delivery cancelled by Craves ops");
+                }
+                lock(trip);
+                if (trip.fleetJob()) {
+                    closedFleetStage(tripId, "OPS_CANCELLED"); // the latest stage is the fleet's again, so CANCELLED reaches the order
+                }
+                jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = COALESCE(cancel_reason, 'Cancelled by Craves ops.'), "
+                    + "finished_at = COALESCE(finished_at, now()), version = version + 1, updated_at = now() WHERE id = ?", tripId);
+                event(tripId, "OPS_CANCELLED", by);
+                if (trip.fleetJob()) {
+                    bridge.publish(tripId);
+                }
+            }
+            return new Done(view(tripId), trip.riderOnTrip() ? trip.riderId() : null, tripId.toString(),
+                "Cancelled the delivery of order " + trip.orderCode() + ": " + text);
+        }));
+    }
+
+    private void toRider(Current trip, UUID riderId, Admin by) {
+        if (trip.riderId() != null || trip.courierJob() || trip.fleetJob() || trip.openStage() == null) {
+            throw notReassignable(trip.riderId() != null
+                ? "This order's trip already belongs to a rider. Give it to Borzo or Pidge, or cancel it."
+                : "This order already has a courier or has ended.");
+        }
+        closeOpenStage(trip, "OPS_ASSIGNED");
+        if (!"CRAVES_FLEET".equals(trip.openStage())) {
+            // Borzo, Pidge or the ops queue: the delivery command must not be booking anyone right now.
+            takeOverCommand(trip, "COMPLETED", null);
+            closedFleetStage(trip.id(), "OPS_ASSIGNED");
+        }
+        Map<String, Object> locked = lock(trip);
+        Map<String, Object> rider = jdbc.queryForList("""
+            SELECT p.lat, p.lng FROM fleet_schema.rider r
+            JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL
+            JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
+            WHERE r.id = ? AND r.status = 'ACTIVE' AND NOT p.mock AND p.received_at > now() - make_interval(secs => ?)
+              AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = r.id AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
+              AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())
+            FOR UPDATE OF r""", riderId, FleetDispatcher.SEEN_WITHIN_SECONDS).stream().findFirst().orElse(null);
+        if (rider == null || !testMode.riderAllowed(riderId) || !testMode.kitchenAllowed((UUID) locked.get("chef_id"))) {
+            throw FleetApiException.conflict("RIDER_NOT_AVAILABLE",
+                "This rider can't take it now: they must be active, online, free and sending their location.");
+        }
+        RateCard card = policies.rateCard((String) locked.get("rate_card_version")).or(policies::currentRateCard)
+            .orElseThrow(() -> notReassignable("There is no rate card to pay the rider with."));
+        int detour = policies.currentDispatchPolicy().map(DispatchPolicy::pickupDetourPercent).orElse(130);
+        int dropM = locked.get("drop_distance_m") == null ? 0 : ((Number) locked.get("drop_distance_m")).intValue();
+        PayQuote quote = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(RoadDistanceClient.straightLineMetres(
+            ((Number) rider.get("lat")).doubleValue(), ((Number) rider.get("lng")).doubleValue(),
+            ((Number) locked.get("kitchen_lat")).doubleValue(), ((Number) locked.get("kitchen_lng")).doubleValue()), detour));
+        jdbc.update("""
+            INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, state, pay_paise, pay_lines, rate_card_version, pickup_distance_m,
+              drop_distance_m, expires_at, decided_at)
+            VALUES (?, ?, ?, 'ACCEPTED', ?, CAST(? AS jsonb), ?, ?, ?, now() + INTERVAL '40 seconds', now())""",
+            UUID.randomUUID(), trip.id(), riderId, quote.totalPaise(), write(quote.lines()), quote.rateCardVersion(), quote.pickupDistanceM(),
+            quote.dropDistanceM());
+        try {
+            jdbc.update("""
+                UPDATE fleet_schema.trip SET state = 'ASSIGNED', provider = 'CRAVES_FLEET', rider_id = ?, pickup_distance_m = ?,
+                  drop_distance_m = ?, rate_card_version = ?, pay_paise = ?, accepted_at = now(), version = version + 1, updated_at = now()
+                WHERE id = ?""", riderId, quote.pickupDistanceM(), quote.dropDistanceM(), quote.rateCardVersion(), quote.totalPaise(), trip.id());
+        } catch (DuplicateKeyException busy) {
+            throw FleetApiException.conflict("RIDER_NOT_AVAILABLE", "This rider took another order just now.");
+        }
+        event(trip.id(), "OPS_ASSIGNED", by);
+        if (!bridge.assigned(trip.id())) {
+            throw notReassignable("This order got a courier just now. Reload the page.");
+        }
+    }
+
+    private void toCourier(Current trip, String provider, Admin by) {
+        if (trip.riderOnTrip()) {
+            if (!Set.of("ASSIGNED", "AT_PICKUP").contains(trip.state())) {
+                throw notReassignable("The rider has the food. Cancel the trip instead, or let them finish.");
+            }
+            lock(trip);
+            jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
+                + "updated_at = now() WHERE id = ?", RELEASED, trip.id());
+            event(trip.id(), "OPS_REASSIGNED", by);
+            pay.finalizePay(trip.id(), "AT_PICKUP".equals(trip.state()) ? Ending.CANCELLED_AT_KITCHEN : Ending.CANCELLED_TO_KITCHEN, false, null);
+            // The rider's delivery job stays; the dispatch tick books this stage's courier and hands the job over.
+            dispatcher.openStage(trip.id(), provider, stageSeconds(provider));
+            return;
+        }
+        if (trip.openStage() == null || trip.courierJob() || provider.equals(trip.openStage())) {
+            throw notReassignable(trip.openStage() == null ? "This delivery has ended."
+                : trip.courierJob() ? "Borzo or Pidge has this order already." : "This order is already with " + provider + ".");
+        }
+        if (!trip.fleetJob()) {
+            // The delivery command books the next courier; it must still be running to do so.
+            String command = jdbc.queryForList("SELECT status FROM delivery_schema.delivery_command WHERE chef_sub_order_id = ? FOR UPDATE",
+                String.class, trip.chefSubOrderId()).stream().findFirst().orElse("");
+            if (!Set.of("SCHEDULED", "WAITING_FOR_PROVIDER", "PROCESSING").contains(command)) {
+                throw notReassignable("No booking is running for this order any more. Give it to a rider, or book a courier by hand.");
+            }
+            // Borzo gets a fresh 120-second window; Pidge means Borzo's window is over (DeliveryProviderRouter).
+            jdbc.update("UPDATE delivery_schema.delivery_command SET borzo_window_started_at = now() - make_interval(secs => ?), "
+                + "updated_at = now() WHERE chef_sub_order_id = ?", "BORZO".equals(provider) ? 0 : FleetDispatcher.BORZO_WINDOW_SECONDS + 1,
+                trip.chefSubOrderId());
+        }
+        closeOpenStage(trip, "OPS_REASSIGNED");
+        lock(trip);
+        if (trip.riderId() == null) {
+            jdbc.update("UPDATE fleet_schema.trip SET provider = ?, version = version + 1, updated_at = now() WHERE id = ?", provider, trip.id());
+        }
+        event(trip.id(), "OPS_REASSIGNED", by);
+        dispatcher.openStage(trip.id(), provider, stageSeconds(provider));
+    }
+
+    /** The open stage closes first (the row an accept or the dispatch tick would close), so neither can book after this. */
+    private void closeOpenStage(Current trip, String outcome) {
+        if (jdbc.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = ?, closed_at = now() WHERE id = ? AND state = 'OPEN'",
+            outcome, trip.openStageId()) != 1) {
+            throw changed();
+        }
+        if ("CRAVES_FLEET".equals(trip.openStage())) {
+            jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", trip.id());
+        }
+    }
+
+    /** A closed fleet stage after the last one: the rider's steps (or CANCELLED) reach the order again (FleetStatusBridge). */
+    private void closedFleetStage(UUID tripId, String outcome) {
+        jdbc.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, state, outcome, deadline_at, closed_at) "
+            + "SELECT ?, ?, COALESCE(MAX(seq), 0) + 1, 'CRAVES_FLEET', 'CLOSED', ?, now() + INTERVAL '1 second', now() "
+            + "FROM fleet_schema.trip_stage WHERE trip_id = ?", UUID.randomUUID(), tripId, outcome, tripId);
+    }
+
+    /** Only when the delivery command is not booking right now: a claim waits on this row and then finds it done. */
+    private void takeOverCommand(Current trip, String status, String note) {
+        if (jdbc.update("UPDATE delivery_schema.delivery_command SET status = ?, last_error = COALESCE(?, last_error), processing_started_at = NULL, "
+            + "next_provider_retry_at = NULL, updated_at = now() WHERE chef_sub_order_id = ? AND status IN ('SCHEDULED', 'WAITING_FOR_PROVIDER', "
+            + "'FAILED', 'DEAD_LETTER')", status, note, trip.chefSubOrderId()) != 1) {
+            throw new FleetApiException(409, "COMPLETED".equals(status) ? "TRIP_NOT_REASSIGNABLE" : "TRIP_NOT_CANCELLABLE",
+                "A Borzo or Pidge booking for this order is in progress. Try again in a minute.");
+        }
+    }
+
+    /** The trip row, locked, unchanged since it was read. */
+    private Map<String, Object> lock(Current trip) {
+        Map<String, Object> row = jdbc.queryForList("SELECT state, rider_id, chef_id, rate_card_version, drop_distance_m, kitchen_lat, kitchen_lng "
+            + "FROM fleet_schema.trip WHERE id = ? FOR UPDATE", trip.id()).stream().findFirst().orElseThrow(FleetOpsService::changed);
+        if (!trip.state().equals(row.get("state")) || !java.util.Objects.equals(trip.riderId(), row.get("rider_id"))) {
+            throw changed();
+        }
+        return row;
+    }
+
+    private Current current(UUID tripId) {
+        return jdbc.query("""
+            SELECT t.id, t.chef_sub_order_id, t.order_code, t.state, t.rider_id, s.id AS stage_id, s.provider AS open_stage,
+                   j.provider_id AS job_provider, j.status AS job_status
+            FROM fleet_schema.trip t
+            LEFT JOIN fleet_schema.trip_stage s ON s.trip_id = t.id AND s.state = 'OPEN'
+            LEFT JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = t.chef_sub_order_id
+            WHERE t.id = ?""", (row, n) -> new Current(row.getObject("id", UUID.class), row.getObject("chef_sub_order_id", UUID.class),
+                row.getString("order_code"), row.getString("state"), row.getObject("rider_id", UUID.class), row.getObject("stage_id", UUID.class),
+                row.getString("open_stage"), row.getString("job_provider"), row.getString("job_status")), tripId)
+            .stream().findFirst().orElseThrow(() -> FleetApiException.notFound("TRIP_NOT_FOUND", "No such trip."));
+    }
+
+    private void event(UUID tripId, String kind, Admin by) {
+        jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, trip_version) "
+            + "SELECT ?, id, ?, 'OPS', ?, version FROM fleet_schema.trip WHERE id = ?", UUID.randomUUID(), kind, by.id(), tripId);
+    }
+
+    private int stageSeconds(String provider) {
+        return "BORZO".equals(provider) ? FleetDispatcher.BORZO_WINDOW_SECONDS : dispatcher.pidgeSeconds();
+    }
+
+    OpsTrip view(UUID tripId) {
+        return jdbc.queryForObject(TRIPS + "WHERE t.id = ?", (row, n) -> trip(row), tripId);
+    }
+
+    /**
+     * The courier the order has now: the ops queue or a stage that is booking (no rider), Borzo or Pidge once they hold
+     * the delivery job (state from their status), else the rider's trip. riderId only for CRAVES_FLEET.
+     */
+    static OpsTrip trip(ResultSet row) throws SQLException {
+        String state = row.getString("state");
+        String provider = row.getString("provider");
+        UUID riderId = row.getObject("rider_id", UUID.class);
+        String openStage = row.getString("open_stage");
+        String jobProvider = row.getString("job_provider");
+        if ("OPS_QUEUE".equals(openStage)) {
+            provider = "OPS_QUEUE";
+            state = "SEARCHING";
+        } else if (jobProvider != null && !FleetStatusBridge.PROVIDER_ID.equals(jobProvider)) {
+            provider = "borzo".equals(jobProvider) ? "BORZO" : "pidge".equals(jobProvider) ? "PIDGE" : openStage != null ? openStage : provider;
+            state = courierState(row.getString("job_status"));
+        } else if (openStage != null && (riderId == null || "CANCELLED".equals(state))) {
+            provider = openStage;
+            state = "SEARCHING";
+        }
+        boolean rider = "CRAVES_FLEET".equals(provider) && riderId != null;
+        return new OpsTrip(row.getObject("id", UUID.class), row.getString("order_code"), row.getString("kitchen_name"), row.getString("drop_area"),
+            state, provider, rider ? riderId : null, rider ? row.getString("rider_name") : null, row.getTimestamp("created_at").toInstant(),
+            row.getTimestamp("updated_at").toInstant());
+    }
+
+    /** A Borzo or Pidge delivery status as the console's trip state. */
+    static String courierState(String status) {
+        return switch (status == null ? "" : status) {
+            case "COURIER_ASSIGNED", "COURIER_TO_PICKUP" -> "ASSIGNED";
+            case "AT_PICKUP" -> "AT_PICKUP";
+            case "PICKED_UP", "IN_TRANSIT" -> "PICKED_UP";
+            case "AT_DROPOFF" -> "AT_DROP";
+            case "DELIVERED" -> "DELIVERED";
+            case "CANCELLED" -> "CANCELLED";
+            case "FAILED", "RETURNING", "RETURNED" -> "FAILED";
+            default -> "SEARCHING";
+        };
+    }
+
+    private String write(Object value) {
+        try {
+            return json.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Pay lines could not be stored", exception);
+        }
+    }
+
+    private static FleetApiException notReassignable(String message) {
+        return FleetApiException.conflict("TRIP_NOT_REASSIGNABLE", message);
+    }
+
+    private static FleetApiException changed() {
+        return FleetApiException.conflict("TRIP_CHANGED", "This order changed just now. Reload the page and try again.");
+    }
+
+    /** The trip as read before locking: its open stage and its delivery job, if any. */
+    record Current(UUID id, UUID chefSubOrderId, String orderCode, String state, UUID riderId, UUID openStageId, String openStage,
+                   String jobProvider, String jobStatus) {
+        boolean riderOnTrip() {
+            return riderId != null && RIDER_ON_TRIP.contains(state);
+        }
+
+        boolean fleetJob() {
+            return FleetStatusBridge.PROVIDER_ID.equals(jobProvider);
+        }
+
+        /** Borzo or Pidge holds the delivery job. */
+        boolean courierJob() {
+            return jobProvider != null && !fleetJob();
+        }
+
+        boolean courierFinished() {
+            return courierJob() && Set.of("DELIVERED", "CANCELLED", "FAILED", "RETURNED").contains(jobStatus);
+        }
+    }
+
+    /** admin-fleet-v1 DispatchQueueItem. */
+    public record QueueItem(UUID tripId, String orderCode, String kitchenName, String dropArea, Instant queuedAt, String alertLevel,
+                            String alertMessage, List<Attempt> attempts) {
+    }
+
+    public record Attempt(String provider, String outcome, Instant at) {
+    }
+
+    public record QueueList(List<QueueItem> items) {
+    }
+
+    /** admin-fleet-v1 RiderPosition. */
+    public record Position(UUID riderId, String riderName, double lat, double lng, Instant recordedAt, long ageSeconds, boolean onShift,
+                           boolean onTrip, UUID tripId, boolean mock) {
+    }
+
+    public record PositionList(List<Position> positions) {
+    }
+
+    public record ReassignInput(UUID riderId, String provider, String reason) {
+    }
+
+    /** admin-fleet-v1 Trip. riderId and riderName only for CRAVES_FLEET. */
+    public record OpsTrip(UUID tripId, String orderCode, String kitchenName, String dropArea, String state, String provider, UUID riderId,
+                          String riderName, Instant createdAt, Instant updatedAt) {
+    }
+
+    public record TripList(List<OpsTrip> trips) {
+    }
+}

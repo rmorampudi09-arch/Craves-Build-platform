@@ -13,6 +13,7 @@ import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.admin.FleetAdminController;
+import in.craves.integration.fleet.admin.FleetOpsController;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.money.FleetMoneyController;
 import in.craves.integration.fleet.money.FleetPayouts;
@@ -89,7 +90,8 @@ class FleetConfigurationTest {
     void theFleetFlagStartsTheReadersTestModeAndAWatchedPool() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context -> {
             assertThat(context).hasNotFailed().hasSingleBean(FleetPolicyStore.class).hasSingleBean(FleetTestMode.class)
-                .hasSingleBean(FleetAdminController.class).hasSingleBean(FleetApiAdvice.class).hasSingleBean(FleetEarnings.class);
+                .hasSingleBean(FleetAdminController.class).hasSingleBean(FleetApiAdvice.class).hasSingleBean(FleetEarnings.class)
+                .hasSingleBean(FleetOpsController.class);
             assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER)).isInstanceOf(SchedulerLagWatchdog.MonitoredTaskScheduler.class);
             assertThat(context.getBean(FleetProperties.class).testMode()).as("test mode is on unless switched off").isTrue();
         });

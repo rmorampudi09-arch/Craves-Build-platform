@@ -261,7 +261,9 @@ public class FleetDispatchJobs {
     private boolean switchJob(CourierStage stage, RoutingResult routed) {
         List<Map<String, Object>> jobs = jdbc.queryForList("SELECT id, last_status_observed_at FROM delivery_schema.delivery_job "
             + "WHERE id = ? AND provider_id = 'craves_fleet' AND provider_delivery_id = ? FOR UPDATE", stage.jobId(), stage.tripId().toString());
-        if (jobs.isEmpty()) {
+        // Ops cancelled the delivery while the courier was being booked: record nothing; the caller alerts ops to cancel it.
+        if (jobs.isEmpty() || Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_stage WHERE trip_id = ? "
+            + "AND outcome = 'OPS_CANCELLED')", Boolean.class, stage.tripId()))) {
             return false;
         }
         Instant observedAt = Instant.now();

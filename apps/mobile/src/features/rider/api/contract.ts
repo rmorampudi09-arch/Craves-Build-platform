@@ -146,6 +146,8 @@ export interface Trip {
 }
 
 export interface PayLine {
+  /** On Offer and Trip lines: base, drop-km, pickup-km, waiting, cancellation or return-km. TripEarning lines leave it out. */
+  component?: string;
   label: string;
   amountPaise: Paise;
 }
@@ -236,8 +238,10 @@ export type DeliverBody =
   | {method: 'OTP'; otp: string; fix?: RiderFix}
   | {method: 'PHOTO'; photoUri?: string; callsMade: number; fix?: RiderFix};
 
+export type FailReason = 'CUSTOMER_UNREACHABLE' | 'WRONG_ADDRESS' | 'CUSTOMER_REFUSED' | 'UNSAFE';
+
 export interface FailBody {
-  reason: string;
+  reason: FailReason;
   note?: string;
 }
 
@@ -254,4 +258,50 @@ export interface SupportIssue {
   payoutId?: string;
   category: SupportCategory;
   note?: string;
+}
+
+/** The codes a refusal carries (rider-v1 ErrorBody); each operation in rider-v1.yaml says which it returns. */
+export type RiderErrorCode =
+  | 'VALIDATION_FAILED'
+  | 'IDEMPOTENCY_KEY_REQUIRED'
+  | 'IDEMPOTENCY_KEY_REUSED'
+  | 'SIGN_IN_REQUIRED'
+  | 'FORBIDDEN'
+  | 'NOT_A_RIDER'
+  | 'TERMS_CHANGED'
+  | 'TERMS_UNAVAILABLE'
+  | 'DOCUMENT_TYPE_NOT_ALLOWED'
+  | 'DOCUMENT_FILE_INVALID'
+  | 'RIDER_NOT_ACTIVE'
+  | 'DEVICE_NOT_BOUND'
+  | 'APP_UPDATE_REQUIRED'
+  | 'DOCUMENTS_EXPIRED'
+  | 'SELFIE_INVALID'
+  | 'SHIFT_OPEN'
+  | 'SHIFT_CREDENTIAL_INVALID'
+  | 'OFFER_TAKEN'
+  | 'OFFER_EXPIRED'
+  | 'OFFER_NOT_FOUND'
+  | 'ORDER_CANCELLED'
+  | 'TRIP_IN_PROGRESS'
+  | 'TRIP_NOT_FOUND'
+  | 'TRIP_NOT_ACTIVE'
+  | 'STEP_CONFLICT'
+  | 'OTP_INVALID'
+  | 'OTP_LOCKED'
+  | 'OTP_UNAVAILABLE'
+  | 'CALLS_REQUIRED'
+  | 'WAIT_NOT_OVER'
+  | 'PHOTO_REQUIRED'
+  | 'WITHDRAWAL_LIMIT'
+  | 'AMOUNT_OVER_BALANCE'
+  | 'PAYOUT_ACCOUNT_REQUIRED'
+  | 'PAYOUTS_PAUSED'
+  | 'PAYOUT_NOT_FOUND';
+
+/** A refusal; the message is safe to show the rider. attemptsLeft comes only with 422 OTP_INVALID. */
+export interface ErrorBody {
+  code: RiderErrorCode;
+  message: string;
+  attemptsLeft?: number;
 }

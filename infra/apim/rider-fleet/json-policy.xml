@@ -1,0 +1,33 @@
+<policies>
+  <inbound>
+    <base />
+    <choose>
+      <when condition="@(!context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase))">
+        <return-response>
+          <set-status code="401" reason="Unauthorized" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-header name="Cache-Control" exists-action="override"><value>private, no-store</value></set-header>
+          <set-body>{"code":"AUTHENTICATION_REQUIRED","message":"A Bearer access token is required."}</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <!-- The shift credential is valid only on /locations and /devices: it never reaches any other route. -->
+    <set-header name="X-Craves-Shift-Credential" exists-action="delete" />
+    <!-- 64 KB covers every JSON body here; the backend still verifies the JWT, the RIDER role and ownership. -->
+    <validate-content unspecified-content-type-action="ignore" max-size="65536" size-exceeded-action="prevent" />
+    <set-backend-service base-url="__BACKEND_URL__" />
+  </inbound>
+  <backend>
+    <!-- The Consumption gateway has no keyed rate limit (docs/admin/explorer/README.md): at most 4 calls in flight per rider. -->
+    <limit-concurrency key="@(&quot;rider-&quot; + (context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).Split(' ').Last().AsJwt()?.Subject ?? context.Request.IpAddress))" max-count="4">
+      <forward-request timeout="30" />
+    </limit-concurrency>
+  </backend>
+  <outbound>
+    <base />
+    <set-header name="Cache-Control" exists-action="override"><value>private, no-store</value></set-header>
+    <set-header name="Pragma" exists-action="override"><value>no-cache</value></set-header>
+    <set-header name="X-Content-Type-Options" exists-action="override"><value>nosniff</value></set-header>
+  </outbound>
+  <on-error><base /></on-error>
+</policies>

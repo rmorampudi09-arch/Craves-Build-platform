@@ -108,6 +108,8 @@ let tree: renderer.ReactTestRenderer;
 async function render(node: React.ReactElement, seed: Array<[readonly unknown[], unknown]> = []) {
   const client = new QueryClient({defaultOptions: {queries: {retry: false, staleTime: Infinity}}});
   seed.forEach(([key, data]) => client.setQueryData(key, data));
+  // A second render in one test must not leave the first mounted: its timers would fire after the suite ends.
+  act(() => tree?.unmount());
   await act(async () => {
     tree = renderer.create(
       <QueryClientProvider client={client}>

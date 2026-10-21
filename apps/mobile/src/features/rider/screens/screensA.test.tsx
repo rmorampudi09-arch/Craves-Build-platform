@@ -562,6 +562,8 @@ describe('Offer', () => {
   });
 
   it('puts the locked pay first, in one sentence with its parts, then distances and the route', async () => {
+    // Fake timers hold the clock, so a slow render cannot take seconds off the 40 s countdown.
+    jest.useFakeTimers();
     await render(<OfferScreen {...props()} />);
     const text = allText();
     expect(text).toContain('New order | 40s left | You get at least | ₹67');

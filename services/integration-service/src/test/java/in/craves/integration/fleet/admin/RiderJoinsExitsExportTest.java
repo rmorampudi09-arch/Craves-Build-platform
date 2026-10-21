@@ -40,8 +40,8 @@ class RiderJoinsExitsExportTest {
 
         String csv = export.csv(LocalDate.parse("2026-10-20"));
         assertThat(csv).isEqualTo("date,riderId,name,phoneMasked,event,reason\r\n"
-            + "2026-10-20," + sita + ",Sita Devi,+91 98xxxxx211,JOINED,Documents checked\r\n"
-            + "2026-10-20," + ravi + ",Ravi Kumar,+91 98xxxxx210,EXITED,Asked to leave\r\n");
+            + "2026-10-20," + sita + ",Sita Devi,'+91 98xxxxx211,JOINED,Documents checked\r\n"
+            + "2026-10-20," + ravi + ",Ravi Kumar,'+91 98xxxxx210,EXITED,Asked to leave\r\n");
 
         export.write(LocalDate.parse("2026-10-20"));
         verify(storage).upload(eq("riders/exports/rider-joins-exits-2026-10-20.csv"), eq(csv.getBytes(StandardCharsets.UTF_8)),

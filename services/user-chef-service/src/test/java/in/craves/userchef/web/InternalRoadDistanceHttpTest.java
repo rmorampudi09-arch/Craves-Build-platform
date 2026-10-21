@@ -92,7 +92,7 @@ class InternalRoadDistanceHttpTest {
     }
 
     private static MockHttpServletRequestBuilder request(String json) {
-        return post(PATH).contentType(MediaType.APPLICATION_JSON).content(json);
+        return post(PATH).contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_JSON).content(json);
     }
 
     private String body(UUID kitchen, String fromLat) {

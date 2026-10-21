@@ -6,6 +6,7 @@ import in.craves.integration.fleet.FleetPolicyStore.RateCard;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetRules;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.rider.FleetRiderModels.Banner;
 import in.craves.integration.fleet.rider.FleetRiderModels.Features;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
@@ -58,8 +59,7 @@ public class FleetRiderService {
         "VEHICLE_INSURANCE", "Vehicle insurance", "PUC", "PUC certificate", "PAN", "PAN card", "BANK_PROOF", "Bank proof",
         "PHOTO", "Photo", "ADDRESS_PROOF", "Address proof");
     private static final Set<String> DOCUMENT_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "application/pdf");
-    // Payouts and withdrawals arrive in a later phase; the app hides them until then.
-    private static final Features FEATURES = new Features(false, false);
+    private static final Features NO_FEATURES = new Features(false, false);
 
     private final JdbcTemplate jdbc;
     private final FleetPolicyStore policies;
@@ -92,7 +92,7 @@ public class FleetRiderService {
             + "FROM fleet_schema.rider WHERE identity_id = ?", (row, n) -> rider(row), identity);
         if (found.isEmpty()) {
             return new RiderMe("", "", FleetRules.maskPhone(phone), null, "NOT_RIDER", null, null, null, termsVersion, null, "en",
-                properties.minAppVersion(), support, whatsapp, FEATURES);
+                properties.minAppVersion(), support, whatsapp, NO_FEATURES);
         }
         Rider rider = found.get(0);
         String statusReason = null;
@@ -123,7 +123,14 @@ public class FleetRiderService {
             + "ORDER BY (version = ?) DESC, accepted_at DESC LIMIT 1", String.class, rider.id(), termsVersion).stream().findFirst().orElse(null);
         return new RiderMe(rider.id().toString(), rider.name(), FleetRules.maskPhone(rider.phone()), null, rider.status(), statusReason,
             statusEffectiveAt, notice, termsVersion, accepted, rider.language(),
-            rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, FEATURES);
+            rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, features(rider.id()));
+    }
+
+    /** Payouts and withdrawals show once the rider has a payout account ops verified in person, and no failed payout paused it. */
+    private Features features(UUID riderId) {
+        boolean verified = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
+            + "WHERE rider_id = ? AND state = 'ACTIVE' AND payouts_paused_at IS NULL)", Boolean.class, riderId));
+        return new Features(verified, verified);
     }
 
     /** Any rider ops added, before activation too (no RIDER role yet), so they can see what ops is still checking. */
@@ -149,8 +156,8 @@ public class FleetRiderService {
 
     /**
      * The shift (online while an open shift's credential still works), the trip in progress, the running or next booked
-     * slot with its own hourly guarantee (zoneName and slotEndsAt only while one runs), rest point and banner. Earnings
-     * (P4) read as zero.
+     * slot with its own hourly guarantee (zoneName and slotEndsAt only while one runs), rest point and banner, and today's
+     * pay (net of TDS) and trips from rider_earning.
      */
     @Transactional(readOnly = true)
     public HomeSummary home(UUID identityId) {
@@ -184,8 +191,11 @@ public class FleetRiderService {
             .map(Timestamp::toInstant).orElse(null);
         String activeTripId = jdbc.queryForList("SELECT id::text FROM fleet_schema.trip WHERE rider_id = ? "
             + "AND state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')", String.class, rider.id()).stream().findFirst().orElse(null);
-        return new HomeSummary(shiftStartedAt != null, shiftStartedAt, zoneName, slotEndsAt, 0, 0, activeTripId, next, guaranteed, restPoint,
-            banner);
+        FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
+        long[] earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> new long[] {row.getLong("paise"), row.getLong("trips")},
+            rider.id(), Timestamp.from(today.from()), Timestamp.from(today.to()));
+        return new HomeSummary(shiftStartedAt != null, shiftStartedAt, zoneName, slotEndsAt, earned[0], (int) earned[1], activeTripId, next,
+            guaranteed, restPoint, banner);
     }
 
     /** A new photo of one document, from any rider ops added (before activation too); PENDING until ops reviews it by hand. */
@@ -225,6 +235,11 @@ public class FleetRiderService {
         }
         jdbc.update("INSERT INTO fleet_schema.rider_terms_acceptance (rider_id, version, language) VALUES (?, ?, ?) "
             + "ON CONFLICT (rider_id, version) DO NOTHING", rider.id(), version, rider.language());
+    }
+
+    /** The id of the rider linked to this signed-in identity; 403 NOT_A_RIDER otherwise. */
+    public UUID riderId(UUID identityId) {
+        return rider(identityId).id();
     }
 
     /** The rider linked to this signed-in identity. */

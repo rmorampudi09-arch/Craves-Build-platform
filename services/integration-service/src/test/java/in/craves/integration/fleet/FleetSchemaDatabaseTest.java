@@ -123,9 +123,9 @@ class FleetSchemaDatabaseTest {
 
     @Test
     void oneWithdrawalPerRiderPerDayAndOneOpenShift() {
-        db.update("INSERT INTO fleet_schema.rider_withdrawal_day (rider_id, request_date, amount_paise) VALUES (?, DATE '2026-10-20', 5000)", ravi);
-        assertThatThrownBy(() -> db.update("INSERT INTO fleet_schema.rider_withdrawal_day (rider_id, request_date, amount_paise) "
-            + "VALUES (?, DATE '2026-10-20', 100)", ravi)).isInstanceOf(DuplicateKeyException.class);
+        db.update("INSERT INTO fleet_schema.rider_withdrawal_day (rider_id, request_date, amount_paise, idem_key) VALUES (?, DATE '2026-10-20', 5000, 'first')", ravi);
+        assertThatThrownBy(() -> db.update("INSERT INTO fleet_schema.rider_withdrawal_day (rider_id, request_date, amount_paise, idem_key) "
+            + "VALUES (?, DATE '2026-10-20', 100, 'second')", ravi)).isInstanceOf(DuplicateKeyException.class);
 
         shift(ravi, "a");
         assertThatThrownBy(() -> shift(ravi, "b")).isInstanceOf(DuplicateKeyException.class);
@@ -177,8 +177,8 @@ class FleetSchemaDatabaseTest {
 
     private void earning(UUID trip, String component, int revision, String key) {
         db.update("INSERT INTO fleet_schema.rider_earning (id, rider_id, trip_id, component, revision, business_key, gross_paise, "
-            + "withheld_paise, net_paise, rate_card_version, withdrawable_at) VALUES (?, ?, ?, ?, ?, ?, 4000, 0, 4000, '2026-10-v1', now())",
-            UUID.randomUUID(), ravi, trip, component, revision, key);
+            + "withheld_paise, net_paise, rate_card_version, withdrawable_at, reason) VALUES (?, ?, ?, ?, ?, ?, 4000, 0, 4000, '2026-10-v1', now(), ?)",
+            UUID.randomUUID(), ravi, trip, component, revision, key, revision == 1 ? null : "Adjusted after review");
     }
 
     private void shift(UUID rider, String hashLetter) {

@@ -184,7 +184,7 @@ public class FleetAdminController {
             .header("Content-Disposition", "attachment; filename=\"rider-joins-exits-" + date + ".csv\"").body(csv);
     }
 
-    static Admin admin(CravesPrincipal principal, String... roles) {
+    public static Admin admin(CravesPrincipal principal, String... roles) {
         if (principal == null || principal.identityId() == null || !principal.hasAnyRole(roles)) {
             throw FleetApiException.forbidden();
         }

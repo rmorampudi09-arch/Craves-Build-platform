@@ -28,6 +28,7 @@ craves:
     enabled: ${CRAVES_FLEET_ENABLED:false}
     rider-api-enabled: ${CRAVES_FLEET_RIDER_API_ENABLED:false}
     location-ingest-enabled: ${CRAVES_FLEET_LOCATION_INGEST_ENABLED:false}
+    # Keep false: automated payouts do not exist; FleetPayouts only logs that it refuses (payouts stay manual).
     payout-execution-enabled: ${CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED:false}
     # While on, dispatch touches only riders and kitchens in fleet_schema.test_mode_rider / test_mode_kitchen.
     test-mode: ${CRAVES_FLEET_TEST_MODE:true}
@@ -49,6 +50,16 @@ craves:
       user-chef-base-url: ${CRAVES_USER_CHEF_INTERNAL_BASE_URL:}
       order-base-url: ${CRAVES_FLEET_ORDER_BASE_URL:}
       notification-base-url: ${CRAVES_NOTIFICATION_INTERNAL_BASE_URL:}
+    # Rider money (P4, docs/riders/BACKEND.md "Money"). Credits post to the financial journal, so they also need
+    # CRAVES_LEDGER_POSTING_ENABLED. TDS stays off until the CA names the section and rate (100 basis points = 1%).
+    money-interval-ms: ${CRAVES_FLEET_MONEY_INTERVAL_MS:60000}
+    tds:
+      enabled: ${CRAVES_FLEET_TDS_ENABLED:false}
+      section: ${CRAVES_FLEET_TDS_SECTION:}
+      rate-basis-points: ${CRAVES_FLEET_TDS_RATE_BASIS_POINTS:0}
+      annual-threshold-paise: ${CRAVES_FLEET_TDS_ANNUAL_THRESHOLD_PAISE:0}
+    # Debt from a negative adjustment is recovered from future pay, at most this much a week (a business input).
+    recovery-weekly-cap-paise: ${CRAVES_FLEET_RECOVERY_WEEKLY_CAP_PAISE:50000}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

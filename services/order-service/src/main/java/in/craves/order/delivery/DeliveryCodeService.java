@@ -39,7 +39,7 @@ public class DeliveryCodeService {
 
     /** The code only while a Craves rider carries the order and it is not yet used; otherwise null. */
     public String codeForCustomer(UUID orderId, String providerId, String deliveryStatus) {
-        if (!CRAVES_FLEET_PROVIDER_ID.equals(providerId) || !CARRYING_STATUSES.contains(deliveryStatus)) {
+        if (!CRAVES_FLEET_PROVIDER_ID.equals(providerId) || deliveryStatus == null || !CARRYING_STATUSES.contains(deliveryStatus)) {
             return null;
         }
         return jdbc.query(

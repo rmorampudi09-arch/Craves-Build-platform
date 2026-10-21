@@ -81,7 +81,8 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
     } catch (error) {
       const status = error instanceof AppApiError ? error.status : undefined;
       if (status === 409) {
-        setEnded(o.taken);
+        // Other 409s (e.g. TRIP_IN_PROGRESS) carry the server's own words.
+        setEnded(error instanceof AppApiError && error.code !== 'OFFER_TAKEN' ? error.message : o.taken);
       } else if (status === 410) {
         setEnded(o.expired);
       } else {

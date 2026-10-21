@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AppApiError} from '../../../core/http/apiError';
+import type {DeliverBody} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {createOfflineQueue} from '../domain/offlineQueue';
 
@@ -19,6 +20,8 @@ export const tripQueue = createOfflineQueue({
     error instanceof AppApiError
       ? {code: error.code, message: error.message, attemptsLeft: error.attemptsLeft}
       : {code: 'UNKNOWN', message: 'Something went wrong. Try again.'},
+  // Never store the customer's OTP on the phone: a restart forgets an unsent one and the rider asks for it again.
+  memoryOnly: entry => (entry.body as DeliverBody | undefined)?.method === 'OTP',
 });
 
 /** Count of this rider's actions still waiting to sync; drives "Saved · will sync" and the sign-out block. */

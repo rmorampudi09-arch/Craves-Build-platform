@@ -26,7 +26,9 @@ const slot = { slotId: SLOT, riderId: RIDER, riderName: "Ravi Kumar", zoneName: 
 const done = { ...slot, slotId: "66666666-6666-4666-8666-666666666666", status: "COMPLETED", onlineInZoneMinutes: 214, topUpPaise: 6550 };
 const banner = { tone: "warning", text: "Heavy rain in Madhapur. Ride slowly.", until: "2030-01-15T16:30:00Z" };
 const lists = (method: string, path: string) => method !== "GET" ? json({ code: "UNMOCKED", message: path }, 500)
-  : path.startsWith("riders?") ? json({ riders: [rider(RIDER, "Ravi Kumar"), rider(SITA, "Sita Devi")], nextCursor: null })
+  // Two pages, newest first; the pickers read both and sort by name.
+  : path === "riders?status=ACTIVE" ? json({ riders: [rider(SITA, "Sita Devi")], nextCursor: "page-2" })
+    : path === "riders?status=ACTIVE&cursor=page-2" ? json({ riders: [rider(RIDER, "Ravi Kumar")], nextCursor: null })
     : path.startsWith("slots?") ? json({ slots: [slot, done] })
       : path === "banner" ? new Response(null, { status: 204 }) : json({ code: "UNMOCKED", message: path }, 500);
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -76,6 +78,8 @@ describe("slots", () => {
     render(createElement(FleetSlots));
     const form = (await screen.findByRole("heading", { name: "Book a slot" })).closest("form") as HTMLElement;
     await waitFor(() => expect(within(form).getAllByRole("option")).toHaveLength(3));
+    expect(within(form).getAllByRole("option").map(option => option.textContent)).toEqual(["Choose…", "Ravi Kumar", "Sita Devi"]);
+    expect(gets("riders?")).toEqual(["riders?status=ACTIVE", "riders?status=ACTIVE&cursor=page-2"]);
     fireEvent.click(button("Book slot", form));
     expect(within(form).getByRole("alert").textContent).toBe("Choose the rider.");
 
@@ -135,6 +139,33 @@ describe("slots", () => {
     expect(posts()[0].body).toMatchObject({ riderId: SITA, guaranteedPerHourPaise: 50000, startsAt: `${istDay()}T01:30:00.000Z` });
   });
 
+  it("books a slot that runs past midnight IST and lists it with both dates", async () => {
+    const late = { ...slot, startsAt: "2030-01-15T16:30:00Z", endsAt: "2030-01-15T20:30:00Z" };
+    answer = (method, path) => method === "POST" ? json(late, 201) : path.startsWith("slots?") ? json({ slots: [late] }) : lists(method, path);
+    render(createElement(FleetSlots));
+    expect((await screen.findByText("Ravi Kumar", { selector: "a" })).closest("tr")?.textContent).toContain("15 Jan 2030, 10:00 pm – 16 Jan 2030, 2:00 am IST");
+    const form = screen.getByRole("heading", { name: "Book a slot" }).closest("form") as HTMLElement;
+    await waitFor(() => expect(within(form).getAllByRole("option")).toHaveLength(3));
+    fireEvent.change(within(form).getByLabelText("Rider for the slot"), { target: { value: RIDER } });
+    type("Zone", "Madhapur", form);
+    type("Day", "2030-01-15", form);
+    type("Starts (IST)", "22:00", form);
+    type("Ends (IST)", "02:00", form);
+    expect(within(form).getByLabelText("Ends (IST), next day")).toBeTruthy();
+    type("Guarantee, ₹ an hour", "80.10", form);
+    fireEvent.click(button("Book slot", form));
+    expect(await within(form).findByText("Slot booked.")).toBeTruthy();
+    // 22:00 on 15 Jan to 02:00 on 16 Jan IST; ₹80.10 is 8010 paise.
+    expect(posts()[0].body).toMatchObject({ startsAt: "2030-01-15T16:30:00.000Z", endsAt: "2030-01-15T20:30:00.000Z", guaranteedPerHourPaise: 8010 });
+  });
+
+  it("says when riders or slots can't load", async () => {
+    answer = (method, path) => /^(riders|slots)\?/.test(path) ? json({ code: "FLEET_UNAVAILABLE", message: "The fleet service is busy." }, 503) : lists(method, path);
+    render(createElement(FleetSlots));
+    expect(await within(section("Slots")).findByText("The fleet service is busy.")).toBeTruthy();
+    expect(await within(section("Book a slot")).findByText("The fleet service is busy.")).toBeTruthy();
+  });
+
   it("cancels a booked slot only with a reason and a confirmation", async () => {
     render(createElement(FleetSlots));
     const row = (await screen.findAllByText("Ravi Kumar", { selector: "a" }))[0].closest("tr") as HTMLElement;
@@ -149,12 +180,21 @@ describe("slots", () => {
     expect(posts()).toHaveLength(0);
 
     vi.stubGlobal("confirm", vi.fn(() => true));
-    answer = (method, path) => method === "POST" ? json({ ...slot, status: "CANCELLED" }) : path.startsWith("slots?") ? json({ slots: [{ ...slot, status: "CANCELLED" }] }) : lists(method, path);
+    answer = (method, path) => method === "POST" ? json({ code: "FLEET_UNAVAILABLE", message: "The fleet service is busy. Try again." }, 503) : lists(method, path);
     fireEvent.click(button("Cancel slot", row));
     expect(window.confirm).toHaveBeenCalledWith("Cancel Ravi Kumar's slot, 21 Oct 2026, 6:00 pm – 10:00 pm IST? The rider loses its guarantee.");
+    expect((await within(row).findByRole("alert")).textContent).toBe("The fleet service is busy. Try again.");
+
+    let finish!: (response: Response) => void;
+    answer = (method, path) => method === "POST" ? new Promise(resolve => { finish = resolve; }) : path.startsWith("slots?") ? json({ slots: [{ ...slot, status: "CANCELLED" }] }) : lists(method, path);
+    fireEvent.click(button("Cancel slot", row));
+    expect(await within(row).findByText("Saving…")).toBeTruthy();
+    finish(json({ ...slot, status: "CANCELLED" }));
     expect(await within(row).findByText("Slot cancelled.")).toBeTruthy();
     expect(row.textContent).toContain("Cancelled");
-    expect(posts()[0]).toMatchObject({ method: "POST", path: `slots/${SLOT}/cancel`, body: { reason: "Rider is unwell today" } });
+    expect(posts()).toHaveLength(2);
+    // The retry after a failure keeps the same Idempotency-Key.
+    for (const call of posts()) expect(call).toMatchObject({ method: "POST", path: `slots/${SLOT}/cancel`, body: { reason: "Rider is unwell today" }, key: posts()[0].key });
     expect(posts()[0].key).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
@@ -167,7 +207,8 @@ describe("zone banner", () => {
     fireEvent.click(button("Show banner", panel));
     expect(within(panel).getByRole("alert").textContent).toBe("Write the banner text.");
 
-    type("Banner text", banner.text, panel);
+    // The counter counts what is sent and what the server counts: the trimmed text.
+    type("Banner text", `  ${banner.text} `, panel);
     expect(within(panel).getByText("36 of 160 characters")).toBeTruthy();
     fireEvent.change(within(panel).getByLabelText("Tone"), { target: { value: "warning" } });
     type("Show until (IST)", localInput(-1), panel);

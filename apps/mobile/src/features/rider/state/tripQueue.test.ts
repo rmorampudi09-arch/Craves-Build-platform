@@ -1,5 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AppApiError} from '../../../core/http/apiError';
 import {riderApi} from '../api/riderApi';
+import {STORAGE_KEY} from '../domain/offlineQueue';
 import {tripQueue} from './tripQueue';
 
 jest.mock('../api/riderApi', () => ({riderApi: {tripAction: jest.fn()}}));
@@ -22,6 +24,19 @@ describe('tripQueue: what the live server says decides whether a step is kept', 
     tripAction.mockRejectedValueOnce(error);
     await expect(tripQueue.enqueue(step(riderId))).resolves.toEqual({kind: 'queued'});
     expect(await tripQueue.pending(riderId)).toBe(1);
+  });
+
+  it("keeps an unsent delivery OTP in memory only, never in the phone's storage", async () => {
+    // Offline: picked-up waits to retry, and the OTP waits behind it.
+    tripAction.mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'No internet', undefined, undefined, true));
+    await tripQueue.enqueue(step('rOtp'));
+    await tripQueue.enqueue({...step('rOtp'), action: 'delivered', key: 'rider-delivered-t1-rOtp-1', body: {method: 'OTP', otp: '4831'}});
+    expect(await tripQueue.pending('rOtp')).toBe(2);
+    const writes = (AsyncStorage.setItem as jest.Mock).mock.calls
+      .filter(([key]) => key === STORAGE_KEY)
+      .map(([, value]) => value as string);
+    expect(writes.at(-1)).toContain('rider-picked-up-t1-rOtp');
+    expect(writes.join('\n')).not.toContain('4831');
   });
 
   it('drops the step when the server refuses it, with its code and tries left', async () => {

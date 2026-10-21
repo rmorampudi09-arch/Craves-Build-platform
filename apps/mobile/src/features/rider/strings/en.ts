@@ -178,6 +178,12 @@ export const en = {
     goingOnline: 'Going online…',
     cameraDenied: 'Allow the camera to take the selfie.',
     openSettings: 'Open settings',
+    /** POST /shift/start's 403 codes: the API client never passes a 403's own message on. */
+    refused: {
+      RIDER_NOT_ACTIVE: "Your account can't go online right now. Open your account page to see why.",
+      APP_UPDATE_REQUIRED: 'Update the Craves Rider app to go online.',
+      DOCUMENTS_EXPIRED: 'A document has expired. Upload the new one in Profile, then go online.',
+    } as Record<string, string>,
   },
   offer: {
     title: 'New order',

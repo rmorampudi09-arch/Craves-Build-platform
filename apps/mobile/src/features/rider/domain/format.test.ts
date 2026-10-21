@@ -6,6 +6,7 @@ import {
   formatKm,
   formatRupees,
   formatTimer,
+  istDay,
 } from './format';
 
 describe('rider formatting', () => {
@@ -45,5 +46,10 @@ describe('rider formatting', () => {
     const madhapur = {lat: 17.4483, lng: 78.3915};
     const nearby = {lat: 17.4492, lng: 78.3915};
     expect(Math.round(distanceMeters(madhapur, nearby))).toBe(100);
+  });
+
+  it('gives the Indian date, which turns over at 18:30 UTC', () => {
+    expect(istDay(Date.parse('2026-10-20T18:29:59Z'))).toBe('2026-10-20');
+    expect(istDay(Date.parse('2026-10-20T18:30:00Z'))).toBe('2026-10-21');
   });
 });

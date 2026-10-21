@@ -425,7 +425,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
             attemptsLeft,
           );
         }
-      } else if (deliver.callsMade < 2) {
+      } else if (deliver.callsMade < 2 && state.otpTries < MAX_OTP_TRIES) {
+        // Like the server: after the OTP lock the photo needs no calls.
         throw apiError(
           'CALLS_REQUIRED',
           'Call the customer twice before leaving the order.',

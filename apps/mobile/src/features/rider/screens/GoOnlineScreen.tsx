@@ -6,6 +6,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Icon, LoadingIndicator} from '../../../shared/components';
 import {colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
+import {AppApiError} from '../../../core/http/apiError';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -74,12 +75,18 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         return;
       }
       setBusy(true);
-      await riderOnlineService.start(await riderApi.startShift(uri, await riderDevice.installationId()));
+      const shift = await riderApi.startShift(uri, await riderDevice.installationId());
+      await riderOnlineService.start(shift).catch(error => {
+        // The server's shift is open now: close it, or ops sees a rider online whose phone sends nothing.
+        riderApi.endShift().catch(() => undefined);
+        throw error;
+      });
       queryClient.invalidateQueries({queryKey: riderKeys.all});
       navigation.goBack();
     } catch (error) {
-      // The server's own words: account not active, expired documents, an old app version, a phone ops hasn't approved.
-      setProblem({text: error instanceof Error && error.message ? error.message : strings.common.error});
+      // The server's own words (a phone ops hasn't approved, a bad selfie); 403s arrive without them, so by code.
+      const refused = error instanceof AppApiError && error.status === 403 ? g.refused[error.code] : undefined;
+      setProblem({text: refused ?? (error instanceof Error && error.message ? error.message : strings.common.error)});
       setBusy(false);
       // A refusal may mean the account changed; /me decides where the rider lands.
       queryClient.invalidateQueries({queryKey: riderKeys.all});

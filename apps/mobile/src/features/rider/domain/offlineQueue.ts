@@ -39,6 +39,8 @@ export interface QueueDeps {
   /** True for network failures and 5xx: keep the entry and retry with backoff. */
   isRetriable: (error: unknown) => boolean;
   describe: (error: unknown) => RejectInfo;
+  /** Entries it matches (the customer's delivery OTP) stay in memory and are never written to storage. */
+  memoryOnly?: (entry: QueueEntry) => boolean;
   now?: () => number;
 }
 
@@ -76,7 +78,8 @@ export function createOfflineQueue(deps: QueueDeps) {
 
   async function save(list: QueueEntry[]): Promise<void> {
     entries = list;
-    await deps.storage.setItem(STORAGE_KEY, JSON.stringify(list));
+    const {memoryOnly} = deps;
+    await deps.storage.setItem(STORAGE_KEY, JSON.stringify(memoryOnly ? list.filter(e => !memoryOnly(e)) : list));
     changeListeners.forEach(listener => listener());
   }
 

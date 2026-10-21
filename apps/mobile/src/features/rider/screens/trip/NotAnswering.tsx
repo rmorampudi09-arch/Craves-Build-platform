@@ -45,6 +45,8 @@ export function NotAnswering({
   const waitMs = trip.unreachableWaitSeconds * 1000;
   const waitEnds = second === undefined ? null : second + waitMs;
   const waitOver = useHasPassed(waitEnds);
+  // After the OTP lock the server takes the photo at once, without the calls or the wait.
+  const photoOpen = waitOver || otpLocked;
   const [problem, setProblem] = useState<'denied' | 'error' | null>(null);
   const [failReason, setFailReason] = useState<FailReason | null>(null);
 
@@ -123,9 +125,9 @@ export function NotAnswering({
         />
         <StepRow
           n={4}
-          state={waitOver ? 'current' : 'locked'}
+          state={photoOpen ? 'current' : 'locked'}
           title={t.photoRoute}
-          sub={waitOver ? t.photoNow : t.unlocksAfterTimer}
+          sub={photoOpen ? t.photoNow : t.unlocksAfterTimer}
         />
       </Card>
       <Banner tone="info" icon="camera-outline" text={t.photoRules(name)} />
@@ -145,9 +147,9 @@ export function NotAnswering({
       ) : null}
       <BottomAction
         label={t.leavePhoto}
-        leftIcon={waitOver ? 'camera-outline' : 'lock-outline'}
-        disabled={!waitOver}
-        accessibilityHint={waitOver ? undefined : t.unlocksAfterTimer}
+        leftIcon={photoOpen ? 'camera-outline' : 'lock-outline'}
+        disabled={!photoOpen}
+        accessibilityHint={photoOpen ? undefined : t.unlocksAfterTimer}
         onPress={leaveWithPhoto}
         testID="rider-leave-photo"
       />

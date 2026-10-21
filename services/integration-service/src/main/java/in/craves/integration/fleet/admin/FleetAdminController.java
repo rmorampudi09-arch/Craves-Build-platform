@@ -3,11 +3,14 @@ package in.craves.integration.fleet.admin;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetRules;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
+import in.craves.integration.fleet.admin.FleetAdminModels.DocumentApproval;
 import in.craves.integration.fleet.admin.FleetAdminModels.FileContent;
 import in.craves.integration.fleet.admin.FleetAdminModels.NewRider;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccountInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.ReasonInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.VehicleInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.ZoneBanner;
 import in.craves.integration.security.CravesPrincipal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -16,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,8 +31,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Ops console API, contracts/openapi/admin-fleet-v1.yaml (P1 paths). Each operation checks its own scoped admin
- * roles (x-roles); the legacy ADMIN role grants nothing. Mutations need an Idempotency-Key.
+ * Ops console API, contracts/openapi/admin-fleet-v1.yaml (P1 paths, document expiry, vehicle and the zone banner). Each
+ * operation checks its own scoped admin roles (x-roles); the legacy ADMIN role grants nothing. Mutations need an
+ * Idempotency-Key.
  */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
@@ -39,6 +44,7 @@ public class FleetAdminController {
     private static final String[] FILE_READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN"};
     private static final String[] PAYMENTS = {"PLATFORM_ADMIN", "PAYMENTS_ADMIN"};
     private static final String[] AUDITORS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN"};
+    private static final String[] BANNER_READERS = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"};
     private static final String KEY = "Idempotency-Key";
 
     private final FleetAdminService service;
@@ -76,10 +82,12 @@ public class FleetAdminController {
         return file(service.documentContent(admin(principal, FILE_READERS), riderId, documentId));
     }
 
+    /** Body {expiresOn} is optional, but required for DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE and PUC (422 EXPIRY_REQUIRED). */
     @PostMapping("/riders/{riderId}/documents/{documentId}/approve")
     public ResponseEntity<Object> approveDocument(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
-                                                  @PathVariable UUID riderId, @PathVariable UUID documentId) {
-        return json(200, service.approveDocument(admin(principal, OPERATORS), key, riderId, documentId));
+                                                  @PathVariable UUID riderId, @PathVariable UUID documentId,
+                                                  @RequestBody(required = false) DocumentApproval body) {
+        return json(200, service.approveDocument(admin(principal, OPERATORS), key, riderId, documentId, body == null ? null : body.expiresOn()));
     }
 
     @PostMapping("/riders/{riderId}/documents/{documentId}/reject")
@@ -99,6 +107,12 @@ public class FleetAdminController {
     public ResponseEntity<Object> setPayoutAccount(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
                                                    @PathVariable UUID riderId, @RequestBody PayoutAccountInput body) {
         return json(200, service.setPayoutAccount(admin(principal, PAYMENTS), key, riderId, body));
+    }
+
+    @PutMapping("/riders/{riderId}/vehicle")
+    public ResponseEntity<Object> setVehicle(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                             @PathVariable UUID riderId, @RequestBody VehicleInput body) {
+        return json(200, service.setVehicle(admin(principal, OPERATORS), key, riderId, body));
     }
 
     @PostMapping("/riders/{riderId}/status-events")
@@ -129,6 +143,26 @@ public class FleetAdminController {
     public ResponseEntity<Object> rejectSelfie(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
                                                @PathVariable UUID shiftId, @RequestBody ReasonInput body) {
         return json(200, service.reviewSelfie(admin(principal, OPERATORS), key, shiftId, false, body.reason()));
+    }
+
+    /** The banner riders see on Home now; 204 when none shows. */
+    @GetMapping("/banner")
+    public ResponseEntity<Object> banner(@AuthenticationPrincipal CravesPrincipal principal) {
+        admin(principal, BANNER_READERS);
+        ZoneBanner banner = service.banner();
+        return banner == null ? ResponseEntity.noContent().header("Cache-Control", "no-store").build() : json(200, banner);
+    }
+
+    @PutMapping("/banner")
+    public ResponseEntity<Object> setBanner(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                            @RequestBody ZoneBanner body) {
+        return json(200, service.setBanner(admin(principal, OPERATORS), key, body));
+    }
+
+    @DeleteMapping("/banner")
+    public ResponseEntity<Void> clearBanner(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key) {
+        service.clearBanner(admin(principal, OPERATORS), key);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/audit")

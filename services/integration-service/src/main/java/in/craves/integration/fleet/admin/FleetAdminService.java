@@ -19,11 +19,14 @@ import in.craves.integration.fleet.admin.FleetAdminModels.RiderDocument;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderHeader;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderPage;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderSummary;
+import in.craves.integration.fleet.admin.FleetAdminModels.RiderVehicle;
 import in.craves.integration.fleet.admin.FleetAdminModels.SelfieQueue;
 import in.craves.integration.fleet.admin.FleetAdminModels.SelfieReview;
 import in.craves.integration.fleet.admin.FleetAdminModels.Shift;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEvent;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.VehicleInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.ZoneBanner;
 import in.craves.integration.payout.bank.BankDataCipher;
 import in.craves.integration.payout.bank.BankOnboardingModels;
 import java.nio.charset.StandardCharsets;
@@ -65,6 +68,12 @@ public class FleetAdminService {
     private static final Set<String> KINDS = Set.of("SAFETY_PAUSE", "NOTICE", "RESTORE", "DEACTIVATE");
     private static final Set<String> SELFIE_STATES = Set.of("PENDING", "APPROVED", "REJECTED");
     static final String RIDER_PHONE = "^\\+91[6-9][0-9]{9}$";
+    // The four riding documents: verified only with the expiry date printed on them (/shift/start checks it).
+    private static final Set<String> EXPIRING_DOCUMENTS = Set.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC");
+    static final String VEHICLE_REGISTRATION = "^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$";
+    // Ends every showing banner. The GREATEST keeps ends_at after starts_at should a banner start in the same instant.
+    private static final String END_BANNERS =
+        "UPDATE fleet_schema.ops_banner SET ends_at = GREATEST(now(), starts_at + INTERVAL '1 microsecond') WHERE ends_at > now()";
     private static final String SUMMARY = """
         SELECT r.id, r.name, r.phone, r.status, r.created_at, r.language, r.vehicle_reg_number,
           (SELECT count(*) FROM fleet_schema.rider_document d WHERE d.rider_id = r.id AND d.status = 'PENDING') AS pending_documents,
@@ -190,15 +199,81 @@ public class FleetAdminService {
         return new FileContent(contentType, bytes);
     }
 
+    /** Verifies a PENDING document with the expiry date the reviewer read on it (required for the four riding documents). */
     @Transactional
-    public Object approveDocument(Admin admin, UUID key, UUID riderId, UUID documentId) {
-        return once(admin, key, "DOCUMENT_VERIFIED", riderId + "/" + documentId, () -> {
-            int updated = jdbc.update("UPDATE fleet_schema.rider_document SET status = 'VERIFIED', reason = NULL, reviewed_by = ?, "
+    public Object approveDocument(Admin admin, UUID key, UUID riderId, UUID documentId, LocalDate expiresOn) {
+        return once(admin, key, "DOCUMENT_VERIFIED", riderId + "/" + documentId + "\n" + expiresOn, () -> {
+            String type = jdbc.queryForList("SELECT type FROM fleet_schema.rider_document WHERE id = ? AND rider_id = ?", String.class,
+                documentId, riderId).stream().findFirst()
+                .orElseThrow(() -> FleetApiException.notFound("DOCUMENT_NOT_FOUND", "No such document for this rider."));
+            if (expiresOn == null && EXPIRING_DOCUMENTS.contains(type)) {
+                throw FleetApiException.unprocessable("EXPIRY_REQUIRED", "Enter the expiry date printed on the document.");
+            }
+            int updated = jdbc.update("UPDATE fleet_schema.rider_document SET status = 'VERIFIED', reason = NULL, expires_on = ?, reviewed_by = ?, "
                 + "reviewed_by_name = ?, reviewed_at = now() WHERE id = ? AND rider_id = ? AND status = 'PENDING'",
-                admin.id(), admin.name(), documentId, riderId);
+                expiresOn, admin.id(), admin.name(), documentId, riderId);
             RiderDocument document = reviewedDocument(updated, riderId, documentId);
-            return new Done(document, riderId, documentId.toString(), "Verified the " + document.type() + ".");
+            return new Done(document, riderId, documentId.toString(), "Verified the " + document.type()
+                + (expiresOn == null ? "." : ", valid until " + expiresOn + "."));
         });
+    }
+
+    /** The vehicle the rider's profile shows. The registration number is stored in full, answered and audited masked. */
+    @Transactional
+    public Object setVehicle(Admin admin, UUID key, UUID riderId, VehicleInput input) {
+        String label = input == null || input.label() == null ? "" : input.label().trim();
+        String registration = input == null || input.regNumber() == null ? "" : input.regNumber().replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
+        if (label.length() < 2 || label.length() > 60) {
+            throw FleetApiException.invalid("Enter the vehicle, like Honda Activa 6G.");
+        }
+        if (!registration.matches(VEHICLE_REGISTRATION)) {
+            throw FleetApiException.invalid("Enter the registration number as on the RC, like TS09EA1234.");
+        }
+        return once(admin, key, "VEHICLE_SET", riderId + "\n" + label + "\n" + registration, () -> {
+            if (jdbc.update("UPDATE fleet_schema.rider SET vehicle_label = ?, vehicle_reg_number = ?, updated_at = now() WHERE id = ?",
+                label, registration, riderId) == 0) {
+                throw riderNotFound();
+            }
+            RiderVehicle vehicle = new RiderVehicle(label, FleetRules.maskVehicle(registration));
+            return new Done(vehicle, riderId, riderId.toString(), "Set the vehicle to " + label + " (" + vehicle.regNumberMasked() + ").");
+        });
+    }
+
+    /** The banner riders see now, or null. */
+    @Transactional(readOnly = true)
+    public ZoneBanner banner() {
+        return jdbc.query("SELECT tone, text, ends_at FROM fleet_schema.ops_banner WHERE starts_at <= now() AND ends_at > now() "
+                + "ORDER BY starts_at DESC LIMIT 1", (row, n) -> new ZoneBanner(row.getString("tone"), row.getString("text"), instant(row, "ends_at")))
+            .stream().findFirst().orElse(null);
+    }
+
+    /** Shows the banner on every rider's Home from now until until, replacing any earlier one. */
+    @Transactional
+    public Object setBanner(Admin admin, UUID key, ZoneBanner input) {
+        if (input == null || !"info".equals(input.tone()) && !"warning".equals(input.tone())) {
+            throw FleetApiException.invalid("Choose info or warning.");
+        }
+        String text = input.text() == null ? "" : input.text().trim();
+        if (text.isEmpty() || text.length() > 160) {
+            throw FleetApiException.invalid("Write the banner in 1 to 160 characters.");
+        }
+        if (input.until() == null || input.until().isBefore(Instant.now().plusSeconds(60))) {
+            throw FleetApiException.invalid("Choose an end time at least a minute from now.");
+        }
+        ZoneBanner banner = new ZoneBanner(input.tone(), text, input.until().truncatedTo(ChronoUnit.MICROS));
+        return once(admin, key, "BANNER_SET", write(banner), () -> {
+            jdbc.update(END_BANNERS);
+            jdbc.update("INSERT INTO fleet_schema.ops_banner (id, tone, text, starts_at, ends_at) VALUES (?, ?, ?, now(), ?)", UUID.randomUUID(),
+                banner.tone(), banner.text(), Timestamp.from(banner.until()));
+            return new Done(banner, null, "banner", "Showing a " + banner.tone() + " banner until " + banner.until() + ": " + text);
+        });
+    }
+
+    /** Stops showing the banner; clearing when none shows changes nothing. */
+    @Transactional
+    public void clearBanner(Admin admin, UUID key) {
+        once(admin, key, "BANNER_CLEARED", "", () -> new Done(null, null, "banner",
+            jdbc.update(END_BANNERS) == 0 ? "Cleared the banner; none was showing." : "Cleared the banner."));
     }
 
     @Transactional

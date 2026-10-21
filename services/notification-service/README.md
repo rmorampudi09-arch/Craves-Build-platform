@@ -61,6 +61,15 @@ curl -X POST http://localhost:8080/internal/v1/notifications \
   }'
 ```
 
+## Rider realtime API (integration-service only)
+
+Both routes take `X-Craves-Internal-Key` like the route above (403 when missing or wrong).
+
+- `POST /internal/v1/push/realtime` sends one high-priority FCM data message to a rider phone while the caller waits, with a TTL equal to the seconds left on the offer, and never after it. Off unless `CRAVES_REALTIME_PUSH_ENABLED=true` (503 `PUSH_DISABLED`); it uses the same `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`.
+- `POST /internal/v1/ops-alerts` emails the ops leads in `CRAVES_OPS_ALERT_EMAILS` (comma-separated) through the ACS settings above and logs `CRAVES_ALERT alert=OPS_ALERT`. Empty list or no ACS: 503 `OPS_ALERT_NOT_CONFIGURED`.
+
+Device tokens carry an `app` column (`customer` or `rider`); the queued push worker sends only to `customer` tokens.
+
 ## In-app inbox API
 
 For the current foundation, APIM or an internal caller must pass the resolved Craves identity ID as `X-Craves-Identity-Id`. Before public production exposure, this must be moved behind APIM JWT validation and identity-header injection.

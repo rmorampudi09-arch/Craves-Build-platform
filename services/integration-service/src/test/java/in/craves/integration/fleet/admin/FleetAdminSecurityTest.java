@@ -2,8 +2,12 @@ package in.craves.integration.fleet.admin;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -83,6 +87,28 @@ class FleetAdminSecurityTest {
         mvc.perform(as(get("/api/v1/admin/fleet/exports/rider-joins-exits").param("date", "2026-10-20"), "SUPPORT_ADMIN"))
             .andExpect(status().isForbidden());
         verifyNoInteractions(service, joinsExits);
+    }
+
+    @Test
+    void theBannerIsReadByOpsSupportAndAuditAndChangedLikeTheVehicleByOpsOnly() throws Exception {
+        String banner = "/api/v1/admin/fleet/banner";
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+            mvc.perform(as(get(banner), role)).andExpect(status().isNoContent());
+        }
+        mvc.perform(as(get(banner), "COMPLIANCE_ADMIN")).andExpect(status().isForbidden());
+        for (String role : List.of("SUPPORT_ADMIN", "AUDIT_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN")) {
+            mvc.perform(as(put(banner), role).header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tone\":\"info\",\"text\":\"Kitchens open late\",\"until\":\"2030-01-01T00:00:00Z\"}"))
+                .andExpect(status().isForbidden());
+            mvc.perform(as(delete(banner), role).header("Idempotency-Key", UUID.randomUUID().toString())).andExpect(status().isForbidden());
+            mvc.perform(as(put(RIDERS + "/" + rider + "/vehicle"), role).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"Honda Activa\",\"regNumber\":\"TS09EA1234\"}"))
+                .andExpect(status().isForbidden());
+        }
+        mvc.perform(as(delete(banner), "OPERATIONS_ADMIN")).andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+        verify(service, times(4)).banner();
+        verifyNoMoreInteractions(service);
     }
 
     @Test

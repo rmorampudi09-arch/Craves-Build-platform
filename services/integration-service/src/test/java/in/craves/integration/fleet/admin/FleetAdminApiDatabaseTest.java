@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -182,10 +183,13 @@ class FleetAdminApiDatabaseTest {
     @Test
     void documentReviewRecordsTheReviewerAndARejectionReason() throws Exception {
         UUID rider = rider("Ravi Kumar");
-        UUID licence = document(rider);
-        UUID pan = document(rider);
+        UUID licence = document(rider, "DRIVING_LICENCE");
+        UUID pan = document(rider, "DRIVING_LICENCE");
         send(post(FLEET + "/riders/" + rider + "/documents/" + licence + "/approve"), "ops", UUID.randomUUID(), null)
-            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("VERIFIED")).andExpect(jsonPath("$.reason").isEmpty());
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("EXPIRY_REQUIRED"));
+        send(post(FLEET + "/riders/" + rider + "/documents/" + licence + "/approve"), "ops", UUID.randomUUID(), "{\"expiresOn\":\"2034-05-31\"}")
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("VERIFIED")).andExpect(jsonPath("$.reason").isEmpty())
+            .andExpect(jsonPath("$.expiresOn").value("2034-05-31"));
         send(post(FLEET + "/riders/" + rider + "/documents/" + licence + "/reject"), "ops", UUID.randomUUID(), "{\"reason\":\"Blurry photo\"}")
             .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DOCUMENT_NOT_PENDING"));
         send(post(FLEET + "/riders/" + rider + "/documents/" + pan + "/reject"), "ops", UUID.randomUUID(), "{\"reason\":\"Blurry photo\"}")
@@ -196,6 +200,63 @@ class FleetAdminApiDatabaseTest {
         assertThat(detail.get("rider").get("kycName").asText()).isEqualTo("Ravi Kumar");
         assertThat(detail.get("documents")).hasSize(2);
         assertThat(detail.get("payoutAccount").isNull()).isTrue();
+    }
+
+    @Test
+    void onlyTheFourRidingDocumentsNeedAnExpiryDate() throws Exception {
+        UUID rider = rider("Ravi Kumar");
+        UUID pan = document(rider, "PAN");
+        UUID puc = document(rider, "PUC");
+        send(post(FLEET + "/riders/" + rider + "/documents/" + pan + "/approve"), "ops", UUID.randomUUID(), null)
+            .andExpect(status().isOk()).andExpect(jsonPath("$.expiresOn").isEmpty());
+        send(post(FLEET + "/riders/" + rider + "/documents/" + puc + "/approve"), "ops", UUID.randomUUID(), "{}")
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("EXPIRY_REQUIRED"));
+        send(post(FLEET + "/riders/" + rider + "/documents/" + UUID.randomUUID() + "/approve"), "ops", UUID.randomUUID(), null)
+            .andExpect(status().isNotFound());
+        assertThat(db.queryForList("SELECT summary FROM fleet_schema.admin_audit WHERE rider_id = ? AND action = 'DOCUMENT_VERIFIED'", String.class,
+            rider)).containsExactly("Verified the PAN.");
+    }
+
+    @Test
+    void theVehicleIsSetMaskedAndAudited() throws Exception {
+        UUID rider = rider("Ravi Kumar");
+        send(put(FLEET + "/riders/" + rider + "/vehicle"), "ops", UUID.randomUUID(), "{\"label\":\"Honda Activa 6G\",\"regNumber\":\"ts 09 ea 1234\"}")
+            .andExpect(status().isOk()).andExpect(jsonPath("$.label").value("Honda Activa 6G"))
+            .andExpect(jsonPath("$.regNumberMasked").value("TS09xx1234"));
+        assertThat(db.queryForMap("SELECT vehicle_label, vehicle_reg_number FROM fleet_schema.rider WHERE id = ?", rider))
+            .containsEntry("vehicle_label", "Honda Activa 6G").containsEntry("vehicle_reg_number", "TS09EA1234");
+        assertThat(db.queryForObject("SELECT summary FROM fleet_schema.admin_audit WHERE rider_id = ? AND action = 'VEHICLE_SET'", String.class,
+            rider)).isEqualTo("Set the vehicle to Honda Activa 6G (TS09xx1234).");
+        send(put(FLEET + "/riders/" + rider + "/vehicle"), "ops", UUID.randomUUID(), "{\"label\":\"Honda Activa 6G\",\"regNumber\":\"TS9\"}")
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        send(put(FLEET + "/riders/" + UUID.randomUUID() + "/vehicle"), "ops", UUID.randomUUID(), "{\"label\":\"Bike\",\"regNumber\":\"22BH1234AA\"}")
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RIDER_NOT_FOUND"));
+    }
+
+    @Test
+    void theZoneBannerShowsUntilItsTimeAndIsReplacedOrCleared() throws Exception {
+        send(delete(FLEET + "/banner"), "ops", UUID.randomUUID(), null).andExpect(status().isNoContent());
+        mvc.perform(get(FLEET + "/banner").header("Authorization", "Bearer ops")).andExpect(status().isNoContent());
+        Instant until = Instant.now().plus(2, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        String rain = "{\"tone\":\"warning\",\"text\":\" Heavy rain in Madhapur. Ride slowly. \",\"until\":\"" + until + "\"}";
+        send(put(FLEET + "/banner"), "ops", UUID.randomUUID(), rain).andExpect(status().isOk())
+            .andExpect(jsonPath("$.text").value("Heavy rain in Madhapur. Ride slowly.")).andExpect(jsonPath("$.until").value(until.toString()));
+        send(put(FLEET + "/banner"), "ops", UUID.randomUUID(), "{\"tone\":\"info\",\"text\":\"Kitchens open late tonight.\",\"until\":\""
+            + until + "\"}").andExpect(status().isOk());
+        when(verifier.verify("support")).thenReturn(new CravesPrincipal(UUID.randomUUID(), "+919000000003", Set.of("SUPPORT_ADMIN")));
+        mvc.perform(get(FLEET + "/banner").header("Authorization", "Bearer support")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.tone").value("info")).andExpect(jsonPath("$.text").value("Kitchens open late tonight."));
+        assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.ops_banner WHERE starts_at <= now() AND ends_at > now()", Integer.class))
+            .as("the second replaced the first").isEqualTo(1);
+
+        send(put(FLEET + "/banner"), "ops", UUID.randomUUID(), rain.replace("Heavy rain", "x".repeat(160)))
+            .andExpect(status().isBadRequest());
+        send(put(FLEET + "/banner"), "ops", UUID.randomUUID(), rain.replace(until.toString(), Instant.now().minusSeconds(60).toString()))
+            .andExpect(status().isBadRequest());
+        send(delete(FLEET + "/banner"), "ops", UUID.randomUUID(), null).andExpect(status().isNoContent());
+        mvc.perform(get(FLEET + "/banner").header("Authorization", "Bearer ops")).andExpect(status().isNoContent());
+        assertThat(db.queryForList("SELECT action FROM fleet_schema.admin_audit WHERE actor_id = ? AND action LIKE 'BANNER%' ORDER BY at",
+            String.class, ops)).containsExactly("BANNER_CLEARED", "BANNER_SET", "BANNER_SET", "BANNER_CLEARED");
     }
 
     @Test
@@ -254,10 +315,10 @@ class FleetAdminApiDatabaseTest {
         return rider;
     }
 
-    private UUID document(UUID rider) {
+    private UUID document(UUID rider, String type) {
         UUID id = UUID.randomUUID();
         db.update("INSERT INTO fleet_schema.rider_document (id, rider_id, type, blob_name, content_type, size_bytes) "
-            + "VALUES (?, ?, 'DRIVING_LICENCE', 'riders/x/dl.jpg', 'image/jpeg', 100)", id, rider);
+            + "VALUES (?, ?, ?, 'riders/x/dl.jpg', 'image/jpeg', 100)", id, rider, type);
         return id;
     }
 

@@ -65,4 +65,41 @@ public final class FleetRiderModels {
 
     public record AcceptTerms(String version) {
     }
+
+    /** installationId is Android's ANDROID_ID for the rider app. */
+    public record DeviceRegistration(String installationId, String fcmToken, String appVersion, String model) {
+        @Override
+        public String toString() {
+            return "DeviceRegistration[redacted, appVersion=" + appVersion + ", model=" + model + "]";
+        }
+    }
+
+    /** One phone fix; mock is Android's mock-location flag, stored with the fix and never used for pay. */
+    public record RiderFix(Double lat, Double lng, Double accuracyM, Instant at, Boolean mock) {
+    }
+
+    public record LocationBatch(List<RiderFix> fixes) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record LocationBatchResponse(List<Offer> offers, ActiveTrip activeTrip, Boolean stop, String stopReason) {
+    }
+
+    public record Offer(String offerId, String tripId, Instant expiresAt, int expiresInSec, long payPaise, int pickupDistanceM,
+                        int dropDistanceM, String kitchenArea, String customerLocality, int estMinutes, List<PayLine> payLines) {
+    }
+
+    public record PayLine(String label, long amountPaise) {
+    }
+
+    public record ActiveTrip(String tripId, String step, int version) {
+    }
+
+    /** The credential is returned once and never stored in clear. */
+    public record ShiftStart(String shiftCredential, Instant expiresAt) {
+        @Override
+        public String toString() {
+            return "ShiftStart[redacted, expiresAt=" + expiresAt + "]";
+        }
+    }
 }

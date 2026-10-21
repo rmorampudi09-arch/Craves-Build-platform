@@ -1,0 +1,269 @@
+package in.craves.integration.fleet.rider;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.FleetConfiguration;
+import in.craves.integration.fleet.rider.FleetRiderModels.ActiveTrip;
+import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
+import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatchResponse;
+import in.craves.integration.fleet.rider.FleetRiderModels.Offer;
+import in.craves.integration.fleet.rider.FleetRiderModels.PayLine;
+import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * POST /locations: the native service's fix upload, heartbeat and second offer channel. Each call runs at most five
+ * statements (docs/riders/BACKEND.md, "Location ingest"): one read of the shift, rider, position, trip and current
+ * slot that locks the shift row; then, only for fixes newer than the stored one, the position upsert, one trip_track
+ * insert while on a trip and one in-zone update; then the offers read. A stop runs the read and one shift update.
+ */
+@Service
+@ConditionalOnProperty(name = {"craves.fleet.enabled", "craves.fleet.rider-api-enabled", "craves.fleet.location-ingest-enabled"},
+    havingValue = "true")
+public class FleetLocationService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FleetLocationService.class);
+    static final int MAX_FIXES = 5;
+    /** The most one gap between fixes adds to in-zone time; the phone may sleep longer than that. */
+    static final Duration MAX_GAP = Duration.ofSeconds(60);
+    /** Fixes stamped further ahead of the database clock are dropped. */
+    static final Duration CLOCK_AHEAD = Duration.ofMinutes(5);
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+    private static final TypeReference<List<PayLine>> PAY_LINES = new TypeReference<>() { };
+    private static final Map<String, String> STEPS = Map.of("ASSIGNED", "TO_KITCHEN", "AT_PICKUP", "AT_KITCHEN", "PICKED_UP", "PICKED_UP",
+        "AT_DROP", "AT_DROP", "DELIVERED", "DELIVERED", "FAILED", "FAILED", "CANCELLED", "CANCELLED");
+    private static final String CONTEXT = """
+        SELECT s.id AS shift_id, s.started_at, s.ended_at, s.credential_revoked_at, s.credential_expires_at <= now() AS expired,
+               r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
+               p.trip_id AS last_trip_id, a.id AS trip_id, a.state AS trip_state, a.version AS trip_version,
+               e.rider_id AS last_trip_rider_id, e.state AS last_trip_state, e.version AS last_trip_version,
+               z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now
+        FROM fleet_schema.rider_shift s
+        JOIN fleet_schema.rider r ON r.id = s.rider_id
+        LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = s.rider_id
+        LEFT JOIN fleet_schema.trip a ON a.rider_id = s.rider_id AND a.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
+        LEFT JOIN fleet_schema.trip e ON e.id = p.trip_id
+        LEFT JOIN LATERAL (SELECT starts_at, ends_at FROM fleet_schema.rider_slot
+          WHERE rider_id = s.rider_id AND starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1) z ON true
+        WHERE %s
+        FOR UPDATE OF s""";
+    private static final String UPSERT = """
+        INSERT INTO fleet_schema.rider_position_latest AS p (rider_id, shift_id, trip_id, lat, lng, accuracy_m, mock, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (rider_id) DO UPDATE SET shift_id = excluded.shift_id, trip_id = excluded.trip_id, lat = excluded.lat,
+          lng = excluded.lng, accuracy_m = excluded.accuracy_m, mock = excluded.mock, recorded_at = excluded.recorded_at, received_at = now()
+        WHERE p.recorded_at < excluded.recorded_at OR p.shift_id IS DISTINCT FROM excluded.shift_id""";
+    private static final String OFFERS = """
+        SELECT o.id, o.trip_id, o.expires_at, GREATEST(0, floor(extract(epoch FROM o.expires_at - now())))::int AS expires_in_sec,
+               o.pay_paise, o.pay_lines::text AS pay_lines, o.pickup_distance_m, o.drop_distance_m, t.kitchen_area, t.drop_area
+        FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
+        WHERE o.rider_id = ? AND o.state = 'ACTIVE' AND o.expires_at > now()
+        ORDER BY o.expires_at""";
+
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper json;
+
+    public FleetLocationService(JdbcTemplate jdbc, ObjectMapper json) {
+        this.jdbc = jdbc;
+        this.json = json;
+    }
+
+    /**
+     * Records the fixes of the rider's shift and answers with their offers and trip, or a stop. With a credential the
+     * shift is the credential's (unknown: 401); with a JWT it is the rider's open shift (none: stop).
+     */
+    @Transactional
+    public LocationBatchResponse ingest(UUID identityId, String credential, LocationBatch batch) {
+        if (batch == null || batch.fixes() == null || batch.fixes().size() > MAX_FIXES) {
+            throw FleetApiException.invalid("Send at most 5 fixes.");
+        }
+        boolean byCredential = credential != null;
+        // The cast keeps the credential_hash unique index usable whatever type the driver binds.
+        String where = byCredential ? "s.credential_hash = CAST(? AS CHAR(64))" : "r.identity_id = ? AND s.ended_at IS NULL";
+        Context shift = jdbc.query(CONTEXT.formatted(where), (row, n) -> context(row),
+            byCredential ? FleetShiftService.hash(credential) : identityId).stream().findFirst().orElse(null);
+        if (shift == null) {
+            if (byCredential) {
+                throw FleetShiftService.credentialInvalid();
+            }
+            return stop("You're offline. Go online to get orders.");
+        }
+        String stopReason = stopReason(shift);
+        if (stopReason != null) {
+            jdbc.update("UPDATE fleet_schema.rider_shift SET " + FleetShiftService.END_SHIFT + " WHERE id = ? AND ended_at IS NULL", shift.shiftId());
+            return stop(stopReason);
+        }
+        boolean sameShift = shift.shiftId().equals(shift.lastShiftId());
+        Instant after = sameShift ? shift.lastAt() : null;
+        // Resent fixes (a lost response) are at or before the stored one, so nothing is counted or tracked twice.
+        List<RiderFix> fresh = batch.fixes().stream().filter(fix -> usable(fix, shift.startedAt(), shift.now()))
+            .map(fix -> new RiderFix(fix.lat(), fix.lng(), fix.accuracyM(), fix.at().truncatedTo(ChronoUnit.MICROS), Boolean.TRUE.equals(fix.mock())))
+            .filter(fix -> after == null || fix.at().isAfter(after)).sorted(Comparator.comparing(RiderFix::at)).toList();
+        if (!fresh.isEmpty()) {
+            RiderFix newest = fresh.get(fresh.size() - 1);
+            jdbc.update(UPSERT, shift.riderId(), shift.shiftId(), shift.tripId(), newest.lat(), newest.lng(), newest.accuracyM(), newest.mock(),
+                Timestamp.from(newest.at()));
+            if (shift.tripId() != null) {
+                List<Object> args = new ArrayList<>();
+                fresh.forEach(fix -> args.addAll(List.of(shift.tripId(), shift.riderId(), Timestamp.from(fix.at()), fix.lat(), fix.lng(),
+                    fix.accuracyM(), fix.mock())));
+                jdbc.update("INSERT INTO fleet_schema.trip_track (trip_id, rider_id, recorded_at, lat, lng, accuracy_m, mock) VALUES "
+                    + String.join(", ", Collections.nCopies(fresh.size(), "(?, ?, ?, ?, ?, ?, ?)")), args.toArray());
+            }
+            long seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
+            if (seconds > 0) {
+                jdbc.update("UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ? WHERE id = ?", seconds, shift.shiftId());
+            }
+        }
+        List<Offer> offers = jdbc.query(OFFERS, (row, n) -> offer(row), shift.riderId());
+        return new LocationBatchResponse(offers, activeTrip(shift), null, null);
+    }
+
+    /**
+     * Creates the trip_track partitions for the next 7 IST days, a minute after start-up and every 6 hours. Never today:
+     * fixes may already sit in trip_track_default for it, and the partition would then be refused.
+     */
+    @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT6H", scheduler = FleetConfiguration.FLEET_SCHEDULER)
+    public void createTrackDays() {
+        LocalDate today = LocalDate.now(IST);
+        for (int i = 1; i <= 7; i++) {
+            LocalDate day = today.plusDays(i);
+            try {
+                jdbc.execute("CREATE TABLE IF NOT EXISTS fleet_schema.trip_track_" + day.format(DateTimeFormatter.BASIC_ISO_DATE)
+                    + " PARTITION OF fleet_schema.trip_track FOR VALUES FROM ('" + day + " 00:00+05:30') TO ('" + day.plusDays(1) + " 00:00+05:30')");
+            } catch (DataAccessException exception) {
+                LOGGER.error("CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED day={} reason={}", day, exception.getMostSpecificCause().getMessage());
+            }
+        }
+    }
+
+    /** Why the phone must stop, or null. Each stop also closes the shift. */
+    static String stopReason(Context shift) {
+        if (!"ACTIVE".equals(shift.status())) {
+            return "Your account can't take orders right now. Open the app to see why.";
+        }
+        if (shift.endedAt() != null) {
+            return "You're offline. Go online again to get orders.";
+        }
+        if (shift.revokedAt() != null) {
+            return "Your shift was stopped on this phone. Go online again from your approved phone.";
+        }
+        return shift.expired() ? "Your shift ended after 12 hours. Go online again to keep riding." : null;
+    }
+
+    /** A fix with sane values, taken during the shift and not stamped in the future. */
+    static boolean usable(RiderFix fix, Instant shiftStart, Instant now) {
+        return fix != null && fix.lat() != null && fix.lng() != null && fix.accuracyM() != null && fix.at() != null
+            && fix.lat() >= -90 && fix.lat() <= 90 && fix.lng() >= -180 && fix.lng() <= 180
+            && fix.accuracyM() >= 0 && fix.accuracyM() < 1_000_000
+            && !fix.at().isBefore(shiftStart) && !fix.at().isAfter(now.plus(CLOCK_AHEAD));
+    }
+
+    /**
+     * In-zone seconds for the slot guarantee. Zone model: P1 stores a slot's zone as a name and a time window, with no
+     * geometry, so a gap between two consecutive non-mock fixes counts while one of the rider's slots runs, at most
+     * MAX_GAP per gap. shortcut: the position is not checked against the zone; add zone geometry (centre and radius)
+     * when ops draws the pilot area and test each fix against it.
+     *
+     * @param previousAt the stored fix of this shift that the first fresh fix follows, or null
+     * @param fixes      fresh fixes, oldest first
+     */
+    static long inZoneSeconds(Instant previousAt, boolean previousMock, List<RiderFix> fixes, Instant slotStart, Instant slotEnd) {
+        if (slotStart == null) {
+            return 0;
+        }
+        long millis = 0;
+        Instant previous = previousAt;
+        boolean previousCounts = previousAt != null && !previousMock;
+        for (RiderFix fix : fixes) {
+            boolean counts = !Boolean.TRUE.equals(fix.mock());
+            if (previousCounts && counts) {
+                Instant from = Collections.max(List.of(previous, fix.at().minus(MAX_GAP), slotStart));
+                Instant to = fix.at().isBefore(slotEnd) ? fix.at() : slotEnd;
+                millis += Math.max(0, Duration.between(from, to).toMillis());
+            }
+            previous = fix.at();
+            previousCounts = counts;
+        }
+        return Math.round(millis / 1000.0);
+    }
+
+    /** Same estimate as the app's mock: 12 minutes at the kitchen and the door, plus 300 m a minute (18 km/h). */
+    static int estMinutes(int pickupDistanceM, int dropDistanceM) {
+        return (int) Math.round(12 + (pickupDistanceM + dropDistanceM) / 300.0);
+    }
+
+    /**
+     * The trip in progress; else the trip the rider was on at this shift's last fix, which has since ended or gone to
+     * another rider (CANCELLED for this one), so the app leaves trip mode.
+     */
+    static ActiveTrip activeTrip(Context shift) {
+        if (shift.tripId() != null) {
+            return new ActiveTrip(shift.tripId().toString(), STEPS.get(shift.tripState()), shift.tripVersion());
+        }
+        if (shift.lastTripId() == null || shift.lastTripVersion() == null || !shift.shiftId().equals(shift.lastShiftId())) {
+            return null;
+        }
+        String step = shift.riderId().equals(shift.lastTripRiderId()) ? STEPS.getOrDefault(shift.lastTripState(), "CANCELLED") : "CANCELLED";
+        return new ActiveTrip(shift.lastTripId().toString(), step, shift.lastTripVersion());
+    }
+
+    private Offer offer(ResultSet row) throws SQLException {
+        int pickup = row.getInt("pickup_distance_m");
+        int drop = row.getInt("drop_distance_m");
+        List<PayLine> lines;
+        try {
+            lines = json.readValue(row.getString("pay_lines"), PAY_LINES);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("trip_offer.pay_lines must be [{label, amountPaise}]", exception);
+        }
+        return new Offer(row.getString("id"), row.getString("trip_id"), row.getTimestamp("expires_at").toInstant(), row.getInt("expires_in_sec"),
+            row.getLong("pay_paise"), pickup, drop, row.getString("kitchen_area"), row.getString("drop_area"), estMinutes(pickup, drop), lines);
+    }
+
+    private static LocationBatchResponse stop(String reason) {
+        return new LocationBatchResponse(List.of(), null, true, reason);
+    }
+
+    private static Context context(ResultSet row) throws SQLException {
+        return new Context(row.getObject("shift_id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
+            instant(row, "credential_revoked_at"), row.getBoolean("expired"), row.getObject("rider_id", UUID.class), row.getString("status"),
+            row.getObject("last_shift_id", UUID.class), instant(row, "last_at"), (Boolean) row.getObject("last_mock"),
+            row.getObject("last_trip_id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("trip_state"),
+            (Integer) row.getObject("trip_version"), row.getObject("last_trip_rider_id", UUID.class), row.getString("last_trip_state"),
+            (Integer) row.getObject("last_trip_version"), instant(row, "slot_starts_at"), instant(row, "slot_ends_at"), instant(row, "db_now"));
+    }
+
+    private static Instant instant(ResultSet row, String column) throws SQLException {
+        Timestamp value = row.getTimestamp(column);
+        return value == null ? null : value.toInstant();
+    }
+
+    record Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
+                   UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
+                   UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, Instant slotStart, Instant slotEnd, Instant now) {
+    }
+}

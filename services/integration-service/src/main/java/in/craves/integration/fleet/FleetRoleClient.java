@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -26,6 +27,7 @@ public class FleetRoleClient {
     private final RestClient client;
     private final String secret;
 
+    @Autowired
     public FleetRoleClient(FleetProperties properties, RestClient.Builder builder) {
         this.secret = properties.internalServiceKey();
         if (!StringUtils.hasText(properties.authBaseUrl()) || !StringUtils.hasText(secret)) {

@@ -1,0 +1,183 @@
+name: Craves Rider APK
+
+# Builds the rider app (com.cravesapp.rider) as an installable APK for phone testing.
+# Demo builds use mock data and never call Firebase or the Craves API.
+# Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
+# RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key). Optional variable: CRAVES_RIDER_API_MODE (mock|live).
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/rider-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: rider-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-rider-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: apps/mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            apps/mobile/android/**/*.gradle*
+            apps/mobile/android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Install packages
+        run: npm ci --no-audit --no-fund
+
+      - name: Rider checks (types and tests)
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npx jest src/features/rider src/app/rider --ci
+
+      - name: Keep rider permissions out of the customer app
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE' android/app/src/main/AndroidManifest.xml; then
+            echo 'ERROR: rider-only permissions belong in android/app/src/rider/AndroidManifest.xml' >&2
+            exit 1
+          fi
+
+      - name: Firebase config for the rider app
+        shell: bash
+        env:
+          RIDER_GOOGLE_SERVICES_JSON: ${{ secrets.RIDER_GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          target=android/app/src/rider/google-services.json
+          if [[ -n "${RIDER_GOOGLE_SERVICES_JSON:-}" ]]; then
+            printf '%s' "$RIDER_GOOGLE_SERVICES_JSON" > "$target"
+            echo 'Using the real rider Firebase config.'
+          else
+            # Placeholder so the Gradle plugin can run; demo sign-in never calls Firebase.
+            cat > "$target" <<'JSON'
+          {
+            "project_info": {"project_number": "000000000000", "project_id": "craves-rider-demo", "storage_bucket": "craves-rider-demo.appspot.com"},
+            "client": [{
+              "client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": {"package_name": "com.cravesapp.rider"}},
+              "oauth_client": [],
+              "api_key": [{"current_key": "demo-placeholder-not-a-key"}],
+              "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+            echo 'No RIDER_GOOGLE_SERVICES_JSON secret: building the demo with a placeholder Firebase config.'
+          fi
+
+      - name: App settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mode="${{ vars.CRAVES_RIDER_API_MODE || 'mock' }}"
+          printf 'CRAVES_ENVIRONMENT=production\nCRAVES_API_BASE_URL=https://api.craves.in\nCRAVES_RIDER_API_MODE=%s\n' "$mode" > .env
+          echo "CRAVES_RIDER_API_MODE=$mode"
+
+      - name: Restore the pilot signing key
+        id: key-cache
+        uses: actions/cache@v4
+        with:
+          path: apps/mobile/android/app/rider-pilot.keystore
+          key: rider-pilot-keystore-v1
+
+      - name: Prepare the signing key
+        shell: bash
+        env:
+          RIDER_KEYSTORE_BASE64: ${{ secrets.RIDER_KEYSTORE_BASE64 }}
+          RIDER_KEYSTORE_PASSWORD: ${{ secrets.RIDER_KEYSTORE_PASSWORD }}
+          RIDER_KEY_ALIAS: ${{ secrets.RIDER_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          keystore="$PWD/android/app/rider-pilot.keystore"
+          password="${RIDER_KEYSTORE_PASSWORD:-craves-rider-pilot}"
+          if [[ -n "${RIDER_KEYSTORE_BASE64:-}" ]]; then
+            printf '%s' "$RIDER_KEYSTORE_BASE64" | base64 -d > "$keystore"
+          elif [[ ! -f "$keystore" ]]; then
+            # A cached throwaway key for pilot builds; set the secrets for a permanent one before the Play Store.
+            keytool -genkeypair -v -keystore "$keystore" -storetype PKCS12 -alias rider -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass "$password" -keypass "$password" -dname "CN=Craves Rider Pilot, O=Craves, C=IN"
+          fi
+          {
+            echo "CRAVES_ANDROID_KEYSTORE_PATH=$keystore"
+            echo "CRAVES_ANDROID_KEYSTORE_PASSWORD=$password"
+            echo "CRAVES_ANDROID_KEY_ALIAS=${RIDER_KEY_ALIAS:-rider}"
+            echo "CRAVES_ANDROID_KEY_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the rider APK (ARM phones only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew assembleRiderRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon --stacktrace 2>&1 | tee ../rider-build.log
+
+      - name: Name the APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="craves-rider-$(git rev-parse --short HEAD).apk"
+          cp android/app/build/outputs/apk/rider/release/app-rider-release.apk "$name"
+          ls -lh "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: craves-rider-apk
+          path: apps/mobile/${{ steps.apk.outputs.name }}
+          retention-days: 14
+
+      - name: Comment the result on the PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          OUTCOME: ${{ job.status }}
+          APK: ${{ steps.apk.outputs.name }}
+        with:
+          script: |
+            const fs = require('fs');
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let body;
+            if (process.env.OUTCOME === 'success') {
+              body = `Rider APK built: **${process.env.APK}**. Download it from the "craves-rider-apk" artifact on [this run](${run}) (kept 14 days).`;
+            } else {
+              let tail = '(no Gradle log: an earlier step failed; see the run)';
+              try {
+                tail = fs.readFileSync('apps/mobile/rider-build.log', 'utf8').split('\n').slice(-80).join('\n');
+              } catch {}
+              body = `Rider APK build **${process.env.OUTCOME}**: [run](${run}).\n\n<details><summary>Last 80 lines of the Gradle log</summary>\n\n\`\`\`\n${tail}\n\`\`\`\n</details>`;
+            }
+            await github.rest.issues.createComment({...context.repo, issue_number: context.payload.pull_request.number, body});

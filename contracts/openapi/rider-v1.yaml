@@ -1,0 +1,274 @@
+openapi: 3.0.3
+info:
+  title: Craves Rider API (draft)
+  version: 0.1.0
+  description: |
+    The API the rider app (apps/mobile, rider flavor) calls. Draft: the app runs against a mock
+    that follows these shapes (src/features/rider/api/contract.ts) until the fleet backend exists.
+    Money is integer paise. Every POST that changes an offer or a trip carries an Idempotency-Key
+    header (rider-{action}-{offerId or tripId}-{riderId}[-{attempt}]); the server returns the first
+    result for a repeated key. Declining or letting an offer expire never affects future offers.
+servers:
+  - url: https://api.craves.in/api/v1/rider
+security:
+  - bearer: []
+paths:
+  /me:
+    get: {summary: The signed-in rider, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}}}
+  /profile:
+    get: {summary: Vehicle, documents, payout account and insurance, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}}}
+  /terms:
+    get: {summary: Current terms and rate card, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Terms'}}}}}}
+  /terms/accept:
+    post:
+      summary: Accept the version shown; 409 if the terms changed meanwhile
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [version], properties: {version: {type: string}}}}}}
+      responses: {'204': {description: Accepted}, '409': {$ref: '#/components/responses/Error'}}
+  /home:
+    get: {summary: Online state and today's totals, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/HomeSummary'}}}}}}
+  /shift/start:
+    post:
+      summary: Go online. The selfie is reviewed by ops (pilot) or face-matched (later, after 14 days' notice).
+      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [selfie], properties: {selfie: {type: string, format: binary}}}}}}
+      responses: {'204': {description: Online}, '403': {$ref: '#/components/responses/Error'}}
+  /shift/end:
+    post: {summary: Go offline, responses: {'204': {description: Offline}}}
+  /locations:
+    post:
+      summary: Batched fixes; the response carries open offers, trip changes and a stop signal
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [fixes], properties: {fixes: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/RiderFix'}}}}}}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/LocationBatchResponse'}}}}}
+  /offers/{offerId}/accept:
+    post:
+      summary: Accept; 409 when another rider got it, 410 when it expired
+      parameters: [{$ref: '#/components/parameters/OfferId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      responses: {'200': {description: The trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '409': {$ref: '#/components/responses/Error'}, '410': {$ref: '#/components/responses/Error'}}
+  /offers/{offerId}/decline:
+    post:
+      summary: Decline. Free, no reason needed.
+      parameters: [{$ref: '#/components/parameters/OfferId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      responses: {'204': {description: Declined}}
+  /trips/active:
+    get:
+      summary: The trip in progress, or 204
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '204': {description: No trip}}
+  /trips/{tripId}/{action}:
+    post:
+      summary: |
+        One trip step. arrived-pickup, food-not-ready, picked-up and arrived-drop take no body.
+        delivered takes the customer's OTP (JSON) or, only after two logged calls and the wait timer,
+        a photo (multipart; pay held until ops checks it). failed takes a reason. 4xx means the server's
+        state wins: the app drops its queued steps for this trip and shows the message.
+      parameters:
+        - {$ref: '#/components/parameters/TripId'}
+        - {name: action, in: path, required: true, schema: {type: string, enum: [arrived-pickup, food-not-ready, picked-up, arrived-drop, delivered, failed]}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - {type: object, required: [method, otp], properties: {method: {type: string, enum: [OTP]}, otp: {type: string, pattern: '^[0-9]{4}$'}, fix: {$ref: '#/components/schemas/RiderFix'}}}
+                - {type: object, required: [reason], properties: {reason: {type: string}, note: {type: string}}}
+          multipart/form-data:
+            schema: {type: object, required: [method, callsMade], properties: {method: {type: string, enum: [PHOTO]}, callsMade: {type: integer, minimum: 2}, photo: {type: string, format: binary}, fix: {type: string, description: RiderFix as JSON}}}
+      responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}}
+  /earnings:
+    get:
+      summary: Per-trip pay for today or this week (Monday to Sunday), paged
+      parameters:
+        - {name: range, in: query, required: true, schema: {type: string, enum: [today, week]}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/EarningsPage'}}}}}
+  /earnings/trips/{tripId}:
+    get:
+      parameters: [{$ref: '#/components/parameters/TripId'}]
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TripEarning'}}}}}
+  /payouts:
+    get: {summary: Weekly payouts with UTRs, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PayoutsPage'}}}}}}
+  /withdrawals:
+    post:
+      summary: One free withdrawal a day, paid by 13:00 the next day
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [amountPaise], properties: {amountPaise: {type: integer, minimum: 1}}}}}}
+      responses: {'204': {description: Requested}, '409': {$ref: '#/components/responses/Error'}}
+  /support/issues:
+    post:
+      summary: Report a problem with a trip or payout; support acknowledges within 24 hours
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SupportIssue'}}}}
+      responses: {'204': {description: Sent}}
+  /sos:
+    post:
+      summary: Emergency; alerts the ops lead with the rider's last location
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {tripId: {type: string}, fix: {$ref: '#/components/schemas/RiderFix'}}}}}}
+      responses: {'204': {description: Ops alerted}}
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    OfferId: {name: offerId, in: path, required: true, schema: {type: string}}
+    TripId: {name: tripId, in: path, required: true, schema: {type: string}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+  responses:
+    Error:
+      description: Refused, with a message safe to show the rider
+      content: {application/json: {schema: {type: object, required: [code, message], properties: {code: {type: string}, message: {type: string}}}}}
+  schemas:
+    Paise: {type: integer, description: Indian rupees x 100}
+    LabelValue: {type: object, required: [label, value], properties: {label: {type: string}, value: {type: string}}}
+    PayLine: {type: object, required: [label, amountPaise], properties: {label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
+    RiderNotice:
+      type: object
+      description: A suspension, a 7-day notice or a hold (Telangana Act 21 of 2026, s.14)
+      required: [title, reason, appealPhone]
+      properties: {title: {type: string}, reason: {type: string}, deadline: {type: string, format: date-time}, appealPhone: {type: string}}
+    RiderMe:
+      type: object
+      required: [riderId, name, phoneMasked, status, termsVersion, language, minAppVersion, supportPhone, features]
+      properties:
+        riderId: {type: string}
+        name: {type: string}
+        phoneMasked: {type: string}
+        photoUrl: {type: string}
+        status: {type: string, enum: [NOT_RIDER, PENDING, ACTIVE, SUSPENDED, DEACTIVATED]}
+        statusReason: {type: string}
+        statusEffectiveAt: {type: string, format: date-time}
+        notice: {$ref: '#/components/schemas/RiderNotice'}
+        termsVersion: {type: string}
+        acceptedTermsVersion: {type: string}
+        language: {type: string, enum: [en, te, hi]}
+        minAppVersion: {type: string, description: Blocks going online between shifts only, never mid-shift}
+        supportPhone: {type: string}
+        features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}}}
+    RiderProfile:
+      type: object
+      required: [vehicle, documents]
+      properties:
+        vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}}}
+        documents:
+          type: array
+          items: {type: object, required: [label, status], properties: {label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
+        payoutAccountMasked: {type: string}
+        insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
+    Terms:
+      type: object
+      required: [version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines]
+      properties:
+        version: {type: string}
+        effectiveFrom: {type: string, format: date-time}
+        summaryOfChanges: {type: array, items: {type: string}}
+        rateCardLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
+        grievanceLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
+        fullTextUrl: {type: string}
+    HomeSummary:
+      type: object
+      required: [online, todayEarningsPaise, todayTrips]
+      properties:
+        online: {type: boolean}
+        shiftStartedAt: {type: string, format: date-time}
+        zoneName: {type: string}
+        slotEndsAt: {type: string, format: date-time}
+        todayEarningsPaise: {$ref: '#/components/schemas/Paise'}
+        todayTrips: {type: integer}
+        activeTripId: {type: string}
+    Offer:
+      type: object
+      required: [offerId, tripId, expiresAt, expiresInSec, payPaise, pickupDistanceM, dropDistanceM, kitchenArea, customerLocality, estMinutes]
+      properties:
+        offerId: {type: string}
+        tripId: {type: string}
+        expiresAt: {type: string, format: date-time}
+        expiresInSec: {type: integer, description: The app counts down from this, never from the phone clock}
+        payPaise: {$ref: '#/components/schemas/Paise'}
+        pickupDistanceM: {type: integer}
+        dropDistanceM: {type: integer}
+        kitchenArea: {type: string}
+        customerLocality: {type: string}
+        estMinutes: {type: integer}
+    Place:
+      type: object
+      required: [area, address, lat, lng]
+      properties: {area: {type: string}, address: {type: string}, landmark: {type: string}, lat: {type: number}, lng: {type: number}}
+    Trip:
+      type: object
+      required: [tripId, version, step, orderCode, itemsCount, payPaise, kitchen, customer, waitFreeSeconds, unreachableWaitSeconds]
+      properties:
+        tripId: {type: string}
+        version: {type: integer}
+        step: {type: string, enum: [TO_KITCHEN, AT_KITCHEN, PICKED_UP, AT_DROP, DELIVERED, FAILED, CANCELLED]}
+        orderCode: {type: string}
+        itemsCount: {type: integer}
+        payPaise: {$ref: '#/components/schemas/Paise'}
+        kitchen: {allOf: [{$ref: '#/components/schemas/Place'}, {type: object, required: [kitchenName, chefPhone], properties: {kitchenName: {type: string}, chefPhone: {type: string}}}]}
+        customer: {allOf: [{$ref: '#/components/schemas/Place'}, {type: object, required: [firstName, phone], properties: {firstName: {type: string}, phone: {type: string, description: May become a masked relay number}}}]}
+        arrivedKitchenAt: {type: string, format: date-time}
+        waitFreeSeconds: {type: integer}
+        unreachableWaitSeconds: {type: integer}
+        cancelReason: {type: string}
+        payLines: {type: array, items: {$ref: '#/components/schemas/PayLine'}}
+    TripEarning:
+      type: object
+      required: [tripId, completedAt, kitchenArea, customerLocality, status, amountPaise, lines, pickupDistanceM, dropDistanceM, rateCardVersion]
+      properties:
+        tripId: {type: string}
+        completedAt: {type: string, format: date-time}
+        kitchenArea: {type: string}
+        customerLocality: {type: string}
+        status: {type: string, enum: [CREDITED, HELD, ADJUSTED]}
+        holdReason: {type: string}
+        releaseOn: {type: string, format: date-time, description: Holds last at most 7 days}
+        amountPaise: {$ref: '#/components/schemas/Paise'}
+        lines: {type: array, items: {$ref: '#/components/schemas/PayLine'}}
+        pickupDistanceM: {type: integer}
+        dropDistanceM: {type: integer}
+        rateCardVersion: {type: string}
+    EarningsPage:
+      type: object
+      required: [rangeLabel, totalPaise, trips]
+      properties:
+        rangeLabel: {type: string}
+        totalPaise: {$ref: '#/components/schemas/Paise'}
+        trips: {type: array, items: {$ref: '#/components/schemas/TripEarning'}}
+        nextCursor: {type: string}
+    Payout:
+      type: object
+      required: [payoutId, periodLabel, amountPaise, status]
+      properties:
+        payoutId: {type: string}
+        periodLabel: {type: string}
+        amountPaise: {$ref: '#/components/schemas/Paise'}
+        status: {type: string, enum: [SCHEDULED, PROCESSING, PAID, FAILED]}
+        utr: {type: string}
+        paidAt: {type: string, format: date-time}
+    PayoutsPage:
+      type: object
+      required: [withdrawablePaise, payouts]
+      properties:
+        nextPayoutOn: {type: string, format: date}
+        withdrawablePaise: {$ref: '#/components/schemas/Paise'}
+        payouts: {type: array, items: {$ref: '#/components/schemas/Payout'}}
+    RiderFix:
+      type: object
+      required: [lat, lng, accuracyM, at]
+      properties:
+        lat: {type: number}
+        lng: {type: number}
+        accuracyM: {type: number}
+        at: {type: string, format: date-time}
+        mock: {type: boolean, description: Android reported a mock location; logged, never used for pay decisions}
+    LocationBatchResponse:
+      type: object
+      required: [offers]
+      properties:
+        offers: {type: array, items: {$ref: '#/components/schemas/Offer'}}
+        activeTrip: {type: object, required: [tripId, step, version], properties: {tripId: {type: string}, step: {type: string}, version: {type: integer}}}
+        stop: {type: boolean}
+        stopReason: {type: string}
+    SupportIssue:
+      type: object
+      required: [category]
+      properties:
+        tripId: {type: string}
+        payoutId: {type: string}
+        category: {type: string, enum: [MISSING_PAY, WRONG_DISTANCE, PAYOUT_NOT_RECEIVED, WRONG_DEDUCTION, APP_PROBLEM, OTHER]}
+        note: {type: string}

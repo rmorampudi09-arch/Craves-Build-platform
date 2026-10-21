@@ -120,7 +120,8 @@ describe("tabs", () => {
     render(createElement(ChefOrderInbox));
     const tabs = await screen.findByRole("navigation", { name: "Choose which orders to see" }, slow);
     expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready1", "Past3"]);
-    expect(screen.getByRole("button", { name: /^Ready/ }).getAttribute("aria-pressed")).toBe("true");
+    // The inbox picks its opening tab in an effect after the tabs first render.
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Ready/ }).getAttribute("aria-pressed")).toBe("true"), slow);
     fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     await waitFor(() => expect(rows()).toEqual(["0BDE0107", "0BDE0106", "0BDE0105"]), slow);
   });

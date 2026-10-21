@@ -68,7 +68,7 @@ import {OlaMapPicker} from '../../maps/OlaMapPicker';
 />
 ```
 
-Then build the APK as usual: `cd apps/mobile && npm ci && cd android && ./gradlew assembleRelease` with the existing signing variables. For iOS, run `cd ios && pod install`.
+Then build the APK as usual: `cd apps/mobile && npm ci && cd android && ./gradlew assembleCustomerRelease` (the rider app is `assembleRiderRelease`) with the existing signing variables. For iOS, run `cd ios && pod install`.
 
 ## Release runbook
 

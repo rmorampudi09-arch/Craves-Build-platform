@@ -167,7 +167,7 @@ class SubscriptionInvoiceVoidTest {
         var mvc = MockMvcBuilders.standaloneSetup(
             new SubscriptionPaymentController(payments, new PaymentApiProperties(true, false, false))).build();
         mvc.perform(post("/api/v1/subscription-payments/invoices/" + INVOICE + "/orders").header("Authorization", AUTH)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"customerName\":\"Fixture\",\"customerPhone\":\"9876543210\"}"))
+                .contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_JSON).content("{\"customerName\":\"Fixture\",\"customerPhone\":\"9876543210\"}"))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.detail").value("This bill was cancelled when the plan was resumed"));
 

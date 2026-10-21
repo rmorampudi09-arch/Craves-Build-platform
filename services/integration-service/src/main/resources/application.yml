@@ -9,6 +9,11 @@ spring:
       # Shared database budget: scripts/release/check-db-connection-budget.py
       maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:4}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
+  servlet:
+    multipart:
+      # Rider document photos (POST /api/v1/rider/documents), at most 10 MB each.
+      max-file-size: 10MB
+      max-request-size: 11MB
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -17,6 +22,27 @@ spring:
     table: flyway_schema_history
 
 craves:
+  # Rider fleet (in.craves.integration.fleet, docs/riders/BACKEND.md). The flags only switch code paths on; with
+  # CRAVES_FLEET_ENABLED off no fleet bean or job exists. Dispatch mode and pay live in fleet_schema tables.
+  fleet:
+    enabled: ${CRAVES_FLEET_ENABLED:false}
+    rider-api-enabled: ${CRAVES_FLEET_RIDER_API_ENABLED:false}
+    location-ingest-enabled: ${CRAVES_FLEET_LOCATION_INGEST_ENABLED:false}
+    payout-execution-enabled: ${CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED:false}
+    # While on, dispatch touches only riders and kitchens in fleet_schema.test_mode_rider / test_mode_kitchen.
+    test-mode: ${CRAVES_FLEET_TEST_MODE:true}
+    # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
+    auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
+    internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}
+    # Private document storage, the same settings as user-chef-service's KYC documents.
+    storage-endpoint: ${CRAVES_STORAGE_ENDPOINT_VALUE:}
+    storage-container: ${CRAVES_STORAGE_DOCUMENTS_CONTAINER:documents}
+    # Rider support line answered in every slot; set it before turning the rider API on.
+    support-phone: ${CRAVES_FLEET_SUPPORT_PHONE:}
+    support-whatsapp-url: ${CRAVES_FLEET_SUPPORT_WHATSAPP_URL:}
+    # Blocks going online below this app version, never a running shift; rider.min_app_version overrides it.
+    min-app-version: ${CRAVES_FLEET_MIN_APP_VERSION:1.0.0}
+    insurance-label: ${CRAVES_FLEET_INSURANCE_LABEL:}
   # CH-07 Idempotency-Key replay; only requests that send the header are affected.
   idempotency:
     enabled: ${CRAVES_IDEMPOTENCY_ENABLED:true}

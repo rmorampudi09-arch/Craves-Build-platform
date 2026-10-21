@@ -1,7 +1,9 @@
-import {Vibration} from 'react-native';
+import {DeviceEventEmitter, NativeModules, Vibration} from 'react-native';
+import {getRuntimeConfig} from '../../../core/config/runtimeConfig';
 import type {Offer, RiderFix, ShiftStart, TripStep} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {mockRider} from '../api/riderApi.mock';
+import type {ReceivedOffer} from '../domain/offerTiming';
 import {riderApiMode} from '../riderConfig';
 
 export interface RiderOnlineStatus {
@@ -16,7 +18,7 @@ export interface TripChange {
   version: number;
 }
 
-/** Keeps the rider online: uploads location, delivers offers and trip changes. Native Kotlin in task A2. */
+/** Keeps the rider online: uploads location, delivers offers and trip changes (Kotlin RiderOnlineService in live builds). */
 export interface RiderOnlineService {
   /** Pass the shift from POST /shift/start; the native service keeps its credential, JS never stores it. */
   start(shift?: ShiftStart): Promise<void>;
@@ -26,6 +28,11 @@ export interface RiderOnlineService {
   onOffer(cb: (offer: Offer, receivedAtMs: number) => void): () => void;
   onTripChanged(cb: (change: TripChange) => void): () => void;
   onStatus(cb: (status: RiderOnlineStatus) => void): () => void;
+  /** The FCM token for POST /devices; null when Firebase can't give one. */
+  fcmToken(): Promise<string | null>;
+  onFcmToken(cb: (token: string) => void): () => void;
+  /** The offer whose notification opened the app, or one that rang while JS wasn't running. */
+  pendingOffer(): Promise<ReceivedOffer | null>;
 }
 
 const UPLOAD_EVERY_MS = 10_000;
@@ -44,10 +51,7 @@ function listeners<T extends unknown[]>() {
   };
 }
 
-/**
- * shortcut: a JS loop that works only while the app is open and only against the mock server;
- * task A2 replaces it with the Kotlin foreground service.
- */
+/** Mock mode, Jest and the customer app: a JS loop that works only while the app is open, against the mock server. */
 function createJsOnlineService() {
   const offers = listeners<[Offer, number]>();
   const trips = listeners<[TripChange]>();
@@ -96,10 +100,10 @@ function createJsOnlineService() {
   }
 
   return {
-    // The mock needs no shift credential; the native service (task A2) keeps the real one.
+    // The mock needs no shift credential; the native service keeps the real one.
     async start(_shift?: ShiftStart) {
       if (riderApiMode !== 'mock') {
-        throw new Error('Going online needs the native rider service (task A2).');
+        throw new Error('Going online needs the rider app (native CravesRiderOnline module).');
       }
       halt();
       timer = setInterval(poll, UPLOAD_EVERY_MS);
@@ -116,10 +120,91 @@ function createJsOnlineService() {
     onOffer: offers.add,
     onTripChanged: trips.add,
     onStatus: statuses.add,
+    // The mock server ignores the token; a fixed one lets demo builds show the "phone not approved" check.
+    fcmToken: async () => 'mock-fcm-token',
+    onFcmToken: (_cb: (token: string) => void) => () => undefined,
+    pendingOffer: async (): Promise<ReceivedOffer | null> => null,
     /** Dev panel: poll now instead of waiting up to 10 seconds. */
     pollNow: poll,
     isRunning: () => timer !== null,
   };
 }
 
-export const riderOnlineService = createJsOnlineService();
+/** The Kotlin module's interface (android/app/src/rider, docs/riders/NATIVE.md). */
+interface NativeRiderOnline {
+  /** A null credential resumes the shift the service saved. */
+  start(shiftCredential: string | null, expiresAtMs: number, apiBaseUrl: string): Promise<void>;
+  stop(): Promise<void>;
+  testRing(): Promise<void>;
+  lastFix(): Promise<RiderFix | null>;
+  getFcmToken(): Promise<string>;
+  getPendingOffer(): Promise<NativeOffer | null>;
+}
+
+/** A riderOffer event: the Offer JSON exactly as FCM or /locations delivered it, and which came first. */
+interface NativeOffer {
+  offer: string;
+  receivedAtMs: number;
+  channel: 'fcm' | 'locations';
+}
+
+function parseOffer(event: NativeOffer): ReceivedOffer | null {
+  try {
+    const offer = JSON.parse(event.offer) as Offer;
+    return typeof offer.offerId === 'string' && typeof offer.expiresInSec === 'number'
+      ? {offer, receivedAtMs: event.receivedAtMs}
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Live mode: the Kotlin foreground service uploads and rings; JS only listens. The credential never touches JS storage. */
+function createNativeOnlineService(native: NativeRiderOnline) {
+  let fix: RiderFix | undefined;
+  const on = <T>(event: string, cb: (payload: T) => void) => {
+    const subscription = DeviceEventEmitter.addListener(event, cb);
+    return () => subscription.remove();
+  };
+  on<RiderOnlineStatus>('riderStatus', status => {
+    fix = status.lastFix ?? fix;
+  });
+  native
+    .lastFix()
+    .then(saved => {
+      fix = fix ?? saved ?? undefined;
+    })
+    .catch(() => undefined);
+
+  return {
+    start: (shift?: ShiftStart) =>
+      native.start(shift?.shiftCredential ?? null, shift ? Date.parse(shift.expiresAt) : 0, getRuntimeConfig().apiBaseUrl),
+    stop: () => native.stop(),
+    testRing: () => native.testRing(),
+    lastFix: () => fix,
+    onOffer: (cb: (offer: Offer, receivedAtMs: number) => void) =>
+      on<NativeOffer>('riderOffer', event => {
+        const received = parseOffer(event);
+        if (received) {
+          cb(received.offer, received.receivedAtMs);
+        }
+      }),
+    onTripChanged: (cb: (change: TripChange) => void) => on('riderTripChanged', cb),
+    onStatus: (cb: (status: RiderOnlineStatus) => void) => on('riderStatus', cb),
+    fcmToken: () => native.getFcmToken().catch(() => null),
+    onFcmToken: (cb: (token: string) => void) => on<{token: string}>('riderFcmToken', event => cb(event.token)),
+    async pendingOffer() {
+      const event = await native.getPendingOffer().catch(() => null);
+      return event ? parseOffer(event) : null;
+    },
+    /** The dev panel exists only in mock builds, which use the JS loop. */
+    pollNow: async () => undefined,
+  };
+}
+
+// Present only in the rider flavor (android/app/src/rider); mock mode keeps the JS loop even there.
+const native = riderApiMode === 'live' ? (NativeModules.CravesRiderOnline as NativeRiderOnline | undefined) : undefined;
+
+export const riderOnlineService: RiderOnlineService & {pollNow(): Promise<void>} = native
+  ? createNativeOnlineService(native)
+  : createJsOnlineService();

@@ -448,6 +448,10 @@ export const en = {
     emptyTitle: 'No notices',
     emptyBody: 'If ops ever needs to tell you something about your account or pay, you will see it here.',
   },
+  device: {
+    notApprovedTitle: "This phone isn't approved",
+    notApprovedBody: "Call rider support to approve this phone. You won't get offers on it until then.",
+  },
   languages: {en: 'English', te: 'తెలుగు', hi: 'हिन्दी'},
 };
 

@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE' android/app/src/main/AndroidManifest.xml; then
+          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE|WAKE_LOCK' android/app/src/main/AndroidManifest.xml; then
             echo 'ERROR: rider-only permissions belong in android/app/src/rider/AndroidManifest.xml' >&2
             exit 1
           fi

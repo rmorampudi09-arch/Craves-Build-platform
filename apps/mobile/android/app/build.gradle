@@ -75,6 +75,9 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+def rnfbAndroidSdk = new groovy.json.JsonSlurper()
+    .parse(file('../../node_modules/@react-native-firebase/app/package.json')).sdkVersions.android
+
 /**
  * Release signing is intentionally external to source. P127 only prepares a
  * fail-closed configuration boundary; P128/secure CI must inject all four
@@ -162,4 +165,10 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Rider app only (android/app/src/rider): the online service and offer pushes. Never the customer flavor or src/main.
+    riderImplementation("com.google.android.gms:play-services-location:21.3.0")
+    // The Firebase BOM @react-native-firebase/app uses, so both resolve one set of Firebase libraries.
+    riderImplementation(platform("com.google.firebase:firebase-bom:${rnfbAndroidSdk.firebase}"))
+    riderImplementation("com.google.firebase:firebase-messaging")
 }

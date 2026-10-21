@@ -1,5 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Rider-only permissions. Never add these to src/main: the customer app's Play declarations must not change. -->
+    <!-- ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION come from src/main. No ACCESS_BACKGROUND_LOCATION: the service starts from the Go Online tap. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Keeps the 10 s upload timer running with the screen off while online. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application>
+        <service
+            android:name=".RiderOnlineService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+        <service
+            android:name=".RiderMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+    </application>
 </manifest>

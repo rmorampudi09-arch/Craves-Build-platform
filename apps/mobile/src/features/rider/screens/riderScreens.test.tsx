@@ -81,6 +81,11 @@ const offer: Offer = {
   kitchenArea: 'Madhapur',
   customerLocality: 'Kondapur',
   estMinutes: 28,
+  payLines: [
+    {label: 'base', amountPaise: 4000},
+    {label: 'drop distance', amountPaise: 1800},
+    {label: 'ride to the kitchen', amountPaise: 1000},
+  ],
 };
 const trip: Trip = {
   tripId: 't1',
@@ -93,6 +98,7 @@ const trip: Trip = {
   customer: {firstName: 'Anil', area: 'Kondapur', address: 'Flat 302', lat: 17.4615, lng: 78.3657, phone: '+910000000000'},
   waitFreeSeconds: 480,
   unreachableWaitSeconds: 480,
+  sealed: true,
 };
 
 const signOut = jest.fn(async () => undefined);
@@ -135,7 +141,7 @@ describe('Home', () => {
     expect(allText()).toContain('₹1,234');
     expect(allText()).toContain('Offline');
     await act(async () => byId('rider-go-online').props.onPress());
-    expect(Alert.alert).toHaveBeenCalledWith('Take a quick selfie to go online', expect.any(String), expect.any(Array));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
   });
 
   it('sends the rider to phone setup when a required check fails', async () => {
@@ -199,13 +205,16 @@ describe('Offer', () => {
 
 describe('Trip', () => {
   const props = {route: {key: 'Trip', name: 'Trip' as const, params: undefined}, navigation: mockNavigation as never};
+  // TripScreen listens for refused OTPs; trip.test.tsx covers the screen in full.
+  beforeEach(() => Object.assign(tripQueue, {onRejected: () => () => undefined}));
+  const otpInput = () => tree.root.findAll(node => node.props.testID === 'rider-otp-input' && node.props.keyboardType)[0];
 
   it('takes the customer OTP before Delivered and sends it through the queue', async () => {
     mockPending.count = 1; // the queue reports the delivery as waiting to sync
     await render(<TripScreen {...props} />, [[riderKeys.activeTrip, trip], [riderKeys.me, me], [riderKeys.home, home]]);
     expect(allText()).toContain('Near drop point');
     expect(byId('rider-delivered').props.disabled).toBe(true);
-    await act(async () => tree.root.findByProps({testID: 'rider-otp-input'}).props.onChangeText('12a34'));
+    await act(async () => otpInput().props.onChangeText('12a34'));
     expect(byId('rider-delivered').props.disabled).toBe(false);
     await act(async () => byId('rider-delivered').props.onPress());
     expect(tripQueue.enqueue).toHaveBeenCalledWith(
@@ -218,14 +227,14 @@ describe('Trip', () => {
   it('keeps the photo fallback locked until two calls and the wait', async () => {
     await render(<TripScreen {...props} />, [[riderKeys.activeTrip, trip], [riderKeys.me, me], [riderKeys.home, home]]);
     await act(async () => byId('rider-unreachable').props.onPress());
-    expect(allText()).toContain('Calls made: 0 of 2');
+    expect(allText()).toContain('Unlocks when the timer ends');
     expect(byId('rider-leave-photo').props.disabled).toBe(true);
   });
 
   it('shows a big order code at the kitchen', async () => {
     await render(<TripScreen {...props} />, [[riderKeys.activeTrip, {...trip, step: 'AT_KITCHEN'}], [riderKeys.me, me], [riderKeys.home, home]]);
     expect(tree.root.findByProps({testID: 'rider-order-code'}).props.children).toBe('CR-4107');
-    expect(allText()).toContain('Free waiting ends in');
+    expect(allText()).toContain('Free waiting starts when the food is ready'); // no chefReadyAt yet
   });
 });
 

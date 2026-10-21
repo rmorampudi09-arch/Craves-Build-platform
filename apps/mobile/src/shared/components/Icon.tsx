@@ -42,7 +42,27 @@ export type IconName =
   | 'info'
   | 'send'
   | 'alert'
-  | 'refresh';
+  | 'refresh'
+  // Outline glyphs for the rider app (docs/riders/SCREENS.md 0.14); the name is the glyph.
+  | 'account-outline'
+  | 'arrow-right'
+  | 'calendar-blank-outline'
+  | 'camera-outline'
+  | 'check-circle'
+  | 'chevron-left'
+  | 'clock-outline'
+  | 'close'
+  | 'home-outline'
+  | 'lock-outline'
+  | 'map-marker-outline'
+  | 'menu-down'
+  | 'menu-right'
+  | 'moped'
+  | 'navigation-variant-outline'
+  | 'phone-outline'
+  | 'shield-alert-outline'
+  | 'shield-check-outline'
+  | 'weather-pouring';
 
 interface Props {
   name: IconName;
@@ -92,6 +112,25 @@ const GLYPHS: Record<IconName, string> = {
   send: 'send',
   alert: 'alert-circle-outline',
   refresh: 'refresh',
+  'account-outline': 'account-outline',
+  'arrow-right': 'arrow-right',
+  'calendar-blank-outline': 'calendar-blank-outline',
+  'camera-outline': 'camera-outline',
+  'check-circle': 'check-circle',
+  'chevron-left': 'chevron-left',
+  'clock-outline': 'clock-outline',
+  'close': 'close',
+  'home-outline': 'home-outline',
+  'lock-outline': 'lock-outline',
+  'map-marker-outline': 'map-marker-outline',
+  'menu-down': 'menu-down',
+  'menu-right': 'menu-right',
+  'moped': 'moped',
+  'navigation-variant-outline': 'navigation-variant-outline',
+  'phone-outline': 'phone-outline',
+  'shield-alert-outline': 'shield-alert-outline',
+  'shield-check-outline': 'shield-check-outline',
+  'weather-pouring': 'weather-pouring',
 };
 
 export function Icon({

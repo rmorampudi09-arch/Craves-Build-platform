@@ -36,10 +36,19 @@ export const liveRiderApi: RiderApi = {
   async startShift(selfieUri) {
     const form = new FormData();
     form.append('selfie', imagePart(selfieUri, 'selfie.jpg'));
-    await apiClient.post(`${BASE}/shift/start`, form, multipart);
+    return (await apiClient.post(`${BASE}/shift/start`, form, multipart)).data;
   },
   async endShift() {
     await apiClient.post(`${BASE}/shift/end`);
+  },
+  async registerDevice(device) {
+    await apiClient.post(`${BASE}/devices`, device);
+  },
+  async uploadDocument(type, photoUri) {
+    const form = new FormData();
+    form.append('type', type);
+    form.append('photo', imagePart(photoUri, 'document.jpg'));
+    await apiClient.post(`${BASE}/documents`, form, multipart);
   },
   async postLocations(fixes) {
     return (await apiClient.post(`${BASE}/locations`, {fixes})).data;

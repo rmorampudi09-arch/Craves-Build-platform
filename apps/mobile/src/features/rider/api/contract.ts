@@ -11,6 +11,12 @@ export interface RiderNotice {
   reason: string;
   deadline?: string;
   appealPhone: string;
+  /** When ops sent it. */
+  sentAt?: string;
+  /** What ops is checking, in plain words. */
+  checking?: string;
+  /** The one trip whose pay is on hold, if any. */
+  tripId?: string;
 }
 
 export interface RiderMe {
@@ -27,12 +33,16 @@ export interface RiderMe {
   language: Language;
   minAppVersion: string;
   supportPhone: string;
+  /** The riders' WhatsApp group, opened from Help. */
+  supportWhatsappUrl?: string;
   features: {payoutsEnabled: boolean; withdrawEnabled: boolean};
 }
 
 export interface RiderProfile {
   vehicle: {label: string; regNumberMasked?: string};
   documents: {
+    /** DL, RC, INSURANCE, PUC, PAN or BANK; used to upload a new photo. */
+    type?: string;
     label: string;
     status: 'VERIFIED' | 'PENDING' | 'REJECTED' | 'EXPIRED';
     expiresOn?: string;
@@ -55,6 +65,8 @@ export interface Terms {
   rateCardLines: LabelValue[];
   grievanceLines: LabelValue[];
   fullTextUrl?: string;
+  /** The rate card is draft pricing, not final; the app shows a badge saying so. */
+  draft?: boolean;
 }
 
 export interface HomeSummary {
@@ -65,6 +77,13 @@ export interface HomeSummary {
   todayEarningsPaise: Paise;
   todayTrips: number;
   activeTripId?: string;
+  nextSlot?: {startsAt: string; endsAt: string; zoneName: string};
+  /** The minimum paid per online hour in a booked slot. */
+  guaranteedPerHourPaise?: Paise;
+  /** Where to wait between orders: water, washroom, shade and charging. */
+  restPoint?: {name: string; area: string};
+  /** A message from ops, e.g. a rain warning. */
+  banner?: {tone: 'info' | 'warning'; text: string};
 }
 
 export interface Offer {
@@ -80,6 +99,8 @@ export interface Offer {
   kitchenArea: string;
   customerLocality: string;
   estMinutes: number;
+  /** How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance"). */
+  payLines: PayLine[];
 }
 
 export type TripStep =
@@ -112,8 +133,14 @@ export interface Trip {
   waitFreeSeconds: number;
   /** How long the rider waits at the door, after two calls, before the photo fallback unlocks. */
   unreachableWaitSeconds: number;
+  /** Waiting pay per minute after the free wait, from the locked rate card (shown, never calculated). */
+  waitPayPerMinutePaise?: Paise;
   cancelReason?: string;
   payLines?: PayLine[];
+  /** The chef ticked "sealed" on the bag. */
+  sealed: boolean;
+  /** When the chef marked the food ready; the free wait starts at the later of this and arrival. */
+  chefReadyAt?: string;
 }
 
 export interface PayLine {
@@ -158,6 +185,19 @@ export interface PayoutsPage {
   nextPayoutOn?: string;
   withdrawablePaise: Paise;
   payouts: Payout[];
+}
+
+/** POST /shift/start. The credential is opaque: the native online service keeps it, JS never stores it. */
+export interface ShiftStart {
+  shiftCredential: string;
+  expiresAt: string;
+}
+
+/** POST /devices. 409 DEVICE_NOT_BOUND: a different phone, which ops must approve first. */
+export interface DeviceRegistration {
+  fcmToken: string;
+  appVersion: string;
+  model: string;
 }
 
 export interface RiderFix {

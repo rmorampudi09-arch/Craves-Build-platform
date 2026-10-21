@@ -19,7 +19,14 @@ export type NewQueueEntry = Pick<QueueEntry, 'riderId' | 'tripId' | 'action' | '
 export type QueueOutcome =
   | {kind: 'sent'; trip: Trip}
   | {kind: 'queued'}
-  | {kind: 'rejected'; code: string; message: string};
+  | ({kind: 'rejected'} & RejectInfo);
+
+/** Why the server refused a step; attemptsLeft comes with a wrong delivery OTP. */
+export interface RejectInfo {
+  code: string;
+  message: string;
+  attemptsLeft?: number;
+}
 
 export interface QueueStorage {
   getItem(key: string): Promise<string | null>;
@@ -31,7 +38,7 @@ export interface QueueDeps {
   send: (entry: QueueEntry) => Promise<Trip>;
   /** True for network failures and 5xx: keep the entry and retry with backoff. */
   isRetriable: (error: unknown) => boolean;
-  describe: (error: unknown) => {code: string; message: string};
+  describe: (error: unknown) => RejectInfo;
   now?: () => number;
 }
 
@@ -45,7 +52,7 @@ export function createOfflineQueue(deps: QueueDeps) {
   let chain: Promise<unknown> = Promise.resolve();
   let counter = 0;
   const changeListeners = new Set<() => void>();
-  const rejectListeners = new Set<(entry: QueueEntry, info: {code: string; message: string}) => void>();
+  const rejectListeners = new Set<(entry: QueueEntry, info: RejectInfo) => void>();
   const sentListeners = new Set<(entry: QueueEntry, trip: Trip) => void>();
 
   // Every operation runs one after another, so a replay never races an enqueue.
@@ -154,7 +161,7 @@ export function createOfflineQueue(deps: QueueDeps) {
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);
     },
-    onRejected(listener: (entry: QueueEntry, info: {code: string; message: string}) => void) {
+    onRejected(listener: (entry: QueueEntry, info: RejectInfo) => void) {
       rejectListeners.add(listener);
       return () => rejectListeners.delete(listener);
     },

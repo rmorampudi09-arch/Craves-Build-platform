@@ -17,7 +17,7 @@ export const tripQueue = createOfflineQueue({
     error.status >= 500,
   describe: error =>
     error instanceof AppApiError
-      ? {code: error.code, message: error.message}
+      ? {code: error.code, message: error.message, attemptsLeft: error.attemptsLeft}
       : {code: 'UNKNOWN', message: 'Something went wrong. Try again.'},
 });
 

@@ -1,5 +1,5 @@
 import {Vibration} from 'react-native';
-import type {Offer, RiderFix, TripStep} from '../api/contract';
+import type {Offer, RiderFix, ShiftStart, TripStep} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {mockRider} from '../api/riderApi.mock';
 import {riderApiMode} from '../riderConfig';
@@ -18,7 +18,8 @@ export interface TripChange {
 
 /** Keeps the rider online: uploads location, delivers offers and trip changes. Native Kotlin in task A2. */
 export interface RiderOnlineService {
-  start(): Promise<void>;
+  /** Pass the shift from POST /shift/start; the native service keeps its credential, JS never stores it. */
+  start(shift?: ShiftStart): Promise<void>;
   stop(): Promise<void>;
   testRing(): Promise<void>;
   lastFix(): RiderFix | undefined;
@@ -95,7 +96,8 @@ function createJsOnlineService() {
   }
 
   return {
-    async start() {
+    // The mock needs no shift credential; the native service (task A2) keeps the real one.
+    async start(_shift?: ShiftStart) {
       if (riderApiMode !== 'mock') {
         throw new Error('Going online needs the native rider service (task A2).');
       }

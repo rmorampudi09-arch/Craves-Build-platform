@@ -27,6 +27,7 @@ export function DevPanelScreen({navigation}: RiderScreenProps<'DevPanel'>) {
       <Button label="Send an offer now" onPress={act(c.sendOfferNow, true)} />
       <Button label="Next accept loses the race" variant="outline" onPress={act(c.loseNextRace)} />
       <Button label="Next call fails (offline)" variant="outline" onPress={act(c.failNextCall)} />
+      <Button label="Next device check fails: phone not approved" variant="outline" onPress={act(c.failNextDeviceCheck)} />
       <Button label="Customer cancels the active trip" variant="outline" onPress={act(c.cancelActiveTrip, true)} />
       <Button label="Ops ends my shift" variant="outline" onPress={act(c.stopShift, true)} />
       <Button label="Give / clear a 7-day notice" variant="outline" onPress={act(c.giveNotice)} />

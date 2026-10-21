@@ -1,12 +1,14 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {ReactNode, useCallback, useEffect, useState} from 'react';
 import {Alert, AppState, StyleSheet, Text, View} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Button, Icon} from '../../../shared/components';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {Icon} from '../../../shared/components';
+import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
-import {Body, Card, Label, RiderScreen} from '../components/ui';
+import {Card, RiderScreen} from '../components/ui';
 import {riderDevice, type DeviceState} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
+import type {RiderScreenProps} from '../navigation';
 import {useStrings} from '../strings/StringsProvider';
 
 const ANSWERS_KEY = 'rider.setup.v1';
@@ -56,120 +58,206 @@ export function usePhoneReadiness(): PhoneReadiness {
   return {location, notifications, device, answers, ready: location && notifications, refresh, answer};
 }
 
-function Check({
-  label,
+export type PhoneBrand = 'xiaomi' | 'coloros' | 'vivo' | 'samsung' | 'other';
+
+/** The settings family for Build.MANUFACTURER: each family hides autostart and the recents lock in its own place. */
+export function phoneBrand(manufacturer = ''): PhoneBrand {
+  const name = manufacturer.toLowerCase();
+  if (/xiaomi|redmi|poco/.test(name)) {
+    return 'xiaomi';
+  }
+  if (/oppo|realme|oneplus/.test(name)) {
+    return 'coloros';
+  }
+  if (/vivo|iqoo/.test(name)) {
+    return 'vivo';
+  }
+  return name.includes('samsung') ? 'samsung' : 'other';
+}
+
+/** A finished check is one row; an unfinished one is outlined dark and says how to fix it. */
+function SetupCheck({
+  title,
+  sub,
   done,
-  required,
   steps,
-  actionLabel,
-  onAction,
+  action,
+  aside,
   testID,
 }: {
-  label: string;
+  title: string;
+  sub: string;
   done: boolean;
-  required: string;
   steps?: string;
-  actionLabel: string;
-  onAction: () => void;
+  action?: ReactNode;
+  aside?: ReactNode;
   testID: string;
 }) {
+  const {strings} = useStrings();
   return (
-    <Card>
-      <View style={styles.checkRow} testID={testID} accessibilityLabel={`${label}: ${done ? 'done' : 'not done'}`}>
-        <View style={[styles.tick, done && styles.tickDone]}>
-          {done ? <Icon name="check" size={20} color={colors.white} surface={false} /> : null}
+    <Card style={[styles.check, !done && styles.attention]}>
+      <View style={styles.row}>
+        <View
+          accessible
+          accessibilityLabel={`${title}. ${done ? strings.setup.done : strings.setup.notDone}. ${sub}`}
+          style={styles.rowText}
+          testID={testID}>
+          <View style={[styles.circle, done && styles.circleDone]}>
+            {done ? <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} /> : null}
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.sub}>{sub}</Text>
+          </View>
         </View>
-        <View style={styles.checkText}>
-          <Text style={styles.checkLabel}>{label}</Text>
-          <Label>{required}</Label>
-        </View>
+        {aside}
       </View>
-      {!done && steps ? <Body>{steps}</Body> : null}
-      {!done ? <Button label={actionLabel} variant="outline" onPress={onAction} /> : null}
+      {done ? null : (
+        <>
+          {steps ? <Text style={styles.steps}>{steps}</Text> : null}
+          {action}
+        </>
+      )}
     </Card>
   );
 }
 
-export function PhoneSetupScreen() {
+/** Six checks so offers ring with the screen off (04-PhoneSetup.png), with steps for the rider's phone brand. */
+export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
   const {strings} = useStrings();
   const s = strings.setup;
   const phone = usePhoneReadiness();
+  const brand = phoneBrand(phone.device?.manufacturer);
 
-  const ask = (question: string, key: 'autostart' | 'recents' | 'ring') =>
+  const ask = (question: string, key: 'autostart' | 'ring') =>
     Alert.alert(question, undefined, [
       {text: s.notYet, style: 'cancel', onPress: () => phone.answer(key, false)},
       {text: s.yes, onPress: () => phone.answer(key, true)},
     ]);
+  // A permission the rider refused for good can only be turned on in the app's settings.
+  const allow = async (request: () => Promise<boolean>) => {
+    if (!(await request())) {
+      await riderDevice.openAppSettings();
+    }
+    phone.refresh();
+  };
+  const ring = () => riderOnlineService.testRing();
+
+  const checks = {
+    location: phone.location,
+    notifications: phone.notifications,
+    battery: Boolean(phone.device?.ignoringBatteryOptimizations),
+    autostart: Boolean(phone.answers.autostart),
+    recents: Boolean(phone.answers.recents),
+    ring: Boolean(phone.answers.ring),
+  };
+  const total = Object.keys(checks).length;
+  const doneCount = Object.values(checks).filter(Boolean).length;
 
   return (
-    <RiderScreen header={<RiderHeader title={s.title} />} testID="rider-phone-setup">
-      <Body>{s.intro}</Body>
-      <Check
-        testID="setup-location"
-        label={s.location}
-        required={s.required}
-        done={phone.location}
-        actionLabel={s.fix}
-        onAction={() => riderDevice.requestLocation().then(phone.refresh)}
-      />
-      <Check
-        testID="setup-notifications"
-        label={s.notifications}
-        required={s.required}
-        done={phone.notifications}
-        actionLabel={s.fix}
-        onAction={() => riderDevice.requestNotifications().then(phone.refresh)}
-      />
-      <Check
-        testID="setup-battery"
-        label={s.battery}
-        required={s.recommended}
-        done={Boolean(phone.device?.ignoringBatteryOptimizations)}
-        actionLabel={s.fix}
-        onAction={() => riderDevice.openBatterySettings()}
-      />
-      <Check
-        testID="setup-autostart"
-        label={s.autostart}
-        required={s.recommended}
-        done={Boolean(phone.answers.autostart)}
-        steps={s.autostartSteps}
-        actionLabel={s.fix}
-        onAction={() => riderDevice.openAutostartSettings().finally(() => ask(s.askAutostart, 'autostart'))}
-      />
-      <Check
-        testID="setup-recents"
-        label={s.recents}
-        required={s.recommended}
-        done={Boolean(phone.answers.recents)}
-        steps={s.recentsSteps}
-        actionLabel={s.fix}
-        onAction={() => ask(s.askRecents, 'recents')}
-      />
-      <Check
-        testID="setup-ring"
-        label={s.testRing}
-        required={s.recommended}
-        done={Boolean(phone.answers.ring)}
-        actionLabel={s.ring}
-        onAction={() => riderOnlineService.testRing().then(() => ask(s.askRing, 'ring'))}
-      />
+    <RiderScreen
+      header={<RiderHeader title={s.title} />}
+      testID="rider-phone-setup"
+      footer={
+        <BottomAction label={s.backHome} onPress={() => navigation.popTo('Tabs', {screen: 'Home'})} testID="rider-setup-home" />
+      }>
+      <Text style={styles.steps}>{s.intro}</Text>
+      <View style={styles.progress}>
+        <View style={styles.track}>
+          <View style={[styles.fill, {transform: [{scaleX: doneCount / total}]}]} />
+        </View>
+        <Text style={styles.count}>{s.progress(doneCount, total)}</Text>
+      </View>
+      <View style={styles.checks}>
+        <SetupCheck
+          testID="setup-location"
+          title={s.location}
+          sub={s.required}
+          done={checks.location}
+          steps={s.locationSteps}
+          action={<Fix label={s.allowLocation} onPress={() => allow(riderDevice.requestLocation)} />}
+        />
+        <SetupCheck
+          testID="setup-notifications"
+          title={s.notifications}
+          sub={s.required}
+          done={checks.notifications}
+          steps={s.notificationsSteps}
+          action={<Fix label={s.allowNotifications} onPress={() => allow(riderDevice.requestNotifications)} />}
+        />
+        <SetupCheck
+          testID="setup-battery"
+          title={s.battery}
+          sub={s.recommended}
+          done={checks.battery}
+          steps={s.batterySteps}
+          action={<Fix label={s.openBattery} onPress={() => riderDevice.openBatterySettings()} />}
+        />
+        <SetupCheck
+          testID="setup-autostart"
+          title={s.autostart}
+          sub={s.recommended}
+          done={checks.autostart}
+          steps={s.autostartSteps[brand]}
+          action={
+            <Fix
+              label={s.openAutostart}
+              onPress={() => riderDevice.openAutostartSettings().finally(() => ask(s.askAutostart, 'autostart'))}
+            />
+          }
+        />
+        <SetupCheck
+          testID="setup-recents"
+          title={s.recents}
+          sub={s.recommended}
+          done={checks.recents}
+          steps={s.recentsSteps[brand]}
+          action={<Fix label={s.locked} onPress={() => phone.answer('recents', true)} />}
+        />
+        <SetupCheck
+          testID="setup-ring"
+          title={s.testRing}
+          sub={checks.ring ? s.rang : s.recommended}
+          done={checks.ring}
+          steps={s.ringSteps}
+          action={<Fix label={s.ring} onPress={() => ring().then(() => ask(s.askRing, 'ring'))} />}
+          aside={
+            checks.ring ? (
+              <BottomAction label={s.ringAgain} variant="ghost" size="compact" onPress={ring} testID="rider-ring-again" />
+            ) : null
+          }
+        />
+      </View>
     </RiderScreen>
   );
 }
 
+function Fix({label, onPress}: {label: string; onPress: () => Promise<unknown> | void}) {
+  return <BottomAction label={label} variant="outline" size="compact" onPress={onPress} />;
+}
+
 const styles = StyleSheet.create({
-  checkRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  tick: {
+  flex: {flex: 1},
+  progress: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  track: {flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: colors.muted, overflow: 'hidden'},
+  fill: {height: '100%', width: '100%', backgroundColor: colors.success, transformOrigin: 'left'},
+  count: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  checks: {gap: spacing.sm},
+  check: {gap: spacing.sm},
+  attention: {borderColor: colors.textPrimary},
+  row: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
+  rowText: {flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  circle: {
     width: 28,
     height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
+    borderRadius: radius.pill,
+    borderWidth: borderWidth.strong,
     borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tickDone: {backgroundColor: colors.success, borderColor: colors.success},
-  checkText: {flex: 1},
-  checkLabel: {fontSize: typography.body, fontWeight: fontWeight.semibold, color: colors.textPrimary},
+  circleDone: {borderColor: colors.success, backgroundColor: colors.success},
+  title: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  sub: {fontSize: typography.small, color: colors.textSecondary},
+  steps: {fontSize: typography.body, color: colors.textPrimary},
 });

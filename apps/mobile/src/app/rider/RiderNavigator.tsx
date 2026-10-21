@@ -3,8 +3,9 @@ import {Alert} from 'react-native';
 import {createNavigationContainerRef, NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Icon, TerminalState} from '../../shared/components';
-import {colors} from '../../design/tokens';
+import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
 import {resolveGate} from '../../features/rider/domain/gate';
@@ -17,8 +18,10 @@ import {useStrings} from '../../features/rider/strings/StringsProvider';
 import {AccountStatusScreen} from '../../features/rider/screens/AccountStatusScreen';
 import {DevPanelScreen} from '../../features/rider/screens/DevPanelScreen';
 import {EarningsScreen} from '../../features/rider/screens/EarningsScreen';
+import {GoOnlineScreen} from '../../features/rider/screens/GoOnlineScreen';
 import {HelpScreen} from '../../features/rider/screens/HelpScreen';
 import {HomeScreen} from '../../features/rider/screens/HomeScreen';
+import {NoticeScreen} from '../../features/rider/screens/NoticeScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
 import {PayoutsScreen} from '../../features/rider/screens/PayoutsScreen';
 import {PhoneSetupScreen} from '../../features/rider/screens/PhoneSetupScreen';
@@ -36,15 +39,31 @@ const Tabs = createBottomTabNavigator<RiderTabParamList>();
 const navigationRef = createNavigationContainerRef<RiderStackParamList>();
 const ENDED = ['DELIVERED', 'FAILED', 'CANCELLED'];
 
-type TabIconProps = {color: string; size: number};
-const homeIcon = ({color, size}: TabIconProps) => <Icon name="home" color={color} size={size} surface={false} />;
-const walletIcon = ({color, size}: TabIconProps) => <Icon name="wallet" color={color} size={size} surface={false} />;
-const accountIcon = ({color, size}: TabIconProps) => <Icon name="account" color={color} size={size} surface={false} />;
+type TabIconProps = {color: string};
+const homeIcon = ({color}: TabIconProps) => <Icon name="home-outline" color={color} size={iconSize.lg} surface={false} />;
+const walletIcon = ({color}: TabIconProps) => <Icon name="wallet" color={color} size={iconSize.lg} surface={false} />;
+const accountIcon = ({color}: TabIconProps) => <Icon name="account-outline" color={color} size={iconSize.lg} surface={false} />;
 
+/** 64 dp above the system bar, a 1 dp top line, no shadow; the active tab is red (docs/riders/SCREENS.md 0.6). */
 function RiderTabs() {
   const {strings} = useStrings();
+  const {bottom} = useSafeAreaInsets();
   return (
-    <Tabs.Navigator screenOptions={{headerShown: false, tabBarActiveTintColor: colors.flameRedAccessible}}>
+    <Tabs.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.flameRedAccessible,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarLabelStyle: {fontSize: typography.small, fontWeight: fontWeight.bold},
+        tabBarStyle: {
+          height: 64 + bottom,
+          backgroundColor: colors.white,
+          borderTopWidth: borderWidth.standard,
+          borderTopColor: colors.border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+      }}>
       <Tabs.Screen
         name="Home"
         component={HomeScreen}
@@ -127,13 +146,22 @@ function SignedIn() {
             <Stack.Screen name="TripDetail" component={TripDetailScreen} />
             <Stack.Screen name="Payouts" component={PayoutsScreen} />
             <Stack.Screen name="PhoneSetup" component={PhoneSetupScreen} />
+            <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
+            <Stack.Screen name="Notice" component={NoticeScreen} />
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
             <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
           </>
         )}
+        {gate.kind !== 'ready' ? (
+          // The account and terms screens show SOS and the demo chip too.
+          <>
+            <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
+            <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
+          </>
+        ) : null}
       </Stack.Navigator>
       {gate.kind === 'ready' ? <RiderRuntime riderId={riderId} openOffer={openOffer} /> : null}
     </RiderShellContext.Provider>

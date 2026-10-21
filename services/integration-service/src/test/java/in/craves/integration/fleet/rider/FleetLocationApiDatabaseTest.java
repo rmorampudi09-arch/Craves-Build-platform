@@ -20,6 +20,7 @@ import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -195,7 +196,7 @@ class FleetLocationApiDatabaseTest {
         locations(rider, List.of()).andExpect(jsonPath("$.offers.length()").value(0));
         fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE id = ?", expired);
         UUID live = offer(rider.id(), trip, "now() + INTERVAL '30 seconds'");
-        JsonNode offer = json.readTree(locations(rider, List.of()).andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+        JsonNode offer = json.readTree(locations(rider, List.of()).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
             .get("offers").get(0);
         assertThat(offer.get("offerId").asText()).isEqualTo(live.toString());
         assertThat(offer.get("tripId").asText()).isEqualTo(trip.toString());

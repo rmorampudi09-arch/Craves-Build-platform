@@ -1,0 +1,1132 @@
+# Admin fleet API: the ops console for Craves riders (apps/customer-web-next /admin/riders,
+# /admin/fleet-trips, /admin/fleet-payouts and /admin/fleet-slots). Implemented by integration-service, package
+# in.craves.integration.fleet (schema fleet_schema). The web BFF under /api/admin/fleet only forwards
+# these paths; this service is the authority for roles, validation and the audit trail.
+openapi: 3.0.3
+info:
+  title: Craves Admin Fleet API
+  version: 1.0.0
+  description: >-
+    Ops console for the Craves rider fleet. Roles are the scoped internal admin roles from
+    auth-service InternalAdminRoles (x-roles on each operation); the legacy ADMIN role grants nothing here.
+    Every mutating call needs an Idempotency-Key and records the acting admin (from the JWT) in the audit trail.
+    A replay with the same key and body returns the first result; the same key with a different body is 409 IDEMPOTENCY_KEY_REUSED.
+    Due process (Telangana Act 21 of 2026): nothing blocks a rider automatically; a person decides and every
+    status change records the reason, the evidence summary and the approver.
+    Money is integer paise. Aadhaar numbers and images are never stored or returned.
+    Errors are always the Error schema.
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/admin/fleet/riders:
+    get:
+      operationId: listRiders
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, PAYMENTS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: Riders, newest first. search matches the name or the last digits of the phone.
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/RiderStatus' } }
+        - { name: search, in: query, schema: { type: string, maxLength: 80 } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: One page of riders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [riders, nextCursor]
+                properties:
+                  riders: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RiderSummary' } }
+                  nextCursor: { type: string, nullable: true, maxLength: 200 }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createRider
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Creates a PENDING rider. The rider signs in with this phone and uploads documents for review.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, phone, language]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120, description: Name as on the rider's KYC documents. }
+                phone: { type: string, pattern: '^\+91[6-9][0-9]{9}$' }
+                language: { type: string, enum: [en, te, hi] }
+      responses:
+        '201':
+          description: Created rider.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderSummary' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: "PHONE_IN_USE or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}:
+    get:
+      operationId: getRider
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, PAYMENTS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: Profile, documents, phones, masked payout account, the last 20 shifts and every status event.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }]
+      responses:
+        '200':
+          description: Rider detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/riders/{riderId}/documents/{documentId}/content:
+    get:
+      operationId: getRiderDocumentContent
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN]
+      description: The uploaded file, for review by hand. Audited as a read.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/DocumentId' }]
+      responses:
+        '200':
+          description: File bytes, at most 10 MB.
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/riders/{riderId}/documents/{documentId}/approve:
+    post:
+      operationId: approveRiderDocument
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Marks a PENDING document VERIFIED and records the reviewer and the expiry date the reviewer read on it.
+        expiresOn is required for DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE and PUC; other types may omit the body.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/DocumentId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                expiresOn: { type: string, format: date, description: Expiry date printed on the document. }
+      responses:
+        '200':
+          description: Reviewed document.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderDocument' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "DOCUMENT_NOT_PENDING.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "EXPIRY_REQUIRED (a DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE or PUC approved without expiresOn).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}/documents/{documentId}/reject:
+    post:
+      operationId: rejectRiderDocument
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Marks a PENDING document REJECTED. The rider sees the reason and can upload again.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/DocumentId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: Reviewed document.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderDocument' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "DOCUMENT_NOT_PENDING.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}/devices/{deviceId}/approve:
+    post:
+      operationId: approveRiderDevice
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Binds a PENDING_APPROVAL phone. A rider has one bound phone; the old one becomes REPLACED and its
+        shift credential is revoked.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { name: deviceId, in: path, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: The newly bound phone.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderDevice' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "DEVICE_NOT_PENDING.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}/payout-account:
+    put:
+      operationId: setRiderPayoutAccount
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        Set in person at the Craves office, after ops has seen the rider's ID. Replaces any earlier account.
+        The full number is write-only; responses are masked. Payouts that failed stay in the balance and
+        go to this account in the next batch.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayoutAccountInput' }
+      responses:
+        '200':
+          description: Masked account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutAccount' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "PAYOUT_ACCOUNT_NOT_UNIQUE (the UPI ID or account is another rider's).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "HOLDER_NAME_MISMATCH (holder name differs from the KYC name).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}/vehicle:
+    put:
+      operationId: setRiderVehicle
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Sets the vehicle the rider's profile shows. Replaces any earlier one. The full registration number is write-only.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RiderVehicleInput' }
+      responses:
+        '200':
+          description: The vehicle as the rider sees it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiderVehicle' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/riders/{riderId}/status-events:
+    post:
+      operationId: createRiderStatusEvent
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Two tracks, decided by a person.
+        SAFETY_PAUSE takes effect now (rider SUSPENDED) and needs reviewBy at most 72 hours ahead.
+        NOTICE (everything else, fraud included) changes nothing for 7 days: deadline at least 7 days ahead,
+        the rider keeps working and sees the notice with the evidence summary and the deadline.
+        RESTORE makes the rider ACTIVE. DEACTIVATE needs an earlier NOTICE whose deadline has passed.
+        appealPhone is required for every kind except RESTORE.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StatusEventInput' }
+      responses:
+        '201':
+          description: Recorded event.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusEvent' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "INVALID_STATUS_TRANSITION.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422':
+          description: NOTICE_DEADLINE_TOO_SOON, REVIEW_BY_TOO_LATE, APPEAL_PHONE_REQUIRED or NOTICE_REQUIRED.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  /api/v1/admin/fleet/selfie-reviews:
+    get:
+      operationId: listSelfieReviews
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Go-online selfies, oldest first. Customers never see them.
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [PENDING, APPROVED, REJECTED], default: PENDING } }
+      responses:
+        '200':
+          description: Selfie queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/SelfieReview' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/shifts/{shiftId}/selfie:
+    get:
+      operationId: getShiftSelfie
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      parameters: [{ $ref: '#/components/parameters/ShiftId' }]
+      responses:
+        '200':
+          description: JPEG, at most 5 MB.
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/shifts/{shiftId}/selfie/approve:
+    post:
+      operationId: approveShiftSelfie
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      parameters: [{ $ref: '#/components/parameters/ShiftId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: Reviewed selfie.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SelfieReview' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SELFIE_NOT_PENDING.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/shifts/{shiftId}/selfie/reject:
+    post:
+      operationId: rejectShiftSelfie
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Records the rejection only. It never ends the shift or blocks the rider; ops decides any status event separately.
+      parameters: [{ $ref: '#/components/parameters/ShiftId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: Reviewed selfie.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SelfieReview' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SELFIE_NOT_PENDING.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/audit:
+    get:
+      operationId: listAudit
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, AUDIT_ADMIN]
+      description: Every admin action on the fleet, newest first, optionally for one rider.
+      parameters:
+        - { name: riderId, in: query, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: One page of entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, nextCursor]
+                properties:
+                  entries: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AuditEntry' } }
+                  nextCursor: { type: string, nullable: true, maxLength: 200 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/trips:
+    get:
+      operationId: listActiveTrips
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: Trips not yet delivered, failed or cancelled, with their current courier.
+      responses:
+        '200':
+          description: Active trips.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [trips]
+                properties:
+                  trips: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/Trip' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/trips/{tripId}/reassign:
+    post:
+      operationId: reassignTrip
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Hands the trip to one on-shift idle fleet rider or to Borzo or Pidge (exactly one of riderId and provider).
+        The current courier is released first, in the same transaction, so the trip always has exactly one courier.
+        The released rider's pay for the trip so far is kept.
+      parameters: [{ $ref: '#/components/parameters/TripId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                riderId: { type: string, format: uuid }
+                provider: { type: string, enum: [BORZO, PIDGE] }
+                reason: { $ref: '#/components/schemas/Reason' }
+      responses:
+        '200':
+          description: Trip with its new courier.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trip' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "TRIP_NOT_REASSIGNABLE or RIDER_NOT_AVAILABLE.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/trips/{tripId}/cancel:
+    post:
+      operationId: cancelTrip
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Cancels the delivery and releases the courier. The order itself is handled by the order and refund flows.
+      parameters: [{ $ref: '#/components/parameters/TripId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: Cancelled trip.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trip' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "TRIP_ALREADY_FINISHED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/dispatch-queue:
+    get:
+      operationId: listDispatchQueue
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: >-
+        Trips that went through fleet, Borzo and Pidge without a courier, oldest first. The same alerts also
+        reach ops through notification-service.
+      responses:
+        '200':
+          description: Queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/DispatchQueueItem' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/positions:
+    get:
+      operationId: listRiderPositions
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Latest fix per rider seen in the last 12 hours.
+      responses:
+        '200':
+          description: Positions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [positions]
+                properties:
+                  positions: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/RiderPosition' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/payout-batches:
+    get:
+      operationId: listPayoutBatches
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN, AUDIT_ADMIN]
+      description: Batches, newest first, without their payout rows.
+      responses:
+        '200':
+          description: Batches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batches]
+                properties:
+                  batches: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/PayoutBatchSummary' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createPayoutBatch
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        WEEKLY (payoutDate is a Monday) pays every rider's whole withdrawable balance, with no minimum.
+        DAILY_WITHDRAWAL pays the withdrawal requests (one free per rider per day) not yet in a batch.
+        Riders with no payout account, a zero or negative balance are left out; a negative balance is
+        recovered from future earnings only, never from the bank.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, payoutDate]
+              properties:
+                kind: { $ref: '#/components/schemas/PayoutBatchKind' }
+                payoutDate: { type: string, format: date }
+      responses:
+        '201':
+          description: Created batch with its payouts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutBatch' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: "BATCH_EXISTS for this kind and date.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "NOTHING_TO_PAY or NOT_A_MONDAY.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/payout-batches/{batchId}:
+    get:
+      operationId: getPayoutBatch
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN, AUDIT_ADMIN]
+      parameters: [{ $ref: '#/components/parameters/BatchId' }]
+      responses:
+        '200':
+          description: Batch with its payouts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutBatch' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/payout-batches/{batchId}/file:
+    get:
+      operationId: downloadPayoutBatchFile
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        The IMPS bulk file for the bank (one row per payout: payoutId, holder name, account or UPI ID, IFSC,
+        amount in rupees with 2 decimals). Holds full account numbers; every download is audited.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }]
+      responses:
+        '200':
+          description: CSV with Content-Disposition attachment.
+          content:
+            text/csv: { schema: { type: string } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/payout-batches/{batchId}/approve:
+    post:
+      operationId: approvePayoutBatch
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: The second approver. Refused with 403 SAME_APPROVER when the caller created the batch.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: APPROVED batch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutBatch' }
+        '403': { description: "Role missing, or SAME_APPROVER.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "BATCH_NOT_CREATED (already approved or later).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/payout-batches/{batchId}/mark-sent:
+    post:
+      operationId: markPayoutBatchSent
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: Records that the approved file was uploaded to the bank. Only an APPROVED batch can be marked sent.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: SENT batch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutBatch' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "BATCH_NOT_APPROVED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/payout-batches/{batchId}/payouts/{payoutId}/utr:
+    post:
+      operationId: markPayoutPaid
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: Marks one PENDING payout of a SENT batch PAID with the bank's UTR. The rider sees the UTR.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }, { $ref: '#/components/parameters/PayoutId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [utr]
+              properties:
+                utr: { type: string, pattern: '^[A-Za-z0-9]{12,22}$' }
+      responses:
+        '200':
+          description: PAID payout.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "PAYOUT_NOT_PENDING, BATCH_NOT_SENT or UTR_IN_USE.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/payout-batches/{batchId}/payouts/{payoutId}/fail:
+    post:
+      operationId: markPayoutFailed
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: Marks one PENDING payout FAILED. The money stays in the rider's withdrawable balance for the next batch.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }, { $ref: '#/components/parameters/PayoutId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: FAILED payout.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "PAYOUT_NOT_PENDING or BATCH_NOT_SENT.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/holds:
+    get:
+      operationId: listHolds
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN, OPERATIONS_ADMIN, AUDIT_ADMIN]
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [ACTIVE, RELEASED], default: ACTIVE } }
+      responses:
+        '200':
+          description: Holds, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [holds]
+                properties:
+                  holds: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/Hold' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createHold
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        Holds one trip's pay only, never the rider's other earnings. releaseOn is today to 7 days ahead (IST);
+        the server releases it on that date if nobody does sooner.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tripId, reason, releaseOn]
+              properties:
+                tripId: { type: string, format: uuid }
+                reason: { $ref: '#/components/schemas/Reason' }
+                releaseOn: { type: string, format: date }
+      responses:
+        '201':
+          description: Active hold.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Hold' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "HOLD_EXISTS or EARNING_ALREADY_PAID.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "RELEASE_DATE_OUT_OF_RANGE.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/holds/{holdId}/release:
+    post:
+      operationId: releaseHold
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: Releases the hold now; the trip's pay becomes withdrawable.
+      parameters: [{ name: holdId, in: path, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: Released hold.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Hold' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "HOLD_NOT_ACTIVE.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/exports/rider-joins-exits:
+    get:
+      operationId: exportRiderJoinsExits
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN]
+      description: >-
+        Riders who joined (first ACTIVE) or exited (DEACTIVATED) on one IST date, for the government portal.
+        Columns: date, riderId, name, phoneMasked, event (JOINED or EXITED), reason.
+      parameters:
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: CSV with Content-Disposition attachment.
+          content:
+            text/csv: { schema: { type: string } }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/support-issues:
+    get:
+      operationId: listRiderSupportIssues
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: Issues riders raised in the app, with acknowledge-by (24 h) and fix-by (72 h) times.
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [OPEN, ACKNOWLEDGED, FIXED], default: OPEN } }
+      responses:
+        '200':
+          description: Issues, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issues]
+                properties:
+                  issues: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/SupportIssue' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/sos-events:
+    get:
+      operationId: listSosEvents
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: SOS presses from the last 7 days, newest first, with the last fix.
+      responses:
+        '200':
+          description: SOS events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/SosEvent' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/slots:
+    get:
+      operationId: listSlots
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: Slots that start on the IST dates from to to (inclusive, at most 31 days), earliest first, optionally for one rider.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: riderId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Slots.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [slots]
+                properties:
+                  slots: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/Slot' } }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createSlot
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Books one rider into a zone for a time window with a guaranteed hourly minimum. The guarantee is counted
+        only from non-mock fixes in the zone; the top-up is settled when the slot ends.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotInput' }
+      responses:
+        '201':
+          description: BOOKED slot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slot' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SLOT_OVERLAP (the rider already has a booked slot in this window) or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422':
+          description: >-
+            GUARANTEE_OUT_OF_RANGE (guaranteedPerHourPaise is outside the current rate card's declared range) or
+            SLOT_END_NOT_AFTER_START (endsAt is not after startsAt).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  /api/v1/admin/fleet/slots/{slotId}/cancel:
+    post:
+      operationId: cancelSlot
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Cancels a BOOKED slot; the rider no longer has its guarantee.
+      parameters: [{ $ref: '#/components/parameters/SlotId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: CANCELLED slot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slot' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SLOT_NOT_BOOKED (already cancelled or completed).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/banner:
+    get:
+      operationId: getZoneBanner
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: The banner riders see on Home until its until time.
+      responses:
+        '200':
+          description: The showing banner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneBanner' }
+        '204': { description: No banner is showing. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: setZoneBanner
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Shows this banner on every rider's Home until until (in the future), replacing any earlier one.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ZoneBanner' }
+      responses:
+        '200':
+          description: The showing banner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZoneBanner' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: clearZoneBanner
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: Stops showing the banner. Clearing when none is showing is also 204.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '204': { description: No banner is showing. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A new UUID per action. Retrying the same action reuses it.
+      schema: { type: string, format: uuid }
+    Cursor: { name: cursor, in: query, schema: { type: string, maxLength: 200 } }
+    RiderId: { name: riderId, in: path, required: true, schema: { type: string, format: uuid } }
+    DocumentId: { name: documentId, in: path, required: true, schema: { type: string, format: uuid } }
+    ShiftId: { name: shiftId, in: path, required: true, schema: { type: string, format: uuid } }
+    TripId: { name: tripId, in: path, required: true, schema: { type: string, format: uuid } }
+    BatchId: { name: batchId, in: path, required: true, schema: { type: string, format: uuid } }
+    PayoutId: { name: payoutId, in: path, required: true, schema: { type: string, format: uuid } }
+    SlotId: { name: slotId, in: path, required: true, schema: { type: string, format: uuid } }
+  requestBodies:
+    Reason:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [reason]
+            properties:
+              reason: { $ref: '#/components/schemas/Reason' }
+  responses:
+    Invalid: { description: "Invalid input.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Forbidden: { description: "The caller lacks the operation's role.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: "No such record.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, maxLength: 80, example: SAME_APPROVER }
+        message: { type: string, maxLength: 500, description: Plain English, safe to show to the admin. }
+    Reason: { type: string, minLength: 3, maxLength: 1000 }
+    RiderStatus: { type: string, enum: [NOT_RIDER, PENDING, ACTIVE, SUSPENDED, DEACTIVATED] }
+    RiderSummary:
+      type: object
+      required: [riderId, name, phoneMasked, status, pendingDocuments, pendingDevice, createdAt]
+      properties:
+        riderId: { type: string, format: uuid }
+        name: { type: string, maxLength: 120 }
+        phoneMasked: { type: string, maxLength: 20, example: '+91 98xxxxx210' }
+        status: { $ref: '#/components/schemas/RiderStatus' }
+        pendingDocuments: { type: integer, minimum: 0 }
+        pendingDevice: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    RiderDetail:
+      type: object
+      required: [rider, documents, devices, payoutAccount, shifts, statusEvents]
+      properties:
+        rider:
+          allOf:
+            - { $ref: '#/components/schemas/RiderSummary' }
+            - type: object
+              required: [kycName, language]
+              properties:
+                kycName: { type: string, maxLength: 120, description: Name on the verified documents; the payout holder name must match it. }
+                language: { type: string, enum: [en, te, hi] }
+                vehicleNumberMasked: { type: string, maxLength: 20, nullable: true }
+        documents: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/RiderDocument' } }
+        devices: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/RiderDevice' } }
+        payoutAccount: { allOf: [{ $ref: '#/components/schemas/PayoutAccount' }], nullable: true }
+        shifts: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/Shift' } }
+        statusEvents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/StatusEvent' } }
+    RiderDocument:
+      type: object
+      required: [documentId, type, status, expiresOn, reason, reviewedBy, reviewedAt, uploadedAt]
+      properties:
+        documentId: { type: string, format: uuid }
+        type:
+          type: string
+          description: Aadhaar is never collected.
+          enum: [DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE, PUC, PAN, PHOTO, ADDRESS_PROOF, BANK_PROOF]
+        status: { type: string, enum: [PENDING, VERIFIED, REJECTED, EXPIRED] }
+        expiresOn: { type: string, format: date, nullable: true }
+        reason: { type: string, maxLength: 1000, nullable: true, description: Rejection reason the rider sees. }
+        reviewedBy: { type: string, maxLength: 120, nullable: true, description: Reviewing admin's name. }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        uploadedAt: { type: string, format: date-time }
+    RiderDevice:
+      type: object
+      required: [deviceId, model, appVersion, state, firstSeenAt, approvedBy, approvedAt]
+      properties:
+        deviceId: { type: string, format: uuid }
+        model: { type: string, maxLength: 120 }
+        appVersion: { type: string, maxLength: 40 }
+        state: { type: string, enum: [BOUND, PENDING_APPROVAL, REPLACED] }
+        firstSeenAt: { type: string, format: date-time }
+        approvedBy: { type: string, maxLength: 120, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+    RiderVehicleInput:
+      type: object
+      additionalProperties: false
+      required: [label, regNumber]
+      properties:
+        label: { type: string, minLength: 2, maxLength: 60, example: Honda Activa 6G }
+        regNumber: { type: string, pattern: '^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$', writeOnly: true, example: TS09EA1234 }
+    RiderVehicle:
+      type: object
+      required: [label, regNumberMasked]
+      properties:
+        label: { type: string, maxLength: 60 }
+        regNumberMasked: { type: string, maxLength: 20, example: TS09xx1234 }
+    PayoutAccountInput:
+      type: object
+      additionalProperties: false
+      required: [method, holderName, verifiedInPerson]
+      description: UPI needs upiId; BANK needs accountNumber and ifsc.
+      properties:
+        method: { type: string, enum: [UPI, BANK] }
+        upiId: { type: string, pattern: '^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$', writeOnly: true }
+        accountNumber: { type: string, pattern: '^[0-9]{9,18}$', writeOnly: true }
+        ifsc: { type: string, pattern: '^[A-Z]{4}0[A-Z0-9]{6}$' }
+        holderName: { type: string, minLength: 2, maxLength: 120 }
+        verifiedInPerson: { type: boolean, enum: [true], description: The admin saw the rider and their ID at the office. }
+    PayoutAccount:
+      type: object
+      required: [method, maskedAccount, ifsc, holderName, setBy, setAt]
+      properties:
+        method: { type: string, enum: [UPI, BANK] }
+        maskedAccount: { type: string, maxLength: 80, example: 'xxxxxx4321' }
+        ifsc: { type: string, nullable: true }
+        holderName: { type: string, maxLength: 120 }
+        setBy: { type: string, maxLength: 120 }
+        setAt: { type: string, format: date-time }
+    Shift:
+      type: object
+      required: [shiftId, startedAt, endedAt, selfieState, selfieReason, selfieReviewedBy, inZoneSeconds]
+      properties:
+        shiftId: { type: string, format: uuid }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time, nullable: true }
+        selfieState: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        selfieReason: { type: string, maxLength: 1000, nullable: true }
+        selfieReviewedBy: { type: string, maxLength: 120, nullable: true }
+        inZoneSeconds: { type: integer, minimum: 0 }
+    SelfieReview:
+      type: object
+      required: [shiftId, riderId, riderName, startedAt, state, reason, reviewedBy, reviewedAt]
+      properties:
+        shiftId: { type: string, format: uuid }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        startedAt: { type: string, format: date-time }
+        state: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        reason: { type: string, maxLength: 1000, nullable: true }
+        reviewedBy: { type: string, maxLength: 120, nullable: true }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+    StatusEventKind: { type: string, enum: [SAFETY_PAUSE, NOTICE, RESTORE, DEACTIVATE] }
+    StatusEventInput:
+      type: object
+      additionalProperties: false
+      required: [kind, reason, evidenceSummary]
+      properties:
+        kind: { $ref: '#/components/schemas/StatusEventKind' }
+        reason: { $ref: '#/components/schemas/Reason' }
+        evidenceSummary: { type: string, minLength: 3, maxLength: 2000, description: What ops looked at; the rider sees it. }
+        deadline: { type: string, format: date-time, description: NOTICE only; at least 7 days after now. }
+        reviewBy: { type: string, format: date-time, description: SAFETY_PAUSE only; at most 72 hours after now. }
+        appealPhone: { type: string, pattern: '^\+91[0-9]{10}$', description: Required except for RESTORE. }
+    StatusEvent:
+      type: object
+      required: [eventId, kind, reason, evidenceSummary, deadline, reviewBy, appealPhone, approverName, createdAt, statusAfter]
+      properties:
+        eventId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/StatusEventKind' }
+        reason: { type: string, maxLength: 1000 }
+        evidenceSummary: { type: string, maxLength: 2000 }
+        deadline: { type: string, format: date-time, nullable: true }
+        reviewBy: { type: string, format: date-time, nullable: true }
+        appealPhone: { type: string, nullable: true }
+        approverName: { type: string, maxLength: 120 }
+        createdAt: { type: string, format: date-time }
+        statusAfter: { $ref: '#/components/schemas/RiderStatus' }
+    AuditEntry:
+      type: object
+      required: [entryId, at, actorName, action, riderId, targetId, summary]
+      properties:
+        entryId: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        actorName: { type: string, maxLength: 120 }
+        action: { type: string, maxLength: 60, example: DOCUMENT_REJECTED }
+        riderId: { type: string, format: uuid, nullable: true }
+        targetId: { type: string, maxLength: 64, nullable: true }
+        summary: { type: string, maxLength: 1000, description: Includes the reason when the action had one. }
+    CourierProvider: { type: string, enum: [CRAVES_FLEET, BORZO, PIDGE, OPS_QUEUE] }
+    Trip:
+      type: object
+      required: [tripId, orderCode, kitchenName, dropArea, state, provider, riderId, riderName, createdAt, updatedAt]
+      properties:
+        tripId: { type: string, format: uuid }
+        orderCode: { type: string, pattern: '^#[0-9A-F]{8}$' }
+        kitchenName: { type: string, maxLength: 160 }
+        dropArea: { type: string, maxLength: 160 }
+        state: { type: string, enum: [SEARCHING, ASSIGNED, AT_PICKUP, PICKED_UP, AT_DROP, DELIVERED, FAILED, CANCELLED] }
+        provider: { $ref: '#/components/schemas/CourierProvider' }
+        riderId: { type: string, format: uuid, nullable: true, description: Set only for CRAVES_FLEET. }
+        riderName: { type: string, maxLength: 120, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DispatchQueueItem:
+      type: object
+      required: [tripId, orderCode, kitchenName, dropArea, queuedAt, alertLevel, alertMessage, attempts]
+      properties:
+        tripId: { type: string, format: uuid }
+        orderCode: { type: string, pattern: '^#[0-9A-F]{8}$' }
+        kitchenName: { type: string, maxLength: 160 }
+        dropArea: { type: string, maxLength: 160 }
+        queuedAt: { type: string, format: date-time }
+        alertLevel: { type: string, enum: [INFO, WARNING, CRITICAL] }
+        alertMessage: { type: string, maxLength: 300 }
+        attempts:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [provider, outcome, at]
+            properties:
+              provider: { $ref: '#/components/schemas/CourierProvider' }
+              outcome: { type: string, maxLength: 60, example: NO_RIDER_ACCEPTED }
+              at: { type: string, format: date-time }
+    RiderPosition:
+      type: object
+      required: [riderId, riderName, lat, lng, recordedAt, ageSeconds, onShift, onTrip, tripId, mock]
+      properties:
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        recordedAt: { type: string, format: date-time }
+        ageSeconds: { type: integer, minimum: 0 }
+        onShift: { type: boolean }
+        onTrip: { type: boolean }
+        tripId: { type: string, format: uuid, nullable: true }
+        mock: { type: boolean, description: The phone reported a mock location for this fix. }
+    PayoutBatchKind: { type: string, enum: [WEEKLY, DAILY_WITHDRAWAL] }
+    PayoutBatchStatus: { type: string, enum: [CREATED, APPROVED, SENT, CLOSED] }
+    PayoutBatchSummary:
+      type: object
+      required: [batchId, kind, payoutDate, status, totalPaise, payoutCount, createdBy, createdByMe, createdAt, approvedBy, approvedAt, sentAt]
+      properties:
+        batchId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/PayoutBatchKind' }
+        payoutDate: { type: string, format: date }
+        status: { $ref: '#/components/schemas/PayoutBatchStatus' }
+        totalPaise: { type: integer, format: int64, minimum: 0 }
+        payoutCount: { type: integer, minimum: 0 }
+        createdBy: { type: string, maxLength: 120 }
+        createdByMe: { type: boolean, description: The caller created this batch and so cannot approve it. }
+        createdAt: { type: string, format: date-time }
+        approvedBy: { type: string, maxLength: 120, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+    PayoutBatch:
+      allOf:
+        - { $ref: '#/components/schemas/PayoutBatchSummary' }
+        - type: object
+          required: [payouts]
+          properties:
+            payouts: { type: array, maxItems: 5000, items: { $ref: '#/components/schemas/Payout' } }
+    Payout:
+      type: object
+      required: [payoutId, riderId, riderName, amountPaise, maskedAccount, status, utr, failureReason, markedBy, markedAt]
+      properties:
+        payoutId: { type: string, format: uuid }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        amountPaise: { type: integer, format: int64, minimum: 1 }
+        maskedAccount: { type: string, maxLength: 80 }
+        status: { type: string, enum: [PENDING, PAID, FAILED] }
+        utr: { type: string, nullable: true }
+        failureReason: { type: string, maxLength: 1000, nullable: true }
+        markedBy: { type: string, maxLength: 120, nullable: true }
+        markedAt: { type: string, format: date-time, nullable: true }
+    Hold:
+      type: object
+      required: [holdId, tripId, orderCode, riderId, riderName, amountPaise, reason, releaseOn, state, createdBy, createdAt, releasedBy, releasedAt]
+      properties:
+        holdId: { type: string, format: uuid }
+        tripId: { type: string, format: uuid }
+        orderCode: { type: string, pattern: '^#[0-9A-F]{8}$' }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        amountPaise: { type: integer, format: int64, minimum: 0 }
+        reason: { type: string, maxLength: 1000 }
+        releaseOn: { type: string, format: date }
+        state: { type: string, enum: [ACTIVE, RELEASED] }
+        createdBy: { type: string, maxLength: 120 }
+        createdAt: { type: string, format: date-time }
+        releasedBy: { type: string, maxLength: 120, nullable: true, description: Null when released automatically on releaseOn. }
+        releasedAt: { type: string, format: date-time, nullable: true }
+    SupportIssue:
+      type: object
+      required: [issueId, riderId, riderName, tripId, category, text, state, createdAt, acknowledgeBy, fixBy]
+      properties:
+        issueId: { type: string, format: uuid }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        tripId: { type: string, format: uuid, nullable: true }
+        category: { type: string, maxLength: 40, example: PAY }
+        text: { type: string, maxLength: 2000 }
+        state: { type: string, enum: [OPEN, ACKNOWLEDGED, FIXED] }
+        createdAt: { type: string, format: date-time }
+        acknowledgeBy: { type: string, format: date-time }
+        fixBy: { type: string, format: date-time }
+    SosEvent:
+      type: object
+      required: [sosId, riderId, riderName, phoneMasked, at, lat, lng, tripId]
+      properties:
+        sosId: { type: string, format: uuid }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        phoneMasked: { type: string, maxLength: 20 }
+        at: { type: string, format: date-time }
+        lat: { type: number, nullable: true }
+        lng: { type: number, nullable: true }
+        tripId: { type: string, format: uuid, nullable: true }
+    SlotInput:
+      type: object
+      additionalProperties: false
+      required: [riderId, zoneName, startsAt, endsAt, guaranteedPerHourPaise]
+      properties:
+        riderId: { type: string, format: uuid }
+        zoneName: { type: string, minLength: 1, maxLength: 80 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, description: After startsAt. }
+        guaranteedPerHourPaise: { type: integer, format: int64, minimum: 1, description: Within the current rate card's declared range. }
+    Slot:
+      type: object
+      required: [slotId, riderId, riderName, zoneName, startsAt, endsAt, guaranteedPerHourPaise, status]
+      properties:
+        slotId: { type: string, format: uuid }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        zoneName: { type: string, maxLength: 80 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        guaranteedPerHourPaise: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, enum: [BOOKED, CANCELLED, COMPLETED] }
+        onlineInZoneMinutes: { type: integer, minimum: 0, nullable: true, description: Counted from non-mock fixes; set once the slot has started. }
+        topUpPaise: { type: integer, format: int64, minimum: 0, nullable: true, description: Paid on top of trip pay to reach the guarantee; set once COMPLETED. }
+    ZoneBanner:
+      type: object
+      additionalProperties: false
+      required: [tone, text, until]
+      properties:
+        tone: { type: string, enum: [info, warning] }
+        text: { type: string, minLength: 1, maxLength: 160, example: Heavy rain in Madhapur. Ride slowly. }
+        until: { type: string, format: date-time, description: The banner stops showing at this time. }

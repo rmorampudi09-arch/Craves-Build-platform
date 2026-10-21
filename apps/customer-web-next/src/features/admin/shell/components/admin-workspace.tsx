@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  BarChart3, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
+  BarChart3, Bike, CalendarClock, Route, Wallet, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
   LayoutDashboard, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, Truck, X
 } from "lucide-react";
 import { observeAdminSession, logoutAdminSession } from "@/features/admin/shell/lib/admin-renewal";
@@ -22,7 +22,8 @@ const icons = {
   overview: LayoutDashboard, search: Search, modules: Menu, operations: SearchCheck,
   delivery: Truck, chefs: ChefHat, accounts: ShieldCheck, finance: ReceiptText,
   plans: ReceiptText, subscriptions: ClipboardList, capacity: Gauge,
-  notifications: BellRing, academy: GraduationCap
+  notifications: BellRing, academy: GraduationCap,
+  riders: Bike, "fleet-trips": Route, "fleet-slots": CalendarClock, "fleet-payouts": Wallet
 };
 
 function Navigation({ pathname, close }: { pathname: string; close?: () => void }) {

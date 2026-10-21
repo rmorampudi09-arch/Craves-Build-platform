@@ -63,6 +63,13 @@ react {
 def enableProguardInReleaseBuilds = false
 
 /**
+ * Rider CI only: .github/workflows/rider-apk.yml runs assembleRiderRelease with -PcravesRiderMinify=true (R8) and
+ * -PcravesVersionCode=<run number>. Nothing else passes them, so the customer build is unchanged.
+ */
+def cravesRiderMinify = project.findProperty('cravesRiderMinify')?.toString() == 'true'
+def cravesVersionCode = project.findProperty('cravesVersionCode')?.toString()
+
+/**
  * The preferred build flavor of JavaScriptCore (JSC)
  *
  * For example, to use the international variant, you can use:
@@ -124,6 +131,10 @@ android {
             buildConfigField "String", "CRAVES_APP", "\"rider\""
             // react-native-config looks up BuildConfig by applicationId unless told the namespace.
             resValue "string", "build_config_package", "com.cravesapp"
+            if (cravesVersionCode != null) {
+                // Each CI build installs over the last one (and Play needs a higher code for every upload).
+                versionCode cravesVersionCode.toInteger()
+            }
         }
     }
     signingConfigs {
@@ -150,7 +161,7 @@ android {
             if (hasReleaseSigningConfig) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled enableProguardInReleaseBuilds
+            minifyEnabled enableProguardInReleaseBuilds || cravesRiderMinify
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }

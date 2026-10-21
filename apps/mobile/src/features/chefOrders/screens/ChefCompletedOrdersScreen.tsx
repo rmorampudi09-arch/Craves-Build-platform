@@ -33,6 +33,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
+import {shortOrderNumber} from '../../../utils/orderNumber';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
@@ -63,10 +64,6 @@ type ChefCompletedOrdersNavigation = CompositeNavigationProp<
     NativeStackNavigationProp<ChefProductStackParamList>
   >
 >;
-
-function shortOrderReference(orderId: string): string {
-  return `#${orderId.replace(/-/g, '').slice(-8).toUpperCase()}`;
-}
 
 function deliveryLabel(order: ChefOperationalOrder): string {
   const summary = order.deliverySummary;
@@ -143,7 +140,7 @@ function CompletedOrderCard({
   onOpen: () => void;
   order: ChefOperationalOrder;
 }) {
-  const reference = shortOrderReference(order.id);
+  const reference = `#${shortOrderNumber(order.id)}`;
   const items = order.items ?? [];
   const updateAge = deriveChefCompletedOrderUpdateAge(order.updatedAt, nowMs);
 

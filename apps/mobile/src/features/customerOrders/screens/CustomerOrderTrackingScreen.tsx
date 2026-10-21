@@ -314,6 +314,20 @@ export function CustomerOrderTrackingScreen() {
             </View>
           )}
 
+          {projection.deliveryCode ? (
+            <View style={styles.codeCard} testID="customer-order-delivery-code">
+              <Text style={styles.sectionTitle}>Delivery code</Text>
+              <Text
+                accessibilityLabel={projection.deliveryCode.split('').join(' ')}
+                style={styles.codeDigits}>
+                {projection.deliveryCode}
+              </Text>
+              <Text style={styles.codeNote}>
+                Tell this code to your Craves rider at the door. Craves never asks for it on a call.
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.timelineCard}>
             <Text style={styles.sectionTitle}>Delivery timeline</Text>
             {projection.history.length > 0 ? (
@@ -437,6 +451,28 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     lineHeight: 21,
     textAlign: 'center',
+  },
+  codeCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    ...elevation.card,
+  },
+  codeDigits: {
+    color: colors.espressoBrown,
+    fontSize: typography.title,
+    fontWeight: fontWeight.extrabold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: spacing.xs,
+  },
+  codeNote: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.small,
+    lineHeight: 21,
   },
   timelineCard: {
     marginTop: spacing.md,

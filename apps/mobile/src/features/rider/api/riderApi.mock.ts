@@ -1,6 +1,7 @@
 // Demo server for the rider app. Data is invented: real Hyderabad areas, made-up kitchens, people and numbers.
 // Rate-card lines are the draft pricing, not final.
 import { AppApiError } from '../../../core/http/apiError';
+import { shortOrderNumber } from '../../../utils/orderNumber';
 import type { RiderApi } from './riderApi';
 import type {
   DeliverBody,
@@ -287,7 +288,12 @@ export function createMockRiderApi(options: MockOptions = {}) {
       tripId: offer.tripId,
       version: 1,
       step: 'TO_KITCHEN',
-      orderCode: `CR-${String(4100 + n).slice(-4)}`,
+      // Demo order ids are made up; the code uses the same rule chefs and customers see.
+      orderCode: `#${shortOrderNumber(
+        `0bde${(4100 + n)
+          .toString(16)
+          .padStart(4, '0')}-1c2d-4e5f-8a9b-0c1d2e3f4a5b`,
+      )}`,
       itemsCount: 1 + (n % 3),
       payPaise: offer.payPaise,
       kitchen: KITCHENS[n % KITCHENS.length],
@@ -780,7 +786,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
           : {
               title: 'Notice: review of a delivery',
               reason:
-                'A customer said order CR-4107 did not arrive. Pay for that order is on hold while we check.',
+                'A customer said order #0BDE1007 did not arrive. Pay for that order is on hold while we check.',
               deadline: iso(now() + 7 * DAY),
               appealPhone: DEMO_PHONE,
               sentAt: iso(now() - 2 * HOUR),

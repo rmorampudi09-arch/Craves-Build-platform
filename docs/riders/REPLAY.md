@@ -7,7 +7,7 @@ Two ways to see what Craves riders would have done, before any rider gets a real
 
 ## Replay
 
-The replay is a test-scope runner in integration-service: `FleetReplay` (the logic) and `FleetReplayRunner` (reads the database, writes the files), both under `src/test/java/in/craves/integration/fleet/dispatch`. It is not part of the service and never runs in CI: it runs only when named, with `FLEET_REPLAY_JDBC_URL` set.
+The replay is a test-scope runner in integration-service: `FleetReplay` (the logic) and `FleetReplayRunner` (reads the database, writes the files), both under `src/test/java/in/craves/integration/fleet/dispatch`. It is not part of the service and never runs in CI: `FleetReplayRunner` is a main class (no `@Test`), run by hand with `FLEET_REPLAY_JDBC_URL` set.
 
 ### What it reads
 
@@ -54,7 +54,8 @@ export FLEET_REPLAY_RADIUS_KM=5 FLEET_REPLAY_RIDERS=5               # defaults 5
 export FLEET_REPLAY_SHIFT_HOURS='11-15,19-23'                       # IST hours on shift (default)
 export FLEET_REPLAY_ACCEPT_RATE=1 FLEET_REPLAY_HOURLY_COST_PAISE=4000 FLEET_REPLAY_SEED=1
 export FLEET_REPLAY_OUT=target/fleet-replay                         # default
-mvn -B -f services/integration-service/pom.xml test -Dtest=FleetReplayRunner -Dsurefire.failIfNoSpecifiedTests=false
+mvn -B -f services/integration-service/pom.xml test-compile exec:java \
+  -Dexec.mainClass=in.craves.integration.fleet.dispatch.FleetReplayRunner -Dexec.classpathScope=test
 ```
 
 `FLEET_REPLAY_HOURLY_COST_PAISE` is C_h, the fixed cost per paid rider-hour (slot fee and support; PLAN uses ₹40). Run it again with other rider counts, hours or accept rates to compare; the seed keeps runs repeatable. Share the markdown; the CSV is for a spreadsheet. The report holds no names or phone numbers, only order ids and areas.

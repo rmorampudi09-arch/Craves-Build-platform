@@ -9,20 +9,19 @@ import in.craves.integration.fleet.dispatch.FleetReplay.Settings;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /**
  * Writes the replay report (markdown and CSV) for a date range and pilot area from the integration database. Not a test:
- * it runs only when named (-Dtest=FleetReplayRunner) with FLEET_REPLAY_JDBC_URL set, on a read-only session. How to run it:
- * docs/riders/REPLAY.md.
+ * a main class run by hand (exec:java, test classpath) with FLEET_REPLAY_JDBC_URL set, on a read-only session, so no
+ * test suite or release gate expects it. How to run it: docs/riders/REPLAY.md.
  */
-@EnabledIfEnvironmentVariable(named = "FLEET_REPLAY_JDBC_URL", matches = ".+")
-class FleetReplayRunner {
-    @Test
-    void writeTheReplayReport() throws Exception {
+public final class FleetReplayRunner {
+    private FleetReplayRunner() {
+    }
+
+    public static void main(String[] args) throws Exception {
         String[] center = env("FLEET_REPLAY_CENTER", null).split(",");
         Settings settings = new Settings(LocalDate.parse(env("FLEET_REPLAY_FROM", null)), LocalDate.parse(env("FLEET_REPLAY_TO", null)),
             Double.parseDouble(center[0].trim()), Double.parseDouble(center[1].trim()), Double.parseDouble(env("FLEET_REPLAY_RADIUS_KM", "5")),

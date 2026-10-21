@@ -60,6 +60,8 @@ public class OccurrenceRepository {
         );
     }
 
+    // Nested reads in the row mapper share this transaction's connection instead of taking a second one from the pool.
+    @Transactional(readOnly = true)
     public Optional<ActiveSchedule> findActiveSchedule(UUID planId) {
         return jdbcTemplate.query(
             "SELECT plan_id, recurrence_type, timezone, service_time, generation_lead_hours, version " +

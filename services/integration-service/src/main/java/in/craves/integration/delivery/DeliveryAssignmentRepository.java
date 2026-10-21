@@ -27,6 +27,8 @@ public class DeliveryAssignmentRepository {
         this.json = json;
     }
 
+    // Nested reads in the row mapper share this transaction's connection instead of taking a second one from the pool.
+    @Transactional(readOnly = true)
     public Optional<AssignmentResponse> findByChefSubOrderId(UUID chefSubOrderId) {
         return jdbc.query("SELECT * FROM delivery_schema.delivery_assignment WHERE chef_sub_order_id = ?",
             (rs, rowNum) -> mapAssignment(rs), chefSubOrderId).stream().findFirst();
@@ -36,10 +38,12 @@ public class DeliveryAssignmentRepository {
      * Compatibility alias for the delivery command router. The canonical repository method remains
      * findByChefSubOrderId so existing intelligence callers are unchanged.
      */
+    @Transactional(readOnly = true)
     public Optional<AssignmentResponse> findResponseByChefSubOrderId(UUID chefSubOrderId) {
         return findByChefSubOrderId(chefSubOrderId);
     }
 
+    @Transactional(readOnly = true)
     public Optional<AssignmentResponse> find(UUID assignmentId) {
         return jdbc.query("SELECT * FROM delivery_schema.delivery_assignment WHERE id = ?",
             (rs, rowNum) -> mapAssignment(rs), assignmentId).stream().findFirst();

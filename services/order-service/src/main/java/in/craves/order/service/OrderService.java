@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -474,9 +475,10 @@ public class OrderService {
 
     public CheckoutResponse getCheckout(CravesPrincipal principal, UUID checkoutId) {
         requireCustomer(principal);
+        List<OrderResponse> orders = listOrdersByCheckout(checkoutId);
         List<CheckoutResponse> rows = jdbcTemplate.query(
             "SELECT * FROM order_schema.checkout WHERE id = ? AND customer_identity_id = ?",
-            (rs, rowNum) -> mapCheckout(rs, listOrdersByCheckout(checkoutId)),
+            (rs, rowNum) -> mapCheckout(rs, orders),
             checkoutId, principal.identityId()
         );
         if (rows.isEmpty()) {
@@ -487,7 +489,7 @@ public class OrderService {
 
     public List<OrderResponse> listCustomerOrders(CravesPrincipal principal) {
         requireCustomer(principal);
-        return jdbcTemplate.query(
+        return queryOrders(
             "SELECT * FROM order_schema.customer_order WHERE customer_identity_id = ? ORDER BY created_at DESC LIMIT 50",
             this::mapOrder,
             principal.identityId()
@@ -496,7 +498,7 @@ public class OrderService {
 
     public OrderResponse getOrderForCustomer(CravesPrincipal principal, UUID orderId) {
         requireCustomer(principal);
-        List<OrderResponse> rows = jdbcTemplate.query(
+        List<OrderResponse> rows = queryOrders(
             "SELECT * FROM order_schema.customer_order WHERE id = ? AND customer_identity_id = ?",
             this::mapOrder,
             orderId, principal.identityId()
@@ -509,7 +511,7 @@ public class OrderService {
 
     public List<OrderResponse> listChefOrders(CravesPrincipal principal) {
         requireChef(principal);
-        List<OrderResponse> allRecent = jdbcTemplate.query(
+        List<OrderResponse> allRecent = queryOrders(
             "SELECT * FROM order_schema.customer_order ORDER BY created_at DESC LIMIT 100",
             this::mapChefOrder
         );
@@ -580,7 +582,7 @@ public class OrderService {
     }
 
     private OrderResponse findChefOrder(UUID orderId) {
-        List<OrderResponse> rows = jdbcTemplate.query("SELECT * FROM order_schema.customer_order WHERE id = ?", this::mapChefOrder, orderId);
+        List<OrderResponse> rows = queryOrders("SELECT * FROM order_schema.customer_order WHERE id = ?", this::mapChefOrder, orderId);
         if (rows.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order was not found");
         }
@@ -697,7 +699,12 @@ public class OrderService {
     }
 
     private List<OrderResponse> listOrdersByCheckout(UUID checkoutId) {
-        return jdbcTemplate.query("SELECT * FROM order_schema.customer_order WHERE checkout_id = ? ORDER BY created_at ASC", this::mapOrder, checkoutId);
+        return queryOrders("SELECT * FROM order_schema.customer_order WHERE checkout_id = ? ORDER BY created_at ASC", this::mapOrder, checkoutId);
+    }
+
+    // Items are read after the order rows: a read inside the row mapper needs a second connection from a small pool.
+    private List<OrderResponse> queryOrders(String sql, RowMapper<OrderResponse> mapper, Object... args) {
+        return jdbcTemplate.query(sql, mapper, args).stream().map(order -> order.withItems(listOrderItems(order.id()))).toList();
     }
 
     private CartItemResponse mapCartItem(ResultSet rs, int rowNum) throws SQLException {
@@ -748,7 +755,7 @@ public class OrderService {
             integerOrNull(rs, "prep_time_minutes"),
             mapDropoffSnapshot(rs),
             mapPickupSnapshot(rs),
-            listOrderItems(orderId),
+            List.of(),
             instant(rs, "created_at"),
             instant(rs, "updated_at")
         );

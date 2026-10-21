@@ -12,7 +12,8 @@ spring:
     username: ${REFERRAL_DB_USER:referral_unconfigured}
     password: ${REFERRAL_DB_PASSWORD:}
     hikari:
-      maximum-pool-size: ${REFERRAL_DB_POOL_SIZE:8}
+      # Shared database budget: scripts/release/check-db-connection-budget.py
+      maximum-pool-size: ${REFERRAL_DB_POOL_SIZE:4}
       minimum-idle: 0
       connection-timeout: 5000
       validation-timeout: 2000

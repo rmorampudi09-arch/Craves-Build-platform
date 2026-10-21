@@ -301,6 +301,13 @@ public final class ApiDtos {
                 statusHistory, deliveryPartner, chefHandedOverAt);
         }
 
+        public OrderResponse withItems(List<OrderItemResponse> orderItems) {
+            return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
+                foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,
+                deliveryAddress, pickupAddress, orderItems, createdAt, updatedAt, chefAcceptanceExpiresAt, customerNote,
+                statusHistory, deliveryPartner, chefHandedOverAt);
+        }
+
         public OrderResponse withStatusHistory(List<OrderStatusHistoryEntry> history) {
             return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
                 foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,

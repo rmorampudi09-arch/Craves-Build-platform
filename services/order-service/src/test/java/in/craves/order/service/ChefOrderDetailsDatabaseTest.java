@@ -299,6 +299,32 @@ class ChefOrderDetailsDatabaseTest {
             "SELECT chef_handed_over_at FROM order_schema.customer_order WHERE id = ?", Timestamp.class, id));
     }
 
+    // The Hikari pool is 3 per replica; a read that took a second connection per request stalled at a few parallel polls.
+    @Test
+    void orderReadsWorkOnAPoolOfOneConnection() {
+        UUID id = placeOrder("note");
+        UUID checkoutId = jdbc.queryForObject("SELECT checkout_id FROM order_schema.customer_order WHERE id = ?", UUID.class, id);
+        try (var one = new com.zaxxer.hikari.HikariDataSource()) {
+            one.setJdbcUrl(System.getenv("LEDGER_TEST_JDBC_URL"));
+            one.setUsername(System.getenv("LEDGER_TEST_DB_USER"));
+            one.setPassword(System.getenv("LEDGER_TEST_DB_PASSWORD"));
+            one.setMaximumPoolSize(1);
+            one.setConnectionTimeout(250);
+            CatalogClient catalog = mock(CatalogClient.class);
+            when(catalog.getKitchen(kitchen)).thenReturn(new CatalogKitchen(kitchen, chef, "Test kitchen", "Test chef",
+                "Test", "9000000000", "test@example.invalid", "Test pickup", null, null, "Test area", "Hyderabad",
+                "Telangana", "500001", new BigDecimal("17.40"), new BigDecimal("78.40"), "ACTIVE"));
+            OrderService pooled = new OrderService(new JdbcTemplate(one), catalog, mock(CustomerAddressClient.class),
+                new CheckoutSnapshotFactory(), mock(NotificationInternalClient.class));
+
+            assertEquals(1, pooled.getCheckout(customerActor, checkoutId).orders().getFirst().items().size());
+            assertEquals(1, pooled.listCustomerOrders(customerActor).getFirst().items().size());
+            assertEquals(1, pooled.getOrderForCustomer(customerActor, id).items().size());
+            assertEquals(1, pooled.getChefOrderDetail(chefActor, id).items().size());
+            assertEquals(1, pooled.listChefOrders(chefActor).getFirst().items().size());
+        }
+    }
+
     private UUID placeOrder(String note) {
         orders.addCartItem(customerActor, new AddCartItemRequest(menu, 1));
         return orders.checkout(customerActor, new CheckoutRequest(address, note)).orders().getFirst().id();

@@ -26,7 +26,7 @@ import org.springframework.web.client.RestClient;
 class FleetConfigurationTest {
     @Configuration(proxyBeanMethods = false)
     @ComponentScan(basePackages = "in.craves.integration.fleet",
-        excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX, pattern = ".*Test.*"))
+        excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX, pattern = ".*Test(\\$.*)?"))
     static class FleetPackage {
     }
 

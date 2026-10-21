@@ -59,6 +59,8 @@ describe('RiderHeader', () => {
     expect(chip().props.accessibilityLabel).toBe('Offline');
     expect(StyleSheet.flatten(chip().props.style).backgroundColor).toBe(colors.white);
     expect(texts()).toContain('Hi, Ravi');
+    // Jest runs mock mode; live mode leaves the tag off (src/app/rider/RiderApp.live.test.tsx).
+    expect(texts()).toContain('Demo data');
     act(() => pressable('rider-sos').props.onPress());
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Sos', {tripId: undefined});
     expect(byId('rider-sos').props.accessibilityLabel).toBe('SOS, emergency help');

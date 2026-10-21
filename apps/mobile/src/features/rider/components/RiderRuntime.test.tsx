@@ -6,6 +6,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {Offer} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import type {ReceivedOffer} from '../domain/offerTiming';
+import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {RiderRuntime} from './RiderRuntime';
@@ -16,6 +17,7 @@ jest.mock('../api/riderApi', () => ({riderApi: {registerDevice: jest.fn(async ()
 jest.mock('../state/tripQueue', () => ({
   tripQueue: {flush: jest.fn(async () => undefined), onSent: () => () => undefined, onRejected: () => () => undefined},
 }));
+jest.mock('../native/riderDevice', () => ({riderDevice: {installationId: jest.fn(async () => 'android-id-1')}}));
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {
     fcmToken: jest.fn(async () => 'token-1'),
@@ -45,6 +47,7 @@ const offer: Offer = {
 };
 
 const registerDevice = riderApi.registerDevice as jest.Mock;
+const installationId = riderDevice.installationId as jest.Mock;
 const pendingOffer = riderOnlineService.pendingOffer as jest.Mock;
 
 async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn()) {
@@ -69,7 +72,12 @@ beforeEach(() => {
 describe('RiderRuntime device registration', () => {
   it('sends the FCM token after sign-in and again whenever it changes', async () => {
     const tree = await mount();
-    expect(registerDevice).toHaveBeenCalledWith({fcmToken: 'token-1', appVersion: RIDER_APP_VERSION, model: expect.any(String)});
+    expect(registerDevice).toHaveBeenCalledWith({
+      installationId: 'android-id-1',
+      fcmToken: 'token-1',
+      appVersion: RIDER_APP_VERSION,
+      model: expect.any(String),
+    });
 
     await act(async () => mockTokenListeners.forEach(cb => cb('token-2')));
     expect(registerDevice).toHaveBeenLastCalledWith(expect.objectContaining({fcmToken: 'token-2'}));
@@ -83,6 +91,13 @@ describe('RiderRuntime device registration', () => {
       "This phone isn't approved",
       "Call rider support to approve this phone. You won't get offers on it until then.",
     );
+    act(() => tree.unmount());
+  });
+
+  it('registers nothing without an Android ID, rather than a made-up one', async () => {
+    installationId.mockResolvedValueOnce(null);
+    const tree = await mount();
+    expect(registerDevice).not.toHaveBeenCalled();
     act(() => tree.unmount());
   });
 

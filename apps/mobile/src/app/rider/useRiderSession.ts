@@ -18,6 +18,8 @@ export interface RiderSession {
   beginPhone(e164Phone: string): Promise<void>;
   confirmOtp(code: string): Promise<void>;
   signOut(): Promise<void>;
+  /** After 'error' (the saved session couldn't be checked, e.g. no signal at start): try again without signing out. */
+  retry(): void;
 }
 
 const DEMO_SESSION_KEY = 'rider.demoSession';
@@ -56,6 +58,8 @@ function useDemoSession(): RiderSession {
         appQueryClient.clear();
         setStatus('anonymous');
       },
+      // Demo restore never fails.
+      retry: () => undefined,
     }),
     [status, phone],
   );
@@ -87,9 +91,11 @@ function useLiveSession(): RiderSession {
     appQueryClient.clear();
   }, [dispatch]);
 
+  const retry = useCallback(() => dispatch(authActions.bootstrapReset()), [dispatch]);
+
   return useMemo(
-    () => ({status: bootstrap === 'idle' ? 'restoring' : status, beginPhone, confirmOtp, signOut}),
-    [bootstrap, status, beginPhone, confirmOtp, signOut],
+    () => ({status: bootstrap === 'idle' ? 'restoring' : status, beginPhone, confirmOtp, signOut, retry}),
+    [bootstrap, status, beginPhone, confirmOtp, signOut, retry],
   );
 }
 

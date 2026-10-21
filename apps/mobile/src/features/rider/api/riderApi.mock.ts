@@ -132,6 +132,13 @@ function apiError(
   return new AppApiError(code, message, status, undefined, retriable);
 }
 
+const notBound = () =>
+  apiError(
+    'DEVICE_NOT_BOUND',
+    "This phone isn't approved yet. Call rider support to approve it.",
+    409,
+  );
+
 interface MockOptions {
   latencyMs?: () => number;
   now?: () => number;
@@ -263,6 +270,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       kitchenArea: kitchen.area,
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
+      itemsCount: 1 + (n % 3),
     };
   }
 
@@ -294,7 +302,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
           .toString(16)
           .padStart(4, '0')}-1c2d-4e5f-8a9b-0c1d2e3f4a5b`,
       )}`,
-      itemsCount: 1 + (n % 3),
+      itemsCount: offer.itemsCount ?? 1,
       payPaise: offer.payPaise,
       kitchen: KITCHENS[n % KITCHENS.length],
       customer: CUSTOMERS[n % CUSTOMERS.length],
@@ -587,6 +595,11 @@ export function createMockRiderApi(options: MockOptions = {}) {
             403,
           );
         }
+        // The dev panel's "phone not approved" also covers the shift start, which the server refuses the same way.
+        if (state.deviceNotBound) {
+          state.deviceNotBound = false;
+          throw notBound();
+        }
         state.online = true;
         state.shiftStartedAt = now();
         state.nextOfferAt = now() + 12_000;
@@ -609,11 +622,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       respond(() => {
         if (state.deviceNotBound) {
           state.deviceNotBound = false;
-          throw apiError(
-            'DEVICE_NOT_BOUND',
-            "This phone isn't approved yet. Call rider support to approve it.",
-            409,
-          );
+          throw notBound();
         }
       }),
     postLocations: () =>

@@ -28,9 +28,10 @@ paths:
     get: {summary: Online state and today's totals, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/HomeSummary'}}}}}}
   /shift/start:
     post:
-      summary: Go online. The selfie is reviewed by ops (pilot) or face-matched (later, after 14 days' notice).
+      summary: Go online. The selfie is reviewed by ops (pilot) or face-matched (later, after 14 days' notice). 409 DEVICE_NOT_BOUND when the phone isn't the rider's bound one.
+      parameters: [{$ref: '#/components/parameters/InstallationId'}]
       requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [selfie], properties: {selfie: {type: string, format: binary}}}}}}
-      responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
   /shift/end:
     post: {summary: Go offline; revokes the shift credential, responses: {'204': {description: Offline}}}
   /documents:
@@ -40,7 +41,10 @@ paths:
       responses: {'204': {description: Uploaded}, '422': {$ref: '#/components/responses/Error'}}
   /devices:
     post:
-      summary: Register this phone's FCM token after sign-in and whenever it changes. One active phone per rider; 409 DEVICE_NOT_BOUND for a different phone until ops approves it.
+      summary: |
+        Register this phone's FCM token after sign-in and whenever it changes. One active phone per rider: the first
+        installationId is bound; a different one gets 409 DEVICE_NOT_BOUND and is kept as a pending device until ops
+        approves it. The same installationId with a new fcmToken updates the token.
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeviceRegistration'}}}}
       responses: {'204': {description: Registered}, '409': {$ref: '#/components/responses/Error'}}
   /locations:
@@ -121,6 +125,7 @@ components:
     OfferId: {name: offerId, in: path, required: true, schema: {type: string}}
     TripId: {name: tripId, in: path, required: true, schema: {type: string}}
     IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string}}
+    InstallationId: {name: X-Craves-Installation-Id, in: header, required: true, description: "The phone's installationId (Android ANDROID_ID), as sent to POST /devices", schema: {type: string}}
   responses:
     Error:
       description: Refused, with a message safe to show the rider
@@ -210,6 +215,7 @@ components:
         kitchenArea: {type: string}
         customerLocality: {type: string}
         estMinutes: {type: integer}
+        itemsCount: {type: integer, minimum: 1, description: 'Items in the sealed bag ("About 28 min in total, 2 items")'}
         payLines: {type: array, description: 'How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance")', items: {$ref: '#/components/schemas/PayLine'}}
     Place:
       type: object
@@ -284,8 +290,12 @@ components:
         expiresAt: {type: string, format: date-time}
     DeviceRegistration:
       type: object
-      required: [fcmToken, appVersion, model]
-      properties: {fcmToken: {type: string}, appVersion: {type: string}, model: {type: string}}
+      required: [installationId, fcmToken, appVersion, model]
+      properties:
+        installationId: {type: string, description: 'Android Settings.Secure.ANDROID_ID for the rider app; the same until a factory reset or a new signing key'}
+        fcmToken: {type: string}
+        appVersion: {type: string}
+        model: {type: string}
     RiderFix:
       type: object
       required: [lat, lng, accuracyM, at]

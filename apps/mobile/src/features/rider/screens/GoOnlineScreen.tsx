@@ -9,6 +9,7 @@ import {colors, fontWeight, iconSize, spacing, touchTarget, typography} from '..
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import type {RiderScreenProps} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
@@ -73,11 +74,11 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         return;
       }
       setBusy(true);
-      await riderOnlineService.start(await riderApi.startShift(uri));
+      await riderOnlineService.start(await riderApi.startShift(uri, await riderDevice.installationId()));
       queryClient.invalidateQueries({queryKey: riderKeys.all});
       navigation.goBack();
     } catch (error) {
-      // The server's own words: account not active, expired documents, an old app version.
+      // The server's own words: account not active, expired documents, an old app version, a phone ops hasn't approved.
       setProblem({text: error instanceof Error && error.message ? error.message : strings.common.error});
       setBusy(false);
       // A refusal may mean the account changed; /me decides where the rider lands.

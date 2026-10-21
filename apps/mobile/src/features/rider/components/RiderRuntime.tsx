@@ -5,6 +5,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {Offer} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {pickOffer, type ReceivedOffer} from '../domain/offerTiming';
+import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {riderKeys} from '../state/riderQueries';
@@ -24,11 +25,12 @@ export function RiderRuntime({riderId, openOffer}: {riderId: string; openOffer: 
   const device = useStrings().strings.device;
 
   useEffect(() => {
-    const register = (fcmToken: string | null) => {
-      if (!fcmToken) {
+    const register = async (fcmToken: string | null) => {
+      const installationId = await riderDevice.installationId();
+      if (!fcmToken || !installationId) {
         return;
       }
-      riderApi.registerDevice({fcmToken, appVersion: RIDER_APP_VERSION, model}).catch(error => {
+      riderApi.registerDevice({installationId, fcmToken, appVersion: RIDER_APP_VERSION, model}).catch(error => {
         // 409 DEVICE_NOT_BOUND: ops must approve this phone. Other failures retry on the next start or token change.
         if (error instanceof AppApiError && error.status === 409) {
           Alert.alert(device.notApprovedTitle, device.notApprovedBody);

@@ -186,7 +186,8 @@ export const en = {
     toKitchen: 'To the kitchen',
     toCustomer: 'Kitchen to customer',
     route: (from: string, to: string) => `${from} to ${to}`,
-    total: (minutes: number) => `About ${minutes} min in total`,
+    total: (minutes: number, items?: number) =>
+      `About ${minutes} min in total${items ? `, ${items} ${items === 1 ? 'item' : 'items'}` : ''}`,
     accept: 'Accept',
     decline: 'Decline',
     expired: 'Offer expired',

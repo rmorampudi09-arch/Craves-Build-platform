@@ -1,5 +1,6 @@
 package com.cravesapp
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -58,6 +59,16 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod
   fun openAppSettings(promise: Promise) {
     promise.resolve(openAppDetails())
+  }
+
+  /**
+   * The id the server binds the rider to (X-Craves-Installation-Id). ANDROID_ID is per signing key, user and phone:
+   * it survives a reinstall but changes after a factory reset or with a new signing key. Null if the phone has none.
+   */
+  @SuppressLint("HardwareIds") // Binding one rider to one phone is the purpose here.
+  @ReactMethod
+  fun getInstallationId(promise: Promise) {
+    promise.resolve(Settings.Secure.getString(reactContext.contentResolver, Settings.Secure.ANDROID_ID))
   }
 
   private fun openAppDetails(): Boolean =

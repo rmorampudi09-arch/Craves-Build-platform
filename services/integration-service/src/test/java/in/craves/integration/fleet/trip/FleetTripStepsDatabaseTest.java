@@ -182,6 +182,25 @@ class FleetTripStepsDatabaseTest {
     }
 
     @Test
+    void anOrderAcceptedBeforeDeliveryCodesExistedOpensThePhotoRouteAtOnce() {
+        toDrop();
+        when(codes.verify(any(), anyString())).thenReturn(new DeliveryCodeClient.Result(Outcome.NOT_FOUND, 0));
+        assertThatThrownBy(() -> trips.deliveredByOtp(identity, tripId, "1234", "rider-delivered-1"))
+            .isInstanceOfSatisfying(FleetApiException.class, error -> {
+                assertThat(error.status()).isEqualTo(423);
+                assertThat(error.code()).isEqualTo("OTP_LOCKED");
+                assertThat(error.getMessage()).isEqualTo("This order has no OTP. Use the photo option; ops will check it.");
+            });
+        refused(() -> trips.deliveredByOtp(identity, tripId, "1234", "rider-delivered-1"), 423, "OTP_LOCKED");
+        refused(() -> trips.deliveredByOtp(identity, tripId, "5678", "rider-delivered-2"), 423, "OTP_LOCKED");
+        verify(codes, times(1)).verify(any(), anyString());
+
+        MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);
+        assertThat(trips.deliveredByPhoto(identity, tripId, 0, photo, "photo-1").step()).as("no calls or wait needed").isEqualTo("DELIVERED");
+        assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, event -> assertThat(event.held()).isTrue());
+    }
+
+    @Test
     void thePhotoNeedsTwoCallsAndTheUnreachableWait() {
         toDrop();
         MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);

@@ -104,8 +104,13 @@ class DeliveryFleetStageTest {
             .thenThrow(new DeliveryProviderTemporarilyUnavailableException("Craves riders are deciding on the order", nextCheck));
 
         assertThatThrownBy(() -> fixture.worker.process(fixture.message)).isInstanceOfSatisfying(DeliveryCommandDeferredException.class,
-            deferred -> assertThat(deferred.retryAt()).isBeforeOrEqualTo(nextCheck));
-        verify(fixture.commands).markProviderWait(eq(fixture.message.commandId()), any(), any());
+            deferred -> {
+                assertThat(deferred.retryAt()).isBeforeOrEqualTo(nextCheck);
+                assertThat(deferred.retryKey()).isEqualTo("fleet-wait-" + fixture.message.commandId() + "-" + deferred.retryAt().toEpochMilli());
+            });
+        // Riders deciding is no courier's wait: Borzo's and Pidge's back-off afterwards starts where it would without riders.
+        verify(fixture.commands).markProviderWait(eq(fixture.message.commandId()), any(), any(), eq(false));
+        verify(fixture.commands, never()).markProviderWait(any(), any(), any());
         verify(fixture.commands, never()).startBorzoWindow(any());
         verify(fixture.router, never()).route(any());
         verify(fixture.router, never()).route(any(), any());
@@ -177,6 +182,7 @@ class DeliveryFleetStageTest {
                 0, 0, null, null)));
             when(jobs.findIdByChefSubOrderId(message.chefSubOrderId())).thenReturn(Optional.empty());
             when(commands.markProviderWait(any(), any(), any())).thenReturn(true);
+            when(commands.markProviderWait(any(), any(), any(), eq(false))).thenReturn(true);
         }
     }
 

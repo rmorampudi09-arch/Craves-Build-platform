@@ -19,6 +19,8 @@ import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
 import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripService;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -30,6 +32,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -207,10 +210,41 @@ public class FleetDispatchJobs {
     }
 
     /**
-     * Books the order a silent rider handed back. Borzo's window is the stage's own (opened when the rider was lost), so
-     * a Pidge stage books Pidge. An uncertain create is never retried: the order goes to the ops queue instead.
+     * Books the order a silent rider handed back, on one replica only: during a rollout two replicas run this tick, and
+     * each would book its own courier. A cancelled order is left for cancelledOrders to close. A session lock on its own connection keeps the router outside any transaction, as
+     * the delivery command runs it; the other replica skips the order and, once the lock is free, finds the job switched.
      */
     private boolean book(CourierStage stage) {
+        return Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) connection -> {
+            if (!advisory(connection, "pg_try_advisory_lock", stage.tripId())) {
+                return false;
+            }
+            try {
+                // Still the rider's job, and the order still going (a cancelled one is closed by cancelledOrders, not booked).
+                return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_stage s "
+                    + "JOIN fleet_schema.trip t ON t.id = s.trip_id JOIN delivery_schema.delivery_job j ON j.id = ? WHERE s.id = ? "
+                    + "AND s.state = 'OPEN' AND j.provider_id = 'craves_fleet' AND NOT " + FleetTripService.ORDER_REFUNDED + ")", Boolean.class,
+                    stage.jobId(), stage.id())) && bookLocked(stage);
+            } finally {
+                advisory(connection, "pg_advisory_unlock", stage.tripId());
+            }
+        }));
+    }
+
+    private static boolean advisory(Connection connection, String function, UUID tripId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT " + function + "(hashtextextended(?, 0))")) {
+            statement.setString(1, "fleet-handback/" + tripId);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() && result.getBoolean(1);
+            }
+        }
+    }
+
+    /**
+     * Borzo's window is the stage's own (opened when the rider was lost), so a Pidge stage books Pidge. An uncertain create
+     * is never retried: the order goes to the ops queue instead.
+     */
+    private boolean bookLocked(CourierStage stage) {
         CommandRecord command = commands.findByChefSubOrderId(stage.chefSubOrderId()).orElse(null);
         if (command == null) {
             return toOpsQueue(stage, "NO_DELIVERY_COMMAND");

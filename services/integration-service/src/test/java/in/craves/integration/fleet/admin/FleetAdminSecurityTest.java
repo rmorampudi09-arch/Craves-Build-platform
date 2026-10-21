@@ -64,9 +64,11 @@ class FleetAdminSecurityTest {
     @Test
     void readersListButOnlyOperatorsCreateRiders() throws Exception {
         when(service.listRiders(null, null, null)).thenReturn(new FleetAdminModels.RiderPage(List.of(), null));
-        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+        // admin-fleet-v1 x-roles: payments admins read riders to set their payout accounts.
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
             mvc.perform(as(get(RIDERS), role)).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.nextCursor").isEmpty());
+            mvc.perform(as(get(RIDERS + "/" + rider), role)).andExpect(status().isOk());
         }
         for (String role : List.of("COMPLIANCE_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN", "PAYMENTS_ADMIN")) {
             mvc.perform(as(post(RIDERS), role).header("Idempotency-Key", UUID.randomUUID().toString())

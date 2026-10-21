@@ -209,6 +209,7 @@ public class FleetPayouts {
      * WEEKLY (a Monday): every rider with a verified, unpaused account gets their whole withdrawable balance, after this
      * week's debt recovery (at most the cap). DAILY_WITHDRAWAL: the withdrawals requested for this date or before and not
      * yet in a batch, to each rider's current account. Riders with nothing to pay are left out; nothing is ever debited.
+     * The payout date is today or earlier (IST).
      */
     @Transactional
     public Object createBatch(Admin by, UUID key, BatchInput input) {
@@ -217,6 +218,10 @@ public class FleetPayouts {
         }
         if ("WEEKLY".equals(input.kind()) && input.payoutDate().getDayOfWeek() != DayOfWeek.MONDAY) {
             throw FleetApiException.unprocessable("NOT_A_MONDAY", "Weekly payouts go on a Monday.");
+        }
+        // A file made early would miss pay still coming in, and its date could then never be made again (BATCH_EXISTS).
+        if (input.payoutDate().isAfter(jdbc.queryForObject("SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date", LocalDate.class))) {
+            throw FleetApiException.unprocessable("PAYOUT_DATE_IN_FUTURE", "Make the payout file on its payout date (IST), not before.");
         }
         return admin.once(by, key, "PAYOUT_BATCH_CREATED", input.kind() + "\n" + input.payoutDate(), () -> {
             UUID id = UUID.randomUUID();

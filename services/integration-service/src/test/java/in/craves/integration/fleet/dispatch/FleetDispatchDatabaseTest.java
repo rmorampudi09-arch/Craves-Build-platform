@@ -134,6 +134,24 @@ class FleetDispatchDatabaseTest {
     }
 
     @Test
+    void aRiderWhoGoesOfflineWhileTheQuotesComeBackGetsNoOfferAndAShiftPastItsTwelveHoursIsNotOffered() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID leaving = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        UUID expired = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET credential_expires_at = now() - INTERVAL '1 second' WHERE rider_id = ?", expired);
+
+        assertThat(dispatcher.run(command, () -> {
+            fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now(), credential_revoked_at = now() WHERE rider_id = ?", leaving);
+            return OptionalLong.of(9000);
+        }, true)).as("nobody is left to ring, so Borzo comes next at once").isEmpty();
+
+        assertThat(count("fleet_schema.trip_offer")).isZero();
+        assertThat(fleet.db.queryForList("SELECT provider || ':' || state || ':' || COALESCE(outcome, '') FROM fleet_schema.trip_stage ORDER BY seq",
+            String.class)).containsExactly("CRAVES_FLEET:CLOSED:RIDERS_BUSY", "BORZO:OPEN:");
+        verifyNoInteractions(push);
+    }
+
+    @Test
     void theFleetStageClosesAtItsDeadlineBeforeBorzoStartsAndOnlyOnce() {
         FleetDispatchFixtures.policy(fleet.db, "live");
         FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);

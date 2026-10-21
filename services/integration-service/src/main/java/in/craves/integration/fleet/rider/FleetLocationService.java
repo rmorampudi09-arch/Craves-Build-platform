@@ -106,7 +106,7 @@ public class FleetLocationService {
         }
         String stopReason = stopReason(shift);
         if (stopReason != null) {
-            jdbc.update("UPDATE fleet_schema.rider_shift SET " + FleetShiftService.END_SHIFT + " WHERE id = ? AND ended_at IS NULL", shift.shiftId());
+            jdbc.update(FleetShiftService.endShifts("id = ?"), shift.shiftId());
             return stop(stopReason);
         }
         boolean sameShift = shift.shiftId().equals(shift.lastShiftId());

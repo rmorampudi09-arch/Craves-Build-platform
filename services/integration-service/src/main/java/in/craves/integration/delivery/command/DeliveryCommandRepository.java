@@ -162,17 +162,26 @@ public class DeliveryCommandRepository {
     public boolean markProviderWait(UUID commandId,
                                     Instant nextRetryAt,
                                     String safeError) {
+        return markProviderWait(commandId, nextRetryAt, safeError, true);
+    }
+
+    /** countAttempt false: a wait that is no courier's (Craves riders deciding), so the courier back-off later is unchanged. */
+    public boolean markProviderWait(UUID commandId,
+                                    Instant nextRetryAt,
+                                    String safeError,
+                                    boolean countAttempt) {
         return jdbc.update("""
             UPDATE delivery_schema.delivery_command
             SET status = 'WAITING_FOR_PROVIDER',
                 processing_started_at = NULL,
-                provider_wait_attempt_count = provider_wait_attempt_count + 1,
+                provider_wait_attempt_count = provider_wait_attempt_count + CASE WHEN ? THEN 1 ELSE 0 END,
                 provider_wait_started_at = COALESCE(provider_wait_started_at, now()),
                 next_provider_retry_at = ?,
                 last_error = ?,
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
             """,
+            countAttempt,
             toDatabaseTimestamp(nextRetryAt),
             truncate(safeError, 2000),
             commandId

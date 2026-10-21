@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,6 +48,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -159,6 +165,65 @@ class FleetDispatchJobsDatabaseTest {
         verify(handoffs, never()).enroll(any(), any(), any());
         assertThat(fleet.db.queryForObject("SELECT final_pay_paise FROM fleet_schema.trip WHERE id = ?", Long.class, trip))
             .as("at the kitchen: ₹20 cancellation fee plus 720 pickup-leg pay").isEqualTo(2720L);
+    }
+
+    @Test
+    void twoReplicasTickingAtOnceBookTheHandedBackOrderOnce() throws Exception {
+        UUID chefSubOrderId = UUID.randomUUID();
+        UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");
+        UUID job = FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, UUID.randomUUID(), trip, "COURIER_ASSIGNED");
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        DeliveryCommandMessage message = FleetDispatchFixtures.command(chefSubOrderId);
+        when(commands.findByChefSubOrderId(chefSubOrderId)).thenReturn(Optional.of(new CommandRecord(message.commandId(), chefSubOrderId,
+            message.orderId(), "COMPLETED", 1, message, null, null, null, null, null, 0, 0, null, null)));
+        AssignmentResponse assignment = new AssignmentResponse(UUID.randomUUID(), chefSubOrderId, message.orderId(), AssignmentStrategy.STOCHASTIC,
+            AssignmentStatus.RANKED, "TEST", null, "pidge", null, List.of(), Instant.now());
+        fleet.db.update("INSERT INTO delivery_schema.delivery_assignment (id, chef_sub_order_id, order_id, strategy, status, scoring_version, "
+            + "request_context) VALUES (?, ?, ?, 'STOCHASTIC', 'RANKED', 'TEST', '{}')", assignment.assignmentId(), chefSubOrderId, message.orderId());
+        RoutingResult pidge = new RoutingResult("pidge", new ProviderDelivery("pidge", "PIDGE-78", "PIDGE-78", DeliveryStatus.SEARCHING,
+            "searching", null, null, null, null, Instant.now()), assignment, UUID.randomUUID(), List.of(), List.of());
+        CountDownLatch booking = new CountDownLatch(1);
+        CountDownLatch booked = new CountDownLatch(1);
+        when(router.borzoTimedPolicyReady()).thenReturn(false);
+        when(router.route(message)).thenAnswer(call -> {
+            booking.countDown();
+            booked.await(10, TimeUnit.SECONDS);
+            return pidge;
+        });
+        jobs.watchdog();
+        ExecutorService replicas = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> first = replicas.submit(jobs::courierStages);
+            assertThat(booking.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(replicas.submit(jobs::courierStages).get(10, TimeUnit.SECONDS))
+                .as("the other replica skips the order while it is being booked").isZero();
+            booked.countDown();
+            assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(1);
+        } finally {
+            replicas.shutdownNow();
+        }
+        jobs.courierStages();
+
+        verify(router, times(1)).route(message);
+        assertThat(fleet.db.queryForObject("SELECT provider_delivery_id FROM delivery_schema.delivery_job WHERE id = ?", String.class, job))
+            .isEqualTo("PIDGE-78");
+        verify(alerts, never()).opsAlert(eq("FLEET_COURIER_UNRECORDED"), anyString(), anyString(), anyMap());
+    }
+
+    @Test
+    void aHandedBackOrderCancelledMeanwhileIsNotBooked() {
+        UUID chefSubOrderId = UUID.randomUUID();
+        UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");
+        FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, UUID.randomUUID(), trip, "COURIER_ASSIGNED");
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        when(router.borzoTimedPolicyReady()).thenReturn(false);
+        jobs.watchdog();
+        fleet.refundRequested(chefSubOrderId);
+
+        assertThat(jobs.courierStages()).isZero();
+        verify(router, never()).route(any());
+        jobs.cancelledOrders();
+        assertThat(stages(trip)).containsExactly("CRAVES_FLEET:CLOSED:ACCEPTED", "PIDGE:CLOSED:CANCELLED");
     }
 
     @Test

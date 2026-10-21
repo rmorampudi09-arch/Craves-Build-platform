@@ -106,7 +106,8 @@ paths:
         a photo (multipart; pay held until ops checks it). failed takes a reason. 4xx means the server's
         state wins: the app drops its queued steps for this trip and shows the message.
         A wrong OTP returns 422 OTP_INVALID with attemptsLeft (4, 3, 2, 1). The fifth wrong OTP, and every
-        OTP after it, returns 423 OTP_LOCKED; the photo route stays open.
+        OTP after it, returns 423 OTP_LOCKED; the photo route stays open. An order with no delivery code (accepted
+        before codes existed) returns 423 OTP_LOCKED at once.
       description: |
         A repeated key, or a step the trip already took, returns the trip. 409 STEP_CONFLICT (out of order) or
         TRIP_NOT_ACTIVE (the trip ended or went to another courier); 404 TRIP_NOT_FOUND (not this rider's trip);

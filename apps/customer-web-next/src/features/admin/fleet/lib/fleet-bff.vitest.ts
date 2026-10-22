@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const upstream = vi.hoisted(() => vi.fn());
 vi.mock("@/shared/lib/server-api", () => ({ authenticatedApiFetch: upstream, SessionRequiredError: class extends Error {} }));
 import { FLEET_ROUTES, fleetProxy } from "./fleet-bff";
-import { SETUP_ROUTES } from "./setup-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
 const DOC = "22222222-2222-4222-8222-222222222222";
@@ -199,8 +198,6 @@ describe("admin fleet BFF", () => {
       const method = /^ {4}(get|post|put|delete):$/.exec(line);
       if (method) operations.add(`${method[1].toUpperCase()} ${path}`);
     }
-    // shortcut: the pilot setup routes are checked once the backend branch adds /setup to the contract; drop this filter after both merge.
-    const pending = operations.has("GET setup") ? [] : SETUP_ROUTES;
-    for (const route of FLEET_ROUTES.filter(route => !pending.includes(route))) expect(operations, `${route.method} ${route.path}`).toContain(`${route.method} ${route.path}`);
+    for (const route of FLEET_ROUTES) expect(operations, `${route.method} ${route.path}`).toContain(`${route.method} ${route.path}`);
   });
 });

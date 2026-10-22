@@ -135,6 +135,40 @@ class FleetSetupDatabaseTest {
     }
 
     @Test
+    void anEmergencyStopWithdrawsVersionsScheduledForLaterSoDispatchStaysStopped() {
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)));
+        DispatchPolicyVersion scheduled = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            policy("shadow", 150, Instant.now().plus(15, ChronoUnit.DAYS))));
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)));
+        assertThat(version(scheduled.version()).withdrawnAt()).as("only an immediate off withdraws").isNull();
+
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        assertThat(stop.withdrawnAt()).isNull();
+        assertThat(version(scheduled.version()).withdrawnAt()).isEqualTo(stop.publishedAt());
+        assertThat(fleet.db.queryForObject("SELECT withdrawn_by FROM fleet_schema.dispatch_policy WHERE version = ?", UUID.class,
+            scheduled.version())).isEqualTo(ops.id());
+        assertThat(fleet.db.queryForObject("SELECT summary FROM fleet_schema.admin_audit WHERE action = 'DISPATCH_POLICY_SET' AND target_id = ?",
+            String.class, stop.version())).contains("withdrew " + scheduled.version() + " scheduled for " + scheduled.effectiveFrom());
+
+        assertThatThrownBy(() -> fleet.db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = NULL, withdrawn_by = NULL "
+            + "WHERE version = ?", scheduled.version())).as("a withdrawn version stays withdrawn").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> fleet.db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now(), withdrawn_by = ? "
+            + "WHERE version = ?", ops.id(), stop.version())).as("a version in force cannot be withdrawn")
+            .isInstanceOf(DataIntegrityViolationException.class);
+
+        // Move every version 16 days into the past, so the scheduled date has passed: the stop is still in force.
+        tx(() -> {
+            fleet.db.execute("ALTER TABLE fleet_schema.dispatch_policy DISABLE TRIGGER dispatch_policy_notice");
+            fleet.db.update("UPDATE fleet_schema.dispatch_policy SET effective_from = effective_from - INTERVAL '16 days', "
+                + "published_at = published_at - INTERVAL '16 days', withdrawn_at = withdrawn_at - INTERVAL '16 days' WHERE status = 'PUBLISHED'");
+            fleet.db.execute("ALTER TABLE fleet_schema.dispatch_policy ENABLE TRIGGER dispatch_policy_notice");
+            return null;
+        });
+        assertThat(new FleetPolicyStore(fleet.db, json).currentDispatchPolicy().orElseThrow().version()).isEqualTo(stop.version());
+        assertThat(tx(setup::setup).dispatchPolicy().mode()).isEqualTo("off");
+    }
+
+    @Test
     void pilotRidersAndKitchensAreUpsertedAndRemoved() {
         UUID rider = fleet.rider("Ravi Kumar", "+919876543210");
         UUID kitchen = UUID.randomUUID();
@@ -172,6 +206,10 @@ class FleetSetupDatabaseTest {
         assertThat(audited("PILOT_RIDER_REMOVED")).isEqualTo(3);
         assertThat(audited("PILOT_KITCHEN_ADDED")).isEqualTo(2);
         assertThat(audited("PILOT_KITCHEN_REMOVED")).isEqualTo(1);
+    }
+
+    private DispatchPolicyVersion version(String version) {
+        return tx(setup::setup).dispatchPolicies().stream().filter(policy -> policy.version().equals(version)).findFirst().orElseThrow();
     }
 
     private <T> T tx(Supplier<T> work) {

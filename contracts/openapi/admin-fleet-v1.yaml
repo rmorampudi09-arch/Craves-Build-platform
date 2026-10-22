@@ -843,7 +843,9 @@ paths:
       x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
       description: >-
         Creates and publishes a dispatch policy version (named like rate cards) in one step. It starts now, so off (the
-        emergency stop) always works at once; effectiveFrom counts only when it is at least 14 days away. A pickup detour
+        emergency stop) always works at once, and an off that starts now withdraws every version scheduled for later, so
+        none switches dispatch back on; any other version set now leaves a scheduled one to take over on its date.
+        effectiveFrom counts only when it is at least 14 days away. A pickup detour
         different from the policy in force changes rider pay (pickup km = straight line x detour), so it needs
         effectiveFrom at least 14 days away. The first policy ever never needs notice. Values must lie inside the declared
         ranges: the newest published policy's, or before any is published, the seeded draft's.
@@ -1288,7 +1290,7 @@ components:
       required: [testMode, dispatchPolicy, dispatchPolicies, rateCard, rateCards, pilotRiders, pilotKitchens]
       properties:
         testMode: { type: boolean, description: "CRAVES_FLEET_TEST_MODE: while true, dispatch offers trips only for pilot kitchens to pilot riders." }
-        dispatchPolicy: { allOf: [{ $ref: '#/components/schemas/DispatchPolicy' }], nullable: true, description: The newest PUBLISHED policy in force now; null means dispatch is off. }
+        dispatchPolicy: { allOf: [{ $ref: '#/components/schemas/DispatchPolicy' }], nullable: true, description: The newest PUBLISHED policy in force now, never a withdrawn one; null means dispatch is off. }
         dispatchPolicies: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/DispatchPolicy' } }
         rateCard: { allOf: [{ $ref: '#/components/schemas/RateCard' }], nullable: true, description: The newest PUBLISHED rate card in force now. }
         rateCards: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/RateCard' } }
@@ -1329,6 +1331,7 @@ components:
             status: { $ref: '#/components/schemas/PolicyStatus' }
             effectiveFrom: { type: string, format: date-time }
             publishedAt: { type: string, format: date-time, description: Left out for a DRAFT. }
+            withdrawnAt: { type: string, format: date-time, description: "An immediate off withdrew this scheduled version before it started; it never comes into force. Left out otherwise." }
             mode: { $ref: '#/components/schemas/DispatchMode' }
             ranges: { $ref: '#/components/schemas/Ranges' }
     RateCardValues:

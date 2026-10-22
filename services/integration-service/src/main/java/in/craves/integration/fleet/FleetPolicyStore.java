@@ -9,7 +9,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,12 +64,12 @@ public class FleetPolicyStore {
             LIMIT 1""", (row, n) -> rateCard(row)).stream().findFirst();
     }
 
-    /** The policy in force. Empty means dispatch is off: drafts never drive dispatch. */
+    /** The policy in force. Empty means dispatch is off: drafts and withdrawn versions never drive dispatch. */
     public Optional<DispatchPolicy> currentDispatchPolicy() {
         return jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
                    per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds FROM fleet_schema.dispatch_policy
-            WHERE status = 'PUBLISHED' AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1""",
+            WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1""",
             (row, n) -> new DispatchPolicy(row.getString("version"), row.getTimestamp("effective_from").toInstant(),
                 row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m"),
                 row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise"),
@@ -100,7 +99,7 @@ public class FleetPolicyStore {
         Map<String, Object> row = draft(RATE_CARD, version);
         boolean first = !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rate_card "
             + "WHERE status = 'PUBLISHED' AND version <> ?)", Boolean.class, version));
-        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant now = databaseNow();
         Instant effectiveFrom = ((Timestamp) row.get("effective_from")).toInstant();
         if (first && effectiveFrom.isBefore(now)) {
             effectiveFrom = now;
@@ -112,12 +111,13 @@ public class FleetPolicyStore {
     /**
      * Publishes a draft dispatch policy. It starts now, or on its effective_from when that is at least 14 days away. A
      * changed pickup detour changes pay, so it needs that notice (the first policy ever never does); live needs a rate
-     * card in force. The table's trigger holds the notice rule.
+     * card in force. The table's trigger holds the notice rule. An off that starts now is the emergency stop: it withdraws
+     * every version scheduled for later, so none switches dispatch back on. Returns those, as "version scheduled for time".
      */
     @Transactional
-    public void publishDispatchPolicy(String version, UUID publishedBy) {
+    public List<String> publishDispatchPolicy(String version, UUID publishedBy) {
         Map<String, Object> row = draft(DISPATCH_POLICY, version);
-        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant now = databaseNow();
         Instant requested = ((Timestamp) row.get("effective_from")).toInstant();
         boolean scheduled = !requested.isBefore(now.plus(NOTICE));
         if ("live".equals(row.get("mode")) && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM "
@@ -125,7 +125,7 @@ public class FleetPolicyStore {
             throw FleetApiException.unprocessable("RATE_CARD_REQUIRED", "Publish a rate card before switching dispatch to live.");
         }
         Integer detour = jdbc.queryForList("SELECT pickup_detour_percent FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
-            + "AND version <> ? ORDER BY (effective_from <= ?) DESC, effective_from DESC LIMIT 1", Integer.class, version,
+            + "AND withdrawn_at IS NULL AND version <> ? ORDER BY (effective_from <= ?) DESC, effective_from DESC LIMIT 1", Integer.class, version,
             Timestamp.from(now)).stream().findFirst().orElse(null);
         if (!scheduled && detour != null && detour != ((Number) row.get("pickup_detour_percent")).intValue()) {
             throw FleetApiException.unprocessable("DETOUR_NEEDS_NOTICE", "A new pickup detour changes rider pay, so it needs 14 days' "
@@ -134,6 +134,13 @@ public class FleetPolicyStore {
         Instant effectiveFrom = scheduled ? requested : now;
         refuse(publishProblems(values(row, DISPATCH_POLICY_FIELDS), declaredRanges(DISPATCH_POLICY, row), effectiveFrom, now, false));
         published(DISPATCH_POLICY, version, publishedBy, now, effectiveFrom);
+        if (scheduled || !"off".equals(row.get("mode"))) {
+            return List.of();
+        }
+        return jdbc.query("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = ?, withdrawn_by = ? WHERE status = 'PUBLISHED' "
+            + "AND withdrawn_at IS NULL AND effective_from > ? RETURNING version, effective_from",
+            (withdrawn, n) -> withdrawn.getString("version") + " scheduled for " + withdrawn.getTimestamp("effective_from").toInstant(),
+            Timestamp.from(now), publishedBy, Timestamp.from(now));
     }
 
     /**
@@ -148,10 +155,16 @@ public class FleetPolicyStore {
         return prefix + "-v" + (last + 1);
     }
 
-    /** The declared ranges of the newest published version in table, if any is published. */
+    /** The declared ranges of the newest published version in table (a withdrawn policy does not count), if any. */
     public Optional<Map<String, List<Long>>> publishedRanges(String table) {
         return jdbc.queryForList("SELECT ranges::text FROM fleet_schema." + table + " WHERE status = 'PUBLISHED' "
-            + "ORDER BY effective_from DESC LIMIT 1", String.class).stream().findFirst().map(this::ranges);
+            + (DISPATCH_POLICY.equals(table) ? "AND withdrawn_at IS NULL " : "") + "ORDER BY effective_from DESC LIMIT 1", String.class)
+            .stream().findFirst().map(this::ranges);
+    }
+
+    /** The database clock (the transaction's start), so published_at and effective_from agree with every in-force read. */
+    private Instant databaseNow() {
+        return jdbc.queryForObject("SELECT now()", Timestamp.class).toInstant();
     }
 
     /** Takes the row lock of a draft, after the publish lock; 404 or 409 otherwise. */

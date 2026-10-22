@@ -54,6 +54,8 @@ public class FleetSetupService {
     private static final Set<String> MODES = Set.of("off", "shadow", "live");
     private static final List<String> LANGUAGES = List.of("en", "te", "hi");
     private static final String IN_FORCE = "WHERE status = 'PUBLISHED' AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1";
+    private static final String POLICY_IN_FORCE = "WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now() "
+        + "ORDER BY effective_from DESC LIMIT 1";
     private static final String NEWEST = "ORDER BY created_at DESC, version DESC LIMIT 20";
     private static final String PILOT_RIDER = "SELECT t.rider_id, r.name, r.status, t.note, t.added_at FROM fleet_schema.test_mode_rider t "
         + "JOIN fleet_schema.rider r ON r.id = t.rider_id ";
@@ -76,7 +78,8 @@ public class FleetSetupService {
     @Transactional(readOnly = true)
     public FleetSetup setup() {
         return new FleetSetup(testMode,
-            jdbc.query("SELECT * FROM fleet_schema.dispatch_policy " + IN_FORCE, (row, n) -> dispatchPolicy(row)).stream().findFirst().orElse(null),
+            jdbc.query("SELECT * FROM fleet_schema.dispatch_policy " + POLICY_IN_FORCE, (row, n) -> dispatchPolicy(row)).stream().findFirst()
+                .orElse(null),
             jdbc.query("SELECT * FROM fleet_schema.dispatch_policy " + NEWEST, (row, n) -> dispatchPolicy(row)),
             jdbc.query("SELECT * FROM fleet_schema.rate_card " + IN_FORCE, (row, n) -> rateCard(row)).stream().findFirst().orElse(null),
             jdbc.query("SELECT * FROM fleet_schema.rate_card " + NEWEST, (row, n) -> rateCard(row)),
@@ -169,11 +172,11 @@ public class FleetSetupService {
             args.add(admin.write(ranges));
             jdbc.update("INSERT INTO fleet_schema.dispatch_policy (version, effective_from, mode, " + String.join(", ", DISPATCH_POLICY_FIELDS)
                 + ", ranges) VALUES (?, ?, ?, " + "?, ".repeat(DISPATCH_POLICY_FIELDS.size()) + "CAST(? AS jsonb))", args.toArray());
-            policies.publishDispatchPolicy(version, by.id());
+            List<String> withdrawn = policies.publishDispatchPolicy(version, by.id());
             DispatchPolicyVersion policy = jdbc.queryForObject("SELECT * FROM fleet_schema.dispatch_policy WHERE version = ?",
                 (row, n) -> dispatchPolicy(row), version);
             return new Done(policy, null, version, "Set dispatch to " + input.mode() + " (version " + version + "), in force from "
-                + policy.effectiveFrom() + ".");
+                + policy.effectiveFrom() + (withdrawn.isEmpty() ? "." : "; withdrew " + String.join(", ", withdrawn) + "."));
         });
     }
 
@@ -316,7 +319,8 @@ public class FleetSetupService {
         return new DispatchPolicyVersion(row.getString("version"), row.getString("status"), instant(row, "effective_from"),
             instant(row, "published_at"), row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"),
             row.getInt("radius_m"), row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"),
-            row.getLong("cost_guard_premium_paise"), row.getInt("pidge_stage_seconds"), camel(read(row.getString("ranges"), RANGES)));
+            row.getLong("cost_guard_premium_paise"), row.getInt("pidge_stage_seconds"), camel(read(row.getString("ranges"), RANGES)),
+            instant(row, "withdrawn_at"));
     }
 
     private static PilotRider pilotRider(ResultSet row) throws SQLException {

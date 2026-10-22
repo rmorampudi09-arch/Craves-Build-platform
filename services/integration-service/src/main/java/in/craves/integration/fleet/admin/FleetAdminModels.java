@@ -110,12 +110,12 @@ public final class FleetAdminModels {
                              List<PilotKitchen> pilotKitchens) {
     }
 
-    /** ranges are keyed by these camelCase field names, each [min, max]. */
+    /** ranges are keyed by these camelCase field names, each [min, max]. withdrawnAt: an emergency stop withdrew it before it started. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record DispatchPolicyVersion(String version, String status, Instant effectiveFrom, Instant publishedAt, String mode,
                                         int offerSeconds, int fleetStageSeconds, int radiusM, int pickupDetourPercent,
                                         long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
-                                        Map<String, List<Long>> ranges) {
+                                        Map<String, List<Long>> ranges, Instant withdrawnAt) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -25,7 +25,7 @@ slot,piece,type,media_ids,status,published_at_ist
 2026-10-20T20:23,ST1,story,18143921170590556|17925433704223545|18117842764792269,published (frames 2-3 finished in the 22:23 catch-up; frame 3 via ST1-03.jpg),2026-10-20 22:24
 2026-10-21T11:23,C4,carousel,18645524593041389,published late (11:23 run stopped after a restart; 13:23 catch-up call timed out but went live 14:23; confirmed via last_3dT),2026-10-21 14:23
 2026-10-21T11:23,ST2,story,17943269736366108|18105307292128765|18118378300997788|18111369566180235|18383177590232911,published late (frames spread 14:24-16:40 across restarts),2026-10-21 15:41
-2026-10-21T20:23,C3-TE,carousel,,timeout-unverified (20:23 and 22:23 runs stopped after restarts; call at Thu 22 20:24 timed out; check last_3dT before any retry),2026-10-22 20:27
+2026-10-21T20:23,C3-TE,carousel,18002648382011187,published late (Wed runs stopped after restarts; Thu 20:24 call timed out but went live 20:26; confirmed via last_3dT),2026-10-22 20:26
 2026-10-21T20:23,ST3,story,,skipped-late (runs stopped after restarts),2026-10-22 20:27
 2026-10-22T11:23,ST6,story,,skipped-late (11:23 and 13:23 runs stopped after restarts),2026-10-22 20:27
 2026-10-22T20:23,ST7,story,18634430503041969|18133908001811208|18119232280957748|18112493890896879,published (frames 3-4 finished in the 22:23 catch-up),2026-10-22 20:29

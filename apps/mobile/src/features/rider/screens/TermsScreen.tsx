@@ -74,7 +74,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       </RiderScreen>
     );
   }
-  const {version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines, fullTextUrl, draft} = terms.data;
+  const {version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines, fullTextUrl, draft, upcoming} = terms.data;
   // Someone who accepted an older version sees what changed; a first acceptance reads the whole card.
   const changed = accepting && Boolean(me.data?.acceptedTermsVersion) && summaryOfChanges.length > 0;
 
@@ -134,6 +134,19 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
         ))}
         <Text style={[styles.small, styles.footnote]}>{t.notice}</Text>
       </Card>
+      {upcoming ? (
+        <Card>
+          <CardTitle>{t.upcomingTitle(formatDay(upcoming.effectiveFrom))}</CardTitle>
+          {upcoming.summaryOfChanges.map(line => (
+            <Text key={line} style={styles.body}>
+              {line}
+            </Text>
+          ))}
+          {upcoming.rateCardLines.map((line, index) => (
+            <RateRow key={line.label} label={line.label} value={line.value} divider={index > 0} />
+          ))}
+        </Card>
+      ) : null}
       <Card>
         <CardTitle>{t.howPaidTitle}</CardTitle>
         <Text style={styles.body}>{t.howPaid}</Text>

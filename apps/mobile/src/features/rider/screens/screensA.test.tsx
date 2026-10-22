@@ -310,6 +310,21 @@ describe('Terms', () => {
     expect(allText()).not.toContain('Draft pricing, not final');
   });
 
+  it('shows the upcoming terms in their own card, and nothing when there are none', async () => {
+    const upcoming = {
+      version: '2026-11-v1',
+      effectiveFrom: '2026-11-05T12:00:00Z',
+      summaryOfChanges: ['Each drop km after 2 km pays ₹10.'],
+      rateCardLines: [{label: 'Each drop km after 2 km', value: '₹10'}],
+    };
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, {...terms, upcoming}], [riderKeys.me, me]]);
+    expect(allText()).toContain('New terms from 5 Nov');
+    expect(allText()).toContain('Each drop km after 2 km pays ₹10.');
+    expect(allText()).toContain('Each drop km after 2 km | ₹10');
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
+    expect(allText()).not.toContain('New terms from');
+  });
+
   it("says why accepting failed and reloads the terms", async () => {
     (riderApi.acceptTerms as jest.Mock).mockRejectedValueOnce(new AppApiError('TERMS_CHANGED', 'The terms changed again.', 409));
     const client = await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, firstTime]]);

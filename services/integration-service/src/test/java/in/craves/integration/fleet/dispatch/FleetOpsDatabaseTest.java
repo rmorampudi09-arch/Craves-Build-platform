@@ -167,6 +167,18 @@ class FleetOpsDatabaseTest {
     }
 
     @Test
+    void aRiderIsNeverGivenATripOnADraftOrNotYetStartedRateCard() {
+        UUID tripId = tripId();
+        // Published cards never change, so the fixture's card is moved with its trigger off, as in FleetSetupDatabaseTest.
+        rateCard("effective_from = now() + INTERVAL '20 days'");
+        refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RATE_CARD_REQUIRED");
+        rateCard("status = 'DRAFT', published_at = NULL, effective_from = now() - INTERVAL '1 day'");
+        refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RATE_CARD_REQUIRED");
+        assertThat(single().state()).as("nothing changed").isEqualTo("SEARCHING");
+        assertThat(stages(tripId)).containsExactly("CRAVES_FLEET:OPEN:");
+    }
+
+    @Test
     void handingARiderTripToPidgeReleasesTheRiderWithPayForTheTripSoFar() {
         UUID tripId = accept(near);
         events.clear();
@@ -353,6 +365,14 @@ class FleetOpsDatabaseTest {
 
     private String commandStatus() {
         return fleet.db.queryForObject("SELECT status FROM delivery_schema.delivery_command WHERE chef_sub_order_id = ?", String.class, chefSubOrderId);
+    }
+
+    private void rateCard(String set) {
+        new TransactionTemplate(fleet.transactions).executeWithoutResult(status -> {
+            fleet.db.execute("ALTER TABLE fleet_schema.rate_card DISABLE TRIGGER rate_card_notice");
+            fleet.db.update("UPDATE fleet_schema.rate_card SET " + set + " WHERE version = '2026-10-v1'");
+            fleet.db.execute("ALTER TABLE fleet_schema.rate_card ENABLE TRIGGER rate_card_notice");
+        });
     }
 
     private static void refused(Runnable call, int status, String code) {

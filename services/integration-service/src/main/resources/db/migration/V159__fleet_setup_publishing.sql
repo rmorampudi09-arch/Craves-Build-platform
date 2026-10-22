@@ -22,13 +22,19 @@ ALTER TABLE fleet_schema.dispatch_policy
     ADD COLUMN IF NOT EXISTS withdrawn_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS withdrawn_by UUID;
 
--- Published versions are the record of what riders were told, so they never change: a published rate card not at all,
--- a published dispatch policy only by its one withdrawal. published_at and withdrawn_at come from the database clock, so a
+-- Published versions are the record of what riders were told, so they never change or go away: a published rate card
+-- not at all, a published dispatch policy only by its one withdrawal. published_at and withdrawn_at come from the database clock, so a
 -- caller cannot backdate them; the in-force reads use the same clock.
 
 -- A rate card needs 14 days' notice unless no other rate card was ever published.
 CREATE OR REPLACE FUNCTION fleet_schema.rate_card_notice() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.status = 'PUBLISHED' THEN
+            RAISE EXCEPTION 'Rate card % is published, so it cannot be deleted.', OLD.version USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN OLD;
+    END IF;
     IF TG_OP = 'UPDATE' AND OLD.status = 'PUBLISHED' THEN
         RAISE EXCEPTION 'Rate card % is published, so it cannot change.', OLD.version USING ERRCODE = 'check_violation';
     END IF;
@@ -53,6 +59,12 @@ CREATE OR REPLACE FUNCTION fleet_schema.dispatch_policy_notice() RETURNS trigger
 DECLARE
     detour INTEGER;
 BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.status = 'PUBLISHED' THEN
+            RAISE EXCEPTION 'Dispatch policy % is published, so it cannot be deleted.', OLD.version USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN OLD;
+    END IF;
     IF TG_OP = 'UPDATE' AND OLD.status = 'PUBLISHED' THEN
         IF OLD.withdrawn_at IS NULL AND NEW.withdrawn_at IS NOT NULL
            AND to_jsonb(NEW) - 'withdrawn_at' - 'withdrawn_by' = to_jsonb(OLD) - 'withdrawn_at' - 'withdrawn_by' THEN
@@ -91,7 +103,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
-CREATE OR REPLACE TRIGGER rate_card_notice BEFORE INSERT OR UPDATE
+CREATE OR REPLACE TRIGGER rate_card_notice BEFORE INSERT OR UPDATE OR DELETE
     ON fleet_schema.rate_card FOR EACH ROW EXECUTE FUNCTION fleet_schema.rate_card_notice();
-CREATE OR REPLACE TRIGGER dispatch_policy_notice BEFORE INSERT OR UPDATE
+CREATE OR REPLACE TRIGGER dispatch_policy_notice BEFORE INSERT OR UPDATE OR DELETE
     ON fleet_schema.dispatch_policy FOR EACH ROW EXECUTE FUNCTION fleet_schema.dispatch_policy_notice();

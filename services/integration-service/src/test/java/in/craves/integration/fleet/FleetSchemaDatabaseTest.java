@@ -110,6 +110,8 @@ class FleetSchemaDatabaseTest {
             .as("pay values of a published card").isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> db.update("UPDATE fleet_schema.rate_card SET status = 'DRAFT', published_at = NULL WHERE version = '2026-10-v1'"))
             .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> db.update("DELETE FROM fleet_schema.rate_card WHERE version = '2026-10-v1'"))
+            .isInstanceOf(DataIntegrityViolationException.class);
 
         String insert = "INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
             + "fleet_stage_seconds, radius_m, ranges) VALUES (?, 'PUBLISHED', now() + CAST(? AS interval), now(), ?, 40, 60, 5000, '{}')";
@@ -128,6 +130,9 @@ class FleetSchemaDatabaseTest {
         }
         assertThatThrownBy(() -> db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now(), withdrawn_by = ? "
             + "WHERE version = '2026-10-v1'", UUID.randomUUID())).as("a draft").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> db.update("DELETE FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v3'"))
+            .as("a withdrawn version is still a record").isInstanceOf(DataIntegrityViolationException.class);
+        db.update("DELETE FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v1'");
     }
 
     @Test

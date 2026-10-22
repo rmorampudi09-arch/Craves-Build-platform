@@ -359,7 +359,7 @@ paths:
         '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: "TRIP_NOT_REASSIGNABLE or RIDER_NOT_AVAILABLE.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "TRIP_NOT_REASSIGNABLE, RIDER_NOT_AVAILABLE, or RATE_CARD_REQUIRED (to a rider: no published rate card has started, so there is nothing to pay them with).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/trips/{tripId}/cancel:
     post:
       operationId: cancelTrip

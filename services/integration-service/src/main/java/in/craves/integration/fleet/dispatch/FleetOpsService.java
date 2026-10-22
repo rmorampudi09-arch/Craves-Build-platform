@@ -163,8 +163,8 @@ public class FleetOpsService {
 
     /**
      * To one on-shift idle rider (an order no rider holds yet) or to Borzo or Pidge (an order still searching, or a rider's
-     * trip before pickup: the rider is released with pay for the trip so far, not held). 409 TRIP_NOT_REASSIGNABLE or
-     * RIDER_NOT_AVAILABLE otherwise.
+     * trip before pickup: the rider is released with pay for the trip so far, not held). 409 TRIP_NOT_REASSIGNABLE,
+     * RIDER_NOT_AVAILABLE, or RATE_CARD_REQUIRED (no published rate card has started) otherwise.
      */
     public Object reassign(Admin by, UUID key, UUID tripId, ReassignInput input) {
         String reason = FleetAdminService.reason(input == null ? null : input.reason());
@@ -257,8 +257,11 @@ public class FleetOpsService {
             throw FleetApiException.conflict("RIDER_NOT_AVAILABLE",
                 "This rider can't take it now: they must be active, online, free and sending their location.");
         }
-        RateCard card = policies.rateCard((String) locked.get("rate_card_version")).or(policies::currentRateCard)
-            .orElseThrow(() -> notReassignable("There is no rate card to pay the rider with."));
+        // Riders are paid only on a published rate card that has started: the trip's own if it is one, else the one in force.
+        Instant now = policies.databaseNow();
+        RateCard card = policies.rateCard((String) locked.get("rate_card_version"))
+            .filter(own -> !own.draft() && !own.effectiveFrom().isAfter(now)).or(() -> policies.rateCardInForce(now))
+            .orElseThrow(() -> FleetApiException.conflict("RATE_CARD_REQUIRED", "Publish a rate card before giving trips to riders."));
         int detour = policies.currentDispatchPolicy().map(DispatchPolicy::pickupDetourPercent).orElse(130);
         int dropM = locked.get("drop_distance_m") == null ? 0 : ((Number) locked.get("drop_distance_m")).intValue();
         PayQuote quote = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(RoadDistanceClient.straightLineMetres(

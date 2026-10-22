@@ -153,6 +153,26 @@ class FleetSetupDatabaseTest {
     }
 
     @Test
+    void twoVersionsCannotStartAtTheSameMomentUnlessOneWasWithdrawn() {
+        Instant start = Instant.now().plus(20, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 150, start)));
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, start)), 409, "START_TAKEN");
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        DispatchPolicyVersion again = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            policy("shadow", 130, start)));
+        assertThat(again.effectiveFrom()).as("the stop withdrew the first, which frees its moment; two stops never collide").isEqualTo(start);
+
+        RateCardVersion firstCard = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), firstCard.version()));
+        RateCardVersion one = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(start, null)));
+        RateCardVersion two = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(start, null)));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), one.version()));
+        refused(() -> setup.publishRateCard(ops, UUID.randomUUID(), two.version()), 409, "START_TAKEN");
+    }
+
+    @Test
     void anEmergencyStopWithdrawsVersionsScheduledForLaterSoDispatchStaysStopped() {
         tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)));
         DispatchPolicyVersion scheduled = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),

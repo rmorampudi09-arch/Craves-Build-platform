@@ -148,6 +148,9 @@ public class FleetPolicyStore {
         Map<String, List<Long>> own = ranges((String) row.get("declared_ranges"));
         Map<String, List<Long>> declared = publishedRanges(RATE_CARD).orElse(own);
         refuse(publishProblems(values(row, RATE_CARD_FIELDS), declared, atOnce ? now : effectiveFrom, now, !first));
+        if (!atOnce && effectiveFrom.isAfter(now)) {
+            startFree(RATE_CARD, version, effectiveFrom);
+        }
         published(RATE_CARD, version, publishedBy, atOnce ? null : effectiveFrom, declared);
         return !declared.equals(own);
     }
@@ -178,6 +181,9 @@ public class FleetPolicyStore {
         }
         Map<String, List<Long>> declared = publishedRanges(DISPATCH_POLICY).orElseGet(() -> ranges((String) row.get("declared_ranges")));
         refuse(publishProblems(values(row, DISPATCH_POLICY_FIELDS), declared, scheduled ? requested : now, now, false));
+        if (scheduled) {
+            startFree(DISPATCH_POLICY, version, requested);
+        }
         published(DISPATCH_POLICY, version, publishedBy, scheduled ? requested : null, declared);
         if (scheduled || !"off".equals(row.get("mode"))) {
             return List.of();
@@ -202,10 +208,23 @@ public class FleetPolicyStore {
 
     /** The declared ranges of the newest published version in table (a withdrawn policy does not count), if any. */
     public Optional<Map<String, List<Long>>> publishedRanges(String table) {
-        return jdbc.queryForList("SELECT ranges::text FROM fleet_schema." + table + " WHERE status = 'PUBLISHED' "
-            + (DISPATCH_POLICY.equals(table) ? "AND withdrawn_at IS NULL " : "") + "ORDER BY effective_from DESC, created_at DESC LIMIT 1",
-            String.class)
-            .stream().findFirst().map(this::ranges);
+        return jdbc.queryForList("SELECT ranges::text FROM fleet_schema." + table + " WHERE status = 'PUBLISHED' " + notWithdrawn(table)
+            + "ORDER BY effective_from DESC, created_at DESC LIMIT 1", String.class).stream().findFirst().map(this::ranges);
+    }
+
+    /**
+     * A version that starts later must not start at the same moment as another published one (not withdrawn): which is in
+     * force, or next, would be a guess. One that starts now never collides: each publish has its own transaction and clock.
+     */
+    private void startFree(String table, String version, Instant start) {
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema." + table + " WHERE status = 'PUBLISHED' "
+            + notWithdrawn(table) + "AND version <> ? AND effective_from = ?)", Boolean.class, version, Timestamp.from(start)))) {
+            throw FleetApiException.conflict("START_TAKEN", "Another version starts at that moment. Pick another start time.");
+        }
+    }
+
+    private static String notWithdrawn(String table) {
+        return DISPATCH_POLICY.equals(table) ? "AND withdrawn_at IS NULL " : "";
     }
 
     /** The database clock (the transaction's start): the clock of published_at, the triggers and every in-force read. */

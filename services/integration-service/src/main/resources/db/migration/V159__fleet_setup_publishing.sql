@@ -44,6 +44,12 @@ BEGIN
     NEW.published_at := now();
     -- One publish at a time, so two first cards cannot both start at once (FleetPolicyStore takes the same lock).
     PERFORM pg_advisory_xact_lock(hashtextextended('fleet-publish/rate_card', 0));
+    -- A version that starts later needs a moment of its own, or which one is in force (or next) would be a guess.
+    IF NEW.effective_from > NEW.published_at AND EXISTS (SELECT 1 FROM fleet_schema.rate_card WHERE status = 'PUBLISHED'
+        AND version <> NEW.version AND effective_from = NEW.effective_from) THEN
+        RAISE EXCEPTION 'Rate card %: another version starts at that moment. Pick another start time.', NEW.version
+            USING ERRCODE = 'check_violation';
+    END IF;
     IF NEW.effective_from < NEW.published_at + INTERVAL '14 days' AND EXISTS (
         SELECT 1 FROM fleet_schema.rate_card WHERE status = 'PUBLISHED' AND version <> NEW.version) THEN
         RAISE EXCEPTION 'Rate card % must start at least 14 days after it is published.', NEW.version
@@ -86,6 +92,11 @@ BEGIN
     END IF;
     NEW.published_at := now();
     PERFORM pg_advisory_xact_lock(hashtextextended('fleet-publish/dispatch_policy', 0));
+    IF NEW.effective_from > NEW.published_at AND EXISTS (SELECT 1 FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED'
+        AND withdrawn_at IS NULL AND version <> NEW.version AND effective_from = NEW.effective_from) THEN
+        RAISE EXCEPTION 'Dispatch policy %: another version starts at that moment. Pick another start time.', NEW.version
+            USING ERRCODE = 'check_violation';
+    END IF;
     IF NEW.effective_from < NEW.published_at + INTERVAL '14 days'
        AND EXISTS (SELECT 1 FROM fleet_schema.rate_card WHERE status = 'PUBLISHED') THEN
         SELECT pickup_detour_percent INTO detour FROM fleet_schema.dispatch_policy

@@ -103,6 +103,25 @@ class FleetSchemaDatabaseTest {
     }
 
     @Test
+    void twoVersionsThatStartLaterCannotShareAMoment() {
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() WHERE version = '2026-10-v1'");
+        String card = "INSERT INTO fleet_schema.rate_card (version, status, effective_from, published_at, base_paise, base_drop_m, "
+            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "ranges, summary_of_changes) SELECT ?, 'PUBLISHED', TIMESTAMPTZ '2030-01-01 00:00:00+00', now(), base_paise, base_drop_m, "
+            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "ranges, summary_of_changes FROM fleet_schema.rate_card WHERE version = '2026-10-v1'";
+        db.update(card, "2029-12-v1");
+        assertThatThrownBy(() -> db.update(card, "2029-12-v2")).isInstanceOf(DataIntegrityViolationException.class);
+        String policy = "INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, ranges) VALUES (?, 'PUBLISHED', TIMESTAMPTZ '2030-01-01 00:00:00+00', now(), 'shadow', 40, 60, "
+            + "5000, '{}')";
+        db.update(policy, "2029-12-v1");
+        assertThatThrownBy(() -> db.update(policy, "2029-12-v2")).isInstanceOf(DataIntegrityViolationException.class);
+        db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now(), withdrawn_by = ? WHERE version = '2029-12-v1'", UUID.randomUUID());
+        db.update(policy, "2029-12-v2");
+    }
+
+    @Test
     void publishedVersionsNeverChangeExceptOneWithdrawalBeforeTheyStart() {
         db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() "
             + "WHERE version = '2026-10-v1'");

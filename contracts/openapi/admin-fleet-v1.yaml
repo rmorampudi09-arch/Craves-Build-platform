@@ -837,7 +837,7 @@ paths:
               schema: { $ref: '#/components/schemas/RateCard' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { description: "VERSION_NOT_FOUND.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '409': { description: "VERSION_ALREADY_PUBLISHED or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "VERSION_ALREADY_PUBLISHED, START_TAKEN (another published rate card starts at that moment; pick another start time) or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: "VERSION_REFUSED: it starts less than 14 days after publishing, or a value is outside the declared ranges.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/dispatch-policies:
     post:
@@ -866,7 +866,7 @@ paths:
               schema: { $ref: '#/components/schemas/DispatchPolicy' }
         '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { description: "IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "START_TAKEN (another published version, not withdrawn, starts at that effectiveFrom; pick another start time) or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422':
           description: >-
             VERSION_REFUSED (a value is outside the declared ranges), NOTICE_TOO_SHORT (effectiveFrom is less than 14 days

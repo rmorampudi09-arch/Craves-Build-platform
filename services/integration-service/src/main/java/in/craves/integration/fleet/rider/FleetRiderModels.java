@@ -56,7 +56,10 @@ public final class FleetRiderModels {
     public record Banner(String tone, String text) {
     }
 
-    /** upcoming: the published rate card that starts later, shown during its 14 days' notice. */
+    /**
+     * upcoming: the next change to these terms (the next published rate card or pickup detour change, whichever is first),
+     * shown during its 14 days' notice.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Terms(String version, Instant effectiveFrom, List<String> summaryOfChanges, List<LabelValue> rateCardLines,
                         List<LabelValue> grievanceLines, String fullTextUrl, boolean draft, UpcomingTerms upcoming) {

@@ -38,7 +38,7 @@ Run `azure-pipelines-admin-dashboard.yml` by hand on `main` with:
 - `expectedReleaseSha` set to the merged commit;
 - `regressionRunId` set to that commit's green "Exact-SHA complete regression evidence" run.
 
-The console then has Riders, Rider trips, Rider slots & banner, Rider payouts and **Rider pilot setup**. Until step 5, these pages answer "The fleet service is unavailable", because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
+The console then has Riders, Rider trips, Rider slots & banner, Rider payouts and **Rider pilot setup**. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
 
 ## 4. Wire the runtime (`azure-pipelines-rider-fleet-runtime.yml`)
 

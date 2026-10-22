@@ -24,7 +24,8 @@ const note = z.string().max(200).nullish();
 const lines = z.array(z.string().max(200)).max(10);
 
 export const dispatchPolicySchema = z.object({
-  ...versionMeta, mode: z.enum(DISPATCH_MODES), ...each(DISPATCH_FIELDS, count), ranges: z.object(each(DISPATCH_FIELDS, range.optional())),
+  // withdrawnAt: an immediate off withdrew this scheduled version before it started; it never comes into force.
+  ...versionMeta, withdrawnAt: instant.nullish(), mode: z.enum(DISPATCH_MODES), ...each(DISPATCH_FIELDS, count), ranges: z.object(each(DISPATCH_FIELDS, range.optional())),
 });
 export const rateCardSchema = z.object({
   ...versionMeta, ...each(RATE_CARD_FIELDS, count), ranges: z.object(each(RATE_CARD_FIELDS, range.optional())),
@@ -114,11 +115,20 @@ function readValues<F extends string>(inputs: readonly UnitInput<F>[], form: Rec
 }
 
 const DAY = 86_400_000;
+// The server checks 14 days against its own clock when the request arrives, so the console asks for an hour more.
+const NOTICE = 14 * DAY + 3_600_000;
+/** The earliest start the console offers for a change that needs 14 days' notice, as an IST datetime-local value. */
+export const noticeStart = (now = Date.now()) => new Date(now + NOTICE + 330 * 60_000).toISOString().slice(0, 16);
+const tooSoon = (local: string, now: number) => !istInstant(local) || Date.parse(istInstant(local)) < now + NOTICE;
+
+/** Published, not withdrawn, and starting later. */
+export const isScheduled = (policy: DispatchPolicy, now = Date.now()) => policy.status === "PUBLISHED" && !policy.withdrawnAt && Date.parse(policy.effectiveFrom) > now;
+
 export type DispatchForm = Record<DispatchField, string> & { mode: DispatchMode; effectiveFrom: string };
 
-export function dispatchForm(policy: DispatchPolicy | null): DispatchForm {
+export function dispatchForm(policy: DispatchPolicy | null, now = Date.now()): DispatchForm {
   const values = Object.fromEntries(DISPATCH_INPUTS.map(({ field, unit }) => [field, policy ? toUnitText(unit, policy[field]) : ""]));
-  return { ...values as Record<DispatchField, string>, mode: policy?.mode ?? "off", effectiveFrom: "" };
+  return { ...values as Record<DispatchField, string>, mode: policy?.mode ?? "off", effectiveFrom: noticeStart(now) };
 }
 
 /** A new detour changes rider pay, so it needs 14 days' notice; `reference` is the policy in force (else the newest published). */
@@ -131,30 +141,30 @@ export function dispatchFromForm(form: DispatchForm, reference: DispatchPolicy |
   const values = readValues(DISPATCH_INPUTS, form);
   if (typeof values === "string") return values;
   if (!detourChanges(form, reference)) return { mode: form.mode, ...values };
-  const effectiveFrom = istInstant(form.effectiveFrom);
-  if (!effectiveFrom || Date.parse(effectiveFrom) < now + 14 * DAY) return "A new detour can start 14 days from now at the earliest. Pick a later start.";
-  return { mode: form.mode, ...values, effectiveFrom };
+  if (tooSoon(form.effectiveFrom, now)) return "Pick a start for the new detour at least 14 days and 1 hour from now.";
+  return { mode: form.mode, ...values, effectiveFrom: istInstant(form.effectiveFrom) };
 }
 
 export type RateCardForm = Record<RateCardField, string> & {
   ranges: Record<RateCardField, [string, string]>; effectiveFrom: string; en: string; te: string; hi: string; fullTextUrl: string;
 };
 
-export function rateCardForm(card: RateCard | null): RateCardForm {
+export function rateCardForm(card: RateCard | null, effectiveFrom = ""): RateCardForm {
   const text = (unit: Unit, value: number | undefined) => value === undefined ? "" : toUnitText(unit, value);
   return {
     ...Object.fromEntries(RATE_CARD_INPUTS.map(({ field, unit }) => [field, text(unit, card?.[field])])) as Record<RateCardField, string>,
     ranges: Object.fromEntries(RATE_CARD_INPUTS.map(({ field, unit }) => [field, [text(unit, card?.ranges[field]?.[0]), text(unit, card?.ranges[field]?.[1])]])) as Record<RateCardField, [string, string]>,
-    effectiveFrom: "", en: "", te: "", hi: "", fullTextUrl: "",
+    effectiveFrom, en: "", te: "", hi: "", fullTextUrl: "",
   };
 }
 
-/** The new-draft form as the API body, or the first problem. Ranges go only with the first card (`withRanges`). */
-export function draftFromForm(form: RateCardForm, withRanges: boolean): RateCardDraft | string {
+/** The new-draft form as the API body, or the first problem. Only the first card sends ranges; later ones need 14 days' notice. */
+export function draftFromForm(form: RateCardForm, firstCard: boolean, now = Date.now()): RateCardDraft | string {
   const values = readValues(RATE_CARD_INPUTS, form);
   if (typeof values === "string") return values;
+  if (!firstCard && form.effectiveFrom && tooSoon(form.effectiveFrom, now)) return "Pick a start at least 14 days and 1 hour from now: riders get 14 days' notice.";
   const ranges = {} as Record<RateCardField, [number, number]>;
-  for (const { field, label, unit } of withRanges ? RATE_CARD_INPUTS : []) {
+  for (const { field, label, unit } of firstCard ? RATE_CARD_INPUTS : []) {
     const [min, max] = form.ranges[field].map(value => fromUnitText(unit, value));
     if (min === null || max === null) return `Enter the lowest and highest “${label}”.`;
     if (min > max) return `The lowest “${label}” is above the highest.`;
@@ -165,14 +175,15 @@ export function draftFromForm(form: RateCardForm, withRanges: boolean): RateCard
   const parsed = rateCardDraftSchema.safeParse({
     ...values, effectiveFrom: istInstant(form.effectiveFrom),
     summaryOfChanges: { en: split(form.en), ...te.length ? { te } : {}, ...hi.length ? { hi } : {} },
-    ...url ? { fullTextUrl: url } : {}, ...withRanges ? { ranges } : {},
+    ...url ? { fullTextUrl: url } : {}, ...firstCard ? { ranges } : {},
   });
   return parsed.success ? parsed.data : parsed.error.issues[0]?.message ?? "Check the details.";
 }
 
-/** A version's place: Draft, In force, Scheduled (published, starts later) or Replaced. */
-export function versionState(row: { version: string; status: string; effectiveFrom: string }, inForce: { version: string } | null, now = Date.now()): string {
+/** A version's place: Draft, Withdrawn, In force, Scheduled (published, starts later) or Replaced. */
+export function versionState(row: { version: string; status: string; effectiveFrom: string; withdrawnAt?: string | null }, inForce: { version: string } | null, now = Date.now()): string {
   if (row.status === "DRAFT") return "Draft";
+  if (row.withdrawnAt) return "Withdrawn";
   if (row.version === inForce?.version) return "In force";
   return Date.parse(row.effectiveFrom) > now ? "Scheduled" : "Replaced";
 }

@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { noticeStart } from "@/features/admin/fleet/lib/setup-contract";
 import { FleetSetup } from "./fleet-setup";
 
 type Call = { method: string; path: string; key: string | null; body: unknown };
@@ -80,23 +81,46 @@ describe("pilot setup status", () => {
 });
 
 describe("dispatch", () => {
-  it("stops dispatch with the values in force after a confirmation", async () => {
-    const scheduled = { ...policy, version: "2026-10-v3", effectiveFrom: "2030-01-15T04:30:00Z", pickupDetourPercent: 140 };
-    setup = { ...base, dispatchPolicy: policy, dispatchPolicies: [scheduled, policy], rateCard: published, rateCards: [published] };
+  it("stops dispatch with the values in force after a confirmation that names what it withdraws", async () => {
+    const scheduled = { ...policy, version: "2026-10-v4", effectiveFrom: "2030-01-15T04:30:00Z", pickupDetourPercent: 140 };
+    const withdrawnEarlier = { ...policy, version: "2026-10-v3", effectiveFrom: "2030-01-01T04:30:00Z", withdrawnAt: at };
+    setup = { ...base, dispatchPolicy: policy, dispatchPolicies: [scheduled, withdrawnEarlier, policy], rateCard: published, rateCards: [published] };
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
+    expect(within(panel).getByRole("cell", { name: "Withdrawn 22 Oct 2026, 10:00 am IST" })).toBeTruthy();
     vi.stubGlobal("confirm", vi.fn(() => false));
     fireEvent.click(button("Stop dispatch now", panel));
-    expect(window.confirm).toHaveBeenCalledWith("Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order. Version 2026-10-v3 (Live) is still set to start 15 Jan 2030, 10:00 am IST.");
+    expect(window.confirm).toHaveBeenCalledWith("Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order. Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
     expect(sends()).toHaveLength(0);
 
     vi.stubGlobal("confirm", vi.fn(() => true));
-    answer = (method, path) => method === "POST" ? json({ ...policy, version: "2026-10-v4", mode: "off" }, 201) : reads(method, path);
+    const off = { ...policy, version: "2026-10-v5", mode: "off" };
+    answer = (method, path) => method === "POST" ? json(off, 201) : reads(method, path);
+    setup = { ...base, dispatchPolicy: off, dispatchPolicies: [off, { ...scheduled, withdrawnAt: "2026-10-22T05:00:00Z" }, withdrawnEarlier, policy], rateCard: published, rateCards: [published] };
     fireEvent.click(button("Stop dispatch now", panel));
     expect(await within(panel).findByText("Dispatch is off.")).toBeTruthy();
     expect(sends()).toEqual([{ method: "POST", path: "dispatch-policies", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { mode: "off", ...values } }]);
-    await waitFor(() => expect(calls.filter(call => call.path === "setup")).toHaveLength(2));
-    expect(within(panel).getByRole("cell", { name: "Scheduled" })).toBeTruthy();
+    expect(await within(panel).findByRole("cell", { name: "Withdrawn 22 Oct 2026, 10:30 am IST" })).toBeTruthy();
+    expect(within(panel).queryByRole("cell", { name: "Scheduled" })).toBeNull();
+    expect(within(await section("In force now")).getByText("Off")).toBeTruthy();
+  });
+
+  it("warns that a scheduled version still takes over after a change that starts now", async () => {
+    const scheduled = { ...policy, version: "2026-10-v4", effectiveFrom: "2030-01-15T04:30:00Z", pickupDetourPercent: 140 };
+    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [scheduled, { ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
+    render(createElement(FleetSetup));
+    const panel = await section("Dispatch");
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    type("Time a rider has to accept, seconds", "45", panel);
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(window.confirm).toHaveBeenLastCalledWith("Version 2026-10-v4 (Live) still takes over on 15 Jan 2030, 10:00 am IST.");
+    fireEvent.click(within(panel).getByLabelText("Live"));
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(window.confirm).toHaveBeenLastCalledWith("Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time. Version 2026-10-v4 (Live) still takes over on 15 Jan 2030, 10:00 am IST.");
+    fireEvent.click(within(panel).getByLabelText("Off"));
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(window.confirm).toHaveBeenLastCalledWith("Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
+    expect(sends()).toHaveLength(0);
   });
 
   it("asks before going live and shows the server's refusal", async () => {
@@ -126,10 +150,14 @@ describe("dispatch", () => {
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
     expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
+    const before = noticeStart();
     type("Pickup detour, % of the straight line", "140", panel);
     expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the detour at 130%");
+    // Filled in as 14 days and 1 hour from now; exactly 14 days would bounce off the server's own clock.
+    expect([before, noticeStart()]).toContain((within(panel).getByLabelText("New detour starts (IST)") as HTMLInputElement).value);
+    type("New detour starts (IST)", new Date(Date.now() + 14 * 86_400_000 + 330 * 60_000).toISOString().slice(0, 16), panel);
     fireEvent.click(button("Save dispatch policy", panel));
-    expect(within(panel).getByRole("alert").textContent).toBe("A new detour can start 14 days from now at the earliest. Pick a later start.");
+    expect(within(panel).getByRole("alert").textContent).toBe("Pick a start for the new detour at least 14 days and 1 hour from now.");
 
     answer = (method, path) => method === "POST" ? json({ code: "DETOUR_NEEDS_NOTICE", message: "A new detour needs 14 days' notice." }, 422) : reads(method, path);
     type("New detour starts (IST)", "2030-01-15T10:00", panel);
@@ -171,8 +199,14 @@ describe("rate card", () => {
     fireEvent.click(button("Publish 2026-10-v4", panel));
     expect(vi.mocked(window.confirm).mock.calls[0][0]).toMatch(/^Publish rate card 2026-10-v4\? Rate cards after the first need 14 days' notice: it starts 4 Nov 2026, 12:00 am IST, which must be on or after .+ IST\.$/);
     expect((await within(panel).findByRole("alert")).textContent).toBe("It must start 14 days after publishing.");
-    // Ranges are fixed once a card is published.
+    // Ranges are fixed once a card is published, and a later draft starts 14 days and 1 hour from now.
     expect(within(panel).queryByText("Allowed ranges")).toBeNull();
+    const form = within(panel).getByRole("heading", { name: "New draft" }).closest("form") as HTMLElement;
+    expect((within(form).getByLabelText("Starts (IST)") as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    type("Starts (IST)", new Date(Date.now() + 14 * 86_400_000 + 330 * 60_000).toISOString().slice(0, 16), form);
+    type(/What changes, in English/, "Base pay is ₹42.", form);
+    fireEvent.click(button("Save draft", form));
+    expect(within(form).getByRole("alert").textContent).toBe("Pick a start at least 14 days and 1 hour from now: riders get 14 days' notice.");
   });
 
   it("saves a first draft with its ranges in paise and metres", async () => {

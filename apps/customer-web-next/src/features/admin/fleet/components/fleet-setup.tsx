@@ -10,8 +10,8 @@ import { formatPaise } from "@/features/admin/fleet/lib/payout-contract";
 import { riderPageSchema, type RiderSummary } from "@/features/admin/fleet/lib/rider-contract";
 import {
   detourChanges, DISPATCH_INPUTS, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicyInputSchema, dispatchPolicySchema, draftFromForm,
-  fleetSetupSchema, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema, toUnitText, versionState,
-  type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RateCard, type Unit, type UnitInput,
+  fleetSetupSchema, isScheduled, noticeStart, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema, toUnitText, versionState,
+  type DispatchMode, type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RateCard, type Unit, type UnitInput,
 } from "@/features/admin/fleet/lib/setup-contract";
 import { ActionMessage, fieldClass, labelClass, useFleetAction } from "./fleet-action";
 
@@ -84,26 +84,34 @@ function NumberInputs<F extends string>({ inputs, values, onChange }: { inputs: 
 
 function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<void> }) {
   const inForce = setup.dispatchPolicy;
-  // The server compares a new detour with the policy in force, or the newest published one before any is in force.
-  const reference = inForce ?? setup.dispatchPolicies.find(policy => policy.status === "PUBLISHED") ?? null;
-  const [form, setForm] = useState(() => dispatchForm(inForce ?? setup.dispatchPolicies[0] ?? null));
+  // The server compares a new detour with the policy in force, or the newest published one before any is in force; withdrawn ones never count.
+  const reference = inForce ?? setup.dispatchPolicies.find(policy => policy.status === "PUBLISHED" && !policy.withdrawnAt) ?? null;
+  const [form, setForm] = useState(() => dispatchForm(inForce ?? setup.dispatchPolicies.find(policy => !policy.withdrawnAt) ?? null));
   const save = useFleetAction();
   const stop = useFleetAction();
   const notice = detourChanges(form, reference);
+
+  /** An off starting now withdraws every scheduled version; any other change now leaves the next one to take over on its date. */
+  function scheduledNote(mode: DispatchMode) {
+    const scheduled = setup.dispatchPolicies.filter(policy => isScheduled(policy)).sort((a, b) => Date.parse(a.effectiveFrom) - Date.parse(b.effectiveFrom));
+    if (scheduled.length === 0) return "";
+    if (mode !== "off") return `Version ${scheduled[0].version} (${MODE_LABEL[scheduled[0].mode]}) still takes over on ${formatAdminTimestamp(scheduled[0].effectiveFrom)}.`;
+    const list = scheduled.map(policy => `${policy.version} (${MODE_LABEL[policy.mode]}, from ${formatAdminTimestamp(policy.effectiveFrom)})`).join(", ");
+    return `${scheduled.length === 1 ? "Version" : "Versions"} ${list} will be withdrawn.`;
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     const input = dispatchFromForm(form, reference);
     if (typeof input === "string") return save.refuse(input);
-    if (input.mode === "live" && !window.confirm(LIVE_WARNING)) return;
+    const warning = [input.mode === "live" ? LIVE_WARNING : "", input.effectiveFrom ? "" : scheduledNote(input.mode)].filter(Boolean).join(" ");
+    if (warning && !window.confirm(warning)) return;
     if (await save.run("POST", "dispatch-policies", dispatchPolicySchema, input, "Dispatch policy saved.")) await onDone();
   }
 
   async function stopNow() {
     if (!inForce) return;
-    const scheduled = setup.dispatchPolicies.find(policy => policy.status === "PUBLISHED" && policy.mode !== "off" && Date.parse(policy.effectiveFrom) > Date.now());
-    if (!window.confirm(`Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.${scheduled
-      ? ` Version ${scheduled.version} (${MODE_LABEL[scheduled.mode]}) is still set to start ${formatAdminTimestamp(scheduled.effectiveFrom)}.` : ""}`)) return;
+    if (!window.confirm(["Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.", scheduledNote("off")].filter(Boolean).join(" "))) return;
     const input = dispatchPolicyInputSchema.parse({ ...inForce, mode: "off", effectiveFrom: undefined });
     if (await stop.run("POST", "dispatch-policies", dispatchPolicySchema, input, "Dispatch is off.")) await onDone();
   }
@@ -114,8 +122,9 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
       <strong>Emergency stop</strong>
       <p>Switches dispatch off at once, keeping the other values in force.</p>
       <button type="button" className="cr-button cr-primary" disabled={stop.busy} onClick={() => void stopNow()}>Stop dispatch now</button>
-      <ActionMessage state={stop.state} />
     </div>}
+    {/* Outside the box, which goes once dispatch is off. */}
+    <ActionMessage state={stop.state} />
     <form noValidate className="space-y-3" onSubmit={event => void submit(event)}>
       <p className="cr-muted">A new version takes effect at once. Off: Craves riders get nothing. Shadow: dispatch only writes logs. Live: pilot riders get real offers; it needs a rate card in force.</p>
       <fieldset>
@@ -128,7 +137,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
       <p className="cr-muted">The cost guard offers a trip to riders only when rider pay plus the overhead is at most the Borzo or Pidge quote plus the premium.</p>
       {notice && reference && <div>
         <label className={labelClass}>New detour starts (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-detour-help" value={form.effectiveFrom} onChange={event => setForm(current => ({ ...current, effectiveFrom: event.target.value }))} /></label>
-        <p id="setup-detour-help" className="cr-muted mt-1 text-xs">The detour changes rider pay (pickup km = straight line × detour), so riders get 14 days&apos; notice. This whole version, mode included, starts at this time, at least 14 days from now. To change anything sooner, keep the detour at {reference.pickupDetourPercent}%.</p>
+        <p id="setup-detour-help" className="cr-muted mt-1 text-xs">The detour changes rider pay (pickup km = straight line × detour), so riders get 14 days&apos; notice. This whole version, mode included, starts at this time, at least 14 days and 1 hour from now. To change anything sooner, keep the detour at {reference.pickupDetourPercent}%.</p>
       </div>}
       <button type="submit" className="cr-button cr-primary" disabled={save.busy}>Save dispatch policy</button>
       <ActionMessage state={save.state} />
@@ -138,7 +147,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
       <thead><tr><th scope="col">Version</th><th scope="col">Mode</th><th scope="col">From</th><th scope="col">Status</th></tr></thead>
       <tbody>{setup.dispatchPolicies.slice(0, 5).map(policy => <tr key={policy.version}>
         <td>{policy.version}</td><td>{MODE_LABEL[policy.mode]}</td><td>{formatAdminTimestamp(policy.effectiveFrom)}</td>
-        <td><span className="cr-status">{versionState(policy, inForce)}</span></td>
+        <td><span className="cr-status">{versionState(policy, inForce)}{policy.withdrawnAt ? ` ${formatAdminTimestamp(policy.withdrawnAt)}` : ""}</span></td>
       </tr>)}</tbody>
     </table></div>}
   </section>;
@@ -175,7 +184,7 @@ function RateCardRow({ card, inForce, published, onDone }: { card: RateCard; inF
 }
 
 function NewDraft({ newest, published, onDone }: { newest: RateCard | null; published: boolean; onDone: () => Promise<void> }) {
-  const [form, setForm] = useState(() => rateCardForm(newest));
+  const [form, setForm] = useState(() => rateCardForm(newest, published ? noticeStart() : ""));
   const action = useFleetAction();
   const text = (field: "effectiveFrom" | "en" | "te" | "hi" | "fullTextUrl") => ({
     value: form[field], onChange: (event: { target: { value: string } }) => setForm(current => ({ ...current, [field]: event.target.value })),
@@ -212,7 +221,7 @@ function NewDraft({ newest, published, onDone }: { newest: RateCard | null; publ
     <div className="grid gap-3 sm:grid-cols-2">
       <div>
         <label className={labelClass}>Starts (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-draft-start" {...text("effectiveFrom")} /></label>
-        <p id="setup-draft-start" className="cr-muted mt-1 text-xs">{published ? "At least 14 days after the day you will publish it." : "If this time has passed when you publish, the card starts then."}</p>
+        <p id="setup-draft-start" className="cr-muted mt-1 text-xs">{published ? "At least 14 days after you publish it; filled in as 14 days and 1 hour from now." : "If this time has passed when you publish, the card starts then."}</p>
       </div>
       <label className={labelClass}>Full terms link (optional)<input className={fieldClass} type="url" maxLength={400} placeholder="https://" {...text("fullTextUrl")} /></label>
     </div>

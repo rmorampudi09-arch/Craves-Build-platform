@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { matchFleetRoute } from "./fleet-common";
 import {
-  detourChanges, dispatchForm, dispatchFromForm, dispatchPolicySchema, draftFromForm, fleetSetupSchema, fromUnitText, pilotKitchenSchema, pilotNoteSchema,
-  pilotRiderSchema, rateCardDraftSchema, rateCardForm, rateCardSchema, SETUP_ROUTES, toUnitText, versionState,
+  detourChanges, dispatchForm, dispatchFromForm, dispatchPolicySchema, draftFromForm, fleetSetupSchema, fromUnitText, isScheduled, noticeStart, pilotKitchenSchema,
+  pilotNoteSchema, pilotRiderSchema, rateCardDraftSchema, rateCardForm, rateCardSchema, SETUP_ROUTES, toUnitText, versionState,
 } from "./setup-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
@@ -36,6 +36,8 @@ describe("pilot setup parsers", () => {
     expect(parsed.pilotKitchens).toEqual([{ chefId: CHEF, addedAt: at }]);
     expect(rateCardSchema.parse({ ...card, status: "PUBLISHED", publishedAt: at, summaryOfChanges: { en: ["a"], te: ["b"], hi: null }, fullTextUrl: "https://craves.in/terms" }).summaryOfChanges.te).toEqual(["b"]);
     expect(pilotRiderSchema.parse({ riderId: RIDER, name: "Ravi", status: "SUSPENDED", addedAt: at }).note).toBeUndefined();
+    expect(dispatchPolicySchema.parse({ ...policy, withdrawnAt: at }).withdrawnAt).toBe(at);
+    expect(dispatchPolicySchema.safeParse({ ...policy, withdrawnAt: "yesterday" }).success).toBe(false);
   });
 
   it("refuse a missing in-force field, a bad version, mode or id, and rupees instead of paise", () => {
@@ -74,10 +76,12 @@ describe("units", () => {
 });
 
 describe("dispatch form", () => {
-  const form = dispatchForm(dispatchPolicySchema.parse(policy));
+  const form = dispatchForm(dispatchPolicySchema.parse(policy), NOW);
 
   it("prefills in human units and sends the same values back at once", () => {
-    expect(form).toMatchObject({ mode: "shadow", radiusM: "5", perOrderOverheadPaise: "5.00", costGuardPremiumPaise: "10.00", pickupDetourPercent: "130", effectiveFrom: "" });
+    expect(form).toMatchObject({ mode: "shadow", radiusM: "5", perOrderOverheadPaise: "5.00", costGuardPremiumPaise: "10.00", pickupDetourPercent: "130", effectiveFrom: "2026-11-05T11:00" });
+    // 22 Oct 10:00 IST + 14 days + 1 hour, as IST wall time.
+    expect(noticeStart(NOW)).toBe("2026-11-05T11:00");
     expect(dispatchFromForm({ ...form, mode: "live", radiusM: "4.5", costGuardPremiumPaise: "12.5" }, dispatchPolicySchema.parse(policy), NOW)).toEqual({
       mode: "live", offerSeconds: 40, fleetStageSeconds: 60, radiusM: 4500, pickupDetourPercent: 130, perOrderOverheadPaise: 500, costGuardPremiumPaise: 1250, pidgeStageSeconds: 600,
     });
@@ -85,51 +89,57 @@ describe("dispatch form", () => {
     expect(dispatchFromForm({ ...form, perOrderOverheadPaise: "five" }, null, NOW)).toBe("Enter a number for “Overhead per order, ₹”, like 40 or 40.50.");
   });
 
-  it("needs a start 14 days ahead only when the detour changes", () => {
+  it("needs a start 14 days and an hour ahead only when the detour changes", () => {
     const reference = dispatchPolicySchema.parse(policy);
-    const changed = { ...form, pickupDetourPercent: "140" };
+    const changed = { ...form, pickupDetourPercent: "140", effectiveFrom: "" };
     expect(detourChanges(form, reference)).toBe(false);
     expect(detourChanges(changed, reference)).toBe(true);
     // The first policy ever has nothing to compare with.
     expect(detourChanges(changed, null)).toBe(false);
     expect(dispatchFromForm(changed, null, NOW)).not.toHaveProperty("effectiveFrom");
-    expect(dispatchFromForm(changed, reference, NOW)).toBe("A new detour can start 14 days from now at the earliest. Pick a later start.");
-    // 22 Oct 10:00 IST + 14 days = 5 Nov 10:00 IST.
-    expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T09:59" }, reference, NOW)).toBe("A new detour can start 14 days from now at the earliest. Pick a later start.");
-    expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T10:00" }, reference, NOW)).toMatchObject({ pickupDetourPercent: 140, effectiveFrom: "2026-11-05T04:30:00.000Z" });
+    const tooSoon = "Pick a start for the new detour at least 14 days and 1 hour from now.";
+    expect(dispatchFromForm(changed, reference, NOW)).toBe(tooSoon);
+    // 22 Oct 10:00 IST + 14 days is 5 Nov 10:00 IST; the server would bounce that by the time it arrives.
+    expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T10:00" }, reference, NOW)).toBe(tooSoon);
+    expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T10:59" }, reference, NOW)).toBe(tooSoon);
+    expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T11:00" }, reference, NOW)).toMatchObject({ pickupDetourPercent: 140, effectiveFrom: "2026-11-05T05:30:00.000Z" });
   });
 });
 
 describe("rate card draft form", () => {
-  const filled = { ...rateCardForm(rateCardSchema.parse(card)), effectiveFrom: "2026-11-05T10:00", en: " Base pay goes up to ₹45. \n\n Waiting is paid after 7 minutes. " };
+  const filled = { ...rateCardForm(rateCardSchema.parse(card)), effectiveFrom: "2026-11-05T11:00", en: " Base pay goes up to ₹45. \n\n Waiting is paid after 7 minutes. " };
 
   it("prefills from the newest version, ranges included", () => {
     expect(rateCardForm(rateCardSchema.parse(card))).toMatchObject({ basePaise: "40.00", baseDropM: "2", waitPerMinutePaise: "1.50", waitFreeMinutes: "8", en: "", effectiveFrom: "" });
     expect(rateCardForm(rateCardSchema.parse(card)).ranges.baseDropM).toEqual(["1", "3"]);
     expect(rateCardForm(null).basePaise).toBe("");
+    expect(rateCardForm(null, noticeStart(NOW)).effectiveFrom).toBe("2026-11-05T11:00");
     expect(rateCardForm(rateCardSchema.parse({ ...card, ranges: {} })).ranges.basePaise).toEqual(["", ""]);
   });
 
   it("builds the body in paise and metres, with ranges only for the first card", () => {
-    const later = draftFromForm({ ...filled, basePaise: "45", te: "", hi: " हिंदी \n" }, false);
+    const later = draftFromForm({ ...filled, basePaise: "45", te: "", hi: " हिंदी \n" }, false, NOW);
     expect(later).toEqual({
       ...Object.fromEntries(Object.entries(card).filter(([key]) => /Paise$|M$|Minutes$/.test(key))), basePaise: 4500,
-      effectiveFrom: "2026-11-05T04:30:00.000Z", summaryOfChanges: { en: ["Base pay goes up to ₹45.", "Waiting is paid after 7 minutes."], hi: ["हिंदी"] },
+      effectiveFrom: "2026-11-05T05:30:00.000Z", summaryOfChanges: { en: ["Base pay goes up to ₹45.", "Waiting is paid after 7 minutes."], hi: ["हिंदी"] },
     });
     expect(rateCardDraftSchema.safeParse(later).success).toBe(true);
-    const first = draftFromForm({ ...filled, fullTextUrl: " https://craves.in/rider-terms " }, true);
+    const first = draftFromForm({ ...filled, fullTextUrl: " https://craves.in/rider-terms " }, true, NOW);
     expect(first).toMatchObject({ fullTextUrl: "https://craves.in/rider-terms", ranges: { ...card.ranges } });
   });
 
   it("names the first problem", () => {
-    expect(draftFromForm({ ...filled, basePaise: "40.505" }, false)).toBe("Enter a number for “Base pay, ₹”, like 40 or 40.50.");
-    expect(draftFromForm({ ...filled, ranges: { ...filled.ranges, baseDropM: ["3", "1"] } }, true)).toBe("The lowest “Drop distance in the base pay, km” is above the highest.");
-    expect(draftFromForm({ ...filled, ranges: { ...filled.ranges, waitFreeMinutes: ["5", ""] } }, true)).toBe("Enter the lowest and highest “Free waiting, minutes”.");
-    expect(draftFromForm({ ...filled, effectiveFrom: "" }, false)).toBe("Pick when the rate card starts.");
-    expect(draftFromForm({ ...filled, en: " \n " }, false)).toBe("Write at least one English summary line.");
-    expect(draftFromForm({ ...filled, en: Array(11).fill("Line").join("\n") }, false)).toBe("Write at most 10 English summary lines.");
-    expect(draftFromForm({ ...filled, te: "x".repeat(201) }, false)).toBe("Keep each Telugu line to 200 characters.");
-    expect(draftFromForm({ ...filled, fullTextUrl: "http://craves.in/terms" }, false)).toBe("Enter the full terms link as https://…");
+    expect(draftFromForm({ ...filled, basePaise: "40.505" }, false, NOW)).toBe("Enter a number for “Base pay, ₹”, like 40 or 40.50.");
+    expect(draftFromForm({ ...filled, ranges: { ...filled.ranges, baseDropM: ["3", "1"] } }, true, NOW)).toBe("The lowest “Drop distance in the base pay, km” is above the highest.");
+    expect(draftFromForm({ ...filled, ranges: { ...filled.ranges, waitFreeMinutes: ["5", ""] } }, true, NOW)).toBe("Enter the lowest and highest “Free waiting, minutes”.");
+    expect(draftFromForm({ ...filled, effectiveFrom: "" }, false, NOW)).toBe("Pick when the rate card starts.");
+    expect(draftFromForm({ ...filled, en: " \n " }, false, NOW)).toBe("Write at least one English summary line.");
+    expect(draftFromForm({ ...filled, en: Array(11).fill("Line").join("\n") }, false, NOW)).toBe("Write at most 10 English summary lines.");
+    expect(draftFromForm({ ...filled, te: "x".repeat(201) }, false, NOW)).toBe("Keep each Telugu line to 200 characters.");
+    expect(draftFromForm({ ...filled, fullTextUrl: "http://craves.in/terms" }, false, NOW)).toBe("Enter the full terms link as https://…");
+    // Later cards need 14 days' notice (and the hour's margin); the first card may start at once.
+    expect(draftFromForm({ ...filled, effectiveFrom: "2026-11-05T10:59" }, false, NOW)).toBe("Pick a start at least 14 days and 1 hour from now: riders get 14 days' notice.");
+    expect(draftFromForm({ ...filled, effectiveFrom: "2026-10-22T10:00" }, true, NOW)).toMatchObject({ effectiveFrom: "2026-10-22T04:30:00.000Z" });
   });
 });
 
@@ -140,5 +150,8 @@ describe("version state", () => {
     expect(versionState({ version: "2026-10-v2", status: "PUBLISHED", effectiveFrom: at }, inForce, NOW)).toBe("In force");
     expect(versionState({ version: "2026-11-v1", status: "PUBLISHED", effectiveFrom: "2026-11-05T04:30:00Z" }, inForce, NOW)).toBe("Scheduled");
     expect(versionState({ version: "2026-10-v1", status: "PUBLISHED", effectiveFrom: "2026-10-01T04:30:00Z" }, null, NOW)).toBe("Replaced");
+    const withdrawn = dispatchPolicySchema.parse({ ...policy, version: "2026-11-v1", effectiveFrom: "2026-11-05T04:30:00Z", withdrawnAt: at });
+    expect(versionState(withdrawn, inForce, NOW)).toBe("Withdrawn");
+    expect([isScheduled(withdrawn, NOW), isScheduled({ ...withdrawn, withdrawnAt: undefined }, NOW), isScheduled(dispatchPolicySchema.parse(policy), NOW)]).toEqual([false, true, false]);
   });
 });

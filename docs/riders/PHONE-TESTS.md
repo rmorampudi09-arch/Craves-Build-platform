@@ -4,7 +4,7 @@ A person runs these on real phones. Use a **live** build (`CRAVES_RIDER_API_MODE
 
 ## Before each phone
 
-1. Install the live APK (`craves-rider-live-<sha>.apk`) from the "craves-rider-apk" artifact: run the "Craves Rider APK" workflow by hand with `api_mode` = `live`, or set the repo variable `CRAVES_RIDER_API_MODE=live` for PR builds.
+1. Install the live APK (`craves-rider-live-<sha>.apk`) from the "craves-rider-apk" artifact: run the "Craves Rider APK" workflow by hand on `main` (live is the default), or set the repo variable `CRAVES_RIDER_API_MODE=live` for PR builds.
 2. Sign in, accept the terms, and finish **Phone setup** (all checks green, including autostart, battery "no restrictions" and "lock Craves in recent apps").
 3. Charge to at least 80%, Wi-Fi off, mobile data on, location on.
 4. Connect adb if you can and keep `adb logcat -s CravesRiderOffer CravesRiderOnline > <brand>.log` running.

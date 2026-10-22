@@ -19,13 +19,13 @@ Keep the mapping file of every build you hand out: it turns a crash stack trace 
 
 | Build | API mode |
 |---|---|
-| Manual run | The `api_mode` input: `mock` (default) or `live` |
+| Manual run | The `api_mode` input: `live` (default; only from `main`) or `mock` |
 | Pull request | The repo variable `CRAVES_RIDER_API_MODE` (`mock` or `live`); `mock` when it isn't set |
 
 - **mock:** demo data inside the app. No Firebase sign-in, no calls to the Craves API, a "Demo data" tag in the header and the demo controls (long-press the status chip).
 - **live:** Firebase phone sign-in and the Craves API at `https://api.craves.in` (`CRAVES_API_BASE_URL`). A live build fails early without `RIDER_GOOGLE_SERVICES_JSON` or `RIDER_KEYSTORE_BASE64`.
 
-Any other value fails the build. To switch pull request builds to live, set the variable in Settings → Secrets and variables → Actions → Variables. To get one live APK, run the workflow by hand with `api_mode` = `live`. The mode is baked into the APK: switching means installing the other APK.
+Any other value fails the build. To switch pull request builds to live, set the variable in Settings → Secrets and variables → Actions → Variables. To get the live APK riders install, run the workflow by hand on `main` (`api_mode` is `live` by default); a live run on any other branch stops, because that APK talks to production. The mode is baked into the APK: switching means installing the other APK.
 
 ## Secrets and variables
 

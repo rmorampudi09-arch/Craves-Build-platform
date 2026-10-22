@@ -47,7 +47,7 @@ SHOWN = {
     "notification": ("CRAVES_REALTIME_PUSH_ENABLED", "CRAVES_OPS_ALERT_EMAILS", "CRAVES_INTERNAL_SERVICE_KEY",
                      "FIREBASE_SERVICE_ACCOUNT_JSON_BASE64", "ACS_EMAIL_CONNECTION_STRING", "ACS_EMAIL_SENDER_ADDRESS"),
     "user-chef": ("CRAVES_INTERNAL_SERVICE_SECRET", "OLA_MAPS_API_KEY"),
-    "auth": ("CRAVES_INTERNAL_SERVICE_SECRET",),
+    "auth": ("CRAVES_INTERNAL_SERVICE_SECRET", "CRAVES_CENTRAL_OTP_ENABLED", "MSG91_AUTHKEY", "CRAVES_MSG91_OTP_TEMPLATE_ID"),
 }
 # A mobile or landline number with +91, or a 1800 toll-free number: riders call it from the app.
 PHONE = re.compile(r"\+91[1-9][0-9]{9}|1800[0-9]{6,7}")
@@ -115,7 +115,8 @@ def secret_value(group: str, name: str, app: dict, variable: str, cache: dict):
 PRINTABLE = {*FLAGS, "CRAVES_FLEET_TEST_MODE", "CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED", *BASE_URLS, "CRAVES_FLEET_SUPPORT_PHONE",
              "CRAVES_FLEET_SUPPORT_WHATSAPP_URL", "CRAVES_FLEET_INSURANCE_LABEL", "CRAVES_FLEET_MIN_APP_VERSION",
              "CRAVES_STORAGE_DOCUMENTS_CONTAINER", "CRAVES_BANK_DATA_ACTIVE_KEY_ID", "CRAVES_LEDGER_POSTING_ENABLED",
-             "CRAVES_REALTIME_PUSH_ENABLED", "CRAVES_OPS_ALERT_EMAILS", "ACS_EMAIL_SENDER_ADDRESS"}
+             "CRAVES_REALTIME_PUSH_ENABLED", "CRAVES_OPS_ALERT_EMAILS", "ACS_EMAIL_SENDER_ADDRESS",
+             "CRAVES_CENTRAL_OTP_ENABLED", "CRAVES_MSG91_OTP_TEMPLATE_ID"}
 
 
 def shown(app: dict, variable: str) -> str:
@@ -146,6 +147,11 @@ def checks(stage: str, apps: dict, args, values) -> tuple[list, list]:
                 if values(role, INTERNAL_KEY[role]) != key:
                     problems.append(f"{APPS[role]} {INTERNAL_KEY[role]} is missing or differs from integration-service's "
                                     "CRAVES_INTERNAL_SERVICE_KEY: a person sets it to the same secret in Azure.")
+        # Riders sign in with the phone OTP auth-service sends by MSG91 (the web's flow).
+        if not is_true(literal(apps["auth"], "CRAVES_CENTRAL_OTP_ENABLED")) or not values("auth", "MSG91_AUTHKEY") \
+                or not re.fullmatch(r"[a-fA-F0-9]{24}", values("auth", "CRAVES_MSG91_OTP_TEMPLATE_ID") or ""):
+            problems.append("auth-service needs CRAVES_CENTRAL_OTP_ENABLED=true, MSG91_AUTHKEY and the DLT-approved "
+                            "CRAVES_MSG91_OTP_TEMPLATE_ID: riders sign in with the MSG91 phone OTP.")
         if not values("notification", "FIREBASE_SERVICE_ACCOUNT_JSON_BASE64"):
             problems.append("notification-service has no FIREBASE_SERVICE_ACCOUNT_JSON_BASE64: offers cannot ring.")
         if not values("integration", "CRAVES_STORAGE_ENDPOINT_VALUE"):

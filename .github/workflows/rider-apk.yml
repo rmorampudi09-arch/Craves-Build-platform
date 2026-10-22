@@ -2,8 +2,8 @@ name: Craves Rider APK
 
 # Builds the rider app (com.cravesapp.rider) as a signed release APK for phone testing: ARM only, R8 on, versionCode =
 # the run number (see docs/riders/RELEASE.md).
-# Mock builds use demo data and never call Firebase or the Craves API. Live builds sign in with Firebase and call
-# CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
+# Mock builds use demo data and never call Firebase or the Craves API. Live builds sign in with the MSG91 phone OTP
+# (auth-service), then Firebase, and call CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
 # Which one: a manual run picks api_mode (default live, the APK riders install; live builds run only from main);
 # pull requests use the repo variable CRAVES_RIDER_API_MODE (mock when unset). The mode is in the APK's name and the
 # PR comment, and a mock build shows "Demo data" on every screen.

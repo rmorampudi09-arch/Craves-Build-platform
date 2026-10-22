@@ -51,6 +51,7 @@ The console then has Riders, Rider trips, Rider slots & banner, Rider payouts an
      - auth-service `CRAVES_INTERNAL_SERVICE_SECRET`.
 
      Each should be a secret reference.
+   - **MSG91 phone OTP** (how riders sign in, the same as the web): auth-service `CRAVES_CENTRAL_OTP_ENABLED=true`, `MSG91_AUTHKEY` (a secret reference) and `CRAVES_MSG91_OTP_TEMPLATE_ID`.
    - **Firebase:** notification-service `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`, which the customer pushes already use.
    - **Document storage:** integration-service `CRAVES_STORAGE_ENDPOINT_VALUE`, the same private storage connection user-chef-service uses for chef KYC files, as a secret reference.
    - **Bank keys:** integration-service `CRAVES_BANK_DATA_KEYS_JSON` and `CRAVES_BANK_DATA_ACTIVE_KEY_ID`. If they are missing, run the chef bank runtime release first.
@@ -115,7 +116,8 @@ A mock APK, from a pull request or a manual run with `mock`, shows "Demo data" o
 
 | Where | What to do | Needed for |
 |---|---|---|
-| **Firebase** (the same project as the customer app, the one auth-service's `FIREBASE_PROJECT_ID` names) | Add an Android app with package `com.cravesapp.rider`, and add the SHA-1 and SHA-256 of the rider signing key. Download its `google-services.json` into the GitHub secret `RIDER_GOOGLE_SERVICES_JSON`. Phone sign-in is already on for customers; riders use the same Firebase phone OTP, so Firebase sends the rider SMS. **No MSG91 or DLT template is needed for riders.** | Sign-in, offer pushes |
+| **MSG91** (your existing account) | Riders sign in with the same phone OTP as the web: the app calls auth-service, which sends the SMS by MSG91 and checks the code. Nothing new is needed if web sign-in works today: the same auth key, the same DLT-registered sender ID and the same approved OTP template. Check the template's wording suits riders too (it should just say "<code> is your Craves verification code"); if you want a rider-specific text, register a new DLT template and put its MSG91 template ID in `CRAVES_MSG91_OTP_TEMPLATE_ID` (it is one setting for all phone sign-ins). Keep enough SMS credit for the pilot riders. | Rider sign-in |
+| **Firebase** (the same project as the customer app, the one auth-service's `FIREBASE_PROJECT_ID` names) | Add an Android app with package `com.cravesapp.rider` and download its `google-services.json` into the GitHub secret `RIDER_GOOGLE_SERVICES_JSON`. Firebase does not send rider SMS: after the MSG91 code is checked, auth-service gives the app a Firebase sign-in token, and Firebase Messaging rings offers. No SHA fingerprints are needed for this. | Sign-in session, offer pushes |
 | **GitHub** (repo secrets) | `RIDER_KEYSTORE_BASE64`, `RIDER_KEYSTORE_PASSWORD`, `RIDER_KEY_ALIAS` for one fixed rider signing key. Keep the key safe and never change it: the phone binding depends on it. | Live APK |
 | **Google Play Console** (when going beyond side-loaded APKs) | New app "Craves Rider" (`com.cravesapp.rider`) with Play App Signing; upload with the same key. Fill in the Data safety form (location, photos, phone number), the foreground-service location declaration with a short video of going online, the privacy policy URL and the content rating. Start on internal testing. | Store distribution |
 | **Azure** | The secrets in step 4. ACS email for ops alerts (notification-service may already have it). | Wiring |

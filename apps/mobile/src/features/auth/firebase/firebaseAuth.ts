@@ -4,6 +4,7 @@ import {
   getIdToken,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut,
@@ -25,6 +26,11 @@ export const firebaseAuth = {
       throw new Error('OTP_CONFIRMATION_FAILED');
     }
     phoneConfirmation = null;
+    return getIdToken(credential.user, true);
+  },
+  /** Signs in with the custom token auth-service issues after an MSG91 OTP check; answers the ID token. */
+  async signInWithCustomToken(customToken: string): Promise<string> {
+    const credential = await signInWithCustomToken(getAuth(), customToken);
     return getIdToken(credential.user, true);
   },
   async signInWithEmail(email: string, password: string): Promise<string> {

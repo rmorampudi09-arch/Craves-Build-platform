@@ -42,7 +42,9 @@ def ready_world():
             ref("ACS_EMAIL_CONNECTION_STRING", "acs")], {"k": KEY, "fb": "e30=", "acs": "endpoint=x"}),
         "ca-craves-user-chef-service-prod": app("ca-craves-user-chef-service-prod", [
             ref("CRAVES_INTERNAL_SERVICE_SECRET", "k"), ref("OLA_MAPS_API_KEY", "ola")], {"k": KEY, "ola": "o"}),
-        "ca-craves-auth-service-prodlow": app("ca-craves-auth-service-prodlow", [ref("CRAVES_INTERNAL_SERVICE_SECRET", "k")], {"k": KEY}),
+        "ca-craves-auth-service-prodlow": app("ca-craves-auth-service-prodlow", [
+            ref("CRAVES_INTERNAL_SERVICE_SECRET", "k"), val("CRAVES_CENTRAL_OTP_ENABLED", "true"), ref("MSG91_AUTHKEY", "msg"),
+            val("CRAVES_MSG91_OTP_TEMPLATE_ID", "0123456789abcdef01234567")], {"k": KEY, "msg": "msg91-auth-key"}),
     }
 
 
@@ -118,6 +120,15 @@ class RiderPilotRuntimeTest(unittest.TestCase):
         self.assertEqual("<secret internal>", report["apps"]["integration"]["settings"]["CRAVES_INTERNAL_SERVICE_KEY"])
         self.assertEqual("<missing>", report["apps"]["integration"]["settings"]["CRAVES_FLEET_ENABLED"])
         self.assertEqual([], report["problems"])
+
+    def test_status_needs_the_msg91_otp_for_rider_sign_in(self):
+        world = ready_world()
+        world["ca-craves-auth-service-prodlow"]["properties"]["template"]["containers"][0]["env"] = [
+            ref("CRAVES_INTERNAL_SERVICE_SECRET", "k")]
+        code, out, report = self.run_main(FakeAz(world), ["--stage", "status"])
+        self.assertEqual(0, code)
+        self.assertTrue(any("CRAVES_CENTRAL_OTP_ENABLED" in p for p in report["problems"]))
+        self.assertNotIn("msg91-auth-key", out + json.dumps(report))
 
     def test_status_lists_what_people_must_fix(self):
         world = ready_world()

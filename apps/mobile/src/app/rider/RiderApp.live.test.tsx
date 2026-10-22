@@ -1,9 +1,9 @@
-// Live mode wired end to end: RiderApp with CRAVES_RIDER_API_MODE=live, Firebase phone sign-in mocked at the SDK,
+// Live mode wired end to end: RiderApp with CRAVES_RIDER_API_MODE=live, MSG91 phone OTP through auth-service, Firebase mocked at the SDK,
 // and every HTTP call (auth-service and the rider API) answered by a fake network through the real clients.
 import React from 'react';
 import {Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {getIdToken, signInWithPhoneNumber} from '@react-native-firebase/auth';
+import {getIdToken, signInWithCustomToken, signInWithPhoneNumber} from '@react-native-firebase/auth';
 import * as SecureStore from 'expo-secure-store';
 import {AxiosError, type InternalAxiosRequestConfig} from 'axios';
 import type {HomeSummary, RiderMe, Terms} from '../../features/rider/api/contract';
@@ -61,6 +61,12 @@ function backend(server: {me: RiderMe; home: HomeSummary}) {
     if (path === 'post /api/v1/auth/firebase/exchange' || path === 'post /api/v1/auth/refresh') {
       return {status: 200, data: tokens};
     }
+    if (path === 'post /api/v1/auth/otp/send') {
+      return {status: 200, data: {challengeId: CHALLENGE, expiresAt: 1, resendAvailableAt: 2}};
+    }
+    if (path === 'post /api/v1/auth/otp/verify') {
+      return {status: 200, data: {firebaseCustomToken: CUSTOM_TOKEN}};
+    }
     if (config.headers.get('Authorization') !== 'Bearer access-1') {
       return {status: 401, data: {}};
     }
@@ -84,6 +90,8 @@ function backend(server: {me: RiderMe; home: HomeSummary}) {
   };
 }
 
+const CHALLENGE = 'c'.repeat(43);
+const CUSTOM_TOKEN = 't'.repeat(200);
 const secure = new Map<string, string>();
 let calls: InternalAxiosRequestConfig[] = [];
 let tree: renderer.ReactTestRenderer;
@@ -136,8 +144,7 @@ async function start(server: {me: RiderMe; home: HomeSummary}, handler = backend
 
 describe('rider app in live mode', () => {
   it('signs in by phone, accepts the new terms and lands on Home, with the live wiring', async () => {
-    const confirm = jest.fn(async () => ({user: {uid: 'firebase-u1'}}));
-    (signInWithPhoneNumber as jest.Mock).mockResolvedValue({confirm});
+    (signInWithCustomToken as jest.Mock).mockResolvedValue({user: {uid: 'firebase-u1'}});
     (getIdToken as jest.Mock).mockResolvedValue('firebase-id-token');
     await start({me, home});
 
@@ -145,13 +152,16 @@ describe('rider app in live mode', () => {
     await act(async () => input('rider-phone-input').props.onChangeText('9848012345'));
     await act(async () => press('rider-send-code').props.onPress());
     await settle();
-    expect(signInWithPhoneNumber).toHaveBeenCalledWith(expect.anything(), '+919848012345');
+    // The SMS goes out by MSG91 from auth-service, never by Firebase phone auth.
+    expect(signInWithPhoneNumber).not.toHaveBeenCalled();
+    expect(JSON.parse(calls[0].data)).toEqual({phoneNumber: '9848012345', countryCode: '91'});
 
     await act(async () => input('rider-code-input').props.onChangeText('482913'));
     await act(async () => press('rider-verify').props.onPress());
     await settle();
-    expect(confirm).toHaveBeenCalledWith('482913');
-    expect(JSON.parse(calls[0].data)).toEqual({firebaseIdToken: 'firebase-id-token'});
+    expect(JSON.parse(calls[1].data)).toEqual({challengeId: CHALLENGE, otp: '482913'});
+    expect(signInWithCustomToken).toHaveBeenCalledWith(expect.anything(), CUSTOM_TOKEN);
+    expect(JSON.parse(calls[2].data)).toEqual({firebaseIdToken: 'firebase-id-token'});
 
     // GET /me says the terms changed: the rider sees them before anything else.
     expect(has('rider-terms-accept')).toBe(true);
@@ -163,6 +173,8 @@ describe('rider app in live mode', () => {
     expect(texts()).not.toContain('Demo data');
     expect(urls()).toEqual(
       expect.arrayContaining([
+        'post /api/v1/auth/otp/send',
+        'post /api/v1/auth/otp/verify',
         'post /api/v1/auth/firebase/exchange',
         'get /api/v1/rider/me',
         'get /api/v1/rider/terms',

@@ -23,7 +23,7 @@ Keep the mapping file of every build you hand out: it turns a crash stack trace 
 | Pull request | The repo variable `CRAVES_RIDER_API_MODE` (`mock` or `live`); `mock` when it isn't set |
 
 - **mock:** demo data inside the app. No Firebase sign-in, no calls to the Craves API, a "Demo data" tag in the header and the demo controls (long-press the status chip).
-- **live:** Firebase phone sign-in and the Craves API at `https://api.craves.in` (`CRAVES_API_BASE_URL`). A live build fails early without `RIDER_GOOGLE_SERVICES_JSON` or `RIDER_KEYSTORE_BASE64`.
+- **live:** phone sign-in with the MSG91 OTP from auth-service (then a Firebase session, as the web does) and the Craves API at `https://api.craves.in` (`CRAVES_API_BASE_URL`). A live build fails early without `RIDER_GOOGLE_SERVICES_JSON` or `RIDER_KEYSTORE_BASE64`.
 
 Any other value fails the build. To switch pull request builds to live, set the variable in Settings → Secrets and variables → Actions → Variables. To get the live APK riders install, run the workflow by hand on `main` (`api_mode` is `live` by default); a live run on any other branch stops, because that APK talks to production. The mode is baked into the APK: switching means installing the other APK.
 
@@ -77,7 +77,7 @@ Riders on the live pilot install from Play's internal testing track.
 
 Gradle and R8 run only in CI, so the first R8 build is what proves the rules. If it fails with "Missing class", R8 writes the rules it wants to `android/app/build/outputs/mapping/riderRelease/missing_rules.txt`; check them and add them to `proguard-rules.pro`. Then on a phone, with a live R8 build:
 
-- sign in by phone (Firebase), and see no "Demo data" tag (react-native-config's `BuildConfig` survived);
+- sign in by phone (the MSG91 SMS code), and see no "Demo data" tag (react-native-config's `BuildConfig` survived);
 - go online: the "You're online" notification appears and the rider shows as seen on the ops console (the rider native modules and OkHttp);
 - get an offer by push with the app closed (Firebase Messaging) and by the location call (Play services location);
 - finish a trip with the OTP and with the photo.

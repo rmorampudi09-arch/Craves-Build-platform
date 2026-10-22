@@ -55,7 +55,8 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
       await session.confirmOtp(code);
       // Success swaps the whole navigator to the signed-in stack.
     } catch (failure) {
-      setError(failure instanceof AppApiError ? failure.message : s.wrongCode);
+      const wrongCode = !(failure instanceof AppApiError) || failure.code === 'OTP_INVALID' || failure.code === 'INVALID_OTP';
+      setError(wrongCode ? s.wrongCode : failure.message);
     }
   }
 

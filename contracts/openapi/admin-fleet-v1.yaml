@@ -825,7 +825,9 @@ paths:
       description: >-
         Publishes a DRAFT rate card, the riders' pay terms (Telangana Act 21 of 2026, s.13(2)). The first rate card ever
         may start at once: one whose effectiveFrom has passed starts now. Every later one must start at least 14 days
-        after it is published; until then riders see it as upcoming in their terms.
+        after it is published; until then riders see it as upcoming in their terms. A later card keeps the published
+        card's declared ranges: a draft made before the first card was published has its own replaced (the audit says so).
+        A published card never changes.
       parameters: [{ $ref: '#/components/parameters/Version' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200':
@@ -842,13 +844,14 @@ paths:
       operationId: setDispatchPolicy
       x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
       description: >-
-        Creates and publishes a dispatch policy version (named like rate cards) in one step. It starts now, so off (the
-        emergency stop) always works at once, and an off that starts now withdraws every version scheduled for later, so
-        none switches dispatch back on; any other version set now leaves a scheduled one to take over on its date.
-        effectiveFrom counts only when it is at least 14 days away. A pickup detour
-        different from the policy in force changes rider pay (pickup km = straight line x detour), so it needs
-        effectiveFrom at least 14 days away. The first policy ever never needs notice. Values must lie inside the declared
-        ranges: the newest published policy's, or before any is published, the seeded draft's.
+        Creates and publishes a dispatch policy version (named like rate cards) in one step. Without effectiveFrom it
+        starts now; effectiveFrom, when sent, must be at least 14 days away. An off without effectiveFrom is the emergency
+        stop and always works: it keeps the values riders are shown (the 7 values sent are ignored), starts at once and
+        withdraws every version scheduled for later, so none switches dispatch back on. Any other version set now leaves a
+        scheduled one to take over on its date. The pickup detour is part of rider pay (pickup km = straight line x
+        detour): once a rate card is published, a detour other than the one riders are shown (the policy in force, else
+        the seeded draft's) needs effectiveFrom at least 14 days away, and riders see it as upcoming in their terms. Values
+        must lie inside the declared ranges: the newest published policy's, or before any is published, the seeded draft's.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -866,8 +869,9 @@ paths:
         '409': { description: "IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422':
           description: >-
-            VERSION_REFUSED (a value is outside the declared ranges), DETOUR_NEEDS_NOTICE (the detour changes and
-            effectiveFrom is less than 14 days away) or RATE_CARD_REQUIRED (live needs a published rate card in force).
+            VERSION_REFUSED (a value is outside the declared ranges), NOTICE_TOO_SHORT (effectiveFrom is less than 14 days
+            away), DETOUR_NEEDS_NOTICE (the detour changes and no effectiveFrom was sent) or RATE_CARD_REQUIRED (live needs
+            a published rate card in force).
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
   /api/v1/admin/fleet/pilot/riders/{riderId}:
     put:
@@ -1320,7 +1324,7 @@ components:
           required: [mode]
           properties:
             mode: { $ref: '#/components/schemas/DispatchMode' }
-            effectiveFrom: { type: string, format: date-time, description: Counts only when at least 14 days away; otherwise the version starts now. }
+            effectiveFrom: { type: string, format: date-time, description: "At least 14 days from now (else 422 NOTICE_TOO_SHORT); leave it out to start now." }
     DispatchPolicy:
       allOf:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }

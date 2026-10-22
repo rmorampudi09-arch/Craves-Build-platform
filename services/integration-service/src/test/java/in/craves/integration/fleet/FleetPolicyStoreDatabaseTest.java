@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.sql.Timestamp;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,21 +33,43 @@ class FleetPolicyStoreDatabaseTest {
     }
 
     @Test
-    void thePublishedVersionInForceWinsOverDraftsAndUpcomingVersions() {
+    void beforeAnyCardIsInForceRidersSeeTheNextPublishedOneAndNoChange() {
+        insertRateCard("2026-11-v2", "now() + INTERVAL '20 days'");
+        assertThat(store.currentRateCard().orElseThrow().version()).isEqualTo("2026-11-v2");
+        assertThat(store.rateCardInForce(null)).isEmpty();
+        assertThat(store.nextTermsChange()).as("nothing is in force, so nothing changes").isEmpty();
+    }
+
+    @Test
+    void theVersionInForceWinsAndTheNextChangeIsTheEarliestCard() {
         insertRateCard("2026-09-v1", "now() - INTERVAL '1 day'");
+        insertRateCard("2026-11-v3", "now() + INTERVAL '20 days'");
         insertRateCard("2026-11-v2", "now() + INTERVAL '14 days'");
         assertThat(store.currentRateCard().orElseThrow().version()).isEqualTo("2026-09-v1");
-        assertThat(store.upcomingRateCard().orElseThrow().version()).as("riders see the change during its notice").isEqualTo("2026-11-v2");
+        assertThat(store.rateCardInForce(null).orElseThrow().version()).isEqualTo("2026-09-v1");
+        FleetPolicyStore.TermsChange change = store.nextTermsChange().orElseThrow();
+        assertThat(change.card().version()).as("the next change, not the last").isEqualTo("2026-11-v2");
+        assertThat(change.cardStarts()).isTrue();
+        assertThat(change.detourBefore()).as("the seeded draft's, before any policy").isEqualTo(130).isEqualTo(change.detourAfter());
 
-        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '20 days', published_at = now() "
-            + "WHERE version = '2026-09-v1'");
-        assertThat(store.currentRateCard().orElseThrow().version()).as("before any is in force: the next one").isEqualTo("2026-11-v2");
-        assertThat(store.upcomingRateCard()).as("nothing is in force, so nothing changes").isEmpty();
-
-        fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
-            + "fleet_stage_seconds, radius_m, ranges) VALUES ('2026-09-v1', 'PUBLISHED', now() - INTERVAL '1 day', now() - INTERVAL '15 days', "
-            + "'off', 40, 60, 5000, '{}')");
+        insertPolicy("2026-09-v1", "now() - INTERVAL '1 day'", 130);
         assertThat(store.currentDispatchPolicy().orElseThrow().mode()).isEqualTo("off");
+    }
+
+    @Test
+    void aScheduledDetourChangeBeforeTheNextCardIsTheNextChange() {
+        insertRateCard("2026-09-v1", "now() - INTERVAL '1 day'");
+        insertRateCard("2026-11-v2", "now() + INTERVAL '30 days'");
+        insertPolicy("2026-10-v5", "now() + INTERVAL '5 days'", 130);
+        insertPolicy("2026-10-v6", "now() + INTERVAL '15 days'", 150);
+        FleetPolicyStore.TermsChange change = store.nextTermsChange().orElseThrow();
+        assertThat(change.at()).as("the same detour changes nothing").isEqualTo(
+            fleet.db.queryForObject("SELECT effective_from FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v6'", Timestamp.class)
+                .toInstant());
+        assertThat(change.card().version()).as("the card in force then").isEqualTo("2026-09-v1");
+        assertThat(change.cardStarts()).isFalse();
+        assertThat(change.detourBefore()).isEqualTo(130);
+        assertThat(change.detourAfter()).isEqualTo(150);
     }
 
     @Test
@@ -88,7 +111,7 @@ class FleetPolicyStoreDatabaseTest {
         });
         fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '15 days' WHERE version = '2026-12-v2'");
         store.publishRateCard("2026-12-v2", ops);
-        assertThat(store.upcomingRateCard().orElseThrow().version()).isEqualTo("2026-12-v2");
+        assertThat(store.nextTermsChange().orElseThrow().card().version()).isEqualTo("2026-12-v2");
     }
 
     @Test
@@ -102,6 +125,11 @@ class FleetPolicyStoreDatabaseTest {
             + "jsonb_set(ranges, '{base_paise}', '[1000, 6000]'), summary_of_changes FROM fleet_schema.rate_card WHERE version = '2026-10-v1'");
         assertThatThrownBy(() -> store.publishRateCard("2026-12-v2", UUID.randomUUID())).isInstanceOfSatisfying(FleetApiException.class,
             error -> assertThat(error.getMessage()).contains("base_paise 2000 is outside the declared range 3000 to 6000"));
+
+        fleet.db.update("UPDATE fleet_schema.rate_card SET base_paise = 4000 WHERE version = '2026-12-v2'");
+        assertThat(store.publishRateCard("2026-12-v2", UUID.randomUUID())).as("its wider ranges were replaced").isTrue();
+        assertThat(fleet.db.queryForObject("SELECT ranges = (SELECT ranges FROM fleet_schema.rate_card WHERE version = '2026-10-v1') "
+            + "FROM fleet_schema.rate_card WHERE version = '2026-12-v2'", Boolean.class)).isTrue();
     }
 
     @Test
@@ -125,10 +153,17 @@ class FleetPolicyStoreDatabaseTest {
             + "FROM fleet_schema.rate_card WHERE version = '2026-10-v1'", version);
     }
 
+    /** A published card; the trigger sets published_at to now. */
     private void insertRateCard(String version, String effectiveFrom) {
         fleet.db.update("INSERT INTO fleet_schema.rate_card (version, status, effective_from, published_at, base_paise, base_drop_m, "
             + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, "
-            + "slot_guarantee_per_hour_paise, ranges, summary_of_changes) VALUES (?, 'PUBLISHED', " + effectiveFrom + ", "
-            + effectiveFrom + " - INTERVAL '14 days', 4000, 2000, 900, 1000, 900, 8, 150, 8000, '{}', '{\"en\": []}')", version);
+            + "slot_guarantee_per_hour_paise, ranges, summary_of_changes) VALUES (?, 'PUBLISHED', " + effectiveFrom + ", now(), 4000, 2000, "
+            + "900, 1000, 900, 8, 150, 8000, '{}', '{\"en\": []}')", version);
+    }
+
+    private void insertPolicy(String version, String effectiveFrom, int detour) {
+        fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, pickup_detour_percent, ranges) VALUES (?, 'PUBLISHED', " + effectiveFrom + ", now(), 'off', 40, "
+            + "60, 5000, ?, '{}')", version, detour);
     }
 }

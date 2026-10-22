@@ -247,7 +247,7 @@ components:
         draft: {type: boolean, description: 'The rate card is draft pricing, not final; the app shows a "Draft pricing, not final" badge'}
         upcoming:
           type: object
-          description: 'The next published rate card while one is in force: the 14 days'' notice of changed terms. Same language fallback and line wording as the terms in force. Left out when there is none.'
+          description: 'The next change to the terms while a rate card is in force, during its 14 days'' notice: the earlier of the next published rate card and the next change of the pickup detour. version is the rate card in force then, rateCardLines the lines riders will have then (same wording and language fallback), summaryOfChanges the card''s summary if it starts then plus a line when the pickup distance changes. Left out when there is none.'
           required: [version, effectiveFrom, summaryOfChanges, rateCardLines]
           properties:
             version: {type: string}

@@ -261,26 +261,26 @@ class FleetRiderApiDatabaseTest {
     }
 
     @Test
-    void termsShowTheNextRateCardDuringItsNotice() throws Exception {
-        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() "
-            + "WHERE version = '2026-10-v1'");
-        db.update("INSERT INTO fleet_schema.rate_card (version, status, effective_from, published_at, base_paise, base_drop_m, "
-            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
-            + "ranges, summary_of_changes) SELECT '2026-12-v2', 'PUBLISHED', now() + INTERVAL '14 days', now(), 4500, base_drop_m, "
-            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
-            + "ranges, '{\"en\": [\"Base pay goes up to ₹45.\"]}' FROM fleet_schema.rate_card WHERE version = '2026-10-v1'");
+    void termsShowTheNextChangeDuringItsNotice() throws Exception {
+        // Published rows never change, so this test adds its own and deletes them: the other tests here share the database.
+        String copy = "INSERT INTO fleet_schema.rate_card (version, status, effective_from, base_paise, base_drop_m, drop_per_km_paise, "
+            + "pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, "
+            + "summary_of_changes) SELECT ?, 'PUBLISHED', now() + CAST(? AS interval), ?, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, CAST(? AS jsonb) "
+            + "FROM fleet_schema.rate_card WHERE version = '2026-10-v1'";
         try {
+            db.update(copy, "2026-09-v8", "-1 day", 4000, "{\"en\": [\"Pilot pay.\"]}");
+            db.update(copy, "2026-12-v3", "20 days", 5000, "{\"en\": [\"Base pay goes up to ₹50.\"]}");
+            db.update(copy, "2026-12-v2", "14 days", 4500, "{\"en\": [\"Base pay goes up to ₹45.\"]}");
             mvc.perform(get("/api/v1/rider/terms").header("Authorization", "Bearer " + rider("ACTIVE", "hi"))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.version").value("2026-10-v1")).andExpect(jsonPath("$.draft").value(false))
+                .andExpect(jsonPath("$.version").value("2026-09-v8")).andExpect(jsonPath("$.draft").value(false))
+                .andExpect(jsonPath("$.rateCardLines[3].value").value("straight line × 1.3"))
                 .andExpect(jsonPath("$.upcoming.version").value("2026-12-v2"))
                 .andExpect(jsonPath("$.upcoming.summaryOfChanges[0]").value("Base pay goes up to ₹45."))
                 .andExpect(jsonPath("$.upcoming.rateCardLines[0].value").value("₹45"))
                 .andExpect(jsonPath("$.upcoming.effectiveFrom").exists());
         } finally {
-            // The other tests here share this database and expect the seeded draft.
-            db.update("DELETE FROM fleet_schema.rate_card WHERE version = '2026-12-v2'");
-            db.update("UPDATE fleet_schema.rate_card SET status = 'DRAFT', published_at = NULL, "
-                + "effective_from = TIMESTAMPTZ '2026-11-04 00:00:00+05:30' WHERE version = '2026-10-v1'");
+            db.update("DELETE FROM fleet_schema.rate_card WHERE version IN ('2026-09-v8', '2026-12-v2', '2026-12-v3')");
         }
     }
 

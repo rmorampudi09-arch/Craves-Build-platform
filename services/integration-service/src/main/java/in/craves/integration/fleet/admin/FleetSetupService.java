@@ -26,6 +26,7 @@ import java.net.URI;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -51,11 +52,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class FleetSetupService {
     private static final TypeReference<Map<String, List<Long>>> RANGES = new TypeReference<>() { };
     private static final TypeReference<Map<String, List<String>>> TEXT = new TypeReference<>() { };
+    private static final Duration NOTICE = Duration.ofDays(14);
     private static final Set<String> MODES = Set.of("off", "shadow", "live");
     private static final List<String> LANGUAGES = List.of("en", "te", "hi");
-    private static final String IN_FORCE = "WHERE status = 'PUBLISHED' AND effective_from <= now() ORDER BY effective_from DESC LIMIT 1";
+    // The same order as FleetPolicyStore's in-force reads, so the console shows the version that pays and dispatches.
+    private static final String IN_FORCE = "WHERE status = 'PUBLISHED' AND effective_from <= now() "
+        + "ORDER BY effective_from DESC, created_at DESC LIMIT 1";
     private static final String POLICY_IN_FORCE = "WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now() "
-        + "ORDER BY effective_from DESC LIMIT 1";
+        + "ORDER BY effective_from DESC, created_at DESC LIMIT 1";
     private static final String NEWEST = "ORDER BY created_at DESC, version DESC LIMIT 20";
     private static final String PILOT_RIDER = "SELECT t.rider_id, r.name, r.status, t.note, t.added_at FROM fleet_schema.test_mode_rider t "
         + "JOIN fleet_schema.rider r ON r.id = t.rider_id ";
@@ -136,38 +140,50 @@ public class FleetSetupService {
     @Transactional
     public Object publishRateCard(Admin by, UUID key, String version) {
         return admin.once(by, key, "RATE_CARD_PUBLISHED", version, () -> {
-            policies.publishRateCard(version, by.id());
+            boolean rangesReplaced = policies.publishRateCard(version, by.id());
             RateCardVersion card = rateCard(version);
-            return new Done(card, null, version, "Published rate card " + version + ", in force from " + card.effectiveFrom() + ".");
+            return new Done(card, null, version, "Published rate card " + version + ", in force from " + card.effectiveFrom() + "."
+                + (rangesReplaced ? " Its declared ranges were replaced with the published card's." : ""));
         });
     }
 
-    /** Creates and publishes a dispatch policy version in one transaction (FleetPolicyStore.publishDispatchPolicy has the rules). */
+    /**
+     * Creates and publishes a dispatch policy version in one transaction (FleetPolicyStore.publishDispatchPolicy has the rules).
+     * An off that starts now is the emergency stop: it keeps the values riders are shown, whatever the page sent, so it
+     * always works.
+     */
     @Transactional
     public Object setDispatchPolicy(Admin by, UUID key, DispatchPolicyInput input) {
         if (input == null || !MODES.contains(input.mode())) {
             throw FleetApiException.invalid("Choose off, shadow or live.");
         }
-        List<Number> given = Arrays.asList(input.offerSeconds(), input.fleetStageSeconds(), input.radiusM(), input.pickupDetourPercent(),
+        boolean stop = "off".equals(input.mode()) && input.effectiveFrom() == null;
+        List<Number> sent = Arrays.asList(input.offerSeconds(), input.fleetStageSeconds(), input.radiusM(), input.pickupDetourPercent(),
             input.perOrderOverheadPaise(), input.costGuardPremiumPaise(), input.pidgeStageSeconds());
-        if (given.contains(null)) {
+        if (!stop && sent.contains(null)) {
             throw FleetApiException.invalid("Fill in every dispatch value.");
-        }
-        Map<String, Long> values = new LinkedHashMap<>();
-        for (int i = 0; i < DISPATCH_POLICY_FIELDS.size(); i++) {
-            values.put(DISPATCH_POLICY_FIELDS.get(i), given.get(i).longValue());
         }
         return admin.once(by, key, "DISPATCH_POLICY_SET", admin.write(input), () -> {
             String version = policies.nextVersion(DISPATCH_POLICY);
+            Instant now = policies.databaseNow();
+            if (input.effectiveFrom() != null && input.effectiveFrom().isBefore(now.plus(NOTICE))) {
+                throw FleetApiException.unprocessable("NOTICE_TOO_SHORT", "Choose a start at least 14 days from now.");
+            }
+            List<Number> given = stop ? policies.shownDispatchPolicy(null, "")
+                .map(shown -> DISPATCH_POLICY_FIELDS.stream().map(column -> (Number) shown.get(column)).toList())
+                .orElseThrow(() -> FleetApiException.invalid("Fill in every dispatch value.")) : sent;
+            Map<String, Long> values = new LinkedHashMap<>();
+            for (int i = 0; i < DISPATCH_POLICY_FIELDS.size(); i++) {
+                values.put(DISPATCH_POLICY_FIELDS.get(i), given.get(i).longValue());
+            }
             // Before any policy is published, the seeded draft's ranges are the declared ones.
             Map<String, List<Long>> ranges = policies.publishedRanges(DISPATCH_POLICY).orElseGet(() -> jdbc.queryForList(
                 "SELECT ranges::text FROM fleet_schema.dispatch_policy WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1", String.class)
                 .stream().findFirst().map(text -> read(text, RANGES)).orElse(Map.of()));
-            Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
             // Checked before the insert so a value the table's CHECKs refuse is a 422, not a database error.
             FleetPolicyStore.refuse(FleetPolicyStore.publishProblems(values, ranges, now, now, false));
-            Instant requested = input.effectiveFrom() == null ? now : input.effectiveFrom().truncatedTo(ChronoUnit.MICROS);
-            List<Object> args = new ArrayList<>(List.of(version, Timestamp.from(requested), input.mode()));
+            List<Object> args = new ArrayList<>(List.of(version, Timestamp.from(input.effectiveFrom() == null ? now
+                : input.effectiveFrom().truncatedTo(ChronoUnit.MICROS)), input.mode()));
             args.addAll(given);
             args.add(admin.write(ranges));
             jdbc.update("INSERT INTO fleet_schema.dispatch_policy (version, effective_from, mode, " + String.join(", ", DISPATCH_POLICY_FIELDS)

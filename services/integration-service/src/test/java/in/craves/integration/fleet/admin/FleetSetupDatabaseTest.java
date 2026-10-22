@@ -102,7 +102,21 @@ class FleetSetupDatabaseTest {
     }
 
     @Test
-    void dispatchOffIsImmediateADetourChangeNeedsNoticeAndLiveNeedsARateCardInForce() {
+    void aDraftMadeBeforeTheFirstCardTakesThePublishedRangesWhenItIsPublished() {
+        Map<String, List<Long>> wider = new LinkedHashMap<>(ranges());
+        wider.put("basePaise", List.of(1000L, 9000L));
+        RateCardVersion firstCard = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        RateCardVersion other = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(),
+            card(Instant.now().plus(15, ChronoUnit.DAYS), wider)));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), firstCard.version()));
+        RateCardVersion published = (RateCardVersion) tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), other.version()));
+        assertThat(published.ranges()).isEqualTo(firstCard.ranges());
+        assertThat(fleet.db.queryForObject("SELECT summary FROM fleet_schema.admin_audit WHERE action = 'RATE_CARD_PUBLISHED' AND target_id = ?",
+            String.class, other.version())).endsWith("Its declared ranges were replaced with the published card's.");
+    }
+
+    @Test
+    void dispatchOffIsImmediateADetourChangeNeedsNoticeOnceRidersHaveTermsAndLiveNeedsARateCardInForce() {
         DispatchPolicyVersion off = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
         assertThat(off.version()).isEqualTo(month + "-v" + first);
         assertThat(off.status()).isEqualTo("PUBLISHED");
@@ -111,27 +125,31 @@ class FleetSetupDatabaseTest {
         assertThat(tx(setup::setup).dispatchPolicy().mode()).isEqualTo("off");
 
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("live", 130, null)), 422, "RATE_CARD_REQUIRED");
-        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 150, null)), 422, "DETOUR_NEEDS_NOTICE");
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 250, null)), 422, "VERSION_REFUSED");
-        Instant notice = Instant.now().plus(15, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
-        DispatchPolicyVersion detour = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
-            policy("shadow", 150, notice)));
-        assertThat(detour.effectiveFrom()).isEqualTo(notice);
-        DispatchPolicyVersion shadow = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
-            policy("shadow", 130, Instant.now().plus(3, ChronoUnit.DAYS))));
-        assertThat(shadow.effectiveFrom()).as("an effectiveFrom under 14 days away means now").isEqualTo(shadow.publishedAt());
-        assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo(shadow.version());
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, Instant.now().plus(3, ChronoUnit.DAYS))), 422,
+            "NOTICE_TOO_SHORT");
+        DispatchPolicyVersion early = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 150, null)));
+        assertThat(early.effectiveFrom()).as("no rate card is published, so riders have no terms to give notice of")
+            .isEqualTo(early.publishedAt());
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
         tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
-        DispatchPolicyVersion live = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("live", 130, null)));
-        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)), 422, "DETOUR_NEEDS_NOTICE");
+        Instant notice = Instant.now().plus(15, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        DispatchPolicyVersion detour = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            policy("shadow", 130, notice)));
+        assertThat(detour.effectiveFrom()).isEqualTo(notice);
+        DispatchPolicyVersion live = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("live", 150, null)));
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("off", 10, null, null, 999, null, null, null, null)));
+        assertThat(stop.pickupDetourPercent()).as("a stale page still stops: the values in force are kept").isEqualTo(150);
+        assertThat(stop.offerSeconds()).isEqualTo(40);
         FleetSetup now = tx(setup::setup);
         assertThat(now.dispatchPolicy().version()).as("off is the emergency stop: at once").isEqualTo(stop.version());
         assertThat(now.dispatchPolicies()).as("five versions and the seeded draft").hasSize(6);
         assertThat(audited("DISPATCH_POLICY_SET")).isEqualTo(5);
         assertThatThrownBy(() -> fleet.db.update("UPDATE fleet_schema.dispatch_policy SET pickup_detour_percent = 160 WHERE version = ?",
-            live.version())).isInstanceOf(DataIntegrityViolationException.class);
+            live.version())).as("published versions never change").isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

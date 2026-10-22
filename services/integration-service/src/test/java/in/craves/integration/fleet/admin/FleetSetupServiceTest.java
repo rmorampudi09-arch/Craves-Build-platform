@@ -46,7 +46,7 @@ class FleetSetupServiceTest {
         invalid(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), draft(4000L, Instant.now(), Map.of("en", List.of("New pay.")),
             "http://craves.in/terms")));
         invalid(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), new DispatchPolicyInput("on", 40, 60, 5000, 130, 500L, 1000L, 600, null)));
-        invalid(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), new DispatchPolicyInput("off", 40, null, 5000, 130, 500L, 1000L, 600, null)));
+        invalid(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), new DispatchPolicyInput("shadow", 40, null, 5000, 130, 500L, 1000L, 600, null)));
         verifyNoInteractions(jdbc, admin);
     }
 

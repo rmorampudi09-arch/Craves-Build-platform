@@ -78,6 +78,24 @@ class FleetDispatchDatabaseTest {
     }
 
     @Test
+    void liveWithoutAPublishedRateCardInForceOpensNoFleetStage() {
+        // Behind RATE_CARD_REQUIRED: a live policy written some other way still never offers trips on draft pay.
+        fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, ranges) VALUES ('2026-09-v9', 'PUBLISHED', now() - INTERVAL '1 day', now(), 'live', 40, 60, "
+            + "5000, '{}')");
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        assertThat(dispatcher.run(command, () -> OptionalLong.of(9000), true)).isEmpty();
+        fleet.db.update("INSERT INTO fleet_schema.rate_card (version, status, effective_from, published_at, base_paise, base_drop_m, "
+            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "ranges, summary_of_changes) SELECT '2026-11-v2', 'PUBLISHED', now() + INTERVAL '20 days', now(), base_paise, base_drop_m, "
+            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "ranges, summary_of_changes FROM fleet_schema.rate_card WHERE version = '2026-10-v1'");
+        assertThat(dispatcher.run(command, () -> OptionalLong.of(9000), true)).as("a card that starts later does not pay yet").isEmpty();
+        assertThat(count("fleet_schema.trip")).isZero();
+        verifyNoInteractions(push);
+    }
+
+    @Test
     void liveOffersTheThreeNearestEligibleRidersWithLockedPayAndWaits() throws Exception {
         FleetDispatchFixtures.policy(fleet.db, "live");
         UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);

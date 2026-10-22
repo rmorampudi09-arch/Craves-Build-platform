@@ -19,11 +19,18 @@ public final class FleetDispatchFixtures {
     private FleetDispatchFixtures() {
     }
 
-    /** A dispatch policy in force (published 15 days ago): offers 40 s, fleet stage 60 s, radius 5 km, Pidge 600 s. */
+    /**
+     * A dispatch policy in force since yesterday: offers 40 s, fleet stage 60 s, radius 5 km, Pidge 600 s. Live pays riders,
+     * so for live the seeded rate card is published first, in force since yesterday too.
+     */
     public static void policy(JdbcTemplate db, String mode) {
+        if ("live".equals(mode)) {
+            db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() - INTERVAL '1 day' "
+                + "WHERE version = '2026-10-v1' AND status = 'DRAFT'");
+        }
         db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
-            + "fleet_stage_seconds, radius_m, ranges) VALUES ('2026-09-v9', 'PUBLISHED', now() - INTERVAL '1 day', now() - INTERVAL '15 days', "
-            + "?, 40, 60, 5000, '{}')", mode);
+            + "fleet_stage_seconds, radius_m, ranges) VALUES ('2026-09-v9', 'PUBLISHED', now() - INTERVAL '1 day', now(), ?, 40, 60, 5000, '{}')",
+            mode);
     }
 
     /** An ACTIVE rider with a bound phone, on an open shift, whose last real fix arrived secondsAgo. Returns the rider id. */

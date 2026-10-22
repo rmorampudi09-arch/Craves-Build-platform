@@ -111,13 +111,20 @@ def secret_value(group: str, name: str, app: dict, variable: str, cache: dict):
     return cache[name].get(item["secretRef"]) or None
 
 
+# The only variables whose plain values are printed; every other value shows as <set> (it may hold a secret).
+PRINTABLE = {*FLAGS, "CRAVES_FLEET_TEST_MODE", "CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED", *BASE_URLS, "CRAVES_FLEET_SUPPORT_PHONE",
+             "CRAVES_FLEET_SUPPORT_WHATSAPP_URL", "CRAVES_FLEET_INSURANCE_LABEL", "CRAVES_FLEET_MIN_APP_VERSION",
+             "CRAVES_STORAGE_DOCUMENTS_CONTAINER", "CRAVES_BANK_DATA_ACTIVE_KEY_ID", "CRAVES_LEDGER_POSTING_ENABLED",
+             "CRAVES_REALTIME_PUSH_ENABLED", "CRAVES_OPS_ALERT_EMAILS", "ACS_EMAIL_SENDER_ADDRESS"}
+
+
 def shown(app: dict, variable: str) -> str:
     item = environment(app).get(variable)
     if item is None:
         return "<missing>"
     if item.get("secretRef"):
         return "<secret " + item["secretRef"] + ">"
-    if re.search(r"KEY|SECRET|CONNECTION|JSON", variable):
+    if variable not in PRINTABLE:
         return "<set>" if item.get("value") else "<empty>"
     return item.get("value") or "<empty>"
 
@@ -183,8 +190,9 @@ def desired(stage: str, apps: dict, args) -> dict:
         if args.insurance_label:
             integration["CRAVES_FLEET_INSURANCE_LABEL"] = args.insurance_label
         emails = ",".join(e.strip() for e in args.ops_alert_emails.split(",") if e.strip())
-        return {"integration": integration,
-                "notification": {"CRAVES_REALTIME_PUSH_ENABLED": "true", "CRAVES_OPS_ALERT_EMAILS": emails}}
+        # Notification first: push on with nothing calling it is harmless if integration-service then fails.
+        return {"notification": {"CRAVES_REALTIME_PUSH_ENABLED": "true", "CRAVES_OPS_ALERT_EMAILS": emails},
+                "integration": integration}
     if stage == "enable":
         return {"integration": {**{flag: "true" for flag in FLAGS}, "CRAVES_FLEET_TEST_MODE": "true",
                                 "CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED": "false"}}
@@ -225,8 +233,9 @@ def wait_ready(group: str, name: str, previous: str, attempts: int, pause: float
     raise GuardError(f"{name} did not reach a healthy new revision in time")
 
 
-def apply_role(group: str, name: str, app: dict, settings: dict, attempts: int, pause: float) -> str:
-    """Sets the values, waits for a healthy revision, and on failure puts the previous values back."""
+def apply_role(group: str, name: str, app: dict, settings: dict, attempts: int, pause: float, roll_back: bool = True) -> str:
+    """Sets the values and waits for a healthy revision. On failure the previous values go back (never for
+    disable: a kill switch must not switch the fleet back on) and the restored revision is awaited too."""
     container = app["properties"]["template"]["containers"][0]["name"]
     previous_revision = app["properties"].get("latestRevisionName", "")
     before = {variable: literal(app, variable) for variable in settings}
@@ -234,7 +243,10 @@ def apply_role(group: str, name: str, app: dict, settings: dict, attempts: int, 
        "--set-env-vars", *[f"{k}={v}" for k, v in settings.items()], output="none")
     try:
         return wait_ready(group, name, previous_revision, attempts, pause)
-    except GuardError:
+    except GuardError as failure:
+        if not roll_back:
+            raise GuardError(f"{failure}; the new values stay (no roll back for disable): check the app in Azure") from failure
+        failed_revision = az("containerapp", "show", "-g", group, "-n", name)["properties"].get("latestRevisionName", "")
         restore = [f"{k}={v}" for k, v in before.items() if v is not None]
         remove = [k for k, v in before.items() if v is None]
         if restore:
@@ -243,7 +255,12 @@ def apply_role(group: str, name: str, app: dict, settings: dict, attempts: int, 
         if remove:
             az("containerapp", "update", "-g", group, "-n", name, "--container-name", container,
                "--remove-env-vars", *remove, output="none")
-        raise
+        try:
+            restored = wait_ready(group, name, failed_revision, attempts, pause)
+        except GuardError as restore_failure:
+            raise GuardError(f"{failure}; putting the previous values back also failed ({restore_failure}): "
+                             "a person must check the app in Azure now") from failure
+        raise GuardError(f"{failure}; previous values restored on {restored}") from failure
 
 
 def main(argv=None) -> int:
@@ -313,7 +330,9 @@ def main(argv=None) -> int:
         print("Plan only: run again with --apply and the reviewed commit to make these changes.")
         return 0
     for role, settings in planned.items():
-        print(f"{APPS[role]}: healthy on {apply_role(group, APPS[role], apps[role], settings, args.ready_attempts, args.ready_pause_seconds)}")
+        revision = apply_role(group, APPS[role], apps[role], settings, args.ready_attempts, args.ready_pause_seconds,
+                              roll_back=args.stage != "disable")
+        print(f"{APPS[role]}: healthy on {revision}")
     print(f"Done: stage {args.stage} applied.")
     return 0
 

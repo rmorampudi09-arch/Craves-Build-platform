@@ -2,7 +2,7 @@
 
 The Craves rider fleet lives in integration-service, package `in.craves.integration.fleet`, with its own schema, `fleet_schema`, in the integration database. Four other services carry small parts of it: auth-service (the RIDER role), notification-service (offer pushes and ops alerts), user-chef-service (road distance) and order-service (the customer's delivery code). Plan: project doc `rider-app/PLAN.md`. Contracts: `contracts/openapi/rider-v1.yaml` (rider app, with every error code per route) and `contracts/openapi/admin-fleet-v1.yaml` (ops console).
 
-Nothing here changes what production does until a person turns it on: every flag is off by default, `dispatch_policy` is seeded in mode `off`, and test mode is on.
+Nothing here changes what production does until a person turns it on: every flag is off by default, `dispatch_policy` is seeded in mode `off`, and test mode is on. The go-live runbook, from merge to a live pilot zone with every outside account to set up, is `GO-LIVE.md`.
 
 ## Deploy order
 
@@ -382,7 +382,7 @@ Both APIs are published on the mobile gateway (`api.craves.in`) by `scripts/apim
 
 ## Test mode for one rider and one kitchen
 
-1. Deploy in the order above. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true`, plus the storage, bank-data, support-phone and internal URL settings (`CRAVES_AUTH_INTERNAL_BASE_URL`, `CRAVES_USER_CHEF_INTERNAL_BASE_URL`, `CRAVES_FLEET_ORDER_BASE_URL`, `CRAVES_NOTIFICATION_INTERNAL_BASE_URL`, `CRAVES_INTERNAL_SERVICE_KEY`). In notification-service set `CRAVES_REALTIME_PUSH_ENABLED=true` and `CRAVES_OPS_ALERT_EMAILS`.
+1. Deploy in the order above. The runtime pipeline (`azure-pipelines-rider-fleet-runtime.yml`, stages status, wire, enable and disable; step by step in `GO-LIVE.md`) sets what follows. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true`, plus the storage, bank-data, support-phone and internal URL settings (`CRAVES_AUTH_INTERNAL_BASE_URL`, `CRAVES_USER_CHEF_INTERNAL_BASE_URL`, `CRAVES_FLEET_ORDER_BASE_URL`, `CRAVES_NOTIFICATION_INTERNAL_BASE_URL`, `CRAVES_INTERNAL_SERVICE_KEY`). In notification-service set `CRAVES_REALTIME_PUSH_ENABLED=true` and `CRAVES_OPS_ALERT_EMAILS`.
 2. Ops creates the rider in the console (`POST /riders`), reviews the documents with their expiry dates, sets the vehicle and the payout account in person; the rider signs in to the app once so `/me` links them; ops activates them with `RESTORE`.
 3. Add both to the pilot in the console (`PUT /pilot/riders/{riderId}` and `PUT /pilot/kitchens/{chefId}`, the chef's identity id). Dispatch asks `FleetTestMode.riderAllowed` and `kitchenAllowed` before it offers a trip, so nobody else is touched. The kitchen is known only for orders checked out with the finance quote (`finance_issued_snapshot`).
 4. Publish the rate card in the console (the first one may start at once), then set dispatch: `shadow` first (it only logs `FLEET_SHADOW`), and `live` only after order-service with the `craves_fleet` hand-over is deployed. `off` stops dispatch at once. `GET /setup` shows what is in force.

@@ -49,7 +49,8 @@ def ready_world():
 class FakeAz:
     """Container Apps in memory: show, secret list, update (set/remove env) and revision show."""
 
-    def __init__(self, world, fail_revision=False):
+    def __init__(self, world, fail_revision=None):
+        """fail_revision: the one revision name (for example "<app>--r2") that comes up failed."""
         self.world, self.fail_revision, self.updates = world, fail_revision, []
 
     def __call__(self, *args, output="json"):
@@ -72,11 +73,11 @@ class FakeAz:
             props = self.world[name]["properties"]
             number = int(props["latestRevisionName"].rsplit("--r", 1)[1]) + 1
             props["latestRevisionName"] = f"{name}--r{number}"
-            if not self.fail_revision:
+            if props["latestRevisionName"] != self.fail_revision:
                 props["latestReadyRevisionName"] = props["latestRevisionName"]
             return None
         if args[:3] == ["containerapp", "revision", "show"]:
-            failed = self.fail_revision
+            failed = args[args.index("--revision") + 1] == self.fail_revision
             return {"properties": {"runningState": "Failed" if failed else "Running", "healthState": "Healthy",
                                    "provisioningState": "Failed" if failed else "Succeeded"}}
         raise AssertionError("unexpected az call: " + " ".join(args))
@@ -211,13 +212,49 @@ class RiderPilotRuntimeTest(unittest.TestCase):
         world = ready_world()
         world["ca-craves-integration-service-pr"]["properties"]["template"]["containers"][0]["env"].append(
             val("CRAVES_FLEET_MIN_APP_VERSION", "0.9.0"))
-        fake = FakeAz(world, fail_revision=True)
-        with self.assertRaises(runtime.GuardError):
+        fake = FakeAz(world, fail_revision="ca-craves-integration-service-pr--r2")
+        with self.assertRaises(runtime.GuardError) as failure:
             self.run_main(fake, [*WIRE, "--apply", "--expected-source-sha", SHA])
+        self.assertIn("previous values restored", str(failure.exception))
         integration = self.env(fake, "ca-craves-integration-service-pr")
         self.assertEqual("0.9.0", integration["CRAVES_FLEET_MIN_APP_VERSION"], "changed value restored")
         self.assertNotIn("CRAVES_FLEET_SUPPORT_PHONE", integration, "added value removed")
-        self.assertNotIn("ca-craves-notification-service-p", [name for name, _ in fake.updates], "stops at the first failure")
+        self.assertEqual("true", self.env(fake, "ca-craves-notification-service-p")["CRAVES_REALTIME_PUSH_ENABLED"],
+                         "notification goes first; push on with nothing calling it is harmless")
+
+    def test_failed_restore_says_a_person_must_check(self):
+        fake = FakeAz(ready_world(), fail_revision="ca-craves-integration-service-pr--r2")
+        original = fake.__call__
+
+        def failing_twice(*args, output="json"):
+            result = original(*args, output=output)
+            if list(args[:2]) == ["containerapp", "update"] and "--remove-env-vars" in args:
+                fake.fail_revision = fake.world["ca-craves-integration-service-pr"]["properties"]["latestRevisionName"]
+                fake.world["ca-craves-integration-service-pr"]["properties"]["latestReadyRevisionName"] = "stale"
+            return result
+        with self.assertRaises(runtime.GuardError) as failure:
+            self.run_main(failing_twice, [*WIRE, "--apply", "--expected-source-sha", SHA])
+        self.assertIn("a person must check the app in Azure now", str(failure.exception))
+
+    def test_failed_disable_never_switches_the_fleet_back_on(self):
+        world = ready_world()
+        world["ca-craves-integration-service-pr"]["properties"]["template"]["containers"][0]["env"].append(
+            val("CRAVES_FLEET_ENABLED", "true"))
+        fake = FakeAz(world, fail_revision="ca-craves-integration-service-pr--r2")
+        with self.assertRaises(runtime.GuardError) as failure:
+            self.run_main(fake, ["--stage", "disable", "--apply", "--expected-source-sha", SHA])
+        self.assertIn("no roll back for disable", str(failure.exception))
+        self.assertEqual("false", self.env(fake, "ca-craves-integration-service-pr")["CRAVES_FLEET_ENABLED"])
+
+    def test_plain_secret_values_are_never_printed(self):
+        world = ready_world()
+        env = world["ca-craves-integration-service-pr"]["properties"]["template"]["containers"][0]["env"]
+        env[:] = [e for e in env if e["name"] != "CRAVES_STORAGE_ENDPOINT_VALUE"] + [
+            val("CRAVES_STORAGE_ENDPOINT_VALUE", "DefaultEndpointsProtocol=https;AccountKey=plain-secret")]
+        code, out, report = self.run_main(FakeAz(world), ["--stage", "status"])
+        self.assertEqual(0, code)
+        self.assertNotIn("plain-secret", out + json.dumps(report))
+        self.assertEqual("<set>", report["apps"]["integration"]["settings"]["CRAVES_STORAGE_ENDPOINT_VALUE"])
 
     def test_never_replaces_a_secret_reference(self):
         world = ready_world()

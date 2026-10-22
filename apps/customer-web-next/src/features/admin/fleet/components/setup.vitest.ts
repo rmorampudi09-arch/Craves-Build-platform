@@ -119,8 +119,58 @@ describe("dispatch", () => {
     expect(window.confirm).toHaveBeenLastCalledWith("Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time. Version 2026-10-v4 (Live) still takes over on 15 Jan 2030, 10:00 am IST.");
     fireEvent.click(within(panel).getByLabelText("Off"));
     fireEvent.click(button("Save dispatch policy", panel));
-    expect(window.confirm).toHaveBeenLastCalledWith("Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
+    expect(window.confirm).toHaveBeenLastCalledWith("Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order. Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
     expect(sends()).toHaveLength(0);
+  });
+
+  it("treats Off in the form as the emergency stop that keeps today's values", async () => {
+    const scheduled = { ...policy, version: "2026-10-v4", effectiveFrom: "2030-01-15T04:30:00Z" };
+    setup = { ...base, dispatchPolicy: policy, dispatchPolicies: [scheduled, policy], rateCard: published, rateCards: [published] };
+    render(createElement(FleetSetup));
+    const panel = await section("Dispatch");
+    type("Pickup detour, % of the straight line", "150", panel);
+    type("Rider search radius, km", "9", panel);
+    expect(within(panel).getByLabelText("New detour starts (IST)")).toBeTruthy();
+    fireEvent.click(within(panel).getByLabelText("Off"));
+    expect(within(panel).getByText("Off stops dispatch now and keeps today's values.")).toBeTruthy();
+    const detour = within(panel).getByLabelText("Pickup detour, % of the straight line") as HTMLInputElement;
+    const radius = within(panel).getByLabelText("Rider search radius, km") as HTMLInputElement;
+    expect([detour.disabled, detour.value, radius.disabled, radius.value]).toEqual([true, "130", true, "5"]);
+    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
+
+    answer = (method, path) => method === "POST" ? json({ ...policy, version: "2026-10-v5", mode: "off" }, 201) : reads(method, path);
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(window.confirm).toHaveBeenCalledWith("Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order. Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
+    expect(await within(panel).findByText("Dispatch is off.")).toBeTruthy();
+    expect(within(panel).queryByText("Dispatch policy saved.")).toBeNull();
+    expect(sends()).toEqual([{ method: "POST", path: "dispatch-policies", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { mode: "off", ...values } }]);
+  });
+
+  it("compares a new detour with the one riders are shown, and gives no notice before a rate card is published", async () => {
+    // Nothing in force: riders are shown the newest draft's 120%, not the scheduled published version's 130%.
+    const draft = { ...policy, version: "2026-10-v1", status: "DRAFT", publishedAt: undefined, mode: "off", pickupDetourPercent: 120 };
+    const scheduled = { ...policy, version: "2026-10-v2", effectiveFrom: "2030-01-15T04:30:00Z" };
+    setup = { ...base, dispatchPolicies: [scheduled, draft], rateCard: published, rateCards: [published] };
+    render(createElement(FleetSetup));
+    let panel = await section("Dispatch");
+    expect((within(panel).getByLabelText("Pickup detour, % of the straight line") as HTMLInputElement).value).toBe("120");
+    fireEvent.click(within(panel).getByLabelText("Shadow — logs only"));
+    type("Pickup detour, % of the straight line", "130", panel);
+    expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the detour at 120%");
+    type("Pickup detour, % of the straight line", "120", panel);
+    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
+    cleanup();
+
+    // No published rate card yet: riders have no terms, so any detour starts at once.
+    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }] };
+    answer = (method, path) => method === "POST" ? json({ ...policy, mode: "shadow", version: "2026-10-v3", pickupDetourPercent: 140 }, 201) : reads(method, path);
+    render(createElement(FleetSetup));
+    panel = await section("Dispatch");
+    type("Pickup detour, % of the straight line", "140", panel);
+    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
+    expect(sends()[0].body).toEqual({ mode: "shadow", ...values, pickupDetourPercent: 140 });
   });
 
   it("asks before going live and shows the server's refusal", async () => {
@@ -146,7 +196,7 @@ describe("dispatch", () => {
   });
 
   it("asks when a new detour starts, only when the detour changes", async () => {
-    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }] };
+    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
     expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
@@ -159,10 +209,10 @@ describe("dispatch", () => {
     fireEvent.click(button("Save dispatch policy", panel));
     expect(within(panel).getByRole("alert").textContent).toBe("Pick a start for the new detour at least 14 days and 1 hour from now.");
 
-    answer = (method, path) => method === "POST" ? json({ code: "DETOUR_NEEDS_NOTICE", message: "A new detour needs 14 days' notice." }, 422) : reads(method, path);
+    answer = (method, path) => method === "POST" ? json({ code: "NOTICE_TOO_SHORT", message: "Start the new detour on or after 5 Nov 2026, 10:00 am IST." }, 422) : reads(method, path);
     type("New detour starts (IST)", "2030-01-15T10:00", panel);
     fireEvent.click(button("Save dispatch policy", panel));
-    expect((await within(panel).findByRole("alert")).textContent).toBe("A new detour needs 14 days' notice.");
+    expect((await within(panel).findByRole("alert")).textContent).toBe("Start the new detour on or after 5 Nov 2026, 10:00 am IST.");
     expect(sends()[0].body).toEqual({ mode: "shadow", ...values, pickupDetourPercent: 140, effectiveFrom: "2030-01-15T04:30:00.000Z" });
     type("Pickup detour, % of the straight line", "130", panel);
     expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();

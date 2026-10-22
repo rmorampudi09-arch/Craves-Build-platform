@@ -131,7 +131,10 @@ export function dispatchForm(policy: DispatchPolicy | null, now = Date.now()): D
   return { ...values as Record<DispatchField, string>, mode: policy?.mode ?? "off", effectiveFrom: noticeStart(now) };
 }
 
-/** A new detour changes rider pay, so it needs 14 days' notice; `reference` is the policy in force (else the newest published). */
+/**
+ * A new detour changes rider pay, so it needs 14 days' notice. `reference` is the detour riders are shown (the policy in
+ * force, else the newest draft), or null before any rate card is published, when any detour starts at once.
+ */
 export function detourChanges(form: DispatchForm, reference: DispatchPolicy | null): boolean {
   const detour = fromUnitText("percent", form.pickupDetourPercent);
   return reference !== null && detour !== null && detour !== reference.pickupDetourPercent;

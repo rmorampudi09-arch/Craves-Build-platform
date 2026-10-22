@@ -13,10 +13,11 @@ import {
   fleetSetupSchema, isScheduled, noticeStart, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema, toUnitText, versionState,
   type DispatchMode, type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RateCard, type Unit, type UnitInput,
 } from "@/features/admin/fleet/lib/setup-contract";
-import { ActionMessage, fieldClass, labelClass, useFleetAction } from "./fleet-action";
+import { ActionMessage, fieldClass, labelClass, useFleetAction, type FleetAction } from "./fleet-action";
 
 const MODE_LABEL = { off: "Off", shadow: "Shadow — logs only", live: "Live" } as const;
 const LIVE_WARNING = "Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time.";
+const STOP_WARNING = "Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.";
 const STEP: Record<Unit, string> = { rupees: "0.01", km: "0.1", minutes: "1", seconds: "1", percent: "1" };
 const DAY = 86_400_000;
 const noteBody = (note: string) => note.trim() ? { note: note.trim() } : undefined;
@@ -74,22 +75,27 @@ function SetupStatus({ setup }: { setup: Setup }) {
   </section>;
 }
 
-function NumberInputs<F extends string>({ inputs, values, onChange }: { inputs: readonly UnitInput<F>[]; values: Record<F, string>; onChange: (field: F, value: string) => void }) {
+function NumberInputs<F extends string>({ inputs, values, onChange, disabled }: {
+  inputs: readonly UnitInput<F>[]; values: Record<F, string>; onChange: (field: F, value: string) => void; disabled?: boolean;
+}) {
   return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
     {inputs.map(({ field, label, unit }) => <label key={field} className={labelClass}>{label}
-      <input className={fieldClass} type="number" min={0} step={STEP[unit]} value={values[field]} onChange={event => onChange(field, event.target.value)} />
+      <input className={fieldClass} type="number" min={0} step={STEP[unit]} disabled={disabled} value={values[field]} onChange={event => onChange(field, event.target.value)} />
     </label>)}
   </div>;
 }
 
 function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<void> }) {
   const inForce = setup.dispatchPolicy;
-  // The server compares a new detour with the policy in force, or the newest published one before any is in force; withdrawn ones never count.
-  const reference = inForce ?? setup.dispatchPolicies.find(policy => policy.status === "PUBLISHED" && !policy.withdrawnAt) ?? null;
-  const [form, setForm] = useState(() => dispatchForm(inForce ?? setup.dispatchPolicies.find(policy => !policy.withdrawnAt) ?? null));
+  // The values riders are shown: the policy in force (never a withdrawn one), else the newest draft.
+  const shown = inForce ?? setup.dispatchPolicies.find(policy => policy.status === "DRAFT") ?? null;
+  // A detour change needs 14 days' notice only once riders have terms, that is a published rate card.
+  const reference = setup.rateCard || setup.rateCards.some(card => card.status === "PUBLISHED") ? shown : null;
+  const [form, setForm] = useState(() => dispatchForm(shown ?? setup.dispatchPolicies.find(policy => !policy.withdrawnAt) ?? null));
   const save = useFleetAction();
   const stop = useFleetAction();
-  const notice = detourChanges(form, reference);
+  const off = form.mode === "off";
+  const notice = !off && detourChanges(form, reference);
 
   /** An off starting now withdraws every scheduled version; any other change now leaves the next one to take over on its date. */
   function scheduledNote(mode: DispatchMode) {
@@ -102,6 +108,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (off) return stopDispatch(save);
     const input = dispatchFromForm(form, reference);
     if (typeof input === "string") return save.refuse(input);
     const warning = [input.mode === "live" ? LIVE_WARNING : "", input.effectiveFrom ? "" : scheduledNote(input.mode)].filter(Boolean).join(" ");
@@ -109,11 +116,12 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
     if (await save.run("POST", "dispatch-policies", dispatchPolicySchema, input, "Dispatch policy saved.")) await onDone();
   }
 
-  async function stopNow() {
-    if (!inForce) return;
-    if (!window.confirm(["Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.", scheduledNote("off")].filter(Boolean).join(" "))) return;
-    const input = dispatchPolicyInputSchema.parse({ ...inForce, mode: "off", effectiveFrom: undefined });
-    if (await stop.run("POST", "dispatch-policies", dispatchPolicySchema, input, "Dispatch is off.")) await onDone();
+  /** An off that starts now is the emergency stop: the server keeps the values riders are shown and withdraws scheduled versions. */
+  async function stopDispatch(action: FleetAction) {
+    const input = shown ? dispatchPolicyInputSchema.parse({ ...shown, mode: "off", effectiveFrom: undefined }) : dispatchFromForm({ ...form, mode: "off" }, null);
+    if (typeof input === "string") return action.refuse(input);
+    if (!window.confirm([STOP_WARNING, scheduledNote("off")].filter(Boolean).join(" "))) return;
+    if (await action.run("POST", "dispatch-policies", dispatchPolicySchema, input, "Dispatch is off.")) await onDone();
   }
 
   return <section className="cr-panel space-y-4" aria-labelledby="setup-dispatch-title">
@@ -121,7 +129,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
     {inForce && inForce.mode !== "off" && <div className="cr-alert space-y-2">
       <strong>Emergency stop</strong>
       <p>Switches dispatch off at once, keeping the other values in force.</p>
-      <button type="button" className="cr-button cr-primary" disabled={stop.busy} onClick={() => void stopNow()}>Stop dispatch now</button>
+      <button type="button" className="cr-button cr-primary" disabled={stop.busy} onClick={() => void stopDispatch(stop)}>Stop dispatch now</button>
     </div>}
     {/* Outside the box, which goes once dispatch is off. */}
     <ActionMessage state={stop.state} />
@@ -133,7 +141,8 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
           <input type="radio" name="dispatch-mode" value={mode} checked={form.mode === mode} onChange={() => setForm(current => ({ ...current, mode }))} />{MODE_LABEL[mode]}
         </label>)}</div>
       </fieldset>
-      <NumberInputs inputs={DISPATCH_INPUTS} values={form} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+      {off && <p className="cr-muted">Off stops dispatch now and keeps today&apos;s values.</p>}
+      <NumberInputs inputs={DISPATCH_INPUTS} values={off && shown ? dispatchForm(shown) : form} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
       <p className="cr-muted">The cost guard offers a trip to riders only when rider pay plus the overhead is at most the Borzo or Pidge quote plus the premium.</p>
       {notice && reference && <div>
         <label className={labelClass}>New detour starts (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-detour-help" value={form.effectiveFrom} onChange={event => setForm(current => ({ ...current, effectiveFrom: event.target.value }))} /></label>

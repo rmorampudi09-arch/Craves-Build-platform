@@ -94,7 +94,7 @@ describe("dispatch form", () => {
     const changed = { ...form, pickupDetourPercent: "140", effectiveFrom: "" };
     expect(detourChanges(form, reference)).toBe(false);
     expect(detourChanges(changed, reference)).toBe(true);
-    // The first policy ever has nothing to compare with.
+    // Before any rate card is published there is no notice to give (the component passes null).
     expect(detourChanges(changed, null)).toBe(false);
     expect(dispatchFromForm(changed, null, NOW)).not.toHaveProperty("effectiveFrom");
     const tooSoon = "Pick a start for the new detour at least 14 days and 1 hour from now.";

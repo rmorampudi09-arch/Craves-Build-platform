@@ -19,6 +19,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.RiderMe;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderProfile;
 import in.craves.integration.fleet.rider.FleetRiderModels.Terms;
+import in.craves.integration.fleet.rider.FleetRiderModels.UpcomingTerms;
 import in.craves.integration.fleet.rider.FleetRiderModels.Vehicle;
 import in.craves.integration.security.CravesPrincipal;
 import java.io.IOException;
@@ -223,7 +224,7 @@ public class FleetRiderService {
 
     @Transactional(readOnly = true)
     public Terms terms(UUID identityId) {
-        return terms(currentRateCard(), rider(identityId).language(), properties.supportPhone());
+        return terms(currentRateCard(), policies.upcomingRateCard().orElse(null), rider(identityId).language(), properties.supportPhone());
     }
 
     /** Only the version in force can be accepted; anything else means the terms changed while the rider read them. */
@@ -257,10 +258,25 @@ public class FleetRiderService {
     /**
      * Rate card lines come from the stored values, so the terms always show what pay uses. The summary of changes
      * is stored per language; te and hi fall back to English, and the labels stay English until they are translated.
+     * upcoming, when not null, is the published card that starts later, shown the same way.
      */
-    static Terms terms(RateCard card, String language, String supportPhone) {
+    static Terms terms(RateCard card, RateCard upcoming, String language, String supportPhone) {
+        List<LabelValue> grievance = List.of(
+            new LabelValue("Craves rider support, every slot", supportPhone == null ? "" : supportPhone),
+            new LabelValue("Telangana Grievance Redressal Officer", "Link added when the state portal opens"));
+        UpcomingTerms next = upcoming == null ? null
+            : new UpcomingTerms(upcoming.version(), upcoming.effectiveFrom(), summary(upcoming, language), rateCardLines(upcoming));
+        return new Terms(card.version(), card.effectiveFrom(), summary(card, language), rateCardLines(card), grievance, card.fullTextUrl(),
+            card.draft(), next);
+    }
+
+    private static List<String> summary(RateCard card, String language) {
+        return card.summaryOfChanges().getOrDefault(language, card.summaryOfChanges().getOrDefault("en", List.of()));
+    }
+
+    private static List<LabelValue> rateCardLines(RateCard card) {
         String baseKm = km(card.baseDropM());
-        List<LabelValue> rateCard = List.of(
+        return List.of(
             new LabelValue("Base pay, first " + baseKm + " km of the drop", rupees(card.basePaise())),
             new LabelValue("Each drop km after " + baseKm + " km", rupees(card.dropPerKmPaise())),
             new LabelValue(card.pickupFreeM() > 0 ? "Ride to the kitchen, each km after the first " + km(card.pickupFreeM()) + " km"
@@ -274,11 +290,6 @@ public class FleetRiderService {
                 card.unreachableWaitMinutes() + " minutes"),
             new LabelValue("Guaranteed minimum in a booked slot", rupees(card.slotGuaranteePerHourPaise()) + " an hour"),
             new LabelValue("Declining or missing an offer", "Free"));
-        List<LabelValue> grievance = List.of(
-            new LabelValue("Craves rider support, every slot", supportPhone == null ? "" : supportPhone),
-            new LabelValue("Telangana Grievance Redressal Officer", "Link added when the state portal opens"));
-        List<String> summary = card.summaryOfChanges().getOrDefault(language, card.summaryOfChanges().getOrDefault("en", List.of()));
-        return new Terms(card.version(), card.effectiveFrom(), summary, rateCard, grievance, card.fullTextUrl(), card.draft());
     }
 
     /** 4000 is "₹40"; 150 is "₹1.50". */

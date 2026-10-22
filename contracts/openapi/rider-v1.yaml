@@ -245,6 +245,15 @@ components:
         grievanceLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
         fullTextUrl: {type: string}
         draft: {type: boolean, description: 'The rate card is draft pricing, not final; the app shows a "Draft pricing, not final" badge'}
+        upcoming:
+          type: object
+          description: 'The next published rate card while one is in force: the 14 days'' notice of changed terms. Same language fallback and line wording as the terms in force. Left out when there is none.'
+          required: [version, effectiveFrom, summaryOfChanges, rateCardLines]
+          properties:
+            version: {type: string}
+            effectiveFrom: {type: string, format: date-time}
+            summaryOfChanges: {type: array, items: {type: string}}
+            rateCardLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
     HomeSummary:
       type: object
       required: [online, todayEarningsPaise, todayTrips]

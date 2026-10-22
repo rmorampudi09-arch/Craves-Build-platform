@@ -56,9 +56,13 @@ public final class FleetRiderModels {
     public record Banner(String tone, String text) {
     }
 
+    /** upcoming: the published rate card that starts later, shown during its 14 days' notice. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Terms(String version, Instant effectiveFrom, List<String> summaryOfChanges, List<LabelValue> rateCardLines,
-                        List<LabelValue> grievanceLines, String fullTextUrl, boolean draft) {
+                        List<LabelValue> grievanceLines, String fullTextUrl, boolean draft, UpcomingTerms upcoming) {
+    }
+
+    public record UpcomingTerms(String version, Instant effectiveFrom, List<String> summaryOfChanges, List<LabelValue> rateCardLines) {
     }
 
     public record LabelValue(String label, String value) {

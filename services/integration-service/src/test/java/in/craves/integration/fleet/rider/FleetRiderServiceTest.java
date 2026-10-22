@@ -16,7 +16,7 @@ class FleetRiderServiceTest {
 
     @Test
     void theRateCardLinesComeFromTheStoredValuesInTheDesignWording() {
-        Terms terms = FleetRiderService.terms(DRAFT, "en", "+914012345678");
+        Terms terms = FleetRiderService.terms(DRAFT, null, "en", "+914012345678");
         assertThat(terms.rateCardLines()).containsExactly(
             new LabelValue("Base pay, first 2 km of the drop", "₹40"),
             new LabelValue("Each drop km after 2 km", "₹9"),
@@ -34,8 +34,22 @@ class FleetRiderServiceTest {
     }
 
     @Test
+    void anUpcomingCardIsShownWithTheSameLinesInTheRidersLanguage() {
+        RateCard next = new RateCard("2026-12-v2", false, Instant.parse("2026-12-01T18:30:00Z"), 4500, 2000, 900, 1000, 900, 8, 150, 8000,
+            Map.of(), Map.of("en", List.of("Base pay goes up to ₹45."), "te", List.of("బేస్ పే ₹45.")), null);
+        Terms terms = FleetRiderService.terms(DRAFT, next, "te", "");
+        assertThat(terms.version()).isEqualTo("2026-10-v1");
+        assertThat(terms.upcoming().version()).isEqualTo("2026-12-v2");
+        assertThat(terms.upcoming().effectiveFrom()).isEqualTo(next.effectiveFrom());
+        assertThat(terms.upcoming().summaryOfChanges()).containsExactly("బేస్ పే ₹45.");
+        assertThat(terms.upcoming().rateCardLines().get(0)).isEqualTo(new LabelValue("Base pay, first 2 km of the drop", "₹45"));
+        assertThat(terms.upcoming().rateCardLines()).hasSameSizeAs(terms.rateCardLines());
+        assertThat(FleetRiderService.terms(DRAFT, null, "en", "").upcoming()).isNull();
+    }
+
+    @Test
     void teluguAndHindiFallBackToEnglishUntilTranslated() {
-        assertThat(FleetRiderService.terms(DRAFT, "te", "").summaryOfChanges())
+        assertThat(FleetRiderService.terms(DRAFT, null, "te", "").summaryOfChanges())
             .containsExactly("First version of the Craves rider terms. Draft pricing, not final.");
     }
 

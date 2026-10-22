@@ -1,11 +1,16 @@
 package in.craves.integration.fleet.admin;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-/** Shapes of contracts/openapi/admin-fleet-v1.yaml (P1 paths). Nullable fields are sent as null, as the contract requires. */
+/**
+ * Shapes of contracts/openapi/admin-fleet-v1.yaml. Nullable fields are sent as null, as the contract requires; the setup
+ * shapes leave optional fields out instead.
+ */
 public final class FleetAdminModels {
     private FleetAdminModels() {
     }
@@ -97,5 +102,51 @@ public final class FleetAdminModels {
         public String toString() {
             return "PayoutAccountInput[redacted]";
         }
+    }
+
+    /** What the pilot zone runs on. dispatchPolicy and rateCard are the versions in force, null when none is. */
+    public record FleetSetup(boolean testMode, DispatchPolicyVersion dispatchPolicy, List<DispatchPolicyVersion> dispatchPolicies,
+                             RateCardVersion rateCard, List<RateCardVersion> rateCards, List<PilotRider> pilotRiders,
+                             List<PilotKitchen> pilotKitchens) {
+    }
+
+    /** ranges are keyed by these camelCase field names, each [min, max]. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record DispatchPolicyVersion(String version, String status, Instant effectiveFrom, Instant publishedAt, String mode,
+                                        int offerSeconds, int fleetStageSeconds, int radiusM, int pickupDetourPercent,
+                                        long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
+                                        Map<String, List<Long>> ranges) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record RateCardVersion(String version, String status, Instant effectiveFrom, Instant publishedAt, long basePaise, int baseDropM,
+                                  long dropPerKmPaise, int pickupFreeM, long pickupPerKmPaise, int waitFreeMinutes,
+                                  long waitPerMinutePaise, long slotGuaranteePerHourPaise, long cancellationFeePaise,
+                                  long returnPerKmPaise, int unreachableWaitMinutes, Map<String, List<Long>> ranges,
+                                  Map<String, List<String>> summaryOfChanges, String fullTextUrl) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record PilotRider(UUID riderId, String name, String status, String note, Instant addedAt) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record PilotKitchen(UUID chefId, String note, Instant addedAt) {
+    }
+
+    /** A new rate card. ranges only while no rate card is published; later ones keep the published ranges. */
+    public record RateCardDraft(Long basePaise, Integer baseDropM, Long dropPerKmPaise, Integer pickupFreeM, Long pickupPerKmPaise,
+                                Integer waitFreeMinutes, Long waitPerMinutePaise, Long slotGuaranteePerHourPaise, Long cancellationFeePaise,
+                                Long returnPerKmPaise, Integer unreachableWaitMinutes, Instant effectiveFrom,
+                                Map<String, List<String>> summaryOfChanges, String fullTextUrl, Map<String, List<Long>> ranges) {
+    }
+
+    /** effectiveFrom counts only when it is at least 14 days away; otherwise the version starts now. */
+    public record DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
+                                      Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
+                                      Integer pidgeStageSeconds, Instant effectiveFrom) {
+    }
+
+    public record PilotNote(String note) {
     }
 }

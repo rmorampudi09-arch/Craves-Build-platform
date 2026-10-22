@@ -36,10 +36,12 @@ class FleetPolicyStoreDatabaseTest {
         insertRateCard("2026-09-v1", "now() - INTERVAL '1 day'");
         insertRateCard("2026-11-v2", "now() + INTERVAL '14 days'");
         assertThat(store.currentRateCard().orElseThrow().version()).isEqualTo("2026-09-v1");
+        assertThat(store.upcomingRateCard().orElseThrow().version()).as("riders see the change during its notice").isEqualTo("2026-11-v2");
 
         fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '20 days', published_at = now() "
             + "WHERE version = '2026-09-v1'");
         assertThat(store.currentRateCard().orElseThrow().version()).as("before any is in force: the next one").isEqualTo("2026-11-v2");
+        assertThat(store.upcomingRateCard()).as("nothing is in force, so nothing changes").isEmpty();
 
         fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
             + "fleet_stage_seconds, radius_m, ranges) VALUES ('2026-09-v1', 'PUBLISHED', now() - INTERVAL '1 day', now() - INTERVAL '15 days', "
@@ -63,23 +65,30 @@ class FleetPolicyStoreDatabaseTest {
     }
 
     @Test
-    void publishingNeedsFourteenDaysAndValuesInsideTheDeclaredRanges() {
+    void theFirstRateCardStartsAtOnceAndEveryLaterOneNeedsFourteenDays() {
         UUID ops = UUID.randomUUID();
-        // The seeded draft starts on 4 Nov 2026: inside 14 days from any later date it is refused, so move it.
-        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '13 days' WHERE version = '2026-10-v1'");
-        assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOfSatisfying(FleetApiException.class,
-            error -> assertThat(error.code()).isEqualTo("VERSION_REFUSED"));
-
-        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '15 days', base_paise = 7000 "
+        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() - INTERVAL '1 day', base_paise = 7000 "
             + "WHERE version = '2026-10-v1'");
-        assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOf(FleetApiException.class);
+        assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOfSatisfying(FleetApiException.class,
+            error -> assertThat(error.getMessage()).isEqualTo("base_paise 7000 is outside the declared range 3000 to 6000."));
 
         fleet.db.update("UPDATE fleet_schema.rate_card SET base_paise = 4000 WHERE version = '2026-10-v1'");
         store.publishRateCard("2026-10-v1", ops);
-        assertThat(fleet.db.queryForObject("SELECT status FROM fleet_schema.rate_card WHERE version = '2026-10-v1'", String.class))
-            .isEqualTo("PUBLISHED");
+        assertThat(fleet.db.queryForObject("SELECT status = 'PUBLISHED' AND effective_from = published_at AND published_at > now() - "
+            + "INTERVAL '1 minute' FROM fleet_schema.rate_card WHERE version = '2026-10-v1'", Boolean.class))
+            .as("a first card starting in the past starts when it is published").isTrue();
+        assertThat(store.currentRateCard().orElseThrow().draft()).isFalse();
         assertThatThrownBy(() -> store.publishRateCard("2026-10-v1", ops)).isInstanceOfSatisfying(FleetApiException.class,
             error -> assertThat(error.code()).isEqualTo("VERSION_ALREADY_PUBLISHED"));
+
+        draftRateCard("2026-12-v2", "now() + INTERVAL '13 days'");
+        assertThatThrownBy(() -> store.publishRateCard("2026-12-v2", ops)).isInstanceOfSatisfying(FleetApiException.class, error -> {
+            assertThat(error.code()).isEqualTo("VERSION_REFUSED");
+            assertThat(error.getMessage()).isEqualTo("It must start at least 14 days after it is published.");
+        });
+        fleet.db.update("UPDATE fleet_schema.rate_card SET effective_from = now() + INTERVAL '15 days' WHERE version = '2026-12-v2'");
+        store.publishRateCard("2026-12-v2", ops);
+        assertThat(store.upcomingRateCard().orElseThrow().version()).isEqualTo("2026-12-v2");
     }
 
     @Test
@@ -96,12 +105,24 @@ class FleetPolicyStoreDatabaseTest {
     }
 
     @Test
-    void dispatchPolicyPublishingFollowsTheSameRules() {
+    void aDispatchPolicyKeepsItsRangesStartsNowOrOnADateAtLeastFourteenDaysAwayAndGoesLiveOnlyWithARateCard() {
         fleet.db.update("UPDATE fleet_schema.dispatch_policy SET effective_from = now() + INTERVAL '15 days', offer_seconds = 20");
-        assertThatThrownBy(() -> store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID())).isInstanceOf(FleetApiException.class);
-        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET offer_seconds = 40");
+        assertThatThrownBy(() -> store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID())).isInstanceOfSatisfying(FleetApiException.class,
+            error -> assertThat(error.code()).isEqualTo("VERSION_REFUSED"));
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET offer_seconds = 40, mode = 'live'");
+        assertThatThrownBy(() -> store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID())).isInstanceOfSatisfying(FleetApiException.class,
+            error -> assertThat(error.code()).isEqualTo("RATE_CARD_REQUIRED"));
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET mode = 'off'");
         store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID());
         assertThat(store.currentDispatchPolicy()).as("published, but not in force for 15 days").isEmpty();
+    }
+
+    private void draftRateCard(String version, String effectiveFrom) {
+        fleet.db.update("INSERT INTO fleet_schema.rate_card (version, effective_from, base_paise, base_drop_m, drop_per_km_paise, "
+            + "pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, "
+            + "summary_of_changes) SELECT ?, " + effectiveFrom + ", base_paise, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, summary_of_changes "
+            + "FROM fleet_schema.rate_card WHERE version = '2026-10-v1'", version);
     }
 
     private void insertRateCard(String version, String effectiveFrom) {

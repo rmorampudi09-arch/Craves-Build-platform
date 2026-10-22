@@ -84,11 +84,17 @@ class FleetSchemaDatabaseTest {
     }
 
     @Test
-    void rateCardCannotBePublishedInsideFourteenDays() {
+    void onlyTheFirstRateCardMayBePublishedInsideFourteenDays() {
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = effective_from WHERE version = '2026-10-v1'");
+        db.update("INSERT INTO fleet_schema.rate_card (version, effective_from, base_paise, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, summary_of_changes) "
+            + "SELECT '2026-12-v2', effective_from + INTERVAL '30 days', base_paise, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, summary_of_changes "
+            + "FROM fleet_schema.rate_card WHERE version = '2026-10-v1'");
         assertThatThrownBy(() -> db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = effective_from "
-            + "- INTERVAL '13 days' WHERE version = '2026-10-v1'")).isInstanceOf(DataIntegrityViolationException.class);
+            + "- INTERVAL '13 days' WHERE version = '2026-12-v2'")).isInstanceOf(DataIntegrityViolationException.class);
         db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = effective_from - INTERVAL '14 days' "
-            + "WHERE version = '2026-10-v1'");
+            + "WHERE version = '2026-12-v2'");
     }
 
     @Test

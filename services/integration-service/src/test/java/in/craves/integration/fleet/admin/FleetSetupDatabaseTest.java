@@ -1,0 +1,221 @@
+package in.craves.integration.fleet.admin;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.FleetDatabase;
+import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetRoleClient;
+import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.FleetTestMode;
+import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
+import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyVersion;
+import in.craves.integration.fleet.admin.FleetAdminModels.FleetSetup;
+import in.craves.integration.fleet.admin.FleetAdminModels.PilotKitchen;
+import in.craves.integration.fleet.admin.FleetAdminModels.PilotNote;
+import in.craves.integration.fleet.admin.FleetAdminModels.PilotRider;
+import in.craves.integration.fleet.admin.FleetAdminModels.RateCardDraft;
+import in.craves.integration.fleet.admin.FleetAdminModels.RateCardVersion;
+import in.craves.integration.payout.bank.BankDataCipher;
+import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Supplier;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/** Publishing from the console and the pilot allow-lists against a real database, each call in its own transaction. */
+@EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
+class FleetSetupDatabaseTest {
+    final FleetDatabase fleet = new FleetDatabase();
+    final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
+    final Admin ops = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx210");
+    final TransactionTemplate transaction = new TransactionTemplate(fleet.transactions);
+    // The seeded draft 2026-10-v1 takes the first number of October 2026.
+    final String month = YearMonth.now(ZoneId.of("Asia/Kolkata")).toString();
+    final int first = "2026-10".equals(month) ? 2 : 1;
+    FleetSetupService setup;
+
+    @BeforeEach
+    void setUp() {
+        FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
+            mock(BankDataCipher.class));
+        setup = new FleetSetupService(fleet.db, json, new FleetPolicyStore(fleet.db, json), admin, FleetDatabase.properties(true));
+    }
+
+    @Test
+    void theFirstRateCardPublishesAtOnceAndTheNextNeedsFourteenDays() {
+        RateCardVersion draft = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(),
+            card(Instant.now().minus(1, ChronoUnit.HOURS), ranges())));
+        assertThat(draft.version()).isEqualTo(month + "-v" + first);
+        assertThat(draft.status()).isEqualTo("DRAFT");
+        assertThat(draft.publishedAt()).isNull();
+        assertThat(draft.ranges()).containsEntry("baseDropM", List.of(1000L, 3000L)).hasSize(11);
+
+        RateCardVersion published = (RateCardVersion) tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), draft.version()));
+        assertThat(published.status()).isEqualTo("PUBLISHED");
+        assertThat(published.effectiveFrom()).as("a first card starting in the past starts now").isEqualTo(published.publishedAt());
+        assertThat(tx(setup::setup).rateCard().version()).isEqualTo(draft.version());
+
+        refused(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now().plus(1, ChronoUnit.DAYS),
+            Map.of("basePaise", List.of(0L, 9000L)))), 422, "RANGES_LOCKED");
+        RateCardVersion soon = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(),
+            card(Instant.now().plus(1, ChronoUnit.DAYS), null)));
+        assertThat(soon.version()).isEqualTo(month + "-v" + (first + 1));
+        assertThat(soon.ranges()).as("later cards keep the published ranges").isEqualTo(draft.ranges());
+        refused(() -> setup.publishRateCard(ops, UUID.randomUUID(), soon.version()), 422, "VERSION_REFUSED");
+
+        RateCardVersion later = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(),
+            card(Instant.now().plus(15, ChronoUnit.DAYS), null)));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), later.version()));
+        FleetSetup now = tx(setup::setup);
+        assertThat(now.rateCard().version()).as("the later card waits for its date").isEqualTo(draft.version());
+        assertThat(now.rateCards()).extracting(RateCardVersion::version)
+            .containsExactly(later.version(), soon.version(), draft.version(), "2026-10-v1");
+        refused(() -> setup.publishRateCard(ops, UUID.randomUUID(), later.version()), 409, "VERSION_ALREADY_PUBLISHED");
+        refused(() -> setup.publishRateCard(ops, UUID.randomUUID(), "2026-01-v9"), 404, "VERSION_NOT_FOUND");
+        assertThat(audited("RATE_CARD_DRAFTED")).isEqualTo(3);
+        assertThat(audited("RATE_CARD_PUBLISHED")).isEqualTo(2);
+    }
+
+    @Test
+    void theTriggerRefusesADirectUpdateThatBreaksTheRule() {
+        RateCardVersion draft = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), draft.version()));
+        assertThatThrownBy(() -> fleet.db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), "
+            + "effective_from = now() + INTERVAL '1 day' WHERE version = '2026-10-v1'")).isInstanceOf(DataIntegrityViolationException.class);
+        fleet.db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), "
+            + "effective_from = now() + INTERVAL '14 days' WHERE version = '2026-10-v1'");
+    }
+
+    @Test
+    void dispatchOffIsImmediateADetourChangeNeedsNoticeAndLiveNeedsARateCardInForce() {
+        DispatchPolicyVersion off = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        assertThat(off.version()).isEqualTo(month + "-v" + first);
+        assertThat(off.status()).isEqualTo("PUBLISHED");
+        assertThat(off.effectiveFrom()).as("the first policy starts at once").isEqualTo(off.publishedAt());
+        assertThat(off.ranges()).containsEntry("pickupDetourPercent", List.of(100L, 200L)).hasSize(7);
+        assertThat(tx(setup::setup).dispatchPolicy().mode()).isEqualTo("off");
+
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("live", 130, null)), 422, "RATE_CARD_REQUIRED");
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 150, null)), 422, "DETOUR_NEEDS_NOTICE");
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 250, null)), 422, "VERSION_REFUSED");
+        Instant notice = Instant.now().plus(15, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        DispatchPolicyVersion detour = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            policy("shadow", 150, notice)));
+        assertThat(detour.effectiveFrom()).isEqualTo(notice);
+        DispatchPolicyVersion shadow = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            policy("shadow", 130, Instant.now().plus(3, ChronoUnit.DAYS))));
+        assertThat(shadow.effectiveFrom()).as("an effectiveFrom under 14 days away means now").isEqualTo(shadow.publishedAt());
+        assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo(shadow.version());
+
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+        DispatchPolicyVersion live = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("live", 130, null)));
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        FleetSetup now = tx(setup::setup);
+        assertThat(now.dispatchPolicy().version()).as("off is the emergency stop: at once").isEqualTo(stop.version());
+        assertThat(now.dispatchPolicies()).as("five versions and the seeded draft").hasSize(6);
+        assertThat(audited("DISPATCH_POLICY_SET")).isEqualTo(5);
+        assertThatThrownBy(() -> fleet.db.update("UPDATE fleet_schema.dispatch_policy SET pickup_detour_percent = 160 WHERE version = ?",
+            live.version())).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void pilotRidersAndKitchensAreUpsertedAndRemoved() {
+        UUID rider = fleet.rider("Ravi Kumar", "+919876543210");
+        UUID kitchen = UUID.randomUUID();
+        FleetTestMode testMode = new FleetTestMode(fleet.db, FleetDatabase.properties(true));
+
+        PilotRider added = (PilotRider) tx(() -> setup.addPilotRider(ops, UUID.randomUUID(), rider, new PilotNote(" First pilot rider ")));
+        assertThat(added).extracting(PilotRider::name, PilotRider::status, PilotRider::note).containsExactly("Ravi Kumar", "PENDING", "First pilot rider");
+        PilotRider again = (PilotRider) tx(() -> setup.addPilotRider(ops, UUID.randomUUID(), rider, null));
+        assertThat(again.note()).isNull();
+        assertThat(again.addedAt()).isEqualTo(added.addedAt());
+        assertThat(testMode.riderAllowed(rider)).isTrue();
+        refused(() -> setup.addPilotRider(ops, UUID.randomUUID(), UUID.randomUUID(), null), 404, "RIDER_NOT_FOUND");
+        refused(() -> setup.addPilotRider(ops, UUID.randomUUID(), rider, new PilotNote("x".repeat(201))), 400, "VALIDATION_FAILED");
+
+        tx(() -> setup.addPilotKitchen(ops, UUID.randomUUID(), kitchen, new PilotNote("Amma's Kitchen")));
+        PilotKitchen renamed = (PilotKitchen) tx(() -> setup.addPilotKitchen(ops, UUID.randomUUID(), kitchen, new PilotNote("Amma's Kitchen, Madhapur")));
+        assertThat(renamed.note()).isEqualTo("Amma's Kitchen, Madhapur");
+        assertThat(testMode.kitchenAllowed(kitchen)).isTrue();
+        FleetSetup listed = tx(setup::setup);
+        assertThat(listed.testMode()).isTrue();
+        assertThat(listed.pilotRiders()).extracting(PilotRider::riderId).containsExactly(rider);
+        assertThat(listed.pilotKitchens()).extracting(PilotKitchen::chefId).containsExactly(kitchen);
+
+        tx(() -> {
+            setup.removePilotRider(ops, UUID.randomUUID(), rider);
+            setup.removePilotRider(ops, UUID.randomUUID(), rider);
+            setup.removePilotRider(ops, UUID.randomUUID(), UUID.randomUUID());
+            setup.removePilotKitchen(ops, UUID.randomUUID(), kitchen);
+            return null;
+        });
+        assertThat(testMode.riderAllowed(rider)).isFalse();
+        assertThat(testMode.kitchenAllowed(kitchen)).isFalse();
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'PILOT_RIDER_REMOVED' "
+            + "AND rider_id = ?", Integer.class, rider)).as("the rider is on their audit trail").isEqualTo(2);
+        assertThat(audited("PILOT_RIDER_REMOVED")).isEqualTo(3);
+        assertThat(audited("PILOT_KITCHEN_ADDED")).isEqualTo(2);
+        assertThat(audited("PILOT_KITCHEN_REMOVED")).isEqualTo(1);
+    }
+
+    private <T> T tx(Supplier<T> work) {
+        return transaction.execute(status -> work.get());
+    }
+
+    private void refused(Runnable work, int status, String code) {
+        assertThatThrownBy(() -> tx(() -> {
+            work.run();
+            return null;
+        })).isInstanceOfSatisfying(FleetApiException.class, error -> {
+            assertThat(error.status()).isEqualTo(status);
+            assertThat(error.code()).isEqualTo(code);
+        });
+    }
+
+    private int audited(String action) {
+        return fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = ?", Integer.class, action);
+    }
+
+    /** The seeded draft's values. */
+    private static RateCardDraft card(Instant effectiveFrom, Map<String, List<Long>> ranges) {
+        return new RateCardDraft(4000L, 2000, 900L, 1000, 900L, 8, 150L, 8000L, 2000L, 900L, 10, effectiveFrom,
+            Map.of("en", List.of("Pilot pay for Madhapur.")), "https://craves.in/riders/terms", ranges);
+    }
+
+    /** The seeded draft's declared ranges, by API name. */
+    private static Map<String, List<Long>> ranges() {
+        Map<String, List<Long>> ranges = new LinkedHashMap<>();
+        ranges.put("basePaise", List.of(3000L, 6000L));
+        ranges.put("baseDropM", List.of(1000L, 3000L));
+        ranges.put("dropPerKmPaise", List.of(600L, 1500L));
+        ranges.put("pickupFreeM", List.of(0L, 2500L));
+        ranges.put("pickupPerKmPaise", List.of(0L, 1500L));
+        ranges.put("waitFreeMinutes", List.of(5L, 10L));
+        ranges.put("waitPerMinutePaise", List.of(100L, 300L));
+        ranges.put("slotGuaranteePerHourPaise", List.of(0L, 15000L));
+        ranges.put("cancellationFeePaise", List.of(0L, 5000L));
+        ranges.put("returnPerKmPaise", List.of(0L, 1500L));
+        ranges.put("unreachableWaitMinutes", List.of(5L, 15L));
+        return ranges;
+    }
+
+    private static DispatchPolicyInput policy(String mode, int detour, Instant effectiveFrom) {
+        return new DispatchPolicyInput(mode, 40, 60, 5000, detour, 500L, 1000L, 600, effectiveFrom);
+    }
+}

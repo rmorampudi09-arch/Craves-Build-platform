@@ -591,7 +591,7 @@ public class FleetAdminService {
         return text;
     }
 
-    private String write(Object value) {
+    String write(Object value) {
         try {
             return json.writeValueAsString(value);
         } catch (JsonProcessingException exception) {

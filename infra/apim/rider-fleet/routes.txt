@@ -65,3 +65,11 @@ route|admin|fleet-post-slots-slotId-cancel|POST|/slots/{slotId}/cancel|admin
 route|admin|fleet-get-banner|GET|/banner|admin
 route|admin|fleet-put-banner|PUT|/banner|admin
 route|admin|fleet-delete-banner|DELETE|/banner|admin
+route|admin|fleet-get-setup|GET|/setup|admin
+route|admin|fleet-post-rate-cards|POST|/rate-cards|admin
+route|admin|fleet-post-rate-cards-version-publish|POST|/rate-cards/{version}/publish|admin
+route|admin|fleet-post-dispatch-policies|POST|/dispatch-policies|admin
+route|admin|fleet-put-pilot-riders-riderId|PUT|/pilot/riders/{riderId}|admin
+route|admin|fleet-delete-pilot-riders-riderId|DELETE|/pilot/riders/{riderId}|admin
+route|admin|fleet-put-pilot-kitchens-chefId|PUT|/pilot/kitchens/{chefId}|admin
+route|admin|fleet-delete-pilot-kitchens-chefId|DELETE|/pilot/kitchens/{chefId}|admin

@@ -154,7 +154,7 @@ public class FleetSetupService {
      */
     @Transactional
     public Object setDispatchPolicy(Admin by, UUID key, DispatchPolicyInput input) {
-        if (input == null || !MODES.contains(input.mode())) {
+        if (input == null || input.mode() == null || !MODES.contains(input.mode())) {
             throw FleetApiException.invalid("Choose off, shadow or live.");
         }
         boolean stop = "off".equals(input.mode()) && input.effectiveFrom() == null;
@@ -262,7 +262,7 @@ public class FleetSetupService {
     private static Map<String, List<Long>> firstRanges(Map<String, List<Long>> given) {
         Set<String> names = RATE_CARD_FIELDS.stream().map(FleetSetupService::camel).collect(Collectors.toSet());
         if (given == null || !given.keySet().equals(names) || given.values().stream().anyMatch(range -> range == null || range.size() != 2
-            || range.contains(null) || range.get(0) < 0 || range.get(0) > range.get(1))) {
+            || range.get(0) == null || range.get(1) == null || range.get(0) < 0 || range.get(0) > range.get(1))) {
             throw FleetApiException.invalid("The first rate card declares a range [min, max] for each of its 11 values, with 0 <= min <= max.");
         }
         Map<String, List<Long>> ranges = new LinkedHashMap<>();

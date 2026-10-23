@@ -546,6 +546,16 @@ export function createMockRiderApi(options: MockOptions = {}) {
             },
           ],
           draft: true,
+          // Demo of the 14-day notice; once new terms are "published" they are in force instead.
+          upcoming:
+            state.me.termsVersion === '2026-10-v1'
+              ? {
+                  version: '2026-11-v1',
+                  effectiveFrom: iso(now() + 14 * DAY),
+                  summaryOfChanges: ['Waiting pay starts after 6 free minutes instead of 8.'],
+                  rateCardLines: [{ label: 'Waiting at the kitchen, after 6 free minutes', value: '₹1.50 a minute' }],
+                }
+              : undefined,
         }),
       ),
     acceptTerms: version =>

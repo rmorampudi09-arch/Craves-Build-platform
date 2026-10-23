@@ -84,6 +84,7 @@ export const en = {
     draft: 'Draft pricing, not final',
     whatChanged: 'What changed',
     rateCard: 'Rate card',
+    upcomingTitle: (from: string) => `New terms from ${from}`,
     notice:
       'Any change to pay or rules appears here at least 14 days before it starts, with old and new example trips side by side.',
     howPaidTitle: "How you're paid",

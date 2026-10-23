@@ -2,10 +2,11 @@ name: Craves Rider APK
 
 # Builds the rider app (com.cravesapp.rider) as a signed release APK for phone testing: ARM only, R8 on, versionCode =
 # the run number (see docs/riders/RELEASE.md).
-# Mock builds use demo data and never call Firebase or the Craves API. Live builds sign in with Firebase and call
-# CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
-# Which one: a manual run picks api_mode (default mock); pull requests use the repo variable CRAVES_RIDER_API_MODE
-# (mock when unset). The mode is in the APK's name and the PR comment.
+# Mock builds use demo data and never call Firebase or the Craves API. Live builds sign in with the MSG91 phone OTP
+# (auth-service), then Firebase, and call CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
+# Which one: a manual run picks api_mode (default live, the APK riders install; live builds run only from main);
+# pull requests use the repo variable CRAVES_RIDER_API_MODE (mock when unset). The mode is in the APK's name and the
+# PR comment, and a mock build shows "Demo data" on every screen.
 # Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
 # RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key).
 
@@ -22,9 +23,9 @@ on:
         description: 'Rider API: mock (demo data) or live (Firebase sign-in and the Craves API)'
         type: choice
         options:
-          - mock
           - live
-        default: mock
+          - mock
+        default: live
 
 permissions:
   contents: read
@@ -89,6 +90,8 @@ jobs:
         env:
           INPUT_MODE: ${{ inputs.api_mode }}
           VARIABLE_MODE: ${{ vars.CRAVES_RIDER_API_MODE }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           # Manual runs: the api_mode input. Pull requests have no input: the repo variable, else mock.
@@ -97,6 +100,11 @@ jobs:
             mock|live) ;;
             *) echo "ERROR: api mode must be mock or live, got '$mode' (check the CRAVES_RIDER_API_MODE variable)" >&2; exit 1 ;;
           esac
+          # The APK riders install talks to production, so it is built only from main (AGENTS.md: deploy only main).
+          if [[ "$mode" == live && "$EVENT" == workflow_dispatch && "$REF" != refs/heads/main ]]; then
+            echo "ERROR: build live APKs from main (this run is on $REF); pick mock to try a branch." >&2
+            exit 1
+          fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "Rider API mode: $mode"
 

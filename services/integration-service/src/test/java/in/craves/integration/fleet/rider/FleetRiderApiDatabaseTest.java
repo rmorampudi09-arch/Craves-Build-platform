@@ -257,7 +257,7 @@ class FleetRiderApiDatabaseTest {
             .andExpect(jsonPath("$.rateCardLines[0].label").value("Base pay, first 2 km of the drop"))
             .andExpect(jsonPath("$.rateCardLines[0].value").value("₹40"))
             .andExpect(jsonPath("$.grievanceLines[0].value").value("+914012345678"))
-            .andExpect(jsonPath("$.summaryOfChanges[0]").exists());
+            .andExpect(jsonPath("$.summaryOfChanges[0]").exists()).andExpect(jsonPath("$.upcoming").doesNotExist());
     }
 
     @Test

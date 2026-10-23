@@ -67,6 +67,8 @@ export interface Terms {
   fullTextUrl?: string;
   /** The rate card is draft pricing, not final; the app shows a badge saying so. */
   draft?: boolean;
+  /** Newer published terms that start later; riders see changes 14 days ahead. */
+  upcoming?: {version: string; effectiveFrom: string; summaryOfChanges: string[]; rateCardLines: LabelValue[]};
 }
 
 export interface HomeSummary {

@@ -169,13 +169,32 @@ describe("admin fleet BFF", () => {
     expect((await fleetProxy(request(path, { method: "POST", body: { reason: "Rider is unwell" } }), segments(path))).status).toBe(502);
   });
 
+  it("publishes a rate card only by a version-shaped path, and removes pilot entries with 204", async () => {
+    for (const version of ["latest", "2026-10", "2026-10-v1x", "..%2Fsetup"]) {
+      expect((await fleetProxy(request(`rate-cards/${version}/publish`, { method: "POST" }), ["rate-cards", version, "publish"])).status).toBe(404);
+    }
+    expect(upstream).not.toHaveBeenCalled();
+    upstream.mockResolvedValue(Response.json({ code: "VERSION_REFUSED", message: "It must start on or after 5 Nov 2026." }, { status: 422 }));
+    const refused = await fleetProxy(request("rate-cards/2026-10-v2/publish", { method: "POST" }), ["rate-cards", "2026-10-v2", "publish"]);
+    expect(await refused.json()).toEqual({ code: "VERSION_REFUSED", message: "It must start on or after 5 Nov 2026." });
+    expect(upstream.mock.calls[0].slice(1, 3)).toEqual(["/admin/fleet/rate-cards/2026-10-v2/publish", { method: "POST", headers: { "Idempotency-Key": KEY } }]);
+
+    upstream.mockResolvedValue(new Response(null, { status: 204 }));
+    const removed = await fleetProxy(request(`pilot/riders/${RIDER}`, { method: "DELETE" }), ["pilot", "riders", RIDER]);
+    expect(removed.status).toBe(204);
+    expect((await fleetProxy(request(`pilot/kitchens/${DOC}`, { method: "DELETE" }), ["pilot", "kitchens", DOC])).status).toBe(204);
+    // A 204 is not a pilot rider.
+    expect((await fleetProxy(request(`pilot/riders/${RIDER}`, { method: "PUT" }), ["pilot", "riders", RIDER])).status).toBe(502);
+    expect((await fleetProxy(request(`pilot/kitchens/${DOC}`, { method: "PUT", body: { note: "x".repeat(201) } }), ["pilot", "kitchens", DOC])).status).toBe(400);
+  });
+
   it("forwards only paths and methods that are in the admin fleet contract", () => {
     const yaml = readFileSync(new URL("../../../../../../../contracts/openapi/admin-fleet-v1.yaml", import.meta.url), "utf8");
     const operations = new Set<string>();
     let path = "";
     for (const line of yaml.split("\n")) {
       const pathMatch = /^ {2}\/api\/v1\/admin\/fleet\/(\S+):$/.exec(line);
-      if (pathMatch) path = pathMatch[1].replace(/\{[^}]+\}/g, ":id");
+      if (pathMatch) path = pathMatch[1].replace("{version}", ":version").replace(/\{[^}]+\}/g, ":id");
       const method = /^ {4}(get|post|put|delete):$/.exec(line);
       if (method) operations.add(`${method[1].toUpperCase()} ${path}`);
     }

@@ -2,7 +2,7 @@
 
 The Craves rider fleet lives in integration-service, package `in.craves.integration.fleet`, with its own schema, `fleet_schema`, in the integration database. Four other services carry small parts of it: auth-service (the RIDER role), notification-service (offer pushes and ops alerts), user-chef-service (road distance) and order-service (the customer's delivery code). Plan: project doc `rider-app/PLAN.md`. Contracts: `contracts/openapi/rider-v1.yaml` (rider app, with every error code per route) and `contracts/openapi/admin-fleet-v1.yaml` (ops console).
 
-Nothing here changes what production does until a person turns it on: every flag is off by default, `dispatch_policy` is seeded in mode `off`, and test mode is on.
+Nothing here changes what production does until a person turns it on: every flag is off by default, `dispatch_policy` is seeded in mode `off`, and test mode is on. The go-live runbook, from merge to a live pilot zone with every outside account to set up, is `GO-LIVE.md`.
 
 ## Deploy order
 
@@ -10,7 +10,7 @@ Nothing here changes what production does until a person turns it on: every flag
 2. **notification-service**: V8 (the device's `app`), `/internal/v1/push/realtime` and `/internal/v1/ops-alerts`.
 3. **user-chef-service**: V20 (road-distance cache) and `/internal/v1/maps/road-distance`.
 4. **auth-service**: V20 (the RIDER role) and `/internal/v1/roles/rider/grant` and `/revoke`.
-5. **integration-service**: V152 to V158 and the fleet package, all flags off.
+5. **integration-service**: V152 to V159 and the fleet package, all flags off.
 6. **APIM** (`scripts/apim/configure-rider-fleet-apim.sh`), once integration-service answers: the gateway probes every route.
 
 The first four only add code that nothing calls until integration-service does. Each service's controllers are in its `live-runtime-lock.txt`.
@@ -56,11 +56,22 @@ Other services:
 | notification-service | `CRAVES_OPS_ALERT_EMAILS` | empty | Comma-separated ops leads for `/internal/v1/ops-alerts` (SOS, dispatch queue); empty or no ACS: 503 `OPS_ALERT_NOT_CONFIGURED`. |
 | user-chef-service | `OLA_MAPS_API_KEY` | existing | Ola Directions for road distance; without it every answer is the fallback. |
 
-Operational values live in versioned tables, not variables, so changing them needs no restart: `dispatch_policy` (seeded `2026-10-v1`, mode `off`, offers 40 s, fleet stage 60 s, radius 5 km as a placeholder; V154 and V155 add pickup detour 130%, per-order overhead ₹5, cost-guard premium ₹10, Pidge stage 600 s) and `rate_card` (seeded draft `2026-10-v1`: ₹40 base for the first 2 km of the drop, ₹9 a drop km after that, ₹9 a pickup km after the first 1 km, ₹1.50 a minute of waiting after 8 free minutes, ₹80 an hour guaranteed in a booked slot; V154 adds ₹20 cancellation at the kitchen, ₹9 a km to return food and a 10-minute unreachable wait). All are draft business inputs with declared ranges. `FleetPolicyStore.publishRateCard` and `publishDispatchPolicy` refuse a version that starts less than 14 days after publishing or has a value outside the declared ranges (those of the newest published version; a first version uses its own); the table's CHECK also refuses fewer than 14 days. The admin contract has no publish endpoint, so a person publishes by service code. Agents never change the mode.
+Operational values live in versioned tables, not variables, so changing them needs no restart: `dispatch_policy` (seeded `2026-10-v1`, mode `off`, offers 40 s, fleet stage 60 s, radius 5 km as a placeholder; V154 and V155 add pickup detour 130%, per-order overhead ₹5, cost-guard premium ₹10, Pidge stage 600 s) and `rate_card` (seeded draft `2026-10-v1`: ₹40 base for the first 2 km of the drop, ₹9 a drop km after that, ₹9 a pickup km after the first 1 km, ₹1.50 a minute of waiting after 8 free minutes, ₹80 an hour guaranteed in a booked slot; V154 adds ₹20 cancellation at the kitchen, ₹9 a km to return food and a 10-minute unreachable wait). All are draft business inputs with declared ranges. Ops publishes both from the console (`/rate-cards`, `/dispatch-policies`); `FleetPolicyStore` holds the rules and the V159 triggers hold the same notice rules, so SQL cannot skip them. Telangana Act 21 of 2026, s.13(2) asks for 14 days' notice of changed terms:
+
+- **Rate card** (the riders' pay terms): the first one ever published may start at once (one whose start has passed starts when published); every later one must start at least 14 days after publishing.
+- **Dispatch policy** (operations): a version starts now, or on an `effectiveFrom` at least 14 days away (a nearer one is 422 `NOTICE_TOO_SHORT`). The pickup detour is part of pay (pickup km = straight line × detour), and the terms show it ("Pickup distance: straight line × 1.3"). So once a rate card is published, a detour other than the one riders are shown (the policy in force, not withdrawn; else the seeded draft's) needs a start at least 14 days away (422 `DETOUR_NEEDS_NOTICE`). Before any card is published, riders have no terms and nothing needs notice. `live` needs a published rate card in force (422 `RATE_CARD_REQUIRED`); behind that, `FleetDispatcher` opens no fleet stage in `live` without one (it logs `FLEET_SKIPPED reason=NO_RATE_CARD_IN_FORCE` at most once per 5 s).
+- **Emergency stop**: an `off` without `effectiveFrom` always works. It keeps the values riders are shown (the 7 values the page sent are ignored, so a stale page can still stop), starts at once and withdraws every version scheduled for later (`withdrawn_at`, `withdrawn_by`; the audit names them), so dispatch stays stopped. A withdrawn version never counts as in force and cannot be un-withdrawn. Any other version set now leaves a scheduled one to take over on its date (the console warns).
+- **Upcoming**: while a rate card is in force, riders see the next change as `upcoming` in their terms during its notice: the earlier of the next published card and the next detour change, with the lines they will have then.
+- **Ranges**: values must lie inside the declared ranges of the newest published version (a first rate card declares its own; before any policy is published, the seeded draft's). A card published after the first takes the published ranges, replacing the ones its draft declared (the audit says so).
+- **Published versions never change or go away.** The V159 triggers refuse deleting a published rate card or dispatch policy, any change to a published rate card, and any change to a published dispatch policy except one withdrawal before it starts; they set `published_at` and `withdrawn_at` from the database clock, so a caller cannot backdate them. The code reads the same clock (`SELECT now()` in the transaction), which is also what every in-force read uses; in-force reads break ties on `effective_from` by the newest `created_at`, in the console too.
+- **One version per moment**: a version that starts later may not start at the same moment as another published one in its table (a withdrawn policy does not count), or which one is in force, or next, would be a guess: 409 `START_TAKEN` ("Another version starts at that moment. Pick another start time."), in the code and the trigger. Versions that start now never collide: each publish has its own transaction and clock.
+- Publishes take an advisory lock per table (in the code and in the trigger), so two "first" rate cards cannot both start at once.
+
+Agents never change the mode.
 
 ## Tables
 
-Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V158.
+Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V159.
 
 | Table | Created by | Holds |
 |---|---|---|
@@ -69,10 +80,10 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 | `fleet_schema.rider_document` | integration V152 | Document photos reviewed by hand: type, status, expiry, rejection reason, reviewer. No Aadhaar type exists. |
 | `fleet_schema.rider_payout_account` | integration V152; V157 adds `payouts_paused_at`, `paused_reason` | UPI ID or bank account set in person: encrypted like chef bank details, keyed fingerprint (unique among current accounts), masked copy. |
 | `fleet_schema.rider_status_event` | integration V152 | Append-only due-process history: kind, reason, evidence, deadline or review date, appeal phone, approver, status before and after. |
-| `fleet_schema.rate_card` | integration V152; V154 adds the event fees | Versioned rider pay with declared ranges and `effective_from` at least 14 days after publishing. |
-| `fleet_schema.dispatch_policy` | integration V152; V154 and V155 add detour, overhead, premium, Pidge stage | Versioned dispatch mode (`off`, `shadow`, `live`), offer and stage seconds, radius, with declared ranges. |
+| `fleet_schema.rate_card` | integration V152; V154 adds the event fees; V159 a trigger in place of the 14-day CHECK | Versioned rider pay with declared ranges; `effective_from` at least 14 days after publishing, except for the first card ever. |
+| `fleet_schema.dispatch_policy` | integration V152; V154 and V155 add detour, overhead, premium, Pidge stage; V159 a trigger in place of the 14-day CHECK, and `withdrawn_at`, `withdrawn_by` | Versioned dispatch mode (`off`, `shadow`, `live`), offer and stage seconds, radius, with declared ranges; 14 days' notice only for a changed detour; scheduled versions an emergency stop withdrew. |
 | `fleet_schema.rider_terms_acceptance` | integration V152 | Which terms version each rider accepted, and when. |
-| `fleet_schema.test_mode_rider`, `test_mode_kitchen` | integration V152 | Test-mode allow-lists. |
+| `fleet_schema.test_mode_rider`, `test_mode_kitchen` | integration V152 | Test-mode allow-lists: the pilot riders and kitchens, set from the console. |
 | `fleet_schema.rider_slot` | integration V152; V154 adds the guarantee and status, V153 `in_zone_seconds` | Ops-assigned slots with zone, rest point and hourly guarantee. |
 | `fleet_schema.ops_banner` | integration V152 | Messages on every rider's Home, such as a rain warning. |
 | `fleet_schema.rider_shift` | integration V152 | Shifts: hashed shift credential (12 h at most), bound phone, selfie and its review, in-zone seconds. One open shift per rider. |
@@ -111,7 +122,7 @@ Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET 
 | `GET /profile` | Latest document per type (with ops's reason), vehicle, masked payout account, insurance. |
 | `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId`, the running or next booked slot with its own guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, the ops banner until its `until`, and `todayEarningsPaise` (net of TDS) and `todayTrips` from credited pay. |
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING for ops. |
-| `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language (te and hi fall back to English until translated). |
+| `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language (te and hi fall back to English until translated). The lines include the pickup detour in force. While a card is in force, `upcoming` is the next change (see "Flags and settings"): the rate card in force then, its start, the lines riders will have then, and the card's summary and a pickup-distance line when they change. |
 | `POST /terms/accept` | Accepts the version in force; any other is 409 `TERMS_CHANGED`. |
 | `POST /shift/start` | Goes online: multipart `selfie` and header `X-Craves-Installation-Id`. Returns `{shiftCredential, expiresAt}` once. See "Shifts". |
 | `POST /shift/end` | Closes the open shift and revokes its credential; 204 even when nothing is open. |
@@ -151,13 +162,17 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 | `GET /trips` | Orders not yet delivered, failed or cancelled, oldest first, with the courier they have now. |
 | `GET /dispatch-queue` | Orders in the ops queue, oldest first, with each earlier stage's outcome: `CRITICAL` after 5 minutes or when a booking may exist (an uncertain create: check that company first), `INFO` when a courier took it after all, else `WARNING`. Ops clears an item by giving it to a rider or cancelling it. |
 | `GET /positions` | Each rider's latest fix of the last 12 hours: position, age, on shift, trip, mock flag. Operations roles only. |
-| `POST /trips/{id}/reassign`, `/cancel` | See "Ops reassign and cancel". 409 `TRIP_NOT_REASSIGNABLE`, `RIDER_NOT_AVAILABLE`, `TRIP_ALREADY_FINISHED`, `TRIP_NOT_CANCELLABLE`. |
+| `POST /trips/{id}/reassign`, `/cancel` | See "Ops reassign and cancel". 409 `TRIP_NOT_REASSIGNABLE`, `RIDER_NOT_AVAILABLE`, `RATE_CARD_REQUIRED`, `TRIP_ALREADY_FINISHED`, `TRIP_NOT_CANCELLABLE`. |
 | `GET /payout-batches`, `POST /payout-batches`, `GET /payout-batches/{id}` | Payout files: reads for payments and audit admins, changes for payments admins. `POST {kind: WEEKLY or DAILY_WITHDRAWAL, payoutDate}` (today or earlier, IST): 409 `BATCH_EXISTS`, 422 `NOTHING_TO_PAY`, `NOT_A_MONDAY`, `PAYOUT_DATE_IN_FUTURE`. |
 | `GET /payout-batches/{id}/file` | The bank's CSV (`payoutId,holderName,accountOrUpiId,ifsc,amountRupees`) with full account numbers, decrypted only here; formula-like cells get a leading apostrophe; `no-store`; every download is audited without numbers. |
 | `POST /payout-batches/{id}/approve`, `/mark-sent` | The second approver (403 `SAME_APPROVER` for the maker; 409 `BATCH_NOT_CREATED`); sent only after approval (409 `BATCH_NOT_APPROVED`). |
 | `POST /payout-batches/{id}/payouts/{payoutId}/utr`, `/fail` | `{utr}` (12 to 22 letters and digits): PAID and posted to the journal; 409 `UTR_IN_USE`, `PAYOUT_NOT_PENDING`, `BATCH_NOT_SENT`; 503 `LEDGER_POSTING_OFF`. `{reason}`: FAILED, the money back in the balance, the rider's payouts paused. The file closes once no payout is pending. |
 | `GET /holds?state=ACTIVE\|RELEASED`, `POST /holds`, `POST /holds/{holdId}/release` | Pay holds: `POST {tripId, reason, releaseOn}`; 409 `HOLD_EXISTS` (one per trip, ever), `EARNING_ALREADY_PAID`; 422 `RELEASE_DATE_OUT_OF_RANGE`; release: 409 `HOLD_NOT_ACTIVE`. |
 | `GET /support-issues?state=OPEN\|ACKNOWLEDGED\|FIXED`, `GET /sos-events` | Issues oldest first; SOS presses of the last 7 days, newest first, with the last fix and the masked phone. |
+| `GET /setup` | Test mode, the dispatch policy and rate card in force (null when none), the latest 20 versions of each, and the pilot riders and kitchens. Operations, support and audit admins. |
+| `POST /rate-cards`, `POST /rate-cards/{version}/publish` | A DRAFT named `YYYY-MM-vN` (IST month): the 11 values, `effectiveFrom`, `summaryOfChanges` (`en` required, `te` and `hi` optional), `fullTextUrl`, and `ranges` only while none is published (422 `RANGES_LOCKED` after). Publish: 404 `VERSION_NOT_FOUND`, 409 `VERSION_ALREADY_PUBLISHED`, `START_TAKEN`, 422 `VERSION_REFUSED` (notice or ranges). |
+| `POST /dispatch-policies` | `{mode, the 7 values, effectiveFrom?}`: created and published at once (see "Flags and settings"); `off` without `effectiveFrom` is the emergency stop. 409 `START_TAKEN`; 422 `VERSION_REFUSED`, `NOTICE_TOO_SHORT`, `DETOUR_NEEDS_NOTICE`, `RATE_CARD_REQUIRED`. |
+| `PUT /pilot/riders/{riderId}`, `PUT /pilot/kitchens/{chefId}` | Adds to the test-mode allow-list, `{note?}` up to 200 characters; adding again changes the note. 404 `RIDER_NOT_FOUND`. `DELETE` removes (204 also when not listed). |
 
 ### Internal endpoints in the other services
 
@@ -248,7 +263,7 @@ Borzo and Pidge get the same order number: pickup note "Craves order #N. Match t
 
 Both go through the dispatch chain, in one transaction, audited and idempotent, so an order never has two couriers recorded. The open stage closes first by the same conditional update an accept uses, and its offers are withdrawn.
 
-- **To a rider** (`riderId`): only an order no rider holds yet (still searching, or in the Borzo, Pidge or ops-queue stage with no courier booked). Outside the fleet stage the delivery command is taken over first, only if it is not booking right now (else 409, try again in a minute). The rider must be ACTIVE, on shift, free, sending real fixes (45 s) and allowed by test mode. Pay is locked as for an accepted offer, then the usual `COURIER_ASSIGNED`. Call the rider first: nothing rings; the trip appears on their next location call.
+- **To a rider** (`riderId`): only an order no rider holds yet (still searching, or in the Borzo, Pidge or ops-queue stage with no courier booked). Outside the fleet stage the delivery command is taken over first, only if it is not booking right now (else 409, try again in a minute). The rider must be ACTIVE, on shift, free, sending real fixes (45 s) and allowed by test mode. Pay is locked as for an accepted offer, on a published rate card that has started (the trip's own, else the one in force; none: 409 `RATE_CARD_REQUIRED`, "Publish a rate card before giving trips to riders."), then the usual `COURIER_ASSIGNED`. Call the rider first: nothing rings; the trip appears on their next location call.
 - **To Borzo or Pidge** (`provider`): a rider's trip before pickup ends for that rider with pay for the trip so far (not held) and that stage opens; the tick books it. An order still searching gets that stage.
 - Refused: a rider's trip to another rider (a trip row is one rider's pay record), anything after pickup (cancel instead), and any order Borzo or Pidge already holds.
 - **Cancel**: a rider's trip ends with the trip-state pay rule (not held) and `CANCELLED` reaches the order. An order still searching stops and its delivery command is marked `DEAD_LETTER`. A courier booked at that moment is not recorded and ops gets `FLEET_COURIER_UNRECORDED` to cancel it.
@@ -368,15 +383,8 @@ Both APIs are published on the mobile gateway (`api.craves.in`) by `scripts/apim
 
 ## Test mode for one rider and one kitchen
 
-1. Deploy in the order above. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true`, plus the storage, bank-data, support-phone and internal URL settings (`CRAVES_AUTH_INTERNAL_BASE_URL`, `CRAVES_USER_CHEF_INTERNAL_BASE_URL`, `CRAVES_FLEET_ORDER_BASE_URL`, `CRAVES_NOTIFICATION_INTERNAL_BASE_URL`, `CRAVES_INTERNAL_SERVICE_KEY`). In notification-service set `CRAVES_REALTIME_PUSH_ENABLED=true` and `CRAVES_OPS_ALERT_EMAILS`.
+1. Deploy in the order above. The runtime pipeline (`azure-pipelines-rider-fleet-runtime.yml`, stages status, wire, enable and disable; step by step in `GO-LIVE.md`) sets what follows. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true`, plus the storage, bank-data, support-phone and internal URL settings (`CRAVES_AUTH_INTERNAL_BASE_URL`, `CRAVES_USER_CHEF_INTERNAL_BASE_URL`, `CRAVES_FLEET_ORDER_BASE_URL`, `CRAVES_NOTIFICATION_INTERNAL_BASE_URL`, `CRAVES_INTERNAL_SERVICE_KEY`). In notification-service set `CRAVES_REALTIME_PUSH_ENABLED=true` and `CRAVES_OPS_ALERT_EMAILS`.
 2. Ops creates the rider in the console (`POST /riders`), reviews the documents with their expiry dates, sets the vehicle and the payout account in person; the rider signs in to the app once so `/me` links them; ops activates them with `RESTORE`.
-3. Allow-list both, by SQL on the integration database:
-
-```sql
-INSERT INTO fleet_schema.test_mode_rider (rider_id, note) VALUES ('<rider id>', 'pilot test rider');
-INSERT INTO fleet_schema.test_mode_kitchen (chef_id, note) VALUES ('<chef identity id>', 'pilot test kitchen');
-```
-
-   Dispatch asks `FleetTestMode.riderAllowed` and `kitchenAllowed` before it offers a trip, so nobody else is touched. The kitchen is known only for orders checked out with the finance quote (`finance_issued_snapshot`).
-4. Dispatch needs a published `dispatch_policy` version in force. A person publishes one with mode `shadow` first (it only logs `FLEET_SHADOW`), and `live` only after order-service with the `craves_fleet` hand-over is deployed. Publishing needs 14 days' notice and values inside the declared ranges.
+3. Add both to the pilot in the console (`PUT /pilot/riders/{riderId}` and `PUT /pilot/kitchens/{chefId}`, the chef's identity id). Dispatch asks `FleetTestMode.riderAllowed` and `kitchenAllowed` before it offers a trip, so nobody else is touched. The kitchen is known only for orders checked out with the finance quote (`finance_issued_snapshot`).
+4. Publish the rate card in the console (the first one may start at once), then set dispatch: `shadow` first (it only logs `FLEET_SHADOW`), and `live` only after order-service with the `craves_fleet` hand-over is deployed. `off` stops dispatch at once. `GET /setup` shows what is in force.
 5. The rider registers the phone, goes online with a selfie, and the allow-listed kitchen accepts an order: the offer rings within the fleet stage. For money, turn on `CRAVES_LEDGER_POSTING_ENABLED` (the existing journal gate); credits wait until then.

@@ -3,6 +3,7 @@ package in.craves.integration.fleet.rider;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
+import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetRules;
 import in.craves.integration.fleet.FleetStorage;
@@ -19,6 +20,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.RiderMe;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderProfile;
 import in.craves.integration.fleet.rider.FleetRiderModels.Terms;
+import in.craves.integration.fleet.rider.FleetRiderModels.UpcomingTerms;
 import in.craves.integration.fleet.rider.FleetRiderModels.Vehicle;
 import in.craves.integration.security.CravesPrincipal;
 import java.io.IOException;
@@ -29,10 +31,12 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -223,7 +227,9 @@ public class FleetRiderService {
 
     @Transactional(readOnly = true)
     public Terms terms(UUID identityId) {
-        return terms(currentRateCard(), rider(identityId).language(), properties.supportPhone());
+        String language = rider(identityId).language();
+        return terms(currentRateCard(), policies.pickupDetour(null), policies.nextTermsChange().orElse(null), language,
+            properties.supportPhone());
     }
 
     /** Only the version in force can be accepted; anything else means the terms changed while the rider read them. */
@@ -255,16 +261,43 @@ public class FleetRiderService {
     }
 
     /**
-     * Rate card lines come from the stored values, so the terms always show what pay uses. The summary of changes
-     * is stored per language; te and hi fall back to English, and the labels stay English until they are translated.
+     * Rate card lines come from the stored values and the pickup detour in force, so the terms always show what pay uses.
+     * The summary of changes is stored per language; te and hi fall back to English, and the labels stay English until
+     * they are translated. change, when not null, is the next change riders get 14 days' notice of, shown the same way.
      */
-    static Terms terms(RateCard card, String language, String supportPhone) {
+    static Terms terms(RateCard card, Integer detour, TermsChange change, String language, String supportPhone) {
+        List<LabelValue> grievance = List.of(
+            new LabelValue("Craves rider support, every slot", supportPhone == null ? "" : supportPhone),
+            new LabelValue("Telangana Grievance Redressal Officer", "Link added when the state portal opens"));
+        return new Terms(card.version(), card.effectiveFrom(), summary(card, language), rateCardLines(card, detour), grievance,
+            card.fullTextUrl(), card.draft(), change == null ? null : upcoming(change, language));
+    }
+
+    /** The terms riders will have then: the card's summary if it starts then, and a line when the pickup detour changes. */
+    private static UpcomingTerms upcoming(TermsChange change, String language) {
+        List<String> summary = new ArrayList<>(change.cardStarts() ? summary(change.card(), language) : List.of());
+        if (!Objects.equals(change.detourBefore(), change.detourAfter())) {
+            summary.add("Pickup distance changes from straight line × " + factor(change.detourBefore()) + " to × "
+                + factor(change.detourAfter()) + ".");
+        }
+        return new UpcomingTerms(change.card().version(), change.at(), summary, rateCardLines(change.card(), change.detourAfter()));
+    }
+
+    private static List<String> summary(RateCard card, String language) {
+        return card.summaryOfChanges().getOrDefault(language, card.summaryOfChanges().getOrDefault("en", List.of()));
+    }
+
+    private static List<LabelValue> rateCardLines(RateCard card, Integer detour) {
         String baseKm = km(card.baseDropM());
-        List<LabelValue> rateCard = List.of(
+        List<LabelValue> lines = new ArrayList<>(List.of(
             new LabelValue("Base pay, first " + baseKm + " km of the drop", rupees(card.basePaise())),
             new LabelValue("Each drop km after " + baseKm + " km", rupees(card.dropPerKmPaise())),
             new LabelValue(card.pickupFreeM() > 0 ? "Ride to the kitchen, each km after the first " + km(card.pickupFreeM()) + " km"
-                : "Ride to the kitchen, each km", rupees(card.pickupPerKmPaise())),
+                : "Ride to the kitchen, each km", rupees(card.pickupPerKmPaise()))));
+        if (detour != null) {
+            lines.add(new LabelValue("Pickup distance", "straight line × " + factor(detour)));
+        }
+        lines.addAll(List.of(
             new LabelValue("Waiting at the kitchen, after " + card.waitFreeMinutes() + " free minutes",
                 rupees(card.waitPerMinutePaise()) + " a minute"),
             new LabelValue("Order cancelled after you reach the kitchen", rupees(card.cancellationFeePaise())
@@ -273,12 +306,13 @@ public class FleetRiderService {
             new LabelValue("Customer not answering: full pay after two calls and a wait of",
                 card.unreachableWaitMinutes() + " minutes"),
             new LabelValue("Guaranteed minimum in a booked slot", rupees(card.slotGuaranteePerHourPaise()) + " an hour"),
-            new LabelValue("Declining or missing an offer", "Free"));
-        List<LabelValue> grievance = List.of(
-            new LabelValue("Craves rider support, every slot", supportPhone == null ? "" : supportPhone),
-            new LabelValue("Telangana Grievance Redressal Officer", "Link added when the state portal opens"));
-        List<String> summary = card.summaryOfChanges().getOrDefault(language, card.summaryOfChanges().getOrDefault("en", List.of()));
-        return new Terms(card.version(), card.effectiveFrom(), summary, rateCard, grievance, card.fullTextUrl(), card.draft());
+            new LabelValue("Declining or missing an offer", "Free")));
+        return lines;
+    }
+
+    /** 130 percent is "1.3". */
+    static String factor(int percent) {
+        return BigDecimal.valueOf(percent, 2).stripTrailingZeros().toPlainString();
     }
 
     /** 4000 is "₹40"; 150 is "₹1.50". */

@@ -3,6 +3,7 @@ package in.craves.integration.fleet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -84,11 +85,73 @@ class FleetSchemaDatabaseTest {
     }
 
     @Test
-    void rateCardCannotBePublishedInsideFourteenDays() {
-        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = effective_from "
-            + "- INTERVAL '13 days' WHERE version = '2026-10-v1'")).isInstanceOf(DataIntegrityViolationException.class);
-        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = effective_from - INTERVAL '14 days' "
+    void onlyTheFirstRateCardMayBePublishedInsideFourteenDaysAndPublishedAtIsTheDatabaseClock() {
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now() - INTERVAL '30 days', "
+            + "effective_from = now() WHERE version = '2026-10-v1'");
+        assertThat(db.queryForObject("SELECT published_at > now() - INTERVAL '1 minute' FROM fleet_schema.rate_card "
+            + "WHERE version = '2026-10-v1'", Boolean.class))
+            .as("a backdated published_at is replaced").isTrue();
+        db.update("INSERT INTO fleet_schema.rate_card (version, effective_from, base_paise, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, summary_of_changes) "
+            + "SELECT '2026-12-v2', now() + INTERVAL '1 day', base_paise, base_drop_m, drop_per_km_paise, pickup_free_m, "
+            + "pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, summary_of_changes "
+            + "FROM fleet_schema.rate_card WHERE version = '2026-10-v1'");
+        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now() - INTERVAL '14 days' "
+            + "WHERE version = '2026-12-v2'")).as("backdating cannot buy notice").isInstanceOf(DataIntegrityViolationException.class);
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() + INTERVAL '14 days' "
+            + "WHERE version = '2026-12-v2'");
+    }
+
+    @Test
+    void twoVersionsThatStartLaterCannotShareAMoment() {
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() WHERE version = '2026-10-v1'");
+        String card = "INSERT INTO fleet_schema.rate_card (version, status, effective_from, published_at, base_paise, base_drop_m, "
+            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "ranges, summary_of_changes) SELECT ?, 'PUBLISHED', TIMESTAMPTZ '2030-01-01 00:00:00+00', now(), base_paise, base_drop_m, "
+            + "drop_per_km_paise, pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, "
+            + "ranges, summary_of_changes FROM fleet_schema.rate_card WHERE version = '2026-10-v1'";
+        db.update(card, "2029-12-v1");
+        assertThatThrownBy(() -> db.update(card, "2029-12-v2")).isInstanceOf(DataIntegrityViolationException.class);
+        String policy = "INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, ranges) VALUES (?, 'PUBLISHED', TIMESTAMPTZ '2030-01-01 00:00:00+00', now(), 'shadow', 40, 60, "
+            + "5000, '{}')";
+        db.update(policy, "2029-12-v1");
+        assertThatThrownBy(() -> db.update(policy, "2029-12-v2")).isInstanceOf(DataIntegrityViolationException.class);
+        db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now(), withdrawn_by = ? WHERE version = '2029-12-v1'", UUID.randomUUID());
+        db.update(policy, "2029-12-v2");
+    }
+
+    @Test
+    void publishedVersionsNeverChangeExceptOneWithdrawalBeforeTheyStart() {
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() "
             + "WHERE version = '2026-10-v1'");
+        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.rate_card SET base_paise = 5000 WHERE version = '2026-10-v1'"))
+            .as("pay values of a published card").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.rate_card SET status = 'DRAFT', published_at = NULL WHERE version = '2026-10-v1'"))
+            .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> db.update("DELETE FROM fleet_schema.rate_card WHERE version = '2026-10-v1'"))
+            .isInstanceOf(DataIntegrityViolationException.class);
+
+        String insert = "INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, ranges) VALUES (?, 'PUBLISHED', now() + CAST(? AS interval), now(), ?, 40, 60, 5000, '{}')";
+        db.update(insert, "2026-10-v2", "0 days", "off");
+        db.update(insert, "2026-10-v3", "15 days", "live");
+        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now() - INTERVAL '1 hour', "
+            + "withdrawn_by = ? WHERE version = '2026-10-v2'", UUID.randomUUID())).as("a backdated withdrawal of the policy in force")
+            .isInstanceOf(DataIntegrityViolationException.class);
+        db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now() + INTERVAL '30 days', withdrawn_by = ? "
+            + "WHERE version = '2026-10-v3'", UUID.randomUUID());
+        assertThat(db.queryForObject("SELECT withdrawn_at BETWEEN now() - INTERVAL '1 minute' AND now() FROM fleet_schema.dispatch_policy "
+            + "WHERE version = '2026-10-v3'", Boolean.class)).as("withdrawn_at is the database clock").isTrue();
+        for (String change : List.of("withdrawn_at = NULL, withdrawn_by = NULL", "status = 'DRAFT', published_at = NULL", "mode = 'off'")) {
+            assertThatThrownBy(() -> db.update("UPDATE fleet_schema.dispatch_policy SET " + change + " WHERE version = '2026-10-v3'"))
+                .as(change).isInstanceOf(DataIntegrityViolationException.class);
+        }
+        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now(), withdrawn_by = ? "
+            + "WHERE version = '2026-10-v1'", UUID.randomUUID())).as("a draft").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> db.update("DELETE FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v3'"))
+            .as("a withdrawn version is still a record").isInstanceOf(DataIntegrityViolationException.class);
+        db.update("DELETE FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v1'");
     }
 
     @Test

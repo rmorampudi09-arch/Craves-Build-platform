@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
 public class FleetDispatcher implements FleetStage {
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetDispatcher.class);
+    // At most one "no rate card" line per dispatch tick (5 s), however many orders arrive.
+    private static final long TICK_MS = 5_000;
     static final int OFFERS_AT_ONCE = 3;
     static final int SEEN_WITHIN_SECONDS = 45;
     static final int BORZO_WINDOW_SECONDS = 120; // DeliveryProviderRouter's Borzo selection window
@@ -65,6 +68,7 @@ public class FleetDispatcher implements FleetStage {
     private final RoadDistanceClient roads;
     private final RiderPushClient push;
     private final ObjectMapper json;
+    private final AtomicLong noRateCardLoggedAt = new AtomicLong();
 
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json) {
@@ -194,9 +198,14 @@ public class FleetDispatcher implements FleetStage {
         if (!testMode.kitchenAllowed(chefId)) {
             return null;
         }
-        RateCard card = policies.currentRateCard().orElse(null);
+        // Live pays riders, so only a published rate card in force will do (behind RATE_CARD_REQUIRED); shadow may price a draft.
+        RateCard card = ("live".equals(policy.mode()) ? policies.rateCardInForce(null) : policies.currentRateCard()).orElse(null);
         if (card == null) {
-            LOGGER.info("FLEET_SKIPPED chefSubOrderId={} reason=NO_RATE_CARD", command.chefSubOrderId());
+            long now = System.currentTimeMillis();
+            long last = noRateCardLoggedAt.get();
+            if (now - last >= TICK_MS && noRateCardLoggedAt.compareAndSet(last, now)) {
+                LOGGER.warn("FLEET_SKIPPED chefSubOrderId={} reason=NO_RATE_CARD_IN_FORCE mode={}", command.chefSubOrderId(), policy.mode());
+            }
             return null;
         }
         double kitchenLat = request.pickup().latitude().doubleValue();

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 // Shapes shared by every fleet screen. Contract: contracts/openapi/admin-fleet-v1.yaml.
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** Rate card and dispatch policy versions, like 2026-10-v1. */
+export const VERSION = /^[0-9]{4}-[0-9]{2}-v[0-9]+$/;
 export const id = z.string().regex(UUID);
 export const instant = z.string().datetime({ offset: true });
 export const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -16,7 +18,7 @@ export type FleetFile = {
   attachment?: (ids: string[], query: URLSearchParams) => string;
 };
 
-/** One BFF-forwarded admin fleet operation. ":id" segments must be UUIDs. */
+/** One BFF-forwarded admin fleet operation. ":id" segments must be UUIDs, ":version" segments versions. */
 export type FleetRoute = {
   method: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
@@ -30,7 +32,8 @@ export function matchFleetRoute(routes: readonly FleetRoute[], method: string, s
   for (const route of routes) {
     const parts = route.path.split("/");
     if (route.method !== method || parts.length !== segments.length) continue;
-    if (parts.every((part, index) => part === ":id" ? UUID.test(segments[index]) : part === segments[index])) {
+    if (parts.every((part, index) => part === ":id" ? UUID.test(segments[index])
+      : part === ":version" ? VERSION.test(segments[index]) : part === segments[index])) {
       return { route, ids: segments.filter((_, index) => parts[index] === ":id") };
     }
   }

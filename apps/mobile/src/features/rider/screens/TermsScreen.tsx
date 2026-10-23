@@ -74,7 +74,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       </RiderScreen>
     );
   }
-  const {version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines, fullTextUrl, draft} = terms.data;
+  const {version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines, fullTextUrl, draft, upcoming} = terms.data;
   // Someone who accepted an older version sees what changed; a first acceptance reads the whole card.
   const changed = accepting && Boolean(me.data?.acceptedTermsVersion) && summaryOfChanges.length > 0;
 
@@ -120,8 +120,8 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       {changed ? (
         <Card>
           <CardTitle>{t.whatChanged}</CardTitle>
-          {summaryOfChanges.map(line => (
-            <Text key={line} style={styles.body}>
+          {summaryOfChanges.map((line, index) => (
+            <Text key={`${index}-${line}`} style={styles.body}>
               {line}
             </Text>
           ))}
@@ -130,10 +130,23 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       <Card>
         <CardTitle>{t.rateCard}</CardTitle>
         {rateCardLines.map((line, index) => (
-          <RateRow key={line.label} label={line.label} value={line.value} divider={index > 0} />
+          <RateRow key={`${index}-${line.label}`} label={line.label} value={line.value} divider={index > 0} />
         ))}
         <Text style={[styles.small, styles.footnote]}>{t.notice}</Text>
       </Card>
+      {upcoming ? (
+        <Card>
+          <CardTitle>{t.upcomingTitle(formatDay(upcoming.effectiveFrom))}</CardTitle>
+          {upcoming.summaryOfChanges.map((line, index) => (
+            <Text key={`${index}-${line}`} style={styles.body}>
+              {line}
+            </Text>
+          ))}
+          {upcoming.rateCardLines.map((line, index) => (
+            <RateRow key={`${index}-${line.label}`} label={line.label} value={line.value} divider={index > 0} />
+          ))}
+        </Card>
+      ) : null}
       <Card>
         <CardTitle>{t.howPaidTitle}</CardTitle>
         <Text style={styles.body}>{t.howPaid}</Text>
@@ -141,8 +154,8 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       </Card>
       <Card>
         <CardTitle>{t.grievance}</CardTitle>
-        {grievanceLines.map(line => (
-          <RateRow key={line.label} label={line.label} value={line.value} />
+        {grievanceLines.map((line, index) => (
+          <RateRow key={`${index}-${line.label}`} label={line.label} value={line.value} />
         ))}
       </Card>
     </RiderScreen>

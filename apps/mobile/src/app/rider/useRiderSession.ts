@@ -65,7 +65,7 @@ function useDemoSession(): RiderSession {
   );
 }
 
-/** The customer app's Firebase phone sign-in and Craves token exchange, without its screens. */
+/** Phone OTP by MSG91 (auth-service's central OTP, as on the web), then the customer app's Firebase sign-in and Craves token exchange. */
 function useLiveSession(): RiderSession {
   const dispatch = useAppDispatch();
   const bootstrap = useBootstrap();
@@ -74,13 +74,11 @@ function useLiveSession(): RiderSession {
   const status: RiderSessionStatus =
     authStatus === 'authenticated' ? 'authenticated' : authStatus === 'anonymous' ? 'anonymous' : authStatus === 'error' ? 'error' : 'restoring';
 
-  const beginPhone = useCallback(async (e164Phone: string) => {
-    // The role is only passed through; Firebase phone sign-in doesn't use it. The rider role is checked by GET /rider/me.
-    await authService.beginPhone('CUSTOMER', e164Phone);
-  }, []);
+  // The rider role is checked by GET /rider/me, not at sign-in.
+  const beginPhone = useCallback((e164Phone: string) => authService.beginMsg91Phone(e164Phone), []);
   const confirmOtp = useCallback(
     async (code: string) => {
-      const tokens = await authService.confirmOtp(code);
+      const tokens = await authService.confirmMsg91Otp(code);
       dispatch(authActions.authenticated(tokens.identity));
     },
     [dispatch],

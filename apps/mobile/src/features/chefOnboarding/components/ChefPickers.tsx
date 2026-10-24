@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, touchTarget, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {LANGUAGE_ENGLISH_NAMES, ONBOARDING_LANGUAGES} from '../api/chefOnboardingApi';
@@ -78,7 +78,7 @@ export function DateOfBirthPicker({
         <Text style={[styles.triggerText, !picked && {color: colors.placeholder}]}>
           {picked ? spoken(picked) : 'Choose your date of birth'}
         </Text>
-        <Icon color={colors.textSecondary} name="calendar" size={20} surface={false} />
+        <Icon color={colors.textSecondary} name="calendar" size={iconSize.sm} surface={false} />
       </Pressable>
       <Sheet
         description={draft ? spoken(draft) : 'Pick the year you were born, then the month and the day.'}
@@ -123,7 +123,7 @@ export function DateOfBirthPicker({
           <View style={styles.gap}>
             <Pressable accessibilityHint="Choose another year" accessibilityRole="button" onPress={() => setView('year')} style={styles.heading}>
               <Text style={styles.headingText}>{shown.year}</Text>
-              <Icon color={colors.textPrimary} name="chevron-down" size={18} surface={false} />
+              <Icon color={colors.textPrimary} name="chevron-down" size={iconSize.sm} surface={false} />
             </Pressable>
             <View style={styles.grid}>
               {MONTHS.map((name, month) => {
@@ -156,11 +156,11 @@ export function DateOfBirthPicker({
                 disabled={!monthAllowed(new Date(shown.year, shown.month - 1, 1).getFullYear(), new Date(shown.year, shown.month - 1, 1).getMonth())}
                 onPress={() => step(-1)}
                 style={styles.arrow}>
-                <Icon color={colors.textPrimary} name="arrow-left" size={20} surface={false} />
+                <Icon color={colors.textPrimary} name="arrow-left" size={iconSize.md} surface={false} />
               </Pressable>
               <Pressable accessibilityHint="Choose another year" accessibilityRole="button" onPress={() => setView('year')} style={styles.heading}>
                 <Text style={styles.headingText}>{MONTHS[shown.month]} {shown.year}</Text>
-                <Icon color={colors.textPrimary} name="chevron-down" size={18} surface={false} />
+                <Icon color={colors.textPrimary} name="chevron-down" size={iconSize.sm} surface={false} />
               </Pressable>
               <Pressable
                 accessibilityLabel="Next month"
@@ -169,7 +169,7 @@ export function DateOfBirthPicker({
                 onPress={() => step(1)}
                 style={styles.arrow}>
                 <View style={styles.flip}>
-                  <Icon color={colors.textPrimary} name="arrow-left" size={20} surface={false} />
+                  <Icon color={colors.textPrimary} name="arrow-left" size={iconSize.md} surface={false} />
                 </View>
               </Pressable>
             </View>
@@ -226,12 +226,12 @@ export function LanguagePicker({
         disabled={disabled}
         onPress={() => setOpen(true)}
         style={[onboardingStyles.input, styles.trigger]}>
-        <Icon color={colors.textSecondary} name="translate" size={18} surface={false} />
+        <Icon color={colors.textSecondary} name="translate" size={iconSize.sm} surface={false} />
         <Text style={[styles.triggerText, styles.flex]}>
           {current[1]}
           {english ? <Text style={styles.english}>  {english}</Text> : null}
         </Text>
-        <Icon color={colors.textSecondary} name="chevron-down" size={20} surface={false} />
+        <Icon color={colors.textSecondary} name="chevron-down" size={iconSize.sm} surface={false} />
       </Pressable>
       <Sheet
         description="Choose the language you are most comfortable in."
@@ -255,7 +255,7 @@ export function LanguagePicker({
                 <Text style={[styles.languageLabel, selected && styles.cellTextOn]}>{label}</Text>
                 {name ? <Text style={[styles.english, selected && styles.englishOn]}>{name}</Text> : null}
               </View>
-              {selected ? <Icon color={colors.white} name="check" size={20} surface={false} /> : null}
+              {selected ? <Icon color={colors.white} name="check" size={iconSize.sm} surface={false} /> : null}
             </Pressable>
           );
         })}

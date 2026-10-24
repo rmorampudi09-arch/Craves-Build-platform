@@ -15,7 +15,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, touchTarget, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {accountResolutionService} from '../../auth/state/accountResolutionService';
@@ -79,10 +79,10 @@ function ResumeScreen({flow}: {flow: ChefOnboardingFlow}) {
             key={section}
             onPress={() => flow.open(section)}
             style={({pressed}) => [styles.listRow, pressed && styles.pressed]}>
-            <Icon color={colors.textPrimary} name={SECTION_ICONS[section]} size={36} />
+            <Icon color={colors.textPrimary} name={SECTION_ICONS[section]} size={iconSize.xl} />
             <Text style={[ui.strong, styles.flex]}>{CHEF_SECTION_LABELS[section]}</Text>
             {PROGRESS_CHIP[progress[section]]}
-            <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+            <Icon color={colors.textSecondary} name="chevron-right" size={iconSize.sm} surface={false} />
           </Pressable>
         ))}
       </Card>
@@ -94,7 +94,7 @@ function ResumeScreen({flow}: {flow: ChefOnboardingFlow}) {
 function PageState({title, message, busy, children}: {title: string; message: string; busy?: boolean; children?: ReactNode}) {
   return (
     <SafeAreaView style={[styles.root, styles.pageState]}>
-      {busy ? <ActivityIndicator color={colors.flameRedAccessible} size="large" /> : <Icon color={colors.textPrimary} name="clock" size={48} />}
+      {busy ? <ActivityIndicator color={colors.flameRedAccessible} size="large" /> : <Icon color={colors.textPrimary} name="clock" size={iconSize.xl} />}
       <Text accessibilityRole="header" style={styles.title}>{title}</Text>
       <Text style={[ui.muted, styles.center]}>{message}</Text>
       {children ? <View style={styles.pageActions}>{children}</View> : null}
@@ -231,7 +231,7 @@ export function ChefOnboardingScreen({navigation}: Props) {
       <View style={styles.header}>
         {editing ? (
           <Pressable accessibilityLabel="Back" accessibilityRole="button" disabled={busy} hitSlop={spacing.xs} onPress={() => flow.back()} style={styles.headerButton}>
-            <Icon color={colors.textPrimary} name="arrow-left" size={22} surface={false} />
+            <Icon color={colors.textPrimary} name="arrow-left" size={iconSize.md} surface={false} />
           </Pressable>
         ) : null}
         <Text numberOfLines={1} style={styles.headerTitle}>{editing ? title : 'Craves for Chefs'}</Text>
@@ -256,7 +256,7 @@ export function ChefOnboardingScreen({navigation}: Props) {
           showsVerticalScrollIndicator={false}>
           {screen === 'submitted' ? (
             <View style={styles.hero}>
-              <Icon color={colors.white} name="check" size={34} surface={false} />
+              <Icon color={colors.white} name="check" size={iconSize.xl} surface={false} />
             </View>
           ) : null}
           <View style={[styles.heading, screen === 'submitted' && styles.headingCenter]}>

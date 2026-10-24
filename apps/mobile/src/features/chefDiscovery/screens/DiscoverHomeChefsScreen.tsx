@@ -27,6 +27,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {
   OfflineNotice,
@@ -454,7 +455,7 @@ export function DiscoverHomeChefsScreen() {
             accessibilityRole="button"
             onPress={openFilters}
             style={({pressed}) => [styles.filterButton, pressed && styles.filterButtonPressed]}>
-            <Icon name="filter" size={22} color={colors.flameRedAccessible} surface={false} />
+            <Icon name="filter" size={iconSize.md} color={colors.flameRedAccessible} surface={false} />
           </Pressable>
         </View>
       </View>

@@ -4,7 +4,7 @@ import {AuthShell} from '../components/AuthShell';
 import {AuthCard} from '../components/AuthCard';
 import {Icon} from '../../../shared/components/Icon';
 import {PrimaryButton} from '../components/PrimaryButton';
-import {colors, spacing} from '../../../design/tokens';
+import {colors, spacing, iconSize} from '../../../design/tokens';
 import {completeLogout} from '../state/logoutCoordinator';
 import {useAppDispatch} from '../../../app/store/hooks';
 
@@ -19,7 +19,7 @@ export function CustomerAccountStatusScreen() {
       <View style={styles.top} />
       <AuthCard>
         <View style={styles.icon}>
-          <Icon name="check" size={30} color={colors.success} />
+          <Icon name="check" size={iconSize.xl} color={colors.success} />
         </View>
         <Text style={styles.title}>Customer account ready</Text>
         <Text style={styles.description}>

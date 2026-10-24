@@ -91,7 +91,7 @@ function NextMealCard({
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.linkText}>
               View details
             </Text>
-            <Icon name="chevron-right" size={iconSize.md} color={colors.flameRedAccessible} surface={false} />
+            <Icon name="chevron-right" size={iconSize.sm} color={colors.flameRedAccessible} surface={false} />
           </Pressable>
         </View>
       </View>

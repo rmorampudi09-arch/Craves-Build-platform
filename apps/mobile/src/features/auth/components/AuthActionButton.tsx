@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import ArrowRight from 'lucide-react-native/icons/arrow-right';
-import { colors, spacing, touchTarget } from '../../../design/tokens';
+import { colors, iconSize, spacing, touchTarget } from '../../../design/tokens';
 import { AuthSurfaceFinish } from './AuthSurfaceFinish';
 import { loginColors, loginFonts } from './loginVisuals';
 
@@ -67,7 +67,7 @@ export function AuthActionButton({
               color={outline ? colors.flameRedAccessible : colors.white}
             />
           ) : (
-            <ArrowRight size={23} color={colors.white} />
+            <ArrowRight size={iconSize.sm} color={colors.white} />
           )}
         </View>
       ) : null}

@@ -22,6 +22,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
@@ -286,7 +287,7 @@ export function CustomerFilterSortScreen() {
               styles.headerAction,
               pressed && styles.headerActionPressed,
             ]}>
-            <Icon name="arrow-left" size={22} color={colors.espressoBrown} />
+            <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} />
           </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.title}>Filter &amp; Sort</Text>
@@ -477,7 +478,7 @@ export function CustomerFilterSortScreen() {
                       ]}>
                       <Text style={styles.optionLabel}>{row.label}</Text>
                       <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-                        {selected ? <Icon name="check" size={16} color={colors.white} /> : null}
+                        {selected ? <Icon name="check" size={iconSize.xs} color={colors.white} /> : null}
                       </View>
                     </Pressable>
                   );

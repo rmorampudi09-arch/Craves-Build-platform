@@ -15,7 +15,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import {useVideoPlayer, VideoView} from 'expo-video';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, elevation, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, elevation, fontWeight, radius, spacing, touchTarget, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {
@@ -223,7 +223,7 @@ export function ChefBasicDetails({flow}: Props) {
 function Verified({label = 'Verified'}: {label?: string}) {
   return (
     <View style={styles.verified}>
-      <Icon color={colors.successText} name="check" size={15} surface={false} />
+      <Icon color={colors.successText} name="check" size={iconSize.xs} surface={false} />
       <Text style={styles.verifiedText}>{label}</Text>
     </View>
   );
@@ -265,7 +265,7 @@ function KitchenPinModal({
           accessibilityRole="button"
           onPress={onClose}
           style={[styles.mapBack, {top: insets.top + spacing.sm}]}>
-          <Icon color={colors.textPrimary} name="arrow-left" size={22} surface={false} />
+          <Icon color={colors.textPrimary} name="arrow-left" size={iconSize.md} surface={false} />
         </Pressable>
         <View style={[styles.mapSheet, {paddingBottom: insets.bottom + spacing.md}]}>
           <Text style={ui.strong}>Move the map until the pin is on your kitchen</Text>
@@ -430,13 +430,13 @@ export function ChefKitchenDetails({flow}: Props) {
                 disabled={flow.busy}
                 onPress={() => setAdjusting(true)}
                 style={styles.adjustPin}>
-                <Icon color={colors.flameRedAccessible} name="edit" size={16} surface={false} />
+                <Icon color={colors.flameRedAccessible} name="edit" size={iconSize.xs} surface={false} />
                 <Text style={styles.adjustPinText}>Adjust pin</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.mapEmpty}>
-              <Icon color={colors.flameRedAccessible} name="location" size={40} />
+              <Icon color={colors.flameRedAccessible} name="location" size={iconSize.xl} />
               <Text style={ui.strong}>Your kitchen pin will appear here</Text>
               <Text style={[ui.muted, styles.center]}>Search for your address or use your current location.</Text>
             </View>
@@ -444,7 +444,7 @@ export function ChefKitchenDetails({flow}: Props) {
 
           <FieldShell label="Search location" optional>
             <View style={[ui.input, styles.searchRow]}>
-              <Icon color={colors.textSecondary} name="search" size={18} surface={false} />
+              <Icon color={colors.textSecondary} name="search" size={iconSize.md} surface={false} />
               <TextInput
                 accessibilityLabel="Search location"
                 editable={!flow.busy}
@@ -462,7 +462,7 @@ export function ChefKitchenDetails({flow}: Props) {
                 value={query}
               />
               <Pressable accessibilityLabel="Search address" accessibilityRole="button" disabled={flow.busy || searching} hitSlop={spacing.xs} onPress={() => search()}>
-                {searching ? <ActivityIndicator color={colors.flameRedAccessible} /> : <Icon color={colors.flameRedAccessible} name="search" size={20} surface={false} />}
+                {searching ? <ActivityIndicator color={colors.flameRedAccessible} /> : <Icon color={colors.flameRedAccessible} name="search" size={iconSize.md} surface={false} />}
               </Pressable>
             </View>
             {searching ? <Text style={ui.muted}>Searching addresses…</Text> : null}
@@ -477,7 +477,7 @@ export function ChefKitchenDetails({flow}: Props) {
                   pin(result.latitude, result.longitude, label).catch(() => undefined);
                 }}
                 style={styles.result}>
-                <Icon color={colors.textSecondary} name="location-outline" size={16} surface={false} />
+                <Icon color={colors.textSecondary} name="location-outline" size={iconSize.xs} surface={false} />
                 <View style={styles.flex}>
                   <Text style={ui.body}>{result.title}</Text>
                   {result.subtitle ? <Text style={ui.muted}>{result.subtitle}</Text> : null}
@@ -497,7 +497,7 @@ export function ChefKitchenDetails({flow}: Props) {
           {locationError || locationFieldError ? <FieldError>{locationError || locationFieldError}</FieldError> : null}
           {hasPin ? (
             <View accessibilityLiveRegion="polite" style={styles.pinned}>
-              <Icon color={colors.flameRedAccessible} name="location" size={18} surface={false} />
+              <Icon color={colors.flameRedAccessible} name="location" size={iconSize.sm} surface={false} />
               <View style={styles.flex}>
                 <Text style={ui.body}>{pinnedLabel || kitchenAddress(d) || 'Pin placed on the map'}</Text>
                 <Text style={ui.muted}>Adjust the pin if it isn’t exactly on your kitchen.</Text>
@@ -776,7 +776,7 @@ function FssaiGuide({flow}: Props) {
       <Card icon="headset" subtitle="Our team can guide you through the application process." title="Need help with FSSAI?">
         {flow.callbackCase ? (
           <View accessibilityLiveRegion="polite" style={styles.success}>
-            <Icon color={colors.successText} name="check" size={22} surface={false} />
+            <Icon color={colors.successText} name="check" size={iconSize.md} surface={false} />
             <View style={styles.flex}>
               <Text style={ui.strong}>{flow.callback?.status === 'CONTACTED' ? 'Our team contacted you' : 'Request received'}</Text>
               <Text style={ui.muted}>
@@ -909,7 +909,7 @@ function ReviewPhoto({flow, type, label}: Props & {type: string; label: string})
         {preview ? (
           <Image accessibilityLabel={label} source={{uri: preview}} style={styles.fill} />
         ) : (
-          <Icon color={evidence ? colors.successText : colors.textSecondary} name={evidence ? 'check' : 'camera'} size={20} surface={false} />
+          <Icon color={evidence ? colors.successText : colors.textSecondary} name={evidence ? 'check' : 'camera'} size={iconSize.sm} surface={false} />
         )}
       </View>
       <Text style={ui.muted}>{label}</Text>

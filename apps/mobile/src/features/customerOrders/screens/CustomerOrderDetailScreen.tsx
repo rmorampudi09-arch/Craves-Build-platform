@@ -23,7 +23,7 @@ import type {
 } from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, radius, spacing} from '../../../design/tokens';
+import {colors, radius, spacing, iconSize} from '../../../design/tokens';
 import {iosType, iosWeight} from '../../../design/iosType';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {
@@ -166,7 +166,7 @@ function KitchenSteps({step}: {step: -1 | 0 | 1 | 2}) {
                 ]}>
                 <MaterialDesignIcons
                   name={done ? 'check' : STEP_ICONS[index]}
-                  size={17}
+                  size={iconSize.xs}
                   color={done || current ? colors.white : colors.textSecondary}
                 />
               </View>
@@ -184,7 +184,7 @@ function KitchenSteps({step}: {step: -1 | 0 | 1 | 2}) {
         })}
       </View>
       <View style={styles.lockedNote}>
-        <MaterialDesignIcons name="map-marker-path" size={14} color={colors.textPrimary} />
+        <MaterialDesignIcons name="map-marker-path" size={iconSize.xs} color={colors.textPrimary} />
         <Text style={[iosType.caption1, iosWeight.semibold, styles.primaryText]}>
           Live map opens once your order is picked up
         </Text>
@@ -213,10 +213,10 @@ function ActionRow({
       accessibilityRole="button"
       onPress={onPress}
       style={({pressed}) => [styles.actionRow, pressed && styles.rowPressed]}>
-      <Icon name={icon} size={20} color={tint} surface={false} />
+      <Icon name={icon} size={iconSize.sm} color={tint} surface={false} />
       <View style={[styles.actionRowBody, !last && styles.hairlineBottom]}>
         <Text style={[iosType.body, {color: tint}]}>{label}</Text>
-        <Icon name="chevron-right" size={20} color={colors.borderStrong} surface={false} />
+        <Icon name="chevron-right" size={iconSize.sm} color={colors.borderStrong} surface={false} />
       </View>
     </Pressable>
   );
@@ -444,7 +444,7 @@ export function CustomerOrderDetailScreen() {
           hitSlop={8}
           onPress={() => navigation.goBack()}
           style={({pressed}) => [styles.headerButton, pressed && styles.pressed]}>
-          <Icon name="arrow-left" size={24} color={colors.textPrimary} surface={false} />
+          <Icon name="arrow-left" size={iconSize.md} color={colors.textPrimary} surface={false} />
         </Pressable>
         <Text accessibilityRole="header" numberOfLines={1} style={[iosType.headline, styles.headerTitle]}>
           Order details
@@ -534,7 +534,7 @@ export function CustomerOrderDetailScreen() {
                   <Text style={[iosType.subheadline, iosWeight.semibold, styles.primaryText]}>
                     {journey.delivered ? 'Delivery history' : 'Track live'}
                   </Text>
-                  <Icon name="chevron-right" size={18} color={colors.textSecondary} surface={false} />
+                  <Icon name="chevron-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
                 </View>
               )}
             </OrderMap>
@@ -592,7 +592,7 @@ export function CustomerOrderDetailScreen() {
         <View style={styles.card}>
           <View style={styles.infoRow}>
             <View style={styles.infoIcon}>
-              <Icon name="location" size={18} color={colors.textPrimary} surface={false} />
+              <Icon name="location" size={iconSize.md} color={colors.textPrimary} surface={false} />
             </View>
             <View style={styles.flexCopy}>
               <Text style={[iosType.footnote, styles.secondaryText]}>Delivering to</Text>
@@ -604,7 +604,7 @@ export function CustomerOrderDetailScreen() {
           <View style={[styles.cardDivider, styles.infoDivider]} />
           <View style={styles.infoRow}>
             <View style={styles.infoIcon}>
-              <Icon name="wallet" size={18} color={colors.textPrimary} surface={false} />
+              <Icon name="wallet" size={iconSize.md} color={colors.textPrimary} surface={false} />
             </View>
             <View style={styles.flexCopy}>
               <Text style={[iosType.footnote, styles.secondaryText]}>Payment</Text>

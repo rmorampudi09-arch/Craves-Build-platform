@@ -24,6 +24,7 @@ import {
   radius,
   spacing,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
@@ -205,7 +206,7 @@ export function CustomerOrderReviewScreen() {
               styles.headerAction,
               pressed && styles.pressed,
             ]}>
-            <Icon name="arrow-left" size={24} surface={false} />
+            <Icon name="arrow-left" size={iconSize.md} surface={false} />
           </Pressable>
           <Text accessibilityRole="header" style={styles.headerTitle}>
             Rate your order

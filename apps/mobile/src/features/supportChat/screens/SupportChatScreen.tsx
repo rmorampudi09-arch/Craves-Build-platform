@@ -146,7 +146,7 @@ function TicketNotice({chat, contextRole}: {chat: Chat; contextRole: SupportChat
             Open the ticket to read replies
           </Text>
         </View>
-        <Icon name="chevron-right" size={iconSize.md} color={colors.borderStrong} surface={false} />
+        <Icon name="chevron-right" size={iconSize.sm} color={colors.borderStrong} surface={false} />
       </Pressable>
     );
   }
@@ -353,7 +353,7 @@ function CustomerChat({chat, orderId}: {chat: Chat; orderId: string | undefined}
             onPress={chat.sendDraft}
             style={({pressed}) => [styles.send, blocked && styles.sendDisabled, pressed && styles.pressed]}
             testID="support-chat-send">
-            <Icon name="send" size={iconSize.sm} color={blocked ? colors.textSecondary : colors.white} surface={false} />
+            <Icon name="send" size={iconSize.md} color={blocked ? colors.textSecondary : colors.white} surface={false} />
           </Pressable>
         </View>
         <Disclosure />

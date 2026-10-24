@@ -237,7 +237,7 @@ function KitchenHeader({
           {count} {count === 1 ? 'item' : 'items'}
         </Text>
       </View>
-      <Icon name="chevron-right" size={22} color={colors.textSecondary} surface={false} />
+      <Icon name="chevron-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
     </Pressable>
   );
 }
@@ -245,7 +245,7 @@ function KitchenHeader({
 function KitchenFooter({onAddMore}: {onAddMore: () => void}) {
   return (
     <Pressable accessibilityRole="button" onPress={onAddMore} style={styles.kitchenFooter}>
-      <Icon name="plus" size={18} color={colors.flameRedAccessible} surface={false} />
+      <Icon name="plus" size={iconSize.sm} color={colors.flameRedAccessible} surface={false} />
       <Text style={styles.addMoreText}>Add more from this kitchen</Text>
     </Pressable>
   );
@@ -281,7 +281,7 @@ function DeliveryCard({
     <View style={styles.card}>
       <View style={styles.deliveryRow}>
         <View style={styles.iconTile}>
-          <Icon name="location" size={20} color={colors.flameRedAccessible} surface={false} />
+          <Icon name="location" size={iconSize.md} color={colors.flameRedAccessible} surface={false} />
         </View>
         <View style={styles.deliveryCopy}>
           <Text style={styles.deliveryLabel}>{label ? `Deliver to ${label}` : 'Deliver to'}</Text>
@@ -296,7 +296,7 @@ function DeliveryCard({
       <View style={styles.estimateRow}>
         <Icon
           name="clock"
-          size={16}
+          size={iconSize.xs}
           color={serviceability === 'UNSERVICEABLE' ? colors.error : colors.success}
           surface={false}
         />
@@ -373,7 +373,7 @@ function PaymentNotice({
 }) {
   return (
     <View accessibilityRole="alert" style={styles.paymentNotice}>
-      <Icon name="alert" size={20} color={colors.warningText} surface={false} />
+      <Icon name="alert" size={iconSize.sm} color={colors.warningText} surface={false} />
       <View style={styles.paymentNoticeCopy}>
         <Text style={styles.paymentNoticeText}>{message}</Text>
         {onCheckStatus ? (
@@ -1091,7 +1091,7 @@ export function CustomerCartScreen() {
       <CheckoutBill checkout={visibleCheckoutReview} />
       <View style={[styles.card, styles.payCard]}>
         <View style={[styles.iconTile, styles.payTile]}>
-          <Icon name="shield" size={20} color={colors.successText} surface={false} />
+          <Icon name="shield" size={iconSize.md} color={colors.successText} surface={false} />
         </View>
         <View style={styles.deliveryCopy}>
           <Text style={styles.payTitle}>Pay securely with Razorpay</Text>
@@ -1151,7 +1151,7 @@ export function CustomerCartScreen() {
             disabled={clearBusy || checkoutBusy}
             onPress={requestClearCart}
             style={styles.clearButton}>
-            <Icon name="trash" size={18} color={colors.textSecondary} surface={false} />
+            <Icon name="trash" size={iconSize.sm} color={colors.textSecondary} surface={false} />
             <Text style={styles.clearText}>{clearBusy ? 'Clearing…' : 'Clear'}</Text>
           </Pressable>
         ) : null}

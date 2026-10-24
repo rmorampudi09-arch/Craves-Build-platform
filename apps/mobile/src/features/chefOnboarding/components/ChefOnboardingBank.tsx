@@ -2,7 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {uuid} from 'expo-modules-core';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, spacing, touchTarget, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {
@@ -197,7 +197,7 @@ export function ChefOnboardingBank({
             <FieldShell helper="From your basic details." label="Account holder name">
               <View style={[ui.input, styles.row, styles.locked]}>
                 <Text style={[ui.body, styles.flex]}>{name}</Text>
-                <Icon color={colors.textSecondary} name="lock" size={18} surface={false} />
+                <Icon color={colors.textSecondary} name="lock" size={iconSize.sm} surface={false} />
               </View>
             </FieldShell>
             <FieldShell error={errorFor('account')} label="Bank account number">
@@ -222,7 +222,7 @@ export function ChefOnboardingBank({
                   accessibilityRole="button"
                   hitSlop={spacing.xs}
                   onPress={() => setShowAccount(value => !value)}>
-                  <Icon color={colors.textSecondary} name={showAccount ? 'eye-off' : 'eye'} size={20} surface={false} />
+                  <Icon color={colors.textSecondary} name={showAccount ? 'eye-off' : 'eye'} size={iconSize.sm} surface={false} />
                 </Pressable>
               </View>
             </FieldShell>

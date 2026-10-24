@@ -115,7 +115,7 @@ function AddressCard({
     <View style={[styles.addressCard, selected && styles.addressCardSelected]}>
       <View style={styles.addressHeading}>
         <View style={styles.addressIcon}>
-          <Icon name="location" size={iconSize.sm} color={colors.flameRed} />
+          <Icon name="location" size={iconSize.md} color={colors.flameRed} />
         </View>
         <View style={styles.addressHeadingCopy}>
           <View style={styles.labelRow}>

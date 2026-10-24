@@ -27,6 +27,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {IconButton} from '../../../shared/components/IconButton';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
@@ -87,7 +88,7 @@ const SAVED_TABS = [
 
 function FilledIcon({
   name,
-  size = 22,
+  size = iconSize.md,
   color = colors.espressoBrown,
 }: {
   name: string;
@@ -503,7 +504,7 @@ export function CustomerFavoritesScreen() {
           disabled={watchBusy}
           onPress={toggleWatch}
           style={({pressed}) => [styles.circleButton, pressed && styles.pressed]}>
-          <FilledIcon name={watched ? 'bell-check' : 'bell-plus-outline'} size={22} color={colors.flameRed} />
+          <FilledIcon name={watched ? 'bell-check' : 'bell-plus-outline'} size={iconSize.md} color={colors.flameRed} />
         </Pressable>
         <IconButton
           accessibilityLabel={`Remove ${displayName} from saved`}
@@ -645,7 +646,7 @@ export function CustomerFavoritesScreen() {
         <View style={styles.todaySection}>
           <View style={styles.todayHeader}>
             <View style={styles.todayIcon}>
-              <FilledIcon name="pot-steam-outline" size={22} color={colors.successText} />
+              <FilledIcon name="pot-steam-outline" size={iconSize.md} color={colors.successText} />
             </View>
             <View style={styles.todayHeaderCopy}>
               <Text accessibilityRole="header" style={styles.todayTitle}>Your favorites are cooking today</Text>
@@ -656,7 +657,7 @@ export function CustomerFavoritesScreen() {
         </View>
       ) : (
         <View style={styles.calmStatusCard}>
-          <FilledIcon name="weather-sunset" size={22} color={colors.textSecondary} />
+          <FilledIcon name="weather-sunset" size={iconSize.md} color={colors.textSecondary} />
           <View style={styles.syncCopy}>
             <Text style={styles.calmStatusTitle}>Nothing saved is cooking today yet</Text>
             <Text style={styles.calmStatusText}>Your dishes stay saved. Pull to refresh when kitchen schedules change.</Text>
@@ -715,7 +716,7 @@ export function CustomerFavoritesScreen() {
           <View style={styles.content}>
             {queueState.hasPendingChanges ? (
               <View accessibilityLiveRegion="polite" style={styles.syncCard}>
-                <FilledIcon name="cloud-sync-outline" size={20} color={colors.flameRedAccessible} />
+                <FilledIcon name="cloud-sync-outline" size={iconSize.sm} color={colors.flameRedAccessible} />
                 <View style={styles.syncCopy}>
                   <Text style={styles.syncTitle}>Saving when online</Text>
                   <Text style={styles.syncText}>

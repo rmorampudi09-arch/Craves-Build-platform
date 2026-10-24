@@ -519,7 +519,7 @@ function MealPlanEditor({
           <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.selectText}>
             {leadHoursLabel(leadHours)}
           </Text>
-          <Icon color={colors.textSecondary} name="chevron-down" size={iconSize.md} surface={false} />
+          <Icon color={colors.textSecondary} name="chevron-down" size={iconSize.sm} surface={false} />
         </Pressable>
         <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.help}>
           How long before each meal you start preparing.

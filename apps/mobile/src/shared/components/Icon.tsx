@@ -75,7 +75,7 @@ interface Props {
   name: IconName;
   size?: number;
   color?: string;
-  /** Bottom/menu bars opt out; others get a glyph-sized box, soft-red filled only under IconTileContext. */
+  /** Bottom/menu bars opt out; others get a size box, soft-red filled (glyph at 74%) only under IconTileContext. */
   surface?: boolean;
 }
 
@@ -158,7 +158,8 @@ export function Icon({
   color = surface ? colors.flameRed : colors.espressoBrown,
 }: Props) {
   const tile = useContext(IconTileContext);
-  const glyphSize = surface ? Math.max(14, Math.round(size * 0.74)) : size;
+  // Only a tiled glyph shrinks to fit its circle; a bare icon draws at its full size.
+  const glyphSize = surface && tile ? Math.max(14, Math.round(size * 0.74)) : size;
   if (!surface) {
     return (
       <MaterialDesignIcons

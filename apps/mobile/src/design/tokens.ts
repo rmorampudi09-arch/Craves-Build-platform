@@ -173,10 +173,15 @@ export const textDefaults = {
   allowFontScaling: true,
 } as const;
 
+/**
+ * App icon scale. md 24: top-bar actions, list-row icons, icon buttons. sm 20: inside buttons and
+ * fields, trailing chevrons, beside body text. xs 16: beside small text, checkbox ticks.
+ * xl 32: feature icons on status screens. lg stays 24 for 24 dp boxes (radios, checkboxes).
+ */
 export const iconSize = {
   xs: 16,
   sm: 20,
-  md: 22,
+  md: 24,
   lg: 24,
   xl: 32,
   xxl: 40,

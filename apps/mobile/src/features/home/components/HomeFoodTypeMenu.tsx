@@ -1,7 +1,7 @@
 import React, {useRef, useState} from 'react';
 import {Modal, Pressable, StyleSheet, Text, View, useWindowDimensions, type StyleProp, type ViewStyle} from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {colors, fontWeight, homeTop, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, fontWeight, homeTop, radius, spacing, touchTarget, typography, iconSize} from '../../../design/tokens';
 import {VegMark} from '../../chefShell/components/ui/VegMark';
 import type {DiscoveryDietOption} from '../../discoveryFilters/state/discoveryFilterSlice';
 
@@ -112,7 +112,7 @@ export function HomeFoodTypeMenu({
             <Text numberOfLines={1} style={[styles.pillLabel, tone && {color: tone.text}]}>
               {label}
             </Text>
-            <MaterialDesignIcons name="chevron-down" size={18} color={tone?.text ?? colors.textPrimary} />
+            <MaterialDesignIcons name="chevron-down" size={iconSize.sm} color={tone?.text ?? colors.textPrimary} />
           </>
         )}
       </Pressable>
@@ -156,7 +156,7 @@ export function HomeFoodTypeMenu({
                       {option.label}
                     </Text>
                     {selected ? (
-                      <MaterialDesignIcons name="check" size={18} color={optionTone?.text ?? colors.textPrimary} />
+                      <MaterialDesignIcons name="check" size={iconSize.sm} color={optionTone?.text ?? colors.textPrimary} />
                     ) : null}
                   </Pressable>
                 );

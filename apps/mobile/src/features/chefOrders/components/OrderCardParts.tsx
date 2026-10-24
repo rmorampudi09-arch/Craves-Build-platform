@@ -78,7 +78,7 @@ export function PartnerRow({partner}: {partner?: ChefOperationalDeliveryPartner}
   return (
     <View style={styles.partner}>
       <View style={styles.partnerIcon}>
-        <Icon color={colors.infoText} name="delivery" size={iconSize.sm} surface={false} />
+        <Icon color={colors.infoText} name="delivery" size={iconSize.md} surface={false} />
       </View>
       <View style={styles.partnerText}>
         {name ? (
@@ -106,7 +106,7 @@ export function PartnerRow({partner}: {partner?: ChefOperationalDeliveryPartner}
             Linking.openURL(`tel:${phone}`).catch(() => undefined);
           }}
           style={styles.partnerCall}>
-          <Icon color={colors.textPrimary} name="phone" size={iconSize.sm} surface={false} />
+          <Icon color={colors.textPrimary} name="phone" size={iconSize.md} surface={false} />
         </Pressable>
       ) : null}
     </View>

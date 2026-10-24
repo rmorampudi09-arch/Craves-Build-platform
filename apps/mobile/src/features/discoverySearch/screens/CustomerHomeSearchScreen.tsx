@@ -18,6 +18,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
@@ -135,7 +136,7 @@ export function CustomerHomeSearchScreen() {
             hitSlop={spacing.xs}
             onPress={() => navigation.goBack()}
             style={({pressed}) => [styles.backButton, pressed && styles.backPressed]}>
-            <Icon name="arrow-left" size={21} color={colors.espressoBrown} surface={false} />
+            <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} surface={false} />
           </Pressable>
           <DiscoverySearchInput
             accessibilityLabel="Search dishes and kitchens"
@@ -204,7 +205,7 @@ export function CustomerHomeSearchScreen() {
                         From {kitchenName} · {formatDistance(item.dish.distanceMeters)}
                       </Text>
                     </View>
-                    <Icon name="chevron-right" size={18} color={colors.textSecondary} surface={false} />
+                    <Icon name="chevron-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
                   </Pressable>
                 );
               }
@@ -229,7 +230,7 @@ export function CustomerHomeSearchScreen() {
                       Kitchen · {formatKitchenDistance(item.kitchen.distanceMeters)}
                     </Text>
                   </View>
-                  <Icon name="chevron-right" size={18} color={colors.textSecondary} surface={false} />
+                  <Icon name="chevron-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
                 </Pressable>
               );
             }}

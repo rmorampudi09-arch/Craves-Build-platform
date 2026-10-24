@@ -10,7 +10,7 @@ import {
   Marker,
   type CameraStop,
 } from '@maplibre/maplibre-react-native';
-import {colors} from '../../../design/tokens';
+import {colors, iconSize} from '../../../design/tokens';
 import {iosType} from '../../../design/iosType';
 import {mapTilesBaseUrl, olaMapStyleUrl} from '../../maps/olaMapTiles';
 import {useMapTilesReferer, type MapPoint} from '../../maps/OlaMapPicker';
@@ -121,14 +121,14 @@ export function OrderMap({
             {home ? (
               <Marker id="order-home" lngLat={lngLat(home)} anchor="center">
                 <View style={styles.homePin}>
-                  <MaterialDesignIcons name="home-variant" size={18} color={colors.white} />
+                  <MaterialDesignIcons name="home-variant" size={iconSize.sm} color={colors.white} />
                 </View>
               </Marker>
             ) : null}
             {showCourier ? (
               <Marker id="order-courier" lngLat={lngLat(courier)} anchor="center">
                 <View style={styles.courierPin}>
-                  <MaterialDesignIcons name="moped" size={20} color={colors.white} />
+                  <MaterialDesignIcons name="moped" size={iconSize.sm} color={colors.white} />
                 </View>
               </Marker>
             ) : null}

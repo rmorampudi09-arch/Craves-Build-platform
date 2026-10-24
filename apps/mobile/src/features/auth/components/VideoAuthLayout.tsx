@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import { useReducedMotionPreference } from '../../../design/reducedMotion';
-import { colors, spacing, touchTarget } from '../../../design/tokens';
+import { colors, iconSize, spacing, touchTarget } from '../../../design/tokens';
 import { loginPanelFractions } from './loginVisuals';
 import {
   CravesWordmark,
@@ -169,7 +169,7 @@ export function VideoAuthLayout({
               backDisabled && styles.disabled,
             ]}
           >
-            <ArrowLeft size={22} color={colors.ink} />
+            <ArrowLeft size={iconSize.md} color={colors.ink} />
           </Pressable>
         ) : null}
         {welcome && splashDone ? (

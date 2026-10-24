@@ -155,7 +155,7 @@ export function AddressSearchStep({
             {locating ? (
               <ActivityIndicator color={colors.flameRed} size="small" />
             ) : (
-              <Icon color={colors.flameRed} name="gps" size={iconSize.sm} surface={false} />
+              <Icon color={colors.flameRed} name="gps" size={iconSize.md} surface={false} />
             )}
           </View>
           <View style={styles.rowCopy}>
@@ -164,7 +164,7 @@ export function AddressSearchStep({
             </Text>
             <Text style={styles.rowSubtitle}>Find your address with GPS</Text>
           </View>
-          <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+          <Icon color={colors.textSecondary} name="chevron-right" size={iconSize.sm} surface={false} />
         </Pressable>
 
         {locationDenied ? (
@@ -199,7 +199,7 @@ export function AddressSearchStep({
                 onPress={() => onPickSavedAddress?.(address)}
                 style={({pressed}) => [styles.row, styles.divided, pressed && styles.pressed]}>
                 <View style={styles.tile}>
-                  <Icon color={colors.flameRed} name={labelIcon(address)} size={18} surface={false} />
+                  <Icon color={colors.flameRed} name={labelIcon(address)} size={iconSize.md} surface={false} />
                 </View>
                 <View style={styles.rowCopy}>
                   <Text style={styles.rowTitle}>{customerAddressLabel(address)}</Text>
@@ -238,7 +238,7 @@ export function AddressSearchStep({
                 onPress={() => onPickResult(result)}
                 style={({pressed}) => [styles.row, styles.divided, pressed && styles.pressed]}>
                 <View style={styles.tile}>
-                  <Icon color={colors.textSecondary} name="location" size={18} surface={false} />
+                  <Icon color={colors.textSecondary} name="location" size={iconSize.md} surface={false} />
                 </View>
                 <View style={styles.rowCopy}>
                   <Text style={styles.rowTitle}>{result.title}</Text>

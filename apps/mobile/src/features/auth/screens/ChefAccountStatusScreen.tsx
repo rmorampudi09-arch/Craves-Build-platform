@@ -4,7 +4,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, spacing} from '../../../design/tokens';
+import {colors, spacing, iconSize} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {profileApi} from '../api/profileApi';
 import {AuthCard} from '../components/AuthCard';
@@ -99,7 +99,7 @@ export function ChefAccountStatusScreen({navigation, route}: Props) {
         <View style={styles.icon}>
           <Icon
             name={status === 'APPROVED' ? 'check' : 'chef'}
-            size={30}
+            size={iconSize.xl}
             color={status === 'APPROVED' ? colors.success : colors.flameRed}
           />
         </View>

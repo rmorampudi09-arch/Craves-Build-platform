@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import Copy from 'lucide-react-native/icons/copy';
+import { iconSize } from '../../../design/tokens';
 import {
   referralColors,
   referralFonts,
@@ -100,7 +101,7 @@ export function ReferralCopyBox({
         onPress={onCopy}
         style={styles.copyButton}
       >
-        <Copy color={referralColors.muted} size={23} strokeWidth={1.8} />
+        <Copy color={referralColors.muted} size={iconSize.md} strokeWidth={1.8} />
       </Pressable>
     </View>
   );

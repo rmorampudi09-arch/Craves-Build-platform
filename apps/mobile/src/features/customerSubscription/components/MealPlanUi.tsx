@@ -44,7 +44,7 @@ export function MealPlanHeader({title, subtitle, onBack, right}: MealPlanHeaderP
         hitSlop={spacing.xs}
         onPress={onBack}
         style={({pressed}) => [styles.backButton, pressed && styles.backPressed]}>
-        <Icon name="arrow-left" size={20} color={colors.espressoBrown} surface={false} />
+        <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} surface={false} />
       </Pressable>
       <View style={styles.headerTitleBlock}>
         <Text

@@ -2,7 +2,7 @@ import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../../app/navigation/types';
-import {colors, spacing} from '../../../design/tokens';
+import {colors, spacing, iconSize} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {AuthCard} from '../components/AuthCard';
 import {AuthShell} from '../components/AuthShell';
@@ -40,7 +40,7 @@ export function PasswordResetSentScreen({navigation, route}: Props) {
       <View style={styles.top} />
       <AuthCard>
         <View style={styles.icon}>
-          <Icon name="check" size={30} color={colors.flameRed} />
+          <Icon name="check" size={iconSize.xl} color={colors.flameRed} />
         </View>
         <Text style={styles.title}>Password Reset Sent</Text>
         <Text style={styles.desc}>{PASSWORD_RECOVERY_NEUTRAL_MESSAGE}</Text>

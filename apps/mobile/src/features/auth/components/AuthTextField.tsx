@@ -8,7 +8,7 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { Icon, type IconName } from '../../../shared/components/Icon';
-import { colors, spacing, touchTarget } from '../../../design/tokens';
+import { colors, spacing, touchTarget, iconSize } from '../../../design/tokens';
 import { loginColors, loginFonts } from './loginVisuals';
 
 interface Props extends TextInputProps {
@@ -60,7 +60,7 @@ export const AuthTextField = forwardRef<TextInput, Props>(
             {leftIcon ? (
               <Icon
                 name={leftIcon}
-                size={20}
+                size={iconSize.sm}
                 surface={false}
                 color={colors.textSecondary}
               />
@@ -94,7 +94,7 @@ export const AuthTextField = forwardRef<TextInput, Props>(
               >
                 <Icon
                   name={rightIcon}
-                  size={22}
+                  size={iconSize.md}
                   surface={false}
                   color={colors.textSecondary}
                 />

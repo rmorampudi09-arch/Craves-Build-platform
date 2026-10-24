@@ -14,7 +14,7 @@ import MaterialDesignIcons from '@react-native-vector-icons/material-design-icon
 import {BlurView} from 'expo-blur';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {colors, elevation, fontWeight, radius, spacing, typography} from '../../design/tokens';
+import {colors, elevation, fontWeight, radius, spacing, typography, iconSize} from '../../design/tokens';
 import {Icon} from '../../shared/components/Icon';
 import {CustomerOrderMenuItemImage} from '../customerOrders/components/CustomerOrderMenuItemImage';
 import {formatCustomerOrderMoney} from '../customerOrders/presentation/customerOrdersPresentation';
@@ -234,7 +234,7 @@ export function LiveOrderCard({
                 hitSlop={spacing.xxs}
                 onPress={close}
                 style={({pressed}) => [styles.closeButton, pressed && styles.pressed]}>
-                <Icon color={colors.flameRed} name="close" size={22} surface={false} />
+                <Icon color={colors.flameRed} name="close" size={iconSize.md} surface={false} />
               </Pressable>
             </View>
 
@@ -289,7 +289,7 @@ export function LiveOrderCard({
                 accessibilityRole="button"
                 onPress={onOpenHelp}
                 style={({pressed}) => [styles.helpButton, pressed && styles.pressed]}>
-                <Icon color={colors.flameRed} name="headset" size={22} surface={false} />
+                <Icon color={colors.flameRed} name="headset" size={iconSize.md} surface={false} />
               </Pressable>
             </View>
           </Animated.View>

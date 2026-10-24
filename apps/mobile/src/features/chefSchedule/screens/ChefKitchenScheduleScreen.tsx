@@ -212,7 +212,7 @@ export function ChefKitchenScheduleScreen() {
                             </Text>
                           ))}
                         </View>
-                        <Icon color={colors.borderStrong} name="chevron-right" size={iconSize.md} surface={false} />
+                        <Icon color={colors.borderStrong} name="chevron-right" size={iconSize.sm} surface={false} />
                       </View>
                     }
                     title={day.name}

@@ -145,7 +145,7 @@ function UnpinnedAddresses({onSetPin}: {onSetPin: (address: CustomerAddress) => 
           onPress={() => onSetPin(address)}
           style={({pressed}) => [styles.row, pressed && styles.pressed]}>
           <View style={styles.rowIcon}>
-            <Icon color={colors.flameRed} name="location" size={18} surface={false} />
+            <Icon color={colors.flameRed} name="location" size={iconSize.md} surface={false} />
           </View>
           <View style={styles.rowCopy}>
             <View style={styles.rowLabelLine}>
@@ -158,7 +158,7 @@ function UnpinnedAddresses({onSetPin}: {onSetPin: (address: CustomerAddress) => 
               {customerAddressDisplayLine(address)}
             </Text>
           </View>
-          <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+          <Icon color={colors.textSecondary} name="chevron-right" size={iconSize.sm} surface={false} />
         </Pressable>
       ))}
     </>
@@ -211,7 +211,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
               hitSlop={spacing.xs}
               onPress={onClose}
               style={({pressed}) => [styles.closeButton, pressed && styles.pressed]}>
-              <Icon color={colors.textPrimary} name="close" size={22} surface={false} />
+              <Icon color={colors.textPrimary} name="close" size={iconSize.md} surface={false} />
             </Pressable>
           </View>
 
@@ -235,26 +235,26 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                 onPress={() => openEditor({mode: 'add', start: 'current-location'})}
                 style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
                 <View style={styles.rowIcon}>
-                  <Icon color={colors.flameRed} name="gps" size={20} surface={false} />
+                  <Icon color={colors.flameRed} name="gps" size={iconSize.md} surface={false} />
                 </View>
                 <View style={styles.rowCopy}>
                   <Text style={styles.currentTitle}>Use current location</Text>
                   <Text style={styles.rowAddress}>Find your address with GPS</Text>
                 </View>
-                <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+                <Icon color={colors.textSecondary} name="chevron-right" size={iconSize.sm} surface={false} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => openEditor({mode: 'add', start: 'search'})}
                 style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
                 <View style={styles.rowIcon}>
-                  <Icon color={colors.textPrimary} name="plus" size={20} surface={false} />
+                  <Icon color={colors.textPrimary} name="plus" size={iconSize.md} surface={false} />
                 </View>
                 <View style={styles.rowCopy}>
                   <Text style={styles.actionTitle}>Add new address</Text>
                   <Text style={styles.rowAddress}>Search, set the pin, add flat details</Text>
                 </View>
-                <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+                <Icon color={colors.textSecondary} name="chevron-right" size={iconSize.sm} surface={false} />
               </Pressable>
             </View>
 
@@ -293,7 +293,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
                         <Icon
                           color={colors.flameRed}
                           name={labelIcon(location.label)}
-                          size={18}
+                          size={iconSize.md}
                           surface={false}
                         />
                       </View>

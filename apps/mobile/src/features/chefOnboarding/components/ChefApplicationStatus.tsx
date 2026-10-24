@@ -1,6 +1,6 @@
 import React from 'react';
 import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import type {ChefApplicationSummary, ChefEvidence} from '../api/chefOnboardingApi';
@@ -36,7 +36,7 @@ export function WhatHappensNext() {
       <View style={ui.fields}>
         {items.map(([icon, title, body]) => (
           <View key={title} style={styles.next}>
-            <Icon color={colors.textPrimary} name={icon} size={36} />
+            <Icon color={colors.textPrimary} name={icon} size={iconSize.xl} />
             <View style={styles.flex}>
               <Text style={ui.strong}>{title}</Text>
               <Text style={ui.muted}>{body}</Text>
@@ -61,7 +61,7 @@ export function ApplicationFacts({application, phase}: {application: ChefApplica
 export function StatusLine({icon, label}: {icon: IconName; label: string}) {
   return (
     <View style={styles.statusLine}>
-      <Icon color={colors.textPrimary} name={icon} size={40} />
+      <Icon color={colors.textPrimary} name={icon} size={iconSize.xl} />
       <View style={styles.flex}>
         <Text style={ui.muted}>Application status</Text>
         <Text style={styles.statusLabel}>{label}</Text>
@@ -144,7 +144,7 @@ export function ChefStatusView({
                     ))}
                 </View>
                 <StatusChip tone="attention">Needs attention</StatusChip>
-                <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+                <Icon color={colors.textSecondary} name="chevron-right" size={iconSize.sm} surface={false} />
               </Pressable>
             ))}
           </View>

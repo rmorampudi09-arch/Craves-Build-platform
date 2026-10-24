@@ -9,6 +9,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Icon, IconTileContext} from '../../../shared/components/Icon';
 import {
@@ -68,7 +69,7 @@ const PALETTES: Record<CustomerHeaderTone, HeaderPalette> = {
 const HEADER_ICON_SIZE = 44;
 /** Space between the collapsed Meal plans circle and the accessory beside it. */
 const COLLAPSED_GAP = spacing.xs;
-const MEAL_PLANS_ICON = 22;
+const MEAL_PLANS_ICON = iconSize.sm;
 const MEAL_PLANS_PADDING_LEFT = 10;
 
 interface Props {
@@ -130,7 +131,7 @@ export function CustomerHeader({
           hitSlop={spacing.xs}
           onPress={() => navigation.goBack()}
           style={({pressed}) => [styles.backButton, pressed && styles.backPressed]}>
-          <Icon name="arrow-left" size={20} color={colors.espressoBrown} surface={false} />
+          <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} surface={false} />
         </Pressable>
       ) : null}
 
@@ -148,7 +149,7 @@ export function CustomerHeader({
         onPress={onPressLocation}
         style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
         <View style={[styles.locationIcon, {backgroundColor: tile}]}>
-          <Icon name="location" size={22} color={palette.icon} surface={false} />
+          <Icon name="location" size={iconSize.md} color={palette.icon} surface={false} />
         </View>
         {compact ? (
           <View style={styles.locationCopy}>
@@ -169,7 +170,7 @@ export function CustomerHeader({
               {locationTitle}{' '}
               <Icon
                 name="chevron-down"
-                size={18}
+                size={iconSize.sm}
                 color={tone === 'red' ? palette.title : colors.textPrimary}
                 surface={false}
               />
@@ -211,7 +212,7 @@ export function CustomerHeader({
           {backgroundColor: tile},
           pressed && styles.notificationPressed,
         ]}>
-        <Icon name="bell" size={22} color={palette.icon} surface={false} />
+        <Icon name="bell" size={iconSize.md} color={palette.icon} surface={false} />
         {badgeLabel ? (
           <View
             style={[styles.badge, {backgroundColor: palette.badgeBackground, borderColor: palette.badgeBorder}]}

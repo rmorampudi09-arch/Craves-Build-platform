@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, Alert, Image, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography, iconSize} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {chefOnboardingApi, type ChefEvidence, type UploadFile} from '../api/chefOnboardingApi';
 import {DoneTick, FieldError, LinkButton, StatusChip} from './OnboardingUi';
@@ -161,7 +161,7 @@ export function ChefOnboardingUpload({
       {thumbUri ? (
         <Image accessibilityIgnoresInvertColors source={{uri: thumbUri}} style={styles.thumbImage} />
       ) : (
-        <Icon color={colors.textSecondary} name={photo || !evidence || IMAGE_NAME.test(evidence.originalFileName) ? 'image' : 'document'} size={22} surface={false} />
+        <Icon color={colors.textSecondary} name={photo || !evidence || IMAGE_NAME.test(evidence.originalFileName) ? 'image' : 'document'} size={iconSize.md} surface={false} />
       )}
     </View>
   );
@@ -183,7 +183,7 @@ export function ChefOnboardingUpload({
       <>
         <View accessibilityRole="alert" style={[styles.file, styles.fileError]}>
           <View style={styles.thumb}>
-            <Icon color={colors.error} name="alert" size={24} surface={false} />
+            <Icon color={colors.error} name="alert" size={iconSize.md} surface={false} />
           </View>
           <View style={styles.fileText}>
             <Text style={styles.fileName}>Upload failed</Text>
@@ -237,7 +237,7 @@ export function ChefOnboardingUpload({
           disabled={disabled || busy}
           onPress={() => choose('library')}
           style={({pressed}) => [styles.dropzone, (pressed || disabled) && styles.pressed]}>
-          {busy ? <ActivityIndicator color={colors.flameRedAccessible} /> : <Icon color={colors.flameRedAccessible} name="upload" size={36} />}
+          {busy ? <ActivityIndicator color={colors.flameRedAccessible} /> : <Icon color={colors.flameRedAccessible} name="upload" size={iconSize.xl} />}
           <Text style={styles.dropTitle}>{emptyTitle ?? (photo ? 'Add photo' : 'Add file')}</Text>
           <Text style={styles.meta}>Take a photo or choose one</Text>
         </Pressable>

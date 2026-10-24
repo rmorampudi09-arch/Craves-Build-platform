@@ -76,7 +76,7 @@ export function ListRow({
           {value}
         </Text>
       ) : null}
-      {right ?? (onPress ? <Icon name="chevron-right" size={iconSize.md} color={colors.borderStrong} surface={false} /> : null)}
+      {right ?? (onPress ? <Icon name="chevron-right" size={iconSize.sm} color={colors.borderStrong} surface={false} /> : null)}
     </>
   );
 

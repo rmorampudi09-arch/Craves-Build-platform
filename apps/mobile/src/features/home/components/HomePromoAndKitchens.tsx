@@ -32,6 +32,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {Icon} from '../../../shared/components/Icon';
@@ -324,7 +325,7 @@ function TopKitchenCard({
             style={styles.timeGlass}>
             <Icon
               name="clock"
-              size={18}
+              size={iconSize.sm}
               color={colors.white}
               surface={false}
             />
@@ -353,7 +354,7 @@ function TopKitchenCard({
           blurTarget={imageTarget}
           pointerEvents="none"
           style={styles.ratingGlass}>
-          <Icon name="star" size={18} color="#FFC928" surface={false} />
+          <Icon name="star" size={iconSize.sm} color="#FFC928" surface={false} />
           <Text style={styles.ratingGlassText}>{ratingLabel}</Text>
         </LiquidGlassSurface>
 

@@ -34,6 +34,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
@@ -275,7 +276,7 @@ function DishCard({
             <View style={styles.detailRow}>
               {dish.preparationTimeMinutes ? (
                 <View style={styles.detailItem}>
-                  <Icon name="clock" size={16} color={colors.textSecondary} surface={false} />
+                  <Icon name="clock" size={iconSize.xs} color={colors.textSecondary} surface={false} />
                   <Text style={styles.detailText}>{dish.preparationTimeMinutes} min</Text>
                 </View>
               ) : null}
@@ -288,7 +289,7 @@ function DishCard({
                     accessibilityElementsHidden
                     color={colors.flameRed}
                     name="chili-hot"
-                    size={17}
+                    size={iconSize.xs}
                   />
                   <Text style={styles.detailText}>{spiceLabel}</Text>
                 </View>
@@ -886,7 +887,7 @@ export function CustomerHomeScreen() {
               accessibilityRole="search"
               onPress={openSearch}
               style={({pressed}) => [styles.searchField, pressed && styles.searchFieldPressed]}>
-              <Icon name="search" size={22} color={colors.flameRed} surface={false} />
+              <Icon name="search" size={iconSize.md} color={colors.flameRed} surface={false} />
               <Text numberOfLines={1} style={styles.searchPlaceholder}>
                 Search dishes or kitchens
               </Text>
@@ -921,7 +922,7 @@ export function CustomerHomeScreen() {
               ]}>
               <Icon
                 name="filter"
-                size={22}
+                size={iconSize.md}
                 color={colors.flameRed}
                 surface={false}
               />
@@ -1042,7 +1043,7 @@ export function CustomerHomeScreen() {
                 onPress={scrollToTop}
                 style={({pressed}) => [styles.backToTop, pressed && styles.backToTopPressed]}
                 testID="home-back-to-top">
-                <MaterialDesignIcons color={colors.flameRedAccessible} name="arrow-up" size={18} />
+                <MaterialDesignIcons color={colors.flameRedAccessible} name="arrow-up" size={iconSize.sm} />
                 <Text style={styles.backToTopText}>Back to top</Text>
               </Pressable>
             ) : null

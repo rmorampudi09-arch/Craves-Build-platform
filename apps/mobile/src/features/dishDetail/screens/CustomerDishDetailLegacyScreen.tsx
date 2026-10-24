@@ -38,6 +38,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {
@@ -549,7 +550,7 @@ export function CustomerDishDetailScreen() {
                 hitSlop={spacing.xs}
                 onPress={() => navigation.goBack()}
                 style={({pressed}) => [styles.glassPressable, pressed && styles.pressed]}>
-                <MaterialDesignIcons name="chevron-down" size={26} color={glassIconColor} />
+                <MaterialDesignIcons name="chevron-down" size={iconSize.md} color={glassIconColor} />
               </Pressable>
             </LiquidGlassSurface>
 
@@ -572,7 +573,7 @@ export function CustomerDishDetailScreen() {
                   ]}>
                   <MaterialDesignIcons
                     name={favorite ? 'heart' : 'heart-outline'}
-                    size={23}
+                    size={iconSize.md}
                     color={favorite ? colors.flameRed : glassIconColor}
                   />
                 </Pressable>
@@ -593,7 +594,7 @@ export function CustomerDishDetailScreen() {
                     pressed && !sharing && styles.pressed,
                     sharing && styles.disabled,
                   ]}>
-                  <MaterialDesignIcons name="share-variant-outline" size={22} color={glassIconColor} />
+                  <MaterialDesignIcons name="share-variant-outline" size={iconSize.md} color={glassIconColor} />
                 </Pressable>
               </LiquidGlassSurface>
             </View>
@@ -659,7 +660,7 @@ export function CustomerDishDetailScreen() {
                     <View style={styles.factIcon}>
                       <MaterialDesignIcons
                         name={fact.icon}
-                        size={19}
+                        size={iconSize.sm}
                         color={colors.flameRedAccessible}
                       />
                     </View>
@@ -701,7 +702,7 @@ export function CustomerDishDetailScreen() {
                   ) : null}
                 </View>
                 <View style={styles.kitchenChevron}>
-                  <MaterialDesignIcons name="chevron-right" size={22} color={colors.espressoBrown} />
+                  <MaterialDesignIcons name="chevron-right" size={iconSize.sm} color={colors.espressoBrown} />
                 </View>
               </View>
               {dish.kitchen.description ? (
@@ -717,7 +718,7 @@ export function CustomerDishDetailScreen() {
                 </Text>
                 <View style={styles.kitchenFooterAction}>
                   <Text style={styles.kitchenFooterActionText}>View kitchen</Text>
-                  <MaterialDesignIcons name="arrow-right" size={16} color={colors.flameRedAccessible} />
+                  <MaterialDesignIcons name="arrow-right" size={iconSize.xs} color={colors.flameRedAccessible} />
                 </View>
               </View>
             </Pressable>
@@ -754,7 +755,7 @@ export function CustomerDishDetailScreen() {
                           <View style={[styles.moreImage, styles.moreImageFallback]}>
                             <MaterialDesignIcons
                               name="silverware-fork-knife"
-                              size={24}
+                              size={iconSize.md}
                               color={colors.textSecondary}
                             />
                           </View>
@@ -774,7 +775,7 @@ export function CustomerDishDetailScreen() {
 
             {dish.thermoboxRequired ? (
               <View style={styles.note}>
-                <MaterialDesignIcons name="thermometer" size={18} color={colors.espressoBrown} />
+                <MaterialDesignIcons name="thermometer" size={iconSize.sm} color={colors.espressoBrown} />
                 <Text style={styles.noteText}>Packed in a thermobox so it reaches you hot.</Text>
               </View>
             ) : null}
@@ -791,7 +792,7 @@ export function CustomerDishDetailScreen() {
             accessibilityRole="button"
             onPress={() => navigation.goBack()}
             style={({pressed}) => [styles.compactClose, pressed && styles.pressed]}>
-            <MaterialDesignIcons name="chevron-down" size={24} color={colors.espressoBrown} />
+            <MaterialDesignIcons name="chevron-down" size={iconSize.sm} color={colors.espressoBrown} />
           </Pressable>
           <Text numberOfLines={1} style={styles.compactTitle}>
             {dish.itemName}

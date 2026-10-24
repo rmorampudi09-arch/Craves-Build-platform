@@ -96,7 +96,7 @@ function StatusTile({icon, tone}: {icon: IconName; tone: 'pin' | 'error' | 'warn
       <Icon
         color={tone === 'error' ? colors.error : tone === 'warning' ? colors.warningText : colors.flameRed}
         name={icon}
-        size={iconSize.sm}
+        size={iconSize.md}
         surface={false}
       />
     </View>

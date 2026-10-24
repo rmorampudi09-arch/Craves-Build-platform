@@ -135,7 +135,7 @@ export function AddressDetailsStep({
               accessibilityRole="button"
               onPress={onChangePin}
               style={({pressed}) => [styles.changePin, pressed && styles.pressed]}>
-              <Icon color={colors.flameRedAccessible} name="edit" size={16} surface={false} />
+              <Icon color={colors.flameRedAccessible} name="edit" size={iconSize.xs} surface={false} />
               <Text style={styles.changePinText}>Change pin</Text>
             </Pressable>
           </View>
@@ -146,7 +146,7 @@ export function AddressDetailsStep({
         {hasPin ? (
           <View style={styles.summary}>
             <View style={styles.tile}>
-              <Icon color={colors.flameRed} name="location" size={iconSize.sm} surface={false} />
+              <Icon color={colors.flameRed} name="location" size={iconSize.md} surface={false} />
             </View>
             <View style={styles.summaryCopy}>
               <Text style={styles.summaryTitle}>{summaryTitle}</Text>

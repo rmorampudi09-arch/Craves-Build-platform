@@ -1,6 +1,6 @@
 import React from 'react';
 import {RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
 import {Icon} from '../../../shared/components/Icon';
@@ -74,7 +74,7 @@ export function HomeComingSoonPage({
             style={styles.subscribed}
             testID="coming-soon-subscribed">
             <View style={styles.subscribedTick}>
-              <Icon color={colors.white} name="check" size={16} surface={false} />
+              <Icon color={colors.white} name="check" size={iconSize.xs} surface={false} />
             </View>
             <Text style={styles.subscribedText}>You'll get a notification when it opens</Text>
           </View>

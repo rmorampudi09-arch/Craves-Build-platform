@@ -1,7 +1,7 @@
 import React from 'react';
 import {Image, StyleSheet, Text, View} from 'react-native';
 import type {AuthRole} from '../domain/types';
-import {colors, spacing, typography} from '../../../design/tokens';
+import {colors, spacing, typography, iconSize} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 
 interface Props { role: AuthRole; compact?: boolean; }
@@ -14,7 +14,7 @@ export function AuthHero({role, compact = false}: Props) {
         <Text style={styles.kicker}>{customer ? 'Hello,' : 'Welcome back,'}</Text>
         <View style={styles.titleRow}>
           <Text style={styles.title}>{customer ? 'Foodie' : 'Chef'}</Text>
-          <Icon name={customer ? 'account' : 'chef'} size={32} color={colors.ink}/>
+          <Icon name={customer ? 'account' : 'chef'} size={iconSize.xl} color={colors.ink}/>
         </View>
         <Text style={styles.subtitle}>
           {customer

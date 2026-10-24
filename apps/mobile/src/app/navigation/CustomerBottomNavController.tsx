@@ -43,6 +43,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../design/tokens';
 import {
   selectCartFoodSubtotal,
@@ -306,7 +307,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
             onPress={handleOpenCart}
             style={({pressed}) => [styles.cartBar, pressed && styles.cartBarPressed]}>
             <View style={styles.cartIconTile}>
-              <Icon name="cart" color={colors.white} size={22} surface={false} />
+              <Icon name="cart" color={colors.white} size={iconSize.md} surface={false} />
             </View>
             <View style={styles.cartCopy}>
               <Text numberOfLines={1} style={styles.cartTitle}>
@@ -320,7 +321,7 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
             </View>
             <View style={styles.cartViewRow}>
               <Text style={styles.cartTitle}>View cart</Text>
-              <Icon name="chevron-right" color={colors.white} size={20} surface={false} />
+              <Icon name="chevron-right" color={colors.white} size={iconSize.sm} surface={false} />
             </View>
           </Pressable>
         ) : null}

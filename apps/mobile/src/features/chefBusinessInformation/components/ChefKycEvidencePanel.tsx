@@ -88,7 +88,7 @@ function DocumentSlot({
       <View style={styles.documentIcon}>
         <Icon
           name={documentType === 'APPLICANT_PHOTO' ? 'account' : 'shield'}
-          size={iconSize.sm}
+          size={iconSize.md}
           color={approved ? colors.success : colors.flameRedAccessible}
         />
       </View>

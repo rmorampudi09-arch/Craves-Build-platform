@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
-import {colors, radius, spacing, touchTarget} from '../../../design/tokens';
+import {colors, radius, spacing, touchTarget, iconSize} from '../../../design/tokens';
 
 interface Props {
   favorite: boolean;
@@ -55,7 +55,7 @@ export function CustomerFavoriteHeartButton({
       ]}>
       <MaterialDesignIcons
         name={favorite ? 'heart' : 'heart-outline'}
-        size={24}
+        size={iconSize.md}
         color={favorite ? colors.flameRed : inactiveColor}
       />
     </Pressable>

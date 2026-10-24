@@ -98,7 +98,7 @@ function NotificationRow({notice, onPress}: {notice: CustomerNotice; onPress: ()
         pressed && styles.noticeRowPressed,
       ]}>
       <View style={styles.noticeIcon}>
-        <Icon name={iconForNotice(notice)} size={iconSize.sm} color={colors.flameRed} />
+        <Icon name={iconForNotice(notice)} size={iconSize.md} color={colors.flameRed} />
       </View>
       <View style={styles.noticeCopy}>
         <View style={styles.noticeTitleRow}>
@@ -112,7 +112,7 @@ function NotificationRow({notice, onPress}: {notice: CustomerNotice; onPress: ()
         </Text>
         <Text style={styles.noticeTime}>{formatCustomerNotificationTimestamp(notice.createdAt)}</Text>
       </View>
-      <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
+      <Icon name="chevron-right" size={iconSize.sm} color={colors.placeholder} />
     </Pressable>
   );
 }

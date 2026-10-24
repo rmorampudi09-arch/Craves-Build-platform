@@ -8,6 +8,7 @@ import {
   radius,
   spacing,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
@@ -93,7 +94,7 @@ export function CustomerKitchenMenuCard({
         {meta ? (
           <View style={styles.metaRow}>
             {item.preparationTimeMinutes ? (
-              <Icon name="clock" size={15} color={colors.textSecondary} surface={false} />
+              <Icon name="clock" size={iconSize.xs} color={colors.textSecondary} surface={false} />
             ) : null}
             <Text numberOfLines={1} style={styles.metaText}>
               {meta}

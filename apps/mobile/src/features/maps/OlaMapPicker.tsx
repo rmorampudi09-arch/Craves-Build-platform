@@ -28,6 +28,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../design/tokens';
 import {
   mapTilesBaseUrl,
@@ -184,7 +185,7 @@ export function OlaMapPicker({
           >
             <MaterialDesignIcons
               name="refresh"
-              size={18}
+              size={iconSize.sm}
               color={colors.flameRed}
             />
             <Text style={styles.pillText}>Retry map</Text>
@@ -316,7 +317,7 @@ export function OlaMapPicker({
           ) : (
             <MaterialDesignIcons
               name="crosshairs-gps"
-              size={18}
+              size={iconSize.sm}
               color={colors.flameRed}
             />
           )}

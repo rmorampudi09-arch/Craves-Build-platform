@@ -2,7 +2,7 @@ import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
-import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {borderWidth, colors, fontWeight, radius, spacing, typography, iconSize} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
@@ -105,7 +105,7 @@ export function CustomerOrderCard({
                 pressed && styles.pressed,
                 reorderDisabled && styles.disabled,
               ]}>
-              <Icon name="renew" size={16} color={colors.flameRed} surface={false} />
+              <Icon name="renew" size={iconSize.xs} color={colors.flameRed} surface={false} />
               <Text style={styles.reorderText}>{reorderPending ? 'Preparing…' : 'Reorder'}</Text>
             </Pressable>
           ) : null}
@@ -118,7 +118,7 @@ export function CustomerOrderCard({
               {referenceAction === 'TRACK' ? 'Track order' : 'Details'}
             </Text>
             {referenceAction === 'TRACK' ? (
-              <Icon name="chevron-right" size={18} color={colors.flameRed} surface={false} />
+              <Icon name="chevron-right" size={iconSize.sm} color={colors.flameRed} surface={false} />
             ) : null}
           </Pressable>
         </View>

@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Image, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography, iconSize} from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {getCartItemInitial} from '../cartUiModel';
@@ -54,7 +54,7 @@ function KitchenSwitchDialog({
         {/* Swallow taps inside the card so only the backdrop dismisses. */}
         <Pressable accessibilityRole="alert" onPress={() => undefined} style={styles.card}>
           <View style={styles.iconTile}>
-            <Icon name="cart" size={24} color={colors.flameRed} surface={false} />
+            <Icon name="cart" size={iconSize.md} color={colors.flameRed} surface={false} />
           </View>
           <Text style={styles.title}>Replace your cart?</Text>
           <Text style={styles.body}>

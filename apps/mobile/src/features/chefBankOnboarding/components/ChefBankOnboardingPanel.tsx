@@ -16,6 +16,7 @@ import {
   spacing,
   touchTarget,
   typography,
+  iconSize,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
@@ -240,7 +241,7 @@ export function ChefBankOnboardingPanel() {
     <View style={styles.panel}>
       <View style={styles.heading}>
         <View style={styles.icon}>
-          <Icon name="shield" size={20} color={colors.flameRedAccessible} />
+          <Icon name="shield" size={iconSize.md} color={colors.flameRedAccessible} />
         </View>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>Payout onboarding</Text>
@@ -341,7 +342,7 @@ export function ChefBankOnboardingPanel() {
               pressed && !busy && styles.pressed,
             ]}>
             <View style={[styles.checkbox, consent && styles.checkboxSelected]}>
-              {consent ? <Icon name="check" size={16} color={colors.white} /> : null}
+              {consent ? <Icon name="check" size={iconSize.xs} color={colors.white} /> : null}
             </View>
             <Text style={styles.consentText}>
               I confirm this is my bank account and consent to Craves sharing

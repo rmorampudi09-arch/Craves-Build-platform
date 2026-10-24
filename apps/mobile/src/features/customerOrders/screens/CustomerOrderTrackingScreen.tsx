@@ -22,7 +22,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {CustomerOrdersStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
-import {colors, radius, spacing} from '../../../design/tokens';
+import {colors, radius, spacing, iconSize} from '../../../design/tokens';
 import {iosType, iosWeight} from '../../../design/iosType';
 import {Icon} from '../../../shared/components/Icon';
 import {
@@ -232,7 +232,7 @@ export function CustomerOrderTrackingScreen() {
         {pickedUp ? null : (
           <View pointerEvents="none" style={styles.mapLocked}>
             <View style={styles.lockedNote}>
-              <MaterialDesignIcons name="map-marker-path" size={14} color={colors.textPrimary} />
+              <MaterialDesignIcons name="map-marker-path" size={iconSize.xs} color={colors.textPrimary} />
               <Text style={[iosType.caption1, iosWeight.semibold, styles.primaryText]}>
                 Live map opens once your order is picked up
               </Text>
@@ -250,7 +250,7 @@ export function CustomerOrderTrackingScreen() {
           {top: insets.top + spacing.xs},
           pressed && styles.pressed,
         ]}>
-        <Icon name="arrow-left" size={22} color={colors.textPrimary} surface={false} />
+        <Icon name="arrow-left" size={iconSize.md} color={colors.textPrimary} surface={false} />
       </Pressable>
       {tracking.isFetching ? (
         <View style={[styles.floatingButton, styles.floatingRight, {top: insets.top + spacing.xs}]}>
@@ -312,7 +312,7 @@ export function CustomerOrderTrackingScreen() {
             accessibilityRole="button"
             onPress={openProviderTracking}
             style={({pressed}) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <Icon name="location" size={18} color={colors.textPrimary} surface={false} />
+            <Icon name="location" size={iconSize.sm} color={colors.textPrimary} surface={false} />
             <Text style={[iosType.headline, styles.primaryText]}>Open partner tracking</Text>
           </Pressable>
         ) : null}

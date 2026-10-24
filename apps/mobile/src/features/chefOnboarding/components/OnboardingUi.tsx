@@ -1,7 +1,7 @@
 import React, {type ReactNode} from 'react';
 import {Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, touchTarget, typography, iconSize} from '../../../design/tokens';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 
 /** Small presentational pieces shared by every chef application screen (website: chef-onboarding-ui). */
@@ -23,7 +23,7 @@ export function Card({
     <View style={styles.card}>
       {title ? (
         <View style={[styles.cardHead, !children && styles.flush]}>
-          {icon ? <Icon color={colors.flameRedAccessible} name={icon} size={36} /> : null}
+          {icon ? <Icon color={colors.flameRedAccessible} name={icon} size={iconSize.xl} /> : null}
           <View style={styles.flex}>
             <Text accessibilityRole="header" style={styles.cardTitle}>{title}</Text>
             {subtitle ? <Text style={styles.muted}>{subtitle}</Text> : null}
@@ -47,7 +47,7 @@ export function DoneTick({label}: {label: string}) {
 export function FieldError({children}: {children: ReactNode}) {
   return (
     <View accessibilityRole="alert" style={styles.errorRow}>
-      <Icon color={colors.error} name="alert" size={15} surface={false} />
+      <Icon color={colors.error} name="alert" size={iconSize.xs} surface={false} />
       <Text style={styles.errorText}>{children}</Text>
     </View>
   );
@@ -107,7 +107,7 @@ export function Note({
     <View
       accessibilityRole={tone === 'error' ? 'alert' : undefined}
       style={[styles.note, tone === 'error' ? styles.noteError : tone === 'neutral' ? styles.noteNeutral : null]}>
-      <Icon color={color} name={icon ?? (tone === 'error' ? 'alert' : 'info')} size={18} surface={false} />
+      <Icon color={color} name={icon ?? (tone === 'error' ? 'alert' : 'info')} size={iconSize.sm} surface={false} />
       <View style={styles.flex}>
         {typeof children === 'string' ? <Text style={styles.noteText}>{children}</Text> : children}
       </View>
@@ -134,7 +134,7 @@ export function CheckRow({
       onPress={() => onChange(!checked)}
       style={styles.checkRow}>
       <View style={[styles.checkBox, checked && styles.checkBoxOn]}>
-        {checked ? <Icon color={colors.white} name="check" size={16} surface={false} /> : null}
+        {checked ? <Icon color={colors.white} name="check" size={iconSize.xs} surface={false} /> : null}
       </View>
       <View style={styles.flex}>
         {typeof children === 'string' ? <Text style={styles.body}>{children}</Text> : children}
@@ -161,7 +161,7 @@ export function Choice({
       disabled={disabled}
       onPress={onPress}
       style={[styles.choice, selected && styles.choiceOn, disabled && !selected && styles.disabled]}>
-      {selected ? <Icon color={colors.white} name="check" size={16} surface={false} /> : null}
+      {selected ? <Icon color={colors.white} name="check" size={iconSize.xs} surface={false} /> : null}
       <Text style={[styles.choiceText, selected && {color: colors.white}]}>{label}</Text>
     </Pressable>
   );
@@ -205,7 +205,7 @@ export function LinkButton({
       hitSlop={spacing.xs}
       onPress={onPress}
       style={({pressed}) => [styles.link, center && styles.linkCenter, (pressed || disabled) && styles.disabled]}>
-      {icon ? <Icon color={colors.flameRedAccessible} name={icon} size={16} surface={false} /> : null}
+      {icon ? <Icon color={colors.flameRedAccessible} name={icon} size={iconSize.xs} surface={false} /> : null}
       <Text style={styles.linkText}>{label}</Text>
     </Pressable>
   );

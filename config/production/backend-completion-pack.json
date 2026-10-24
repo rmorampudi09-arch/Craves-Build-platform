@@ -9,8 +9,8 @@
     "serviceConnection": "Craves-Dev-Service-Connection",
     "resourceGroup": "rg-craves-prodlow-centralindia",
     "location": "centralindia",
-    "containerRegistry": "cravesprodlowacr82121",
-    "containerRegistryLoginServer": "cravesprodlowacr82121.azurecr.io"
+    "containerRegistry": "cravesrm09prodlow6bf632",
+    "containerRegistryLoginServer": "cravesrm09prodlow6bf632.azurecr.io"
   },
   "services": [
     {

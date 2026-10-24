@@ -25,7 +25,7 @@ variables:
   dataLocation: India
   notificationApp: ca-craves-notification-service-p
   authApp: ca-craves-auth-service-prodlow
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   notificationImageRepository: craves/notification-service
 
 steps:

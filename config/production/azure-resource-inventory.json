@@ -3,8 +3,8 @@
   "environment": "prodlow",
   "region": "centralindia",
   "resourceGroup": "rg-craves-prodlow-centralindia",
-  "containerRegistry": "cravesprodlowacr82121",
-  "apiManagement": "apim-craves-prodlow-l3ing6",
+  "containerRegistry": "cravesrm09prodlow6bf632",
+  "apiManagement": "apim-craves-prodlow-kmqgfy",
   "serviceBusNamespace": "sb-craves-prodlow-l3ing6",
   "containerApps": {
     "auth": "ca-craves-auth-service-prodlow",

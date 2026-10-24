@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 API_ID="${API_ID:-}"
 DEFAULT_API_ID="${DEFAULT_API_ID:-craves-order-customer-v1}"
 API_PATH="${API_PATH:-api/v1/orders}"

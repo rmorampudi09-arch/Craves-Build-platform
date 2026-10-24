@@ -7,7 +7,7 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('auth_release', Path(__file__).parents[1] / 'release-auth-protection.py')
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
-IMAGE = 'cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:' + 'a' * 64
+IMAGE = 'cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:' + 'a' * 64
 
 
 def fixture():

@@ -171,13 +171,13 @@ steps:
         exit 2
       fi
 
-      grep -Fq 'default: apim-craves-prodlow-l3ing6' "$borzo"
+      grep -Fq 'default: apim-craves-prodlow-kmqgfy' "$borzo"
       grep -Fq 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true' "$borzo"
       grep -Fq "status NOT IN ('DELIVERED','CANCELLED','RETURNED','FAILED')" "$borzo"
       grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=false' "$borzo"
       grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=true' "$borzo"
 
-      grep -Fq 'default: apim-craves-prodlow-l3ing6' "$coordinated"
+      grep -Fq 'default: apim-craves-prodlow-kmqgfy' "$coordinated"
       grep -Fq 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED' "$coordinated"
       grep -Fq 'ENTERPRISE_API_ONBOARDING_REQUIRED' "$coordinated"
       grep -Fq 'INTRACITY_API_PRODUCT_NOT_VERIFIED' "$coordinated"

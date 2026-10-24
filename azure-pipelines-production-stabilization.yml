@@ -24,7 +24,7 @@ variables:
   frontDoorProfileName: afd-craves-prodlow
   frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
   apimHostname: api.craves.in
-  apimExpectedCname: apim-craves-prodlow-l3ing6.azure-api.net
+  apimExpectedCname: apim-craves-prodlow-kmqgfy.azure-api.net
   rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
   certMinRemainingDays: 30
   integrationAppName: ca-craves-integration-service-pr

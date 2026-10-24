@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 INTEGRATION_APP="${INTEGRATION_APP:-ca-craves-integration-service-pr}"
 API_PATH="${API_PATH:-api/v1/payments}"
 API_VERSION="${API_VERSION:-2022-08-01}"

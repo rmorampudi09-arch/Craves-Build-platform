@@ -115,7 +115,7 @@ describe('ChefProfileScreen', () => {
     expect(ui.has('Chef Relangi · KPHB, Hyderabad')).toBe(true);
     expect(ui.has('Approved')).toBe(true);
     expect(ui.has('★ 4.6 · 32 reviews')).toBe(true);
-    expect(ui.has('Craves for Chefs · version 1.36.2')).toBe(true);
+    expect(ui.has('Craves for Chefs · version 1.36.3')).toBe(true);
   });
 
   it('groups the rows as Kitchen, Money and More, each row its title only', async () => {

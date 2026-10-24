@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   FlatList,
   Image,
   Pressable,
@@ -41,7 +42,7 @@ import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
 import {comingSoonTitle} from '../../customerEmptyStates/domain/customerEmptyStateModel';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
-import {CloudFill} from '../components/CloudFill';
+import {CLOUD_FILL_MS, CloudFill} from '../components/CloudFill';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
 import {HomeFoodTypeMenu} from '../components/HomeFoodTypeMenu';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
@@ -117,6 +118,7 @@ const HEADER_COLLAPSE_END = 80;
 /** An add tapped on a card longer ago than this (a slow server, a kitchen-switch question) flies no photo. */
 const FLIGHT_WINDOW_MS = 8000;
 const DISH_SCRIM_HEIGHT = 110;
+const PIN_RELEASE_PX = 24;
 /** White search, food type and filter controls lift off the red band with a soft shadow. */
 const WHITE_CARD_SHADOW = {
   shadowColor: colors.espressoBrown,
@@ -401,6 +403,16 @@ export function CustomerHomeScreen() {
   const [railPinned, setRailPinned] = useState(false);
   // White clouds cover the red header while the row is pinned; then the header switches to its white look.
   const [headerWhite, setHeaderWhite] = useState(false);
+  // 0 = red look, 1 = white look; runs with the clouds so text and icons fade instead of flipping.
+  const headerWhiteness = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(headerWhiteness, {
+      toValue: railPinned ? 1 : 0,
+      duration: railPinned ? CLOUD_FILL_MS : CLOUD_FILL_MS / 1.6,
+      easing: Easing.bezier(0.45, 0, 0.25, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [headerWhiteness, railPinned]);
   const [headerSize, setHeaderSize] = useState({width: 0, height: 0});
   const [listViewportHeight, setListViewportHeight] = useState(0);
   const [railOffset, setRailOffset] = useState(0);
@@ -414,8 +426,11 @@ export function CustomerHomeScreen() {
           scrollOffsetRef.current = offset;
           const next = offset > (HEADER_COLLAPSE_START + HEADER_COLLAPSE_END) / 2;
           setHeaderCollapsed(current => (current === next ? current : next));
-          const pinned = railOffsetRef.current > 0 && offset >= railOffsetRef.current - 0.5;
-          setRailPinned(current => (current === pinned ? current : pinned));
+          // Unpins a little later than it pins, so resting right at the edge can't flicker the colours.
+          setRailPinned(current => {
+            const rail = railOffsetRef.current;
+            return rail > 0 && offset >= rail - (current ? PIN_RELEASE_PX : 0.5);
+          });
         },
       }),
     [bottomNavScroll, scrollY],
@@ -985,6 +1000,27 @@ export function CustomerHomeScreen() {
     );
   }
 
+  const renderHeader = (tone: 'red' | 'light') => (
+    <CustomerHeader
+      tone={tone}
+      transparent
+      onPressLocation={() => setLocationSelectorVisible(true)}
+      onPressNotifications={header.openNotifications}
+      onPressMealPlans={openMealPlans}
+      collapse={selectedLocation ? headerCollapse : undefined}
+      collapsed={headerCollapsed}
+      collapsedAccessory={
+        <HomeFoodTypeMenu
+          compact
+          appearance={tone === 'light' ? 'default' : 'onRed'}
+          diets={appliedFilters.diets}
+          onChange={setDiets}
+          testID={tone === 'light' ? 'home-food-type-header' : 'home-food-type-header-red'}
+        />
+      }
+    />
+  );
+
   return (
     <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
       {/* The header pads itself under the status bar, so the clouds can cover the status bar too. */}
@@ -1007,24 +1043,21 @@ export function CustomerHomeScreen() {
           testID="home-header-cloud"
           width={headerSize.width}
         />
-        <CustomerHeader
-          tone={headerWhite ? 'light' : 'red'}
-          transparent
-          onPressLocation={() => setLocationSelectorVisible(true)}
-          onPressNotifications={header.openNotifications}
-          onPressMealPlans={openMealPlans}
-          collapse={selectedLocation ? headerCollapse : undefined}
-          collapsed={headerCollapsed}
-          collapsedAccessory={
-            <HomeFoodTypeMenu
-              compact
-              appearance={headerWhite ? 'default' : 'onRed'}
-              diets={appliedFilters.diets}
-              onChange={setDiets}
-              testID="home-food-type-header"
-            />
-          }
-        />
+        {/* Both looks stay mounted and crossfade with the clouds, so no colour jumps in one frame. */}
+        <Animated.View
+          pointerEvents={headerWhite ? 'none' : 'box-none'}
+          accessibilityElementsHidden={headerWhite}
+          importantForAccessibility={headerWhite ? 'no-hide-descendants' : 'auto'}
+          style={{opacity: headerWhiteness.interpolate({inputRange: [0, 1], outputRange: [1, 0]})}}>
+          {renderHeader('red')}
+        </Animated.View>
+        <Animated.View
+          pointerEvents={headerWhite ? 'box-none' : 'none'}
+          accessibilityElementsHidden={!headerWhite}
+          importantForAccessibility={headerWhite ? 'auto' : 'no-hide-descendants'}
+          style={[styles.whiteHeader, {top: insets.top, opacity: headerWhiteness}]}>
+          {renderHeader('light')}
+        </Animated.View>
       </View>
       <View style={styles.feedContainer}>
         <Animated.FlatList
@@ -1202,6 +1235,11 @@ const styles = StyleSheet.create({
     backgroundColor: homeTop.background,
     // Lets the food type circle rise over the list edge into the header.
     zIndex: 2,
+  },
+  whiteHeader: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
   feedContainer: {
     flex: 1,

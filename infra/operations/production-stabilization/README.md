@@ -6,25 +6,21 @@ It is intentionally read-only. It does not change DNS, certificates, custom-doma
 
 ## Scope
 
+It checks the rebuilt production environment: Azure subscription 1 (`721906c9-…`), Container Apps environment `cae-craves-prodlow-kmqgfy`, Front Door `afd-craves-prodlow`. All public hostnames (`craves.in`, `www.craves.in`, `api.craves.in`, `admin.craves.in`) are Front Door custom domains, and Front Door terminates TLS for them; no custom domain is bound on a Container App.
+
 The checks cover:
 
 - Azure subscription safety check.
 - Customer Container App running state.
 - Latest revision equals latest ready revision.
-- Container Apps environment static IP remains `4.187.245.188`.
-- `craves.in` and `www.craves.in` remain `SniEnabled`.
-- Both customer domains remain bound to `craves-web-tls`.
-- Container Apps certificate provisioning is `Succeeded` and valid.
-- Key Vault certificate SANs include `craves.in` and `www.craves.in`.
-- Certificate has more than 30 days remaining.
+- Container App FQDN and Container Apps environment static IP (`20.235.225.35`) are unchanged.
+- The certificate each public hostname serves covers that hostname and has more than 30 days remaining.
 - The Azure Front Door endpoint is enabled and successfully provisioned.
-- Both Front Door custom domains are provisioned and validation-approved.
+- All four Front Door custom domains are provisioned and validation-approved.
 - The currently delegated authoritative DNS and Google/Cloudflare recursive DNS all resolve the apex, and `www` points to the Front Door endpoint.
-- `asuid` ownership TXT records remain correct.
-- Both ACME validation child zones retain four delegated nameservers.
 - Both public customer URLs return HTTP 200 with valid TLS and an Azure Front Door response marker.
-- `api.craves.in` points to the expected APIM gateway and APIM TLS remains valid.
-- The legacy Azure Static Web App remains reachable as a temporary rollback target.
+- `api.craves.in` points to the Front Door endpoint, its TLS is valid and its root answers 200 or 404.
+- Integration-service: latest revision is ready and the JWT issuer and audience have not drifted (second pipeline step).
 
 ## Files
 
@@ -43,13 +39,7 @@ Create an Azure DevOps YAML pipeline from:
 /azure-pipelines-production-stabilization.yml
 ```
 
-Add this pipeline variable:
-
-```text
-AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
-```
-
-This is not a secret.
+The YAML sets `AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection`, the connection every pipeline for the rebuilt environment uses. The Azure DevOps project that runs this pipeline must have a service connection with that name and read access to subscription `721906c9-…`.
 
 The YAML runs every six hours from `main` and can also be queued manually. The schedule consumes Azure DevOps hosted-agent minutes but does not provision an Azure resource.
 
@@ -61,7 +51,6 @@ A healthy run ends with:
 FINAL RESULT: PASS
 FAILURES: 0
 PRODUCTION_STABILIZATION_STATUS=PASS
-LEGACY_ROLLBACK_TARGET_AVAILABLE=true
 ```
 
 ## Failure handling
@@ -70,20 +59,12 @@ Do not immediately roll back on a single failed assertion. Use the failed sectio
 
 - Runtime/revision failure: investigate the Container App revision before changing DNS.
 - DNS mismatch: compare the currently delegated authoritative DNS with public resolvers and the configured Front Door endpoint. A recursive-only mismatch can be cache propagation.
-- TLS or certificate failure: keep custom-domain bindings intact while checking `craves-web-tls` and the renewal pipeline.
+- TLS or certificate failure: check the hostname's certificate on the Front Door custom domain before changing DNS.
 - APIM failure: do not change customer website DNS; API routing is a separate component.
-- Legacy rollback target failure: this only reduces rollback options; it does not imply the current Container App is unhealthy.
 
-## 48-hour stabilization gate
+## History
 
-Keep the legacy Static Web App available until all of the following are true:
-
-1. Customer and chef smoke tests remain successful.
-2. At least eight consecutive six-hour stabilization runs pass, covering approximately 48 hours.
-3. No unresolved HTTP/TLS/DNS/custom-domain regression is observed.
-4. The certificate automation pipeline is healthy.
-
-After the gate passes, the legacy Static Web App can be reviewed for retirement as a separate change. Do not delete it as part of this verification module.
+Until 24 Oct 2026 this module checked the first environment (subscription `4f897b61-…`, `cae-craves-prodlow-l3ing6`), with `craves-web-tls` bound on the customer Container App and the legacy Static Web App as a rollback target. Production moved to the rebuilt environment, so those checks failed on `az account set` and were retired with it.
 
 ## Cost note
 

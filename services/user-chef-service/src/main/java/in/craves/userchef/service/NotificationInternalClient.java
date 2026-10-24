@@ -115,14 +115,44 @@ public class NotificationInternalClient {
         };
     }
 
+    /**
+     * "A home kitchen now delivers near you" for a customer who tapped Notify me. Sent directly rather than through the
+     * chef outbox; the launch-alert job retries the customer itself until this returns true, and notification-service
+     * drops a repeated requestKey.
+     */
+    public boolean kitchenLaunched(UUID customerId, String requestKey, String channel, String title, String body, UUID kitchenId) {
+        return post(
+            new CreateNotificationRequest(
+                requestKey,
+                "user-chef-service",
+                "KITCHEN_LAUNCHED_NEARBY",
+                customerId,
+                "CUSTOMER",
+                channel,
+                "KITCHEN_LAUNCHED_NEARBY_" + channel,
+                null,
+                title,
+                body,
+                "KITCHEN",
+                kitchenId,
+                Map.of("kitchenId", kitchenId.toString()),
+                3
+            )
+        );
+    }
+
     private void sendSafely(CreateNotificationRequest request) {
         if (!properties.isNotificationDirectDispatchEnabled()) {
             log.info("Direct notification dispatch disabled. Outbox will handle requestKey={}", request.requestKey());
             return;
         }
+        post(request);
+    }
+
+    private boolean post(CreateNotificationRequest request) {
         if (!StringUtils.hasText(properties.getNotificationServiceBaseUrl())) {
             log.warn("Notification Service URL is not configured. Skipping notification {}", request.requestKey());
-            return;
+            return false;
         }
         String key = properties.getNotificationServiceKey();
         if (!StringUtils.hasText(key)) {
@@ -130,7 +160,7 @@ public class NotificationInternalClient {
         }
         if (!StringUtils.hasText(key)) {
             log.warn("Notification internal key is not configured. Skipping notification {}", request.requestKey());
-            return;
+            return false;
         }
 
         RestClient client = restClientBuilder
@@ -154,8 +184,10 @@ public class NotificationInternalClient {
                 request.targetType(),
                 request.targetId()
             );
+            return true;
         } catch (RestClientException ex) {
             log.warn("Notification dispatch failed for requestKey={}: {}", request.requestKey(), ex.getMessage());
+            return false;
         }
     }
 

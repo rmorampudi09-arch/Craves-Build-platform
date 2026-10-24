@@ -59,7 +59,7 @@ import {useHomeBannersQuery} from '../query/homeBannerQueries';
 import type {HomeBanner} from '../api/homeBannerApi';
 
 const HOME_RADIUS_METERS = 10_000;
-const TOP_KITCHENS_PAGE_SIZE = 12;
+export const TOP_KITCHENS_PAGE_SIZE = 12;
 const TOP_KITCHEN_DISH_PAGE_SIZE = 100;
 const MAX_TOP_KITCHENS = 8;
 export const PROMO_AUTO_ADVANCE_MS = 4_000;

@@ -7,6 +7,7 @@ export type EmptyIllustrationName =
   | 'cart'
   | 'orders'
   | 'comingSoonArea'
+  | 'deliveryBike'
   | 'location'
   | 'search'
   | 'kitchenNoDishes'
@@ -137,6 +138,50 @@ const DRAWINGS: Record<EmptyIllustrationName, () => React.ReactElement> = {
         <Circle cx={134} cy={84} r={7.5} fill={WHITE} />
       </Pin>
       <Ellipse cx={134} cy={121} rx={13} ry={3.5} fill="none" stroke={RED} strokeWidth={2} opacity={0.45} />
+    </>
+  ),
+  // A rider on a red scooter heading for a map pin (bike 3 on the Home coming-soon canvas).
+  deliveryBike: () => (
+    <>
+      <Backdrop ground={{cx: 122, rx: 86}} sparkles={[{x: 40, y: 40, kind: 'big'}, {x: 212, y: 140, kind: 'small'}, {x: 150, y: 24, kind: 'ring'}]} />
+      <Path d="M10 112 H26 M4 126 H24 M12 140 H26" stroke={LINE_STRONG} strokeWidth={2.5} strokeLinecap="round" />
+      <Circle cx={38} cy={164} r={4} fill={GROUND} />
+      <Circle cx={28} cy={158} r={3} fill={GROUND} />
+      <G {...line}>
+        <Path d="M172 116 L178 152" />
+        <Circle cx={72} cy={152} r={17} fill={INK} />
+        <Circle cx={72} cy={152} r={9} fill={WHITE} stroke="none" />
+        <Circle cx={72} cy={152} r={3} fill={INK} stroke="none" />
+        <Circle cx={178} cy={152} r={17} fill={INK} />
+        <Circle cx={178} cy={152} r={9} fill={WHITE} stroke="none" />
+        <Circle cx={178} cy={152} r={3} fill={INK} stroke="none" />
+        <Path d="M44 132 C44 120 52 112 66 112 L122 112 C128 112 130 118 128 124 L124 138 L150 138 L160 98 C162 90 172 88 176 94 C180 100 178 112 174 122 C170 132 166 142 158 148 L95 148 A23 23 0 0 0 49 148 L44 142 Z" fill={RED} />
+        <Path d="M160 148 C160 136 170 128 182 130 C190 131 196 138 197 146 L191 146 C189 140 185 137 180 137 C172 137 167 142 166 148 Z" fill={RED} />
+        <Path d="M84 112 C84 105 88 102 94 102 H120 C126 102 129 106 127 112 Z" fill={INK} />
+        <Path d="M36 110 H88 M46 110 L54 124" />
+        <Rect x={38} y={60} width={48} height={50} rx={7} fill={WHITE} />
+        <Path d="M38 76 V67 C38 63 41 60 45 60 H79 C83 60 86 63 86 67 V76 Z" fill={RED} />
+        <Path d="M96 92 L128 96 C135 97 138 101 137 108 L136 134 H127 L126 110 L98 108 C92 107 90 96 96 92 Z" fill={INK} />
+        <Path d="M124 132 H140 C145 132 147 138 143 138 H124 Z" fill={WHITE} />
+        <Path d="M94 68 C100 62 114 62 120 68 L126 92 C127 98 122 102 116 102 H98 C92 102 89 98 90 92 Z" fill={WHITE} />
+        <Path d="M104 64 L110 100" stroke={RED} strokeWidth={3} />
+        <Path d="M112 72 L148 64 C152 63 154 70 150 72 L118 84 C112 86 108 76 112 72 Z" fill={WHITE} />
+        <Path d="M147 71 L157 70" strokeWidth={4.5} />
+        <Circle cx={151} cy={68} r={4.5} fill={CREAM_DEEP} />
+        <Path d="M168 90 L167 76 M165 64 L161 53" />
+        <Rect x={156} y={64} width={28} height={12} rx={6} fill={WHITE} />
+        <Circle cx={183} cy={70} r={3.5} fill={CREAM_DEEP} />
+        <Ellipse cx={160} cy={50} rx={4.5} ry={3.5} fill={WHITE} />
+        <Path d="M94 48 C94 36 102 30 112 30 C123 30 130 38 130 48 C130 56 126 60 120 60 H100 C96 60 94 56 94 48 Z" fill={RED} />
+        <Path d="M116 42 H130 C131 48 129 54 124 54 H116 C113 54 113 42 116 42 Z" fill={INK} />
+        <Path d="M119 46 H126" stroke={WHITE} strokeWidth={2} />
+      </G>
+      <Path d={HEART} fill={RED} transform="translate(62 93) scale(1.25)" />
+      <Path d="M192 66 L202 62 M193 73 L204 73" stroke={RED} strokeWidth={2.5} strokeLinecap="round" />
+      <Path d="M206 108 C214 96 222 86 220 72" fill="none" stroke={RED} strokeWidth={2.5} strokeLinecap="round" strokeDasharray="0.5 7" />
+      <Pin x={218} tipY={62} r={11}>
+        <Circle cx={218} cy={44.4} r={4.2} fill={WHITE} stroke={INK} strokeWidth={2} />
+      </Pin>
     </>
   ),
   location: () => (

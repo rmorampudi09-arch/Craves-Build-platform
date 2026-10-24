@@ -95,6 +95,10 @@ import {
   formatDishPrice,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
+import {useLaunchAlert} from '../api/launchAlertApi';
+import {HomeComingSoonPage} from '../components/HomeComingSoonPage';
+import {TOP_KITCHENS_PAGE_SIZE} from '../components/HomePromoAndKitchens';
+import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
 import {useQueryClient} from '@tanstack/react-query';
 import {homeBannerQueryKey} from '../query/homeBannerQueries';
 import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
@@ -425,7 +429,6 @@ export function CustomerHomeScreen() {
   const statusEntryRef = useRef<ReturnType<typeof StatusBar.pushStackEntry> | null>(null);
   const homeFocusedRef = useRef(false);
   const headerWhiteRef = useRef(headerWhite);
-  headerWhiteRef.current = headerWhite;
   const applyStatusBar = useCallback((white: boolean) => {
     if (statusEntryRef.current) StatusBar.popStackEntry(statusEntryRef.current);
     statusEntryRef.current = StatusBar.pushStackEntry({barStyle: white ? 'dark-content' : 'light-content'});
@@ -441,9 +444,6 @@ export function CustomerHomeScreen() {
       };
     }, [applyStatusBar]),
   );
-  useEffect(() => {
-    if (homeFocusedRef.current) applyStatusBar(headerWhite);
-  }, [applyStatusBar, headerWhite]);
 
   const searchScopeKey =
     identity?.id && selectedLocation
@@ -540,9 +540,27 @@ export function CustomerHomeScreen() {
   const hasFilters = Boolean(
     searchActive || selectedCategory || activeDiscoveryFilterCount > 0,
   );
+  // Same query as "Kitchens near you", so the cache is shared. No kitchen at all here = the coming-soon page.
+  const kitchenDiscovery = useNearbyChefDiscoveryQuery({
+    radiusMeters: HOME_RADIUS_METERS,
+    size: TOP_KITCHENS_PAGE_SIZE,
+  });
+  const noKitchensHere =
+    Boolean(selectedLocation) &&
+    kitchenDiscovery.isSuccess &&
+    (kitchenDiscovery.data.pages[0]?.kitchens.length ?? 0) === 0;
+  const launchAlert = useLaunchAlert(selectedLocation, noKitchensHere);
+
+  // The coming-soon page is white, so it takes the dark status bar icons like the white header.
+  const darkStatusBar = headerWhite || noKitchensHere;
+  headerWhiteRef.current = darkStatusBar;
+  useEffect(() => {
+    if (homeFocusedRef.current) applyStatusBar(darkStatusBar);
+  }, [applyStatusBar, darkStatusBar]);
 
   const retryFeed = () => {
     feed.refetch();
+    kitchenDiscovery.refetch();
     void queryClient.invalidateQueries({queryKey: homeBannerQueryKey});
   };
 
@@ -817,6 +835,10 @@ export function CustomerHomeScreen() {
         />
       );
     }
+    if (kitchenDiscovery.isPending) {
+      // Wait for the kitchen count so the coming-soon page doesn't follow a flash of this state.
+      return <HomeFeedSkeleton />;
+    }
     return (
       <TerminalState
         illustration="comingSoonArea"
@@ -914,6 +936,42 @@ export function CustomerHomeScreen() {
       ) : null}
     </View>
   );
+
+  const locationModals = (
+    <>
+      <CustomerLocationSelector
+        visible={locationSelectorVisible}
+        onClose={() => setLocationSelectorVisible(false)}
+      />
+      {addressEditor ? (
+        <DeliveryAddressEditor
+          onClose={() => setAddressEditor(null)}
+          target={addressEditor}
+        />
+      ) : null}
+    </>
+  );
+
+  if (noKitchensHere && selectedLocation) {
+    return (
+      <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
+        <HomeComingSoonPage
+          bottomPadding={listBottomPadding}
+          locationLabel={selectedLocation.label}
+          locationName={selectedLocation.displayName}
+          notifyError={launchAlert.error ? toAppApiError(launchAlert.error).message : null}
+          notifyPending={launchAlert.saving}
+          onChangeAddress={() => setLocationSelectorVisible(true)}
+          onNotify={launchAlert.subscribe}
+          onRefresh={retryFeed}
+          refreshing={kitchenDiscovery.isRefetching}
+          subscribed={launchAlert.subscribed}
+          topInset={insets.top}
+        />
+        {locationModals}
+      </ScreenShell>
+    );
+  }
 
   return (
     <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
@@ -1088,16 +1146,7 @@ export function CustomerHomeScreen() {
           ]}
         />
       </View>
-      <CustomerLocationSelector
-        visible={locationSelectorVisible}
-        onClose={() => setLocationSelectorVisible(false)}
-      />
-      {addressEditor ? (
-        <DeliveryAddressEditor
-          onClose={() => setAddressEditor(null)}
-          target={addressEditor}
-        />
-      ) : null}
+      {locationModals}
     </ScreenShell>
   );
 }

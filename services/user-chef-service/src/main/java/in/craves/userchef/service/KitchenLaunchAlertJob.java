@@ -11,9 +11,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Tells customers who tapped Notify me that a home kitchen now delivers to their spot, once, in the app inbox and
- * as a push. Safe on several replicas at once: notification-service keeps one notification per requestKey, and a
- * customer is marked told only after both requests were accepted, so a failure is simply tried again next run.
+ * Tells customers who tapped Notify me that a home kitchen now delivers to their spot, once, in the app's
+ * notification list. Safe on several replicas at once: notification-service keeps one notification per requestKey,
+ * and a customer is marked told only after it was accepted, so a failure is simply tried again next run.
  */
 @Component
 public class KitchenLaunchAlertJob {
@@ -75,9 +75,7 @@ public class KitchenLaunchAlertJob {
             + spot.longitudeKey().toPlainString() + "-" + customer.createdAt().getEpochSecond();
         String title = "Home chefs now cook near " + area(customer.areaName());
         String body = kitchen.name() + " now delivers to your address. Tap to see the menu.";
-        boolean inApp = notifications.kitchenLaunched(customer.identityId(), requestKey + "-in-app", "IN_APP", title, body, kitchen.id());
-        boolean push = notifications.kitchenLaunched(customer.identityId(), requestKey + "-push", "PUSH", title, body, kitchen.id());
-        return inApp && push;
+        return notifications.kitchenLaunched(customer.identityId(), requestKey, title, body, kitchen.id());
     }
 
     /** Same rule as the app's comingSoonTitle: a short area name, never a full address line. */

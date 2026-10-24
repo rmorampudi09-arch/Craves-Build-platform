@@ -116,11 +116,11 @@ public class NotificationInternalClient {
     }
 
     /**
-     * "A home kitchen now delivers near you" for a customer who tapped Notify me. Sent directly rather than through the
-     * chef outbox; the launch-alert job retries the customer itself until this returns true, and notification-service
-     * drops a repeated requestKey.
+     * "A home kitchen now delivers near you" in the app's notification list, for a customer who tapped Notify me.
+     * Sent directly rather than through the chef outbox; the launch-alert job retries the customer itself until this
+     * returns true, and notification-service drops a repeated requestKey.
      */
-    public boolean kitchenLaunched(UUID customerId, String requestKey, String channel, String title, String body, UUID kitchenId) {
+    public boolean kitchenLaunched(UUID customerId, String requestKey, String title, String body, UUID kitchenId) {
         return post(
             new CreateNotificationRequest(
                 requestKey,
@@ -128,8 +128,8 @@ public class NotificationInternalClient {
                 "KITCHEN_LAUNCHED_NEARBY",
                 customerId,
                 "CUSTOMER",
-                channel,
-                "KITCHEN_LAUNCHED_NEARBY_" + channel,
+                "IN_APP",
+                "KITCHEN_LAUNCHED_NEARBY_IN_APP",
                 null,
                 title,
                 body,

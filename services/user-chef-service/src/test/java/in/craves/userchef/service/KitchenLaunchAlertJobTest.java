@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -68,27 +67,27 @@ class KitchenLaunchAlertJobTest {
     }
 
     @Test
-    void tellsEachWaitingCustomerInTheInboxAndByPushThenMarksThemTold() {
+    void tellsEachWaitingCustomerInTheAppThenMarksThemTold() {
         when(discovery.firstKitchen(SPOT.latitudeKey(), SPOT.longitudeKey()))
             .thenReturn(Optional.of(new NearbyKitchen(KITCHEN_ID, "Radha's Kitchen")));
-        when(notifications.kitchenLaunched(any(), anyString(), anyString(), anyString(), anyString(), any())).thenReturn(true);
+        when(notifications.kitchenLaunched(any(), anyString(), anyString(), anyString(), any())).thenReturn(true);
 
         job.run();
 
-        String key = "kitchen-launch-" + customerId + "-17.465-78.357-" + ASKED_AT.getEpochSecond();
-        String title = "Home chefs now cook near Kondapur";
-        String body = "Radha's Kitchen now delivers to your address. Tap to see the menu.";
-        verify(notifications).kitchenLaunched(customerId, key + "-in-app", "IN_APP", title, body, KITCHEN_ID);
-        verify(notifications).kitchenLaunched(customerId, key + "-push", "PUSH", title, body, KITCHEN_ID);
+        verify(notifications).kitchenLaunched(
+            customerId,
+            "kitchen-launch-" + customerId + "-17.465-78.357-" + ASKED_AT.getEpochSecond(),
+            "Home chefs now cook near Kondapur",
+            "Radha's Kitchen now delivers to your address. Tap to see the menu.",
+            KITCHEN_ID);
         verify(alerts).markNotified(customerId, SPOT, ASKED_AT);
     }
 
     @Test
-    void triesAgainNextRunWhenAnyRequestFails() {
+    void triesAgainNextRunWhenTheNotificationIsNotAccepted() {
         when(discovery.firstKitchen(SPOT.latitudeKey(), SPOT.longitudeKey()))
             .thenReturn(Optional.of(new NearbyKitchen(KITCHEN_ID, "Radha's Kitchen")));
-        when(notifications.kitchenLaunched(any(), anyString(), eq("IN_APP"), anyString(), anyString(), any())).thenReturn(true);
-        when(notifications.kitchenLaunched(any(), anyString(), eq("PUSH"), anyString(), anyString(), any())).thenReturn(false);
+        when(notifications.kitchenLaunched(any(), anyString(), anyString(), anyString(), any())).thenReturn(false);
 
         job.run();
 

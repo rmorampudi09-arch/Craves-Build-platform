@@ -545,13 +545,11 @@ const styles = StyleSheet.create({
   promoCarousel: {
     width: '100%',
   },
+  // No border or fill: the banner art carries the Home top's colours, so any edge shows as a thin line.
   bannerSlide: {
     aspectRatio: 2,
     overflow: 'hidden',
     borderRadius: radius.lg,
-    backgroundColor: '#FFF7F2',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   bannerImage: {
     width: '100%',

@@ -147,7 +147,8 @@ export function CustomerHeader({
         hitSlop={spacing.xs}
         onPress={onPressLocation}
         style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
-        <View style={[styles.locationIcon, {backgroundColor: palette.tile}]}>
+        {/* collapsable={false}: Android flattens the tile while it is transparent (white header) and drops its round corners when the red top brings it back. */}
+        <View collapsable={false} style={[styles.locationIcon, {backgroundColor: palette.tile}]}>
           <Icon name="location" size={iconSize.md} color={palette.icon} surface={false} />
         </View>
         {compact ? (

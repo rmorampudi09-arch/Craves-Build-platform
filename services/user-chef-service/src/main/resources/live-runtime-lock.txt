@@ -16,6 +16,7 @@ in.craves.userchef.web.ChefReviewController
 in.craves.userchef.web.CustomerAddressGeocodingController
 in.craves.userchef.web.CustomerFavoriteController
 in.craves.userchef.web.CustomerHomeFavoriteController
+in.craves.userchef.web.CustomerLaunchAlertController
 in.craves.userchef.web.CustomerProfileController
 in.craves.userchef.web.InternalBankApplicantController
 in.craves.userchef.web.InternalChefKitchenPhotoController

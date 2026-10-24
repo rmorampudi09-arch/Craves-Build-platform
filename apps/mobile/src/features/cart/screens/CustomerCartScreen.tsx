@@ -1218,7 +1218,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   titleCopy: {flex: 1, minWidth: 0},
   title: {color: colors.espressoBrown, fontSize: 21, fontWeight: fontWeight.extrabold},

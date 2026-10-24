@@ -470,7 +470,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   rowCopy: {minWidth: 0, flex: 1, gap: 2},
   rowLabelLine: {

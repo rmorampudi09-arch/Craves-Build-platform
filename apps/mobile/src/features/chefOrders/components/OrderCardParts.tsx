@@ -145,7 +145,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.infoSoft,
   },
   partnerText: {flex: 1, minWidth: 0},
   partnerName: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},

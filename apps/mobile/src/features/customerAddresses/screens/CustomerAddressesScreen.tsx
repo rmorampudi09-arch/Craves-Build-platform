@@ -611,7 +611,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   addressHeadingCopy: {flex: 1, minWidth: 0},
   labelRow: {

@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
   cookingDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success},
   homeStateText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.bold},
   homeStateTextOn: {color: colors.successText},
-  circleButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.iconSurface},
+  circleButton: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill},
   loadMoreButton: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radius.md, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},
   loadMoreText: {color: colors.flameRedAccessible, fontSize: typography.small, fontWeight: fontWeight.bold},
   footnote: {marginTop: spacing.xxs, marginHorizontal: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},

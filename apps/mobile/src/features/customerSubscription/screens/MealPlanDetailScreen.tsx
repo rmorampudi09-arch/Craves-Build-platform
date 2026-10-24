@@ -328,7 +328,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.iconSurface,
   },
   addressValue: {
     color: colors.textPrimary,

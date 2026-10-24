@@ -6,6 +6,7 @@ import {resolveRouteChromePolicy} from '../../../app/navigation/navigationPolicy
 import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
 import {safeArea, spacing, touchTarget} from '../../../design/tokens';
+import {IconTileContext} from '../../../shared/components/Icon';
 import {SharedViewCartOverlay} from '../../cart/components/SharedViewCartOverlay';
 import {
   selectCartFoodSubtotal,
@@ -39,20 +40,23 @@ export function CustomerHomeRouteScreen() {
     navigation.navigate('CustomerCart');
   }, [navigation]);
 
+  // Home is the one screen that keeps the soft-red circles behind icons.
   return (
-    <View style={styles.root}>
-      <View
-        style={[
-          styles.home,
-          viewCartVisible && styles.homeWithViewCart,
-        ]}>
-        <CustomerHomeScreen />
+    <IconTileContext.Provider value>
+      <View style={styles.root}>
+        <View
+          style={[
+            styles.home,
+            viewCartVisible && styles.homeWithViewCart,
+          ]}>
+          <CustomerHomeScreen />
+        </View>
+        <SharedViewCartOverlay
+          routePolicy={CUSTOMER_HOME_ROUTE_POLICY}
+          onOpenCart={handleOpenCart}
+        />
       </View>
-      <SharedViewCartOverlay
-        routePolicy={CUSTOMER_HOME_ROUTE_POLICY}
-        onOpenCart={handleOpenCart}
-      />
-    </View>
+    </IconTileContext.Provider>
   );
 }
 

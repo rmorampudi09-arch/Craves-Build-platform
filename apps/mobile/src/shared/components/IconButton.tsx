@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useContext} from 'react';
 import {Pressable, StyleProp, StyleSheet, ViewStyle} from 'react-native';
 import {
   borderWidth,
@@ -8,7 +8,7 @@ import {
   touchTarget,
 } from '../../design/tokens';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
-import {Icon, IconName} from './Icon';
+import {Icon, IconName, IconTileContext} from './Icon';
 import {LoadingIndicator} from './LoadingIndicator';
 
 export interface IconButtonProps {
@@ -33,6 +33,7 @@ export function IconButton({
   testID,
 }: IconButtonProps) {
   const reduceMotion = useReducedMotionPreference();
+  const tile = useContext(IconTileContext);
   const blocked = disabled || loading;
   const foreground = variant === 'primary' ? colors.white : colors.flameRed;
 
@@ -46,6 +47,7 @@ export function IconButton({
       testID={testID}
       style={({pressed}) => [
         styles.base,
+        tile && styles.tile,
         variant === 'surface' && styles.surface,
         variant === 'primary' && styles.primary,
         blocked && styles.disabled,
@@ -73,8 +75,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
+  tile: {backgroundColor: colors.iconSurface},
   surface: {
     backgroundColor: colors.iconSurface,
     borderWidth: borderWidth.standard,

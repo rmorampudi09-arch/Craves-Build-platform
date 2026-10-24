@@ -387,7 +387,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   steps: {
     flexDirection: 'row',
@@ -481,6 +480,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
 });

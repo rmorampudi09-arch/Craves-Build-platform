@@ -350,7 +350,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   rowCopy: {flex: 1, minWidth: 0, gap: 2},
   currentTitle: {
@@ -426,7 +425,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   emptyTitle: {
     color: colors.textPrimary,

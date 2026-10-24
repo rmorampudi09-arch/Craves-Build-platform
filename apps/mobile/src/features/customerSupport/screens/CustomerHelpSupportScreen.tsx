@@ -55,7 +55,7 @@ function ContactTile({glyph, label, hint, filled = false, onPress, testID}: Cont
       onPress={onPress}
       testID={testID}
       style={({pressed}) => [styles.tile, filled ? styles.tileFilled : styles.tileOutlined, pressed && styles.pressed]}>
-      <View style={[styles.tileIcon, filled && styles.tileIconFilled]}>
+      <View style={styles.tileIcon}>
         <MaterialDesignIcons name={glyph} size={iconSize.md} color={filled ? colors.white : colors.flameRed} />
       </View>
       <Text style={[styles.tileLabel, filled && styles.tileLabelFilled]}>{label}</Text>
@@ -210,7 +210,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   title: {
     flex: 1,
@@ -250,9 +249,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
-  tileIconFilled: {backgroundColor: 'rgba(255,255,255,0.18)'},
   tileLabel: {
     color: colors.espressoBrown,
     fontSize: typography.body,

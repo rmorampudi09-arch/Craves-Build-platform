@@ -30,12 +30,12 @@ const FILTERS: {id: Filter; label: string}[] = [
   {id: 'reviews', label: 'Reviews'},
 ];
 
-const CATEGORY_ICON: Record<Category, {icon: IconName; background: string; foreground: string}> = {
-  orders: {icon: 'orders', background: colors.errorSoft, foreground: colors.flameRedAccessible},
-  money: {icon: 'wallet', background: colors.successSoft, foreground: colors.successText},
-  reviews: {icon: 'star', background: colors.warningSoft, foreground: colors.warningText},
-  plans: {icon: 'calendar-check', background: colors.infoSoft, foreground: colors.infoText},
-  other: {icon: 'bell', background: colors.iconSurface, foreground: colors.textPrimary},
+const CATEGORY_ICON: Record<Category, {icon: IconName; foreground: string}> = {
+  orders: {icon: 'orders', foreground: colors.flameRedAccessible},
+  money: {icon: 'wallet', foreground: colors.successText},
+  reviews: {icon: 'star', foreground: colors.warningText},
+  plans: {icon: 'calendar-check', foreground: colors.infoText},
+  other: {icon: 'bell', foreground: colors.textPrimary},
 };
 
 function categoryOf(notice: ChefOperationalNotice): Category {
@@ -201,7 +201,7 @@ export function ChefNotificationsScreen() {
                     unreadRow && styles.rowUnread,
                     pressed && styles.pressed,
                   ]}>
-                  <View style={[styles.tile, {backgroundColor: tone.background}]}>
+                  <View style={styles.tile}>
                     <Icon color={tone.foreground} name={tone.icon} size={iconSize.md} surface={false} />
                   </View>
                   <View style={styles.rowText}>

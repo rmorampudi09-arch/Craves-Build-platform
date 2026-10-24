@@ -465,9 +465,9 @@ export function CustomerKitchenProfileScreen() {
   ]
     .filter(Boolean)
     .join(' · ');
-  // Over the photo the buttons are glass with white icons; on the white header they are soft red tiles.
+  // Over the photo the buttons are glass with white icons; on the white header they are bare red icons.
   const onPhoto = hasPhotos && !headerTitleVisible;
-  const headerControlStyle = [styles.headerControl, !onPhoto && styles.headerControlSolid];
+  const headerControlStyle = styles.headerControl;
   const backButton = (
     <Pressable
       accessibilityLabel="Back"
@@ -900,9 +900,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-  },
-  headerControlSolid: {
-    backgroundColor: colors.iconSurface,
   },
   headerTitleRow: {
     flex: 1,

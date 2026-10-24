@@ -69,7 +69,7 @@ function AddressCard({
       onPress={onSelect}
       style={({pressed}) => [styles.card, selected && styles.cardSelected, pressed && styles.pressed]}
       testID={`meal-plan-address-${address.id}`}>
-      <View style={[styles.tile, selected && styles.tileSelected]}>
+      <View style={styles.tile}>
         <Icon
           name={LABEL_ICONS[address.addressLabel ?? ''] ?? 'location-outline'}
           size={iconSize.lg}
@@ -159,7 +159,7 @@ export function MealPlanAddressScreen({navigation}: Props) {
             accessibilityRole="button"
             onPress={() => setEditor({mode: 'add'})}
             style={({pressed}) => [styles.card, styles.addCard, pressed && styles.pressed]}>
-            <View style={[styles.tile, styles.tileSelected, styles.round]}>
+            <View style={[styles.tile, styles.round]}>
               <Icon
                 name="plus"
                 size={iconSize.lg}
@@ -216,9 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.iconSurface,
   },
-  tileSelected: {backgroundColor: colors.errorSoft},
   round: {borderRadius: radius.pill},
   cardText: {flex: 1, minWidth: 0, gap: spacing.xxs},
   labelRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},

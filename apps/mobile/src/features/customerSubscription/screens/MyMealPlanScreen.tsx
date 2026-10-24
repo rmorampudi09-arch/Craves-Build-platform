@@ -471,7 +471,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.errorSoft,
   },
   tileLabel: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.semibold},
   weekRow: {

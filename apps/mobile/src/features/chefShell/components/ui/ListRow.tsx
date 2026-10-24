@@ -30,12 +30,13 @@ export interface ListRowProps {
   accessibilityLabel?: string;
 }
 
-const TONES: Record<ListRowIconTone, {background: string; foreground: string}> = {
-  neutral: {background: colors.iconSurface, foreground: colors.flameRedAccessible},
-  red: {background: colors.errorSoft, foreground: colors.flameRedAccessible},
-  green: {background: colors.successSoft, foreground: colors.successText},
-  amber: {background: colors.warningSoft, foreground: colors.warningText},
-  blue: {background: colors.errorSoft, foreground: colors.flameRedAccessible},
+/** Icon colour per tone; the icon sits bare, with no tile behind it. */
+const TONES: Record<ListRowIconTone, {foreground: string}> = {
+  neutral: {foreground: colors.flameRedAccessible},
+  red: {foreground: colors.flameRedAccessible},
+  green: {foreground: colors.successText},
+  amber: {foreground: colors.warningText},
+  blue: {foreground: colors.flameRedAccessible},
 };
 
 export function ListRow({
@@ -53,7 +54,7 @@ export function ListRow({
   const body = (
     <>
       {icon ? (
-        <View style={[styles.tile, {backgroundColor: tone.background}]}>
+        <View style={styles.tile}>
           <Icon name={icon} size={iconSize.md} color={tone.foreground} surface={false} />
         </View>
       ) : null}

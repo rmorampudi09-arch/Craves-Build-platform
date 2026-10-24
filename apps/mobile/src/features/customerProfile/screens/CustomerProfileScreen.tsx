@@ -460,7 +460,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   menuCopy: {minWidth: 0, flex: 1},
   menuTitle: {

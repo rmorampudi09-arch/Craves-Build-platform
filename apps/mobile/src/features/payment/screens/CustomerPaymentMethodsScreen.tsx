@@ -402,7 +402,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   methodHeadingCopy: {
     flex: 1,

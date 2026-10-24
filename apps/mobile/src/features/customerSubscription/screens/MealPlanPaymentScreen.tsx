@@ -395,7 +395,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.errorSoft,
   },
   addressLabel: {
     color: colors.textPrimary,

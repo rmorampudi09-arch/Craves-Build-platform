@@ -343,7 +343,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   summaryCopy: {flex: 1, minWidth: 0, gap: 2},
   summaryTitle: {

@@ -54,7 +54,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.infoSoft,
   },
   text: {flex: 1, minWidth: 0, gap: spacing.xxs},
   title: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},

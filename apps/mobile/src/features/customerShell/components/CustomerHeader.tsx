@@ -1,4 +1,4 @@
-import React, {useState, type ReactNode} from 'react';
+import React, {useContext, useState, type ReactNode} from 'react';
 import {Animated, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 import {
@@ -10,7 +10,7 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Icon} from '../../../shared/components/Icon';
+import {Icon, IconTileContext} from '../../../shared/components/Icon';
 import {
   browsingLocationLabel,
   useCustomerHeaderState,
@@ -64,7 +64,7 @@ const PALETTES: Record<CustomerHeaderTone, HeaderPalette> = {
   },
 };
 
-/** Pin and bell share one 44 dp soft-red tile. */
+/** Pin and bell share one 44 dp box, a soft-red tile on Home only. */
 const HEADER_ICON_SIZE = 44;
 /** Space between the collapsed Meal plans circle and the accessory beside it. */
 const COLLAPSED_GAP = spacing.xs;
@@ -103,6 +103,8 @@ export function CustomerHeader({
   transparent = false,
 }: Props) {
   const palette = PALETTES[tone];
+  // Pin and bell sit on tiles only on Home; Chefs and Notifications show bare icons.
+  const tile = useContext(IconTileContext) ? palette.tile : 'transparent';
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {selectedLocation, locationDisplayName, badgeLabel} = useCustomerHeaderState();
   const compact = variant === 'compact';
@@ -145,7 +147,7 @@ export function CustomerHeader({
         hitSlop={spacing.xs}
         onPress={onPressLocation}
         style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
-        <View style={[styles.locationIcon, {backgroundColor: palette.tile}]}>
+        <View style={[styles.locationIcon, {backgroundColor: tile}]}>
           <Icon name="location" size={22} color={palette.icon} surface={false} />
         </View>
         {compact ? (
@@ -206,7 +208,7 @@ export function CustomerHeader({
         onPress={onPressNotifications}
         style={({pressed}) => [
           styles.notificationButton,
-          {backgroundColor: palette.tile},
+          {backgroundColor: tile},
           pressed && styles.notificationPressed,
         ]}>
         <Icon name="bell" size={22} color={palette.icon} surface={false} />
@@ -408,7 +410,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   locationCopy: {
     minWidth: 0,
@@ -508,7 +509,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   notificationPressed: {
     opacity: 0.78,

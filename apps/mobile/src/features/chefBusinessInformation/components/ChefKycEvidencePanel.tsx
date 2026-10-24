@@ -350,7 +350,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.iconSurface,
   },
   headingCopy: {flex: 1, minWidth: 0},
   eyebrow: {
@@ -418,7 +417,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.iconSurface,
   },
   documentCopy: {flex: 1, minWidth: 0},
   documentTitle: {

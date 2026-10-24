@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {createContext, useContext} from 'react';
 import {StyleSheet, View} from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {colors, iconSize} from '../../design/tokens';
@@ -75,9 +75,12 @@ interface Props {
   name: IconName;
   size?: number;
   color?: string;
-  /** Bottom/menu bars opt out; normal app icons use the requested #F1F5F9 surface. */
+  /** Bottom/menu bars opt out; others get a glyph-sized box, soft-red filled only under IconTileContext. */
   surface?: boolean;
 }
+
+/** True only on Home: icons keep their soft-red circle there; every other screen shows the bare glyph. */
+export const IconTileContext = createContext(false);
 
 const GLYPHS: Record<IconName, string> = {
   account: 'account',
@@ -154,6 +157,7 @@ export function Icon({
   surface = true,
   color = surface ? colors.flameRed : colors.espressoBrown,
 }: Props) {
+  const tile = useContext(IconTileContext);
   const glyphSize = surface ? Math.max(14, Math.round(size * 0.74)) : size;
   if (!surface) {
     return (
@@ -170,6 +174,7 @@ export function Icon({
       accessibilityElementsHidden
       style={[
         styles.surface,
+        tile && styles.tile,
         {width: size, height: size, borderRadius: Math.max(6, size / 2)},
       ]}>
       <MaterialDesignIcons
@@ -185,6 +190,6 @@ const styles = StyleSheet.create({
   surface: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
+  tile: {backgroundColor: colors.iconSurface},
 });

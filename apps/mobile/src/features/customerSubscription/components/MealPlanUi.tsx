@@ -85,13 +85,13 @@ export function MealPlanPageHeader({title, onBack, right}: Omit<MealPlanHeaderPr
   );
 }
 
-/** A glyph on a tile: red on soft red by default; `square` gives the rounded-square tiles. Decorative. */
+/** A glyph on a tile: bare red glyph by default; pass `background` for a filled tile, `square` for rounded corners. Decorative. */
 export function IconTile({
   icon,
   size = 44,
   glyph = iconSize.md,
   square = false,
-  background = colors.iconSurface,
+  background = 'transparent',
   color = colors.flameRed,
 }: {
   icon: IconName;
@@ -590,7 +590,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.errorSoft,
   },
   ruleText: {flex: 1, minWidth: 0},
   ruleTitle: {

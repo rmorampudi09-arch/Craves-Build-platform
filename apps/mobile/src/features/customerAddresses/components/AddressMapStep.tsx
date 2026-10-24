@@ -92,12 +92,7 @@ function AddressSkeleton({fontScale}: {fontScale: number}) {
 
 function StatusTile({icon, tone}: {icon: IconName; tone: 'pin' | 'error' | 'warning'}) {
   return (
-    <View
-      style={[
-        styles.tile,
-        tone === 'error' && {backgroundColor: colors.errorSoft},
-        tone === 'warning' && {backgroundColor: colors.warningSoft},
-      ]}>
+    <View style={styles.tile}>
       <Icon
         color={tone === 'error' ? colors.error : tone === 'warning' ? colors.warningText : colors.flameRed}
         name={icon}
@@ -328,7 +323,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   statusCopy: {flex: 1, minWidth: 0, gap: spacing.xxs},
   title: {

@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s scripts/apim/tests -p test_rider_fleet_apim
 """
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -92,6 +93,12 @@ class PolicyTest(unittest.TestCase):
                        'A Bearer access token is required.'):
             self.assertIn(marker, existing)
             self.assertIn(marker, admin)
+
+    def test_policy_expressions_brace_their_if_blocks(self):
+        # APIM rejects `if (...) return x;` in @{ } expressions ("Expected a { but found a return"); 24 Oct release failure.
+        for path in FLEET.glob('*-policy.xml'):
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                self.assertIsNone(re.search(r'\bif\s*\(.*\)\s*return\b', line), f'{path.name}:{number}')
 
 
 FAKE_AZ = r'''#!/usr/bin/env python3

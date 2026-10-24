@@ -101,7 +101,31 @@ class CustomerLaunchAlertServiceTest {
         assertThatThrownBy(() -> service.subscribe(customer, request("17.46", "78.36", "Kondapur")))
             .isInstanceOf(ApiException.class)
             .satisfies(error -> assertThat(((ApiException) error).getCode()).isEqualTo("LAUNCH_ALERTS_LIMIT_REACHED"));
-        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).update(contains("INSERT INTO"), any(Object[].class));
+    }
+
+    @Test
+    void subscribeRearmsASpotThatWasAlreadyToldWithoutUsingTheCap() {
+        when(jdbcTemplate.queryForObject(contains(EXISTS_SQL), eq(Integer.class), any(Object[].class))).thenReturn(0);
+        when(jdbcTemplate.update(contains("SET notified_at = NULL"), any(Object[].class))).thenReturn(1);
+
+        assertThat(service.subscribe(customer, request("17.4648", "78.3567", " Kondapur")).subscribed()).isTrue();
+        verify(jdbcTemplate).update(
+            contains("AND notified_at IS NOT NULL"),
+            eq("Kondapur"),
+            eq(identityId),
+            eq(new BigDecimal("17.465")),
+            eq(new BigDecimal("78.357")));
+        verify(jdbcTemplate, never()).queryForList(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).update(contains("INSERT INTO"), any(Object[].class));
+    }
+
+    @Test
+    void statusCountsOnlyCustomersStillWaiting() {
+        when(jdbcTemplate.queryForObject(contains(EXISTS_SQL), eq(Integer.class), any(Object[].class))).thenReturn(0);
+
+        assertThat(service.status(customer, new BigDecimal("17.46"), new BigDecimal("78.36")).subscribed()).isFalse();
+        verify(jdbcTemplate).queryForObject(contains("AND notified_at IS NULL"), eq(Integer.class), any(Object[].class));
     }
 
     private static LaunchAlertRequest request(String latitude, String longitude, String areaName) {

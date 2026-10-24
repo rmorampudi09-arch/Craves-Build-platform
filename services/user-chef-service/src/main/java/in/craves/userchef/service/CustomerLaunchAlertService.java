@@ -9,12 +9,15 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** "Notify me" for a delivery spot where no home kitchen cooks yet. Sending the notification comes later. */
+/** "Notify me" for a delivery spot where no home kitchen cooks yet; {@link KitchenLaunchAlertJob} sends the news. */
 @Service
 public class CustomerLaunchAlertService {
     static final int MAX_ALERTS = 50;
@@ -53,6 +56,18 @@ public class CustomerLaunchAlertService {
         if (exists(identityId, latitudeKey, longitudeKey)) {
             return new LaunchAlertStatus(true);
         }
+        // Already told once (the area later lost its kitchens): wait again, outside the cap.
+        int rearmed = jdbcTemplate.update(
+            "UPDATE customer_kitchen_launch_alert SET notified_at = NULL, created_at = now(), area_name = ? " +
+                "WHERE identity_id = ? AND latitude_key = ? AND longitude_key = ? AND notified_at IS NOT NULL",
+            request.areaName().trim(),
+            identityId,
+            latitudeKey,
+            longitudeKey
+        );
+        if (rearmed > 0) {
+            return new LaunchAlertStatus(true);
+        }
 
         // Same per-customer advisory lock as favorites, so parallel taps can't pass the cap together.
         jdbcTemplate.queryForList("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", identityId.toString());
@@ -87,10 +102,53 @@ public class CustomerLaunchAlertService {
         return coordinate.setScale(3, RoundingMode.HALF_UP);
     }
 
+    /** A rounded spot where at least one customer is still waiting. */
+    public record WaitingSpot(BigDecimal latitudeKey, BigDecimal longitudeKey) {
+    }
+
+    public record WaitingCustomer(UUID identityId, String areaName, Instant createdAt) {
+    }
+
+    /** Spots with someone still waiting, the longest wait first. */
+    public List<WaitingSpot> waitingSpots(int limit) {
+        return jdbcTemplate.query(
+            "SELECT latitude_key, longitude_key FROM customer_kitchen_launch_alert WHERE notified_at IS NULL " +
+                "GROUP BY latitude_key, longitude_key ORDER BY min(created_at) LIMIT ?",
+            (rs, rowNum) -> new WaitingSpot(rs.getBigDecimal("latitude_key"), rs.getBigDecimal("longitude_key")),
+            limit
+        );
+    }
+
+    public List<WaitingCustomer> waitingAt(WaitingSpot spot) {
+        return jdbcTemplate.query(
+            "SELECT identity_id, area_name, created_at FROM customer_kitchen_launch_alert " +
+                "WHERE latitude_key = ? AND longitude_key = ? AND notified_at IS NULL ORDER BY created_at",
+            (rs, rowNum) -> new WaitingCustomer(
+                rs.getObject("identity_id", UUID.class),
+                rs.getString("area_name"),
+                rs.getTimestamp("created_at").toInstant()
+            ),
+            spot.latitudeKey(),
+            spot.longitudeKey()
+        );
+    }
+
+    /** Marks only the request that was told; a re-armed one has a newer created_at and keeps waiting. */
+    public void markNotified(UUID identityId, WaitingSpot spot, Instant createdAt) {
+        jdbcTemplate.update(
+            "UPDATE customer_kitchen_launch_alert SET notified_at = now() " +
+                "WHERE identity_id = ? AND latitude_key = ? AND longitude_key = ? AND created_at = ? AND notified_at IS NULL",
+            identityId,
+            spot.latitudeKey(),
+            spot.longitudeKey(),
+            Timestamp.from(createdAt)
+        );
+    }
+
     private boolean exists(UUID identityId, BigDecimal latitudeKey, BigDecimal longitudeKey) {
         Integer found = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM customer_kitchen_launch_alert " +
-                "WHERE identity_id = ? AND latitude_key = ? AND longitude_key = ?",
+                "WHERE identity_id = ? AND latitude_key = ? AND longitude_key = ? AND notified_at IS NULL",
             Integer.class,
             identityId,
             latitudeKey,

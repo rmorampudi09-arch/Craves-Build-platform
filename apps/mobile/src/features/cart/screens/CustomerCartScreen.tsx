@@ -1327,7 +1327,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cream,
   },
   deliveryCopy: {flex: 1, minWidth: 0},
   deliveryLabel: {color: colors.textSecondary, fontSize: typography.small},

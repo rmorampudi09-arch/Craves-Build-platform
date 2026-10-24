@@ -88,6 +88,7 @@ export function HomeFoodTypeMenu({
         style={({pressed}) => [
           styles.pill,
           compact && styles.circle,
+          compact && appearance === 'default' && styles.circlePlain,
           appearance === 'card' && styles.card,
           appearance === 'onRed' && styles.onRed,
           tone && {backgroundColor: tone.soft, borderColor: tone.border},
@@ -182,6 +183,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.iconSurface,
   },
   circle: {width: 44, height: 44, paddingHorizontal: 0, justifyContent: 'center'},
+  // On the white pinned header the circle matches Meal plans beside it: white with a grey edge, no red fill.
+  circlePlain: {backgroundColor: colors.white, borderColor: colors.border},
   card: {
     backgroundColor: colors.white,
     borderColor: colors.white,

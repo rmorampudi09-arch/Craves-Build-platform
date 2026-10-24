@@ -1,4 +1,4 @@
-import React, {useContext, useState, type ReactNode} from 'react';
+import React, {useState, type ReactNode} from 'react';
 import {Animated, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 import {
@@ -11,7 +11,7 @@ import {
   typography,
   iconSize,
 } from '../../../design/tokens';
-import {Icon, IconTileContext} from '../../../shared/components/Icon';
+import {Icon} from '../../../shared/components/Icon';
 import {
   browsingLocationLabel,
   useCustomerHeaderState,
@@ -38,7 +38,8 @@ interface HeaderPalette {
 const PALETTES: Record<CustomerHeaderTone, HeaderPalette> = {
   light: {
     background: colors.white,
-    tile: colors.iconSurface,
+    // Bare icons on white, Home's pinned header included; only the red top keeps tiles.
+    tile: 'transparent',
     icon: colors.flameRed,
     title: colors.espressoBrown,
     line: colors.textSecondary,
@@ -65,7 +66,7 @@ const PALETTES: Record<CustomerHeaderTone, HeaderPalette> = {
   },
 };
 
-/** Pin and bell share one 44 dp box, a soft-red tile on Home only. */
+/** Pin and bell share one 44 dp box, tiled only on Home's red top. */
 const HEADER_ICON_SIZE = 44;
 /** Space between the collapsed Meal plans circle and the accessory beside it. */
 const COLLAPSED_GAP = spacing.xs;
@@ -104,8 +105,6 @@ export function CustomerHeader({
   transparent = false,
 }: Props) {
   const palette = PALETTES[tone];
-  // Pin and bell sit on tiles only on Home; Chefs and Notifications show bare icons.
-  const tile = useContext(IconTileContext) ? palette.tile : 'transparent';
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {selectedLocation, locationDisplayName, badgeLabel} = useCustomerHeaderState();
   const compact = variant === 'compact';
@@ -148,7 +147,7 @@ export function CustomerHeader({
         hitSlop={spacing.xs}
         onPress={onPressLocation}
         style={({pressed}) => [styles.locationButton, pressed && styles.locationPressed]}>
-        <View style={[styles.locationIcon, {backgroundColor: tile}]}>
+        <View style={[styles.locationIcon, {backgroundColor: palette.tile}]}>
           <Icon name="location" size={iconSize.md} color={palette.icon} surface={false} />
         </View>
         {compact ? (
@@ -209,7 +208,7 @@ export function CustomerHeader({
         onPress={onPressNotifications}
         style={({pressed}) => [
           styles.notificationButton,
-          {backgroundColor: tile},
+          {backgroundColor: palette.tile},
           pressed && styles.notificationPressed,
         ]}>
         <Icon name="bell" size={iconSize.md} color={palette.icon} surface={false} />

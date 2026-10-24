@@ -17,7 +17,6 @@ jest.setTimeout(20_000);
 const mockNavigate = jest.fn();
 const mockDispatch = jest.fn();
 const mockSummary = jest.fn();
-const mockBank = jest.fn();
 const mockOnboardingLoad = jest.fn();
 let mockState: {auth: {identity: Record<string, unknown> | null; accountResolution: Record<string, unknown> | null}};
 const mockKitchenState: {kitchen: ChefKitchenProfile | null; status: string; hoursToday: string | null; refresh: jest.Mock} = {
@@ -43,9 +42,6 @@ jest.mock('../../chefShell/state/ChefOperationalProvider', () => ({
 jest.mock('../state/useKitchenOpenState', () => ({useKitchenOpenState: () => mockKitchenState}));
 jest.mock('../../auth/state/logoutCoordinator', () => ({completeLogout: jest.fn()}));
 jest.mock('../state/chefProfileRoleSwitch', () => ({switchChefToCustomerRole: jest.fn()}));
-jest.mock('../../chefBankOnboarding/api/chefBankOnboardingApi', () => ({
-  chefBankOnboardingApi: {getStatus: (...args: unknown[]) => mockBank(...args)},
-}));
 jest.mock('../../chefOnboarding/api/chefOnboardingApi', () => ({
   ...jest.requireActual('../../chefOnboarding/api/chefOnboardingApi'),
   chefOnboardingApi: {load: (...args: unknown[]) => mockOnboardingLoad(...args)},
@@ -103,7 +99,6 @@ describe('ChefProfileScreen', () => {
     mockKitchenState.status = 'open';
     mockKitchenState.hoursToday = '11:00 AM – 10:00 PM';
     mockSummary.mockResolvedValue({kitchenId: KITCHEN.id, reviewCount: 32, overallAverage: 4.6});
-    mockBank.mockResolvedValue({state: 'VERIFIED', lastFour: '4521', bankName: 'SBI'});
     mockOnboardingLoad.mockResolvedValue({
       details: {...EMPTY_ONBOARDING, proofKind: 'AADHAAR', fssaiNumber: '12345678901234'},
       documents: [{id: 'd1', documentType: 'SELECTED_PROOF_FRONT', status: 'APPROVED'}],
@@ -120,21 +115,17 @@ describe('ChefProfileScreen', () => {
     expect(ui.has('Chef Relangi · KPHB, Hyderabad')).toBe(true);
     expect(ui.has('Approved')).toBe(true);
     expect(ui.has('★ 4.6 · 32 reviews')).toBe(true);
-    expect(ui.has('Craves for Chefs · version 1.35.7')).toBe(true);
+    expect(ui.has('Craves for Chefs · version 1.35.8')).toBe(true);
   });
 
-  it('groups the rows as Kitchen, Money and More, each with its short line', async () => {
+  it('groups the rows as Kitchen, Money and More, each row its title only', async () => {
     await mount();
     for (const heading of ['Kitchen', 'Money', 'More']) {
       expect(ui.has(heading)).toBe(true);
     }
-    expect(ui.byPrefix('Kitchen details')?.props.accessibilityLabel).toBe('Kitchen details, Name, about, address, photos');
-    expect(ui.byPrefix('Opening hours')?.props.accessibilityLabel).toBe('Opening hours, Open now · 11:00 AM – 10:00 PM');
-    expect(ui.byPrefix('Documents & verification')?.props.accessibilityLabel).toBe('Documents & verification, Verified · FSSAI, Aadhaar');
-    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account, SBI ••4521');
-    expect(ui.byPrefix('Reviews')?.props.accessibilityLabel).toBe('Reviews, 4.6 average · 32 reviews');
-    expect(ui.byPrefix('Refer a chef')?.props.accessibilityLabel).toBe('Refer a chef, Earn when chefs you invite start cooking');
-    expect(ui.byPrefix('Preferences')?.props.accessibilityLabel).toBe('Preferences, Notifications, orders, language');
+    for (const title of ['Kitchen details', 'Opening hours', 'Documents & verification', 'Reviews', 'Bank account', 'Payout history', 'Refer a chef', 'Preferences', 'Switch to customer mode']) {
+      expect(ui.byPrefix(title)?.props.accessibilityLabel).toBe(title);
+    }
     // The old Live summary, Business status, Scheduled orders and Subscription plan rows are gone from here.
     expect(ui.anyText(/Live summary|Business status|Scheduled orders|Subscription plan/)).toBe(false);
   });
@@ -166,24 +157,12 @@ describe('ChefProfileScreen', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('ChefEditProfile');
   });
 
-  it('has no Documents page for an approved chef with no application documents, and shows the bank by its last digits when it has no name', async () => {
+  it('has no Documents page for an approved chef with no application documents', async () => {
     mockOnboardingLoad.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
-    mockBank.mockResolvedValue({state: 'VERIFIED', lastFour: '4521', bankName: null});
     await mount();
     expect(ui.byPrefix('Documents & verification')).toBeUndefined();
     expect(ui.has('Approved')).toBe(true);
     expect(ui.byLabel('Approved. Open documents')).toBeUndefined();
-    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account, ••4521');
-  });
-
-  it('leaves the Bank account line empty when no account is on file or it cannot be read', async () => {
-    mockBank.mockResolvedValue({state: 'NOT_SUBMITTED', lastFour: null, bankName: null});
-    await mount();
-    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account');
-    act(() => tree.unmount());
-    mockBank.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
-    await mount();
-    expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account');
   });
 
   it('makes the camera and the two chips themselves at least 48 dp, inside parents that are not smaller (hit slop is clipped to the parent)', async () => {
@@ -223,20 +202,10 @@ describe('ChefProfileScreen', () => {
     }
   });
 
-  it('describes the opening hours for each kitchen state without showing a raw status', async () => {
-    mockKitchenState.status = 'closed';
-    await mount();
-    expect(ui.byPrefix('Opening hours')?.props.accessibilityLabel).toBe('Opening hours, Closed · 11:00 AM – 10:00 PM');
-    act(() => tree.unmount());
-    mockKitchenState.status = 'paused';
-    mockKitchenState.hoursToday = null;
-    await mount();
-    expect(ui.byPrefix('Opening hours')?.props.accessibilityLabel).toBe('Opening hours, Paused');
-    act(() => tree.unmount());
+  it('keeps Opening hours to its title and drops the Approved chip while Craves has paused the kitchen', async () => {
     mockKitchenState.status = 'suspended';
     await mount();
-    expect(ui.byPrefix('Opening hours')?.props.accessibilityLabel).toBe('Opening hours, Paused by Craves');
-    expect(ui.has('Paused by Craves')).toBe(true);
+    expect(ui.byPrefix('Opening hours')?.props.accessibilityLabel).toBe('Opening hours');
     expect(ui.has('Approved')).toBe(false);
   });
 
@@ -246,8 +215,6 @@ describe('ChefProfileScreen', () => {
     await mount();
     expect(ui.has('Approved')).toBe(false);
     expect(ui.anyText(/★/)).toBe(false);
-    expect(ui.byPrefix('Reviews')?.props.accessibilityLabel).toBe('Reviews, What customers say');
-    expect(ui.byPrefix('Documents & verification')?.props.accessibilityLabel).toBe('Documents & verification, See your documents');
   });
 
   it('shows the account name until the kitchen has loaded', async () => {

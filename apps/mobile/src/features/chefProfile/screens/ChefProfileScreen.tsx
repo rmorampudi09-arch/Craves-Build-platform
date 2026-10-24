@@ -17,32 +17,15 @@ import {
   StatusChip,
   useChefToast,
 } from '../../chefShell/components/ui';
-import {documentsSummary} from '../../chefBusinessInformation/domain/documentRows';
-import {chefBankOnboardingApi} from '../../chefBankOnboarding/api/chefBankOnboardingApi';
 import {chefReviewsApi} from '../../reviews/api/chefReviewsApi';
 import {switchChefToCustomerRole} from '../state/chefProfileRoleSwitch';
 import {useChefOnboardingState} from '../state/useChefOnboardingState';
 import {useChefRead} from '../state/useChefRead';
-import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
+import {useKitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.35.7';
+export const CHEF_APP_VERSION = '1.35.8';
 
-/** The line under Opening hours: where the kitchen is right now, with today's hours. */
-function hoursLine(status: KitchenOpenState['status'], hoursToday: string | null): string | undefined {
-  switch (status) {
-    case 'open':
-      return hoursToday ? `Open now · ${hoursToday}` : 'Open now';
-    case 'closed':
-      return hoursToday ? `Closed · ${hoursToday}` : 'Closed';
-    case 'paused':
-      return 'Paused';
-    case 'suspended':
-      return 'Paused by Craves';
-    default:
-      return undefined;
-  }
-}
 
 type Dialog = 'switch' | 'logout' | null;
 
@@ -64,12 +47,9 @@ export function ChefProfileScreen() {
   const reviewCount = summary.query.data?.reviewCount ?? 0;
   const hasRating = typeof rating === 'number' && reviewCount > 0;
 
-  // Both lines are extras: when a read fails or finds nothing, the row simply has no second line.
   const onboarding = useChefOnboardingState().query.data;
   // Documents are view-only: a chef with nothing from the application (joined on the old form) gets no Documents page.
   const hasDocuments = Boolean(onboarding?.documents.length);
-  const bank = useChefRead('chef-bank-status', signal => chefBankOnboardingApi.getStatus(signal)).query.data;
-  const bankLine = bank?.lastFour ? [bank.bankName, `••${bank.lastFour}`].filter(Boolean).join(' ') : undefined;
 
   const suspended = kitchenState.status === 'suspended' || identity?.status === 'SUSPENDED';
   const approved = !suspended && accountResolution?.flow === 'CHEF' && accountResolution.onboardingStatus === 'APPROVED';
@@ -170,48 +150,45 @@ export function ChefProfileScreen() {
 
       <SectionHeader title="Kitchen" />
       <ListGroup dividers={false}>
-        <ListRow icon="store" iconTone="red" onPress={open('ChefEditProfile')} subtitle="Name, about, address, photos" title="Kitchen details" />
-        <ListRow
+        <ListRow compact icon="store" iconTone="red" onPress={open('ChefEditProfile')} title="Kitchen details" />
+        <ListRow compact
           icon="clock"
           iconTone="red"
           onPress={open('ChefKitchenSchedule')}
-          subtitle={hoursLine(kitchenState.status, kitchenState.hoursToday)}
           title="Opening hours"
         />
         {onboarding && hasDocuments ? (
-          <ListRow
+          <ListRow compact
             icon="shield"
             iconTone="red"
             onPress={open('ChefBusinessInformation')}
-            subtitle={approved ? ['Verified', documentsSummary(onboarding)].filter(Boolean).join(' · ') : 'See your documents'}
             title="Documents & verification"
           />
         ) : null}
-        <ListRow
+        <ListRow compact
           icon="star"
           iconTone="red"
           onPress={open('ChefReviews')}
-          subtitle={hasRating ? `${rating.toFixed(1)} average · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}` : 'What customers say'}
           title="Reviews"
         />
       </ListGroup>
 
       <SectionHeader title="Money" />
       <ListGroup dividers={false}>
-        <ListRow icon="bank" onPress={open('ChefBankAccount')} subtitle={bankLine} title="Bank account" />
-        <ListRow icon="receipt" onPress={open('ChefPayoutHistory')} title="Payout history" />
+        <ListRow compact icon="bank" onPress={open('ChefBankAccount')} title="Bank account" />
+        <ListRow compact icon="receipt" onPress={open('ChefPayoutHistory')} title="Payout history" />
       </ListGroup>
 
       <SectionHeader title="More" />
       <ListGroup dividers={false}>
-        <ListRow icon="gift" onPress={open('ChefReferral')} subtitle="Earn when chefs you invite start cooking" title="Refer a chef" />
-        <ListRow icon="filter" onPress={open('ChefAppPreferences')} subtitle="Notifications, orders, language" title="Preferences" />
-        <ListRow icon="headset" onPress={open('ChefSupport')} title="Help & support" />
-        <ListRow icon="lock" onPress={open('ChefSecurity')} title="Login & security" />
+        <ListRow compact icon="gift" onPress={open('ChefReferral')} title="Refer a chef" />
+        <ListRow compact icon="filter" onPress={open('ChefAppPreferences')} title="Preferences" />
+        <ListRow compact icon="headset" onPress={open('ChefSupport')} title="Help & support" />
+        <ListRow compact icon="lock" onPress={open('ChefSecurity')} title="Login & security" />
       </ListGroup>
 
       <ListGroup dividers={false}>
-        <ListRow
+        <ListRow compact
           icon="renew"
           onPress={() => {
             if (identity?.roles.includes('CUSTOMER')) {
@@ -220,10 +197,9 @@ export function ChefProfileScreen() {
               toast.show("Customer mode isn't set up for this account.");
             }
           }}
-          subtitle="Order food as a customer"
           title="Switch to customer mode"
         />
-        <ListRow destructive icon="arrow-left" onPress={() => setDialog('logout')} title="Log out" />
+        <ListRow compact destructive icon="arrow-left" onPress={() => setDialog('logout')} title="Log out" />
       </ListGroup>
 
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.version}>

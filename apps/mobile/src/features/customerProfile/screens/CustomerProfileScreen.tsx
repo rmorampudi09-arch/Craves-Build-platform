@@ -83,7 +83,6 @@ function ProfileMenuRow({row, disabled = false, onPress}: ProfileMenuRowProps) {
       </View>
       <View style={styles.menuCopy}>
         <Text style={styles.menuTitle}>{row.title}</Text>
-        <Text style={styles.menuSubtitle}>{row.subtitle}</Text>
       </View>
       <Icon name="chevron-right" size={iconSize.sm} color={colors.placeholder} surface={false} />
     </Pressable>
@@ -445,18 +444,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   menuRow: {
-    minHeight: 68,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   menuRowPressed: {backgroundColor: colors.surfaceMuted},
   menuRowDisabled: {opacity: 0.5},
   menuIcon: {
     width: 44,
-    height: 44,
+    height: iconSize.md,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -466,11 +465,6 @@ const styles = StyleSheet.create({
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
-  },
-  menuSubtitle: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.small,
   },
   rowPressed: {opacity: 0.72},
   skeletonWrap: {gap: spacing.md},

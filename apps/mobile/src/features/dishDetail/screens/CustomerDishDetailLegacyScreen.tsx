@@ -967,7 +967,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cream,
   },
   factValue: {
     color: colors.espressoBrown,

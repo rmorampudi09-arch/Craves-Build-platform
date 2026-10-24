@@ -55,7 +55,7 @@ export const motionDuration = {
   press: 150,
   selection: 180,
   listItem: 220,
-  bottomNavigation: 240,
+  bottomNavigation: 340,
   viewCart: 260,
   modal: 300,
   skeletonCycle: 1200,
@@ -66,6 +66,8 @@ export const motionEasing = {
   standard: {x1: 0.2, y1: 0, x2: 0, y2: 1},
   enter: {x1: 0, y1: 0, x2: 0, y2: 1},
   exit: {x1: 0.3, y1: 0, x2: 1, y2: 1},
+  /** Eases in and out, so a slide starts and lands gently instead of snapping. */
+  smooth: {x1: 0.4, y1: 0, x2: 0.2, y2: 1},
 } as const satisfies Record<string, MotionEasingCurve>;
 
 /** Restrained springs for feedback only; neither convention intentionally bounces. */
@@ -111,7 +113,7 @@ export const motionTransitions = {
   },
   bottomNavigation: {
     durationMs: motionDuration.bottomNavigation,
-    easing: 'standard',
+    easing: 'smooth',
     properties: ['opacity', 'transform'],
     largeListPolicy: 'not-applicable',
   },

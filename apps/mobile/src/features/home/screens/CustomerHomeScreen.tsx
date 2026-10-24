@@ -1280,7 +1280,7 @@ const styles = StyleSheet.create({
   },
   sectionHeadingRow: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
   },
   sectionTitle: {

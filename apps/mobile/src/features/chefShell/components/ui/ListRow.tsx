@@ -27,6 +27,8 @@ export interface ListRowProps {
   onPress?: () => void;
   /** Red title and icon for sign out, delete and similar. */
   destructive?: boolean;
+  /** Title-only menu row (Profile): shorter, no tile height. */
+  compact?: boolean;
   accessibilityLabel?: string;
 }
 
@@ -48,13 +50,14 @@ export function ListRow({
   right,
   onPress,
   destructive,
+  compact = false,
   accessibilityLabel,
 }: ListRowProps) {
   const tone = TONES[destructive ? 'red' : iconTone];
   const body = (
     <>
       {icon ? (
-        <View style={styles.tile}>
+        <View style={[styles.tile, compact && styles.tileCompact]}>
           <Icon name={icon} size={iconSize.md} color={tone.foreground} surface={false} />
         </View>
       ) : null}
@@ -81,14 +84,14 @@ export function ListRow({
   );
 
   if (!onPress) {
-    return <View style={styles.row}>{body}</View>;
+    return <View style={[styles.row, compact && styles.rowCompact]}>{body}</View>;
   }
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel ?? [title, subtitle, value].filter(Boolean).join(', ')}
       accessibilityRole="button"
       onPress={onPress}
-      style={({pressed}) => [styles.row, pressed && styles.pressed]}>
+      style={({pressed}) => [styles.row, compact && styles.rowCompact, pressed && styles.pressed]}>
       {body}
     </Pressable>
   );
@@ -128,7 +131,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.white,
   },
+  rowCompact: {minHeight: 52, paddingVertical: spacing.xs},
   pressed: {opacity: 0.6},
+  tileCompact: {height: iconSize.md},
   tile: {
     width: 38,
     height: 38,

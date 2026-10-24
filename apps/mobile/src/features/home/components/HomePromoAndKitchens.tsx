@@ -541,7 +541,6 @@ const styles = StyleSheet.create({
   bannerRow: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
   },
   promoCarousel: {
     width: '100%',
@@ -578,7 +577,7 @@ const styles = StyleSheet.create({
   },
 
   kitchensSection: {
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xxs,
   },
   sectionHeader: {
     minHeight: touchTarget.minimum,

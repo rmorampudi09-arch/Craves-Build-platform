@@ -118,10 +118,13 @@ describe('ChefSupportScreen', () => {
     expect(openUrl).toHaveBeenCalledWith('tel:+918012345678');
   });
 
-  it('says there are no tickets yet when the chef has none', async () => {
+  it('says there are no support chats yet, with the support drawing, when the chef has none', async () => {
     mockCases.list.mockResolvedValue({cases: [], nextCursor: null, hasMore: false});
     await mount();
-    expect(ui.has('No tickets yet')).toBe(true);
+    expect(ui.has('No support chats yet')).toBe(true);
+    expect(ui.has('When you write to Craves support, your chats are listed here.')).toBe(true);
+    expect(tree.root.findAll(node => node.props.testID === 'empty-illustration-support').length).toBeGreaterThan(0);
+    expect(ui.byLabel('Call')).toBeDefined();
   });
 
   it('keeps the Call button when the number cannot be loaded, says so, and tries again when pressed', async () => {

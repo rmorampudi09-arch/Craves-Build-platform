@@ -32,7 +32,7 @@ import {
 export const PREFERENCE_SAVE_FAILED = "We couldn't save that. Please try again.";
 const COOKING_TIMES = [10, 15, 20, 25, 30, 40, 45, 60];
 
-const comingSoonChip = <StatusChip label="Coming soon" tone="info" />;
+const comingSoonChip = <StatusChip label="Coming soon" tone="soon" />;
 
 export function ChefAppPreferencesScreen() {
   const navigation = useNavigation();
@@ -106,7 +106,7 @@ export function ChefAppPreferencesScreen() {
         <ListRow right={comingSoonChip} subtitle="Loud ring until you open the order" title="New order sound" />
       </ListGroup>
       <ReadState
-        comingSoon={{title: 'Notification settings are on their way', message: 'You will be able to choose how Craves reaches you here soon.'}}
+        comingSoon={{compact: true, title: 'Notification settings are on their way', message: 'You will be able to choose how Craves reaches you here soon.'}}
         query={prefs.query}>
         {() => (
           <ListGroup>
@@ -119,7 +119,7 @@ export function ChefAppPreferencesScreen() {
 
       <SectionHeader title="Orders" />
       <ReadState
-        comingSoon={{title: 'Order settings are on their way', message: 'Automatic acceptance and a default cooking time will be here soon.'}}
+        comingSoon={{compact: true, title: 'Order settings are on their way', message: 'Automatic acceptance and a default cooking time will be here soon.'}}
         query={settings.query}>
         {() => (
           <ListGroup>

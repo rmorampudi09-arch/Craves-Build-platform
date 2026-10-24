@@ -1,10 +1,12 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   Pressable,
   RefreshControl,
+  StatusBar,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -14,7 +16,8 @@ import {
 } from 'react-native';
 import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {BlurTargetView} from 'expo-blur';
-import {useNavigation} from '@react-navigation/native';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
+import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
@@ -26,15 +29,20 @@ import {
   colors,
   elevation,
   fontWeight,
+  homeTop,
   radius,
   spacing,
   touchTarget,
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
+import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
+import {comingSoonTitle} from '../../customerEmptyStates/domain/customerEmptyStateModel';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
+import {CloudFill} from '../components/CloudFill';
 import {HomeCategoryRail} from '../components/HomeCategoryRail';
+import {HomeFoodTypeMenu} from '../components/HomeFoodTypeMenu';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
   OfflineNotice,
@@ -61,7 +69,10 @@ import {
   DeliveryAddressEditor,
   type DeliveryAddressEditorTarget,
 } from '../../customerShell/components/CustomerLocationSelector';
-import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {
+  browsingLocationLabel,
+  useCustomerHeaderState,
+} from '../../customerShell/hooks/useCustomerHeaderState';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
@@ -73,8 +84,8 @@ import {
   discoveryFilterActions,
   getActiveDiscoveryFilterCount,
   resolveDiscoveryFilterSession,
+  type DiscoveryDietOption,
 } from '../../discoveryFilters/state/discoveryFilterSlice';
-import {DiscoverySearchInput} from '../../discoverySearch/components/DiscoverySearchInput';
 import {
   canRequestNextSearchPage,
   isDiscoverySearchActive,
@@ -87,12 +98,28 @@ import {
   formatDishPrice,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
+import {launchAlertErrorText, useLaunchAlert} from '../api/launchAlertApi';
+import {HomeComingSoonPage} from '../components/HomeComingSoonPage';
+import {TOP_KITCHENS_PAGE_SIZE} from '../components/HomePromoAndKitchens';
+import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
 import {useQueryClient} from '@tanstack/react-query';
 import {homeBannerQueryKey} from '../query/homeBannerQueries';
 import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
 
 const HOME_RADIUS_METERS = 10_000;
 const HOME_PAGE_SIZE = 20;
+/** Search pill and filter button height on the Home board. */
+const SEARCH_ROW_HEIGHT = 52;
+const HEADER_COLLAPSE_START = 10;
+const HEADER_COLLAPSE_END = 80;
+/** White search, food type and filter controls lift off the red band with a soft shadow. */
+const WHITE_CARD_SHADOW = {
+  shadowColor: colors.espressoBrown,
+  shadowOpacity: 0.14,
+  shadowRadius: 8,
+  shadowOffset: {width: 0, height: 2},
+  elevation: 3,
+} as const;
 
 type HomeFeedListItem =
   | {kind: 'categories'; key: 'categories'}
@@ -347,6 +374,79 @@ export function CustomerHomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const listRef = useRef<FlatList<HomeFeedListItem>>(null);
+  // The search row spans about 12-64 dp of the list; the header morphs while it scrolls under.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerCollapse = useMemo(
+    () =>
+      scrollY.interpolate({
+        inputRange: [HEADER_COLLAPSE_START, HEADER_COLLAPSE_END],
+        outputRange: [0, 1],
+        extrapolate: 'clamp',
+      }),
+    [scrollY],
+  );
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  // The category row pins once the list has scrolled past everything above it (the list header).
+  const railOffsetRef = useRef(0);
+  const scrollOffsetRef = useRef(0);
+  const [railPinned, setRailPinned] = useState(false);
+  // White clouds cover the red header while the row is pinned; then the header switches to its white look.
+  const [headerWhite, setHeaderWhite] = useState(false);
+  const [headerSize, setHeaderSize] = useState({width: 0, height: 0});
+  const [listViewportHeight, setListViewportHeight] = useState(0);
+  const [railOffset, setRailOffset] = useState(0);
+  const onFeedScroll = useMemo(
+    () =>
+      Animated.event([{nativeEvent: {contentOffset: {y: scrollY}}}], {
+        useNativeDriver: true,
+        listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+          bottomNavScroll.onScroll(event);
+          const offset = event.nativeEvent.contentOffset.y;
+          scrollOffsetRef.current = offset;
+          const next = offset > (HEADER_COLLAPSE_START + HEADER_COLLAPSE_END) / 2;
+          setHeaderCollapsed(current => (current === next ? current : next));
+          const pinned = railOffsetRef.current > 0 && offset >= railOffsetRef.current - 0.5;
+          setRailPinned(current => (current === pinned ? current : pinned));
+        },
+      }),
+    [bottomNavScroll, scrollY],
+  );
+  const pinnedCategoryScrollRef = useRef(false);
+  // While the row is pinned, a new category starts its list at the first dish under the row.
+  const selectCategory = useCallback((category: string | null) => {
+    pinnedCategoryScrollRef.current =
+      railOffsetRef.current > 0 && scrollOffsetRef.current >= railOffsetRef.current - 0.5;
+    setSelectedCategory(category);
+  }, []);
+  useEffect(() => {
+    if (!pinnedCategoryScrollRef.current) return;
+    pinnedCategoryScrollRef.current = false;
+    listRef.current?.scrollToOffset({offset: railOffsetRef.current, animated: false});
+  }, [selectedCategory]);
+  const scrollToTop = useCallback(() => {
+    listRef.current?.scrollToOffset({offset: 0, animated: true});
+  }, []);
+
+  // Status bar icons follow the header (light on red, dark on white) while Home is in front;
+  // the entry is popped on blur so other screens keep theirs.
+  const statusEntryRef = useRef<ReturnType<typeof StatusBar.pushStackEntry> | null>(null);
+  const homeFocusedRef = useRef(false);
+  const headerWhiteRef = useRef(headerWhite);
+  const applyStatusBar = useCallback((white: boolean) => {
+    if (statusEntryRef.current) StatusBar.popStackEntry(statusEntryRef.current);
+    statusEntryRef.current = StatusBar.pushStackEntry({barStyle: white ? 'dark-content' : 'light-content'});
+  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      homeFocusedRef.current = true;
+      applyStatusBar(headerWhiteRef.current);
+      return () => {
+        homeFocusedRef.current = false;
+        if (statusEntryRef.current) StatusBar.popStackEntry(statusEntryRef.current);
+        statusEntryRef.current = null;
+      };
+    }, [applyStatusBar]),
+  );
 
   const searchScopeKey =
     identity?.id && selectedLocation
@@ -443,9 +543,27 @@ export function CustomerHomeScreen() {
   const hasFilters = Boolean(
     searchActive || selectedCategory || activeDiscoveryFilterCount > 0,
   );
+  // Same query as "Kitchens near you", so the cache is shared. No kitchen at all here = the coming-soon page.
+  const kitchenDiscovery = useNearbyChefDiscoveryQuery({
+    radiusMeters: HOME_RADIUS_METERS,
+    size: TOP_KITCHENS_PAGE_SIZE,
+  });
+  const noKitchensHere =
+    Boolean(selectedLocation) &&
+    kitchenDiscovery.isSuccess &&
+    (kitchenDiscovery.data.pages[0]?.kitchens.length ?? 0) === 0;
+  const launchAlert = useLaunchAlert(selectedLocation, noKitchensHere);
+
+  // The coming-soon page is white, so it takes the dark status bar icons like the white header.
+  const darkStatusBar = headerWhite || noKitchensHere;
+  headerWhiteRef.current = darkStatusBar;
+  useEffect(() => {
+    if (homeFocusedRef.current) applyStatusBar(darkStatusBar);
+  }, [applyStatusBar, darkStatusBar]);
 
   const retryFeed = () => {
     feed.refetch();
+    kitchenDiscovery.refetch();
     void queryClient.invalidateQueries({queryKey: homeBannerQueryKey});
   };
 
@@ -465,17 +583,6 @@ export function CustomerHomeScreen() {
     restorePendingRef.current = false;
     listRef.current?.scrollToOffset({offset: 0, animated: false});
   }, []);
-
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      if (feed.isFetchingNextPage) {
-        feed.cancelPendingRequest();
-      }
-      resetSearchPosition();
-      search.setDraft(value);
-    },
-    [feed, resetSearchPosition, search],
-  );
 
   const handleClearSearch = useCallback(() => {
     if (feed.isFetchingNextPage) {
@@ -593,12 +700,22 @@ export function CustomerHomeScreen() {
     [navigation],
   );
 
-  const openSubscription = useCallback(() => {
+  const openMealPlans = useCallback(() => {
     navigation.navigate('CustomerSettingsSubscription');
   }, [navigation]);
 
   const openFilters = () => {
     navigation.navigate('CustomerFilterSort', {origin: 'HOME'});
+  };
+
+  const setDiets = (diets: DiscoveryDietOption[]) => {
+    dispatch(
+      discoveryFilterActions.filtersApplied({
+        surface: 'HOME',
+        scopeKey: searchScopeKey,
+        filters: {...appliedFilters, diets},
+      }),
+    );
   };
 
   const clearFilters = () => {
@@ -616,14 +733,12 @@ export function CustomerHomeScreen() {
     if (feed.locationRequired) {
       return (
         <View style={styles.noLocationCard}>
-          <View style={styles.noLocationIcon}>
-            <Icon color={colors.flameRed} name="location" size={36} surface={false} />
-          </View>
+          <EmptyIllustration name="location" />
           <Text accessibilityRole="header" style={styles.noLocationTitle}>
             Where should Craves deliver?
           </Text>
           <Text style={styles.noLocationBody}>
-            Home kitchens, dishes and delivery depend on your address.
+            Home chefs, dishes and delivery times depend on your address.
           </Text>
           <View style={styles.noLocationActions}>
             <Button
@@ -668,6 +783,7 @@ export function CustomerHomeScreen() {
       }
       return (
         <TerminalState
+          illustration="loadError"
           title="Meals could not be loaded"
           description={queryError.message}
           actionLabel="Try again"
@@ -687,6 +803,7 @@ export function CustomerHomeScreen() {
       if (searchActive && feed.hasNextPage) {
         return (
           <TerminalState
+            illustration="search"
             title="No match in the loaded results yet"
             description="More live nearby results are available. Search the next page or clear your search."
             actionLabel="Search next page"
@@ -713,6 +830,7 @@ export function CustomerHomeScreen() {
       }
       return (
         <TerminalState
+          illustration="search"
           title="No matching meals"
           description="Try a different category or filter."
           actionLabel="Clear filters"
@@ -720,35 +838,75 @@ export function CustomerHomeScreen() {
         />
       );
     }
+    if (kitchenDiscovery.isPending) {
+      // Wait for the kitchen count so the coming-soon page doesn't follow a flash of this state.
+      return <HomeFeedSkeleton />;
+    }
     return (
       <TerminalState
-        title="No meals nearby yet"
-        description="Pull to refresh or choose another saved location."
-        actionLabel="Refresh"
-        onAction={retryFeed}
-        secondaryActionLabel="Change location"
-        onSecondaryAction={() => setLocationSelectorVisible(true)}
+        illustration="comingSoonArea"
+        title={comingSoonTitle(selectedLocation?.displayName)}
+        description="Home chefs don't cook near this address yet. Try another address."
+        actionLabel="Change delivery address"
+        onAction={() => setLocationSelectorVisible(true)}
       />
     );
   })();
 
+  // The red band fades to white by the bottom of the banner (search row + banner top gap + 2:1 banner).
+  const topFadeHeight = SEARCH_ROW_HEIGHT + spacing.sm + spacing.md + Math.max(280, width - spacing.md * 2) / 2;
   const headerContent = (
-    <View>
+    <View
+      onLayout={event => {
+        const headerHeight = event.nativeEvent.layout.height;
+        railOffsetRef.current = headerHeight;
+        setRailOffset(headerHeight);
+      }}>
       {selectedLocation ? (
         <>
+          <Svg
+            pointerEvents="none"
+            width="100%"
+            height={topFadeHeight}
+            style={[styles.topFade, {height: topFadeHeight}]}>
+            <Defs>
+              <LinearGradient id="homeTopFade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={homeTop.background} />
+                <Stop offset="0.45" stopColor={homeTop.fadeMiddle} />
+                <Stop offset="1" stopColor={colors.white} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height={topFadeHeight} fill="url(#homeTopFade)" />
+          </Svg>
           <View style={[styles.searchRow, compactLayout && styles.searchRowCompact]}>
-            <DiscoverySearchInput
+            {/* Home only opens the search page, so the field is a button. */}
+            <Pressable
+              accessibilityHint="Opens search"
               accessibilityLabel="Search nearby meals"
-              iconColor={colors.flameRedAccessible}
-              onChangeText={handleSearchChange}
-              onClear={handleClearSearch}
-              onFocus={openSearch}
-              pill
-              placeholder="Search nearby dishes or kitchens"
-              showSoftInputOnFocus={false}
-              style={styles.searchField}
-              value=""
-            />
+              accessibilityRole="search"
+              onPress={openSearch}
+              style={({pressed}) => [styles.searchField, pressed && styles.searchFieldPressed]}>
+              <Icon name="search" size={22} color={colors.flameRed} surface={false} />
+              <Text numberOfLines={1} style={styles.searchPlaceholder}>
+                Search dishes or kitchens
+              </Text>
+            </Pressable>
+            {/* Fades as its round twin rises into the header. */}
+            <Animated.View
+              style={{
+                opacity: headerCollapse.interpolate({
+                  inputRange: [0, 0.45],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+              }}>
+              <HomeFoodTypeMenu
+                appearance="card"
+                diets={appliedFilters.diets}
+                onChange={setDiets}
+                style={styles.foodTypeMenuPill}
+              />
+            </Animated.View>
             <Pressable
               accessibilityHint="Open filter and sort options"
               accessibilityLabel="Filters"
@@ -756,19 +914,21 @@ export function CustomerHomeScreen() {
               onPress={openFilters}
               style={({pressed}) => [
                 styles.filterButton,
-                activeDiscoveryFilterCount > 0 && styles.filterButtonActive,
+                // The food type pill shows diets itself, so only other filters light this up.
+                activeDiscoveryFilterCount - appliedFilters.diets.length > 0 &&
+                  styles.filterButtonActive,
                 pressed && styles.filterButtonPressed,
               ]}>
               <Icon
                 name="filter"
-                size={20}
-                color={colors.flameRedAccessible}
+                size={22}
+                color={colors.flameRed}
                 surface={false}
               />
             </Pressable>
           </View>
 
-          <HomePromoAndKitchens />
+          <HomePromoAndKitchens diets={appliedFilters.diets} />
 
           <View style={styles.mindHeadingRow}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>
@@ -780,17 +940,85 @@ export function CustomerHomeScreen() {
     </View>
   );
 
+  const locationModals = (
+    <>
+      <CustomerLocationSelector
+        visible={locationSelectorVisible}
+        onClose={() => setLocationSelectorVisible(false)}
+      />
+      {addressEditor ? (
+        <DeliveryAddressEditor
+          onClose={() => setAddressEditor(null)}
+          target={addressEditor}
+        />
+      ) : null}
+    </>
+  );
+
+  if (noKitchensHere && selectedLocation) {
+    return (
+      <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
+        <HomeComingSoonPage
+          bottomPadding={listBottomPadding}
+          locationLabel={browsingLocationLabel(selectedLocation.label)}
+          locationName={selectedLocation.displayName}
+          notifyError={launchAlert.error ? launchAlertErrorText(launchAlert.error) : null}
+          notifyPending={launchAlert.saving}
+          onChangeAddress={() => setLocationSelectorVisible(true)}
+          onNotify={launchAlert.subscribe}
+          onRefresh={retryFeed}
+          refreshing={kitchenDiscovery.isRefetching}
+          subscribed={launchAlert.subscribed}
+          topInset={insets.top}
+        />
+        {locationModals}
+      </ScreenShell>
+    );
+  }
+
   return (
-    <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-home">
-      <View style={styles.fixedHeader}>
+    <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
+      {/* The header pads itself under the status bar, so the clouds can cover the status bar too. */}
+      <View
+        onLayout={event => {
+          const {width: headerWidth, height: headerHeight} = event.nativeEvent.layout;
+          setHeaderSize(current =>
+            current.width === headerWidth && current.height === headerHeight
+              ? current
+              : {width: headerWidth, height: headerHeight},
+          );
+        }}
+        style={[styles.fixedHeader, {paddingTop: insets.top}]}>
+        <CloudFill
+          active={railPinned}
+          color={colors.white}
+          edge="bottom"
+          height={headerSize.height}
+          onCoveredChange={setHeaderWhite}
+          testID="home-header-cloud"
+          width={headerSize.width}
+        />
         <CustomerHeader
+          tone={headerWhite ? 'light' : 'red'}
+          transparent
           onPressLocation={() => setLocationSelectorVisible(true)}
           onPressNotifications={header.openNotifications}
-          onPressSubscription={openSubscription}
+          onPressMealPlans={openMealPlans}
+          collapse={selectedLocation ? headerCollapse : undefined}
+          collapsed={headerCollapsed}
+          collapsedAccessory={
+            <HomeFoodTypeMenu
+              compact
+              appearance={headerWhite ? 'default' : 'onRed'}
+              diets={appliedFilters.diets}
+              onChange={setDiets}
+              testID="home-food-type-header"
+            />
+          }
         />
       </View>
       <View style={styles.feedContainer}>
-        <FlatList
+        <Animated.FlatList
           ref={listRef}
           data={listData}
           keyExtractor={item => item.key}
@@ -798,6 +1026,7 @@ export function CustomerHomeScreen() {
           nestedScrollEnabled
           removeClippedSubviews={false}
           style={styles.feedList}
+          onLayout={event => setListViewportHeight(event.nativeEvent.layout.height)}
           ListFooterComponent={
             feed.isFetchingNextPage ? (
               <ActivityIndicator
@@ -805,6 +1034,17 @@ export function CustomerHomeScreen() {
                 color={colors.flameRed}
                 style={styles.footerLoader}
               />
+            ) : !feed.hasNextPage && visibleDishes.length > 0 ? (
+              <Pressable
+                accessibilityHint="Scrolls back to the top of Home"
+                accessibilityLabel="Back to top"
+                accessibilityRole="button"
+                onPress={scrollToTop}
+                style={({pressed}) => [styles.backToTop, pressed && styles.backToTopPressed]}
+                testID="home-back-to-top">
+                <MaterialDesignIcons color={colors.flameRedAccessible} name="arrow-up" size={18} />
+                <Text style={styles.backToTopText}>Back to top</Text>
+              </Pressable>
             ) : null
           }
           ListHeaderComponent={headerContent}
@@ -812,7 +1052,7 @@ export function CustomerHomeScreen() {
           onEndReached={loadNextPage}
           onEndReachedThreshold={0.6}
           onMomentumScrollEnd={saveListOffset}
-          onScroll={bottomNavScroll.onScroll}
+          onScroll={onFeedScroll}
           stickyHeaderIndices={feed.locationRequired ? undefined : [1]}
           onScrollEndDrag={saveListOffset}
           refreshControl={
@@ -829,7 +1069,7 @@ export function CustomerHomeScreen() {
                 <View style={styles.stickyCategoryWrap}>
                   <HomeCategoryRail
                     selectedCategory={selectedCategory}
-                    onSelect={setSelectedCategory}
+                    onSelect={selectCategory}
                   />
                 </View>
               );
@@ -904,19 +1144,12 @@ export function CustomerHomeScreen() {
           contentContainerStyle={[
             styles.listContent,
             {paddingBottom: listBottomPadding},
+            // Always room to keep the category row pinned, even for a category with one dish or none.
+            railOffset > 0 && listViewportHeight > 0 && {minHeight: railOffset + listViewportHeight},
           ]}
         />
       </View>
-      <CustomerLocationSelector
-        visible={locationSelectorVisible}
-        onClose={() => setLocationSelectorVisible(false)}
-      />
-      {addressEditor ? (
-        <DeliveryAddressEditor
-          onClose={() => setAddressEditor(null)}
-          target={addressEditor}
-        />
-      ) : null}
+      {locationModals}
     </ScreenShell>
   );
 }
@@ -936,14 +1169,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.white,
     ...elevation.card,
-  },
-  noLocationIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
   },
   noLocationTitle: {
     color: colors.textPrimary,
@@ -965,10 +1190,19 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   fixedHeader: {
-    backgroundColor: colors.white,
+    backgroundColor: homeTop.background,
+    // Lets the food type circle rise over the list edge into the header.
+    zIndex: 2,
   },
   feedContainer: {
     flex: 1,
+    backgroundColor: colors.white,
+  },
+  topFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   feedList: {
     flex: 1,
@@ -980,7 +1214,7 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
@@ -990,24 +1224,46 @@ const styles = StyleSheet.create({
   searchField: {
     minWidth: 0,
     flex: 1,
+    height: SEARCH_ROW_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.white,
+    backgroundColor: colors.white,
+    ...WHITE_CARD_SHADOW,
+  },
+  searchFieldPressed: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  searchPlaceholder: {
+    minWidth: 0,
+    flex: 1,
+    color: colors.placeholder,
+    fontSize: typography.body,
   },
   filterButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
+    width: SEARCH_ROW_HEIGHT,
+    height: SEARCH_ROW_HEIGHT,
     flexShrink: 0,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.white,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...WHITE_CARD_SHADOW,
   },
   filterButtonActive: {
     borderColor: colors.flameRed,
-    backgroundColor: colors.iconSurface,
+  },
+  foodTypeMenuPill: {
+    height: SEARCH_ROW_HEIGHT,
   },
   filterButtonPressed: {
-    backgroundColor: colors.surfaceMuted,
+    opacity: 0.78,
     transform: [{scale: 0.96}],
   },
   mindHeadingRow: {
@@ -1253,6 +1509,26 @@ const styles = StyleSheet.create({
   },
   footerLoader: {
     paddingVertical: spacing.lg,
+  },
+  backToTop: {
+    alignSelf: 'center',
+    minHeight: touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  backToTopPressed: {backgroundColor: colors.surfaceMuted},
+  backToTopText: {
+    color: colors.textPrimary,
+    fontSize: typography.small,
+    fontWeight: fontWeight.semibold,
   },
   skeletonWrap: {
     padding: spacing.md,

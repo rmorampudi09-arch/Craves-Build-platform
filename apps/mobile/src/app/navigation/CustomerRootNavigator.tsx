@@ -223,6 +223,9 @@ const profileTabOptions = {
   tabBarIcon: ProfileTabIcon,
 };
 
+/** The dish popup keeps the page behind drawn and still; the screen animates its own dim and sheet. */
+const DISH_SHEET_OPTIONS = {presentation: 'transparentModal', animation: 'none'} as const;
+
 function useCustomerStackScreenOptions() {
   const reduceMotionEnabled = useReducedMotionPreference();
   return React.useMemo(
@@ -395,7 +398,7 @@ function CustomerHomeStackNavigator() {
       <HomeStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
       <HomeStack.Screen name="CustomerSettingsSubscription" component={CustomerSettingsSubscriptionScreen} />
       <HomeStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
-      <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
+      <HomeStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} options={DISH_SHEET_OPTIONS} />
       <HomeStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <HomeStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
       <HomeStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
@@ -415,7 +418,7 @@ function CustomerChefsStackNavigator() {
       <ChefsStack.Screen name="CustomerChefsRoot" component={DiscoverHomeChefsRouteScreen} listeners={rootListeners} />
       <ChefsStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
       <ChefsStack.Screen name="CustomerFilterSort" component={CustomerFilterSortScreen} />
-      <ChefsStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
+      <ChefsStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} options={DISH_SHEET_OPTIONS} />
       <ChefsStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ChefsStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
       <ChefsStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
@@ -434,7 +437,7 @@ function CustomerOrdersStackNavigator() {
     <OrdersStack.Navigator screenOptions={stackScreenOptions}>
       <OrdersStack.Screen name="CustomerOrdersRoot" component={CustomerOrdersRouteScreen} listeners={rootListeners} />
       <OrdersStack.Screen name="CustomerNotifications" component={CustomerNotificationsRouteScreen} />
-      <OrdersStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
+      <OrdersStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} options={DISH_SHEET_OPTIONS} />
       <OrdersStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <OrdersStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
       <OrdersStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
@@ -474,7 +477,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
       <ProfileStack.Screen name="CustomerOrderReview" component={CustomerOrderReviewScreen} />
       <ProfileStack.Screen name="CustomerOrderTracking" component={CustomerOrderTrackingScreen} />
-      <ProfileStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} />
+      <ProfileStack.Screen name="CustomerDishDetail" component={CustomerDishDetailScreen} options={DISH_SHEET_OPTIONS} />
       <ProfileStack.Screen name="CustomerDishIngredients" component={CustomerDishIngredientsScreen} />
       <ProfileStack.Screen name="CustomerKitchenProfile" component={CustomerKitchenProfileScreen} />
       <ProfileStack.Screen name="CustomerCart" component={CustomerCartScreen} />

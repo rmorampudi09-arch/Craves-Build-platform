@@ -98,7 +98,8 @@ function occurrence(over: Partial<CustomerSubscriptionOccurrence> = {}): Custome
 const done = () => Promise.resolve(undefined);
 const actions = {
   pause: jest.fn(done),
-  resume: jest.fn((_date: string) => done()),
+  resume: jest.fn((_date: string) => Promise.resolve(subscription())),
+  chooseDayCredit: jest.fn((_creditId: string, _choice: 'REFUND' | 'EXTEND') => done()),
   skip: jest.fn((_date: string) => done()),
   cancel: jest.fn(done),
   pending: false,
@@ -267,6 +268,30 @@ describe('MyMealPlanScreen', () => {
     expect(actions.resume).toHaveBeenCalledWith(todayIso(tomorrow));
   });
 
+  it('turns Pause off when the bill has no pause days left', () => {
+    given({sub: subscription({pauseDaysPerBill: 1, pauseDaysLeft: 0})});
+    const root = renderPlan();
+    expect(byLabel(root, 'Pause plan')).toBeUndefined();
+    expect(byLabel(root, 'No pause days left this bill').props.disabled).toBe(true);
+  });
+
+  it('shows the automatic restart and hides a resume that would come later', () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const restart = todayIso(tomorrow);
+    given({sub: subscription({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: restart})});
+    const root = renderPlan();
+    expect(texts(root)).toContain(`Restarts on ${formatMealPlanDate(restart, 'long')}`);
+    expect(byLabel(root, 'Resume plan')).toBeUndefined();
+  });
+
+  it('offers Resume when the automatic restart never happened', () => {
+    given({sub: subscription({status: 'PAUSED', pauseDaysLeft: 0, pauseAutoResumeDate: '2026-01-01'})});
+    const root = renderPlan();
+    expect(texts(root).some(text => text.startsWith('Restarts on'))).toBe(false);
+    expect(byLabel(root, 'Resume plan')).toBeDefined();
+  });
+
   it('skips a date picked from the sheet', async () => {
     const later = occurrence({id: 'occ-2', serviceDate: '2099-01-02', serviceAt: '2099-01-02T07:00:00Z'});
     given({occurrences: [later]});
@@ -292,6 +317,98 @@ describe('MyMealPlanScreen', () => {
     const root = renderPlan();
     act(() => byLabel(root, 'Complete payment').props.onPress());
     expect(navigation.navigate).toHaveBeenCalledWith('MealPlanPayment', {planId, subscriptionId});
+  });
+});
+
+describe('MyMealPlanScreen refund-or-extend choices', () => {
+  const renderPlan = () =>
+    render(<MyMealPlanScreen navigation={navigation as never} route={route({subscriptionId})} />);
+  const inTwoDays = () => new Date(Date.now() + 48 * 3_600_000).toISOString();
+  const declineId = '88888888-8888-4888-8888-888888888888';
+  const pauseId = '99999999-9999-4999-8999-999999999999';
+  const decline = (over: object = {}) => ({
+    id: declineId,
+    kind: 'DECLINE',
+    firstDate: '2026-10-14',
+    lastDate: '2026-10-14',
+    mealSlotCode: 'LUNCH',
+    days: null,
+    status: 'PENDING_CHOICE',
+    refundAmount: null,
+    currency: 'INR',
+    choiceDeadline: inTwoDays(),
+    extendAvailable: true,
+    ...over,
+  });
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  it('pendingDeclineShowsChoiceCard', () => {
+    given({sub: subscription({dayCredits: [decline()]})});
+    const root = renderPlan();
+    expect(texts(root)).toContain("Your chef couldn't make Lunch on Wed, 14 Oct");
+    expect(byLabel(root, 'Get a refund')).toBeDefined();
+    expect(byLabel(root, 'Add 1 day at the end')).toBeDefined();
+  });
+
+  it('refundButtonCallsChoose', async () => {
+    given({sub: subscription({dayCredits: [decline()]})});
+    const root = renderPlan();
+    act(() => byLabel(root, 'Get a refund').props.onPress());
+    // A choice can't be changed later, so it is confirmed first.
+    expect(actions.chooseDayCredit).not.toHaveBeenCalled();
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Get a refund?');
+    await pressAlert('Get a refund');
+    expect(actions.chooseDayCredit).toHaveBeenCalledWith(declineId, 'REFUND');
+  });
+
+  it('shows the server message when a choice is refused', async () => {
+    given({sub: subscription({dayCredits: [decline()]})});
+    actions.chooseDayCredit.mockRejectedValueOnce(
+      new AppApiError('DAY_CREDIT_ALREADY_SETTLED', 'This day has already been settled.'),
+    );
+    const root = renderPlan();
+    act(() => byLabel(root, 'Add 1 day at the end').props.onPress());
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Add 1 day at the end?');
+    await pressAlert('Add 1 day at the end');
+    expect(actions.chooseDayCredit).toHaveBeenCalledWith(declineId, 'EXTEND');
+    expect(Alert.alert).toHaveBeenLastCalledWith('Choice not saved', 'This day has already been settled.');
+  });
+
+  it('extendHiddenWhenNotAvailable', () => {
+    given({sub: subscription({dayCredits: [decline({extendAvailable: false})]})});
+    const root = renderPlan();
+    expect(byLabel(root, 'Get a refund')).toBeDefined();
+    expect(byLabel(root, 'Add 1 day at the end')).toBeUndefined();
+  });
+
+  it('settledCreditShowsItsLine', () => {
+    given({sub: subscription({dayCredits: [decline({status: 'REFUND_REQUESTED'})]})});
+    const root = renderPlan();
+    expect(texts(root)).toContain('Refund requested. It goes back to the UPI or card you paid with.');
+    expect(byLabel(root, 'Get a refund')).toBeUndefined();
+  });
+
+  it('noDayCreditsShowsNothing', () => {
+    given();
+    const root = renderPlan();
+    expect(byLabel(root, 'Get a refund')).toBeUndefined();
+  });
+
+  it('resumeOffersThePauseChoice', async () => {
+    given({sub: subscription({status: 'PAUSED'})});
+    const pause = decline({id: pauseId, kind: 'PAUSE', firstDate: '2026-10-10', lastDate: '2026-10-12', mealSlotCode: null, days: 3});
+    actions.resume.mockResolvedValueOnce(subscription({dayCredits: [pause] as never}));
+    const root = renderPlan();
+    act(() => byLabel(root, 'Resume plan').props.onPress());
+    await pressAlert('Resume plan');
+
+    const [title, , buttons] = jest.mocked(Alert.alert).mock.calls.at(-1) ?? [];
+    expect(title).toBe('You paused 3 days');
+    expect((buttons ?? []).map(button => button.text)).toEqual(['Later', 'Get a refund', 'Add 3 days at the end']);
+    await pressAlert('Add 3 days at the end');
+    expect(actions.chooseDayCredit).toHaveBeenCalledWith(pauseId, 'EXTEND');
   });
 });
 

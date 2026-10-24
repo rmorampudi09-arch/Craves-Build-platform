@@ -22,6 +22,8 @@ jest.mock('../api/customerSubscriptionApi', () => ({
     listPlans: jest.fn(),
     getPlanSchedule: jest.fn(),
     pause: jest.fn(),
+    resume: jest.fn(),
+    chooseDayCredit: jest.fn(),
   },
 }));
 jest.mock('../../dishDetail/api/dishDetailApi', () => ({
@@ -213,5 +215,35 @@ describe('useSubscriptionActions', () => {
     });
     expect(invalidate).toHaveBeenCalledWith({queryKey: mealPlanQueryPrefix});
     expect(result.current.pending).toBe(false);
+  });
+
+  it('chooses a day credit and refreshes the plan', async () => {
+    const CREDIT_ID = '88888888-8888-4888-8888-888888888888';
+    get(customerSubscriptionApi.chooseDayCredit).mockResolvedValueOnce({});
+    const {result, queryClient} = await renderHook(() =>
+      useSubscriptionActions(SUBSCRIPTION_ID),
+    );
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    await act(async () => {
+      await result.current.chooseDayCredit(CREDIT_ID, 'EXTEND');
+    });
+
+    expect(customerSubscriptionApi.chooseDayCredit).toHaveBeenCalledWith(SUBSCRIPTION_ID, CREDIT_ID, 'EXTEND');
+    expect(invalidate).toHaveBeenCalledWith({queryKey: mealPlanQueryPrefix});
+  });
+
+  it('resume returns the resumed plan, so a new pause choice can be offered', async () => {
+    const resumed = {id: SUBSCRIPTION_ID, dayCredits: []};
+    get(customerSubscriptionApi.resume).mockResolvedValueOnce(resumed);
+    const {result} = await renderHook(() => useSubscriptionActions(SUBSCRIPTION_ID));
+
+    let returned: unknown;
+    await act(async () => {
+      returned = await result.current.resume('2026-10-20');
+    });
+
+    expect(customerSubscriptionApi.resume).toHaveBeenCalledWith(SUBSCRIPTION_ID, '2026-10-20');
+    expect(returned).toBe(resumed);
   });
 });

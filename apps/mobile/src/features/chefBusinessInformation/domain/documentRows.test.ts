@@ -1,5 +1,5 @@
 import {EMPTY_ONBOARDING, type ChefEvidence, type OnboardingState} from '../../chefOnboarding/api/chefOnboardingApi';
-import {documentRows, documentsSummary, uploadChoices, verificationBanner} from './documentRows';
+import {documentRows, documentsSummary, verificationBanner} from './documentRows';
 
 const evidence = (documentType: string, status: ChefEvidence['status'], reviewReason: string | null = null): ChefEvidence => ({
   id: `id-${documentType}`,
@@ -82,17 +82,6 @@ describe('verificationBanner', () => {
       tone: 'wait',
       title: 'Your application is not finished',
     });
-  });
-});
-
-describe('uploadChoices', () => {
-  it('offers the four files the application takes, named with the chosen ID proof', () => {
-    expect(uploadChoices(state())).toEqual([
-      {type: 'SELECTED_PROOF_FRONT', title: 'Aadhaar card · front'},
-      {type: 'SELECTED_PROOF_BACK', title: 'Aadhaar card · back'},
-      {type: 'KITCHEN_PHOTO_1', title: 'Kitchen photo'},
-      {type: 'KITCHEN_PHOTO_2', title: 'Cooking setup photo'},
-    ]);
   });
 });
 

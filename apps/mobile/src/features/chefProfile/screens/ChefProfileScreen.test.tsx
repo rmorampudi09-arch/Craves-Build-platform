@@ -104,7 +104,10 @@ describe('ChefProfileScreen', () => {
     mockKitchenState.hoursToday = '11:00 AM – 10:00 PM';
     mockSummary.mockResolvedValue({kitchenId: KITCHEN.id, reviewCount: 32, overallAverage: 4.6});
     mockBank.mockResolvedValue({state: 'VERIFIED', lastFour: '4521', bankName: 'SBI'});
-    mockOnboardingLoad.mockResolvedValue({details: {...EMPTY_ONBOARDING, proofKind: 'AADHAAR', fssaiNumber: '12345678901234'}});
+    mockOnboardingLoad.mockResolvedValue({
+      details: {...EMPTY_ONBOARDING, proofKind: 'AADHAAR', fssaiNumber: '12345678901234'},
+      documents: [{id: 'd1', documentType: 'SELECTED_PROOF_FRONT', status: 'APPROVED'}],
+    });
     jest.mocked(switchChefToCustomerRole).mockResolvedValue(undefined);
     jest.mocked(completeLogout).mockResolvedValue(undefined);
   });
@@ -117,7 +120,7 @@ describe('ChefProfileScreen', () => {
     expect(ui.has('Chef Relangi · KPHB, Hyderabad')).toBe(true);
     expect(ui.has('Approved')).toBe(true);
     expect(ui.has('★ 4.6 · 32 reviews')).toBe(true);
-    expect(ui.has('Craves for Chefs · version 1.31.1')).toBe(true);
+    expect(ui.has('Craves for Chefs · version 1.35.5')).toBe(true);
   });
 
   it('groups the rows as Kitchen, Money and More, each with its short line', async () => {
@@ -163,11 +166,13 @@ describe('ChefProfileScreen', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('ChefEditProfile');
   });
 
-  it('shows only Verified for an approved chef who has no application of the new kind, and the bank by its last digits when it has no name', async () => {
+  it('has no Documents page for an approved chef with no application documents, and shows the bank by its last digits when it has no name', async () => {
     mockOnboardingLoad.mockRejectedValue(new AppApiError('HTTP_404', 'Not found', 404));
     mockBank.mockResolvedValue({state: 'VERIFIED', lastFour: '4521', bankName: null});
     await mount();
-    expect(ui.byPrefix('Documents & verification')?.props.accessibilityLabel).toBe('Documents & verification, Verified');
+    expect(ui.byPrefix('Documents & verification')).toBeUndefined();
+    expect(ui.has('Approved')).toBe(true);
+    expect(ui.byLabel('Approved. Open documents')).toBeUndefined();
     expect(ui.byPrefix('Bank account')?.props.accessibilityLabel).toBe('Bank account, ••4521');
   });
 

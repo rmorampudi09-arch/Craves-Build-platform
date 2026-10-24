@@ -5,6 +5,7 @@ import ChefHat from 'lucide-react-native/icons/chef-hat';
 import ClipboardList from 'lucide-react-native/icons/clipboard-list';
 import UserRound from 'lucide-react-native/icons/user-round';
 import ChartNoAxesColumnIncreasing from 'lucide-react-native/icons/chart-no-axes-column-increasing';
+import Wallet from 'lucide-react-native/icons/wallet';
 import { bottomMenu } from '../../design/tokens';
 
 const MENU_ICONS = {
@@ -13,6 +14,7 @@ const MENU_ICONS = {
   orders: ClipboardList,
   account: UserRound,
   analytics: ChartNoAxesColumnIncreasing,
+  wallet: Wallet,
 } as const;
 
 export function BottomMenuIcon({

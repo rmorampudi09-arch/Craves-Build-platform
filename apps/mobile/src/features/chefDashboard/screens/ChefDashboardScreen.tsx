@@ -1,5 +1,5 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type CompositeNavigationProp} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -39,6 +39,8 @@ import {
 import {NotificationBell} from '../../chefShell/components/ui/ChefTopBar';
 import {formatRelativeTime, formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
+import {useChefBankStatus} from '../../chefBankOnboarding/state/useChefBankStatus';
+import {needsBankAccount} from '../../chefPayout/domain/chefPayoutPresentation';
 import {useChefReviewPreview} from '../../reviews/query/useChefReviewPreview';
 import {RespondTimer} from '../components/RespondTimer';
 import {useKitchenStatusControl} from '../components/useKitchenStatusControl';
@@ -128,11 +130,15 @@ function HomeHeader({
   const locked = (kitchen.status === 'unknown' && !kitchen.unavailable) || kitchen.status === 'suspended';
   return (
     <View style={styles.header}>
-      <View importantForAccessibility="no-hide-descendants" style={styles.avatar}>
-        <Text allowFontScaling={false} style={styles.avatarText}>
-          {name.charAt(0).toUpperCase()}
-        </Text>
-      </View>
+      {kitchen.kitchen?.chefPhotoUrl ? (
+        <Image accessibilityIgnoresInvertColors source={{uri: kitchen.kitchen.chefPhotoUrl}} style={styles.avatar} />
+      ) : (
+        <View importantForAccessibility="no-hide-descendants" style={styles.avatar}>
+          <Text allowFontScaling={false} style={styles.avatarText}>
+            {name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      )}
       <View style={styles.headerText}>
         <Text
           accessibilityRole="header"
@@ -165,6 +171,7 @@ export function ChefDashboardScreen() {
   const navigation = useNavigation<HomeNavigation>();
   const toast = useChefToast();
   const model = useChefDashboardModel();
+  const addBank = needsBankAccount(useChefBankStatus().bank);
   const kitchen = useKitchenOpenState();
   const reviews = useChefReviewPreview();
   const newActions = useChefNewOrderActions();
@@ -546,7 +553,15 @@ export function ChefDashboardScreen() {
           </View>
           <Icon color={colors.white} name="wallet" size={iconSize.xl} surface={false} />
         </View>
-        <ChefActionButton label="Withdraw" onPress={() => navigation.navigate('Earnings', {openWithdraw: true})} tone="inverse" />
+        {addBank ? (
+          <ChefActionButton
+            label="Add bank account"
+            onPress={() => navigation.navigate('Profile', {screen: 'ChefBankAccount', params: {from: 'home'}, initial: false})}
+            tone="inverse"
+          />
+        ) : (
+          <ChefActionButton label="Withdraw" onPress={() => navigation.navigate('Earnings', {openWithdraw: true})} tone="inverse" />
+        )}
       </View>
 
       {kitchenControl.dialogs}

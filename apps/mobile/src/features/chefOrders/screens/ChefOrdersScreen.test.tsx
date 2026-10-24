@@ -80,7 +80,7 @@ jest.mock('../components/KitchenStatusCard', () => {
   };
 });
 
-const id = (suffix: string) => `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`;
+const id = (suffix: string) => `${suffix.padStart(8, '0')}-0000-4000-8000-${suffix.padStart(12, '0')}`;
 const NEW_ID = id('df94b');
 const NEW_ID_2 = id('9b2e1');
 const COOK_ID = id('a21c7');
@@ -364,20 +364,20 @@ describe('Orders: filters', () => {
 describe('Orders: New', () => {
   it('shows each order with customer, area, age, total, dishes and one Accept and Reject', async () => {
     await mount();
-    expect(hasText('#DF94B')).toBe(true);
-    expect(hasText('#9B2E1')).toBe(true);
+    expect(hasText('#000DF94B')).toBe(true);
+    expect(hasText('#0009B2E1')).toBe(true);
     expect(hasText('₹220')).toBe(true);
     expect(hasText(/^Priya S\. · KPHB Colony · 2 min ago$/)).toBe(true);
-    expect(buttons('Accept order #DF94B')).toHaveLength(1);
-    expect(buttons('Reject order #DF94B')).toHaveLength(1);
+    expect(buttons('Accept order #000DF94B')).toHaveLength(1);
+    expect(buttons('Reject order #000DF94B')).toHaveLength(1);
     expect(hasText('Accept · 20 min')).toBe(true);
     expect(allText().join(' ')).not.toMatch(/Accept All|NON_VEG/);
   });
 
   it('puts the longest-waiting order first', async () => {
     await mount();
-    const numbers = allText().filter(value => /^#(DF94B|9B2E1)$/.test(value));
-    expect(numbers).toEqual(['#9B2E1', '#DF94B']);
+    const numbers = allText().filter(value => /^#(000DF94B|0009B2E1)$/.test(value));
+    expect(numbers).toEqual(['#0009B2E1', '#000DF94B']);
   });
 
   it('shows the response countdown and the customer note only when the order carries them', async () => {
@@ -395,7 +395,7 @@ describe('Orders: New', () => {
 
   it('opens the order page from the card', async () => {
     await mount();
-    await press('Order #DF94B, ₹220, Priya S., 3 items');
+    await press('Order #000DF94B, ₹220, Priya S., 3 items');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: NEW_ID});
   });
 
@@ -404,7 +404,7 @@ describe('Orders: New', () => {
     mockApi.acceptOrder.mockReturnValueOnce(new Promise(resolve => (finish = resolve)));
     mockOperational = baseOperational([newOrder]);
     await mount();
-    const accept = buttons('Accept order #DF94B')[0];
+    const accept = buttons('Accept order #000DF94B')[0];
     expect(accept.props.disabled).toBe(false);
     await act(async () => {
       accept.props.onPress();
@@ -412,8 +412,8 @@ describe('Orders: New', () => {
     });
     expect(mockApi.acceptOrder).toHaveBeenCalledTimes(1);
     expect(mockApi.acceptOrder).toHaveBeenCalledWith(NEW_ID, {prepTimeMinutes: 20, note: null}, expect.any(String));
-    expect(buttons('Accept order #DF94B')[0].props.disabled).toBe(true);
-    expect(buttons('Reject order #DF94B')[0].props.disabled).toBe(true);
+    expect(buttons('Accept order #000DF94B')[0].props.disabled).toBe(true);
+    expect(buttons('Reject order #000DF94B')[0].props.disabled).toBe(true);
     await act(async () => finish(detail(NEW_ID, 'CHEF_ACCEPTED')));
     expect(mockReconcile).toHaveBeenCalledWith(NEW_ID, 'CHEF_ACCEPTED', expect.anything(), 20);
     expect(hasText('Order accepted and moved to Preparing.')).toBe(true);
@@ -458,13 +458,13 @@ describe('Orders: New', () => {
 describe('Orders: Reject', () => {
   const openSheet = async () => {
     await mount();
-    await press('Reject order #DF94B');
+    await press('Reject order #000DF94B');
   };
 
   it('opens the reasons sheet for that order instead of rejecting straight away', async () => {
     await openSheet();
     expect(visibleModals()).toHaveLength(1);
-    expect(hasText('Reject #DF94B?')).toBe(true);
+    expect(hasText('Reject #000DF94B?')).toBe(true);
     expect(mockApi.rejectOrder).not.toHaveBeenCalled();
   });
 
@@ -561,11 +561,11 @@ describe('Orders: Preparing', () => {
   it('shows the cooking order with when it was accepted, the time left, Call and Mark ready', async () => {
     mockOperational = baseOperational([cookingOrder], {orderTabs: {prepTimers: {[COOK_ID]: timer()}}});
     await mount('ChefOrdersPreparing');
-    expect(hasText('#A21C7')).toBe(true);
+    expect(hasText('#000A21C7')).toBe(true);
     expect(hasText(/^Meena V\. · Accepted 2:40 PM$/)).toBe(true);
     expect(hasText('Ready in 10 min')).toBe(true);
-    expect(buttons('Mark #A21C7 ready')).toHaveLength(1);
-    expect(buttons('Call customer for #A21C7')).toHaveLength(1);
+    expect(buttons('Mark #000A21C7 ready')).toHaveLength(1);
+    expect(buttons('Call customer for #000A21C7')).toHaveLength(1);
   });
 
   it('says how late an overdue order is', async () => {
@@ -580,9 +580,9 @@ describe('Orders: Preparing', () => {
     mockApi.getOrder.mockImplementation(async (orderId: string) => detail(orderId, 'PREPARING'));
     mockOperational = baseOperational([cookingOrder], {orderTabs: {prepTimers: {}}});
     await mount('ChefOrdersPreparing');
-    await press('Mark #A21C7 ready');
+    await press('Mark #000A21C7 ready');
     expect(visibleModals()).toHaveLength(1);
-    expect(hasText('Is #A21C7 packed and ready?')).toBe(true);
+    expect(hasText('Is #000A21C7 packed and ready?')).toBe(true);
     expect(hasText('1 × Dum Chicken biriyani. The delivery partner is told to pick it up.')).toBe(true);
     expect(mockApi.markReadyForPickup).not.toHaveBeenCalled();
 
@@ -600,7 +600,7 @@ describe('Orders: Preparing', () => {
   it('Not yet closes the dialog without marking ready', async () => {
     mockOperational = baseOperational([cookingOrder]);
     await mount('ChefOrdersPreparing');
-    await press('Mark #A21C7 ready');
+    await press('Mark #000A21C7 ready');
     await press('Not yet');
     expect(visibleModals()).toHaveLength(0);
     expect(mockApi.markReadyForPickup).not.toHaveBeenCalled();
@@ -618,13 +618,13 @@ describe('Orders: Preparing', () => {
 describe('Orders: Ready', () => {
   it('shows the waiting partner line and the safety tip, and both buttons when the server supports hand-over', async () => {
     await mount('ChefOrdersReady');
-    expect(hasText('#0E7CD')).toBe(true);
+    expect(hasText('#0000E7CD')).toBe(true);
     expect(hasText('Ready')).toBe(true);
     expect(hasText(/^Arjun M\. · Ready since 2:50 PM$/)).toBe(true);
     expect(hasText('Waiting for a delivery partner')).toBe(true);
     expect(hasText('Hand the bag only to the partner shown here. Check the order number on the bag.')).toBe(true);
-    expect(buttons('Not picked up #0E7CD')).toHaveLength(1);
-    expect(buttons('Handed over #0E7CD')).toHaveLength(1);
+    expect(buttons('Not picked up #0000E7CD')).toHaveLength(1);
+    expect(buttons('Handed over #0000E7CD')).toHaveLength(1);
   });
 
   it('shows the courier, the arrival time and a call button when the server sends them', async () => {
@@ -646,12 +646,12 @@ describe('Orders: Ready', () => {
     delete withoutField.chefHandedOverAt;
     mockOperational = baseOperational([withoutField]);
     await mount('ChefOrdersReady');
-    expect(buttons('Handed over #0E7CD')).toHaveLength(0);
-    expect(buttons('Not picked up #0E7CD')).toHaveLength(1);
+    expect(buttons('Handed over #0000E7CD')).toHaveLength(0);
+    expect(buttons('Not picked up #0000E7CD')).toHaveLength(1);
     act(() => tree.unmount());
     mockOperational = baseOperational([{...readyOrder, chefHandedOverAt: '2026-10-14T09:00:00.000Z'}]);
     await mount('ChefOrdersReady');
-    expect(buttons('Handed over #0E7CD')).toHaveLength(0);
+    expect(buttons('Handed over #0000E7CD')).toHaveLength(0);
   });
 
   it('shows Handed over only on the order whose field is present and null, not on one that does not carry it', async () => {
@@ -659,15 +659,15 @@ describe('Orders: Ready', () => {
     delete noField.chefHandedOverAt;
     mockOperational = baseOperational([readyOrder, noField]);
     await mount('ChefOrdersReady');
-    expect(buttons('Handed over #0E7CD')).toHaveLength(1);
-    expect(buttons('Handed over #0E7CE')).toHaveLength(0);
-    expect(buttons('Not picked up #0E7CD')).toHaveLength(1);
-    expect(buttons('Not picked up #0E7CE')).toHaveLength(1);
+    expect(buttons('Handed over #0000E7CD')).toHaveLength(1);
+    expect(buttons('Handed over #0000E7CE')).toHaveLength(0);
+    expect(buttons('Not picked up #0000E7CD')).toHaveLength(1);
+    expect(buttons('Not picked up #0000E7CE')).toHaveLength(1);
   });
 
   it('posts the hand-over once and hides the button; the order stays Ready', async () => {
     await mount('ChefOrdersReady');
-    const handedOver = buttons('Handed over #0E7CD')[0];
+    const handedOver = buttons('Handed over #0000E7CD')[0];
     await act(async () => {
       handedOver.props.onPress();
       handedOver.props.onPress();
@@ -675,31 +675,31 @@ describe('Orders: Ready', () => {
     await flush();
     expect(mockApi.handedOver).toHaveBeenCalledTimes(1);
     expect(mockApi.handedOver).toHaveBeenCalledWith(READY_ID);
-    expect(buttons('Handed over #0E7CD')).toHaveLength(0);
+    expect(buttons('Handed over #0000E7CD')).toHaveLength(0);
     expect(hasText('Marked as handed over')).toBe(true);
   });
 
   it('says "Handed over is coming soon." when the server has no such route, and keeps the button instead of hiding it silently', async () => {
     mockApi.handedOver.mockRejectedValueOnce(new AppApiError('HTTP_404', 'nope', 404));
     await mount('ChefOrdersReady');
-    await press('Handed over #0E7CD');
+    await press('Handed over #0000E7CD');
     await flush();
     expect(hasText('Handed over is coming soon.')).toBe(true);
-    expect(buttons('Handed over #0E7CD')).toHaveLength(1);
+    expect(buttons('Handed over #0000E7CD')).toHaveLength(1);
     expect(allText().join(' ')).not.toMatch(/nope|couldn't save/);
   });
 
   it('sends "Not picked up" to support with the order and the reason', async () => {
     await mount('ChefOrdersReady');
-    await press('Not picked up #0E7CD');
-    expect(hasText('What happened with #0E7CD?')).toBe(true);
+    await press('Not picked up #0000E7CD');
+    expect(hasText('What happened with #0000E7CD?')).toBe(true);
     await press('Partner left without the order');
     await press('Send to support');
     await flush();
     expect(mockApi.createCase).toHaveBeenCalledWith({
       contextRole: 'CHEF',
       orderId: READY_ID,
-      subject: 'Not picked up · #0E7CD',
+      subject: 'Not picked up · #0000E7CD',
       message: 'Partner left without the order',
     });
   });
@@ -719,20 +719,20 @@ describe('Orders: an order left in Ready for over a day', () => {
     mockOperational = baseOperational([forgotten, readyOrder]);
     await mount('ChefOrdersReady');
     expect(buttons('Ready, 1 order')).toHaveLength(1);
-    expect(hasText('#F0F0F')).toBe(false);
-    expect(hasText('#0E7CD')).toBe(true);
+    expect(hasText('#000F0F0F')).toBe(false);
+    expect(hasText('#0000E7CD')).toBe(true);
   });
 
   it('shows in Past with the chip "Not picked up"', async () => {
     mockOperational = baseOperational([forgotten, deliveredOrder]);
     await mount('ChefOrdersCompleted');
-    expect(hasText('#F0F0F · ₹175')).toBe(true);
+    expect(hasText('#000F0F0F · ₹175')).toBe(true);
     expect(hasText('Not picked up')).toBe(true);
     expect(hasText('Delivered')).toBe(true);
     await press('Delivered');
-    expect(hasText('#F0F0F · ₹175')).toBe(false);
+    expect(hasText('#000F0F0F · ₹175')).toBe(false);
     await press('All');
-    expect(hasText('#F0F0F · ₹175')).toBe(true);
+    expect(hasText('#000F0F0F · ₹175')).toBe(true);
   });
 });
 
@@ -749,9 +749,9 @@ describe('Orders: Scheduled', () => {
     await mount('ChefOrdersScheduled');
     expect(hasText('Waiting for you to confirm')).toBe(true);
     expect(hasText(/^Tomorrow, 1:00 PM$/)).toBe(true);
-    expect(hasText('#7AF02')).toBe(true);
+    expect(hasText('#0007AF02')).toBe(true);
     expect(hasText('Customer pays when you confirm.')).toBe(true);
-    expect(buttons('Decline scheduled order #7AF02')).toHaveLength(1);
+    expect(buttons('Decline scheduled order #0007AF02')).toHaveLength(1);
   });
 
   it('says the customer has already paid when payment came first', async () => {
@@ -765,7 +765,7 @@ describe('Orders: Scheduled', () => {
     const respond = jest.fn(async () => undefined);
     mockQueue = baseQueue({pending: [item], respond});
     await mount('ChefOrdersScheduled');
-    await press('Confirm scheduled order #7AF02');
+    await press('Confirm scheduled order #0007AF02');
     expect(hasText('Confirm for tomorrow, 1:00 PM?')).toBe(true);
     expect(respond).not.toHaveBeenCalled();
     await press('Confirm');
@@ -777,7 +777,7 @@ describe('Orders: Scheduled', () => {
     const respond = jest.fn(async () => false);
     mockQueue = baseQueue({pending: [scheduledItem()], respond});
     await mount('ChefOrdersScheduled');
-    await press('Confirm scheduled order #7AF02');
+    await press('Confirm scheduled order #0007AF02');
     await press('Confirm');
     expect(respond).toHaveBeenCalledTimes(1);
     expect(visibleModals()).toHaveLength(1);
@@ -786,13 +786,13 @@ describe('Orders: Scheduled', () => {
   it('tells a request the customer has not paid for yet that nothing is refunded, and a paid one that it is', async () => {
     mockQueue = baseQueue({pending: [scheduledItem()]});
     await mount('ChefOrdersScheduled');
-    await press('Decline scheduled order #7AF02');
+    await press('Decline scheduled order #0007AF02');
     expect(hasText('The customer is told right away.')).toBe(true);
     expect(hasText('The customer is told right away and gets a full refund.')).toBe(false);
     act(() => tree.unmount());
     mockQueue = baseQueue({pending: [scheduledItem({paymentGate: 'PAYMENT_BEFORE_CHEF_CONFIRMATION'})]});
     await mount('ChefOrdersScheduled');
-    await press('Decline scheduled order #7AF02');
+    await press('Decline scheduled order #0007AF02');
     expect(hasText('The customer is told right away and gets a full refund.')).toBe(true);
   });
 
@@ -801,8 +801,8 @@ describe('Orders: Scheduled', () => {
     const respond = jest.fn(async () => undefined);
     mockQueue = baseQueue({pending: [item], respond});
     await mount('ChefOrdersScheduled');
-    await press('Decline scheduled order #7AF02');
-    expect(hasText('Reject #7AF02?')).toBe(true);
+    await press('Decline scheduled order #0007AF02');
+    expect(hasText('Reject #0007AF02?')).toBe(true);
     for (const reason of ['An item is sold out', 'Kitchen is too busy right now', 'Closing soon', "Can't deliver to this area", 'Other reason']) {
       expect(buttons(reason)).toHaveLength(1);
     }
@@ -815,7 +815,7 @@ describe('Orders: Scheduled', () => {
     mockQueue = baseQueue({confirmed: [scheduledItem({orderId: id('41de9'), responseStatus: 'ACCEPTED', scheduleStatus: 'CONFIRMED'})]});
     await mount('ChefOrdersScheduled');
     expect(hasText('Confirmed')).toBe(true);
-    await press('Scheduled order #41DE9, Tomorrow, 1:00 PM, confirmed');
+    await press('Scheduled order #00041DE9, Tomorrow, 1:00 PM, confirmed');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: id('41de9')});
   });
 
@@ -834,9 +834,9 @@ describe('Orders: Past', () => {
     await mount('ChefOrdersCompleted');
     expect(hasText('Rejected')).toBe(true);
     expect(hasText('Delivered')).toBe(true);
-    expect(hasText('#C3B0D · ₹130')).toBe(true);
+    expect(hasText('#000C3B0D · ₹130')).toBe(true);
     expect(hasText(/^Today · 2 orders · ₹48$/)).toBe(true);
-    expect(hasText('#DF94B')).toBe(false);
+    expect(hasText('#000DF94B')).toBe(false);
   });
 
   it('pull to refresh reads the live orders, the scheduled orders and the older history again', async () => {
@@ -862,9 +862,9 @@ describe('Orders: Past', () => {
     mockOperational = baseOperational([rejectedOrder, deliveredOrder]);
     await mount('ChefOrdersCompleted');
     await press('Rejected');
-    expect(hasText('#C3B0D · ₹130')).toBe(true);
-    expect(hasText('#79F4F · ₹48')).toBe(false);
-    await press('Order #C3B0D, ₹130, Rejected');
+    expect(hasText('#000C3B0D · ₹130')).toBe(true);
+    expect(hasText('#00079F4F · ₹48')).toBe(false);
+    await press('Order #000C3B0D, ₹130, Rejected');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: rejectedOrder.id});
   });
 

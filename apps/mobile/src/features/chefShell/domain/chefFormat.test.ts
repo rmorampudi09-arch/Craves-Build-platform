@@ -10,9 +10,9 @@ import {
 } from './chefFormat';
 
 describe('shortOrderNumber', () => {
-  it('uses the last 5 characters of the id without dashes, uppercase', () => {
-    expect(shortOrderNumber('11111111-1111-4111-8111-1111-7a3df94b')).toBe('#DF94B');
-    expect(shortOrderNumber('7a3df94b')).toBe('#DF94B');
+  it('uses the first 8 characters of the id without dashes, uppercase, like the customer side', () => {
+    expect(shortOrderNumber('11111111-1111-4111-8111-1111-7a3df94b')).toBe('#11111111');
+    expect(shortOrderNumber('7a3df94b')).toBe('#7A3DF94B');
   });
 
   it('copes with ids shorter than 5 characters', () => {

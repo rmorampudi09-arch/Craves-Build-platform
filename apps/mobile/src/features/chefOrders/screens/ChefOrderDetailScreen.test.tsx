@@ -192,7 +192,7 @@ afterEach(() => {
 describe('Order page: header', () => {
   it('is titled with the order number and shows the real status, not "New order"', async () => {
     await mount();
-    expect(hasText('Order #DF94B')).toBe(true);
+    expect(hasText('Order #00000000')).toBe(true);
     expect(hasText('New')).toBe(true);
     expect(hasText('New order')).toBe(false);
     expect(hasText('Today, 2:58 PM')).toBe(true);
@@ -209,7 +209,7 @@ describe('Order page: header', () => {
   ] as const)('shows %s as "%s"', async (status, label) => {
     mockOrder = order(status);
     await mount();
-    expect(hasText('Order #DF94B')).toBe(true);
+    expect(hasText('Order #00000000')).toBe(true);
     expect(hasText(label)).toBe(true);
   });
 
@@ -331,7 +331,7 @@ describe('Order page: New', () => {
   it('rejects through the same reasons sheet, then returns to Orders', async () => {
     await mount();
     await press('Reject order');
-    expect(hasText('Reject #DF94B?')).toBe(true);
+    expect(hasText('Reject #00000000?')).toBe(true);
     expect(mockReject).not.toHaveBeenCalled();
     await press('Closing soon');
     await press('Reject order');
@@ -372,7 +372,7 @@ describe('Order page: Preparing', () => {
   it('asks before marking ready, then marks it once', async () => {
     await mount();
     await press('Mark ready');
-    expect(hasText('Is #DF94B packed and ready?')).toBe(true);
+    expect(hasText('Is #00000000 packed and ready?')).toBe(true);
     expect(hasText('2 × Chicken curry, 1 × Lemon rice. The delivery partner is told to pick it up.')).toBe(true);
     expect(mockMarkReady).not.toHaveBeenCalled();
     const confirm = buttons("Yes, it's ready")[0];
@@ -429,12 +429,12 @@ describe('Order page: Ready', () => {
   it('opens the support sheet from Not picked up', async () => {
     await mount();
     await press('Not picked up');
-    expect(hasText('What happened with #DF94B?')).toBe(true);
+    expect(hasText('What happened with #00000000?')).toBe(true);
     await press('Send to support');
     expect(mockCreateCase).toHaveBeenCalledWith({
       contextRole: 'CHEF',
       orderId: ORDER_ID,
-      subject: 'Not picked up · #DF94B',
+      subject: 'Not picked up · #00000000',
       message: "Partner hasn't arrived yet",
     });
   });

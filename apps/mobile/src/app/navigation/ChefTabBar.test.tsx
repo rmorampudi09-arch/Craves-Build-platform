@@ -1,7 +1,7 @@
 import React from 'react';
 import {Keyboard, StyleSheet, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {colors} from '../../design/tokens';
+import {bottomMenu, colors} from '../../design/tokens';
 import {ChefTabBar} from './ChefTabBar';
 import {CHEF_TABS} from './chefTabs';
 
@@ -80,8 +80,8 @@ describe('ChefTabBar', () => {
     mount(1);
     const colour = (text: string) => StyleSheet.flatten(label(text)!.props.style).color;
     expect(colour('Orders')).toBe(colors.flameRedAccessible);
-    expect(colour('Home')).toBe(colors.textPrimary);
-    expect(colour('Earnings')).toBe(colors.textPrimary);
+    expect(colour('Home')).toBe(bottomMenu.inactiveColor);
+    expect(colour('Earnings')).toBe(bottomMenu.inactiveColor);
     expect(tab('Orders').props.accessibilityState).toEqual({selected: true});
     expect(tab('Home').props.accessibilityState).toEqual({selected: false});
   });

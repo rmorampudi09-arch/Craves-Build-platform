@@ -9,17 +9,14 @@ import {
   type ViewStyle,
 } from 'react-native';
 import {
-  borderWidth,
   colors,
   fontWeight,
-  iconSize,
-  radius,
   spacing,
   textDefaults,
   typography,
 } from '../../../design/tokens';
 import {Button} from '../../../shared/components/Button';
-import {Icon} from '../../../shared/components/Icon';
+import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
 import type {
   CustomerConnectivity,
   CustomerEmptyStateActionId,
@@ -107,14 +104,8 @@ export function CustomerEmptyState({
         style,
         {opacity, transform: [{scale}]},
       ]}>
-      <View accessibilityElementsHidden style={styles.illustration}>
-        <View style={styles.illustrationRing}>
-          <Icon
-            color={colors.flameRed}
-            name={model.illustration}
-            size={iconSize.xl}
-          />
-        </View>
+      <View style={styles.illustration}>
+        <EmptyIllustration name={model.illustration} />
       </View>
 
       <Text
@@ -124,19 +115,6 @@ export function CustomerEmptyState({
         {model.title}
       </Text>
 
-      {model.preservedSearchQuery !== undefined ? (
-        <View
-          accessibilityLabel={`Search query ${model.preservedSearchQuery}`}
-          style={styles.queryPill}>
-          <Icon name="search" color={colors.espressoBrown} size={iconSize.xs} />
-          <Text
-            allowFontScaling={textDefaults.allowFontScaling}
-            numberOfLines={2}
-            style={styles.queryText}>
-            {model.preservedSearchQuery || 'Empty search'}
-          </Text>
-        </View>
-      ) : null}
 
       <Text
         allowFontScaling={textDefaults.allowFontScaling}
@@ -177,48 +155,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl,
   },
   illustration: {
-    width: 112,
-    height: 112,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
     marginBottom: spacing.lg,
-  },
-  illustrationRing: {
-    width: 80,
-    height: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.creamDeep,
-    backgroundColor: colors.white,
   },
   title: {
     color: colors.espressoBrown,
     fontSize: typography.hero,
     fontWeight: fontWeight.bold,
     textAlign: 'center',
-  },
-  queryPill: {
-    maxWidth: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  queryText: {
-    flexShrink: 1,
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
   },
   description: {
     color: colors.textSecondary,

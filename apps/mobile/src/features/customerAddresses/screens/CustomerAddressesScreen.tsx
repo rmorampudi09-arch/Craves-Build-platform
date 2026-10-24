@@ -323,7 +323,7 @@ export function CustomerAddressesScreen() {
         setFeedback({
           tone: 'warning',
           message:
-            'Address selected and cart refreshed. Delivery fee, ETA and serviceability cannot refresh yet because the approved delivery-quote contract is not available.',
+            'Address selected for delivery.',
         });
       }
       setDeliveringId(null);
@@ -365,6 +365,7 @@ export function CustomerAddressesScreen() {
         addressesQuery.error instanceof CustomerAddressesContractError;
       return (
         <TerminalState
+          illustration="loadError"
           actionLabel="Try again"
           description={
             invalidContract

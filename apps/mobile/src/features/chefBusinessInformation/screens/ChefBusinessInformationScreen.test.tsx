@@ -5,14 +5,13 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {EMPTY_ONBOARDING, type OnboardingState} from '../../chefOnboarding/api/chefOnboardingApi';
 import {ChefToastProvider} from '../../chefShell/components/ui';
-import {deferred, screenQueries} from '../../chefProfile/testing/screenTestKit';
+import {screenQueries} from '../../chefProfile/testing/screenTestKit';
 import {ChefBusinessInformationScreen} from './ChefBusinessInformationScreen';
 
 jest.setTimeout(20_000);
 
 const mockNavigate = jest.fn();
 const mockOnboarding = {load: jest.fn(), preview: jest.fn(), upload: jest.fn()};
-const mockPickPhoto = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({useNavigation: () => ({navigate: mockNavigate, goBack: jest.fn()})}));
 jest.mock('react-native-safe-area-context', () => ({
@@ -37,9 +36,6 @@ jest.mock('../../chefOnboarding/api/chefOnboardingApi', () => ({
     preview: (...args: unknown[]) => mockOnboarding.preview(...args),
     upload: (...args: unknown[]) => mockOnboarding.upload(...args),
   },
-}));
-jest.mock('../../chefOnboarding/components/ChefOnboardingUpload', () => ({
-  pickPhoto: (...args: unknown[]) => mockPickPhoto(...args),
 }));
 
 const doc = (documentType: string, status: 'UPLOADED' | 'APPROVED' | 'REJECTED' = 'APPROVED', reviewReason: string | null = null) => ({
@@ -151,60 +147,10 @@ describe('ChefBusinessInformationScreen (Documents & verification)', () => {
     expect(ui.has("We couldn't open that file. Please try again.")).toBe(true);
   });
 
-  it('uploads a photo for the chosen document with the application uploader, then reloads the list', async () => {
-    const file = {uri: 'file:///kitchen.jpg', name: 'kitchen.jpg', type: 'image/jpeg'};
-    mockPickPhoto.mockResolvedValue(file);
-    mockOnboarding.upload.mockResolvedValue('new-id');
+  it('shows the documents to view only: there is no upload', async () => {
     await mount();
-    expect(mockOnboarding.load).toHaveBeenCalledTimes(1);
-
-    await ui.press('Upload another document');
-    await ui.press('Cooking setup photo');
-    await ui.press('Choose from gallery');
-    await ui.settle();
-
-    expect(mockPickPhoto).toHaveBeenCalledWith('library');
-    expect(mockOnboarding.upload).toHaveBeenCalledWith('KITCHEN_PHOTO_2', file);
-    expect(mockOnboarding.load).toHaveBeenCalledTimes(2);
-    expect(ui.has('Document uploaded. Craves will check it.')).toBe(true);
-  });
-
-  it('takes a photo with the camera too', async () => {
-    mockPickPhoto.mockResolvedValue({uri: 'file:///x.jpg', name: 'x.jpg', type: 'image/jpeg'});
-    mockOnboarding.upload.mockResolvedValue('new-id');
-    await mount();
-    await ui.press('Upload another document');
-    await ui.press('Aadhaar card · front');
-    await ui.press('Take a photo');
-    await ui.settle();
-    expect(mockPickPhoto).toHaveBeenCalledWith('camera');
-    expect(mockOnboarding.upload).toHaveBeenCalledWith('SELECTED_PROOF_FRONT', expect.anything());
-  });
-
-  it('does nothing when the chef cancels the photo', async () => {
-    mockPickPhoto.mockResolvedValue(null);
-    await mount();
-    await ui.press('Upload another document');
-    await ui.press('Kitchen photo');
-    await ui.press('Choose from gallery');
-    await ui.settle();
+    expect(ui.anyText(/Upload/)).toBe(false);
     expect(mockOnboarding.upload).not.toHaveBeenCalled();
-  });
-
-  it('explains in plain words when Craves refuses the upload, and sends a double tap once', async () => {
-    mockPickPhoto.mockResolvedValue({uri: 'file:///x.jpg', name: 'x.jpg', type: 'image/jpeg'});
-    const pending = deferred<string>();
-    mockOnboarding.upload.mockReturnValue(pending.promise);
-    await mount();
-    await ui.press('Upload another document');
-    await ui.press('Kitchen photo');
-    await ui.press('Choose from gallery');
-    await ui.press('Choose from gallery');
-    expect(mockPickPhoto).toHaveBeenCalledTimes(1);
-    await act(async () => pending.reject(new AppApiError('CHEF_ALREADY_APPROVED', 'x', 409)));
-    await ui.settle();
-    expect(ui.has('Your Chef application is approved, so its documents cannot be replaced.')).toBe(true);
-    expect(ui.has('Document uploaded. Craves will check it.')).toBe(false);
   });
 
   it('asks support to update a document', async () => {
@@ -255,25 +201,5 @@ describe('ChefBusinessInformationScreen (Documents & verification)', () => {
     await mount();
     expect(ui.has("We couldn't load this")).toBe(true);
     expect(ui.anyText(/Coming soon/)).toBe(false);
-  });
-
-  it('says before the camera opens that changes to an approved document go through support', async () => {
-    await mount();
-    await ui.press('Upload another document');
-    expect(
-      ui.has('Your documents are already approved. To change one, contact support: Craves checks it again before the change goes live.'),
-    ).toBe(true);
-    await ui.press('Contact support');
-    await ui.settle();
-    expect(mockNavigate).toHaveBeenCalledWith('ChefSupportTicket', {topic: 'Update my documents'});
-    expect(mockPickPhoto).not.toHaveBeenCalled();
-  });
-
-  it('gives no such warning while the application is still being reviewed', async () => {
-    mockOnboarding.load.mockResolvedValue(onboarding({application: application('PENDING', {reviewedAt: null})}));
-    await mount();
-    await ui.press('Upload another document');
-    expect(ui.anyText(/already approved/)).toBe(false);
-    expect(ui.byLabel('Contact support')).toBeUndefined();
   });
 });

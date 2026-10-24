@@ -2,15 +2,17 @@ import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {useNavigation, type NavigationProp, type ParamListBase} from '@react-navigation/native';
 import {colors, fontWeight, spacing, textDefaults, typography} from '../../../design/tokens';
+import {EmptyIllustration} from '../../../shared/components/EmptyIllustration';
 import type {IconName} from '../../../shared/components/Icon';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
-import {SegmentedControl} from '../../../shared/components/SegmentedControl';
+import {UnderlineTabs} from '../../../shared/components/UnderlineTabs';
 import {
   ChefActionButton,
   ChefCard,
   ChefScreen,
   ChefSheet,
   ChefTopBar,
+  EmptyState,
   ListGroup,
   ListRow,
   StatusChip,
@@ -40,28 +42,15 @@ const timeOf = (iso: string) => Date.parse(iso) || 0;
 
 function Problem({title, onRetry}: {title: string; onRetry: () => void}) {
   return (
-    <ChefCard style={styles.card}>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
+    <ChefCard style={[styles.card, styles.problem]}>
+      <EmptyIllustration name="loadError" width={160} />
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.title, styles.centered]}>
         {title}
       </Text>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={[styles.muted, styles.centered]}>
         Check your connection and try again.
       </Text>
-      <ChefActionButton label="Try again" onPress={onRetry} tone="neutral" />
-    </ChefCard>
-  );
-}
-
-function Empty({title, message, action}: {title: string; message: string; action?: {label: string; onPress: () => void}}) {
-  return (
-    <ChefCard style={styles.card}>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
-        {title}
-      </Text>
-      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
-        {message}
-      </Text>
-      {action ? <ChefActionButton label={action.label} onPress={action.onPress} tone="neutral" /> : null}
+      <ChefActionButton label="Try again" onPress={onRetry} style={styles.retry} tone="neutral" />
     </ChefCard>
   );
 }
@@ -111,31 +100,36 @@ export function ChefPayoutHistoryScreen() {
   return (
     <>
       <ChefScreen
-        header={<ChefTopBar onBack={goBack} showBell={false} title="Payout history" />}
+        header={
+          <>
+            <ChefTopBar onBack={goBack} showBell={false} title="Payout history" />
+            <UnderlineTabs
+              accessibilityLabel="Show"
+              fill
+              onSelect={setTab}
+              selected={tab}
+              tabs={[
+                {key: 'payouts', label: 'Payouts'},
+                {key: 'earnings', label: 'Order earnings'},
+              ]}
+            />
+          </>
+        }
         onRefresh={retry}
         refreshing={data.isRefreshing}
         withTabBar>
-        <SegmentedControl
-          accessibilityLabel="Show"
-          onChange={setTab}
-          options={[
-            {value: 'payouts', label: 'Payouts'},
-            {value: 'earnings', label: 'Order earnings'},
-          ]}
-          value={tab}
-        />
-
         {tab === 'payouts' ? (
           data.balanceStatus === 'pending' ? (
             <LoadingIndicator label="Loading your payouts" />
           ) : data.balanceStatus === 'error' ? (
             <Problem onRetry={retry} title="We couldn't load your payouts." />
           ) : payouts.length === 0 ? (
-            <Empty
-              action={{label: 'Go to Earnings', onPress: () => navigation.navigate('Earnings')}}
+            <EmptyState
+              illustration="payouts"
               message="When you withdraw, the money sent to your bank is listed here."
-              title="No payouts yet"
-            />
+              title="No payouts yet">
+              <ChefActionButton label="Go to Earnings" onPress={() => navigation.navigate('Earnings')} tone="neutral" />
+            </EmptyState>
           ) : (
             groupByMonth(payouts, payout => payout.createdAt, now).map(group => (
               <View key={group.title} style={styles.group}>
@@ -146,14 +140,14 @@ export function ChefPayoutHistoryScreen() {
                   {group.items.map(payout => {
                     const view = payoutStatusView(payout.status);
                     const amount = formatRupees(Number(payout.amount), {paise: true});
-                    const subtitle = [`Asked ${asked(payout.createdAt)}`, payout.transferReference ? `Bank ref ${payout.transferReference}` : null]
+                    const subtitle = [`Requested ${asked(payout.createdAt)}`, payout.transferReference ? `Bank ref ${payout.transferReference}` : null]
                       .filter(Boolean)
                       .join('\n');
-                    const look = STATUS_ICONS[view.label] ?? {icon: 'wallet' as IconName, tone: 'blue' as const};
+                    const look = STATUS_ICONS[view.label] ?? {icon: 'wallet' as IconName, tone: 'red' as const};
                     return (
                       <ListRow
                         key={payout.id}
-                        accessibilityLabel={`${amount}, ${view.label}, Asked ${asked(payout.createdAt)}`}
+                        accessibilityLabel={`${amount}, ${view.label}, Requested ${asked(payout.createdAt)}`}
                         icon={look.icon}
                         iconTone={look.tone}
                         onPress={() => setOpened(payout)}
@@ -172,11 +166,9 @@ export function ChefPayoutHistoryScreen() {
         ) : data.ledgerStatus === 'error' ? (
           <Problem onRetry={retry} title="We couldn't load your earnings." />
         ) : data.ledger.length === 0 ? (
-          <Empty
-            action={{label: 'Go to Orders', onPress: () => navigation.navigate('Orders')}}
-            message="Each delivered order adds its earnings here."
-            title="No earnings yet"
-          />
+          <EmptyState illustration="earnings" message="Each delivered order adds its earnings here." title="No earnings yet">
+            <ChefActionButton label="Go to Orders" onPress={() => navigation.navigate('Orders')} tone="neutral" />
+          </EmptyState>
         ) : (
           groupByMonth<ChefEarningLedgerEntry>(data.ledger, entry => entry.createdAt, now).map(group => (
             <View key={group.title} style={styles.group}>
@@ -212,7 +204,7 @@ export function ChefPayoutHistoryScreen() {
             <ChefCard style={styles.card}>
               <DetailRow label="Amount" value={formatRupees(Number(opened.amount), {paise: true})} />
               <DetailRow label="Status" value={<StatusChip label={openedView.label} tone={openedView.tone} />} />
-              <DetailRow label="Asked" value={asked(opened.createdAt)} />
+              <DetailRow label="Requested" value={asked(opened.createdAt)} />
               {opened.transferReference ? <DetailRow label="Bank reference" value={opened.transferReference} /> : null}
             </ChefCard>
             <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
@@ -227,6 +219,9 @@ export function ChefPayoutHistoryScreen() {
 
 const styles = StyleSheet.create({
   card: {gap: spacing.sm},
+  problem: {alignItems: 'center'},
+  centered: {textAlign: 'center'},
+  retry: {alignSelf: 'stretch'},
   group: {gap: spacing.xs},
   groupTitle: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.bold, textTransform: 'uppercase'},
   title: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},

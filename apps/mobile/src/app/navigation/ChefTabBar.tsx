@@ -5,9 +5,9 @@ import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
   borderWidth,
+  bottomMenu,
   colors,
   fontWeight,
-  iconSize,
   radius,
   spacing,
   textDefaults,
@@ -16,11 +16,13 @@ import {
 } from '../../design/tokens';
 import {chefCounterBadgeLabel} from '../../features/chefShell/domain/chefOperationalCounters';
 import {useChefOperationalState} from '../../features/chefShell/state/ChefOperationalProvider';
-import {Icon} from '../../shared/components/Icon';
+import {BottomMenuIcon} from '../../shared/components/BottomMenuIcon';
 import {CHEF_TAB_ACTIVE_COLOR, CHEF_TAB_INACTIVE_COLOR, getChefTabDefinition} from './chefTabs';
 import type {ChefTabRouteName} from './types';
 
-const PILL_HEIGHT = 68;
+type MenuIconName = React.ComponentProps<typeof BottomMenuIcon>['name'];
+
+const PILL_HEIGHT = 80;
 
 // The Android window resizes for the keyboard, which would lift the bar above it.
 function useKeyboardVisible() {
@@ -36,14 +38,16 @@ function useKeyboardVisible() {
   return visible;
 }
 
-/** Plain white floating pill with the five Chef tabs; the Orders tab carries the new-order count. */
+/** White floating pill with the five Chef tabs, drawn like the customer menu bar; the Orders tab carries the new-order count. */
 export function ChefTabBar({state, descriptors, navigation}: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const {counters} = useChefOperationalState();
   const keyboardVisible = useKeyboardVisible();
   const focusedRoute = state.routes[state.index];
 
-  if (keyboardVisible && descriptors[focusedRoute.key]?.options.tabBarHideOnKeyboard) {
+  // Profile's sub-pages (forms, Bank account, Payout history) are full pages: no menu bar under their buttons.
+  const profileSubPage = focusedRoute.name === 'Profile' && (focusedRoute.state?.index ?? 0) > 0;
+  if (profileSubPage || (keyboardVisible && descriptors[focusedRoute.key]?.options.tabBarHideOnKeyboard)) {
     return null;
   }
 
@@ -73,12 +77,12 @@ export function ChefTabBar({state, descriptors, navigation}: BottomTabBarProps) 
               onLongPress={() => navigation.emit({type: 'tabLongPress', target: route.key})}
               onPress={onPress}
               style={({pressed}) => [styles.tab, pressed && styles.pressed]}>
-              <Icon color={color} name={tab.icon} size={iconSize.lg + 1} surface={false} />
+              <BottomMenuIcon color={color} glow={focused} name={tab.icon as MenuIconName} size={28} />
               <Text
                 allowFontScaling={textDefaults.allowFontScaling}
                 maxFontSizeMultiplier={1.3}
                 numberOfLines={1}
-                style={[styles.label, {color}]}>
+                style={[styles.label, {color}, focused && styles.glow]}>
                 {tab.label}
               </Text>
               {badge ? (
@@ -125,7 +129,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxs,
   },
   pressed: {opacity: 0.6},
-  label: {fontSize: typography.tiny, fontWeight: fontWeight.semibold},
+  label: {fontSize: typography.small, fontWeight: fontWeight.regular, marginTop: 2},
+  glow: {
+    textShadowColor: bottomMenu.glowTextShadow,
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: bottomMenu.glowTextRadius,
+  },
   badge: {
     position: 'absolute',
     top: spacing.xs,

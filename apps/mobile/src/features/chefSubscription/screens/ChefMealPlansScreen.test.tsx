@@ -310,7 +310,13 @@ describe('ChefMealPlansScreen', () => {
   it('offers one next step when there are no plans', () => {
     render();
 
-    expect(texts()).toEqual(expect.arrayContaining(['No meal plans yet', 'Create a weekly or monthly plan from dishes on your menu.']));
+    expect(texts()).toEqual(
+      expect.arrayContaining([
+        'No meal plans yet',
+        'Create a weekly or monthly plan from dishes on your menu, so customers can get your food every day.',
+      ]),
+    );
+    expect(tree.root.findAll(node => node.props.testID === 'empty-illustration-chefMealPlans').length).toBeGreaterThan(0);
     press('Create a plan');
     expect(mockNavigate).toHaveBeenCalledWith('ChefMealPlanEditor', {});
   });

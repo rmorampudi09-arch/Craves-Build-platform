@@ -1,4 +1,4 @@
-import {kitchenNavigationAction} from './dishDetailNavigation';
+import {isDishSheetDismissal, kitchenNavigationAction} from './dishDetailNavigation';
 
 const kitchenId = '11111111-1111-4111-8111-111111111111';
 const dish = {name: 'CustomerDishDetail', params: {menuItemId: 'm1'}};
@@ -17,5 +17,14 @@ describe('kitchenNavigationAction', () => {
       dish,
     ];
     expect(kitchenNavigationAction(otherKitchen, 1, kitchenId)).toBe('replace');
+  });
+});
+
+describe('isDishSheetDismissal', () => {
+  it('animates only the actions that close the sheet', () => {
+    expect(isDishSheetDismissal('GO_BACK')).toBe(true);
+    expect(isDishSheetDismissal('POP')).toBe(true);
+    expect(isDishSheetDismissal('REPLACE')).toBe(false);
+    expect(isDishSheetDismissal('RESET')).toBe(false);
   });
 });

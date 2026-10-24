@@ -31,11 +31,11 @@ export interface ListRowProps {
 }
 
 const TONES: Record<ListRowIconTone, {background: string; foreground: string}> = {
-  neutral: {background: colors.iconSurface, foreground: colors.textPrimary},
+  neutral: {background: colors.iconSurface, foreground: colors.flameRedAccessible},
   red: {background: colors.errorSoft, foreground: colors.flameRedAccessible},
   green: {background: colors.successSoft, foreground: colors.successText},
   amber: {background: colors.warningSoft, foreground: colors.warningText},
-  blue: {background: colors.infoSoft, foreground: colors.infoText},
+  blue: {background: colors.errorSoft, foreground: colors.flameRedAccessible},
 };
 
 export function ListRow({
@@ -94,13 +94,14 @@ export function ListRow({
 }
 
 /** Bordered white group that puts a hairline between its rows (the board's `.list`). */
-export function ListGroup({children}: {children: React.ReactNode}) {
+/** `dividers={false}` drops the lines between rows (the card keeps its outline). */
+export function ListGroup({children, dividers = true}: {children: React.ReactNode; dividers?: boolean}) {
   const rows = React.Children.toArray(children);
   return (
     <View style={styles.group}>
       {rows.map((row, index) => (
         <React.Fragment key={index}>
-          {index > 0 ? <View style={styles.divider} /> : null}
+          {dividers && index > 0 ? <View style={styles.divider} /> : null}
           {row}
         </React.Fragment>
       ))}

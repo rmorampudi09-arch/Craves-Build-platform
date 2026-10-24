@@ -256,6 +256,7 @@ export function CustomerNotificationsScreen() {
     if (notificationsQuery.isError) {
       return (
         <TerminalState
+          illustration="loadError"
           title="Notifications could not be loaded"
           description="Check your connection and try again."
           actionLabel="Try again"
@@ -266,10 +267,9 @@ export function CustomerNotificationsScreen() {
     if (notices.length === 0) {
       return (
         <TerminalState
+          illustration="notifications"
           title="No notifications yet"
-          description="Order, offer, kitchen and account updates will appear here when they arrive."
-          actionLabel="Refresh"
-          onAction={refresh}
+          description="Order updates, offers and messages from Craves will show up here."
         />
       );
     }
@@ -336,7 +336,7 @@ export function CustomerNotificationsScreen() {
             accessibilityHint={
               notificationsQuery.v2Available
                 ? 'Marks every notification in your inbox as read'
-                : 'Available after Notification Inbox v2 is published through the production gateway'
+                : 'Coming soon'
             }
             accessibilityLabel="Mark all as read"
             accessibilityRole="button"
@@ -370,7 +370,7 @@ export function CustomerNotificationsScreen() {
         </View>
         {!notificationsQuery.v2Available && unreadCount > 0 ? (
           <Text style={styles.markAllReason}>
-            Mark all will enable when Notification Inbox v2 is published through APIM.
+            Marking all as read is coming soon.
           </Text>
         ) : null}
         <SectionList
@@ -402,7 +402,7 @@ export function CustomerNotificationsScreen() {
               ) : !notificationsQuery.v2Available &&
                 notices.length === CUSTOMER_NOTIFICATION_LIMIT ? (
                 <Text style={styles.boundaryCopy}>
-                  Older notifications may not be shown yet. Cursor paging will enable after Notification Inbox v2 is published.
+                  Showing your latest notifications.
                 </Text>
               ) : null
             ) : null

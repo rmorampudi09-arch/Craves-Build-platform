@@ -308,12 +308,13 @@ export function toRestorationNavigatePayload(
   if (target.kind === 'CUSTOMER_TAB') {
     return {name: target.tab};
   }
+  // As for chef Profile below: the tab's own root stays beneath, so Back and the tab never get stuck.
   if (target.kind === 'CUSTOMER_SCREEN') {
-    return {name: target.tab, params: {screen: target.screen}};
+    return {name: target.tab, params: {screen: target.screen, initial: false}};
   }
   if (target.kind === 'CUSTOMER_RESOURCE') {
     const {screen, ...params} = target.route;
-    return {name: target.tab, params: {screen, params}};
+    return {name: target.tab, params: {screen, params, initial: false}};
   }
   if (target.kind === 'CHEF_TAB') {
     return {

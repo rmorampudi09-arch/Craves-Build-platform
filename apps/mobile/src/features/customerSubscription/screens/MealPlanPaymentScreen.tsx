@@ -30,6 +30,7 @@ import {
 import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
 import {CustomerAddressEditorModal} from '../../customerAddresses/screens/CustomerAddressEditorModal';
 import {
+  billingPeriodLabel,
   billingUnit,
   dayLabel,
   formatMealCount,
@@ -157,7 +158,8 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
 
   const menu: {label: string; value: string}[] = [];
   const items = sortScheduleItems(schedule.data?.items ?? []);
-  for (const item of unit === 'month' ? items.slice(0, 7) : items) {
+  // Old date-based menus list a month of days; show the first week.
+  for (const item of items.some(i => i.dayOfMonth != null) ? items.slice(0, 7) : items) {
     const label = dayLabel(item, 'short');
     const last = menu[menu.length - 1];
     if (last?.label === label) {
@@ -214,7 +216,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
           <View style={styles.planRow}>
             <MealPlanPhoto uri={imageUrl} size={88} />
             <View style={styles.grow}>
-              {unit ? <Badge label={unit === 'month' ? 'Monthly' : 'Weekly'} tone="error" /> : null}
+              {period ? <Badge label={billingPeriodLabel(period)} tone="error" /> : null}
               <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.planName}>
                 {name}
               </Text>
@@ -249,7 +251,7 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
         </CardSection>
 
         {menu.length > 0 ? (
-          <CardSection title={unit === 'month' ? 'Menu' : "This week's menu"}>
+          <CardSection title={summary?.weekly ? 'Weekly menu' : 'Menu'}>
             {menu.map((row, index) => (
               <InfoRow key={row.label} first={index === 0} label={row.label} value={row.value} />
             ))}

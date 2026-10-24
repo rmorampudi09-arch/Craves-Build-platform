@@ -192,6 +192,8 @@ describe('P122 cross-feature integration completion', () => {
       params: {
         screen: 'CustomerOrderDetail',
         params: {orderId: ORDER_ID},
+        // My Orders stays beneath the restored order.
+        initial: false,
       },
     });
   });

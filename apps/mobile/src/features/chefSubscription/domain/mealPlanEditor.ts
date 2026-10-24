@@ -2,7 +2,13 @@
 import type {ChefMealSchedule, PutChefScheduleRequest} from '../api/chefSubscriptionApi';
 
 export type MealSlot = 'BREAKFAST' | 'LUNCH' | 'SNACK' | 'DINNER';
-export type BillingPeriod = 'WEEKLY' | 'MONTHLY';
+export type BillingPeriod = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY';
+/** Every new plan is one weekday menu; date-based (MONTHLY) schedules only appear on plans already live. */
+export type ScheduleKind = 'WEEKLY' | 'MONTHLY';
+
+/** ISO weekdays in the order chefs fill them in: Sunday first. */
+export const WEEK_ORDER: readonly number[] = [7, 1, 2, 3, 4, 5, 6];
+const weekPosition = (day: number) => day % 7;
 
 export const MEAL_SLOTS: readonly MealSlot[] = ['BREAKFAST', 'LUNCH', 'SNACK', 'DINNER'];
 
@@ -23,7 +29,7 @@ export const TIME_OPTIONS: readonly string[] = Array.from({length: 36}, (_, inde
 
 export interface EditorSlot {
   key: string;
-  /** isoDayOfWeek 1–7 for WEEKLY plans, dayOfMonth 1–28 for MONTHLY plans. */
+  /** isoDayOfWeek 1–7 for weekday menus, dayOfMonth 1–28 for old date-based menus. */
   day: number;
   slot: MealSlot;
   /** 'HH:mm' */
@@ -57,12 +63,8 @@ export function scheduleToSlots(schedule: ChefMealSchedule): EditorSlot[] {
     .sort(bySlotOrder);
 }
 
-/** Meals without a dish are left out: the server checks every menu item against the chef's catalog. */
-export function slotsToScheduleRequest(
-  slots: readonly EditorSlot[],
-  period: BillingPeriod,
-  leadHours: number,
-): PutChefScheduleRequest {
+/** One week of meals, whatever the bill length. Meals without a dish are left out: the server checks every dish. */
+export function slotsToScheduleRequest(slots: readonly EditorSlot[], leadHours: number): PutChefScheduleRequest {
   const sequenceByDay = new Map<number, number>();
   const items = [...slots]
     .filter(slot => slot.menuItemId !== null)
@@ -73,14 +75,37 @@ export function slotsToScheduleRequest(
       return {
         menuItemId: slot.menuItemId as string,
         quantity: slot.quantity,
-        isoDayOfWeek: period === 'WEEKLY' ? slot.day : null,
-        dayOfMonth: period === 'MONTHLY' ? slot.day : null,
+        isoDayOfWeek: slot.day,
+        dayOfMonth: null,
         mealSlotCode: slot.slot,
         serviceTime: slot.time,
         sequenceNumber,
       };
     });
-  return {recurrenceType: period, timezone: 'Asia/Kolkata', generationLeadHours: leadHours, items};
+  return {recurrenceType: 'WEEKLY', timezone: 'Asia/Kolkata', generationLeadHours: leadHours, items};
+}
+
+/** A live plan set up by date still shows its dates; an editable one starts again as one week. */
+export function editorScheduleKind(editable: boolean, schedule?: ChefMealSchedule): ScheduleKind {
+  return !editable && schedule?.recurrenceType === 'MONTHLY' ? 'MONTHLY' : 'WEEKLY';
+}
+
+export function initialSlots(editable: boolean, schedule?: ChefMealSchedule): EditorSlot[] {
+  if (!schedule || (editable && schedule.recurrenceType !== 'WEEKLY')) {
+    return [];
+  }
+  return scheduleToSlots(schedule);
+}
+
+export function repeatsLabel(period: BillingPeriod): string {
+  switch (period) {
+    case 'FORTNIGHTLY':
+      return 'This week repeats 2 times in each 14-day bill.';
+    case 'MONTHLY':
+      return 'This week repeats 4 times in each 28-day bill.';
+    default:
+      return 'Customers get this week each bill.';
+  }
 }
 
 export function addSlot(slots: readonly EditorSlot[], day: number, slot: MealSlot): EditorSlot[] {
@@ -121,8 +146,8 @@ export const WEEKDAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export const WEEKDAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const WEEKDAYS_MON_TO_FRI = [1, 2, 3, 4, 5];
 
-export const dayName = (period: BillingPeriod, day: number, style: 'short' | 'long' = 'short') =>
-  period === 'WEEKLY' ? (style === 'long' ? WEEKDAYS_LONG : WEEKDAYS_SHORT)[day - 1] : `Day ${day}`;
+export const dayName = (kind: ScheduleKind, day: number, style: 'short' | 'long' = 'short') =>
+  kind === 'WEEKLY' ? (style === 'long' ? WEEKDAYS_LONG : WEEKDAYS_SHORT)[day - 1] : `Day ${day}`;
 
 /** Gives Monday to Friday (except `day`) the meals of `day`, replacing what they had; the weekend is left alone. */
 export function copyDayToWeekdays(slots: readonly EditorSlot[], day: number): EditorSlot[] {
@@ -138,9 +163,13 @@ export function otherWeekdaysHaveMeals(slots: readonly EditorSlot[], day: number
 }
 
 /** Days with exactly the same meals (slot, time, dish, quantity), for the review step. Groups follow day order. */
-export function groupMealDays(slots: readonly EditorSlot[]): {days: number[]; meals: EditorSlot[]}[] {
+export function groupMealDays(
+  slots: readonly EditorSlot[],
+  kind: ScheduleKind = 'WEEKLY',
+): {days: number[]; meals: EditorSlot[]}[] {
   const groups = new Map<string, {days: number[]; meals: EditorSlot[]}>();
-  for (const day of [...daysWithMeals(slots)].sort((a, b) => a - b)) {
+  const order = kind === 'WEEKLY' ? weekPosition : (day: number) => day;
+  for (const day of [...daysWithMeals(slots)].sort((a, b) => order(a) - order(b))) {
     const meals = slots.filter(slot => slot.day === day).sort(bySlotOrder);
     const signature = meals.map(meal => `${meal.slot}|${meal.time}|${meal.menuItemId}|${meal.quantity}`).join(';');
     const group = groups.get(signature);
@@ -153,12 +182,13 @@ export function groupMealDays(slots: readonly EditorSlot[]): {days: number[]; me
   return [...groups.values()];
 }
 
-/** "Mon, Wed – Fri, Sun"; monthly plans read "Day 1 – 3, 15". */
-export function dayRangeLabel(period: BillingPeriod, days: readonly number[]): string {
+/** "Sun – Mon, Wed – Fri" (the week starts on Sunday); date-based menus read "Day 1 – 3, 15". */
+export function dayRangeLabel(kind: ScheduleKind, days: readonly number[]): string {
+  const order = kind === 'WEEKLY' ? weekPosition : (day: number) => day;
   const runs: number[][] = [];
-  for (const day of [...days].sort((a, b) => a - b)) {
+  for (const day of [...days].sort((a, b) => order(a) - order(b))) {
     const run = runs[runs.length - 1];
-    if (run && day === run[run.length - 1] + 1) {
+    if (run && order(day) === order(run[run.length - 1]) + 1) {
       run.push(day);
     } else {
       runs.push([day]);
@@ -166,10 +196,10 @@ export function dayRangeLabel(period: BillingPeriod, days: readonly number[]): s
   }
   const names = runs.map(run => {
     const [first, last] = [run[0], run[run.length - 1]];
-    const label = (day: number) => (period === 'WEEKLY' ? WEEKDAYS_SHORT[day - 1] : String(day));
+    const label = (day: number) => (kind === 'WEEKLY' ? WEEKDAYS_SHORT[day - 1] : String(day));
     return first === last ? label(first) : `${label(first)} – ${label(last)}`;
   });
-  return period === 'WEEKLY' ? names.join(', ') : `Day ${names.join(', ')}`;
+  return kind === 'WEEKLY' ? names.join(', ') : `Day ${names.join(', ')}`;
 }
 
 /** "Add breakfast, snack or dinner": the meals a day can still take; "Add a meal" while it has none. */

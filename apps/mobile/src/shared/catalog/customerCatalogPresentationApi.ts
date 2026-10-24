@@ -21,6 +21,7 @@ const kitchenPresentationSchema = z.object({
   kitchenName: z.string().min(1),
   displayName: z.string().nullable(),
   description: z.string().nullable(),
+  chefPhotoUrl: z.string().nullish(),
 });
 
 export interface CustomerCatalogKitchenPresentation {
@@ -28,6 +29,7 @@ export interface CustomerCatalogKitchenPresentation {
   kitchenName: string;
   displayName: string | null;
   description: string | null;
+  chefPhotoUrl: string | null;
 }
 
 function normalizeId(value: string): string {
@@ -58,7 +60,7 @@ export const customerCatalogPresentationApi = {
     if (kitchen.id !== id) {
       throw new Error('Catalog kitchen identity does not match the request.');
     }
-    return kitchen;
+    return {...kitchen, chefPhotoUrl: normalizeHttpsUrl(kitchen.chefPhotoUrl ?? null)};
   },
 
   async getMenuItemPrimaryImageUrl(

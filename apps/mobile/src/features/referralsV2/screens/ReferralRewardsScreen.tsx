@@ -8,13 +8,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import type {
-  CustomerProfileStackParamList,
-  CustomerTabParamList,
-} from '../../../app/navigation/types';
+import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {
   borderWidth,
@@ -39,7 +35,6 @@ import {
 
 type SettingsNavigation =
   NativeStackNavigationProp<CustomerProfileStackParamList>;
-type CustomerTabsNavigation = BottomTabNavigationProp<CustomerTabParamList>;
 
 const PROGRAM_UNAVAILABLE_CODES = new Set([
   'REFERRALS_DISABLED',
@@ -49,7 +44,7 @@ const PROGRAM_UNAVAILABLE_CODES = new Set([
 ]);
 
 const REFERRAL_UNAVAILABLE_COPY =
-  'Referral rewards are not available in the app yet because the current main backend keeps Referral Service member routes private until their APIM publication is approved.';
+  'Referral rewards are coming soon. You can still share your invitation with friends.';
 
 function formatPaise(value: string): string {
   const paise = Number(value);
@@ -74,7 +69,7 @@ function cashoutCopy(overview: ReferralOverview): string {
     return 'Referral rewards are currently on review hold.';
   }
   if (overview.cashout.eligible) {
-    return `Current backend status: eligible. Minimum ${formatPaise(
+    return `You can cash out. Minimum ${formatPaise(
       overview.cashout.minimumPaise,
     )}.`;
   }
@@ -83,7 +78,7 @@ function cashoutCopy(overview: ReferralOverview): string {
       overview.cashout.minimumPaise,
     )} minimum.`;
   }
-  return 'Current backend status does not allow a referral cashout.';
+  return 'Cashing out is not available for your account right now.';
 }
 
 function rewardTitle(reward: ReferralReward): string {
@@ -112,14 +107,6 @@ export function ReferralRewardsScreen() {
   );
   const [error, setError] = React.useState<string | null>(null);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      const tabs = navigation.getParent<CustomerTabsNavigation>();
-      tabs?.setOptions({tabBarStyle: {display: 'none'}});
-      return () => tabs?.setOptions({tabBarStyle: undefined});
-    }, [navigation]),
-  );
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -356,8 +343,7 @@ export function ReferralRewardsScreen() {
                   this account.
                 </Text>
                 <Text style={styles.boundary}>
-                  This screen is read-only for cashout. It does not create or
-                  cancel a referral payout request.
+                  Cashing out from the app is coming soon.
                 </Text>
               </View>
 

@@ -49,6 +49,12 @@ import {
   selectCartItemCount,
 } from '../../features/cart/state/cartSelectors';
 import {formatCartMoney} from '../../features/cart/viewCartOverlayModel';
+import {
+  LiveOrderBubble,
+  LiveOrderCard,
+  type LiveOrderOrigin,
+} from '../../features/liveOrder/LiveOrderBubble';
+import {useLiveOrder} from '../../features/liveOrder/useLiveOrder';
 import {Icon} from '../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../shared/components/LiquidGlassSurface';
 import {LiquidTabButton} from '../../shared/components/LiquidBottomTabBar';
@@ -197,6 +203,11 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const itemCount = useAppSelector(selectCartItemCount);
   const subtotal = useAppSelector(selectCartFoodSubtotal);
+  const cartKitchenName = useAppSelector(
+    state => state.cart.snapshot?.lines[0]?.kitchenName ?? null,
+  );
+  const liveOrder = useLiveOrder();
+  const [liveOrderOrigin, setLiveOrderOrigin] = useState<LiveOrderOrigin | null>(null);
   const [barHeight, setBarHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const activeTabRoute = props.state.routes[props.state.index];
@@ -233,6 +244,21 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
     );
   }, [activeTabRoute.name, props.navigation]);
 
+  const closeLiveOrder = useCallback(() => setLiveOrderOrigin(null), []);
+  const liveOrderId = liveOrder?.orderId ?? null;
+  // A delivered or replaced order closes its card, so a later order never opens on its own.
+  useEffect(closeLiveOrder, [closeLiveOrder, liveOrderId]);
+  const openFromLiveOrder = (tab: string, screen: 'CustomerOrderDetail' | 'CustomerSupportChat') => {
+    if (!liveOrder) return;
+    setLiveOrderOrigin(null);
+    props.navigation.dispatch(
+      CommonActions.navigate({
+        name: tab,
+        params: {screen, params: {orderId: liveOrder.orderId}},
+      }),
+    );
+  };
+
   if (keyboardVisible || !focusedRoutePolicy.bottomNavigationVisible) {
     return null;
   }
@@ -250,57 +276,79 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
     extrapolate: 'clamp',
   });
   const totalLabel = subtotal ? formatCartMoney(subtotal) : '';
+  const itemsLabel = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
 
   return (
-    <Animated.View
-      onLayout={handleLayout}
-      pointerEvents={isVisible ? 'auto' : 'none'}
-      accessibilityElementsHidden={!isVisible}
-      importantForAccessibility={isVisible ? 'auto' : 'no-hide-descendants'}
-      style={[
-        styles.positioner,
-        {
-          bottom: bottomOffset,
-          transform: [{translateY}],
-        },
-      ]}>
-      <View style={styles.shellShadow}>
-        <LiquidGlassSurface
-          appearance="home"
-          blurTarget={blurTargets[activeTabRoute.key]}
-          variant="navigation"
-          style={styles.shell}>
-          <View style={styles.tabsArea}>
-            <BottomTabBar {...props} insets={{...props.insets, bottom: 0}} />
-          </View>
+    <>
+      {/* The live order bubble and the cart bar ride above the menu and hide with it. */}
+      <Animated.View
+        onLayout={handleLayout}
+        pointerEvents={isVisible ? 'box-none' : 'none'}
+        accessibilityElementsHidden={!isVisible}
+        importantForAccessibility={isVisible ? 'auto' : 'no-hide-descendants'}
+        style={[
+          styles.positioner,
+          {
+            bottom: bottomOffset,
+            transform: [{translateY}],
+          },
+        ]}>
+        {liveOrder ? (
+          <LiveOrderBubble order={liveOrder} onOpen={setLiveOrderOrigin} />
+        ) : null}
 
-          {cartVisible ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`View Cart, ${itemCount} ${
-                itemCount === 1 ? 'item' : 'items'
-              }, ${totalLabel}`}
-              onPress={handleOpenCart}
-              style={({pressed}) => [
-                styles.cartAction,
-                pressed && styles.cartActionPressed,
-              ]}>
-              <View style={styles.cartIcon}>
-                <Icon name="cart" color={colors.white} size={20} surface={false} />
-                <View style={styles.cartBadge}>
-                  <Text numberOfLines={1} style={styles.cartBadgeText}>
-                    {itemCount}
-                  </Text>
-                </View>
-              </View>
-              <Text numberOfLines={1} style={styles.cartTotal}>
-                {totalLabel}
+        {cartVisible ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View cart, ${itemsLabel}${
+              cartKitchenName ? ` from ${cartKitchenName}` : ''
+            }, ${totalLabel}`}
+            onPress={handleOpenCart}
+            style={({pressed}) => [styles.cartBar, pressed && styles.cartBarPressed]}>
+            <View style={styles.cartIconTile}>
+              <Icon name="cart" color={colors.white} size={22} surface={false} />
+            </View>
+            <View style={styles.cartCopy}>
+              <Text numberOfLines={1} style={styles.cartTitle}>
+                {itemsLabel} · {totalLabel}
               </Text>
-            </Pressable>
-          ) : null}
-        </LiquidGlassSurface>
-      </View>
-    </Animated.View>
+              {cartKitchenName ? (
+                <Text numberOfLines={1} style={styles.cartKitchen}>
+                  From {cartKitchenName}
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.cartViewRow}>
+              <Text style={styles.cartTitle}>View cart</Text>
+              <Icon name="chevron-right" color={colors.white} size={20} surface={false} />
+            </View>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.shellShadow}>
+          <LiquidGlassSurface
+            appearance="home"
+            blurTarget={blurTargets[activeTabRoute.key]}
+            variant="navigation"
+            style={styles.shell}>
+            <View style={styles.tabsArea}>
+              <BottomTabBar {...props} insets={{...props.insets, bottom: 0}} />
+            </View>
+          </LiquidGlassSurface>
+        </View>
+      </Animated.View>
+
+      {liveOrder && liveOrderOrigin ? (
+        <LiveOrderCard
+          order={liveOrder}
+          origin={liveOrderOrigin}
+          blurTarget={blurTargets[activeTabRoute.key]}
+          onClosed={closeLiveOrder}
+          onOpenOrder={() => openFromLiveOrder(activeTabRoute.name, 'CustomerOrderDetail')}
+          onOpenHelp={() => openFromLiveOrder('Profile', 'CustomerSupportChat')}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -311,7 +359,7 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     zIndex: 50,
-    borderRadius: radius.pill,
+    gap: 18,
   },
   shellShadow: {
     height: 80,
@@ -325,6 +373,8 @@ const styles = StyleSheet.create({
   },
   shell: {
     height: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(38,26,21,0.10)',
     flexDirection: 'row',
     alignItems: 'stretch',
     borderRadius: radius.pill,
@@ -337,54 +387,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1,
   },
-  // A content-sized capsule, inset evenly inside the 80 dp bar.
-  cartAction: {
-    zIndex: 1,
-    minWidth: touchTarget.minimum,
+  cartBar: {
     height: 60,
-    flexShrink: 0,
-    alignSelf: 'center',
-    marginLeft: spacing.xxs,
-    marginRight: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.flameRedAccessible,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
+    paddingLeft: 10,
+    paddingRight: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.flameRedAccessible,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: {width: 0, height: 8},
+    elevation: 6,
   },
-  cartActionPressed: {
+  cartBarPressed: {
     opacity: 0.86,
     transform: [{scale: 0.98}],
   },
-  cartIcon: {
-    width: 22,
-    height: 22,
+  cartIconTile: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  cartBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cartCopy: {
+    flex: 1,
+    minWidth: 0,
   },
-  cartBadgeText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.bold,
-  },
-  cartTotal: {
+  cartTitle: {
     color: colors.white,
-    fontSize: typography.small,
+    fontSize: typography.body,
     fontWeight: fontWeight.bold,
+  },
+  cartKitchen: {
+    color: colors.white,
+    opacity: 0.9,
+    fontSize: typography.tiny + 1,
+  },
+  cartViewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
   },
 });
 

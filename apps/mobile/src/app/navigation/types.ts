@@ -76,7 +76,7 @@ export type CustomerHomeStackParamList = {
   CustomerHomeRoot: undefined;
   CustomerHomeSearch: undefined;
   CustomerNotifications: undefined;
-  CustomerSettingsSubscription: undefined;
+  CustomerSettingsSubscription: NavigatorScreenParams<CustomerMealPlanStackParamList> | undefined;
   CustomerFilterSort: CustomerFilterSortRouteParams;
 } & CustomerDishDetailStackParamList &
   CustomerOrderDetailStackParamList &
@@ -112,8 +112,9 @@ export type CustomerSettingsChildStackParamList = {
   CustomerSettingsReferral: undefined;
   CustomerShareInvitation: undefined;
   CustomerSettingsSupport: undefined;
-  CustomerSettingsSubscription: undefined;
-  CustomerSettingsLegal: undefined;
+  CustomerSettingsSubscription: NavigatorScreenParams<CustomerMealPlanStackParamList> | undefined;
+  /** Which legal text to show; Terms when missing (e.g. a restored route). */
+  CustomerSettingsLegal: {document: 'terms' | 'privacy'} | undefined;
 };
 
 export type CustomerProfileStackParamList = {
@@ -141,6 +142,8 @@ export type CustomerMealPlanStackParamList = {
   MealPlanActivated: {subscriptionId: string};
   MyMealPlan: {subscriptionId: string};
   MealPlanMeal: {subscriptionId: string; occurrenceId: string};
+  MealPlanHistory: undefined;
+  MealPlanHowItWorks: undefined;
 };
 
 export type CustomerTabParamList = {
@@ -181,7 +184,7 @@ export type ChefProfileStackParamList = {
   ChefScheduledOrders: undefined;
   ChefReviews: undefined;
   ChefSecurity: undefined;
-  ChefBankAccount: {from?: 'earnings'} | undefined;
+  ChefBankAccount: {from?: 'earnings' | 'home'} | undefined;
   ChefEditProfile: undefined;
 };
 

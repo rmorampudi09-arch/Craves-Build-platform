@@ -22,9 +22,9 @@ const CHECKING_NOTE = "We're looking at this payout. We'll update it here.";
 
 // craves.in words. PENDING_APPROVAL (and anything new the server adds) reads as Craves checking, never as a raw code.
 const PAYOUT_STATUS_VIEWS: Record<string, {label: string; tone: StatusChipTone; note: string}> = {
-  RESERVED: {label: 'Asked', tone: 'info', note: 'We have your request and will send it to your bank.'},
-  SUBMITTING: {label: 'Sending', tone: 'info', note: "We're sending the money to your bank."},
-  PROCESSING: {label: 'With the bank', tone: 'info', note: 'Your bank is processing the transfer.'},
+  RESERVED: {label: 'Requested', tone: 'cooking', note: 'We have your request and will send it to your bank.'},
+  SUBMITTING: {label: 'Sending', tone: 'cooking', note: "We're sending the money to your bank."},
+  PROCESSING: {label: 'With the bank', tone: 'cooking', note: 'Your bank is processing the transfer.'},
   PAID: {label: 'Paid', tone: 'ready', note: 'The money has reached your bank.'},
   FAILED: {
     label: "Didn't go through",
@@ -62,6 +62,11 @@ export interface WithdrawBlock {
 }
 
 const NEEDS_BANK_STATES = new Set(['NOT_SUBMITTED', 'SUPERSEDED']);
+
+/** True once the bank status has loaded and there is no account to pay into. */
+export function needsBankAccount(bank: ChefBankStatus | null): boolean {
+  return bank !== null && NEEDS_BANK_STATES.has(bank.state);
+}
 const REFUSED_BANK_STATES = new Set(['VALIDATION_FAILED', 'NAME_MISMATCH', 'APPLICANT_ACTION_REQUIRED']);
 
 /** The Bank account row's second line on the Earnings tab. */

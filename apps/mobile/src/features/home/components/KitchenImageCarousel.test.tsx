@@ -1,14 +1,24 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import { AppState, Image, ScrollView } from 'react-native';
-import { KitchenImageCarousel } from './KitchenImageCarousel';
+import {
+  Animated,
+  AppState,
+  Image,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import {
+  KITCHEN_PHOTO_ADVANCE_MS,
+  KitchenImageCarousel,
+} from './KitchenImageCarousel';
 
 let mockReducedMotion = false;
 jest.mock('../../../design/reducedMotion', () => ({
   useReducedMotionPreference: () => mockReducedMotion,
 }));
 
-describe('kitchen photo scrolling', () => {
+describe('kitchen photo slideshow', () => {
   let tree: renderer.ReactTestRenderer;
   const originalAppState = AppState.currentState;
   beforeEach(() => {
@@ -28,7 +38,7 @@ describe('kitchen photo scrolling', () => {
     'https://example.invalid/two.jpg',
     'https://example.invalid/three.jpg',
   ];
-  const render = (imageUrls = photos) => {
+  const render = (imageUrls = photos, startDelayMs?: number) => {
     act(() => {
       tree = renderer.create(
         <KitchenImageCarousel
@@ -38,95 +48,114 @@ describe('kitchen photo scrolling', () => {
           kitchenName="Test kitchen"
           active
           onPress={() => undefined}
+          startDelayMs={startDelayMs}
         />,
       );
     });
-    return tree.root.findByType(ScrollView);
   };
+  const shows = (n: number, of = 3) =>
+    tree.root.findAllByProps({
+      accessibilityLabel: `Kitchen photo ${n} of ${of}`,
+    }).length > 0;
+  const tick = (ms = KITCHEN_PHOTO_ADVANCE_MS) =>
+    act(() => jest.advanceTimersByTime(ms));
 
-  it('renders distinct photos and moves the dot only when the photo position changes', () => {
-    const scroll = render();
+  it('changes photo calmly, every 4 seconds', () => {
+    expect(KITCHEN_PHOTO_ADVANCE_MS).toBe(4_000);
+    render();
+    tick(3_999);
+    expect(shows(1)).toBe(true);
+    tick(1);
+    expect(shows(2)).toBe(true);
+  });
+
+  it('loops forward from the last photo onto a copy of the first, never rewinding', () => {
+    const timing = jest.spyOn(Animated, 'timing');
+    render();
+    // Every photo, plus the copy of the first that the last one fades into.
     expect(
       tree.root.findAllByType(Image).map(image => image.props.source.uri),
-    ).toEqual(photos);
-    act(() => jest.advanceTimersByTime(2_000));
-    expect(
-      tree.root.findAllByProps({ accessibilityLabel: 'Kitchen photo 1 of 3' }),
-    ).not.toHaveLength(0);
-    act(() =>
-      scroll.props.onScroll({ nativeEvent: { contentOffset: { x: 280 } } }),
-    );
-    expect(
-      tree.root.findAllByProps({ accessibilityLabel: 'Kitchen photo 2 of 3' }),
-    ).not.toHaveLength(0);
-    act(() =>
-      scroll.props.onMomentumScrollEnd({
-        nativeEvent: { contentOffset: { x: 560 } },
-      }),
-    );
-    expect(
-      tree.root.findAllByProps({ accessibilityLabel: 'Kitchen photo 3 of 3' }),
-    ).not.toHaveLength(0);
+    ).toEqual([...photos, photos[0]]);
+    tick();
+    tick();
+    tick();
+    expect(shows(1)).toBe(true);
+    const targets = timing.mock.calls.map(([, config]) => config.toValue);
+    expect(targets).toEqual([1, 2, 3]);
+    timing.mock.calls.forEach(([, config]) => {
+      expect(config.duration).toBeGreaterThanOrEqual(600);
+      expect(config.useNativeDriver).toBe(true);
+    });
   });
 
-  it('disables manual photo paging even when there are multiple photos', () => {
-    const scroll = render();
-    expect(scroll.props.scrollEnabled).toBe(false);
-    expect(scroll.props.onScrollBeginDrag).toBeUndefined();
-    expect(scroll.props.onScrollEndDrag).toBeUndefined();
-    expect(jest.getTimerCount()).toBeGreaterThan(0);
+  it('staggers its start so a row of cards does not change together', () => {
+    render(photos, 1_000);
+    tick();
+    expect(shows(1)).toBe(true);
+    tick(1_000);
+    expect(shows(2)).toBe(true);
   });
 
-  it('still advances and wraps automatically with manual paging disabled', () => {
-    const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
-    const scroll = render();
-    scrollTo.mockClear();
-    act(() => jest.advanceTimersByTime(2_000));
-    expect(scrollTo).toHaveBeenLastCalledWith({x: 280, animated: true});
-    act(() => scroll.props.onScroll({nativeEvent: {contentOffset: {x: 280}}}));
-    act(() => jest.advanceTimersByTime(2_000));
-    expect(scrollTo).toHaveBeenLastCalledWith({x: 560, animated: true});
-    act(() => scroll.props.onMomentumScrollEnd({nativeEvent: {contentOffset: {x: 560}}}));
-    act(() => jest.advanceTimersByTime(2_000));
-    expect(scrollTo).toHaveBeenLastCalledWith({x: 0, animated: true});
-    expect(scroll.props.scrollEnabled).toBe(false);
-  });
-
-  it('preserves the kitchen card press without exposing manual photo paging', () => {
+  it('keeps the kitchen card press on the photo', () => {
     render();
-    const photo = tree.root.findAllByProps({accessibilityLabel: 'Open Test kitchen, photo 1'})[0];
+    const photo = tree.root.findAllByProps({
+      accessibilityLabel: 'Open Test kitchen, photo 1',
+    })[0];
     expect(photo.props.accessibilityRole).toBe('button');
     expect(typeof photo.props.onPress).toBe('function');
   });
 
-  it('pauses automatic paging when the app goes into the background', () => {
+  it('pauses while the app is in the background', () => {
     const listener = jest.spyOn(AppState, 'addEventListener');
     listener.mockClear();
-    const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
     render();
     const onAppState = listener.mock.calls[listener.mock.calls.length - 1][1];
-    scrollTo.mockClear();
     act(() => onAppState('background'));
-    act(() => jest.advanceTimersByTime(4_000));
-    expect(scrollTo).not.toHaveBeenCalled();
+    tick(8_000);
+    expect(shows(1)).toBe(true);
     act(() => onAppState('active'));
-    act(() => jest.advanceTimersByTime(2_000));
-    expect(scrollTo).toHaveBeenLastCalledWith({x: 280, animated: true});
+    tick();
+    expect(shows(2)).toBe(true);
   });
 
-  it('respects reduced motion with automatic-only photos', () => {
+  it('respects reduced motion', () => {
     mockReducedMotion = true;
-    const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
-    const scroll = render();
-    scrollTo.mockClear();
-    act(() => jest.advanceTimersByTime(4_000));
-    expect(scrollTo).not.toHaveBeenCalled();
-    expect(scroll.props.scrollEnabled).toBe(false);
+    render();
+    tick(8_000);
+    expect(shows(1)).toBe(true);
   });
 
-  it('does not show cycling dots or allow scrolling for a single photo', () => {
-    const scroll = render([photos[0]]);
-    expect(scroll.props.scrollEnabled).toBe(false);
+  it('puts the kitchen page dots in a glass capsule with a wide active dot', () => {
+    act(() => {
+      tree = renderer.create(
+        <KitchenImageCarousel
+          imageUrls={photos}
+          width={390}
+          height={293}
+          kitchenName="Test kitchen"
+          active
+          onPress={() => undefined}
+          pager="glass-right"
+        />,
+      );
+    });
+    const pager = tree.root.find(
+      node =>
+        typeof node.type !== 'string' &&
+        node.props.accessibilityLabel === 'Kitchen photo 1 of 3',
+    );
+    expect(pager.props.cornerRadius).toBe(14);
+    expect(pager.props.blurTarget).toBeDefined();
+    const widths = pager.props.children.map(
+      (dot: { props: { style: StyleProp<ViewStyle> } }) =>
+        StyleSheet.flatten(dot.props.style).width,
+    );
+    expect(widths).toEqual([16, 6, 6]);
+  });
+
+  it('shows no dots and no copy for a single photo', () => {
+    render([photos[0]]);
+    expect(tree.root.findAllByType(Image)).toHaveLength(1);
     expect(
       tree.root.findAll(node =>
         String(node.props.accessibilityLabel).startsWith('Kitchen photo'),

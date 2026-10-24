@@ -42,14 +42,12 @@ describe('image capsule optics', () => {
     expect(rim?.props.width).toBe(70.2);
     expect(rim?.props.rx).toBe(17.1);
   });
-  it('uses the same lower blur for home capsules and the home menu', () => {
+  it('keeps home capsules lightly blurred and frosts the home menu', () => {
     expect(render('image', 'home').props.intensity).toBe(
       homeLiquidGlass.blurIntensity,
     );
     act(() => tree.unmount());
-    expect(render('navigation', 'home').props.intensity).toBe(
-      homeLiquidGlass.blurIntensity,
-    );
+    expect(render('navigation', 'home').props.intensity).toBe(66);
   });
   it.each(['image', 'navigation'] as const)(
     'removes the drawn outline from home %s glass',

@@ -11,7 +11,7 @@ export class CustomerProfileContractError extends Error {
   readonly code = 'invalid-response' as const;
 
   constructor() {
-    super('Customer profile response did not match the approved contract.');
+    super('We could not read your profile. Please try again.');
     this.name = 'CustomerProfileContractError';
   }
 }

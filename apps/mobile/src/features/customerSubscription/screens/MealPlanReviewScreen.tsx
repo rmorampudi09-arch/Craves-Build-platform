@@ -13,7 +13,7 @@ import {
 import {ScreenShell} from '../../../shared/components';
 import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
 import {CustomerAddressEditorModal} from '../../customerAddresses/screens/CustomerAddressEditorModal';
-import {billingUnit, formatMealCount} from '../../mealPlans/domain/mealPlanSchedule';
+import {billingPeriodLabel, billingUnit, formatMealCount} from '../../mealPlans/domain/mealPlanSchedule';
 import {
   BottomPriceBar,
   CardSection,
@@ -153,7 +153,7 @@ export function MealPlanReviewScreen({navigation, route}: Props) {
             action={{label: 'Change', onPress: () => setSheetOpen(true)}}
           />
           <InfoRow label="Delivery address" value={addressRow.value} action={addressRow.action} />
-          <InfoRow label="Plan type" value={unit === 'month' ? 'Monthly' : 'Weekly'} />
+          <InfoRow label="Plan type" value={billingPeriodLabel(plan.billingPeriod)} />
           {summary ? (
             <InfoRow
               label={`Meals per ${unit}`}

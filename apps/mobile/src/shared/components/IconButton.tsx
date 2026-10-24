@@ -34,7 +34,7 @@ export function IconButton({
 }: IconButtonProps) {
   const reduceMotion = useReducedMotionPreference();
   const blocked = disabled || loading;
-  const foreground = variant === 'primary' ? colors.white : colors.espressoBrown;
+  const foreground = variant === 'primary' ? colors.white : colors.flameRed;
 
   return (
     <Pressable

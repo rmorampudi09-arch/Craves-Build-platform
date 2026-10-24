@@ -12,16 +12,11 @@ import {
 } from '../../cart/state/cartSelectors';
 import {isViewCartOverlayVisible} from '../../cart/viewCartOverlayModel';
 import {resolveCustomerOrdersContentBottomInset} from '../customerOrdersActiveCart';
-import {CustomerYourUsualSection} from '../components/CustomerYourUsualSection';
 import {CustomerOrdersScreen} from './CustomerOrdersScreen';
 
 const CUSTOMER_ORDERS_ROUTE_POLICY = resolveRouteChromePolicy('Customer', 'Orders');
 
-/**
- * Orders keeps the existing status-history screen and layers the P3 `Your usual`
- * repeat-order surface above it. Repeat-order writes still flow through the
- * existing atomic cart-reorder contract and current Cart destination.
- */
+/** Orders shows the status-history screen with the shared View cart bar. */
 export function CustomerOrdersRouteScreen() {
   const navigation =
     useNavigation<
@@ -45,7 +40,6 @@ export function CustomerOrdersRouteScreen() {
 
   return (
     <View style={styles.root}>
-      <CustomerYourUsualSection />
       <View style={[styles.orders, {paddingBottom: contentBottomInset}]}>
         <CustomerOrdersScreen />
       </View>

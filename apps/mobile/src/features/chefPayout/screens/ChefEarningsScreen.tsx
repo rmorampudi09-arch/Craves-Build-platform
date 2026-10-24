@@ -28,6 +28,7 @@ import {
   ChefCard,
   ChefScreen,
   ChefTopBar,
+  EmptyState,
   ListGroup,
   ListRow,
   StatTile,
@@ -336,17 +337,15 @@ export function ChefEarningsScreen() {
             ) : null}
 
             {empty ? (
-              <ChefCard style={styles.gap}>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.cardTitle}>
-                  {accountEmpty ? 'No sales yet' : words.none}
-                </Text>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.muted}>
-                  Your earnings, best sellers and daily sales show up here once orders are delivered.
-                </Text>
+              <EmptyState
+                illustration="earnings"
+                message="Your earnings, best sellers and daily sales show up here once orders are delivered."
+                title={accountEmpty ? 'No sales yet' : words.none}
+                width={accountEmpty ? 200 : 150}>
                 {accountEmpty ? (
                   <ChefActionButton label="Go to your menu" onPress={() => navigation.navigate('Menu')} tone="neutral" />
                 ) : null}
-              </ChefCard>
+              </EmptyState>
             ) : (
               <>
                 {summary.byDay.length > 1 ? (

@@ -8,7 +8,7 @@ export const colors = {
   flameRedAccessible: '#D92714',
   flameRedSoft: '#FF5548',
   /** Shared icon-tile background across customer and Chef experiences. */
-  iconSurface: '#F1F5F9',
+  iconSurface: '#FDEAE8',
   espresso: '#261A15',
   espressoBrown: '#261A15',
   cream: '#FFF5E9',
@@ -30,14 +30,28 @@ export const colors = {
   error: '#C72C21',
   errorSoft: '#FDEAE8',
   info: '#2F6FED',
-  infoText: '#1F4FAF',
-  infoSoft: '#EAF0FF',
+  infoText: '#261A15',
+  infoSoft: '#FDEAE8',
   muted: '#F7F5F3',
   surfaceBase: '#FFFFFF',
   surfaceWarm: '#FFFFFF',
   surfaceWarmStrong: '#FFFFFF',
   surfaceMuted: '#F7F5F3',
   overlay: 'rgba(38,26,21,0.08)',
+} as const;
+
+/**
+ * Craves red top of the customer Home (header, the search and banner band, the pinned
+ * category row). Tiles are opaque blends of white over the red (20% fill, 35% border), so
+ * pieces that overlap while the header collapses never double up their tint.
+ */
+export const homeTop = {
+  background: '#E2341F',
+  fadeMiddle: '#FF6F52',
+  tile: '#E85D4C',
+  tileBorder: '#EC7B6D',
+  foreground: colors.white,
+  secondaryText: '#FFD9D2',
 } as const;
 
 /** Foreground colors shared only by the bottom menus. */
@@ -107,15 +121,18 @@ export const homeLiquidGlass = {
     specular: 0.45,
     edgeGlow: 0,
   },
-  /** The menu carries labels, so it starts from kube.io's searchbox (refraction 0.7, some blur), tuned on device. */
+  /**
+   * The menu carries labels, so it starts from kube.io's searchbox (refraction 0.7, some blur), tuned on device.
+   * Light frost (55% white, 14 dp blur) since 18 Oct: clear glass made the menu hard to find over food photos.
+   */
   navigationOptics: {
     refraction: 1,
-    blurRadius: 4,
+    blurRadius: 14,
     bezel: 0.18,
     thickness: 1,
     aberration: 2,
     saturation: 1.4,
-    tint: [1, 1, 1, 0.1],
+    tint: [1, 1, 1, 0.55],
     specular: 0.3,
     edgeGlow: 0,
   },
@@ -132,14 +149,16 @@ export const borderWidth = {
  * React Native font scaling enabled; fixed line heights are deliberately not
  * embedded here so scaled text is not clipped by a non-scaling line box.
  */
+// iPhone (Dynamic Type) sizes, one step per level so the app's hierarchy is unchanged:
+// Large Title, Title 1, Title 3, Headline/buttons, Body, Subheadline, Caption 1.
 export const typography = {
-  title: 30,
-  hero: 24,
-  heading: 19,
-  button: 16,
-  body: 15,
-  small: 13,
-  tiny: 11,
+  title: 34,
+  hero: 28,
+  heading: 20,
+  button: 17,
+  body: 17,
+  small: 15,
+  tiny: 12,
 } as const;
 
 export const fontWeight = {

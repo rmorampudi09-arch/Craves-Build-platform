@@ -19,14 +19,12 @@ import {
 } from './referralVisuals';
 
 export function ReferralScaffold({
-  role,
   title,
   subtitle,
   onBack,
   children,
   refreshControl,
 }: PropsWithChildren<{
-  role: 'Customer' | 'Chef';
   title: string;
   subtitle: string;
   onBack: () => void;
@@ -51,7 +49,6 @@ export function ReferralScaffold({
             color={referralColors.muted}
           />
         </Pressable>
-        <Text style={styles.role}>{role}</Text>
       </View>
       {fontsLoaded || fontError ? (
         <ScrollView
@@ -92,12 +89,6 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  role: {
-    fontFamily: referralFonts.regular,
-    fontSize: 13,
-    color: referralColors.muted,
-    marginRight: 8,
   },
   content: {
     paddingHorizontal: referralLayout.inset,

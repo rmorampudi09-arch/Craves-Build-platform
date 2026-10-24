@@ -116,3 +116,12 @@ export function getKitchenInitials(kitchen: Pick<NearbyKitchen, 'kitchenName'>):
   }
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
+
+/** Kitchen card images: the chef's https kitchen photos first, then dish photos, each once. */
+export function kitchenCardImageUrls(
+  kitchenPhotoUrls: readonly string[] | null | undefined,
+  dishPhotoUrls: readonly string[],
+): string[] {
+  const kitchenPhotos = (kitchenPhotoUrls ?? []).map(url => url.trim()).filter(url => /^https:\/\//i.test(url));
+  return [...new Set([...kitchenPhotos, ...dishPhotoUrls])];
+}

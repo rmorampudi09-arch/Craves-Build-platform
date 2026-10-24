@@ -71,7 +71,16 @@ describe('P55 customer delivery tracking API', () => {
       trackingUrl: null,
       observedAt: null,
       history: [],
+      courierLocation: null,
     });
+  });
+
+  it('reads the delivery partner position, and ignores a malformed one', () => {
+    const position = {latitude: 17.49, longitude: 78.39, observedAt: '2026-10-14T09:00:00Z'};
+    expect(parseCustomerOrderTrackingResponse(tracking({courierLocation: position}))?.courierLocation).toEqual(position);
+    expect(
+      parseCustomerOrderTrackingResponse(tracking({courierLocation: {latitude: 'x'}}))?.courierLocation,
+    ).toBeNull();
   });
 
   it('strips unapproved fields and removes non-HTTPS tracking URLs', () => {

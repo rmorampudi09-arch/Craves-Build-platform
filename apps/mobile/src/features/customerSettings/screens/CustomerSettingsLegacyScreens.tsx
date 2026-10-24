@@ -2,6 +2,7 @@ import React, {useCallback, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   Share,
@@ -11,13 +12,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import {useFocusEffect, useNavigation} from '@react-navigation/native';
-import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import {useNavigation, useRoute, type RouteProp} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import type {
-  CustomerProfileStackParamList,
-  CustomerTabParamList,
-} from '../../../app/navigation/types';
+import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch} from '../../../app/store/hooks';
 import {
   borderWidth,
@@ -30,72 +27,90 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {IconButton} from '../../../shared/components/IconButton';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {firebaseAuth} from '../../auth/firebase/firebaseAuth';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {CustomerReferralScreen} from '../../referralsV2/screens/CustomerReferralScreens';
+import {LEGAL_DOCUMENTS} from '../content/legalText';
 import {
+  CUSTOMER_APP_VERSION,
   CUSTOMER_SETTINGS_CAPABILITY_STATUS,
   hasPasswordChangeErrors,
   validatePasswordChange,
 } from '../domain/customerSettingsChildModel';
 
 type SettingsNavigation = NativeStackNavigationProp<CustomerProfileStackParamList>;
-type CustomerTabsNavigation = BottomTabNavigationProp<CustomerTabParamList>;
 
 interface ChildScaffoldProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   children: React.ReactNode;
 }
 
-function useHideCustomerBottomTabs(navigation: SettingsNavigation) {
-  const hideBottomTabs = useCallback(() => {
-    const tabs = navigation.getParent<CustomerTabsNavigation>();
-    tabs?.setOptions({tabBarStyle: {display: 'none'}});
-    return () => tabs?.setOptions({tabBarStyle: undefined});
-  }, [navigation]);
-  useFocusEffect(hideBottomTabs);
+/** Asks first, then signs this phone out. Shared by Settings and Privacy & security. */
+export function useConfirmLogout() {
+  const dispatch = useAppDispatch();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logout = useCallback(() => {
+    if (loggingOut) {
+      return;
+    }
+    Alert.alert('Log out?', 'You will need to sign in again to use Craves on this phone.', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          setLoggingOut(true);
+          try {
+            await completeLogout(dispatch);
+          } catch {
+            setLoggingOut(false);
+            Alert.alert('Could not log out', 'Please try again.');
+          }
+        },
+      },
+    ]);
+  }, [dispatch, loggingOut]);
+  return {loggingOut, logout};
 }
 
+// These routes are immersive (navigationPolicy), so the bottom menu hides itself; never set tabBarStyle here.
 function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
   const navigation = useNavigation<SettingsNavigation>();
-  useHideCustomerBottomTabs(navigation);
   return (
     <ScreenShell
+      backgroundColor={colors.white}
       edges={['top']}
-      keyboardAvoiding
+      keyboardAvoiding={false}
       testID={`customer-settings-${title.toLowerCase().replace(/\s+/g, '-')}`}>
-      <View style={styles.root}>
+      {/* Edge-to-edge Android no longer shrinks the window for the keyboard, so the screen makes room itself. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.root}>
         <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            hitSlop={spacing.xs}
-            onPress={() => navigation.goBack()}
-            style={styles.headerButton}>
-            <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} />
-          </Pressable>
-          <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>{title}</Text>
-            <Text style={styles.headerSubtitle}>{subtitle}</Text>
-          </View>
+          <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => navigation.goBack()} />
+          <Text accessibilityRole="header" style={styles.headerTitle}>
+            {title}
+          </Text>
         </View>
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>{children}</View>
+          <View style={styles.content}>
+            {subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}
+            {children}
+          </View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </ScreenShell>
   );
 }
 
-function CapabilityNotice({title, body}: {title: string; body: string}) {
+function Notice({title, body}: {title: string; body: string}) {
   return (
     <View style={styles.notice} accessibilityRole="text">
-      <Icon name="shield" size={iconSize.sm} color={colors.flameRed} />
+      <Icon name="info" size={iconSize.sm} color={colors.flameRed} />
       <View style={styles.noticeCopy}>
         <Text style={styles.noticeTitle}>{title}</Text>
         <Text style={styles.noticeBody}>{body}</Text>
@@ -127,35 +142,35 @@ function ActionRow({title, subtitle, onPress, destructive, trailing}: ActionRowP
       </View>
       {trailing ??
         (onPress ? (
-          <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
+          <Icon name="chevron-right" size={iconSize.sm} color={colors.placeholder} surface={false} />
         ) : null)}
     </Pressable>
   );
 }
 
-function DisabledOption({label, detail}: {label: string; detail: string}) {
+function ComingSoonOption({label}: {label: string}) {
   return (
     <ActionRow
       title={label}
-      subtitle={detail}
-      trailing={<Switch disabled value={false} accessibilityLabel={`${label} unavailable`} />}
+      subtitle="Coming soon"
+      trailing={<Switch disabled value={false} accessibilityLabel={`${label}, coming soon`} />}
     />
   );
 }
 
 export function CustomerSettingsNotificationsScreen() {
   return (
-    <ChildScaffold title="Notification Preferences" subtitle="Channel-level delivery settings">
-      <CapabilityNotice
-        title="Preference service contract unavailable"
-        body="The current Notification Service exposes the inbox but no authenticated customer preference read/write endpoint. P75 therefore does not create local-only toggles that could disagree with delivery subscriptions."
+    <ChildScaffold title="Notifications" subtitle="Order and meal plan alerts">
+      <Notice
+        title="Choosing your alerts is coming soon"
+        body="Updates about your orders show under Notifications in the app. Soon you can pick how else we reach you."
       />
       <View style={styles.card}>
-        <DisabledOption label="Push notifications" detail="Requires backend subscription preference contract" />
+        <ComingSoonOption label="Push notifications" />
         <View style={styles.divider} />
-        <DisabledOption label="Email notifications" detail="Requires backend channel preference contract" />
+        <ComingSoonOption label="Email" />
         <View style={styles.divider} />
-        <DisabledOption label="SMS notifications" detail="Requires backend channel preference contract" />
+        <ComingSoonOption label="SMS" />
       </View>
     </ChildScaffold>
   );
@@ -163,55 +178,29 @@ export function CustomerSettingsNotificationsScreen() {
 
 export function CustomerSettingsPrivacySecurityScreen() {
   const navigation = useNavigation<SettingsNavigation>();
-  const dispatch = useAppDispatch();
-  const [loggingOut, setLoggingOut] = useState(false);
-  const logout = useCallback(() => {
-    if (loggingOut) {
-      return;
-    }
-    Alert.alert(
-      'Sign out of this device?',
-      'Your secure session will be revoked and local private state cleared.',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Sign out',
-          style: 'destructive',
-          onPress: async () => {
-            setLoggingOut(true);
-            try {
-              await completeLogout(dispatch);
-            } catch {
-              setLoggingOut(false);
-              Alert.alert('Could not sign out', 'Please try again.');
-            }
-          },
-        },
-      ],
-    );
-  }, [dispatch, loggingOut]);
+  const {loggingOut, logout} = useConfirmLogout();
 
   return (
-    <ChildScaffold title="Privacy & Security" subtitle="Password and session controls">
+    <ChildScaffold title="Privacy & security" subtitle="Password and sign-out">
       <View style={styles.card}>
         <ActionRow
           title="Change password"
-          subtitle="Re-authenticate before updating your Firebase credential"
+          subtitle="Only for accounts that sign in with email and password"
           onPress={() => navigation.navigate('CustomerSettingsChangePassword')}
         />
         <View style={styles.divider} />
         <ActionRow
-          title={loggingOut ? 'Signing out…' : 'Sign out this device'}
-          subtitle="Uses the existing Craves logout/revoke coordinator"
+          title={loggingOut ? 'Logging out…' : 'Log out of this device'}
+          subtitle="You will need to sign in again on this phone"
           destructive
           onPress={loggingOut ? undefined : logout}
-          trailing={loggingOut ? <ActivityIndicator /> : undefined}
+          trailing={loggingOut ? <ActivityIndicator color={colors.flameRed} /> : undefined}
         />
       </View>
       {CUSTOMER_SETTINGS_CAPABILITY_STATUS.deviceSessions === 'contract-unavailable' ? (
-        <CapabilityNotice
-          title="Other sessions are not exposed"
-          body="The current auth contract has no list/revoke-other-devices API. P75 keeps that action unavailable rather than fabricating device rows."
+        <Notice
+          title="Other devices"
+          body="Logging out your other phones from here is coming soon."
         />
       ) : null}
     </ChildScaffold>
@@ -237,13 +226,13 @@ export function CustomerSettingsChangePasswordScreen() {
     setFormError(null);
     try {
       await firebaseAuth.changePassword(currentPassword, newPassword);
-      Alert.alert('Password changed', 'Your password was updated securely.', [
+      Alert.alert('Password changed', 'Your new password is saved.', [
         {text: 'Done', onPress: () => navigation.goBack()},
       ]);
     } catch (error) {
       const message =
         error instanceof Error && error.message === 'PASSWORD_CHANGE_REQUIRES_EMAIL_SESSION'
-          ? 'Password changes are available only for an active email/password session.'
+          ? 'You can change a password only when you sign in with email and password.'
           : 'We could not change your password. Check your current password and try again.';
       setFormError(message);
     } finally {
@@ -252,7 +241,7 @@ export function CustomerSettingsChangePasswordScreen() {
   }, [currentPassword, navigation, newPassword, submitting, validation]);
 
   return (
-    <ChildScaffold title="Change Password" subtitle="Secure credential update">
+    <ChildScaffold title="Change password" subtitle="Choose a new password">
       <View style={styles.formCard}>
         <Text style={styles.fieldLabel}>Current password</Text>
         <TextInput
@@ -309,51 +298,31 @@ export function CustomerSettingsChangePasswordScreen() {
   );
 }
 
+// Settings no longer links Language or Appearance (user decision); these stay for restored routes.
 export function CustomerSettingsLanguageScreen() {
   return (
-    <ChildScaffold title="Language" subtitle="App language">
-      <CapabilityNotice
-        title="App-wide localization runtime unavailable"
-        body="This branch does not yet contain an approved i18n provider or server preference contract. P75 does not persist a selector that cannot update the entire app safely."
-      />
-      <View style={styles.card}>
-        <ActionRow title="English" subtitle="Pending approved localization preference layer" />
-        <View style={styles.divider} />
-        <ActionRow title="Hindi" subtitle="Pending approved localization preference layer" />
-      </View>
+    <ChildScaffold title="Language">
+      <Notice title="More languages are coming soon" body="Craves is in English for now." />
     </ChildScaffold>
   );
 }
 
 export function CustomerSettingsAppearanceScreen() {
   return (
-    <ChildScaffold title="Appearance" subtitle="Theme preference">
-      <CapabilityNotice
-        title="Shared theme provider unavailable"
-        body="The current mobile design tokens are static and no app-wide theme preference layer is registered. P75 leaves theme choices disabled instead of applying an isolated screen-only switch."
-      />
-      <View style={styles.card}>
-        <ActionRow title="System" subtitle="Requires shared theme provider" />
-        <View style={styles.divider} />
-        <ActionRow title="Light" subtitle="Requires shared theme provider" />
-        <View style={styles.divider} />
-        <ActionRow title="Dark" subtitle="Requires shared theme provider" />
-      </View>
+    <ChildScaffold title="Appearance">
+      <Notice title="Dark mode is coming soon" body="Craves uses the light theme for now." />
     </ChildScaffold>
   );
 }
 
 export function CustomerSettingsAboutScreen() {
   return (
-    <ChildScaffold title="About Craves" subtitle="Application information">
+    <ChildScaffold title="About Craves">
       <View style={styles.aboutCard}>
         <Text style={styles.aboutBrand}>Craves</Text>
         <Text style={styles.aboutBody}>Homemade food from trusted home chefs.</Text>
+        <Text style={styles.aboutVersion}>{`Version ${CUSTOMER_APP_VERSION}`}</Text>
       </View>
-      <CapabilityNotice
-        title="Runtime build metadata not exposed"
-        body="The current native runtime does not expose an approved app-version/build metadata adapter, so P75 does not hardcode a release version."
-      />
     </ChildScaffold>
   );
 }
@@ -368,19 +337,19 @@ export function CustomerSettingsShareScreen() {
     try {
       await Share.share({message: 'Craves — homemade food from trusted home chefs.'});
     } catch {
-      Alert.alert('Could not open share sheet', 'Please try again.');
+      Alert.alert('Could not open sharing', 'Please try again.');
     } finally {
       setSharing(false);
     }
   }, [sharing]);
   return (
-    <ChildScaffold title="Share Craves" subtitle="Use the native share sheet">
+    <ChildScaffold title="Share Craves" subtitle="Tell your friends about Craves">
       <View style={styles.card}>
         <ActionRow
-          title={sharing ? 'Opening share sheet…' : 'Share Craves'}
-          subtitle="Share through apps installed on this device"
+          title={sharing ? 'Opening…' : 'Share Craves'}
+          subtitle="Share through apps on your phone"
           onPress={sharing ? undefined : share}
-          trailing={sharing ? <ActivityIndicator /> : undefined}
+          trailing={sharing ? <ActivityIndicator color={colors.flameRed} /> : undefined}
         />
       </View>
     </ChildScaffold>
@@ -391,40 +360,23 @@ export function CustomerSettingsReferralScreen() {
   return <CustomerReferralScreen />;
 }
 
-export function CustomerSettingsSupportScreen() {
-  return (
-    <ChildScaffold title="Support" subtitle="Help and contact">
-      <CapabilityNotice
-        title="Support destination is phase-gated"
-        body="No trusted customer support content/contact contract is registered yet. The full Help & Support experience remains owned by its later phase, so P75 does not pre-implement it."
-      />
-    </ChildScaffold>
-  );
-}
-
-export function CustomerSettingsSubscriptionScreen() {
-  return (
-    <ChildScaffold title="Membership" subtitle="Subscription and benefits">
-      <CapabilityNotice
-        title="Customer membership contract unavailable"
-        body="The mobile branch has no approved customer plan-list, entitlement, or plan-change client contract. Pricing and benefits are not hardcoded."
-      />
-    </ChildScaffold>
-  );
-}
-
 export function CustomerSettingsLegalScreen() {
+  const route = useRoute<RouteProp<CustomerProfileStackParamList, 'CustomerSettingsLegal'>>();
+  const legal = LEGAL_DOCUMENTS[route.params?.document ?? 'terms'];
   return (
-    <ChildScaffold title="Legal" subtitle="Terms and privacy">
-      <CapabilityNotice
-        title="Trusted legal-content destination unavailable"
-        body="No approved Terms or Privacy URL/content endpoint is present in the mobile runtime configuration. P75 does not open guessed external links."
-      />
-      <View style={styles.card}>
-        <ActionRow title="Terms & Conditions" subtitle="Awaiting approved content destination" />
-        <View style={styles.divider} />
-        <ActionRow title="Privacy Policy" subtitle="Awaiting approved content destination" />
-      </View>
+    <ChildScaffold title={legal.title}>
+      <Text style={styles.legalIntro}>{legal.intro}</Text>
+      {legal.sections.map(section => (
+        <View key={section.heading} style={styles.legalSection}>
+          <Text accessibilityRole="header" style={styles.legalHeading}>
+            {section.heading}
+          </Text>
+          {section.body ? <Text style={styles.legalBody}>{section.body}</Text> : null}
+          {section.bullets?.map(item => (
+            <Text key={item} style={styles.legalBody}>{`•  ${item}`}</Text>
+          ))}
+        </View>
+      ))}
     </ChildScaffold>
   );
 }
@@ -432,27 +384,17 @@ export function CustomerSettingsLegalScreen() {
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: colors.white},
   header: {
-    minHeight: 68,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     backgroundColor: colors.white,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
   },
-  headerButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCopy: {minWidth: 0, flex: 1},
-  headerTitle: {color: colors.espressoBrown, fontSize: typography.heading, fontWeight: fontWeight.bold},
-  headerSubtitle: {marginTop: 2, color: colors.textSecondary, fontSize: typography.tiny},
-  scrollContent: {flexGrow: 1, padding: spacing.md, paddingBottom: spacing.xxl},
+  headerTitle: {minWidth: 0, flex: 1, color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
+  headerSubtitle: {color: colors.textSecondary, fontSize: typography.small},
+  scrollContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.xxl},
   content: {width: '100%', maxWidth: 640, alignSelf: 'center', gap: spacing.md},
   card: {
     overflow: 'hidden',
@@ -465,9 +407,9 @@ const styles = StyleSheet.create({
   rowPressed: {backgroundColor: colors.surfaceMuted},
   rowCopy: {minWidth: 0, flex: 1},
   rowTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold},
-  rowSubtitle: {marginTop: 3, color: colors.textSecondary, fontSize: typography.tiny, lineHeight: 18},
+  rowSubtitle: {marginTop: 3, color: colors.textSecondary, fontSize: typography.small},
   divider: {height: borderWidth.standard, marginLeft: spacing.md, backgroundColor: colors.border},
-  dangerText: {color: colors.error},
+  dangerText: {color: colors.flameRedAccessible},
   notice: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   noticeCopy: {minWidth: 0, flex: 1},
   noticeTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
@@ -484,4 +426,9 @@ const styles = StyleSheet.create({
   aboutCard: {padding: spacing.xl, alignItems: 'center', borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   aboutBrand: {color: colors.espressoBrown, fontSize: typography.title, fontWeight: fontWeight.extrabold},
   aboutBody: {marginTop: spacing.xs, color: colors.textSecondary, fontSize: typography.body, textAlign: 'center'},
+  aboutVersion: {marginTop: spacing.sm, color: colors.textSecondary, fontSize: typography.small},
+  legalIntro: {color: colors.textSecondary, fontSize: typography.small, lineHeight: 22},
+  legalSection: {gap: spacing.xxs},
+  legalHeading: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.bold},
+  legalBody: {color: colors.textPrimary, fontSize: typography.small, lineHeight: 22},
 });

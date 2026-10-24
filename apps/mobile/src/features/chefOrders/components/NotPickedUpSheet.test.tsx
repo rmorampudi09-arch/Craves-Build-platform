@@ -47,7 +47,7 @@ describe('NotPickedUpSheet', () => {
     mount();
     expect(allText()).toEqual(
       expect.arrayContaining([
-        'What happened with #0E7CD?',
+        'What happened with #00000000?',
         "Partner hasn't arrived yet",
         'Partner left without the order',
         'Partner asked me to cancel',
@@ -70,7 +70,7 @@ describe('NotPickedUpSheet', () => {
     expect(mockCreate).toHaveBeenCalledWith({
       contextRole: 'CHEF',
       orderId: ORDER_ID,
-      subject: 'Not picked up · #0E7CD',
+      subject: 'Not picked up · #00000000',
       message: 'Partner left without the order\n\nWaited 30 min',
     });
     expect(onClose).toHaveBeenCalledTimes(1);

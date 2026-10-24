@@ -8,20 +8,18 @@ import {
   borderWidth,
   colors,
   fontWeight,
-  iconSize,
   radius,
   spacing,
   textDefaults,
   typography,
 } from '../../../design/tokens';
-import {Icon, type IconName} from '../../../shared/components/Icon';
 import {InputField} from '../../../shared/components/InputField';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {
   ChefActionButton,
-  ChefCard,
   ChipTap,
   ConfirmDialog,
+  EmptyState,
   ListGroup,
   chipTapOverlap,
   useChefToast,
@@ -58,33 +56,6 @@ function FilterPill({label, on, onPress}: {label: string; on: boolean; onPress: 
         </Text>
       </View>
     </ChipTap>
-  );
-}
-
-function CenterMessage({
-  icon,
-  title,
-  message,
-  action,
-}: {
-  icon: IconName;
-  title: string;
-  message: string;
-  action: {label: string; onPress: () => void};
-}) {
-  return (
-    <ChefCard>
-      <View style={styles.center}>
-        <Icon color={colors.textSecondary} name={icon} size={iconSize.xxl} surface={false} />
-        <Text accessibilityRole="header" allowFontScaling={textDefaults.allowFontScaling} style={styles.centerTitle}>
-          {title}
-        </Text>
-        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.centerMessage}>
-          {message}
-        </Text>
-        <ChefActionButton label={action.label} onPress={action.onPress} />
-      </View>
-    </ChefCard>
   );
 }
 
@@ -162,21 +133,18 @@ export function ChefMenuScreen() {
     );
   } else if (status === 'error' && items.length === 0) {
     body = (
-      <CenterMessage
-        action={{label: 'Try again', onPress: () => refresh().catch(() => undefined)}}
-        icon="wifi-off"
-        message="Check your connection and try again."
-        title="Couldn't load your dishes"
-      />
+      <EmptyState illustration="loadError" message="Check your connection and try again." title="Couldn't load your dishes">
+        <ChefActionButton label="Try again" onPress={() => refresh().catch(() => undefined)} />
+      </EmptyState>
     );
   } else if (items.length === 0) {
     body = (
-      <CenterMessage
-        action={{label: 'Add a dish', onPress: () => navigation.navigate('ChefAddMenuItem')}}
-        icon="meal"
-        message="Add your first dish so customers can order from you."
-        title="No dishes yet"
-      />
+      <EmptyState
+        illustration="menu"
+        message="Add your first dish with a photo and price so customers near you can order."
+        title="No dishes yet">
+        <ChefActionButton label="Add a dish" onPress={() => navigation.navigate('ChefAddMenuItem')} />
+      </EmptyState>
     );
   } else {
     body = (
@@ -212,12 +180,9 @@ export function ChefMenuScreen() {
           {`${summary.available} of ${summary.total} dishes customers can order`}
         </Text>
         {shown.length === 0 ? (
-          <CenterMessage
-            action={{label: 'Clear filters', onPress: clearFilters}}
-            icon="search-off"
-            message="Try another word or filter."
-            title="No dishes match"
-          />
+          <EmptyState illustration="search" message="Try another word or filter." title="No dishes match" width={160}>
+            <ChefActionButton label="Clear filters" onPress={clearFilters} />
+          </EmptyState>
         ) : (
           <ListGroup>
             {shown.map(item => (
@@ -279,7 +244,4 @@ const styles = StyleSheet.create({
   pillText: {color: colors.textPrimary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   pillTextOn: {color: colors.flameRedAccessible},
   count: {color: colors.textSecondary, fontSize: typography.small, marginHorizontal: 2},
-  center: {alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.md},
-  centerTitle: {color: colors.textPrimary, fontSize: typography.heading, fontWeight: fontWeight.bold, textAlign: 'center'},
-  centerMessage: {color: colors.textSecondary, fontSize: typography.body, textAlign: 'center', marginBottom: spacing.xs},
 });

@@ -6,6 +6,8 @@ export function useCustomerOrderKitchenPresentationQuery(kitchenId: string) {
   return useQuery({
     queryKey: ['craves', 'v1', 'public', 'order-kitchen-presentation', kitchenId],
     queryFn: ({signal}) => customerCatalogPresentationApi.getKitchen(kitchenId, signal),
+    // The order detail asks before its order has loaded.
+    enabled: kitchenId !== '',
     staleTime: queryStaleTimes.discoveryMs,
   });
 }

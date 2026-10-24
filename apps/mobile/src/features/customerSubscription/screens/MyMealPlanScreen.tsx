@@ -1,8 +1,7 @@
 import React from 'react';
-import {Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Pressable, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {CustomerMealPlanStackParamList} from '../../../app/navigation/types';
-import {toAppApiError} from '../../../core/http/apiError';
 import {
   borderWidth,
   colors,
@@ -25,25 +24,22 @@ import {
 } from '../../../shared/components';
 import {useCustomerAddressesQuery} from '../../customerAddresses/query/customerAddressQueries';
 import {billingUnit} from '../../mealPlans/domain/mealPlanSchedule';
-import type {CustomerSubscriptionOccurrence} from '../api/customerSubscriptionApi';
+import type {CustomerSubscriptionOccurrence, DayCredit, DayCreditChoice} from '../api/customerSubscriptionApi';
 import {
   CardSection,
-  DateSheet,
   MealPlanHeader,
   MealPlanPhoto,
   PlanUnavailable,
 } from '../components/MealPlanUi';
 import {
+  dayCreditCard,
   formatMealPlanDate,
   formatPlanPrice,
   nextOccurrence,
   occurrenceDishNames,
   occurrenceStatusPresentation,
   occurrenceTimeLabel,
-  resumeDateFor,
-  skippableDates,
   subscriptionStatusPresentation,
-  todayIso,
   weekOccurrences,
 } from '../domain/mealPlanPresentation';
 import {
@@ -52,17 +48,11 @@ import {
   useMenuItemPreview,
   useMySubscriptionsQuery,
   usePlanCover,
-  usePlanPolicyQuery,
-  usePlanScheduleQuery,
   usePublicMealPlansQuery,
-  useSubscriptionActions,
-  useSubscriptionOccurrencesQuery,
 } from '../query/mealPlanQueries';
+import {CANCEL_COPY, usePlanControls} from '../state/usePlanControls';
 
 type Props = NativeStackScreenProps<CustomerMealPlanStackParamList, 'MyMealPlan'>;
-
-const CANCEL_COPY =
-  'Cancelling stops upcoming meals right away. Meals already being prepared will still be delivered.';
 
 function NextMealCard({
   occurrence,
@@ -143,6 +133,44 @@ function WeekRow({
   );
 }
 
+function DayCreditCard({
+  credit,
+  today,
+  busy,
+  onChoose,
+}: {
+  credit: DayCredit;
+  today: string;
+  busy: boolean;
+  onChoose: (choice: DayCreditChoice) => void;
+}) {
+  const card = dayCreditCard(credit, today);
+  return (
+    <CardSection>
+      <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.title}>
+        {card.title}
+      </Text>
+      {card.pending ? (
+        <View style={styles.choices}>
+          <Button label={card.refundLabel} variant="outline" disabled={busy} onPress={() => onChoose('REFUND')} />
+          {card.extendAvailable ? (
+            <Button label={card.extendLabel} disabled={busy} onPress={() => onChoose('EXTEND')} />
+          ) : null}
+          {card.note ? (
+            <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+              {card.note}
+            </Text>
+          ) : null}
+        </View>
+      ) : card.settledLine ? (
+        <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+          {card.settledLine}
+        </Text>
+      ) : null}
+    </CardSection>
+  );
+}
+
 function ActionTile({icon, label, onPress, disabled}: {icon: IconName; label: string; onPress: () => void; disabled: boolean}) {
   return (
     <Pressable
@@ -169,15 +197,11 @@ export function MyMealPlanScreen({navigation, route}: Props) {
   const planId = subscription?.planId ?? null;
   const plan = usePublicMealPlansQuery().data?.find(candidate => candidate.id === planId);
   const cover = usePlanCover(planId);
-  const scheduleItems = usePlanScheduleQuery(planId).data?.items ?? [];
-  const policy = usePlanPolicyQuery(planId).data;
-  const occurrencesQuery = useSubscriptionOccurrencesQuery(subscriptionId);
-  const occurrences = occurrencesQuery.data ?? [];
+  const controls = usePlanControls(subscriptionId, subscription);
+  const {now, today, scheduleItems, occurrences, occurrencesQuery, actions, pausing} = controls;
   const paymentQuery = useLatestSubscriptionPaymentQuery(subscriptionId);
   const payment = paymentQuery.data;
   const {addresses} = useCustomerAddressesQuery();
-  const actions = useSubscriptionActions(subscriptionId);
-  const [skipDates, setSkipDates] = React.useState<string[] | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
 
   const refresh = () => {
@@ -207,8 +231,6 @@ export function MyMealPlanScreen({navigation, route}: Props) {
     );
   }
 
-  const now = new Date();
-  const today = todayIso(now);
   const {status} = subscription;
   const badge = subscriptionStatusPresentation(status);
   const period = subscription.billingPeriod ?? plan?.billingPeriod;
@@ -226,62 +248,7 @@ export function MyMealPlanScreen({navigation, route}: Props) {
   const dishes = (occurrence: CustomerSubscriptionOccurrence) =>
     occurrenceDishNames(occurrence, scheduleItems).join(' + ');
 
-  // Controls follow the plan policy; with no policy loaded nothing is offered (no 403 taps).
-  const canPause = status === 'ACTIVE' && policy?.customerPauseEnabled === true;
-  const canResume = status === 'PAUSED' && policy?.customerResumeEnabled === true;
-  const canSkip = status === 'ACTIVE' && policy?.customerSkipEnabled === true;
-  const canCancel =
-    (status === 'ACTIVE' || status === 'PAUSED') && policy?.customerCancelEnabled === true;
-
-  const confirm = (
-    title: string,
-    message: string,
-    actionLabel: string,
-    action: () => Promise<void>,
-    destructive = false,
-  ) =>
-    Alert.alert(title, message, [
-      {text: 'Not now', style: 'cancel'},
-      {
-        text: actionLabel,
-        style: destructive ? 'destructive' : 'default',
-        onPress: () => {
-          action().catch(error => Alert.alert('Plan not updated', toAppApiError(error).message));
-        },
-      },
-    ]);
-
-  const pause = () =>
-    confirm('Pause your plan?', 'Upcoming meals stop until you resume the plan.', 'Pause plan', actions.pause);
-  const resume = () => {
-    const earliestTime = scheduleItems.map(item => item.serviceTime).sort()[0] ?? null;
-    const date = resumeDateFor(now, policy?.resumeLeadMinutes ?? 0, earliestTime);
-    confirm(
-      'Resume your plan?',
-      `Meals start again from ${formatMealPlanDate(date, 'long')}.`,
-      'Resume plan',
-      () => actions.resume(date),
-    );
-  };
-  const openSkip = () => {
-    // shortcut: the sheet lists only the next 7 skippable dates; add scrolling if plans need more.
-    const dates = skippableDates(occurrences, now, policy?.skipCutoffMinutes ?? 0).slice(0, 7);
-    if (dates.length === 0) {
-      Alert.alert('No meals to skip', 'There are no upcoming meals you can skip right now.');
-      return;
-    }
-    setSkipDates(dates);
-  };
-  const skip = (date: string) => {
-    setSkipDates(null);
-    confirm(
-      'Skip this meal?',
-      `You won't get meals on ${formatMealPlanDate(date, 'long')}.`,
-      'Skip meal',
-      () => actions.skip(date),
-    );
-  };
-  const cancel = () => confirm('Cancel your plan?', CANCEL_COPY, 'Cancel plan', actions.cancel, true);
+  const {canPause, canResume, canSkip, canCancel, pause, resume, openSkip, cancel} = controls;
 
   return (
     <ScreenShell edges={['top', 'bottom']} keyboardAvoiding={false} testID="my-meal-plan">
@@ -323,6 +290,11 @@ export function MyMealPlanScreen({navigation, route}: Props) {
                 </Text>
                 <Badge label={badge.label} tone={badge.tone} />
               </View>
+              {pausing.restartNote ? (
+                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
+                  {pausing.restartNote}
+                </Text>
+              ) : null}
               {cover.kitchenName ? (
                 <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.secondary}>
                   {cover.kitchenName}
@@ -370,10 +342,29 @@ export function MyMealPlanScreen({navigation, route}: Props) {
           />
         ) : null}
 
-        {canPause || canResume || canSkip ? (
+        {(subscription.dayCredits ?? []).map(credit => (
+          <DayCreditCard
+            key={credit.id}
+            credit={credit}
+            today={today}
+            busy={actions.pending}
+            onChoose={choice => controls.confirmChoice(credit, choice)}
+          />
+        ))}
+
+        {canPause || (canResume && pausing.resumeOffered) || canSkip ? (
           <View style={styles.tiles}>
-            {canPause ? <ActionTile icon="pause" label="Pause plan" onPress={pause} disabled={actions.pending} /> : null}
-            {canResume ? <ActionTile icon="play" label="Resume plan" onPress={resume} disabled={actions.pending} /> : null}
+            {canPause ? (
+              <ActionTile
+                icon="pause"
+                label={pausing.pauseDisabledLabel ?? 'Pause plan'}
+                onPress={pause}
+                disabled={actions.pending || pausing.pauseDisabledLabel !== null}
+              />
+            ) : null}
+            {canResume && pausing.resumeOffered ? (
+              <ActionTile icon="play" label="Resume plan" onPress={resume} disabled={actions.pending} />
+            ) : null}
             {canSkip ? (
               <ActionTile icon="calendar-remove" label="Skip a meal" onPress={openSkip} disabled={actions.pending} />
             ) : null}
@@ -415,14 +406,7 @@ export function MyMealPlanScreen({navigation, route}: Props) {
         ) : null}
       </ScrollView>
 
-      {skipDates ? (
-        <DateSheet
-          title="Skip a meal"
-          dates={skipDates}
-          onSelect={skip}
-          onClose={() => setSkipDates(null)}
-        />
-      ) : null}
+      {controls.skipSheet}
     </ScreenShell>
   );
 }
@@ -469,6 +453,7 @@ const styles = StyleSheet.create({
   linkText: {color: colors.flameRedAccessible, fontSize: typography.body, fontWeight: fontWeight.semibold},
   pressed: {opacity: 0.7},
   tiles: {flexDirection: 'row', gap: spacing.sm},
+  choices: {gap: spacing.sm, marginTop: spacing.sm},
   tile: {
     flex: 1,
     alignItems: 'center',

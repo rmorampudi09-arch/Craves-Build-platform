@@ -6,8 +6,8 @@ export const CUSTOMER_PROFILE_ROUTE_BLOCKER_REASON =
 
 export type CustomerProfileMenuAction =
   | 'route-favorites'
+  | 'route-meal-plans'
   | 'route-payments'
-  | 'route-membership'
   | 'route-referral'
   | 'route-support'
   | 'switch-chef'
@@ -16,11 +16,11 @@ export type CustomerProfileMenuAction =
 export interface CustomerProfileMenuRowModel {
   id:
     | 'favorites'
+    | 'meal-plans'
     | 'payments'
-    | 'membership'
     | 'referral'
-    | 'switch-chef'
     | 'contact'
+    | 'switch-chef'
     | 'logout';
   title: string;
   subtitle: string;
@@ -31,31 +31,38 @@ export interface CustomerProfileMenuRowModel {
 export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] = [
   {
     id: 'favorites',
-    title: 'Favorites',
-    subtitle: 'Saved meals and kitchens',
+    title: 'Saved',
+    subtitle: 'Dishes and home chefs',
     icon: 'heart',
     action: 'route-favorites',
   },
   {
+    id: 'meal-plans',
+    title: 'Meal plans',
+    subtitle: 'Your plans and how they work',
+    icon: 'calendar-check',
+    action: 'route-meal-plans',
+  },
+  {
     id: 'payments',
     title: 'Payments',
-    subtitle: 'Payment methods and preferences',
+    subtitle: 'UPI, cards and wallets',
     icon: 'wallet',
     action: 'route-payments',
   },
   {
-    id: 'membership',
-    title: 'Membership',
-    subtitle: 'Subscription and benefits',
-    icon: 'crown',
-    action: 'route-membership',
-  },
-  {
     id: 'referral',
-    title: 'Referral to friend',
-    subtitle: 'Invite friends and earn rewards',
+    title: 'Refer a friend',
+    subtitle: 'Share Craves with friends',
     icon: 'gift',
     action: 'route-referral',
+  },
+  {
+    id: 'contact',
+    title: 'Contact us',
+    subtitle: 'Chat, call or email',
+    icon: 'headset',
+    action: 'route-support',
   },
   {
     id: 'switch-chef',
@@ -65,26 +72,13 @@ export const CUSTOMER_PROFILE_MENU_ROWS: readonly CustomerProfileMenuRowModel[] 
     action: 'switch-chef',
   },
   {
-    id: 'contact',
-    title: 'Contact us',
-    subtitle: 'Help and support',
-    icon: 'headset',
-    action: 'route-support',
-  },
-  {
     id: 'logout',
-    title: 'Logout',
+    title: 'Log out',
     subtitle: 'Sign out of this device',
     icon: 'lock',
     action: 'logout',
   },
 ] as const;
-
-export const CUSTOMER_PROFILE_EDIT_BLOCKER_MESSAGE =
-  'Edit Profile is not registered in the approved mobile route contract yet.';
-
-export const CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY =
-  'Rewards balance and tier are not exposed by the approved profile contract yet.';
 
 export function resolveCustomerProfileDisplayName(
   profile: CustomerProfileIdentity,
@@ -112,6 +106,6 @@ export function resolveCustomerProfilePhoneLabel(
   profile: CustomerProfileIdentity,
 ): string {
   return profile.registeredPhone.last4
-    ? `Registered phone •••• ${profile.registeredPhone.last4}`
-    : 'No registered phone on the approved profile record';
+    ? `Phone •••• ${profile.registeredPhone.last4}`
+    : 'No phone number on your account';
 }

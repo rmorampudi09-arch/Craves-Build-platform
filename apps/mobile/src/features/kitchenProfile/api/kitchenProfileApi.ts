@@ -20,6 +20,8 @@ const publicKitchenProfileSchema = z.object({
   state: z.string().nullable(),
   status: kitchenStatusSchema,
   createdAt: z.string().min(1).nullable(),
+  chefPhotoUrl: z.string().nullable().optional(),
+  kitchenPhotoUrls: z.array(z.string()).nullish(),
 });
 
 const publicMenuItemImageSchema = z.object({
@@ -107,6 +109,9 @@ export interface CustomerKitchenProfile {
     state: string | null;
   };
   joinedAt: string | null;
+  chefPhotoUrl: string | null;
+  /** The chef's kitchen photos in slot order (https only); empty before the server sends them. */
+  kitchenPhotoUrls: readonly string[];
   menuItems: readonly CustomerKitchenMenuItemSummary[];
   verificationStatus: null;
   reviewSummary: {
@@ -267,6 +272,10 @@ export function mapCustomerKitchenProfile(
       state: kitchen.state,
     },
     joinedAt: kitchen.createdAt,
+    chefPhotoUrl: kitchen.chefPhotoUrl ?? null,
+    kitchenPhotoUrls: (kitchen.kitchenPhotoUrls ?? [])
+      .map(normalizeHttpsPublicUrl)
+      .filter((url): url is string => url !== null),
     menuItems,
     verificationStatus: null,
     reviewSummary: {

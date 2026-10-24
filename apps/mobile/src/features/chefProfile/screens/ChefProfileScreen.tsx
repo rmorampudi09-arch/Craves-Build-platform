@@ -26,7 +26,7 @@ import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState, type KitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.31.1';
+export const CHEF_APP_VERSION = '1.35.5';
 
 /** The line under Opening hours: where the kitchen is right now, with today's hours. */
 function hoursLine(status: KitchenOpenState['status'], hoursToday: string | null): string | undefined {
@@ -66,6 +66,8 @@ export function ChefProfileScreen() {
 
   // Both lines are extras: when a read fails or finds nothing, the row simply has no second line.
   const onboarding = useChefOnboardingState().query.data;
+  // Documents are view-only: a chef with nothing from the application (joined on the old form) gets no Documents page.
+  const hasDocuments = Boolean(onboarding?.documents.length);
   const bank = useChefRead('chef-bank-status', signal => chefBankOnboardingApi.getStatus(signal)).query.data;
   const bankLine = bank?.lastFour ? [bank.bankName, `••${bank.lastFour}`].filter(Boolean).join(' ') : undefined;
 
@@ -140,7 +142,12 @@ export function ChefProfileScreen() {
               <StatusChip label="Paused by Craves" tone="new" />
             </View>
           ) : null}
-          {approved ? (
+          {approved && !hasDocuments ? (
+            <View style={styles.chipTap}>
+              <StatusChip label="Approved" tone="ready" />
+            </View>
+          ) : null}
+          {approved && hasDocuments ? (
             <Pressable
               accessibilityLabel="Approved. Open documents"
               accessibilityRole="button"
@@ -162,25 +169,27 @@ export function ChefProfileScreen() {
       </ChefCard>
 
       <SectionHeader title="Kitchen" />
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow icon="store" iconTone="red" onPress={open('ChefEditProfile')} subtitle="Name, about, address, photos" title="Kitchen details" />
         <ListRow
           icon="clock"
-          iconTone="green"
+          iconTone="red"
           onPress={open('ChefKitchenSchedule')}
           subtitle={hoursLine(kitchenState.status, kitchenState.hoursToday)}
           title="Opening hours"
         />
-        <ListRow
-          icon="shield"
-          iconTone="blue"
-          onPress={open('ChefBusinessInformation')}
-          subtitle={approved ? ['Verified', onboarding ? documentsSummary(onboarding) : ''].filter(Boolean).join(' · ') : 'See your documents'}
-          title="Documents & verification"
-        />
+        {onboarding && hasDocuments ? (
+          <ListRow
+            icon="shield"
+            iconTone="red"
+            onPress={open('ChefBusinessInformation')}
+            subtitle={approved ? ['Verified', documentsSummary(onboarding)].filter(Boolean).join(' · ') : 'See your documents'}
+            title="Documents & verification"
+          />
+        ) : null}
         <ListRow
           icon="star"
-          iconTone="amber"
+          iconTone="red"
           onPress={open('ChefReviews')}
           subtitle={hasRating ? `${rating.toFixed(1)} average · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}` : 'What customers say'}
           title="Reviews"
@@ -188,20 +197,20 @@ export function ChefProfileScreen() {
       </ListGroup>
 
       <SectionHeader title="Money" />
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow icon="bank" onPress={open('ChefBankAccount')} subtitle={bankLine} title="Bank account" />
         <ListRow icon="receipt" onPress={open('ChefPayoutHistory')} title="Payout history" />
       </ListGroup>
 
       <SectionHeader title="More" />
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow icon="gift" onPress={open('ChefReferral')} subtitle="Earn when chefs you invite start cooking" title="Refer a chef" />
         <ListRow icon="filter" onPress={open('ChefAppPreferences')} subtitle="Notifications, orders, language" title="Preferences" />
         <ListRow icon="headset" onPress={open('ChefSupport')} title="Help & support" />
         <ListRow icon="lock" onPress={open('ChefSecurity')} title="Login & security" />
       </ListGroup>
 
-      <ListGroup>
+      <ListGroup dividers={false}>
         <ListRow
           icon="renew"
           onPress={() => {

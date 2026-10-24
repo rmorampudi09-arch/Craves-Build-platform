@@ -1,5 +1,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  Animated,
+  Easing,
   FlatList,
   Image,
   Pressable,
@@ -31,6 +33,7 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
+import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {KitchenImageCarousel} from './KitchenImageCarousel';
@@ -38,6 +41,7 @@ import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefD
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
 import {formatPreparationTime} from '../../chefDiscovery/chefDiscoveryPresentation';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   useFavoriteKitchensQuery,
@@ -49,15 +53,19 @@ import {
 } from '../../kitchenProfile/api/publicKitchenReviewApi';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import type {NearbyDish} from '../api/homeFeedApi';
+import type {DiscoveryDietOption} from '../../discoveryFilters/state/discoveryFilterSlice';
 import {formatDishPrice} from '../homePresentation';
 import {useHomeBannersQuery} from '../query/homeBannerQueries';
 import type {HomeBanner} from '../api/homeBannerApi';
 
 const HOME_RADIUS_METERS = 10_000;
-const TOP_KITCHENS_PAGE_SIZE = 12;
+export const TOP_KITCHENS_PAGE_SIZE = 12;
 const TOP_KITCHEN_DISH_PAGE_SIZE = 100;
 const MAX_TOP_KITCHENS = 8;
-export const PROMO_AUTO_ADVANCE_MS = 2_000;
+export const PROMO_AUTO_ADVANCE_MS = 4_000;
+const PROMO_SLIDE_MS = 650;
+/** Kitchen cards change photos this far apart so the row never flips at once. */
+const KITCHEN_PHOTO_STAGGER_MS = 800;
 
 type HomeNavigation = NativeStackNavigationProp<
   CustomerHomeStackParamList,
@@ -68,6 +76,7 @@ interface TopKitchenCardModel {
   kitchenId: string;
   kitchenName: string;
   biography: string;
+  chefPhotoUrl: string | null;
   imageUrls: string[];
   preparationTimeLabel: string | null;
   startingPriceLabel: string;
@@ -90,6 +99,21 @@ export function PromoCarousel({
   // A manual swipe gets a full interval on its slide before auto-advance resumes.
   const lastSwipeAtRef = useRef(0);
   const [activeIndex, setActiveIndex] = useState(0);
+  const reduceMotion = useReducedMotionPreference();
+  // Drives the list offset frame by frame: a slower, eased slide than the default scroll.
+  const offset = useRef(new Animated.Value(0)).current;
+  // The first banner repeats at the end, so the last one slides forward into it.
+  const slides = useMemo(
+    () => (banners.length > 1 ? [...banners, banners[0]] : banners),
+    [banners],
+  );
+
+  useEffect(() => {
+    const id = offset.addListener(({value}) =>
+      listRef.current?.scrollToOffset({offset: value, animated: false}),
+    );
+    return () => offset.removeListener(id);
+  }, [offset]);
 
   useEffect(() => {
     if (!active || width <= 0 || banners.length < 2) return undefined;
@@ -100,33 +124,41 @@ export function PromoCarousel({
       ) {
         return;
       }
-      const nextIndex =
-        (activeIndexRef.current + 1) % banners.length;
-      listRef.current?.scrollToOffset({
-        offset: nextIndex * width,
-        animated: true,
-      });
+      const from = activeIndexRef.current;
+      const nextIndex = (from + 1) % banners.length;
       activeIndexRef.current = nextIndex;
       setActiveIndex(nextIndex);
+      offset.setValue(from * width);
+      Animated.timing(offset, {
+        toValue: (from + 1) * width,
+        duration: reduceMotion ? 0 : PROMO_SLIDE_MS,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: false,
+      }).start(({finished}) => {
+        if (finished && nextIndex === 0) offset.setValue(0);
+      });
     }, PROMO_AUTO_ADVANCE_MS);
-    return () => clearInterval(interval);
-  }, [active, banners.length, width]);
+    return () => {
+      clearInterval(interval);
+      offset.stopAnimation();
+      offset.setValue(activeIndexRef.current * width);
+    };
+  }, [active, banners.length, offset, reduceMotion, width]);
 
   const handleMomentumScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
-    if (width <= 0) return;
-    const nextIndex = Math.max(
+    // Auto-advance tracks its own position; only a drag moves the dots here.
+    if (width <= 0 || !isDraggingRef.current) return;
+    const landed = Math.max(
       0,
-      Math.min(
-        banners.length - 1,
-        Math.round(event.nativeEvent.contentOffset.x / width),
-      ),
+      Math.round(event.nativeEvent.contentOffset.x / width),
     );
-    // Android also reports momentum for programmatic scrolls; only a drag counts as a swipe.
-    if (isDraggingRef.current) {
-      lastSwipeAtRef.current = Date.now();
+    const nextIndex = landed >= banners.length ? 0 : landed;
+    if (landed >= banners.length) {
+      listRef.current?.scrollToOffset({offset: 0, animated: false});
     }
+    lastSwipeAtRef.current = Date.now();
     isDraggingRef.current = false;
     activeIndexRef.current = nextIndex;
     setActiveIndex(nextIndex);
@@ -136,25 +168,32 @@ export function PromoCarousel({
     <View style={styles.promoCarousel}>
       <FlatList
         ref={listRef}
-        data={banners}
+        data={slides}
         horizontal
         pagingEnabled
         nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) =>
+          index === banners.length ? `${item.id}:loop` : item.id
+        }
         getItemLayout={(_, index) => ({
           length: width,
           offset: width * index,
           index,
         })}
         onScrollBeginDrag={() => {
+          offset.stopAnimation();
           isDraggingRef.current = true;
         }}
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        renderItem={({item}) => (
+        renderItem={({item, index}) => (
           <Pressable
             accessibilityLabel={item.label}
             accessibilityRole="button"
+            accessibilityElementsHidden={index === banners.length}
+            importantForAccessibility={
+              index === banners.length ? 'no-hide-descendants' : 'auto'
+            }
             onPress={onPress}
             style={[styles.bannerSlide, {width}]}>
             <Image
@@ -186,12 +225,15 @@ export function PromoCarousel({
   );
 }
 
-function buildTopKitchenCards(
+/** Kitchens with no dish of the chosen food types drop out; photos and prices use only matching dishes. */
+export function buildTopKitchenCards(
   kitchens: readonly NearbyKitchen[],
   dishes: readonly NearbyDish[],
+  diets: readonly DiscoveryDietOption[] = [],
 ): TopKitchenCardModel[] {
   const dishesByKitchen = new Map<string, NearbyDish[]>();
   for (const dish of dishes) {
+    if (diets.length > 0 && !diets.includes(dish.foodType)) continue;
     const current = dishesByKitchen.get(dish.kitchenId) ?? [];
     current.push(dish);
     dishesByKitchen.set(dish.kitchenId, current);
@@ -215,10 +257,11 @@ function buildTopKitchenCards(
 
     cards.push({
       kitchenId: kitchen.id,
-      kitchenName: kitchen.displayName?.trim() || kitchen.kitchenName,
+      kitchenName: kitchen.kitchenName.trim() || kitchen.displayName?.trim() || kitchen.kitchenName,
       biography:
         kitchen.description?.trim() ||
         'Home-cooked meals prepared with care.',
+      chefPhotoUrl: kitchen.chefPhotoUrl ?? null,
       imageUrls,
       preparationTimeLabel: formatPreparationTime(kitchenDishes),
       startingPriceLabel: `Starts from ${formatDishPrice(
@@ -240,6 +283,7 @@ function TopKitchenCard({
   favoritePending,
   rating,
   active,
+  startDelayMs,
   onFavorite,
   onPress,
 }: {
@@ -249,6 +293,7 @@ function TopKitchenCard({
   favoritePending: boolean;
   rating: number | null;
   active: boolean;
+  startDelayMs: number;
   onFavorite: () => void;
   onPress: () => void;
 }) {
@@ -266,6 +311,7 @@ function TopKitchenCard({
             height={imageHeight}
             kitchenName={kitchen.kitchenName}
             active={active}
+            startDelayMs={startDelayMs}
             onPress={onPress}
           />
         </BlurTargetView>
@@ -312,15 +358,22 @@ function TopKitchenCard({
         </LiquidGlassSurface>
 
         <View pointerEvents="none" style={styles.chefAvatarShell}>
-          <CustomerChefAvatar size={64} />
-          <View style={styles.chefAvatarIcon}>
-            <Icon
-              name="chef"
-              size={26}
-              color={colors.espressoBrown}
-              surface={false}
-            />
-          </View>
+          <CustomerChefFace
+            url={kitchen.chefPhotoUrl}
+            fallback={
+              <>
+                <CustomerChefAvatar size={64} />
+                <View style={styles.chefAvatarIcon}>
+                  <Icon
+                    name="chef"
+                    size={26}
+                    color={colors.espressoBrown}
+                    surface={false}
+                  />
+                </View>
+              </>
+            }
+          />
         </View>
       </View>
 
@@ -346,7 +399,7 @@ function TopKitchenCard({
   );
 }
 
-export function HomePromoAndKitchens() {
+export function HomePromoAndKitchens({diets = []}: {diets?: readonly DiscoveryDietOption[]}) {
   const navigation = useNavigation<HomeNavigation>();
   const focused = useIsFocused();
   const tabNavigation =
@@ -371,8 +424,8 @@ export function HomePromoAndKitchens() {
       kitchenDiscovery.data?.pages.flatMap(page => page.kitchens) ?? [];
     const nearbyDishes =
       menuDiscovery.data?.pages.flatMap(page => page.menuItems) ?? [];
-    return buildTopKitchenCards(nearbyKitchens, nearbyDishes);
-  }, [kitchenDiscovery.data?.pages, menuDiscovery.data?.pages]);
+    return buildTopKitchenCards(nearbyKitchens, nearbyDishes, diets);
+  }, [diets, kitchenDiscovery.data?.pages, menuDiscovery.data?.pages]);
 
   const reviewQueries = useQueries({
     queries: topKitchens.map(kitchen => ({
@@ -459,7 +512,7 @@ export function HomePromoAndKitchens() {
             showsHorizontalScrollIndicator={false}
             keyExtractor={item => item.kitchenId}
             contentContainerStyle={styles.kitchenRow}
-            renderItem={({item}) => (
+            renderItem={({item, index}) => (
               <TopKitchenCard
                 kitchen={item}
                 width={kitchenCardWidth}
@@ -467,6 +520,7 @@ export function HomePromoAndKitchens() {
                 favoritePending={toggleFavoriteKitchen.isPending}
                 rating={ratingByKitchenId.get(item.kitchenId) ?? null}
                 active={focused}
+                startDelayMs={index * KITCHEN_PHOTO_STAGGER_MS}
                 onFavorite={() => handleFavorite(item.kitchenId)}
                 onPress={() =>
                   navigation.navigate('CustomerKitchenProfile', {
@@ -623,8 +677,6 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    borderWidth: 3,
-    borderColor: colors.white,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',

@@ -85,6 +85,8 @@ import {
   type CartMutationOutcome,
 } from '../state/cartMutations';
 import {isDefinitiveCartRejection} from '../domain/cartWriteRejection';
+import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
+import {useCustomerOrderKitchenPresentationQuery} from '../../customerOrders/query/customerOrderCatalogQueries';
 import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
 import {cartActions} from '../state/cartSlice';
@@ -214,6 +216,7 @@ function KitchenHeader({
   onOpen: () => void;
 }) {
   const count = section.data.reduce((total, item) => total + item.quantity, 0);
+  const kitchen = useCustomerOrderKitchenPresentationQuery(section.kitchenId);
   return (
     <Pressable
       accessibilityLabel={`Open ${section.kitchenName}`}
@@ -221,7 +224,10 @@ function KitchenHeader({
       onPress={onOpen}
       style={styles.kitchenHeader}>
       <View style={styles.kitchenAvatar}>
-        <Text style={styles.kitchenInitials}>{kitchenInitials(section.kitchenName)}</Text>
+        <CustomerChefFace
+          url={kitchen.data?.chefPhotoUrl}
+          fallback={<Text style={styles.kitchenInitials}>{kitchenInitials(section.kitchenName)}</Text>}
+        />
       </View>
       <View style={styles.kitchenCopy}>
         <Text numberOfLines={1} style={styles.kitchenName}>
@@ -445,6 +451,8 @@ export function CustomerCartScreen() {
         tabs.navigate('Orders', {
           screen: 'CustomerOrderDetail',
           params: {orderId: checkout.orders[0].orderId},
+          // Keeps My Orders under the new order for Back and the tab.
+          initial: false,
         });
       } else {
         tabs.navigate('Orders', {screen: 'CustomerOrdersRoot'});
@@ -591,10 +599,17 @@ export function CustomerCartScreen() {
     verifyServiceability();
   }, [verifyServiceability]);
 
-  const browseMeals = useCallback(() => {
+  const exploreHomeChefs = useCallback(() => {
     const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
-    if (tabs) tabs.navigate('Home');
+    if (tabs) tabs.navigate('Chefs');
     else navigation.goBack();
+  }, [navigation]);
+
+  // Meal plans live in the Home stack, whichever tab this cart is in.
+  const openMealPlans = useCallback(() => {
+    navigation
+      .getParent<BottomTabNavigationProp<CustomerTabParamList>>()
+      ?.navigate('Home', {screen: 'CustomerSettingsSubscription', initial: false});
   }, [navigation]);
 
   const handleMutationOutcome = useCallback((outcome: CartMutationOutcome) => {
@@ -1004,6 +1019,7 @@ export function CustomerCartScreen() {
     if (!model) {
       return (
         <TerminalState
+          illustration="loadError"
           title="Cart could not be loaded"
           description={visibleRefreshError ?? 'Refresh to load your current cart.'}
           actionLabel="Try again"
@@ -1037,7 +1053,8 @@ export function CustomerCartScreen() {
           <CustomerEmptyState
             model={customerEmptyStateAdapters.emptyCart()}
             onAction={actionId => {
-              if (actionId === 'BROWSE_MEALS') browseMeals();
+              if (actionId === 'BROWSE_MEALS') exploreHomeChefs();
+              else if (actionId === 'VIEW_MEAL_PLANS') openMealPlans();
             }}
             testID="customer-cart-empty"
           />
@@ -1234,6 +1251,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: radius.pill,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.cream,

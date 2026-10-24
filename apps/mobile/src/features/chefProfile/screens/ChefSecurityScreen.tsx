@@ -51,7 +51,7 @@ export function ChefSecurityScreen() {
       <ListGroup>
         <ListRow
           icon="phone"
-          right={<StatusChip label="Coming soon" tone="info" />}
+          right={<StatusChip label="Coming soon" tone="soon" />}
           subtitle="If you lost a phone or shared your login"
           title="Log out of other devices"
         />

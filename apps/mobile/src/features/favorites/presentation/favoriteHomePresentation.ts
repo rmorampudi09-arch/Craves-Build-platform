@@ -48,3 +48,35 @@ export function favoriteHomeStateCopy(card: FavoriteHomeCard): FavoriteHomeState
 export function isCookingToday(card: FavoriteHomeCard): boolean {
   return card.cookingState === 'COOKING_NOW' || card.cookingState === 'COOKING_LATER_TODAY';
 }
+
+/** One saved home: the card to show plus each saved relation behind it, so removing clears both. */
+export interface SavedHomeEntry {
+  card: FavoriteHomeCard;
+  kitchenId: string | null;
+  chefIdentityId: string | null;
+}
+
+/**
+ * Saved → Home chefs lists saved kitchens (the kitchen heart) and saved home chefs together.
+ * A chef whose kitchen is also saved shows once; homes cooking today come first.
+ */
+export function mergeSavedHomes(
+  kitchenCards: readonly FavoriteHomeCard[],
+  chefCards: readonly FavoriteHomeCard[],
+): SavedHomeEntry[] {
+  const entries: SavedHomeEntry[] = kitchenCards.map(card => ({
+    card,
+    kitchenId: card.requestedId,
+    chefIdentityId: null,
+  }));
+  for (const card of chefCards) {
+    const same = entries.find(
+      entry =>
+        (entry.card.chefIdentityId !== null && entry.card.chefIdentityId === card.requestedId) ||
+        (card.kitchenId !== null && entry.kitchenId === card.kitchenId),
+    );
+    if (same) same.chefIdentityId = card.requestedId;
+    else entries.push({card, kitchenId: null, chefIdentityId: card.requestedId});
+  }
+  return entries.sort((a, b) => Number(isCookingToday(b.card)) - Number(isCookingToday(a.card)));
+}

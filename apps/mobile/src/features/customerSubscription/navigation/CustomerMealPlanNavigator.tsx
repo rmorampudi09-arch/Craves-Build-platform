@@ -6,6 +6,8 @@ import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {MealPlanActivatedScreen} from '../screens/MealPlanActivatedScreen';
 import {MealPlanAddressScreen} from '../screens/MealPlanAddressScreen';
 import {MealPlanDetailScreen} from '../screens/MealPlanDetailScreen';
+import {MealPlanHistoryScreen} from '../screens/MealPlanHistoryScreen';
+import {MealPlanHowItWorksScreen} from '../screens/MealPlanHowItWorksScreen';
 import {MealPlanMealScreen} from '../screens/MealPlanMealScreen';
 import {MealPlanPaymentScreen} from '../screens/MealPlanPaymentScreen';
 import {MealPlanReviewScreen} from '../screens/MealPlanReviewScreen';
@@ -13,7 +15,14 @@ import {MealPlansScreen} from '../screens/MealPlansScreen';
 import {MyMealPlanScreen} from '../screens/MyMealPlanScreen';
 import {MealPlanCheckoutProvider} from '../state/MealPlanCheckoutContext';
 
-const Stack = createNativeStackNavigator<CustomerMealPlanStackParamList>();
+// shortcut: the two new routes are typed here until app/navigation/types.ts lists them; then drop this.
+export type MealPlanStackParamList = CustomerMealPlanStackParamList & {
+  MealPlanHistory: undefined;
+  /** Static rules page; Help opens it by name. */
+  MealPlanHowItWorks: undefined;
+};
+
+const Stack = createNativeStackNavigator<MealPlanStackParamList>();
 
 // Same options as the customer tab stacks. They live in CustomerRootNavigator, which imports this
 // navigator, so they are repeated here rather than imported (circular).
@@ -46,6 +55,8 @@ export function CustomerMealPlanNavigator() {
         />
         <Stack.Screen name="MyMealPlan" component={MyMealPlanScreen} />
         <Stack.Screen name="MealPlanMeal" component={MealPlanMealScreen} />
+        <Stack.Screen name="MealPlanHistory" component={MealPlanHistoryScreen} />
+        <Stack.Screen name="MealPlanHowItWorks" component={MealPlanHowItWorksScreen} />
       </Stack.Navigator>
     </MealPlanCheckoutProvider>
   );

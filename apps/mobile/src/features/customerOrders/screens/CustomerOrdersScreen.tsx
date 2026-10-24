@@ -22,14 +22,8 @@ import type {
   CustomerTabParamList,
 } from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
-import {
-  borderWidth,
-  colors,
-  fontWeight,
-  radius,
-  spacing,
-  typography,
-} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {iosType, iosWeight} from '../../../design/iosType';
 import {
   OfflineNotice,
   RecoverableErrorBanner,
@@ -42,15 +36,12 @@ import {reorderCart} from '../../cart/state/cartMutations';
 import {isDefinitiveCartRejection} from '../../cart/domain/cartWriteRejection';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
-import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
+import {CustomerBellButton} from '../../notifications/components/CustomerBellButton';
 import {CustomerOrderCard} from '../components/CustomerOrderCard';
 import type {CustomerOrder} from '../domain/customerOrderTypes';
 import {createCustomerOrderReorder} from '../domain/customerOrderReorder';
 import {
-  CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER,
   CUSTOMER_ORDERS_TABS,
-  isCustomerOrdersTabAuthoritative,
   selectCustomerOrdersTab,
   getPendingOrderVisibilityExpiry,
   type CustomerOrdersTabKey,
@@ -113,7 +104,6 @@ export function CustomerOrdersScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const ordersQuery = useCustomerOrdersQuery();
   const [selectedTab, setSelectedTab] = useState<CustomerOrdersTabKey>('ALL');
-  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [capabilityMessage, setCapabilityMessage] = useState<string | null>(null);
   const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
   const [uncertainReorder, setUncertainReorder] = useState(false);
@@ -150,7 +140,6 @@ export function CustomerOrdersScreen() {
   const queryError = ordersQuery.error ? toAppApiError(ordersQuery.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const initialLoading = ordersQuery.isPending && !snapshot;
-  const lifecycleBlocked = !isCustomerOrdersTabAuthoritative(selectedTab);
 
   useEffect(() => {
     mounted.current = true;
@@ -393,17 +382,13 @@ export function CustomerOrdersScreen() {
 
   const listHeader = (
     <View>
-      <CustomerHeader
-        onPressLocation={() => setLocationSelectorVisible(true)}
-        onPressNotifications={() => navigation.navigate('CustomerNotifications')}
-      />
-      <View style={styles.titleArea}>
+      <View style={styles.header}>
         <Text accessibilityRole="header" style={styles.title}>
           My Orders
         </Text>
-        <Text style={styles.subtitle}>Track, manage and reorder your meals</Text>
+        <CustomerBellButton />
       </View>
-      <View accessibilityRole="tablist" style={styles.tabs}>
+      <View accessibilityLabel="Order filters" accessibilityRole="tablist" style={styles.tabs}>
         {CUSTOMER_ORDERS_TABS.map(tab => {
           const selected = tab.key === selectedTab;
           return (
@@ -415,7 +400,7 @@ export function CustomerOrdersScreen() {
               style={({pressed}) => [
                 styles.tab,
                 selected && styles.tabSelected,
-                pressed && styles.tabPressed,
+                pressed && !selected && styles.tabPressed,
               ]}>
               <Text
                 numberOfLines={1}
@@ -437,13 +422,6 @@ export function CustomerOrdersScreen() {
               : undefined
           }
           retryLabel={checkingCart ? 'Checking cart…' : 'Check cart'}
-          style={styles.banner}
-        />
-      ) : null}
-      {!ordersQuery.v2Available &&
-      snapshot?.historyCompleteness === 'UNKNOWN_AFTER_SERVER_LIMIT' ? (
-        <RecoverableErrorBanner
-          message="Showing the newest 50 orders. The current server contract does not expose another page or a complete-history count yet."
           style={styles.banner}
         />
       ) : null}
@@ -472,8 +450,8 @@ export function CustomerOrdersScreen() {
     if (ordersQuery.sessionRequired) {
       return (
         <TerminalState
-          title="Customer session required"
-          description="Orders are private account data and can only load for the signed-in customer."
+          title="Sign in required"
+          description="Sign in to see your orders."
         />
       );
     }
@@ -495,20 +473,11 @@ export function CustomerOrdersScreen() {
       }
       return (
         <TerminalState
+          illustration="loadError"
           title="Orders could not be loaded"
           description={queryError.message}
           actionLabel="Try again"
           onAction={refresh}
-        />
-      );
-    }
-    if (lifecycleBlocked) {
-      return (
-        <TerminalState
-          title="This order group is not available yet"
-          description={`The server currently returns exact order statuses, but it does not define the approved ${selectedTab.toLowerCase()} lifecycle mapping. ${CUSTOMER_ORDERS_LIFECYCLE_BUCKET_BLOCKER}`}
-          actionLabel="Show all orders"
-          onAction={() => selectTab('ALL')}
         />
       );
     }
@@ -578,7 +547,7 @@ export function CustomerOrdersScreen() {
                 {ordersQuery.isFetchingNextPage ? (
                   <ActivityIndicator color={colors.flameRed} />
                 ) : (
-                  <Text style={styles.loadOlderButtonText}>
+                  <Text style={[iosType.subheadline, iosWeight.semibold, styles.loadOlderButtonText]}>
                     Load older orders
                   </Text>
                 )}
@@ -594,10 +563,6 @@ export function CustomerOrdersScreen() {
           ) : null
         }
       />
-      <CustomerLocationSelector
-        visible={locationSelectorVisible}
-        onClose={() => setLocationSelectorVisible(false)}
-      />
     </ScreenShell>
   );
 }
@@ -608,52 +573,58 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     backgroundColor: colors.white,
   },
-  titleArea: {
+  header: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingVertical: spacing.xs,
   },
   title: {
-    color: colors.espressoBrown,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
+    minWidth: 0,
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.title,
+    fontWeight: fontWeight.bold,
   },
-  subtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
+  // Warm-grey track with the chosen filter raised in a white pill.
   tabs: {
+    minHeight: 48,
     flexDirection: 'row',
     marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
     marginBottom: spacing.md,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
+    padding: spacing.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
   },
   tab: {
-    minHeight: 48,
+    minHeight: 40,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxs,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    borderRadius: radius.pill,
   },
   tabSelected: {
-    borderBottomColor: colors.flameRed,
-  },
-  tabPressed: {
     backgroundColor: colors.white,
-    borderRadius: radius.sm,
+    shadowColor: colors.espressoBrown,
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: {width: 0, height: 1},
+    elevation: 2,
   },
+  tabPressed: {opacity: 0.6},
   tabText: {
     color: colors.textSecondary,
-    fontSize: typography.tiny,
+    fontSize: typography.small,
     fontWeight: fontWeight.semibold,
     textAlign: 'center',
   },
   tabTextSelected: {
-    color: colors.flameRed,
+    color: colors.textPrimary,
+    fontWeight: fontWeight.bold,
   },
   banner: {
     marginHorizontal: spacing.md,
@@ -663,7 +634,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   skeletonCard: {
-    minHeight: 210,
+    minHeight: 168,
     marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
@@ -691,22 +662,18 @@ const styles = StyleSheet.create({
   loadOlderButton: {
     alignItems: 'center',
     alignSelf: 'center',
-    borderColor: colors.flameRed,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
     justifyContent: 'center',
     marginVertical: spacing.md,
     minHeight: 44,
     paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(118,118,128,0.12)',
   },
   loadOlderButtonPressed: {
-    backgroundColor: colors.surfaceMuted,
-    opacity: 0.72,
+    opacity: 0.6,
   },
   loadOlderButtonText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
   },
   footerLoading: {
     alignItems: 'center',

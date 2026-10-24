@@ -7,17 +7,15 @@ import {
 } from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import type {CustomerTabParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
-import {resolveReducedMotionAnimation} from '../../../design/motion';
-import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   borderWidth,
   colors,
@@ -30,6 +28,7 @@ import {
 } from '../../../design/tokens';
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
+import {SheetModal} from '../../../shared/components/SheetModal';
 import {resolveCartAddressSelection} from '../../cart/domain/cartAddressSelection';
 import {cartActions} from '../../cart/state/cartSlice';
 import {
@@ -169,7 +168,7 @@ function UnpinnedAddresses({onSetPin}: {onSetPin: (address: CustomerAddress) => 
 export function CustomerLocationSelector({visible, onClose}: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
-  const reduceMotionEnabled = useReducedMotionPreference();
+  const {height: windowHeight} = useWindowDimensions();
   const {selectedLocation} = useCustomerHeaderState();
   const {locations, status, refresh} = useCustomerLocationOptions();
   const cartAddress = useAppSelector(state => state.cart.dependencies.address);
@@ -196,176 +195,160 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
 
   return (
     <>
-      <Modal
-        animationType={resolveReducedMotionAnimation(
-          'slide' as const,
-          reduceMotionEnabled,
-        )}
-        onRequestClose={onClose}
-        transparent
-        visible={visible}>
-        <View style={styles.backdrop}>
-          <Pressable
-            accessible={false}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            onPress={onClose}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            accessibilityViewIsModal
-            onAccessibilityEscape={onClose}
-            style={styles.sheet}>
-            <View accessibilityElementsHidden style={styles.handle} />
-            <View style={styles.headingRow}>
-              <Text accessibilityRole="header" style={styles.title}>
-                {commerceSelection ? 'Choose delivery address' : 'Choose delivery location'}
-              </Text>
+      <SheetModal onRequestClose={onClose} scrimOpacity={0.32} visible={visible}>
+        <View
+          accessibilityViewIsModal
+          onAccessibilityEscape={onClose}
+          style={[styles.sheet, {maxHeight: windowHeight * 0.88}]}>
+          <View accessibilityElementsHidden style={styles.handle} />
+          <View style={styles.headingRow}>
+            <Text accessibilityRole="header" style={styles.title}>
+              {commerceSelection ? 'Choose delivery address' : 'Choose delivery location'}
+            </Text>
+            <Pressable
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+              hitSlop={spacing.xs}
+              onPress={onClose}
+              style={({pressed}) => [styles.closeButton, pressed && styles.pressed]}>
+              <Icon color={colors.textPrimary} name="close" size={22} surface={false} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}>
+            <Pressable
+              accessibilityHint="Opens place search"
+              accessibilityLabel="Search for area, street or landmark"
+              accessibilityRole="search"
+              onPress={() => openEditor({mode: 'add', start: 'search'})}
+              style={({pressed}) => [styles.searchField, pressed && styles.pressed]}>
+              <Icon color={colors.flameRedAccessible} name="search" size={iconSize.lg} surface={false} />
+              <Text style={styles.searchPlaceholder}>Search for area, street or landmark</Text>
+            </Pressable>
+
+            <View style={styles.actionCard}>
               <Pressable
-                accessibilityLabel="Close"
+                accessibilityHint="Asks for location access and finds your address with GPS"
                 accessibilityRole="button"
-                hitSlop={spacing.xs}
-                onPress={onClose}
-                style={({pressed}) => [styles.closeButton, pressed && styles.pressed]}>
-                <Icon color={colors.textPrimary} name="close" size={22} surface={false} />
+                onPress={() => openEditor({mode: 'add', start: 'current-location'})}
+                style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
+                <View style={styles.rowIcon}>
+                  <Icon color={colors.flameRed} name="gps" size={20} surface={false} />
+                </View>
+                <View style={styles.rowCopy}>
+                  <Text style={styles.currentTitle}>Use current location</Text>
+                  <Text style={styles.rowAddress}>Find your address with GPS</Text>
+                </View>
+                <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openEditor({mode: 'add', start: 'search'})}
+                style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
+                <View style={styles.rowIcon}>
+                  <Icon color={colors.textPrimary} name="plus" size={20} surface={false} />
+                </View>
+                <View style={styles.rowCopy}>
+                  <Text style={styles.actionTitle}>Add new address</Text>
+                  <Text style={styles.rowAddress}>Search, set the pin, add flat details</Text>
+                </View>
+                <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
               </Pressable>
             </View>
 
-            <ScrollView
-              contentContainerStyle={styles.content}
-              showsVerticalScrollIndicator={false}>
-              <Pressable
-                accessibilityHint="Opens place search"
-                accessibilityLabel="Search for area, street or landmark"
-                accessibilityRole="search"
-                onPress={() => openEditor({mode: 'add', start: 'search'})}
-                style={({pressed}) => [styles.searchField, pressed && styles.pressed]}>
-                <Icon color={colors.flameRedAccessible} name="search" size={iconSize.lg} surface={false} />
-                <Text style={styles.searchPlaceholder}>Search for area, street or landmark</Text>
-              </Pressable>
+            <Text accessibilityRole="header" style={styles.overline}>
+              Saved addresses
+            </Text>
 
-              <View style={styles.actionCard}>
-                <Pressable
-                  accessibilityHint="Asks for location access and finds your address with GPS"
-                  accessibilityRole="button"
-                  onPress={() => openEditor({mode: 'add', start: 'current-location'})}
-                  style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
-                  <View style={styles.rowIcon}>
-                    <Icon color={colors.flameRed} name="gps" size={20} surface={false} />
-                  </View>
-                  <View style={styles.rowCopy}>
-                    <Text style={styles.currentTitle}>Use current location</Text>
-                    <Text style={styles.rowAddress}>Find your address with GPS</Text>
-                  </View>
-                  <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => openEditor({mode: 'add', start: 'search'})}
-                  style={({pressed}) => [styles.actionRow, pressed && styles.pressed]}>
-                  <View style={styles.rowIcon}>
-                    <Icon color={colors.textPrimary} name="plus" size={20} surface={false} />
-                  </View>
-                  <View style={styles.rowCopy}>
-                    <Text style={styles.actionTitle}>Add new address</Text>
-                    <Text style={styles.rowAddress}>Search, set the pin, add flat details</Text>
-                  </View>
-                  <Icon color={colors.textSecondary} name="chevron-right" size={18} surface={false} />
-                </Pressable>
+            {status === 'pending' ? (
+              <View style={styles.stateBox}>
+                <LoadingIndicator
+                  accessibilityLabel="Loading saved locations"
+                  label="Loading saved locations…"
+                />
               </View>
-
-              <Text accessibilityRole="header" style={styles.overline}>
-                Saved addresses
-              </Text>
-
-              {status === 'pending' ? (
-                <View style={styles.stateBox}>
-                  <LoadingIndicator
-                    accessibilityLabel="Loading saved locations"
-                    label="Loading saved locations…"
-                  />
-                </View>
-              ) : (
-                <View accessibilityRole="radiogroup" style={styles.list}>
-                  {locations.map(location => {
-                    const selected = selectedAddressId === location.addressId;
-                    const label = browsingLocationLabel(location.label);
-                    return (
+            ) : (
+              <View accessibilityRole="radiogroup" style={styles.list}>
+                {locations.map(location => {
+                  const selected = selectedAddressId === location.addressId;
+                  const label = browsingLocationLabel(location.label);
+                  return (
+                    <Pressable
+                      accessibilityLabel={`${label}, ${location.displayName}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{checked: selected}}
+                      key={location.addressId}
+                      onPress={() => {
+                        selectDelivery(location);
+                        onClose();
+                      }}
+                      style={({pressed}) => [
+                        styles.row,
+                        selected && styles.rowSelected,
+                        pressed && styles.pressed,
+                      ]}>
+                      <View style={styles.rowIcon}>
+                        <Icon
+                          color={colors.flameRed}
+                          name={labelIcon(location.label)}
+                          size={18}
+                          surface={false}
+                        />
+                      </View>
+                      <View style={styles.rowCopy}>
+                        <Text style={styles.rowLabel}>{label}</Text>
+                        <Text numberOfLines={2} style={styles.rowAddress}>
+                          {location.displayName}
+                        </Text>
+                      </View>
+                      {selected ? (
+                        <View style={styles.checkBadge}>
+                          <Icon color={colors.white} name="check" size={14} surface={false} />
+                        </View>
+                      ) : (
+                        <View style={styles.radio} />
+                      )}
+                    </Pressable>
+                  );
+                })}
+                <UnpinnedAddresses
+                  onSetPin={address => openEditor({mode: 'edit', address})}
+                />
+                {locations.length === 0 ? (
+                  <View style={styles.stateBox}>
+                    <Text style={styles.stateText}>
+                      Your saved delivery addresses will appear here.
+                    </Text>
+                    {status === 'error' ? (
                       <Pressable
-                        accessibilityLabel={`${label}, ${location.displayName}`}
-                        accessibilityRole="radio"
-                        accessibilityState={{checked: selected}}
-                        key={location.addressId}
+                        accessibilityLabel="Retry saved locations"
+                        accessibilityRole="button"
                         onPress={() => {
-                          selectDelivery(location);
-                          onClose();
+                          refresh();
                         }}
-                        style={({pressed}) => [
-                          styles.row,
-                          selected && styles.rowSelected,
-                          pressed && styles.pressed,
-                        ]}>
-                        <View style={styles.rowIcon}>
-                          <Icon
-                            color={colors.flameRed}
-                            name={labelIcon(location.label)}
-                            size={18}
-                            surface={false}
-                          />
-                        </View>
-                        <View style={styles.rowCopy}>
-                          <Text style={styles.rowLabel}>{label}</Text>
-                          <Text numberOfLines={2} style={styles.rowAddress}>
-                            {location.displayName}
-                          </Text>
-                        </View>
-                        {selected ? (
-                          <View style={styles.checkBadge}>
-                            <Icon color={colors.white} name="check" size={14} surface={false} />
-                          </View>
-                        ) : (
-                          <View style={styles.radio} />
-                        )}
+                        style={styles.textButton}>
+                        <Text style={styles.textButtonLabel}>Try again</Text>
                       </Pressable>
-                    );
-                  })}
-                  <UnpinnedAddresses
-                    onSetPin={address => openEditor({mode: 'edit', address})}
-                  />
-                  {locations.length === 0 ? (
-                    <View style={styles.stateBox}>
-                      <Text style={styles.stateText}>
-                        Your saved delivery addresses will appear here.
-                      </Text>
-                      {status === 'error' ? (
-                        <Pressable
-                          accessibilityLabel="Retry saved locations"
-                          accessibilityRole="button"
-                          onPress={() => {
-                            refresh();
-                          }}
-                          style={styles.textButton}>
-                          <Text style={styles.textButtonLabel}>Try again</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </View>
-              )}
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            )}
 
-              {customerTabs ? (
-                <Pressable
-                  accessibilityLabel="Manage saved addresses"
-                  accessibilityRole="button"
-                  onPress={openAddressManager}
-                  style={({pressed}) => [styles.textButton, pressed && styles.pressed]}>
-                  <Text style={styles.textButtonLabel}>Manage addresses</Text>
-                </Pressable>
-              ) : null}
-            </ScrollView>
-          </View>
+            {customerTabs ? (
+              <Pressable
+                accessibilityLabel="Manage saved addresses"
+                accessibilityRole="button"
+                onPress={openAddressManager}
+                style={({pressed}) => [styles.textButton, pressed && styles.pressed]}>
+                <Text style={styles.textButtonLabel}>Manage addresses</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
         </View>
-      </Modal>
+      </SheetModal>
 
       {editorTarget ? (
         <DeliveryAddressEditor
@@ -379,13 +362,7 @@ export function CustomerLocationSelector({visible, onClose}: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(38,26,21,0.32)',
-  },
   sheet: {
-    maxHeight: '88%',
     backgroundColor: colors.white,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,

@@ -1,3 +1,6 @@
+// shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
+export const CUSTOMER_APP_VERSION = '1.35.5';
+
 export type CustomerSettingsCapability =
   | 'notificationPreferences'
   | 'appLanguage'
@@ -17,7 +20,7 @@ export const CUSTOMER_SETTINGS_CAPABILITY_STATUS: Readonly<
   deviceSessions: 'contract-unavailable',
   referral: 'available',
   subscription: 'contract-unavailable',
-  legalContent: 'contract-unavailable',
+  legalContent: 'available',
   support: 'contract-unavailable',
 };
 

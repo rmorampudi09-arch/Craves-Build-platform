@@ -1,7 +1,6 @@
 import type {CustomerProfileIdentity} from './domain/customerProfileContract';
 import {
   CUSTOMER_PROFILE_MENU_ROWS,
-  CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY,
   resolveCustomerProfileDisplayName,
   resolveCustomerProfileInitials,
   resolveCustomerProfilePhoneLabel,
@@ -34,11 +33,11 @@ describe('customerProfileUiModel', () => {
   it('keeps rows deterministic and maps each row to the registered action', () => {
     expect(CUSTOMER_PROFILE_MENU_ROWS.map(row => row.id)).toEqual([
       'favorites',
+      'meal-plans',
       'payments',
-      'membership',
       'referral',
-      'switch-chef',
       'contact',
+      'switch-chef',
       'logout',
     ]);
 
@@ -46,16 +45,17 @@ describe('customerProfileUiModel', () => {
       CUSTOMER_PROFILE_MENU_ROWS.map(row => [row.id, row.action]),
     ).toEqual([
       ['favorites', 'route-favorites'],
+      ['meal-plans', 'route-meal-plans'],
       ['payments', 'route-payments'],
-      ['membership', 'route-membership'],
       ['referral', 'route-referral'],
-      ['switch-chef', 'switch-chef'],
       ['contact', 'route-support'],
+      ['switch-chef', 'switch-chef'],
       ['logout', 'logout'],
     ]);
 
     const favorites = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'favorites');
     expect(favorites?.icon).toBe('heart');
+    expect(favorites?.title).toBe('Saved');
 
     const payments = CUSTOMER_PROFILE_MENU_ROWS.find(row => row.id === 'payments');
     expect(payments?.icon).toBe('wallet');
@@ -69,7 +69,7 @@ describe('customerProfileUiModel', () => {
     expect(resolveCustomerProfileDisplayName(full)).toBe('Asha Rao');
     expect(resolveCustomerProfileInitials(full)).toBe('AR');
     expect(resolveCustomerProfilePhoneLabel(full)).toBe(
-      'Registered phone •••• 3210',
+      'Phone •••• 3210',
     );
 
     const partial = profile({
@@ -86,12 +86,6 @@ describe('customerProfileUiModel', () => {
     });
     expect(resolveCustomerProfileDisplayName(partial)).toBe('asha@example.com');
     expect(resolveCustomerProfileInitials(partial)).toBe('AS');
-    expect(resolveCustomerProfilePhoneLabel(partial)).toContain('No registered phone');
-  });
-
-  it('uses truthful unsupported copy instead of fabricated rewards', () => {
-    expect(CUSTOMER_PROFILE_REWARDS_UNSUPPORTED_COPY).toContain(
-      'not exposed by the approved profile contract',
-    );
+    expect(resolveCustomerProfilePhoneLabel(partial)).toBe('No phone number on your account');
   });
 });

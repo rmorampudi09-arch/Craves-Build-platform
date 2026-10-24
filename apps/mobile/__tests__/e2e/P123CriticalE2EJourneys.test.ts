@@ -248,6 +248,8 @@ describe('P123 critical E2E journeys', () => {
       params: {
         screen: 'CustomerOrderDetail',
         params: {orderId: ORDER_ID},
+        // My Orders stays beneath the restored order.
+        initial: false,
       },
     });
   });

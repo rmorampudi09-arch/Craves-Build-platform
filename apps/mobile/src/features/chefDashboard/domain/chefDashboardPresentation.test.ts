@@ -52,7 +52,7 @@ describe('splitHomeOrders', () => {
       order(4, 'READY_FOR_PICKUP', {updatedAt: at(2026, 9, 14, 14, 20)}),
       order(5, 'OUT_FOR_DELIVERY'),
       order(6, 'DELIVERED'),
-    ]);
+    ], now);
     expect(pending.map(o => o.id)).toEqual([id(2), id(1)]);
     expect(inKitchen.map(o => o.id)).toEqual([id(4), id(3)]);
   });

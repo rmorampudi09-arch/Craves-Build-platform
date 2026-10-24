@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
-import {Modal, StyleSheet, Text, View} from 'react-native';
+import {Modal, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {colors} from '../../../../design/tokens';
 import {LoadingIndicator} from '../../../../shared/components/LoadingIndicator';
 import {
@@ -12,6 +12,7 @@ import {
   ChipTap,
   ComingSoon,
   ConfirmDialog,
+  EmptyState,
   ListGroup,
   ListRow,
   OrderCard,
@@ -71,7 +72,7 @@ describe('Chef UI kit', () => {
   it('OrderCard shows the short number, quantity, note, money and truncates a long dish name', () => {
     mount(<OrderCard order={order} actions={<Text>ACTIONS</Text>} />);
     const text = allText();
-    expect(text).toContain('#DF94B');
+    expect(text).toContain('#11111111');
     expect(text).toContain('2×');
     expect(text).toContain('1×');
     expect(text.some(t => t.includes('Less spicy please'))).toBe(true);
@@ -100,7 +101,7 @@ describe('Chef UI kit', () => {
   it('OrderCard keeps the action buttons outside the tappable summary', () => {
     const onPress = jest.fn();
     mount(<OrderCard order={order} onPress={onPress} actions={<Text accessibilityLabel="Accept">Accept</Text>} />);
-    const summary = roleButtons().find(n => String(n.props.accessibilityLabel).includes('#DF94B'));
+    const summary = roleButtons().find(n => String(n.props.accessibilityLabel).includes('#11111111'));
     expect(summary).toBeDefined();
     expect(summary!.findAll(n => n.props.accessibilityLabel === 'Accept')).toHaveLength(0);
     act(() => summary!.props.onPress());
@@ -212,14 +213,26 @@ describe('Chef UI kit', () => {
   it('ChefSheet closes from the Android back button and the scrim', () => {
     const onClose = jest.fn();
     mount(
-      <ChefSheet visible title="Reject #DF94B?" onClose={onClose}>
+      <ChefSheet visible title="Reject #11111111?" onClose={onClose}>
         <Text>reasons</Text>
       </ChefSheet>,
     );
-    expect(allText()).toEqual(expect.arrayContaining(['Reject #DF94B?', 'reasons']));
+    expect(allText()).toEqual(expect.arrayContaining(['Reject #11111111?', 'reasons']));
     act(() => tree.root.findByType(Modal).props.onRequestClose());
     act(() => pressables('Close')[0].props.onPress());
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('ChefSheet keeps its footer outside the scrolling body, so it stays on screen', () => {
+    mount(
+      <ChefSheet visible title="Change your picture" onClose={jest.fn()} footer={<Text>PINNED</Text>}>
+        <Text>tall body</Text>
+      </ChefSheet>,
+    );
+    const body = tree.root.findByType(ScrollView);
+    expect(body.findAllByProps({children: 'tall body'}).length).toBeGreaterThan(0);
+    expect(body.findAllByProps({children: 'PINNED'})).toHaveLength(0);
+    expect(allText()).toEqual(expect.arrayContaining(['PINNED']));
   });
 
   it('ChefTopBar shows the unread count, opens notifications and offers a back arrow', () => {
@@ -338,5 +351,30 @@ describe('Chef UI kit', () => {
       expect.arrayContaining(['Preparing', '₹1,240', 'Today', '12% vs last week', 'inside', 'Reviews', 'Coming soon']),
     );
     expect(pressables('Card').length).toBeGreaterThan(0);
+  });
+
+  it('shows Coming soon as a full-page drawing by default, and as the small card when compact', () => {
+    const drawings = () => tree.root.findAll(n => n.props.testID === 'empty-illustration-comingSoon').length;
+    mount(<ComingSoon title="Reviews are on their way" message="Soon." />);
+    expect(drawings()).toBeGreaterThan(0);
+    expect(tree.root.findAllByType(ChefCard)).toHaveLength(0);
+    expect(allText()).toEqual(['Coming soon', 'Reviews are on their way', 'Soon.']);
+    act(() => tree.unmount());
+
+    mount(<ComingSoon compact title="Reviews are on their way" message="Soon." />);
+    expect(drawings()).toBe(0);
+    expect(tree.root.findAllByType(ChefCard)).toHaveLength(1);
+    expect(allText()).toEqual(expect.arrayContaining(['Coming soon', 'Reviews are on their way', 'Soon.']));
+  });
+
+  it('draws an empty state with its title, message and buttons, and no card', () => {
+    mount(
+      <EmptyState illustration="menu" title="No dishes yet" message="Add your first dish.">
+        <Text>BUTTON</Text>
+      </EmptyState>,
+    );
+    expect(tree.root.findAll(n => n.props.testID === 'empty-illustration-menu').length).toBeGreaterThan(0);
+    expect(tree.root.findAllByType(ChefCard)).toHaveLength(0);
+    expect(allText()).toEqual(['No dishes yet', 'Add your first dish.', 'BUTTON']);
   });
 });

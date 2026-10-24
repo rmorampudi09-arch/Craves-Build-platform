@@ -1,8 +1,6 @@
 import React from 'react';
-import {Image, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {resolveReducedMotionAnimation} from '../../../design/motion';
-import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {
   borderWidth,
   colors,
@@ -18,11 +16,13 @@ import {
 import {
   Button,
   Icon,
+  IconButton,
   ListSkeleton,
   RecoverableErrorBanner,
   TerminalState,
   type IconName,
 } from '../../../shared/components';
+import {SheetModal} from '../../../shared/components/SheetModal';
 import type {MealPlanFoodType} from '../../mealPlans/domain/mealPlanSchedule';
 import {formatMealPlanDate, type PlanRule} from '../domain/mealPlanPresentation';
 import type {KitchenRating} from '../query/mealPlanQueries';
@@ -64,6 +64,50 @@ export function MealPlanHeader({title, subtitle, onBack, right}: MealPlanHeaderP
         ) : null}
       </View>
       <View style={styles.headerSide}>{right}</View>
+    </View>
+  );
+}
+
+/** Meal plans, History and How it works: soft-red back circle, large left title, optional right button. */
+export function MealPlanPageHeader({title, onBack, right}: Omit<MealPlanHeaderProps, 'subtitle'>) {
+  return (
+    <View style={styles.pageHeader}>
+      <IconButton accessibilityLabel="Go back" icon="arrow-left" onPress={onBack} />
+      <Text
+        accessibilityRole="header"
+        allowFontScaling={textDefaults.allowFontScaling}
+        numberOfLines={2}
+        style={styles.pageTitle}>
+        {title}
+      </Text>
+      {right}
+    </View>
+  );
+}
+
+/** A glyph on a tile: red on soft red by default; `square` gives the rounded-square tiles. Decorative. */
+export function IconTile({
+  icon,
+  size = 44,
+  glyph = iconSize.md,
+  square = false,
+  background = colors.iconSurface,
+  color = colors.flameRed,
+}: {
+  icon: IconName;
+  size?: number;
+  glyph?: number;
+  square?: boolean;
+  background?: string;
+  color?: string;
+}) {
+  return (
+    <View
+      style={[
+        styles.iconTile,
+        {width: size, height: size, borderRadius: square ? radius.md : size / 2, backgroundColor: background},
+      ]}>
+      <Icon name={icon} size={glyph} color={color} surface={false} />
     </View>
   );
 }
@@ -297,49 +341,37 @@ export function DateSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotionPreference();
+  // The dim fades in place and only the card slides (a sliding Modal dragged the dim up with it).
   return (
-    <Modal
-      animationType={resolveReducedMotionAnimation('slide' as const, reduceMotion)}
-      onRequestClose={onClose}
-      transparent
-      visible>
-      <View style={styles.backdrop}>
-        <Pressable
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          onPress={onClose}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          accessibilityViewIsModal
-          onAccessibilityEscape={onClose}
-          style={[styles.sheet, {paddingBottom: Math.max(insets.bottom, spacing.md)}]}>
-          <View style={styles.handle} />
-          <Text
-            accessibilityRole="header"
-            allowFontScaling={textDefaults.allowFontScaling}
-            style={styles.sheetTitle}>
-            {title}
-          </Text>
-          <View accessibilityRole={selected === undefined ? undefined : 'radiogroup'}>
-            {dates.map(date => (
-              <Pressable
-                key={date}
-                accessibilityRole={selected === undefined ? 'button' : 'radio'}
-                accessibilityState={selected === undefined ? undefined : {checked: date === selected}}
-                onPress={() => onSelect(date)}
-                style={({pressed}) => [styles.dateRow, pressed && styles.pressed]}>
-                <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.dateText}>
-                  {formatMealPlanDate(date, 'long')}
-                </Text>
-                {selected === undefined ? null : <RadioMark checked={date === selected} />}
-              </Pressable>
-            ))}
-          </View>
+    <SheetModal visible onRequestClose={onClose}>
+      <View
+        accessibilityViewIsModal
+        onAccessibilityEscape={onClose}
+        style={[styles.sheet, {paddingBottom: Math.max(insets.bottom, spacing.md)}]}>
+        <View style={styles.handle} />
+        <Text
+          accessibilityRole="header"
+          allowFontScaling={textDefaults.allowFontScaling}
+          style={styles.sheetTitle}>
+          {title}
+        </Text>
+        <View accessibilityRole={selected === undefined ? undefined : 'radiogroup'}>
+          {dates.map(date => (
+            <Pressable
+              key={date}
+              accessibilityRole={selected === undefined ? 'button' : 'radio'}
+              accessibilityState={selected === undefined ? undefined : {checked: date === selected}}
+              onPress={() => onSelect(date)}
+              style={({pressed}) => [styles.dateRow, pressed && styles.pressed]}>
+              <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.dateText}>
+                {formatMealPlanDate(date, 'long')}
+              </Text>
+              {selected === undefined ? null : <RadioMark checked={date === selected} />}
+            </Pressable>
+          ))}
         </View>
       </View>
-    </Modal>
+    </SheetModal>
   );
 }
 
@@ -429,6 +461,21 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     textAlign: 'center',
   },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.white,
+  },
+  pageTitle: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.hero,
+    fontWeight: fontWeight.bold,
+  },
+  iconTile: {alignItems: 'center', justifyContent: 'center', flexShrink: 0},
   headerSide: {
     minWidth: touchTarget.minimum,
     alignItems: 'flex-end',
@@ -556,7 +603,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
   },
-  backdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay},
   sheet: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,

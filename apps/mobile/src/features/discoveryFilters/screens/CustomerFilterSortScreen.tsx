@@ -57,7 +57,7 @@ const SORT_ROWS: readonly SortRowDefinition[] = [
   {
     key: 'recommended',
     label: 'Recommended',
-    description: 'Keep the current discovery ranking.',
+    description: 'Our usual order.',
     value: 'RECOMMENDED',
     supportedOnHome: true,
     supportedOnChefs: true,
@@ -65,32 +65,32 @@ const SORT_ROWS: readonly SortRowDefinition[] = [
   {
     key: 'popular',
     label: 'Most Popular',
-    description: 'Requires popularity ranking from discovery.',
+    description: 'Coming soon.',
     value: null,
   },
   {
     key: 'rating',
     label: 'Rating',
-    description: 'Requires rating data from discovery.',
+    description: 'Coming soon.',
     value: null,
   },
   {
     key: 'delivery',
     label: 'Delivery Time',
-    description: 'Requires an authoritative delivery-time field.',
+    description: 'Coming soon.',
     value: null,
   },
   {
     key: 'price-low',
     label: 'Price: Low to High',
-    description: 'Sort the currently loaded nearby meals by price.',
+    description: 'Cheapest meals first.',
     value: 'PRICE_LOW_TO_HIGH',
     supportedOnHome: true,
   },
   {
     key: 'price-high',
     label: 'Price: High to Low',
-    description: 'Sort nearby meals by current Catalog price.',
+    description: 'Priciest meals first.',
     value: 'PRICE_HIGH_TO_LOW',
     supportedOnHome: true,
   },
@@ -449,9 +449,9 @@ export function CustomerFilterSortScreen() {
             <Text style={styles.sectionTitle}>Cuisine</Text>
             <Text style={styles.sectionHint}>Choose one or more cuisines.</Text>
             <View style={styles.unavailableCard}>
-              <Text style={styles.unavailableTitle}>Cuisine filters unavailable</Text>
+              <Text style={styles.unavailableTitle}>Cuisine filters are coming soon</Text>
               <Text style={styles.unavailableText}>
-                The current discovery contract does not expose typed cuisine IDs or filter metadata, so Craves will not send guessed cuisine values.
+                For now, use search on Home to find a cuisine.
               </Text>
             </View>
           </View>
@@ -487,17 +487,10 @@ export function CustomerFilterSortScreen() {
               <View style={styles.unavailableCard}>
                 <Text style={styles.unavailableTitle}>Diet filters unavailable here</Text>
                 <Text style={styles.unavailableText}>
-                  Nearby-kitchen results do not currently include a typed dietary filter field.
+                  This list cannot be filtered by diet yet.
                 </Text>
               </View>
             )}
-          </View>
-
-          <View style={styles.contractNote}>
-            <Text style={styles.contractNoteTitle}>Current contract boundary</Text>
-            <Text style={styles.contractNoteText}>
-              Home now sends Catalog v2 price, preparation-time, spice, diet and supported sort criteria to the server. Popularity, rating, delivery-time, cuisine facets and result-count preview remain disabled until exact server contracts exist.
-            </Text>
           </View>
         </ScrollView>
 
@@ -717,22 +710,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.small,
     lineHeight: 20,
-    marginTop: spacing.xs,
-  },
-  contractNote: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceMuted,
-    padding: spacing.md,
-  },
-  contractNoteTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-  },
-  contractNoteText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 18,
     marginTop: spacing.xs,
   },
   footer: {

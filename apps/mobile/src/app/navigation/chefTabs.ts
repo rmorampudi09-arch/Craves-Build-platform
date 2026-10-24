@@ -1,5 +1,5 @@
 import type {IconName} from '../../shared/components/Icon';
-import {colors} from '../../design/tokens';
+import {bottomMenu} from '../../design/tokens';
 import type {ChefOrdersStackRouteName, ChefTabRouteName} from './types';
 
 export interface ChefTabDefinition {
@@ -17,8 +17,9 @@ export const CHEF_TABS: readonly ChefTabDefinition[] = [
   {routeName: 'Profile', label: 'Profile', icon: 'account'},
 ] as const;
 
-export const CHEF_TAB_ACTIVE_COLOR = colors.flameRedAccessible;
-export const CHEF_TAB_INACTIVE_COLOR = colors.textPrimary;
+// Same colours as the customer menu bar.
+export const CHEF_TAB_ACTIVE_COLOR = bottomMenu.activeColor;
+export const CHEF_TAB_INACTIVE_COLOR = bottomMenu.inactiveColor;
 
 /** Every Orders-stack route; the navigator registers one screen for each. */
 export const CHEF_ORDER_ROUTES = [

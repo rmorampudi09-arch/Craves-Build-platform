@@ -107,7 +107,7 @@ const GLYPHS: Record<IconName, string> = {
   clock: 'clock',
   trash: 'trash-can',
   delivery: 'truck-delivery',
-  settings: 'cog-outline',
+  settings: 'cog',
   wallet: 'wallet-outline',
   crown: 'crown-outline',
   gift: 'gift-outline',
@@ -151,8 +151,8 @@ const GLYPHS: Record<IconName, string> = {
 export function Icon({
   name,
   size = iconSize.md,
-  color = colors.espressoBrown,
   surface = true,
+  color = surface ? colors.flameRed : colors.espressoBrown,
 }: Props) {
   const glyphSize = surface ? Math.max(14, Math.round(size * 0.74)) : size;
   if (!surface) {

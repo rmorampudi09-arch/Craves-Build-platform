@@ -1,3 +1,6 @@
+# Expo modules (blur, glass, haptics, video…) link through Expo's autolinking, as on Android.
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+
 # Resolve react_native_pods.rb with node to allow for hoisting
 require Pod::Executable.execute_command('node', ['-p',
   'require.resolve(
@@ -5,17 +8,20 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
-platform :ios, min_ios_version_supported
+# Expo SDK 56 needs iOS 16.4.
+platform :ios, '16.4'
 prepare_react_native_project!
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-end
+# Firebase comes from CocoaPods (not Swift Package Manager) and needs frameworks; static keeps launch fast.
+$RNFirebaseDisableSPM = true
+$RNFirebaseAsStaticFramework = true
+linkage = ENV['USE_FRAMEWORKS'] || 'static'
+Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+use_frameworks! :linkage => linkage.to_sym
 
 target 'CravesMobile' do
-  config = use_native_modules!
+  use_expo_modules!
+  config = use_native_modules!(['npx', 'expo-modules-autolinking', 'react-native-config', '--json', '--platform', 'ios'])
 
   use_react_native!(
     :path => config[:reactNativePath],

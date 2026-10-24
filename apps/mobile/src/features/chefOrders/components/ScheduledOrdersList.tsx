@@ -11,6 +11,7 @@ import {
   ChefCard,
   ComingSoon,
   ConfirmDialog,
+  EmptyState,
   ListGroup,
   ListRow,
   SectionHeader,
@@ -19,7 +20,6 @@ import {
 } from '../../chefShell/components/ui';
 import {formatDayLabel, formatRupees, formatTimeOfDay, shortOrderNumber} from '../../chefShell/domain/chefFormat';
 import {itemsSummary} from '../domain/chefOrderCard';
-import {EmptyState} from './OrderCardParts';
 import {RejectOrderSheet} from './RejectOrderSheet';
 
 export const SCHEDULE_RESPONSE_FAILED = "We couldn't save that. Check your connection and try again.";
@@ -83,10 +83,10 @@ export function ScheduledOrdersList({queue, orders, onOpenOrder, onSeeNew}: Sche
   if (queue.pending.length === 0 && queue.confirmed.length === 0) {
     return (
       <EmptyState
-        icon="calendar"
+        illustration="mealPlans"
         message="When a customer books food for a later time, you confirm it here."
         title="No scheduled orders">
-        <ChefActionButton label="See new orders" onPress={onSeeNew} style={styles.action} tone="neutral" />
+        <ChefActionButton label="See new orders" onPress={onSeeNew} tone="neutral" />
       </EmptyState>
     );
   }
@@ -190,7 +190,7 @@ export function ScheduledOrdersList({queue, orders, onOpenOrder, onSeeNew}: Sche
                 <ListRow
                   accessibilityLabel={`Scheduled order ${shortOrderNumber(item.orderId)}, ${when}, confirmed`}
                   icon="calendar-check"
-                  iconTone="blue"
+                  iconTone="red"
                   key={`${item.scheduleRequestId}:${item.orderId}`}
                   onPress={() => onOpenOrder(item.orderId)}
                   right={<StatusChip label="Confirmed" tone="info" />}
@@ -234,7 +234,6 @@ const styles = StyleSheet.create({
   skeleton: {gap: spacing.md},
   errorTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.bold},
   errorMessage: {color: colors.textSecondary, fontSize: typography.small, marginBottom: spacing.sm},
-  action: {alignSelf: 'stretch', marginTop: spacing.sm},
   top: {flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm},
   topText: {flex: 1, minWidth: 0},
   when: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},

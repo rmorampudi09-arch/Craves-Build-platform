@@ -51,8 +51,8 @@ export function buildCustomerPaymentMethodsModel({
     mode,
     title: activeCart ? 'Choose how you’ll pay' : 'Payment methods',
     subtitle: activeCart
-      ? 'Online checkout is securely handled by Razorpay from Cart. Saved-method selection stays disabled until Craves exposes an authoritative payment-method eligibility contract.'
-      : 'View payment capabilities without creating a checkout selection. Saved tokenized methods require the approved payment-method contract.',
+      ? 'You pay online through Razorpay when you check out from your cart.'
+      : 'How you can pay for your Craves orders.',
     savedMethodsSupported: false,
     selectedMethodId: null,
     options: [
@@ -60,21 +60,21 @@ export function buildCustomerPaymentMethodsModel({
         id: 'RAZORPAY_ONLINE',
         title: 'Online payment methods',
         description:
-          'Cards, UPI, wallets and net banking are handled through Razorpay after Craves creates and validates the checkout.',
+          'Pay with cards, UPI, wallets or net banking through Razorpay at checkout.',
         availability: 'BLOCKED',
         blockerReason: activeCart
-          ? 'Continue from Cart to launch the backend-issued Razorpay payment order. This screen does not invent a separate selection contract.'
-          : 'Add items to a cart first; checkout creates the authoritative payment order.',
+          ? 'Continue from your cart and tap Checkout to pay.'
+          : 'Add dishes to your cart first, then pay at checkout.',
         channels: ['Cards', 'UPI', 'Wallets', 'Net banking'],
         selected: false,
       },
       {
         id: 'COD',
         title: 'Cash on delivery',
-        description: 'Availability must be verified for the current cart, address and order intent.',
+        description: 'Pay in cash when your food arrives.',
         availability: 'BLOCKED',
         blockerReason:
-          'Cash on delivery eligibility is not exposed by the approved mobile API contract yet.',
+          'Cash on delivery is not offered yet.',
         channels: ['COD'],
         selected: false,
       },

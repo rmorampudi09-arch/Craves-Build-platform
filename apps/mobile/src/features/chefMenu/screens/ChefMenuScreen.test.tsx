@@ -297,6 +297,8 @@ describe('ChefMenuScreen', () => {
   it('an empty kitchen shows one next step: add a dish', async () => {
     await mount([]);
     expect(has('No dishes yet')).toBe(true);
+    expect(has('Add your first dish with a photo and price so customers near you can order.')).toBe(true);
+    expect(tree.root.findAll(node => node.props.testID === 'empty-illustration-menu').length).toBeGreaterThan(0);
     expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
     await press('Add a dish');
     expect(mockNavigate).toHaveBeenCalledWith('ChefAddMenuItem');

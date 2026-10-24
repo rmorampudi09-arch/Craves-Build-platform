@@ -90,6 +90,8 @@ describe('ChefOnboardingScreen', () => {
 
     expect(api.save).toHaveBeenCalledWith(0, expect.objectContaining({firstName: 'Asha', lastName: 'Rao', email: 'asha@example.com'}), false);
     expect(texts()).toContain('Your kitchen');
+    // Applicants are told before uploading that these two photos become public on their kitchen page.
+    expect(texts()).toContain('Two clear photos of where you cook. Customers see them on your kitchen page.');
   });
 
   it('shows a submitted application on its status page', async () => {

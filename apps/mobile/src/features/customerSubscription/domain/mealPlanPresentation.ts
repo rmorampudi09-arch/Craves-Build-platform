@@ -2,6 +2,7 @@
 // No Intl and no React: Hermes' Intl support is unreliable, so money and dates are formatted by hand.
 import {
   formatServiceTime,
+  mealSlotLabel,
   sortScheduleItems,
   titleCaseCode,
   type ScheduleItemLike,
@@ -9,7 +10,9 @@ import {
 import type {IconName} from '../../../shared/components/Icon';
 import type {CustomerAddress} from '../../customerAddresses/domain/customerAddressContract';
 import type {
+  CustomerSubscription,
   CustomerSubscriptionOccurrence,
+  DayCredit,
   PublicSubscriptionPolicy,
 } from '../api/customerSubscriptionApi';
 
@@ -160,6 +163,11 @@ export function subscriptionStatusPresentation(status: string): {
   return (
     SUBSCRIPTION_STATUS[status] ?? {label: titleCaseCode(status), tone: 'neutral'}
   );
+}
+
+/** Ended and cancelled plans live in History; every other plan is on My plans. */
+export function isPastSubscription(status: string): boolean {
+  return status === 'EXPIRED' || status === 'CANCELLED';
 }
 
 type OccurrenceStep = 0 | 1 | 2 | null;
@@ -314,4 +322,84 @@ export function firstScheduledItem<T extends ScheduleItemLike>(
     sorted[0] ??
     null
   );
+}
+
+export interface PauseInfo {
+  pauseDisabledLabel: string | null;
+  pauseMessage: string;
+  restartNote: string | null;
+  resumeOffered: boolean;
+}
+
+/** Pause and resume copy from the bill's pause allowance; an older server sends none, so nothing changes. */
+export function pauseInfo(
+  subscription: Pick<CustomerSubscription, 'status' | 'pauseDaysLeft' | 'pauseAutoResumeDate'>,
+  resumeDate: string,
+  today: string,
+): PauseInfo {
+  const left = subscription.pauseDaysLeft;
+  // An overdue restart (switched off or failed) is ignored, so the customer can always resume.
+  const autoDate = subscription.pauseAutoResumeDate && subscription.pauseAutoResumeDate >= today ? subscription.pauseAutoResumeDate : null;
+  const paused = subscription.status === 'PAUSED';
+  return {
+    pauseDisabledLabel: !paused && left === 0 ? 'No pause days left this bill' : null,
+    pauseMessage:
+      typeof left === 'number' && left > 0
+        ? `You can pause up to ${left} more ${left === 1 ? 'day' : 'days'} this bill. Your plan restarts by itself after that.`
+        : 'Upcoming meals stop until you resume the plan.',
+    restartNote: paused && autoDate ? `Restarts on ${formatMealPlanDate(autoDate, 'long')}` : null,
+    // Resuming on or after the automatic restart would change nothing, so it is not offered.
+    resumeOffered: !(autoDate && resumeDate >= autoDate),
+  };
+}
+
+export interface DayCreditCard {
+  title: string;
+  refundLabel: string;
+  extendLabel: string;
+  note: string | null;
+  settledLine: string | null;
+  pending: boolean;
+  extendAvailable: boolean;
+}
+
+const dayCount = (days: number) => `${days} ${days === 1 ? 'day' : 'days'}`;
+
+/** The refund-or-extend card on My Meal Plan for one declined day or one pause. */
+export function dayCreditCard(credit: DayCredit, today: string): DayCreditCard {
+  // A declined meal is offered as one day; a pause as its paid days.
+  const days = credit.kind === 'PAUSE' ? credit.days ?? 1 : 1;
+  const pending = credit.status === 'PENDING_CHOICE';
+  const deadline = todayIso(new Date(credit.choiceDeadline));
+  const fallback = credit.extendAvailable ? "we'll add it at the end" : "we'll request a refund";
+  const settledLine =
+    credit.status === 'EXTENDED'
+      ? `${dayCount(days)} added at the end.`
+      : credit.status === 'REFUND_REQUESTED'
+        ? 'Refund requested. It goes back to the UPI or card you paid with.'
+        : credit.status === 'REFUNDED'
+          ? 'Refunded to the UPI or card you paid with.'
+          : null;
+  return {
+    title:
+      credit.kind === 'PAUSE'
+        ? `You paused ${dayCount(days)}`
+        : `Your chef couldn't make ${credit.mealSlotCode ? mealSlotLabel(credit.mealSlotCode) : 'a meal'} on ${formatMealPlanDate(credit.firstDate, 'short')}`,
+    refundLabel:
+      credit.refundAmount === null ? 'Get a refund' : `Refund ${formatPlanPrice(credit.refundAmount, credit.currency ?? 'INR')}`,
+    extendLabel: `Add ${dayCount(days)} at the end`,
+    // The server settles it at the exact deadline, so the time is shown; once that day has passed, nothing is promised.
+    note:
+      pending && deadline >= today
+        ? `If you don't choose by ${occurrenceTimeLabel(credit.choiceDeadline)} on ${formatMealPlanDate(deadline, 'short')}, ${fallback}.`
+        : null,
+    settledLine,
+    pending,
+    extendAvailable: credit.extendAvailable,
+  };
+}
+
+/** Choices still waiting for the customer; none on an older server or while refunds are switched off. */
+export function pendingDayCredits(subscription: Pick<CustomerSubscription, 'dayCredits'>): DayCredit[] {
+  return (subscription.dayCredits ?? []).filter(credit => credit.status === 'PENDING_CHOICE');
 }

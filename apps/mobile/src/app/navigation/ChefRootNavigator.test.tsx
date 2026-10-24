@@ -25,6 +25,15 @@ jest.mock('../../features/chefShell/state/ChefOperationalProvider', () => ({
 jest.mock('../../features/chefProfile/state/ChefEditProfileDraftProvider', () => ({
   ChefEditProfileDraftProvider: ({children}: {children: React.ReactNode}) => children,
 }));
+// The gate has its own tests; here it only shows that it wraps the workspace.
+jest.mock('../../features/chefProfile/components/ChefAvatarGate', () => {
+  const ReactActual = require('react');
+  const {Text: MockText} = require('react-native');
+  return {
+    ChefAvatarGate: ({children}: {children: React.ReactNode}) =>
+      ReactActual.createElement(ReactActual.Fragment, null, ReactActual.createElement(MockText, null, 'GATE'), children),
+  };
+});
 jest.mock('./ChefMenuTabScreen', () => mockScreenModule('ChefMenuTabScreen'));
 jest.mock('../../features/chefDashboard/screens/ChefDashboardScreen', () => {
   const ReactActual = require('react');
@@ -122,6 +131,11 @@ describe('ChefRootNavigator', () => {
     expect(tab('Orders').props.accessibilityLabel).toBe('Orders tab, 3 new orders');
   });
 
+  it('puts the chef workspace behind the profile picture gate', () => {
+    expect(allText()).toContain('GATE');
+    expect(allText()).toContain('SCREEN:ChefDashboardScreen');
+  });
+
   it('switches tabs from the bar: Orders opens the New list and Earnings its own screen', () => {
     act(() => tab('Orders').props.onPress());
     expect(allText()).toContain('SCREEN:ChefOrdersScreen');
@@ -147,15 +161,16 @@ describe('ChefRootNavigator', () => {
     expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
   });
 
-  it('opens a Profile sub-screen from Home with Profile home beneath it, so Back and the Profile tab work', () => {
+  it('opens a Profile sub-screen from Home as a full page with Profile home beneath it, so Back works', () => {
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefKitchenSchedule', initial: false}});
     expect(allText()).toContain('SCREEN:ChefKitchenScheduleScreen');
+    // A sub-page is a full page: no menu bar under its buttons.
+    expect(tab('Home')).toBeUndefined();
     act(() => navigationRef.goBack());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');
+    expect(tab('Profile').props.accessibilityState).toEqual({selected: true});
     act(() => tab('Home').props.onPress());
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews', initial: false}});
-    act(() => tab('Home').props.onPress());
-    act(() => tab('Profile').props.onPress());
     expect(allText()).toContain('SCREEN:ChefReviewsScreen');
     act(() => navigationRef.goBack());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');

@@ -20,6 +20,7 @@ import {
   typography,
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
 import {
@@ -148,12 +149,11 @@ export function CustomerHomeSearchScreen() {
         </View>
 
         {!selectedLocation ? (
-          <View style={styles.messageWrap}>
-            <Text style={styles.messageTitle}>Choose a delivery location first</Text>
-            <Text style={styles.messageCopy}>
-              Nearby dish and kitchen search needs your selected delivery location.
-            </Text>
-          </View>
+          <TerminalState
+            illustration="location"
+            title="Choose a delivery location first"
+            description="Nearby dish and kitchen search needs your selected delivery location."
+          />
         ) : loading ? (
           <View accessibilityRole="progressbar" style={styles.messageWrap}>
             <ActivityIndicator color={colors.flameRed} />
@@ -167,10 +167,11 @@ export function CustomerHomeSearchScreen() {
             </Text>
           </View>
         ) : hasNoMatches ? (
-          <View style={styles.messageWrap}>
-            <Text style={styles.messageTitle}>No matches found</Text>
-            <Text style={styles.messageCopy}>Try another dish or kitchen name.</Text>
-          </View>
+          <TerminalState
+            illustration="search"
+            title={`No results for “${normalizedQuery}”`}
+            description="Try another dish or kitchen name, or check the spelling."
+          />
         ) : (
           <FlatList
             data={rows}

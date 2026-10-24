@@ -157,7 +157,7 @@ describe('ChefPayoutHistoryScreen', () => {
         'October',
         'September',
         '₹1,450.00',
-        'Asked today, 10:12 AM',
+        'Requested today, 10:12 AM',
         'With the bank',
         '₹2,000.00',
         'Paid',
@@ -181,7 +181,7 @@ describe('ChefPayoutHistoryScreen', () => {
 
   it('opens a payout to show what happened to it', async () => {
     mount();
-    await press('₹900.00, Returned by bank, Asked 2 Oct, 9:12 AM');
+    await press('₹900.00, Returned by bank, Requested 2 Oct, 9:12 AM');
     expect(allText()).toEqual(
       expect.arrayContaining(['Payout details', 'Money is back in your balance.', 'Returned by bank']),
     );
@@ -190,8 +190,8 @@ describe('ChefPayoutHistoryScreen', () => {
   it('shows what each order added, and opens that order', async () => {
     mount();
     await press('Order earnings');
-    expect(allText()).toEqual(expect.arrayContaining(['₹280.50', '#0A1B2 · Yesterday', 'Settled', '₹140.00', 'Earned', '₹50.00', 'Reversed']));
-    await press('₹280.50, Settled, #0A1B2 · Yesterday');
+    expect(allText()).toEqual(expect.arrayContaining(['₹280.50', '#00000000 · Yesterday', 'Settled', '₹140.00', 'Earned', '₹50.00', 'Reversed']));
+    await press('₹280.50, Settled, #00000000 · Yesterday');
     expect(mockNavigate).toHaveBeenCalledWith('ChefOrderDetail', {orderId: ORDER_A});
   });
 

@@ -41,7 +41,7 @@ const PRODUCTION_DECISIONS: Record<
       'P54_REORDER_CART_MERGE_CONTRACT_UNAVAILABLE',
     ],
     message:
-      'Reorder stays unavailable until the server can revalidate the historical order and Craves has an approved cart merge or replace flow.',
+      'Reorder is not available for this order right now.',
   },
   CANCEL: {
     kind: 'BLOCKED',
@@ -49,13 +49,13 @@ const PRODUCTION_DECISIONS: Record<
       'P56_CUSTOMER_ORDER_CANCELLATION_ELIGIBILITY_CONTRACT_UNAVAILABLE',
     ],
     message:
-      'Cancellation stays unavailable until the server exposes customer cancellation eligibility and mutation.',
+      'Cancelling in the app is coming soon. Tap Help and our support team will sort it out.',
   },
   REFUND: {
     kind: 'BLOCKED',
     blockers: ['P56_CUSTOMER_ORDER_REFUND_ELIGIBILITY_CONTRACT_UNAVAILABLE'],
     message:
-      'Refund actions stay unavailable until the server exposes customer refund eligibility and mutation.',
+      'Refund requests in the app are coming soon. Tap Help and our support team will sort it out.',
   },
 };
 

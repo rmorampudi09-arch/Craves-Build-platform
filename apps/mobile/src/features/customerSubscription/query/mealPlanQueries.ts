@@ -23,7 +23,11 @@ import {
   type PlanScheduleSummary,
 } from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
-import {customerSubscriptionApi} from '../api/customerSubscriptionApi';
+import {
+  customerSubscriptionApi,
+  type CustomerSubscription,
+  type DayCreditChoice,
+} from '../api/customerSubscriptionApi';
 import {subscriptionPaymentApi} from '../api/subscriptionPaymentApi';
 
 const CUSTOMER_ROLE = 'CUSTOMER' as const;
@@ -288,8 +292,11 @@ export function useSubscriptionActions(subscriptionId: string) {
 
   return {
     pause: () => act(() => customerSubscriptionApi.pause(subscriptionId)),
+    // Returns the resumed plan: a new pause choice in it is offered at once.
     resume: (resumeDate: string) =>
-      act(() => customerSubscriptionApi.resume(subscriptionId, resumeDate)),
+      mutateAsync(() => customerSubscriptionApi.resume(subscriptionId, resumeDate)) as Promise<CustomerSubscription>,
+    chooseDayCredit: (creditId: string, choice: DayCreditChoice) =>
+      act(() => customerSubscriptionApi.chooseDayCredit(subscriptionId, creditId, choice)),
     skip: (serviceDate: string) =>
       act(() => customerSubscriptionApi.skip(subscriptionId, serviceDate)),
     cancel: () => act(() => customerSubscriptionApi.cancel(subscriptionId)),

@@ -12,10 +12,9 @@ import {
 import {OptionChip} from '../../chefMenu/components/DishFormField';
 import {ReadState} from '../../chefProfile/components/ReadState';
 import {useChefRead} from '../../chefProfile/state/useChefRead';
-import {ChefActionButton, ChefCard, ChefScreen, ChefTopBar, StatusChip} from '../../chefShell/components/ui';
+import {ChefActionButton, ChefCard, ChefScreen, ChefTopBar, EmptyState, StatusChip} from '../../chefShell/components/ui';
 import {formatRelativeTime} from '../../chefShell/domain/chefFormat';
 import {humanizeCode} from '../../chefShell/domain/humanizeCode';
-import {EmptyState} from '../../chefOrders/components/OrderCardParts';
 import {chefReviewsApi} from '../api/chefReviewsApi';
 import type {PublicKitchenReview} from '../api/publicKitchenReviewsApi';
 
@@ -118,7 +117,7 @@ export function ChefReviewsScreen() {
         query={list.query}>
         {() =>
           reviews.length === 0 ? (
-            <EmptyState icon="star" message="When customers rate your food, their reviews appear here." title="No reviews yet" />
+            <EmptyState illustration="reviews" message="When customers rate your food, their reviews show up here." title="No reviews yet" />
           ) : (
             <>
               <ChefCard style={styles.summary}>
@@ -144,14 +143,15 @@ export function ChefReviewsScreen() {
                 ))}
               </View>
               {shown.length === 0 ? (
-                <View style={styles.noneBox}>
-                  <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.none}>
-                    {hasMore ? 'No loaded reviews in this group' : 'No reviews in this group'}
-                  </Text>
+                <EmptyState
+                  illustration="search"
+                  message={hasMore ? 'Load more to look at older reviews.' : 'Try another star rating.'}
+                  title={hasMore ? 'No loaded reviews in this group' : 'No reviews in this group'}
+                  width={160}>
                   {hasMore ? (
                     <ChefActionButton busy={loadingMore} label="Load more" onPress={() => loadMore().catch(() => undefined)} tone="neutral" />
                   ) : null}
-                </View>
+                </EmptyState>
               ) : (
                 shown.map(review => (
                   <ChefCard key={review.reviewId}>
@@ -200,8 +200,6 @@ const styles = StyleSheet.create({
   bar: {flex: 1, height: 8, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: colors.border},
   barFill: {height: '100%', borderRadius: radius.pill, backgroundColor: colors.warning},
   filters: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
-  noneBox: {gap: spacing.sm, paddingVertical: spacing.md},
-  none: {color: colors.textSecondary, fontSize: typography.body, textAlign: 'center'},
   cardTop: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   date: {color: colors.textSecondary, fontSize: typography.small},
   text: {marginTop: spacing.xs, color: colors.textPrimary, fontSize: typography.body},

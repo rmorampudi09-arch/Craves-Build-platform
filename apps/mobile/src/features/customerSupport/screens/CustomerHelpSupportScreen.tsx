@@ -1,13 +1,14 @@
 import React, {useState} from 'react';
 import {Linking, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import MaterialDesignIcons from '@react-native-vector-icons/material-design-icons';
 import {useNavigation} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
-import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
+import type {CustomerProfileStackParamList, CustomerTabParamList} from '../../../app/navigation/types';
 import {
   borderWidth,
   colors,
-  elevation,
   fontWeight,
   iconSize,
   radius,
@@ -15,288 +16,182 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
-import {Icon, type IconName} from '../../../shared/components/Icon';
+import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
-import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
 import {
   CUSTOMER_SUPPORT_CASES_AVAILABLE,
 } from '../api/customerSupportCasesApi';
 import {CustomerSupportCasesSection} from '../components/CustomerSupportCasesSection';
-import {customerSupportIntegrationBoundary} from '../domain/customerSupportCapabilityModel';
+import {
+  CRAVES_SUPPORT_EMAIL,
+  CRAVES_SUPPORT_PHONE,
+  CRAVES_SUPPORT_PHONE_LABEL,
+  SUPPORT_COMMON_QUESTIONS,
+  type SupportQuestionDestination,
+} from '../domain/supportContact';
 
 type SupportNavigation = NativeStackNavigationProp<
   CustomerProfileStackParamList,
   'CustomerSettingsSupport'
 >;
 
-interface ContractUnavailableCardProps {
-  title: string;
-  detail: string;
+type GlyphName = React.ComponentProps<typeof MaterialDesignIcons>['name'];
+
+interface ContactTileProps {
+  glyph: GlyphName;
+  label: string;
+  hint: string;
+  filled?: boolean;
+  onPress: () => void;
   testID: string;
 }
 
-function ContractUnavailableCard({title, detail, testID}: ContractUnavailableCardProps) {
-  return (
-    <View style={styles.unavailableCard} accessibilityRole="summary" testID={testID}>
-      <View style={styles.unavailableIcon}>
-        <Icon name="shield" size={iconSize.sm} color={colors.textSecondary} />
-      </View>
-      <View style={styles.unavailableCopy}>
-        <Text style={styles.unavailableTitle}>{title}</Text>
-        <Text style={styles.unavailableDetail}>{detail}</Text>
-      </View>
-    </View>
-  );
-}
-
-interface DisabledSupportActionProps {
-  icon: IconName;
-  title: string;
-  detail: string;
-  testID: string;
-}
-
-function EnabledSupportAction({icon, title, detail, testID, onPress}: DisabledSupportActionProps & {onPress: () => void}) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityHint={detail} onPress={onPress} testID={testID} style={({pressed}) => [styles.supportAction, pressed && styles.actionPressed]}>
-      <View style={styles.actionIcon}><Icon name={icon} size={iconSize.sm} color={colors.flameRed} /></View>
-      <View style={styles.actionCopy}><Text style={styles.actionTitle}>{title}</Text><Text style={styles.actionDetail}>{detail}</Text></View>
-      <Icon name="chevron-right" size={iconSize.xs} color={colors.espressoBrown} />
-    </Pressable>
-  );
-}
-
-function DisabledSupportAction({icon, title, detail, testID}: DisabledSupportActionProps) {
+function ContactTile({glyph, label, hint, filled = false, onPress, testID}: ContactTileProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityHint={detail}
-      accessibilityState={{disabled: true}}
-      disabled
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      onPress={onPress}
       testID={testID}
-      style={styles.supportAction}>
-      <View style={styles.actionIcon}>
-        <Icon name={icon} size={iconSize.sm} color={colors.textSecondary} />
+      style={({pressed}) => [styles.tile, filled ? styles.tileFilled : styles.tileOutlined, pressed && styles.pressed]}>
+      <View style={[styles.tileIcon, filled && styles.tileIconFilled]}>
+        <MaterialDesignIcons name={glyph} size={iconSize.md} color={filled ? colors.white : colors.flameRed} />
       </View>
-      <View style={styles.actionCopy}>
-        <Text style={styles.actionTitle}>{title}</Text>
-        <Text style={styles.actionDetail}>{detail}</Text>
-      </View>
-      <Icon name="chevron-right" size={iconSize.xs} color={colors.placeholder} />
+      <Text style={[styles.tileLabel, filled && styles.tileLabelFilled]}>{label}</Text>
     </Pressable>
   );
 }
 
-/** P76 / Guide Reference 35: Help & Support — Empty Cart reference state. */
+/** Help & support: chat, call or email Craves, and shortcuts for the common questions. */
 export function CustomerHelpSupportScreen() {
   const navigation = useNavigation<SupportNavigation>();
-  const header = useCustomerHeaderState();
   const bottomNavScroll = useCustomerBottomNavScroll();
-  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [supportMessage, setSupportMessage] = useState<string | null>(null);
   const [supportCaseCreateRequest, setSupportCaseCreateRequest] = useState(0);
-  const emailSupport = async () => {
+
+  const openLink = async (url: string, failure: string) => {
     setSupportMessage(null);
     try {
-      await Linking.openURL('mailto:support@craves.in?subject=Craves%20support');
+      await Linking.openURL(url);
     } catch {
-      setSupportMessage('Email could not be opened. Contact support@craves.in from your email app.');
+      setSupportMessage(failure);
+    }
+  };
+  const callSupport = () =>
+    openLink(`tel:${CRAVES_SUPPORT_PHONE}`, `Calling could not start. Call ${CRAVES_SUPPORT_PHONE_LABEL} from your phone app.`);
+  const emailSupport = () =>
+    openLink(`mailto:${CRAVES_SUPPORT_EMAIL}?subject=Craves%20support`, `Email could not be opened. Contact ${CRAVES_SUPPORT_EMAIL} from your email app.`);
+
+  const openQuestion = (destination: SupportQuestionDestination) => {
+    if (destination === 'orders') {
+      navigation
+        .getParent<BottomTabNavigationProp<CustomerTabParamList>>()
+        ?.navigate('Orders', {screen: 'CustomerOrdersRoot'});
+    } else if (destination === 'mealPlanHelp') {
+      navigation.navigate('CustomerSettingsSubscription', {screen: 'MealPlanHowItWorks'});
+    } else if (destination === 'addresses') {
+      navigation.navigate('CustomerAddresses');
+    } else {
+      navigation.navigate('CustomerSupportChat');
     }
   };
 
-  const configuration = customerSupportIntegrationBoundary.supportConfiguration;
-  const helpContent = customerSupportIntegrationBoundary.helpContent;
-  const availability = customerSupportIntegrationBoundary.supportAvailability;
-  const ticket = customerSupportIntegrationBoundary.supportTicket;
-
   return (
     <ScreenShell
-      backgroundColor={colors.surfaceWarm}
+      backgroundColor={colors.white}
       edges={['top']}
       keyboardAvoiding={false}
       testID="customer-help-support-empty-cart">
-      <View style={styles.root}>
-        <CustomerHeader
-          variant="compact"
-          onPressLocation={() => setLocationSelectorVisible(true)}
-          onPressNotifications={header.openNotifications}
-        />
-
-        <View style={styles.titleBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            hitSlop={spacing.xs}
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}>
-            <Icon name="arrow-left" size={iconSize.md} color={colors.espressoBrown} />
-          </Pressable>
-          <View style={styles.titleCopy}>
-            <Text style={styles.title}>Help & Support</Text>
-            <Text style={styles.subtitle}>How can we help?</Text>
+      <ScrollView
+        {...bottomNavScroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          <View style={styles.titleBar}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={spacing.xxs}
+              onPress={() => navigation.goBack()}
+              style={({pressed}) => [styles.backButton, pressed && styles.pressed]}>
+              <Icon name="arrow-left" size={iconSize.md} color={colors.flameRed} surface={false} />
+            </Pressable>
+            <Text accessibilityRole="header" style={styles.title}>Help & support</Text>
           </View>
-        </View>
+          <Text style={styles.subtitle}>How would you like to reach Craves?</Text>
 
-        <ScrollView
-          {...bottomNavScroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>
-            <View
-              style={styles.immediateHelpCard}
-              testID={`support-blocker-${availability.blocker}`}>
-              <View style={styles.immediateHelpIcon}>
-                <Icon name="phone" size={iconSize.lg} color={colors.flameRed} />
-              </View>
-              <View style={styles.immediateHelpCopy}>
-                <Text style={styles.cardEyebrow}>IMMEDIATE HELP</Text>
-                <Text style={styles.immediateHelpTitle}>Need help now?</Text>
-                <Text style={styles.immediateHelpDetail}>
-                  Live support availability is temporarily unavailable.
-                </Text>
-              </View>
+          <View style={styles.tiles}>
+            <ContactTile
+              filled
+              glyph="message-outline"
+              label="Chat"
+              hint="Chat with the Craves assistant about orders, payments, refunds or your account"
+              onPress={() => navigation.navigate('CustomerSupportChat')}
+              testID="support-start-chat"
+            />
+            <ContactTile
+              glyph="phone-outline"
+              label="Call"
+              hint={`Calls Craves support on ${CRAVES_SUPPORT_PHONE_LABEL}`}
+              onPress={() => { callSupport().catch(() => undefined); }}
+              testID="support-call"
+            />
+            <ContactTile
+              glyph="email-outline"
+              label="Email"
+              hint={`Emails ${CRAVES_SUPPORT_EMAIL}`}
+              onPress={() => { emailSupport().catch(() => undefined); }}
+              testID="support-email"
+            />
+          </View>
+          <Text style={styles.contactNote}>
+            Chat replies in seconds. Call {CRAVES_SUPPORT_PHONE_LABEL}. Email {CRAVES_SUPPORT_EMAIL}.
+          </Text>
+          {supportMessage ? <Text accessibilityLiveRegion="assertive" style={styles.supportMessage}>{supportMessage}</Text> : null}
+
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Common questions</Text>
+          <View style={styles.listCard}>
+            {SUPPORT_COMMON_QUESTIONS.map((question, index) => (
+              <Pressable
+                key={question.label}
+                accessibilityRole="button"
+                accessibilityLabel={question.label}
+                onPress={() => openQuestion(question.destination)}
+                style={({pressed}) => [styles.questionRow, index > 0 && styles.rowDivider, pressed && styles.rowPressed]}>
+                <Text style={styles.questionText}>{question.label}</Text>
+                <Icon name="chevron-right" size={iconSize.sm} color={colors.placeholder} surface={false} />
+              </Pressable>
+            ))}
+            {CUSTOMER_SUPPORT_CASES_AVAILABLE ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Call Us"
-                accessibilityHint="Phone support is temporarily unavailable"
-                accessibilityState={{disabled: true}}
-                disabled
-                testID={`support-blocker-${configuration.blocker}`}
-                style={styles.callButton}>
-                <Text style={styles.callButtonText}>Call Us</Text>
+                accessibilityLabel="Open a support case"
+                accessibilityHint="Open a case and continue the conversation with Craves Support"
+                onPress={() => setSupportCaseCreateRequest(current => current + 1)}
+                testID="support-create-case"
+                style={({pressed}) => [styles.questionRow, styles.rowDivider, pressed && styles.rowPressed]}>
+                <Text style={styles.questionText}>Open a support case</Text>
+                <Icon name="chevron-right" size={iconSize.sm} color={colors.placeholder} surface={false} />
               </Pressable>
-            </View>
-
-            <Text style={styles.sectionTitle}>Quick Help</Text>
-            <ContractUnavailableCard
-              title="Help categories unavailable"
-              detail="Verified help categories are not available right now."
-              testID={`support-blocker-${helpContent.blocker}-categories`}
-            />
-
-            <Text style={styles.sectionTitle}>Popular Help Topics</Text>
-            <ContractUnavailableCard
-              title="Help articles unavailable"
-              detail="Verified help articles are not available right now."
-              testID={`support-blocker-${helpContent.blocker}-articles`}
-            />
-
-            <Text style={styles.sectionTitle}>Contact Support</Text>
-            <View style={styles.actionsCard}>
-              <DisabledSupportAction
-                icon="phone"
-                title="Call Us"
-                detail="Phone support is temporarily unavailable."
-                testID={`support-blocker-${configuration.blocker}-call`}
-              />
-              <View style={styles.divider} />
-              <EnabledSupportAction
-                icon="mail"
-                title="Email Us"
-                detail="Email support@craves.in for order, payment, refund, account or delivery help."
-                testID="support-email"
-                onPress={() => { emailSupport().catch(() => undefined); }}
-              />
-              <View style={styles.divider} />
-              <EnabledSupportAction
-                icon="account"
-                title="Start Chat"
-                detail="Chat with the Craves AI assistant about orders, payments, refunds or your account."
-                testID="support-start-chat"
-                onPress={() => navigation.navigate('CustomerSupportChat')}
-              />
-              <View style={styles.divider} />
-              {CUSTOMER_SUPPORT_CASES_AVAILABLE ? (
-                <EnabledSupportAction
-                  icon="orders"
-                  title="Create Support Case"
-                  detail="Open a case and continue the conversation with Craves Support."
-                  testID="support-create-case"
-                  onPress={() =>
-                    setSupportCaseCreateRequest(current => current + 1)
-                  }
-                />
-              ) : (
-                <DisabledSupportAction
-                  icon="orders"
-                  title="Create Support Case"
-                  detail="Support cases are ready in the app but not published through the production gateway yet."
-                  testID={`support-blocker-${ticket.blocker}`}
-                />
-              )}
-            </View>
-
-            {supportMessage ? <Text accessibilityLiveRegion="assertive" style={styles.supportMessage}>{supportMessage}</Text> : null}
-
-            <CustomerSupportCasesSection
-              createRequestToken={supportCaseCreateRequest}
-            />
-
-            <View style={styles.reassuranceBanner}>
-              <Icon name="shield" size={iconSize.sm} color={colors.espressoBrown} />
-              <Text style={styles.reassuranceText}>
-                Email and chat support are available. Phone stays disabled until Craves publishes its production configuration. Support cases are implemented in-app and will enable when their gateway routes are published.
-              </Text>
-            </View>
+            ) : null}
           </View>
-        </ScrollView>
 
-        <CustomerLocationSelector
-          visible={locationSelectorVisible}
-          onClose={() => setLocationSelectorVisible(false)}
-        />
-      </View>
+          <CustomerSupportCasesSection
+            createRequestToken={supportCaseCreateRequest}
+          />
+        </View>
+      </ScrollView>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  actionPressed: {opacity: 0.7},
-  supportMessage: {color: colors.error, fontSize: typography.small},
-  root: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  titleBar: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.white,
-    borderTopWidth: borderWidth.standard,
-    borderBottomWidth: borderWidth.standard,
-    borderColor: colors.border,
-  },
-  backButton: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  titleCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
-  title: {
-    color: colors.espressoBrown,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  subtitle: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-  },
+  pressed: {opacity: 0.82},
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xxs,
     paddingBottom: spacing.xxxl,
   },
   content: {
@@ -304,159 +199,110 @@ const styles = StyleSheet.create({
     maxWidth: 640,
     alignSelf: 'center',
   },
-  immediateHelpCard: {
+  titleBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    ...elevation.card,
   },
-  immediateHelpIcon: {
-    width: touchTarget.comfortable,
-    height: touchTarget.comfortable,
+  backButton: {
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.iconSurface,
   },
-  immediateHelpCopy: {
-    minWidth: 0,
+  title: {
     flex: 1,
-  },
-  cardEyebrow: {
-    color: colors.flameRed,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.extrabold,
-    letterSpacing: 0.8,
-  },
-  immediateHelpTitle: {
-    marginTop: spacing.xxs,
     color: colors.espressoBrown,
-    fontSize: typography.heading,
+    fontSize: typography.hero,
     fontWeight: fontWeight.bold,
   },
-  immediateHelpDetail: {
-    marginTop: spacing.xxs,
+  subtitle: {
+    marginTop: spacing.xs,
+    marginHorizontal: spacing.xxs,
     color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 17,
+    fontSize: typography.body,
   },
-  callButton: {
-    minHeight: touchTarget.minimum,
-    paddingHorizontal: spacing.md,
+  tiles: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: spacing.md,
+  },
+  tile: {
+    flex: 1,
+    minWidth: 0,
+    height: 112,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  tileFilled: {backgroundColor: colors.flameRedAccessible},
+  tileOutlined: {
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  tileIcon: {
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.iconSurface,
   },
-  callButtonText: {
+  tileIconFilled: {backgroundColor: 'rgba(255,255,255,0.18)'},
+  tileLabel: {
+    color: colors.espressoBrown,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+  },
+  tileLabelFilled: {color: colors.white},
+  contactNote: {
+    marginTop: 10,
+    marginHorizontal: spacing.xxs,
     color: colors.textSecondary,
     fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+  },
+  supportMessage: {
+    marginTop: spacing.xs,
+    marginHorizontal: spacing.xxs,
+    color: colors.error,
+    fontSize: typography.small,
   },
   sectionTitle: {
     marginTop: spacing.xl,
     marginBottom: spacing.xs,
+    marginHorizontal: spacing.xxs,
     color: colors.espressoBrown,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
   },
-  unavailableCard: {
-    minHeight: 92,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  unavailableIcon: {
-    width: touchTarget.minimum,
-    height: touchTarget.minimum,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
-  },
-  unavailableCopy: {
-    minWidth: 0,
-    flex: 1,
-  },
-  unavailableTitle: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  unavailableDetail: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 17,
-  },
-  actionsCard: {
+  listCard: {
     overflow: 'hidden',
     borderRadius: radius.lg,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
-  supportAction: {
-    minHeight: 76,
+  questionRow: {
+    minHeight: touchTarget.comfortable,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    opacity: 0.78,
+    padding: spacing.md,
   },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
+  rowDivider: {
+    borderTopWidth: borderWidth.standard,
+    borderTopColor: colors.surfaceMuted,
   },
-  actionCopy: {
-    minWidth: 0,
+  rowPressed: {backgroundColor: colors.surfaceMuted},
+  questionText: {
     flex: 1,
-  },
-  actionTitle: {
+    minWidth: 0,
     color: colors.espressoBrown,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
-  },
-  actionDetail: {
-    marginTop: spacing.xxs,
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    lineHeight: 17,
-  },
-  divider: {
-    height: borderWidth.standard,
-    marginLeft: 68,
-    backgroundColor: colors.border,
-  },
-  reassuranceBanner: {
-    marginTop: spacing.xl,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.white,
-  },
-  reassuranceText: {
-    minWidth: 0,
-    flex: 1,
-    color: colors.espressoBrown,
-    fontSize: typography.small,
-    lineHeight: 20,
   },
 });

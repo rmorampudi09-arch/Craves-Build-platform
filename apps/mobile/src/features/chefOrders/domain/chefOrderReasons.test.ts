@@ -66,7 +66,7 @@ describe('not picked up', () => {
     const orderId = '11111111-1111-4111-8111-1111-7a3df94b';
     expect(buildNotPickedUpCase(orderId, 'left', '')).toEqual({
       orderId,
-      subject: 'Not picked up · #DF94B',
+      subject: 'Not picked up · #11111111',
       message: 'Partner left without the order',
     });
     expect(buildNotPickedUpCase(orderId, 'late', ' Waiting 20 min ').message).toBe(

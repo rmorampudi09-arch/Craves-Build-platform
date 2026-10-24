@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef} from 'react';
 import {
   Animated,
   Easing,
@@ -13,6 +13,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import {BlurTargetView} from 'expo-blur';
+import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import {
   useNavigation,
   useIsFocused,
@@ -26,7 +27,6 @@ import type {
 } from '../../../app/navigation/types';
 import {
   colors,
-  elevation,
   fontWeight,
   radius,
   spacing,
@@ -41,7 +41,6 @@ import {KitchenImageCarousel} from './KitchenImageCarousel';
 import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
 import type {NearbyKitchen} from '../../chefDiscovery/api/nearbyChefDiscoveryApi';
 import {formatPreparationTime} from '../../chefDiscovery/chefDiscoveryPresentation';
-import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
 import {CustomerChefFace} from '../../customerShell/components/CustomerChefFace';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
@@ -67,6 +66,7 @@ export const PROMO_AUTO_ADVANCE_MS = 4_000;
 const PROMO_SLIDE_MS = 650;
 /** Kitchen cards change photos this far apart so the row never flips at once. */
 const KITCHEN_PHOTO_STAGGER_MS = 800;
+const KITCHEN_SCRIM_HEIGHT = 96;
 
 type HomeNavigation = NativeStackNavigationProp<
   CustomerHomeStackParamList,
@@ -99,7 +99,6 @@ export function PromoCarousel({
   const isDraggingRef = useRef(false);
   // A manual swipe gets a full interval on its slide before auto-advance resumes.
   const lastSwipeAtRef = useRef(0);
-  const [activeIndex, setActiveIndex] = useState(0);
   const reduceMotion = useReducedMotionPreference();
   // Drives the list offset frame by frame: a slower, eased slide than the default scroll.
   const offset = useRef(new Animated.Value(0)).current;
@@ -128,7 +127,6 @@ export function PromoCarousel({
       const from = activeIndexRef.current;
       const nextIndex = (from + 1) % banners.length;
       activeIndexRef.current = nextIndex;
-      setActiveIndex(nextIndex);
       offset.setValue(from * width);
       Animated.timing(offset, {
         toValue: (from + 1) * width,
@@ -149,7 +147,7 @@ export function PromoCarousel({
   const handleMomentumScrollEnd = (
     event: NativeSyntheticEvent<NativeScrollEvent>,
   ) => {
-    // Auto-advance tracks its own position; only a drag moves the dots here.
+    // Auto-advance tracks its own position; only a drag updates it here.
     if (width <= 0 || !isDraggingRef.current) return;
     const landed = Math.max(
       0,
@@ -162,7 +160,6 @@ export function PromoCarousel({
     lastSwipeAtRef.current = Date.now();
     isDraggingRef.current = false;
     activeIndexRef.current = nextIndex;
-    setActiveIndex(nextIndex);
   };
 
   return (
@@ -207,21 +204,6 @@ export function PromoCarousel({
           </Pressable>
         )}
       />
-      <View
-        accessibilityLabel={`Banner ${activeIndex + 1} of ${banners.length}`}
-        accessibilityRole="text"
-        pointerEvents="none"
-        style={styles.pagination}>
-        {banners.map((banner, index) => (
-          <View
-            key={banner.id}
-            style={[
-              styles.paginationDot,
-              index === activeIndex && styles.paginationDotActive,
-            ]}
-          />
-        ))}
-      </View>
     </View>
   );
 }
@@ -298,13 +280,14 @@ function TopKitchenCard({
   onFavorite: () => void;
   onPress: () => void;
 }) {
-  const imageHeight = Math.round(width * 0.63);
+  const imageHeight = Math.round(width * 0.66);
   const imageTarget = useRef<View | null>(null);
   const ratingLabel = rating === null ? 'New' : rating.toFixed(1);
+  const facts = [ratingLabel, kitchen.preparationTimeLabel].filter(Boolean).join(' · ');
 
   return (
     <View style={[styles.kitchenCard, {width}]}>
-      <View style={styles.kitchenImageWrap}>
+      <View style={[styles.kitchenImageWrap, {height: imageHeight}]}>
         <BlurTargetView ref={imageTarget} style={{width, height: imageHeight}}>
           <KitchenImageCarousel
             imageUrls={kitchen.imageUrls}
@@ -314,26 +297,27 @@ function TopKitchenCard({
             active={active}
             startDelayMs={startDelayMs}
             onPress={onPress}
+            pager="glass-right"
           />
         </BlurTargetView>
 
-        {kitchen.preparationTimeLabel ? (
-          <LiquidGlassSurface
-            appearance="home"
-            blurTarget={imageTarget}
-            pointerEvents="none"
-            style={styles.timeGlass}>
-            <Icon
-              name="clock"
-              size={iconSize.sm}
-              color={colors.white}
-              surface={false}
-            />
-            <Text style={styles.timeGlassText}>
-              {kitchen.preparationTimeLabel}
-            </Text>
-          </LiquidGlassSurface>
-        ) : null}
+        {/* A dark fade under the name keeps white text readable on any photo. */}
+        <Svg pointerEvents="none" width={width} height={KITCHEN_SCRIM_HEIGHT} style={styles.kitchenScrim}>
+          <Defs>
+            <LinearGradient id="kitchenScrim" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={colors.ink} stopOpacity={0} />
+              <Stop offset="1" stopColor={colors.ink} stopOpacity={0.62} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width={width} height={KITCHEN_SCRIM_HEIGHT} fill="url(#kitchenScrim)" />
+        </Svg>
+
+        <View pointerEvents="none" style={styles.chefFace}>
+          <CustomerChefFace
+            url={kitchen.chefPhotoUrl}
+            fallback={<Icon name="chef" size={iconSize.sm} color={colors.espressoBrown} surface={false} />}
+          />
+        </View>
 
         <LiquidGlassSurface
           appearance="home"
@@ -349,32 +333,16 @@ function TopKitchenCard({
           />
         </LiquidGlassSurface>
 
-        <LiquidGlassSurface
-          appearance="home"
-          blurTarget={imageTarget}
-          pointerEvents="none"
-          style={styles.ratingGlass}>
-          <Icon name="star" size={iconSize.sm} color="#FFC928" surface={false} />
-          <Text style={styles.ratingGlassText}>{ratingLabel}</Text>
-        </LiquidGlassSurface>
-
-        <View pointerEvents="none" style={styles.chefAvatarShell}>
-          <CustomerChefFace
-            url={kitchen.chefPhotoUrl}
-            fallback={
-              <>
-                <CustomerChefAvatar size={64} />
-                <View style={styles.chefAvatarIcon}>
-                  <Icon
-                    name="chef"
-                    size={26}
-                    color={colors.espressoBrown}
-                    surface={false}
-                  />
-                </View>
-              </>
-            }
-          />
+        <View pointerEvents="none" style={styles.kitchenOverlay}>
+          <Text numberOfLines={1} style={styles.kitchenName}>
+            {kitchen.kitchenName}
+          </Text>
+          <View style={styles.kitchenFacts}>
+            <Icon name="star" size={iconSize.xs} color="#FFC928" surface={false} />
+            <Text numberOfLines={1} style={styles.kitchenFactsText}>
+              {facts}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -386,10 +354,7 @@ function TopKitchenCard({
           styles.kitchenBody,
           pressed && styles.kitchenPressed,
         ]}>
-        <Text numberOfLines={1} style={styles.kitchenName}>
-          {kitchen.kitchenName}
-        </Text>
-        <Text numberOfLines={2} style={styles.kitchenBio}>
+        <Text numberOfLines={1} style={styles.kitchenBio}>
           {kitchen.biography}
         </Text>
         <Text numberOfLines={1} style={styles.kitchenStartingPrice}>
@@ -456,9 +421,10 @@ export function HomePromoAndKitchens({diets = []}: {diets?: readonly DiscoveryDi
   );
 
   const bannerWidth = Math.max(280, width - spacing.md * 2);
+  // About 1.6 cards across, so the next kitchen peeks in.
   const kitchenCardWidth = Math.min(
-    286,
-    Math.max(248, Math.round(width * 0.74)),
+    260,
+    Math.max(220, Math.round(width * 0.6)),
   );
 
   const handleFavorite = (kitchenId: string) => {
@@ -555,24 +521,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  pagination: {
-    minHeight: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: spacing.xs,
-  },
-  paginationDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-  },
-  paginationDotActive: {
-    width: 18,
-    backgroundColor: colors.flameRed,
-  },
 
   kitchensSection: {
     paddingTop: spacing.xxs,
@@ -602,43 +550,37 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
-  kitchenCard: {
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-    ...elevation.card,
-  },
+  kitchenCard: {},
   kitchenPressed: {
     opacity: 0.88,
   },
   kitchenImageWrap: {
     position: 'relative',
-    zIndex: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
   },
-  timeGlass: {
+  kitchenScrim: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+  },
+  chefFace: {
     position: 'absolute',
     top: spacing.sm,
     left: spacing.sm,
-    minHeight: 38,
-    flexDirection: 'row',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
+    justifyContent: 'center',
     overflow: 'hidden',
   },
-  timeGlassText: {
-    color: colors.white,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-
   favoriteGlass: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    top: spacing.xs,
+    right: spacing.xs,
     width: touchTarget.minimum,
     height: touchTarget.minimum,
     borderRadius: radius.pill,
@@ -649,66 +591,44 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: 'transparent',
   },
-
-  ratingGlass: {
+  // Clears the glass photo dots in the bottom-right corner.
+  kitchenOverlay: {
     position: 'absolute',
-    right: spacing.sm,
+    left: spacing.sm,
+    right: 72,
     bottom: spacing.sm,
-    minHeight: 38,
+  },
+  kitchenName: {
+    color: colors.white,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+  },
+  kitchenFacts: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
   },
-  ratingGlassText: {
+  kitchenFactsText: {
+    flexShrink: 1,
     color: colors.white,
     fontSize: typography.small,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.medium,
   },
-
-  chefAvatarShell: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: -32,
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    ...elevation.card,
-  },
-  chefAvatarIcon: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   kitchenBody: {
-    paddingHorizontal: spacing.sm,
-    paddingTop: 38,
-    paddingBottom: spacing.sm,
-  },
-  kitchenName: {
-    color: colors.espressoBrown,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
   },
   kitchenBio: {
-    marginTop: spacing.xxs,
+    flex: 1,
+    minWidth: 0,
     color: colors.textSecondary,
     fontSize: typography.small,
-    lineHeight: 19,
   },
   kitchenStartingPrice: {
-    marginTop: spacing.xs,
+    flexShrink: 0,
     color: colors.flameRedAccessible,
     fontSize: typography.small,
     fontWeight: fontWeight.bold,

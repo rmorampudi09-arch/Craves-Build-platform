@@ -24,7 +24,7 @@ import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.36.0';
+export const CHEF_APP_VERSION = '1.36.2';
 
 
 type Dialog = 'switch' | 'logout' | null;

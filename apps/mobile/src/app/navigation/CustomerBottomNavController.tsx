@@ -13,9 +13,7 @@ import {
   Animated,
   Easing,
   Keyboard,
-  Pressable,
   StyleSheet,
-  Text,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -38,25 +36,22 @@ import {resolveMotion} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {
   colors,
-  fontWeight,
   radius,
   spacing,
   touchTarget,
-  typography,
-  iconSize,
 } from '../../design/tokens';
 import {
   selectCartFoodSubtotal,
   selectCartItemCount,
 } from '../../features/cart/state/cartSelectors';
 import {formatCartMoney} from '../../features/cart/viewCartOverlayModel';
+import {FloatingCartButton} from '../../features/cart/components/FloatingCartButton';
 import {
   LiveOrderBubble,
   LiveOrderCard,
   type LiveOrderOrigin,
 } from '../../features/liveOrder/LiveOrderBubble';
 import {useLiveOrder} from '../../features/liveOrder/useLiveOrder';
-import {Icon} from '../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../shared/components/LiquidGlassSurface';
 import {LiquidTabButton} from '../../shared/components/LiquidBottomTabBar';
 import {customerHaptics} from '../../shared/haptics/customerHaptics';
@@ -76,6 +71,9 @@ interface CustomerBottomNavVisibilityContextValue {
   readonly blurTargets: Readonly<Record<string, RefObject<View | null>>>;
   readonly registerBlurTarget: (key: string, target: RefObject<View | null> | null) => void;
 }
+
+/** The menu shell's height, used until the menu has been measured. */
+const MENU_FALLBACK_HEIGHT = 80;
 
 const CustomerBottomNavVisibilityContext =
   createContext<CustomerBottomNavVisibilityContextValue | null>(null);
@@ -277,11 +275,17 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
     extrapolate: 'clamp',
   });
   const totalLabel = subtotal ? formatCartMoney(subtotal) : '';
+  // Above the menu (and the live order bubble) while they show; down in the corner once they slide away.
+  const cartLift = animationProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -((barHeight || MENU_FALLBACK_HEIGHT) + spacing.sm)],
+    extrapolate: 'clamp',
+  });
   const itemsLabel = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
 
   return (
     <>
-      {/* The live order bubble and the cart bar ride above the menu and hide with it. */}
+      {/* The live order bubble rides above the menu and hides with it; the cart button below stays. */}
       <Animated.View
         onLayout={handleLayout}
         pointerEvents={isVisible ? 'box-none' : 'none'}
@@ -298,34 +302,6 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
           <LiveOrderBubble order={liveOrder} onOpen={setLiveOrderOrigin} />
         ) : null}
 
-        {cartVisible ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`View cart, ${itemsLabel}${
-              cartKitchenName ? ` from ${cartKitchenName}` : ''
-            }, ${totalLabel}`}
-            onPress={handleOpenCart}
-            style={({pressed}) => [styles.cartBar, pressed && styles.cartBarPressed]}>
-            <View style={styles.cartIconTile}>
-              <Icon name="cart" color={colors.white} size={iconSize.md} surface={false} />
-            </View>
-            <View style={styles.cartCopy}>
-              <Text numberOfLines={1} style={styles.cartTitle}>
-                {itemsLabel} · {totalLabel}
-              </Text>
-              {cartKitchenName ? (
-                <Text numberOfLines={1} style={styles.cartKitchen}>
-                  From {cartKitchenName}
-                </Text>
-              ) : null}
-            </View>
-            <View style={styles.cartViewRow}>
-              <Text style={styles.cartTitle}>View cart</Text>
-              <Icon name="chevron-right" color={colors.white} size={iconSize.sm} surface={false} />
-            </View>
-          </Pressable>
-        ) : null}
-
         <View style={styles.shellShadow}>
           <LiquidGlassSurface
             appearance="home"
@@ -338,6 +314,21 @@ function CustomerBottomTabBarContent(props: BottomTabBarProps) {
           </LiquidGlassSurface>
         </View>
       </Animated.View>
+
+      {/* Mounted on every cart screen, empty or not, so the first add still gets its flight and total. */}
+      {focusedRoutePolicy.viewCartEligible ? (
+        <FloatingCartButton
+          visible={cartVisible}
+          itemCount={itemCount}
+          itemsLabel={itemsLabel}
+          totalLabel={totalLabel}
+          kitchenName={cartKitchenName}
+          blurTarget={blurTargets[activeTabRoute.key]}
+          lift={cartLift}
+          bottom={bottomOffset}
+          onPress={handleOpenCart}
+        />
+      ) : null}
 
       {liveOrder && liveOrderOrigin ? (
         <LiveOrderCard
@@ -387,52 +378,6 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     zIndex: 1,
-  },
-  cartBar: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: 10,
-    paddingRight: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.flameRedAccessible,
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: {width: 0, height: 8},
-    elevation: 6,
-  },
-  cartBarPressed: {
-    opacity: 0.86,
-    transform: [{scale: 0.98}],
-  },
-  cartIconTile: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  cartCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cartTitle: {
-    color: colors.white,
-    fontSize: typography.body,
-    fontWeight: fontWeight.bold,
-  },
-  cartKitchen: {
-    color: colors.white,
-    opacity: 0.9,
-    fontSize: typography.tiny + 1,
-  },
-  cartViewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
   },
 });
 

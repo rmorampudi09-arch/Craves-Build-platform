@@ -51,7 +51,8 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {getDisplayAvailabilityCount} from '../../../shared/menuAvailability';
+import {launchCartFlight} from '../../cart/cartFlight';
+import {VegMark} from '../../chefShell/components/ui/VegMark';
 import {askKitchenSwitch} from '../../cart/components/KitchenSwitchDialog';
 import type {CartLine} from '../../cart/domain/cartTypes';
 import {
@@ -113,6 +114,9 @@ const HOME_PAGE_SIZE = 20;
 const SEARCH_ROW_HEIGHT = 52;
 const HEADER_COLLAPSE_START = 10;
 const HEADER_COLLAPSE_END = 80;
+/** An add tapped on a card longer ago than this (a slow server, a kitchen-switch question) flies no photo. */
+const FLIGHT_WINDOW_MS = 8000;
+const DISH_SCRIM_HEIGHT = 110;
 /** White search, food type and filter controls lift off the red band with a soft shadow. */
 const WHITE_CARD_SHADOW = {
   shadowColor: colors.espressoBrown,
@@ -174,23 +178,43 @@ function DishCard({
 }: DishCardProps) {
   const kitchenName = dish.kitchenDisplayName?.trim() || dish.kitchenName;
   const imageTarget = useRef<View | null>(null);
+  const mediaRef = useRef<View | null>(null);
   const quantity = cartLine?.quantity ?? 0;
-  const availableCount = getDisplayAvailabilityCount(dish.id);
-  const foodTypeLabel =
-    dish.foodType === 'NON_VEG' ? 'Non-veg' : dish.foodType === 'EGG' ? 'Egg' : 'Veg';
-  const foodTypeColor =
-    dish.foodType === 'VEG'
-      ? colors.success
-      : dish.foodType === 'EGG'
-        ? colors.warning
-        : colors.error;
+  const lastQuantity = useRef(quantity);
+  const flightAskedAt = useRef(0);
   const spiceLabel = dish.spiceLevel
     ? `${dish.spiceLevel.charAt(0)}${dish.spiceLevel.slice(1).toLowerCase()}`
     : null;
+  const facts = [
+    dish.preparationTimeMinutes ? `${dish.preparationTimeMinutes} min` : null,
+    spiceLabel,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // The photo flies to the cart only once the add has really landed, and only for a tap made here.
+  useEffect(() => {
+    if (quantity > lastQuantity.current && Date.now() - flightAskedAt.current < FLIGHT_WINDOW_MS) {
+      flightAskedAt.current = 0;
+      mediaRef.current?.measureInWindow((x, y, width, height) =>
+        launchCartFlight({imageUrl: dish.primaryImageUrl ?? null, x, y, width, height}),
+      );
+    }
+    lastQuantity.current = quantity;
+  }, [quantity, dish.primaryImageUrl]);
+
+  const add = () => {
+    flightAskedAt.current = Date.now();
+    onAdd(dish.id);
+  };
+  const increase = (line: CartLine) => {
+    flightAskedAt.current = Date.now();
+    onIncrease(line);
+  };
 
   return (
     <View style={styles.dishCard}>
-      <View style={styles.mediaWrap}>
+      <View ref={mediaRef} collapsable={false} style={styles.mediaWrap}>
         <BlurTargetView ref={imageTarget}>
           <Pressable
             accessibilityHint="Opens full dish information and purchase actions"
@@ -212,13 +236,25 @@ function DishCard({
             )}
           </Pressable>
         </BlurTargetView>
+
+        {/* A dark fade under the name keeps the white text readable on any photo. */}
+        <Svg pointerEvents="none" width="100%" height={DISH_SCRIM_HEIGHT} style={styles.dishScrim}>
+          <Defs>
+            <LinearGradient id="dishScrim" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={colors.ink} stopOpacity={0} />
+              <Stop offset="1" stopColor={colors.ink} stopOpacity={0.62} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height={DISH_SCRIM_HEIGHT} fill="url(#dishScrim)" />
+        </Svg>
+
         <LiquidGlassSurface
           appearance="home"
           blurTarget={imageTarget}
           pointerEvents="none"
           style={styles.availabilityPill}>
           <View style={styles.availabilityDot} />
-          <Text style={styles.glassPillText}>Available - {availableCount}</Text>
+          <Text style={styles.glassPillText}>Available</Text>
         </LiquidGlassSurface>
 
         <LiquidGlassSurface
@@ -236,14 +272,14 @@ function DishCard({
           />
         </LiquidGlassSurface>
 
-        <LiquidGlassSurface
-          appearance="home"
-          blurTarget={imageTarget}
-          pointerEvents="none"
-          style={styles.foodTypePill}>
-          <View style={[styles.foodTypeDot, {backgroundColor: foodTypeColor}]} />
-          <Text style={styles.glassPillText}>{foodTypeLabel}</Text>
-        </LiquidGlassSurface>
+        <View pointerEvents="none" style={styles.photoText}>
+          <Text numberOfLines={1} style={styles.photoName}>
+            {dish.itemName}
+          </Text>
+          <Text numberOfLines={1} style={styles.photoKitchen}>
+            From {kitchenName}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.dishBody}>
@@ -251,96 +287,68 @@ function DishCard({
           accessibilityLabel={`Open ${dish.itemName}`}
           accessibilityRole="button"
           onPress={() => onOpen(dish.id)}
-          style={({pressed}) => pressed && styles.dishOpenPressed}>
-          <View style={styles.titlePriceRow}>
-            <Text numberOfLines={2} style={styles.dishName}>
-              {dish.itemName}
-            </Text>
-            <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
-          </View>
+          style={({pressed}) => [styles.dishFacts, pressed && styles.dishOpenPressed]}>
+          <VegMark type={dish.foodType} />
+          <Text style={styles.price}>{formatDishPrice(dish.price, dish.currency)}</Text>
+          {facts ? (
+            <View style={styles.detailItem}>
+              <Icon name="clock" size={iconSize.xs} color={colors.textSecondary} surface={false} />
+              <Text numberOfLines={1} style={styles.detailText}>
+                {facts}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
 
-        <View style={styles.infoPurchaseRow}>
-          <Pressable
-            accessibilityLabel={`Open ${dish.itemName}`}
-            accessibilityRole="button"
-            onPress={() => onOpen(dish.id)}
-            style={({pressed}) => [
-              styles.dishInfoColumn,
-              pressed && styles.dishOpenPressed,
-            ]}>
-            <Text numberOfLines={1} style={styles.kitchenName}>
-              From {kitchenName}
+        {cartLine && quantity > 0 ? (
+          <View
+            accessibilityLabel={`${dish.itemName} quantity ${quantity}`}
+            style={styles.quantitySelector}>
+            <Pressable
+              accessibilityLabel={`Decrease ${dish.itemName} quantity`}
+              accessibilityRole="button"
+              accessibilityState={{disabled: changingQuantity}}
+              disabled={changingQuantity}
+              onPress={() => onDecrease(cartLine)}
+              style={({pressed}) => [
+                styles.quantityButton,
+                pressed && styles.quantityButtonPressed,
+                changingQuantity && styles.quantityButtonDisabled,
+              ]}>
+              <Text style={styles.quantityButtonText}>−</Text>
+            </Pressable>
+            <Text accessibilityLiveRegion="polite" style={styles.quantityText}>
+              {quantity}
             </Text>
-
-            <View style={styles.detailRow}>
-              {dish.preparationTimeMinutes ? (
-                <View style={styles.detailItem}>
-                  <Icon name="clock" size={iconSize.xs} color={colors.textSecondary} surface={false} />
-                  <Text style={styles.detailText}>{dish.preparationTimeMinutes} min</Text>
-                </View>
-              ) : null}
-              {dish.preparationTimeMinutes && spiceLabel ? (
-                <View style={styles.detailDivider} />
-              ) : null}
-              {spiceLabel ? (
-                <View style={styles.detailItem}>
-                  <MaterialDesignIcons
-                    accessibilityElementsHidden
-                    color={colors.flameRed}
-                    name="chili-hot"
-                    size={iconSize.xs}
-                  />
-                  <Text style={styles.detailText}>{spiceLabel}</Text>
-                </View>
-              ) : null}
-            </View>
+            <Pressable
+              accessibilityLabel={`Increase ${dish.itemName} quantity`}
+              accessibilityRole="button"
+              accessibilityState={{disabled: changingQuantity}}
+              disabled={changingQuantity}
+              onPress={() => increase(cartLine)}
+              style={({pressed}) => [
+                styles.quantityButton,
+                pressed && styles.quantityButtonPressed,
+                changingQuantity && styles.quantityButtonDisabled,
+              ]}>
+              <Text style={styles.quantityButtonText}>+</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityLabel={`Add ${dish.itemName} to cart`}
+            accessibilityRole="button"
+            accessibilityState={{disabled: adding, busy: adding}}
+            disabled={adding}
+            onPress={add}
+            style={({pressed}) => [styles.addButton, pressed && styles.addButtonPressed]}>
+            {adding ? (
+              <ActivityIndicator color={colors.flameRed} />
+            ) : (
+              <Text style={styles.addButtonText}>ADD</Text>
+            )}
           </Pressable>
-
-          {cartLine && quantity > 0 ? (
-            <View
-              accessibilityLabel={`${dish.itemName} quantity ${quantity}`}
-              style={styles.quantitySelector}>
-              <Pressable
-                accessibilityLabel={`Decrease ${dish.itemName} quantity`}
-                accessibilityRole="button"
-                accessibilityState={{disabled: changingQuantity}}
-                disabled={changingQuantity}
-                onPress={() => onDecrease(cartLine)}
-                style={({pressed}) => [
-                  styles.quantityButton,
-                  pressed && styles.quantityButtonPressed,
-                  changingQuantity && styles.quantityButtonDisabled,
-                ]}>
-                <Text style={styles.quantityButtonText}>−</Text>
-              </Pressable>
-              <Text accessibilityLiveRegion="polite" style={styles.quantityText}>
-                {quantity}
-              </Text>
-              <Pressable
-                accessibilityLabel={`Increase ${dish.itemName} quantity`}
-                accessibilityRole="button"
-                accessibilityState={{disabled: changingQuantity}}
-                disabled={changingQuantity}
-                onPress={() => onIncrease(cartLine)}
-                style={({pressed}) => [
-                  styles.quantityButton,
-                  pressed && styles.quantityButtonPressed,
-                  changingQuantity && styles.quantityButtonDisabled,
-                ]}>
-                <Text style={styles.quantityButtonText}>+</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Button
-              label="+ Add"
-              accessibilityLabel={`Add ${dish.itemName} to cart`}
-              loading={adding}
-              onPress={() => onAdd(dish.id)}
-              style={styles.addButton}
-            />
-          )}
-        </View>
+        )}
       </View>
     </View>
   );
@@ -1299,28 +1307,25 @@ const styles = StyleSheet.create({
   },
   dishCard: {
     marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-    ...elevation.card,
+    marginBottom: spacing.lg,
   },
   dishOpenPressed: {
     opacity: 0.88,
   },
   mediaWrap: {
     position: 'relative',
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
   },
   dishImage: {
     width: '100%',
-    aspectRatio: 1.5,
+    aspectRatio: 16 / 9,
     backgroundColor: colors.surfaceMuted,
   },
   imageFallback: {
     width: '100%',
-    aspectRatio: 1.5,
+    aspectRatio: 16 / 9,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
@@ -1330,10 +1335,15 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
   },
+  dishScrim: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+  },
   favoriteGlass: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    top: spacing.xs,
+    right: spacing.xs,
     zIndex: 4,
     width: touchTarget.minimum,
     height: touchTarget.minimum,
@@ -1350,62 +1360,58 @@ const styles = StyleSheet.create({
     top: spacing.sm,
     left: spacing.sm,
     zIndex: 3,
-    minHeight: 38,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 6,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     overflow: 'hidden',
   },
   availabilityDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: radius.pill,
     backgroundColor: colors.success,
   },
-  foodTypePill: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: spacing.sm,
-    zIndex: 3,
-    minHeight: 38,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden',
-  },
-  foodTypeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.pill,
-  },
+  // The soft shadow keeps white glass text readable on pale photos and the no-photo grey.
   glassPillText: {
     color: colors.white,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
+    textShadowColor: 'rgba(31,27,25,0.45)',
+    textShadowRadius: 4,
+    textShadowOffset: {width: 0, height: 1},
   },
-  dishBody: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+  photoText: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.sm,
   },
-  titlePriceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  dishName: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.espressoBrown,
+  photoName: {
+    color: colors.white,
     fontSize: typography.heading,
     fontWeight: fontWeight.bold,
+  },
+  photoKitchen: {
+    color: colors.white,
+    opacity: 0.92,
+    fontSize: typography.small,
+    fontWeight: fontWeight.medium,
+  },
+  dishBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  dishFacts: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   price: {
     flexShrink: 0,
@@ -1413,74 +1419,56 @@ const styles = StyleSheet.create({
     fontSize: typography.heading,
     fontWeight: fontWeight.extrabold,
   },
-  infoPurchaseRow: {
+  detailItem: {
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  dishInfoColumn: {
-    flex: 1,
-    minWidth: 0,
     gap: spacing.xxs,
   },
-  kitchenName: {
+  detailText: {
+    flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.small,
     fontWeight: fontWeight.medium,
   },
-  detailRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'nowrap',
-    gap: spacing.xs,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-  },
-  detailDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 18,
-    backgroundColor: colors.borderStrong,
-  },
-  detailText: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    fontWeight: fontWeight.medium,
-  },
+  // White, not glass or red: the one solid control on the card is the one that adds to the cart.
   addButton: {
-    width: 132,
-    minWidth: 132,
-    maxWidth: 132,
-    minHeight: 48,
-    flexShrink: 0,
-    alignSelf: 'center',
-    paddingHorizontal: spacing.sm,
+    height: touchTarget.minimum,
+    minWidth: 96,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    ...WHITE_CARD_SHADOW,
+  },
+  addButtonPressed: {
+    opacity: 0.86,
+    transform: [{scale: 0.96}],
+  },
+  addButtonText: {
+    color: colors.flameRedAccessible,
+    fontSize: typography.body,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0.6,
   },
   quantitySelector: {
-    minHeight: 48,
-    minWidth: 120,
+    height: touchTarget.minimum,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: colors.flameRed,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     backgroundColor: colors.white,
-    overflow: 'hidden',
+    ...WHITE_CARD_SHADOW,
   },
   quantityButton: {
-    width: touchTarget.minimum,
-    minHeight: touchTarget.minimum,
+    width: 40,
+    height: touchTarget.minimum,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quantityButtonPressed: {
-    backgroundColor: colors.iconSurface,
+    opacity: 0.6,
   },
   quantityButtonDisabled: {
     opacity: 0.45,
@@ -1491,9 +1479,9 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   quantityText: {
-    minWidth: 24,
+    minWidth: 20,
     textAlign: 'center',
-    color: colors.espressoBrown,
+    color: colors.flameRedAccessible,
     fontSize: typography.body,
     fontWeight: fontWeight.bold,
   },

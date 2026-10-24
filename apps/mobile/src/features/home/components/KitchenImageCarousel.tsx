@@ -17,6 +17,8 @@ import { LiquidGlassSurface } from '../../../shared/components/LiquidGlassSurfac
 export const KITCHEN_PHOTO_ADVANCE_MS = 4_000;
 const FADE_MS = 650;
 
+const MAX_DOTS = 4;
+
 export function KitchenImageCarousel({
   imageUrls,
   width,
@@ -96,10 +98,11 @@ export function KitchenImageCarousel({
   }, [active, appActive, position, reduceMotion, slides.length, startDelayMs]);
 
   const layers = slides.length > 1 ? [...slides, slides[0]] : slides;
-  const firstDot = Math.max(0, Math.min(activeIndex - 2, slides.length - 5));
+  // At most four dots: enough to show there are more photos without a row of specks.
+  const firstDot = Math.max(0, Math.min(activeIndex - 2, slides.length - MAX_DOTS));
   const glassPager = pager === 'glass-right';
   const pagerLabel = `Kitchen photo ${activeIndex + 1} of ${slides.length}`;
-  const dots = slides.slice(firstDot, firstDot + 5).map((url, index) => (
+  const dots = slides.slice(firstDot, firstDot + MAX_DOTS).map((url, index) => (
     <View
       key={`${firstDot + index}:${url}`}
       style={[

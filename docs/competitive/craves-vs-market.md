@@ -182,7 +182,7 @@ officer **before the ~May 2027 DPDP core-duty date** (EV-REG-01); keep the alrea
 | 4 | Device-first integrity | **Swiggy** — SHIELD | No attestation/root/emulator checks; self-reported rider signals | Play Integrity/App Attest + device fingerprint |
 | 5 | Incident-driven ATO hardening | **Swiggy** — new-device unlink + 2FA | No device binding/step-up for consumers | Extend the admin-session model to consumers |
 | 6 | Tool-calling support agent | **Swiggy/Zepto** | Craves' assistant is read-only | Give it bounded, audited actions |
-| 7 | Resilience under peak | **Swiggy** — multi-AZ, RTO/RPO, CDN failover | Small pools, sync calls under lock, no load tests | Timeouts, outbox the payment confirm, load-test |
+| 7 | Resilience under peak | **Swiggy** — degrade the business before the infra: per-locality stress state machine shrinks the delivery radius, every dependency has a fallback chain, one deadline per request, multi-AZ for peaks, and published postmortems | Small pools, sync calls under lock, no load tests | Timeouts + circuit breakers, outbox the payment confirm, a serviceability degrade path, load-test |
 | 8 | Service guarantees paid in credit | **Swiggy** — On-Time Promise, member guarantees | No compensation/credit engine | Add missed-meal credit for meal plans |
 
 ## 5. Where Craves already beats the field
@@ -220,3 +220,8 @@ runbook and the lock files.
 | EV-REG-02 | Consumer Protection (E-Commerce) Rules 2020: grievance officer, acknowledge in 48 h, resolve within one month; display legal name, address, customer-care & grievance contacts | [IndiaLaw summary](https://www.indialaw.in/blog/civil/consumer-protection-e-commerce-rules/) |
 | EV-REG-03 | CERT-In directions (28 Apr 2022): report listed cyber incidents within 6 hours; retain ICT logs 180 days | [Mondaq](https://mondaq.co.uk/india/it-and-internet/1270332/6-hours-to-report-cyber-incidents-to-cert-in) |
 | EV-REG-04 | CCPA dark-pattern self-audit advisory, 5 Jun 2025 (Guidelines 2023, 13 patterns) | [Storyboard18](https://www.storyboard18.com/how-it-works/e-commerce-platforms-told-to-self-audit-and-eliminate-dark-patterns-in-new-consumer-advisory-76047.htm) |
+| EV-REG-05 | RBI refund turnaround floor: a failed UPI merchant payment must be auto-reversed by T+5, with ₹100/day compensation after that; on-us PPI (wallet) by T+1. This is the legal floor for any refund SLA Craves publishes | [RBI TAT circular](https://www.rbi.org.in/commonPerson/english/scripts/Notification.aspx?Id=3074), 20 Sep 2019 |
+
+The regulatory evidence above is why the trust-and-refund roadmap is not optional: a published refund
+promise must be backed by a running worker (EV-REG-05), a grievance officer and timelines are
+mandatory (EV-REG-02), and the DPDP core-duty clock is already running (EV-REG-01).

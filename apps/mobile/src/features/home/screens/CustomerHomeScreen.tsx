@@ -69,7 +69,10 @@ import {
   DeliveryAddressEditor,
   type DeliveryAddressEditorTarget,
 } from '../../customerShell/components/CustomerLocationSelector';
-import {useCustomerHeaderState} from '../../customerShell/hooks/useCustomerHeaderState';
+import {
+  browsingLocationLabel,
+  useCustomerHeaderState,
+} from '../../customerShell/hooks/useCustomerHeaderState';
 import {CustomerFavoriteHeartButton} from '../../favorites/components/CustomerFavoriteHeartButton';
 import {
   isFavoriteMenuItem,
@@ -95,7 +98,7 @@ import {
   formatDishPrice,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
-import {useLaunchAlert} from '../api/launchAlertApi';
+import {launchAlertErrorText, useLaunchAlert} from '../api/launchAlertApi';
 import {HomeComingSoonPage} from '../components/HomeComingSoonPage';
 import {TOP_KITCHENS_PAGE_SIZE} from '../components/HomePromoAndKitchens';
 import {useNearbyChefDiscoveryQuery} from '../../chefDiscovery/query/nearbyChefDiscoveryQueries';
@@ -957,9 +960,9 @@ export function CustomerHomeScreen() {
       <ScreenShell edges={[]} keyboardAvoiding={false} testID="customer-home">
         <HomeComingSoonPage
           bottomPadding={listBottomPadding}
-          locationLabel={selectedLocation.label}
+          locationLabel={browsingLocationLabel(selectedLocation.label)}
           locationName={selectedLocation.displayName}
-          notifyError={launchAlert.error ? toAppApiError(launchAlert.error).message : null}
+          notifyError={launchAlert.error ? launchAlertErrorText(launchAlert.error) : null}
           notifyPending={launchAlert.saving}
           onChangeAddress={() => setLocationSelectorVisible(true)}
           onNotify={launchAlert.subscribe}

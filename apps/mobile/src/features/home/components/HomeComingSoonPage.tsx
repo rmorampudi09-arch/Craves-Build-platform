@@ -82,6 +82,7 @@ export function HomeComingSoonPage({
           <Button
             label="Notify me"
             leftIcon="bell"
+            iconSurface={false}
             loading={notifyPending}
             onPress={onNotify}
             style={styles.pill}

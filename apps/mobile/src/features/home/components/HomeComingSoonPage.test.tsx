@@ -1,4 +1,5 @@
 import React from 'react';
+import {Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {HomeComingSoonPage, type HomeComingSoonPageProps} from './HomeComingSoonPage';
 
@@ -25,7 +26,7 @@ function render(overrides: Partial<HomeComingSoonPageProps> = {}) {
 
 const text = (tree: renderer.ReactTestRenderer) =>
   tree.root
-    .findAll(node => typeof node.type === 'string' && node.type === 'Text')
+    .findAllByType(Text)
     .map(node => [node.props.children].flat().join(''))
     .join(' ');
 
@@ -36,6 +37,8 @@ describe('HomeComingSoonPage', () => {
     expect(tree.root.findAllByProps({testID: 'empty-illustration-deliveryBike'})).not.toHaveLength(0);
     expect(text(tree)).toContain('Coming soon to Kondapur');
     expect(text(tree)).toContain('Delivering to Home');
+    // The bell sits bare on the red button, not on the pale icon tile where white vanished.
+    expect(tree.root.findAll(node => node.props.name === 'bell' && node.props.surface === false)).not.toHaveLength(0);
 
     act(() => tree.root.findByProps({testID: 'coming-soon-notify'}).props.onPress());
     act(() => tree.root.findByProps({testID: 'coming-soon-change-address'}).props.onPress());

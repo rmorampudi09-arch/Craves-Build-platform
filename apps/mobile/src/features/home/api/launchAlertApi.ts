@@ -1,4 +1,5 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
+import {toAppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
 import {useAppSelector} from '../../../app/store/hooks';
 import type {CustomerBrowsingLocation} from '../../customerShell/state/customerShellSlice';
@@ -34,6 +35,12 @@ export const launchAlertApi = {
     return parseSubscribed(await httpClient.put<unknown>(LAUNCH_ALERTS_PATH, {latitude, longitude, areaName}));
   },
 };
+
+/** The 50-place cap (409) explains itself; anything else gets one plain line instead of the raw API text. */
+export function launchAlertErrorText(error: unknown): string {
+  const apiError = toAppApiError(error);
+  return apiError.status === 409 ? apiError.message : "We couldn't save that. Please try again.";
+}
 
 /** Status and "Notify me" for the selected location; disabled until Home knows no kitchen cooks there. */
 export function useLaunchAlert(location: CustomerBrowsingLocation | null, enabled: boolean) {

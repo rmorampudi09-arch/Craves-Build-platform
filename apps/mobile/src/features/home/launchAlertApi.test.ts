@@ -1,5 +1,11 @@
 import {httpClient} from '../../core/http/httpClient';
-import {LAUNCH_ALERTS_PATH, LaunchAlertContractError, launchAlertApi} from './api/launchAlertApi';
+import {AppApiError} from '../../core/http/apiError';
+import {
+  LAUNCH_ALERTS_PATH,
+  LaunchAlertContractError,
+  launchAlertApi,
+  launchAlertErrorText,
+} from './api/launchAlertApi';
 
 jest.mock('../../core/http/httpClient', () => ({
   httpClient: {
@@ -36,6 +42,15 @@ describe('launch alert API', () => {
       longitude: 78.3567,
       areaName: 'Kondapur',
     });
+  });
+
+  it('keeps the cap message but hides other raw API text', () => {
+    expect(launchAlertErrorText(new AppApiError('CONFLICT', 'You can ask to be notified for up to 50 places', 409))).toBe(
+      'You can ask to be notified for up to 50 places',
+    );
+    expect(launchAlertErrorText(new AppApiError('NOT_FOUND', 'Resource not found', 404))).toBe(
+      "We couldn't save that. Please try again.",
+    );
   });
 
   it('rejects an answer without a subscribed flag', async () => {

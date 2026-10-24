@@ -34,6 +34,8 @@ export interface ButtonProps {
   style?: StyleProp<ViewStyle>;
   leftIcon?: IconName;
   rightIcon?: IconName;
+  /** Draw icons on their pale round tile (default) or bare in the label colour. */
+  iconSurface?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   testID?: string;
@@ -48,6 +50,7 @@ export function Button({
   style,
   leftIcon,
   rightIcon,
+  iconSurface = true,
   accessibilityLabel,
   accessibilityHint,
   testID,
@@ -86,7 +89,7 @@ export function Button({
       ) : (
         <View style={styles.row}>
           {leftIcon ? (
-            <Icon name={leftIcon} size={iconSize.sm} color={foreground} />
+            <Icon name={leftIcon} size={iconSize.sm} color={foreground} surface={iconSurface} />
           ) : null}
           <Text
             allowFontScaling={textDefaults.allowFontScaling}
@@ -98,6 +101,7 @@ export function Button({
               name={rightIcon === 'chevron' ? 'chevron-right' : rightIcon}
               size={iconSize.sm}
               color={foreground}
+              surface={iconSurface}
             />
           ) : null}
         </View>

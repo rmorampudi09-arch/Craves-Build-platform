@@ -29,6 +29,7 @@ import in.craves.order.web.CheckoutOperationDtos.Request;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -54,6 +55,7 @@ class ChefOrderDetailsDatabaseTest {
     private final CravesPrincipal chefActor = new CravesPrincipal(chef, "", Set.of("CHEF"));
     private final CravesPrincipal otherChefActor = new CravesPrincipal(UUID.randomUUID(), "", Set.of("CHEF"));
     private JdbcTemplate jdbc;
+    private CatalogClient catalog;
     private OrderService orders;
     private DeliveryStatusUpdateService delivery;
 
@@ -72,7 +74,7 @@ class ChefOrderDetailsDatabaseTest {
         Flyway.configure().dataSource(ds).defaultSchema("order_schema").schemas("order_schema")
             .locations("classpath:db/migration").load().migrate();
 
-        CatalogClient catalog = mock(CatalogClient.class);
+        catalog = mock(CatalogClient.class);
         CustomerAddressClient addresses = mock(CustomerAddressClient.class);
         when(catalog.getActiveMenuItem(menu)).thenReturn(new CatalogMenuItem(menu, kitchen, "Test meal", "Test meal",
             "MEAL", "VEG", new BigDecimal("369.00"), "INR", 1, 20, "MILD", 500, false, true, "ACTIVE"));
@@ -297,6 +299,19 @@ class ChefOrderDetailsDatabaseTest {
             assertThrows(ResponseStatusException.class, () -> orders.markHandedOver(customerActor, id)).getStatusCode());
         assertNull(jdbc.queryForObject(
             "SELECT chef_handed_over_at FROM order_schema.customer_order WHERE id = ?", Timestamp.class, id));
+    }
+
+    // Production 25 Oct: one newer order from a kitchen Catalog no longer serves failed every chef's list.
+    @Test
+    void anotherKitchensOrderNeverReachesCatalogOrBreaksTheChefList() {
+        UUID mine = placeOrder("note");
+        UUID theirs = placeOrder("note");
+        UUID closedKitchen = UUID.randomUUID();
+        jdbc.update("UPDATE order_schema.customer_order SET kitchen_id = ?, chef_identity_id = ?, "
+            + "created_at = created_at + interval '1 minute' WHERE id = ?", closedKitchen, UUID.randomUUID(), theirs);
+        when(catalog.getKitchen(closedKitchen)).thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active"));
+
+        assertEquals(List.of(mine), orders.listChefOrders(chefActor).stream().map(OrderResponse::id).toList());
     }
 
     // The Hikari pool is 3 per replica; a read that took a second connection per request stalled at a few parallel polls.

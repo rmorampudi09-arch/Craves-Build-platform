@@ -307,8 +307,10 @@ class ChefOrderDetailsDatabaseTest {
         UUID mine = placeOrder("note");
         UUID theirs = placeOrder("note");
         UUID closedKitchen = UUID.randomUUID();
-        jdbc.update("UPDATE order_schema.customer_order SET kitchen_id = ?, chef_identity_id = ?, "
-            + "created_at = created_at + interval '1 minute' WHERE id = ?", closedKitchen, UUID.randomUUID(), theirs);
+        // V16's trigger takes the order's chef from this table when the kitchen changes.
+        jdbc.update("INSERT INTO catalog_schema.kitchen_profile(id,identity_id) VALUES (?,?)", closedKitchen, UUID.randomUUID());
+        jdbc.update("UPDATE order_schema.customer_order SET kitchen_id = ?, "
+            + "created_at = created_at + interval '1 minute' WHERE id = ?", closedKitchen, theirs);
         when(catalog.getKitchen(closedKitchen)).thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active"));
 
         assertEquals(List.of(mine), orders.listChefOrders(chefActor).stream().map(OrderResponse::id).toList());

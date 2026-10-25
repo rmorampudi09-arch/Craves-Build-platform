@@ -6,6 +6,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   type KeyboardEvent,
@@ -260,6 +261,32 @@ describe('login reference visual structure', () => {
     expect(handle().props.accessibilityLabel).toBe('Lower sign-in panel');
     act(() => handle().props.onPress());
     expect(panelFlex()).toBeCloseTo(loginPanelFractions.resting);
+  });
+
+  // Short screens, 3-button bars and large text cut the welcome button off at a third (25 Oct).
+  it('rests the welcome sheet tall enough for all of its copy, up to half the screen', () => {
+    render(
+      <VideoAuthLayout welcome>
+        <Text>Welcome</Text>
+      </VideoAuthLayout>,
+    );
+    const area = Dimensions.get('window').height;
+    const measure = (copy: number) => {
+      const panel = tree.root.findAll(
+        node => node.props.testID === 'auth-white-panel' && typeof node.type === 'string',
+      )[0];
+      const slid = StyleSheet.flatten(panel.props.style).transform?.[0]?.translateY ?? 0;
+      // The scroll content is the copy plus the room added for the part hidden below the screen.
+      act(() => tree.root.findByType(ScrollView).props.onContentSizeChange(390, copy + slid));
+    };
+
+    measure(area * 0.2);
+    expect(panelFlex()).toBeCloseTo(loginPanelFractions.resting);
+    measure(area * 0.42);
+    measure(area * 0.42);
+    expect(panelFlex()).toBeCloseTo(0.42);
+    measure(area * 0.8);
+    expect(panelFlex()).toBeCloseTo(loginPanelFractions.raised);
   });
 
   it('glides a sign-in form up from the welcome height to half the screen', () => {

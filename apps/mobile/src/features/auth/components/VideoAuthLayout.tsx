@@ -77,12 +77,22 @@ export function VideoAuthLayout({
     androidKeyboardTop === null
       ? 0
       : Math.max(0, androidLayoutBottom - androidKeyboardTop);
+  // Height of the sheet's copy and its bottom-bar padding, without the room added to scroll past the hidden part.
+  const [copyHeight, setCopyHeight] = useState(0);
+  const offsetRef = useRef(0);
   const expanded = raised || keyboardOpen;
+  // A third of the screen hides the welcome button on short screens, behind 3-button bars and with large text.
+  const restingFraction = welcome
+    ? Math.min(
+        loginPanelFractions.raised,
+        Math.max(loginPanelFractions.resting, copyHeight / areaHeight),
+      )
+    : loginPanelFractions.resting;
   const panelFraction = keyboardOpen
     ? loginPanelFractions.keyboard
     : raised
     ? loginPanelFractions.raised
-    : loginPanelFractions.resting;
+    : restingFraction;
   // The sheet keeps its tallest height and slides on the native driver, so the
   // move stays smooth while the video decodes; resting hides its lower part.
   const sheetHeight =
@@ -93,12 +103,19 @@ export function VideoAuthLayout({
       ? 0
       : Math.max(0, areaHeight * (loginPanelFractions.raised - fraction));
   const offset = hiddenBelow(panelFraction);
+  offsetRef.current = offset;
   const slide = useRef(
     new Animated.Value(hiddenBelow(lastPanelFraction)),
   ).current;
+  const fitted = useRef(false);
   useEffect(() => {
     lastPanelFraction = panelFraction;
-    if (reduceMotion) {
+    // The first measured fit corrects the resting height before anyone sees it move.
+    const firstFit = !fitted.current && copyHeight > 0;
+    if (firstFit) {
+      fitted.current = true;
+    }
+    if (reduceMotion || firstFit) {
       slide.setValue(offset);
       return;
     }
@@ -110,7 +127,7 @@ export function VideoAuthLayout({
     });
     move.start();
     return () => move.stop();
-  }, [slide, offset, panelFraction, reduceMotion]);
+  }, [slide, offset, panelFraction, reduceMotion, copyHeight]);
   const raise = (next: boolean) => {
     if (next !== raised) {
       setRaised(next);
@@ -199,6 +216,10 @@ export function VideoAuthLayout({
               }
             }}
             scrollEventThrottle={16}
+            onContentSizeChange={(_width, height) => {
+              const copy = Math.ceil(height - offsetRef.current);
+              setCopyHeight(current => (Math.abs(current - copy) < 1 ? current : copy));
+            }}
             contentContainerStyle={[
               styles.content,
               welcome && styles.welcomeContent,

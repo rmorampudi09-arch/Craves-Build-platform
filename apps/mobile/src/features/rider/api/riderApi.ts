@@ -5,10 +5,12 @@ import type {
   HomeSummary,
   LocationBatchResponse,
   Paise,
+  PayoutAccountInput,
   PayoutsPage,
   RiderFix,
   RiderMe,
   RiderProfile,
+  RiderSignUp,
   ShiftStart,
   SupportIssue,
   Terms,
@@ -24,6 +26,10 @@ import {mockRider} from './riderApi.mock';
 export interface RiderApi {
   getMe(): Promise<RiderMe>;
   getProfile(): Promise<RiderProfile>;
+  /** Sign up with the signed-in phone; answers /me (PENDING). 409 PHONE_IN_USE, 422 PHONE_REQUIRED. */
+  signUp(input: RiderSignUp): Promise<RiderMe>;
+  /** The UPI ID or bank account to be paid into; ops confirms it. 409 PAYOUT_ACCOUNT_NOT_UNIQUE, 422 HOLDER_NAME_MISMATCH. */
+  submitPayoutAccount(input: PayoutAccountInput): Promise<void>;
   getTerms(): Promise<Terms>;
   acceptTerms(version: string): Promise<void>;
   getHome(): Promise<HomeSummary>;

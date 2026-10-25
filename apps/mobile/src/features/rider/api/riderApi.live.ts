@@ -37,6 +37,12 @@ async function get<T>(path: string): Promise<T> {
 export const liveRiderApi: RiderApi = {
   getMe: () => get('/me'),
   getProfile: () => get('/profile'),
+  async signUp(input) {
+    return (await apiClient.post(`${BASE}/apply`, input)).data;
+  },
+  async submitPayoutAccount(input) {
+    await apiClient.post(`${BASE}/payout-account`, input);
+  },
   getTerms: () => get('/terms'),
   async acceptTerms(version) {
     await apiClient.post(`${BASE}/terms/accept`, {version});

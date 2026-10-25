@@ -18,6 +18,7 @@ import {useRiderShell} from '../navigation';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
+import {JoinForm, PayoutAccountCard} from './SignUpForms';
 
 type RiderDocument = RiderProfile['documents'][number];
 
@@ -58,7 +59,7 @@ function IconCard({icon, title, body}: {icon: IconName; title: string; body: str
   );
 }
 
-/** One row per document from GET /profile; a rejected or expired one shows why and how to fix it. */
+/** One row per document from GET /profile; a missing one asks for a photo, a rejected or expired one shows why. */
 function Documents() {
   const {strings} = useStrings();
   const a = strings.account;
@@ -90,7 +91,7 @@ function Documents() {
   return (
     <Card style={styles.documents}>
       {documents.map((doc, index) => {
-        const fix = doc.status === 'REJECTED' || doc.status === 'EXPIRED';
+        const fix = doc.status === 'REJECTED' || doc.status === 'EXPIRED' || doc.status === 'MISSING';
         const reason = doc.reason ?? (doc.status === 'EXPIRED' ? a.expiredReason : undefined);
         const label = doc.status === 'VERIFIED' && doc.type === 'BANK' ? a.nameMatches : a.docStatus[doc.status];
         return (
@@ -102,7 +103,7 @@ function Documents() {
             {fix && reason ? <Text style={styles.body}>{reason}</Text> : null}
             {fix && doc.type ? (
               <BottomAction
-                label={a.uploadAgain}
+                label={doc.status === 'MISSING' ? a.upload : a.uploadAgain}
                 variant="outline"
                 size="compact"
                 accessibilityHint={doc.label}
@@ -120,7 +121,16 @@ function Documents() {
   );
 }
 
-/** Why the rider can't work yet (02-AccountStatus.png), or the notice they must read, with a way to reach a person. */
+/** The payout account card once the profile has loaded (Documents shows the loading and error states). */
+function PayoutAccount({kycName}: {kycName: string}) {
+  const profile = useProfile();
+  return profile.data ? <PayoutAccountCard profile={profile.data} kycName={kycName} /> : null;
+}
+
+/**
+ * Why the rider can't work yet (02-AccountStatus.png), or the notice they must read, with a way to reach a person.
+ * Someone who isn't a rider yet signs up here, like a chef: then documents and a payout account, which ops checks.
+ */
 export function AccountStatusScreen() {
   const {strings} = useStrings();
   const a = strings.account;
@@ -176,9 +186,11 @@ export function AccountStatusScreen() {
           <Text style={styles.secondary}>{a.bodies[block]}</Text>
         </View>
       ) : null}
+      {block === 'NOT_RIDER' ? <JoinForm /> : null}
       {block === 'PENDING' ? (
         <>
           <Documents />
+          <PayoutAccount kycName={me.data.name} />
           <IconCard icon="clock-outline" title={a.backgroundTitle} body={a.backgroundBody} />
           <IconCard icon="moped" title={a.trainingTitle} body={a.trainingBody} />
         </>

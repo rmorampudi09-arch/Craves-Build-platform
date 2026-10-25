@@ -31,8 +31,10 @@ public final class FleetAdminModels {
                               boolean pendingDevice, Instant createdAt, String kycName, String language, String vehicleNumberMasked) {
     }
 
+    /** submittedPayoutAccount: what the rider typed in the app, never paid until ops confirms it. */
     public record RiderDetail(RiderHeader rider, List<RiderDocument> documents, List<RiderDevice> devices,
-                              PayoutAccount payoutAccount, List<Shift> shifts, List<StatusEvent> statusEvents) {
+                              PayoutAccount payoutAccount, PayoutAccount submittedPayoutAccount, List<Shift> shifts,
+                              List<StatusEvent> statusEvents) {
     }
 
     public record RiderDocument(UUID documentId, String type, String status, LocalDate expiresOn, String reason,

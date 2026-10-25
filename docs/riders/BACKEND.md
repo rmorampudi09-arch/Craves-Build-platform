@@ -75,10 +75,10 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 
 | Table | Created by | Holds |
 |---|---|---|
-| `fleet_schema.rider` | integration V152 | One row per rider ops adds: KYC name, phone (unique), language, status (NOT_RIDER is never stored: it is "no row"), linked identity, vehicle, min app version. |
+| `fleet_schema.rider` | integration V152, V160 | One row per rider, signed up in the app or added by ops: KYC name, phone (unique), language, status (NOT_RIDER is never stored: it is "no row"), linked identity, vehicle, min app version, `vehicle_kind` (V160: PETROL, ELECTRIC or BICYCLE decides the documents asked for). |
 | `fleet_schema.rider_device` | integration V152 | Phones: one `BOUND` per rider, a new one `PENDING_APPROVAL`, an old one `REPLACED`. |
 | `fleet_schema.rider_document` | integration V152 | Document photos reviewed by hand: type, status, expiry, rejection reason, reviewer. No Aadhaar type exists. |
-| `fleet_schema.rider_payout_account` | integration V152; V157 adds `payouts_paused_at`, `paused_reason` | UPI ID or bank account set in person: encrypted like chef bank details, keyed fingerprint (unique among current accounts), masked copy. |
+| `fleet_schema.rider_payout_account` | integration V152; V157 adds `payouts_paused_at`, `paused_reason`; V160 adds state `SUBMITTED` | UPI ID or bank account set in person, or sent by the rider (`SUBMITTED`, never paid) and then confirmed by ops: encrypted like chef bank details, keyed fingerprint (unique among current accounts), masked copy. |
 | `fleet_schema.rider_status_event` | integration V152 | Append-only due-process history: kind, reason, evidence, deadline or review date, appeal phone, approver, status before and after. |
 | `fleet_schema.rate_card` | integration V152; V154 adds the event fees; V159 a trigger in place of the 14-day CHECK | Versioned rider pay with declared ranges; `effective_from` at least 14 days after publishing, except for the first card ever. |
 | `fleet_schema.dispatch_policy` | integration V152; V154 and V155 add detour, overhead, premium, Pidge stage; V159 a trigger in place of the 14-day CHECK, and `withdrawn_at`, `withdrawn_by` | Versioned dispatch mode (`off`, `shadow`, `live`), offer and stage seconds, radius, with declared ranges; 14 days' notice only for a changed detour; scheduled versions an emergency stop withdrew. |
@@ -114,12 +114,14 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 
 ### Rider API (`/api/v1/rider`, integration-service, rider API flag)
 
-Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET /me` (any signed-in user), `GET /profile` and `POST /documents` (any signed-in user with a rider row, so a PENDING rider can send documents), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential). Errors are `{code, message}` (`FleetApiAdvice`); `rider-v1.yaml` lists every code each route returns.
+Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET /me` and `POST /apply` (any signed-in user), `GET /profile`, `POST /documents` and `POST /payout-account` (any signed-in user with a rider row, so a PENDING rider can send documents and an account), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential). Errors are `{code, message}` (`FleetApiAdvice`); `rider-v1.yaml` lists every code each route returns.
 
 | Route | Does |
 |---|---|
 | `GET /me` | Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise status `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts, `features` (payouts and withdrawals once ops verified a payout account). |
-| `GET /profile` | Latest document per type (with ops's reason), vehicle, masked payout account, insurance. |
+| `POST /apply` | Sign-up, like chefs: anyone signed in with an Indian mobile becomes a PENDING rider (name, language, vehicle kind, number plate unless a bicycle, 18+). A repeat, or a phone ops already added, just answers `/me`; 409 `PHONE_IN_USE` for a phone on another account. |
+| `GET /profile` | Latest document per type (with ops's reason), and for a PENDING rider each required one not sent yet as `MISSING`; vehicle, masked payout account, `payoutAccountSubmitted`, insurance. |
+| `POST /payout-account` | The rider's UPI ID or bank account in their KYC name, stored encrypted as `SUBMITTED`. Never paid until a payments admin confirms it (`POST /admin/fleet/riders/{id}/payout-account/confirm`) against the bank proof. |
 | `GET /home` | `online` and `shiftStartedAt` (an open shift whose credential still works), `activeTripId`, the running or next booked slot with its own guaranteed hourly pay and rest point, `zoneName` and `slotEndsAt` while a slot runs, the ops banner until its `until`, and `todayEarningsPaise` (net of TDS) and `todayTrips` from credited pay. |
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING for ops. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language (te and hi fall back to English until translated). The lines include the pickup detour in force. While a card is in force, `upcoming` is the next change (see "Flags and settings"): the rate card in force then, its start, the lines riders will have then, and the card's summary and a pickup-distance line when they change. |
@@ -153,6 +155,7 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 | `PUT /riders/{id}/vehicle` | `{label, regNumber}` (an Indian or BH-series plate) → `{label, regNumberMasked}`. |
 | `POST /riders/{id}/devices/{deviceId}/approve` | Binds the new phone, replaces the old one and revokes its shift credential. |
 | `PUT /riders/{id}/payout-account` | Set in person. Holder name must match the KYC name (422 `HOLDER_NAME_MISMATCH`); the account must not belong to another rider (409 `PAYOUT_ACCOUNT_NOT_UNIQUE`). |
+| `POST /riders/{id}/payout-account/confirm` | Payments admins. Makes the account the rider sent from the app (`submittedPayoutAccount` on the rider) the one payouts go to, after checking it against the bank proof; the same name and uniqueness checks; 404 `NO_SUBMITTED_PAYOUT_ACCOUNT`. Audited. |
 | `POST /riders/{id}/status-events` | The two due-process tracks (below). |
 | `GET /selfie-reviews`, `GET /shifts/{id}/selfie`, `POST /shifts/{id}/selfie/approve`, `/reject` | Go-online selfie review; a rejection never ends a shift or blocks anyone. |
 | `GET /banner`, `PUT /banner`, `DELETE /banner` | The zone banner: `{tone: info or warning, text (1 to 160), until}`. PUT shows it from now until `until` and ends any earlier one; DELETE ends it; GET answers it or 204. |
@@ -354,7 +357,7 @@ A photo delivery posts the same journals; only the hold differs.
 - **Weekly payout.** A WEEKLY file on a Monday pays every rider with a verified, unpaused account their whole withdrawable balance, by IMPS, no minimum. Making it records this week's recovery (`rider_recovery`). Riders with nothing, a negative balance or no account are left out. Debt is never debited from a bank.
 - **Daily withdrawal.** One a day per rider (IST), free, up to the withdrawable balance. It is a payout (`DAILY_WITHDRAWAL`, date = tomorrow) at once, so the balance drops at once; the DAILY_WITHDRAWAL file for a date takes every request for that date or before not yet in a file.
 - **Never twice.** A payout belongs to one file. A sent payout stays processing until ops marks its UTR or a final failure; nothing re-sends it.
-- **Failure.** FAILED with the bank's reason: the money stays in the balance, and the account is paused (`features` false, `PAYOUTS_PAUSED`, left out of files) until ops sets a new account in person.
+- **Failure.** FAILED with the bank's reason: the money stays in the balance, and the account is paused (`features` false, `PAYOUTS_PAUSED`, left out of files) until ops sets a new account in person or confirms one the rider sends.
 - **Ledger.** Only a UTR posts: `fleet-payout/{payoutId}/paid`, debit `RIDER_PAYABLE`, credit `BANK`, evidence `utr/{UTR}`. So `RIDER_PAYABLE` = all rider pay − paid payouts.
 
 ### Payout runbook for ops
@@ -384,7 +387,7 @@ Both APIs are published on the mobile gateway (`api.craves.in`) by `scripts/apim
 ## Test mode for one rider and one kitchen
 
 1. Deploy in the order above. The runtime pipeline (`azure-pipelines-rider-fleet-runtime.yml`, stages status, wire, enable and disable; step by step in `GO-LIVE.md`) sets what follows. Keep `CRAVES_FLEET_TEST_MODE=true` (the default) and set `CRAVES_FLEET_ENABLED=true`, `CRAVES_FLEET_RIDER_API_ENABLED=true` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED=true`, plus the storage, bank-data, support-phone and internal URL settings (`CRAVES_AUTH_INTERNAL_BASE_URL`, `CRAVES_USER_CHEF_INTERNAL_BASE_URL`, `CRAVES_FLEET_ORDER_BASE_URL`, `CRAVES_NOTIFICATION_INTERNAL_BASE_URL`, `CRAVES_INTERNAL_SERVICE_KEY`). In notification-service set `CRAVES_REALTIME_PUSH_ENABLED=true` and `CRAVES_OPS_ALERT_EMAILS`.
-2. Ops creates the rider in the console (`POST /riders`), reviews the documents with their expiry dates, sets the vehicle and the payout account in person; the rider signs in to the app once so `/me` links them; ops activates them with `RESTORE`.
+2. The rider installs the app, signs in with their phone and signs up (or ops adds them in the console with `POST /riders` and they sign in once so `/me` links them). They send their documents and payout account from the app. Ops reviews each document with its expiry date, confirms the payout account against the bank proof (or sets it in person), and activates them with `RESTORE`.
 3. Add both to the pilot in the console (`PUT /pilot/riders/{riderId}` and `PUT /pilot/kitchens/{chefId}`, the chef's identity id). Dispatch asks `FleetTestMode.riderAllowed` and `kitchenAllowed` before it offers a trip, so nobody else is touched. The kitchen is known only for orders checked out with the finance quote (`finance_issued_snapshot`).
 4. Publish the rate card in the console (the first one may start at once), then set dispatch: `shadow` first (it only logs `FLEET_SHADOW`), and `live` only after order-service with the `craves_fleet` hand-over is deployed. `off` stops dispatch at once. `GET /setup` shows what is in force.
 5. The rider registers the phone, goes online with a selfie, and the allow-listed kitchen accepts an order: the offer rings within the fleet stage. For money, turn on `CRAVES_LEDGER_POSTING_ENABLED` (the existing journal gate); credits wait until then.

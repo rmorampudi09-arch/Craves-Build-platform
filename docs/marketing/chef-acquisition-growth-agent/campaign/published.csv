@@ -31,3 +31,7 @@ slot,piece,type,media_ids,status,published_at_ist
 2026-10-22T20:23,ST7,story,18634430503041969|18133908001811208|18119232280957748|18112493890896879,published (frames 3-4 finished in the 22:23 catch-up),2026-10-22 20:29
 2026-10-23T11:23,ST8,story,,skipped-late (every create_story call stopped at an unanswered approval prompt; runs then stopped after restarts),2026-10-24 13:24
 2026-10-23T20:23,ST1,story,,skipped-late (every create_story call stopped at an unanswered approval prompt; runs then stopped after restarts),2026-10-24 13:24
+2026-10-24T11:23,ST2,story,,blocked (create_story stopped at an unanswered approval prompt; skipped),2026-10-25 20:25
+2026-10-24T20:23,ST3,story,,blocked (create_story stopped at an unanswered approval prompt; skipped),2026-10-25 20:25
+2026-10-25T11:23,ST6,story,,blocked (create_story stopped at an unanswered approval prompt; skipped),2026-10-25 20:25
+2026-10-25T20:23,ST7,story,,blocked (not attempted: every story call since Fri 23 waits on an approval nobody answers),2026-10-25 20:25

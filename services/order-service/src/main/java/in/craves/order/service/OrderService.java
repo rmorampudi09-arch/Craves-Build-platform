@@ -511,13 +511,13 @@ public class OrderService {
 
     public List<OrderResponse> listChefOrders(CravesPrincipal principal) {
         requireChef(principal);
-        List<OrderResponse> allRecent = queryOrders(
-            "SELECT * FROM order_schema.customer_order ORDER BY created_at DESC LIMIT 100",
-            this::mapChefOrder
+        // Owner from the order row (V16 keeps it NOT NULL), not a Catalog call per order: one closed kitchen
+        // among everyone's recent orders used to fail this list for every chef.
+        return queryOrders(
+            "SELECT * FROM order_schema.customer_order WHERE chef_identity_id = ? ORDER BY created_at DESC LIMIT 100",
+            this::mapChefOrder,
+            principal.identityId()
         );
-        return allRecent.stream()
-            .filter(order -> catalogClient.getKitchen(order.kitchenId()).identityId().equals(principal.identityId()))
-            .toList();
     }
 
     @Transactional

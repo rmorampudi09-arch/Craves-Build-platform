@@ -67,10 +67,10 @@ public class FleetAdminService {
     private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
     private static final Set<String> KINDS = Set.of("SAFETY_PAUSE", "NOTICE", "RESTORE", "DEACTIVATE");
     private static final Set<String> SELFIE_STATES = Set.of("PENDING", "APPROVED", "REJECTED");
-    static final String RIDER_PHONE = "^\\+91[6-9][0-9]{9}$";
+    static final String RIDER_PHONE = FleetRules.RIDER_PHONE;
     // The four riding documents: verified only with the expiry date printed on them (/shift/start checks it).
     private static final Set<String> EXPIRING_DOCUMENTS = Set.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC");
-    static final String VEHICLE_REGISTRATION = "^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$";
+    static final String VEHICLE_REGISTRATION = FleetRules.VEHICLE_REGISTRATION;
     // Ends every showing banner. The GREATEST keeps ends_at after starts_at should a banner start in the same instant.
     private static final String END_BANNERS =
         "UPDATE fleet_schema.ops_banner SET ends_at = GREATEST(now(), starts_at + INTERVAL '1 microsecond') WHERE ends_at > now()";
@@ -178,6 +178,9 @@ public class FleetAdminService {
         PayoutAccount account = jdbc.query("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
             + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'ACTIVE'", (row, n) -> payoutAccount(row), riderId)
             .stream().findFirst().orElse(null);
+        PayoutAccount submitted = jdbc.query("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
+            + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'", (row, n) -> payoutAccount(row), riderId)
+            .stream().findFirst().orElse(null);
         List<Shift> shifts = jdbc.query("SELECT id, started_at, ended_at, selfie_state, selfie_reason, selfie_reviewed_by_name, "
             + "in_zone_seconds FROM fleet_schema.rider_shift WHERE rider_id = ? ORDER BY started_at DESC LIMIT 20",
             (row, n) -> new Shift(row.getObject("id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
@@ -185,7 +188,7 @@ public class FleetAdminService {
                 row.getInt("in_zone_seconds")), riderId);
         List<StatusEvent> events = jdbc.query(EVENT + "WHERE rider_id = ? ORDER BY created_at DESC LIMIT 100",
             (row, n) -> statusEvent(row), riderId);
-        return new RiderDetail(rider, documents, devices, account, shifts, events);
+        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events);
     }
 
     @Transactional
@@ -319,9 +322,7 @@ public class FleetAdminService {
             throw FleetApiException.invalid("Enter the account holder's name.");
         }
         boolean upi = "UPI".equals(input.method());
-        if (upi ? input.upiId() == null || !input.upiId().matches("^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$") || input.accountNumber() != null
-            : !"BANK".equals(input.method()) || input.accountNumber() == null || !input.accountNumber().matches("^[0-9]{9,18}$")
-                || input.ifsc() == null || !input.ifsc().matches("^[A-Z]{4}0[A-Z0-9]{6}$") || input.upiId() != null) {
+        if (!FleetRules.validPayoutAccount(input.method(), input.upiId(), input.accountNumber(), input.ifsc())) {
             throw FleetApiException.invalid("UPI needs a UPI ID like name@bank; a bank account needs its number and IFSC.");
         }
         if (!cipher.ready()) {
@@ -329,8 +330,7 @@ public class FleetAdminService {
         }
         String account = upi ? input.upiId().toLowerCase(Locale.ROOT) : input.accountNumber();
         String ifsc = upi ? null : input.ifsc();
-        // The same account at the same bank, whatever branch IFSC was typed.
-        String fingerprint = cipher.accountFingerprint(upi ? "UPI:" + account : "BANK:" + ifsc.substring(0, 4) + ":" + account);
+        String fingerprint = cipher.accountFingerprint(FleetRules.payoutAccountKey(input.method(), account, ifsc));
         // The hash of a request carries the keyed fingerprint, never the account number itself.
         String request = riderId + "\n" + input.method() + "\n" + fingerprint + "\n" + ifsc + "\n" + holder;
         return once(admin, key, "PAYOUT_ACCOUNT_SET", request, () -> {
@@ -347,7 +347,9 @@ public class FleetAdminService {
             // BankDataCipher's chef-bank record: the rider is the owner, the UPI ID goes where the account number goes.
             String encrypted = cipher.encrypt(id, riderId,
                 new BankOnboardingModels.Details(riderId, null, holder, null, null, account, ifsc));
-            jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE rider_id = ? AND state = 'ACTIVE'", riderId);
+            // An account the rider sent from the app is superseded by the one ops saw in person.
+            jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE rider_id = ? AND state IN ('ACTIVE', 'SUBMITTED')",
+                riderId);
             try {
                 jdbc.update("INSERT INTO fleet_schema.rider_payout_account (id, rider_id, method, encrypted_details, fingerprint, "
                     + "masked_account, ifsc, holder_name, verified_in_person, set_by, set_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, true, ?, ?)",
@@ -359,6 +361,35 @@ public class FleetAdminService {
                 + "FROM fleet_schema.rider_payout_account WHERE id = ?", (row, n) -> payoutAccount(row), id);
             return new Done(saved, riderId, id.toString(), "Set the payout account to " + input.method() + " " + masked
                 + ", seen in person.");
+        });
+    }
+
+    /**
+     * The account a rider typed in the app at sign-up, checked by ops against the bank proof and the KYC name, becomes
+     * the account payouts go to. Until then it is never paid.
+     */
+    @Transactional
+    public Object confirmPayoutAccount(Admin admin, UUID key, UUID riderId) {
+        return once(admin, key, "PAYOUT_ACCOUNT_CONFIRMED", riderId.toString(), () -> {
+            String kycName = lockRider(riderId).name();
+            Map<String, Object> sent = jdbc.queryForList("SELECT id, fingerprint, holder_name, method, masked_account "
+                + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'", riderId).stream().findFirst()
+                .orElseThrow(() -> FleetApiException.notFound("NO_SUBMITTED_PAYOUT_ACCOUNT", "The rider has not sent a payout account to check."));
+            if (!FleetRules.sameName((String) sent.get("holder_name"), kycName)) {
+                throw FleetApiException.unprocessable("HOLDER_NAME_MISMATCH", "The account holder's name differs from the rider's KYC name.");
+            }
+            if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
+                + "WHERE fingerprint = ? AND rider_id <> ? AND state = 'ACTIVE')", Boolean.class, sent.get("fingerprint"), riderId))) {
+                throw notUnique();
+            }
+            UUID id = (UUID) sent.get("id");
+            jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE rider_id = ? AND state = 'ACTIVE'", riderId);
+            jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'ACTIVE', set_by = ?, set_by_name = ?, set_at = now() WHERE id = ?",
+                admin.id(), admin.name(), id);
+            PayoutAccount saved = jdbc.queryForObject("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
+                + "FROM fleet_schema.rider_payout_account WHERE id = ?", (row, n) -> payoutAccount(row), id);
+            return new Done(saved, riderId, id.toString(), "Confirmed the payout account " + sent.get("method") + " "
+                + sent.get("masked_account") + " the rider sent from the app.");
         });
     }
 

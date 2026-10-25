@@ -63,6 +63,11 @@ public class FleetRiderService {
         "VEHICLE_INSURANCE", "Vehicle insurance", "PUC", "PUC certificate", "PAN", "PAN card", "BANK_PROOF", "Bank proof",
         "PHOTO", "Photo", "ADDRESS_PROOF", "Address proof");
     private static final Set<String> DOCUMENT_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "application/pdf");
+    // What a rider still signing up must send, by what they ride (V160); NULL is a rider ops added before sign-up existed.
+    static final Map<String, List<String>> REQUIRED_DOCUMENTS = Map.of(
+        "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF"),
+        "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
+        "BICYCLE", List.of("PAN", "BANK_PROOF"));
     private static final Features NO_FEATURES = new Features(false, false);
 
     private final JdbcTemplate jdbc;
@@ -130,7 +135,7 @@ public class FleetRiderService {
             rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, features(rider.id()));
     }
 
-    /** Payouts and withdrawals show once the rider has a payout account ops verified in person, and no failed payout paused it. */
+    /** Payouts and withdrawals show once the rider has a payout account ops set or confirmed (ACTIVE), and no failed payout paused it. */
     private Features features(UUID riderId) {
         boolean verified = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
             + "WHERE rider_id = ? AND state = 'ACTIVE' AND payouts_paused_at IS NULL)", Boolean.class, riderId));
@@ -141,21 +146,33 @@ public class FleetRiderService {
     @Transactional(readOnly = true)
     public RiderProfile profile(UUID identityId) {
         Rider rider = rider(identityId);
-        List<ProfileDocument> documents = jdbc.query("SELECT DISTINCT ON (type) type, " + FleetRules.DOCUMENT_STATUS_SQL + " AS status, "
+        List<Latest> sent = new ArrayList<>(jdbc.query("SELECT DISTINCT ON (type) type, " + FleetRules.DOCUMENT_STATUS_SQL + " AS status, "
                 + "expires_on, reason FROM fleet_schema.rider_document WHERE rider_id = ? ORDER BY type, uploaded_at DESC",
             (row, n) -> {
                 String type = row.getString("type");
                 String status = row.getString("status");
                 return new Latest(type, new ProfileDocument(DOCUMENT_CODES.get(type), DOCUMENT_LABELS.get(type), status,
                     row.getObject("expires_on", LocalDate.class), "REJECTED".equals(status) ? row.getString("reason") : null));
-            }, rider.id()).stream()
-            .sorted(Comparator.comparingInt(latest -> DOCUMENT_ORDER.indexOf(latest.type()))).map(Latest::document).toList();
+            }, rider.id()));
+        if ("PENDING".equals(rider.status())) {
+            // A rider still signing up sees every document they must send, sent or not (MISSING), like the chef checklist.
+            String kind = jdbc.queryForObject("SELECT vehicle_kind FROM fleet_schema.rider WHERE id = ?", String.class, rider.id());
+            Set<String> have = sent.stream().map(Latest::type).collect(Collectors.toSet());
+            REQUIRED_DOCUMENTS.get(kind == null ? "PETROL" : kind).stream().filter(type -> !have.contains(type))
+                .forEach(type -> sent.add(new Latest(type, new ProfileDocument(DOCUMENT_CODES.get(type), DOCUMENT_LABELS.get(type),
+                    "MISSING", null, null))));
+        }
+        List<ProfileDocument> documents = sent.stream().sorted(Comparator.comparingInt(latest -> DOCUMENT_ORDER.indexOf(latest.type())))
+            .map(Latest::document).toList();
         String payoutAccount = jdbc.queryForList("SELECT masked_account FROM fleet_schema.rider_payout_account WHERE rider_id = ? "
             + "AND state = 'ACTIVE'", String.class, rider.id()).stream().findFirst().orElse(null);
+        String submitted = jdbc.queryForList("SELECT masked_account FROM fleet_schema.rider_payout_account WHERE rider_id = ? "
+            + "AND state = 'SUBMITTED'", String.class, rider.id()).stream().findFirst().orElse(null);
         Insurance insurance = StringUtils.hasText(properties.insuranceLabel())
             ? new Insurance(properties.insuranceLabel(), properties.supportPhone() == null ? "" : properties.supportPhone(), null) : null;
         return new RiderProfile(new Vehicle(rider.vehicleLabel(),
-            rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber())), documents, payoutAccount, insurance);
+            rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber())), documents, payoutAccount, insurance,
+            submitted);
     }
 
     /**

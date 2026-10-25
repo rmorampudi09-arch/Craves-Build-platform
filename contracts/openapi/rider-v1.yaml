@@ -9,7 +9,10 @@ info:
     header (rider-{action}-{offerId or tripId}-{riderId}[-{attempt}]); the server returns the first
     result for a repeated key. Declining or letting an offer expire never affects future offers.
 
-    Every route needs a Craves JWT; every route but /me, GET /profile and POST /documents also needs the RIDER role
+    Riders sign up in the app (POST /apply), like chefs: they become PENDING, send documents and a payout account,
+    and ops checks both by hand before activating them.
+    Every route needs a Craves JWT; every route but /me, /apply, GET /profile, POST /documents and POST /payout-account
+    also needs the RIDER role
     (a bare 403 without it). /locations and /devices take the shift credential instead (X-Craves-Shift-Credential).
     A refusal is ErrorBody {code, message}; the message is safe to show the rider. Each operation's description lists
     its codes. Any route can also answer 400 VALIDATION_FAILED (a body, part or parameter it can't read),
@@ -21,8 +24,29 @@ security:
 paths:
   /me:
     get: {summary: The signed-in rider, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}}}
+  /apply:
+    post:
+      summary: Sign up as a rider with the OTP-verified phone of this sign-in; the rider is PENDING until ops activates them
+      description: |
+        For anyone signed in with an Indian mobile number; no RIDER role. Answers /me. Someone who already is a rider (or
+        whom ops added for this phone) gets their /me unchanged, so a repeat is harmless. vehicleRegNumber is required
+        unless vehicleKind is BICYCLE (letters and digits as on the RC; spaces and dashes are ignored). 400
+        VALIDATION_FAILED (name, language, vehicle, plate, or adult not true); 409 PHONE_IN_USE (the phone is a rider on
+        another account); 422 PHONE_REQUIRED (the sign-in carries no Indian mobile number).
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SignUp'}}}}
+      responses: {'200': {description: Signed up, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}}
+  /payout-account:
+    post:
+      summary: The UPI ID or bank account to be paid into, in the rider's KYC name; ops confirms it before anything is paid
+      description: |
+        Also for a PENDING rider. It shows as payoutAccountSubmitted on /profile and replaces one sent earlier; an account
+        ops already confirmed keeps being paid until ops confirms the new one. UPI takes upiId; BANK takes accountNumber
+        (9 to 18 digits) and ifsc. 400 VALIDATION_FAILED; 409 PAYOUT_ACCOUNT_NOT_UNIQUE (another rider's account); 422
+        HOLDER_NAME_MISMATCH (holderName is not the KYC name); 503 PAYOUT_ACCOUNT_STORAGE_UNAVAILABLE.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PayoutAccountInput'}}}}
+      responses: {'204': {description: Sent for checking}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /profile:
-    get: {summary: 'Vehicle, documents, payout account and insurance', description: 'Also for a PENDING rider (no RIDER role yet). 403 NOT_A_RIDER.', responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}, '403': {$ref: '#/components/responses/Error'}}}
+    get: {summary: 'Vehicle, documents, payout account and insurance', description: 'Also for a PENDING rider (no RIDER role yet), who also sees each document still to send as MISSING. 403 NOT_A_RIDER.', responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}, '403': {$ref: '#/components/responses/Error'}}}
   /terms:
     get: {summary: Current terms and rate card, description: 503 TERMS_UNAVAILABLE while no rate card is stored., responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Terms'}}}}, '503': {$ref: '#/components/responses/Error'}}}
   /terms/accept:
@@ -40,7 +64,8 @@ paths:
         Checked in this order: 403 RIDER_NOT_ACTIVE (the rider is not ACTIVE); 409 DEVICE_NOT_BOUND (the
         X-Craves-Installation-Id header is missing or is not the rider's bound phone); 403 APP_UPDATE_REQUIRED (the bound
         phone's appVersion is below minAppVersion; checked only here, never mid-shift); 403 DOCUMENTS_EXPIRED (the DL, RC,
-        insurance or PUC has no verified copy valid today; the message names them); 422 SELFIE_INVALID (not a JPEG, empty
+        insurance or PUC has no verified copy valid today; no PUC for an electric two-wheeler, none of them for a bicycle;
+        the message names them); 422 SELFIE_INVALID (not a JPEG, empty
         or over 5 MB); 409 SHIFT_OPEN (a shift is open on another phone). A second start from the same phone while its
         shift is open returns a new credential for that shift.
       parameters: [{$ref: '#/components/parameters/InstallationId'}]
@@ -231,9 +256,28 @@ components:
         vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}}}
         documents:
           type: array
-          items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
-        payoutAccountMasked: {type: string}
+          items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED, MISSING]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
+        payoutAccountMasked: {type: string, description: The account payouts go to (ops set or confirmed it)}
+        payoutAccountSubmitted: {type: string, description: An account the rider sent that ops has not confirmed yet}
         insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
+    SignUp:
+      type: object
+      required: [name, language, vehicleKind, adult]
+      properties:
+        name: {type: string, minLength: 2, maxLength: 120, description: Full name as on the rider's documents}
+        language: {type: string, enum: [en, te, hi]}
+        vehicleKind: {type: string, enum: [PETROL, ELECTRIC, BICYCLE]}
+        vehicleRegNumber: {type: string, example: TS09EA1234}
+        adult: {type: boolean, description: The rider confirms they are 18 or older}
+    PayoutAccountInput:
+      type: object
+      required: [method, holderName]
+      properties:
+        method: {type: string, enum: [UPI, BANK]}
+        holderName: {type: string}
+        upiId: {type: string, example: name@okaxis}
+        accountNumber: {type: string}
+        ifsc: {type: string, example: SBIN0001234}
     Terms:
       type: object
       required: [version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines]

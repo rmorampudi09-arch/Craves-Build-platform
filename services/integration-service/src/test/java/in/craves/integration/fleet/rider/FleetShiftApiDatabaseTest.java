@@ -71,6 +71,15 @@ class FleetShiftApiDatabaseTest {
             rider.id());
         expect(start(rider, rider.installation()), 403, "DOCUMENTS_EXPIRED").andExpect(jsonPath("$.message")
             .value("Renew these before going online: Driving licence, PUC certificate. Upload a new photo in Profile and ops will check it."));
+        // What they ride decides the documents: an electric two-wheeler needs no PUC, a bicycle none of the four.
+        db.update("UPDATE fleet_schema.rider SET vehicle_kind = 'ELECTRIC' WHERE id = ?", rider.id());
+        expect(start(rider, rider.installation()), 403, "DOCUMENTS_EXPIRED").andExpect(jsonPath("$.message")
+            .value("Renew these before going online: Driving licence. Upload a new photo in Profile and ops will check it."));
+        db.update("UPDATE fleet_schema.rider SET vehicle_kind = 'BICYCLE' WHERE id = ?", rider.id());
+        expect(mvc.perform(multipart("/api/v1/rider/shift/start").file(new MockMultipartFile("selfie", "s.jpg", "image/jpeg", "png?".getBytes()))
+            .header("Authorization", "Bearer " + rider.token()).header(FleetShiftService.INSTALLATION_ID, rider.installation())),
+            422, "SELFIE_INVALID");
+        db.update("UPDATE fleet_schema.rider SET vehicle_kind = NULL WHERE id = ?", rider.id());
 
         db.update("UPDATE fleet_schema.rider_document SET expires_on = current_date + 30 WHERE rider_id = ?", rider.id());
         // A new photo waiting for review never hides a current verified one.

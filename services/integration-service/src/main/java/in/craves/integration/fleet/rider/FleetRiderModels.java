@@ -26,7 +26,9 @@ public final class FleetRiderModels {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance) {
+    /** payoutAccountSubmitted: the account the rider sent from the app, masked, until ops confirms it. */
+    public record RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
+                               @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -72,6 +74,18 @@ public final class FleetRiderModels {
     }
 
     public record AcceptTerms(String version) {
+    }
+
+    /** Sign-up from the app. vehicleKind PETROL, ELECTRIC or BICYCLE; the registration number is needed for a motor vehicle. */
+    public record SignUp(String name, String language, String vehicleKind, String vehicleRegNumber, Boolean adult) {
+    }
+
+    /** The rider's own payout account: UPI (upiId) or BANK (accountNumber and ifsc), in their KYC name. */
+    public record PayoutAccountInput(String method, String holderName, String upiId, String accountNumber, String ifsc) {
+        @Override
+        public String toString() {
+            return "PayoutAccountInput[method=" + method + "]";
+        }
     }
 
     /** installationId is Android's ANDROID_ID for the rider app. */

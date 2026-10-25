@@ -45,6 +45,7 @@ export const riderDetailSchema = z.object({
   documents: z.array(riderDocumentSchema).max(20),
   devices: z.array(riderDeviceSchema).max(10),
   payoutAccount: payoutAccountSchema.nullable(),
+  submittedPayoutAccount: payoutAccountSchema.nullable().optional(),
   shifts: z.array(shiftSchema).max(20),
   statusEvents: z.array(statusEventSchema).max(100),
 });
@@ -125,6 +126,7 @@ export const RIDER_ROUTES: readonly FleetRoute[] = [
   { method: "POST", path: "riders/:id/documents/:id/reject", body: reasonBody, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/devices/:id/approve", response: riderDeviceSchema },
   { method: "PUT", path: "riders/:id/payout-account", body: payoutAccountInputSchema, response: payoutAccountSchema },
+  { method: "POST", path: "riders/:id/payout-account/confirm", response: payoutAccountSchema },
   { method: "PUT", path: "riders/:id/vehicle", body: riderVehicleInputSchema, response: riderVehicleSchema },
   { method: "POST", path: "riders/:id/status-events", body: statusEventInputSchema, response: statusEventSchema },
   { method: "GET", path: "selfie-reviews", response: z.object({ items: z.array(selfieReviewSchema).max(200) }),

@@ -20,6 +20,7 @@ in.craves.integration.fleet.money.FleetMoneyAdminController
 in.craves.integration.fleet.money.FleetMoneyController
 in.craves.integration.fleet.rider.FleetLocationController
 in.craves.integration.fleet.rider.FleetRiderController
+in.craves.integration.fleet.rider.FleetSignupController
 in.craves.integration.fleet.support.FleetSupportAdminController
 in.craves.integration.fleet.support.FleetSupportController
 in.craves.integration.fleet.trip.FleetTripController

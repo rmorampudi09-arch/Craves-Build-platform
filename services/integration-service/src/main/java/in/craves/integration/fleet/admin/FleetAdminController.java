@@ -111,6 +111,13 @@ public class FleetAdminController {
         return json(200, service.setPayoutAccount(admin(principal, PAYMENTS), key, riderId, body));
     }
 
+    /** The account the rider sent from the app becomes the payout account (payments admins, like setting one). */
+    @PostMapping("/riders/{riderId}/payout-account/confirm")
+    public ResponseEntity<Object> confirmPayoutAccount(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                                       @PathVariable UUID riderId) {
+        return json(200, service.confirmPayoutAccount(admin(principal, PAYMENTS), key, riderId));
+    }
+
     @PutMapping("/riders/{riderId}/vehicle")
     public ResponseEntity<Object> setVehicle(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
                                              @PathVariable UUID riderId, @RequestBody VehicleInput body) {

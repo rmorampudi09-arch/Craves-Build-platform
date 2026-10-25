@@ -181,6 +181,33 @@ class FleetAdminApiDatabaseTest {
     }
 
     @Test
+    void paymentsConfirmsTheAccountTheRiderSentFromTheApp() throws Exception {
+        UUID ravi = rider("Ravi Kumar");
+        send(post(FLEET + "/riders/" + ravi + "/payout-account/confirm"), "payments", UUID.randomUUID(), null)
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NO_SUBMITTED_PAYOUT_ACCOUNT"));
+        db.update("INSERT INTO fleet_schema.rider_payout_account (id, rider_id, method, encrypted_details, fingerprint, masked_account, "
+            + "holder_name, verified_in_person, set_by, set_by_name) VALUES (?, ?, 'UPI', 'k.old', ?, 'ol****@okaxis', 'Ravi Kumar', true, ?, 'Ops')",
+            UUID.randomUUID(), ravi, "k." + UUID.randomUUID(), ops);
+        db.update("INSERT INTO fleet_schema.rider_payout_account (id, rider_id, method, encrypted_details, fingerprint, masked_account, "
+            + "holder_name, state, verified_in_person, set_by, set_by_name) VALUES (?, ?, 'UPI', 'k.new', ?, 'ra****@okaxis', 'Ravi Kumar', "
+            + "'SUBMITTED', false, ?, 'Ravi Kumar')", UUID.randomUUID(), ravi, "k." + UUID.randomUUID(), UUID.randomUUID());
+        mvc.perform(get(FLEET + "/riders/" + ravi).header("Authorization", "Bearer ops")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.payoutAccount.maskedAccount").value("ol****@okaxis"))
+            .andExpect(jsonPath("$.submittedPayoutAccount.maskedAccount").value("ra****@okaxis"));
+
+        UUID key = UUID.randomUUID();
+        send(post(FLEET + "/riders/" + ravi + "/payout-account/confirm"), "payments", key, null).andExpect(status().isOk())
+            .andExpect(jsonPath("$.maskedAccount").value("ra****@okaxis")).andExpect(jsonPath("$.setBy").value("Admin +91 90xxxxx002"));
+        send(post(FLEET + "/riders/" + ravi + "/payout-account/confirm"), "payments", key, null).andExpect(status().isOk());
+        assertThat(db.queryForList("SELECT state || ':' || masked_account FROM fleet_schema.rider_payout_account WHERE rider_id = ? "
+            + "ORDER BY masked_account", String.class, ravi)).containsExactly("REPLACED:ol****@okaxis", "ACTIVE:ra****@okaxis");
+        send(post(FLEET + "/riders/" + ravi + "/payout-account/confirm"), "payments", UUID.randomUUID(), null)
+            .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NO_SUBMITTED_PAYOUT_ACCOUNT"));
+        assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE rider_id = ? AND action = 'PAYOUT_ACCOUNT_CONFIRMED'",
+            Integer.class, ravi)).isEqualTo(1);
+    }
+
+    @Test
     void documentReviewRecordsTheReviewerAndARejectionReason() throws Exception {
         UUID rider = rider("Ravi Kumar");
         UUID licence = document(rider, "DRIVING_LICENCE");

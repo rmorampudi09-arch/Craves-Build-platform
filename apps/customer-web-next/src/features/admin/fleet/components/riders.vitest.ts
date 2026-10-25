@@ -240,6 +240,17 @@ describe("rider detail", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("The holder name must match the KYC name RAVI KUMAR.");
     expect(posts()[0]).toMatchObject({ method: "PUT", path: `riders/${RIDER}/payout-account`, body: { method: "UPI", upiId: "ravi@okaxis", holderName: "R KUMAR", verifiedInPerson: true } });
   });
+
+  it("confirms the account the rider sent from the app", async () => {
+    const sent = { method: "BANK", maskedAccount: "xxxxxx4020", ifsc: "SBIN0001234", holderName: "Ravi Kumar", setBy: "Ravi Kumar", setAt: at };
+    answer = (method, path) => method === "POST" ? json({ ...sent, setBy: "Asha" })
+      : path === `riders/${RIDER}` ? json({ ...detail, submittedPayoutAccount: sent }) : json({}, 500);
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    expect((await screen.findByText(/Sent from the app, not paid yet/)).parentElement?.textContent).toContain("Bank xxxxxx4020 · SBIN0001234 · Ravi Kumar");
+    fireEvent.click(button("Confirm this account"));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]).toMatchObject({ method: "POST", path: `riders/${RIDER}/payout-account/confirm`, key: expect.stringMatching(UUID) });
+  });
 });
 
 describe("selfie queue", () => {

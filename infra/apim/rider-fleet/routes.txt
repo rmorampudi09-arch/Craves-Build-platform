@@ -6,6 +6,8 @@ api|admin|api/v1/admin/fleet|craves-admin-fleet-v1|Craves Admin Fleet API
 # json: Bearer, 64 KB. upload: Bearer, multipart. location: Bearer or the shift credential, 16 KB. admin: the admin protections.
 # Kept equal to contracts/openapi/rider-v1.yaml and admin-fleet-v1.yaml by scripts/apim/tests/test_rider_fleet_apim.py.
 route|rider|rider-get-me|GET|/me|json
+route|rider|rider-post-apply|POST|/apply|json
+route|rider|rider-post-payout-account|POST|/payout-account|json
 route|rider|rider-get-profile|GET|/profile|json
 route|rider|rider-get-terms|GET|/terms|json
 route|rider|rider-post-terms-accept|POST|/terms/accept|json
@@ -33,6 +35,7 @@ route|admin|fleet-post-riders-riderId-documents-documentId-approve|POST|/riders/
 route|admin|fleet-post-riders-riderId-documents-documentId-reject|POST|/riders/{riderId}/documents/{documentId}/reject|admin
 route|admin|fleet-post-riders-riderId-devices-deviceId-approve|POST|/riders/{riderId}/devices/{deviceId}/approve|admin
 route|admin|fleet-put-riders-riderId-payout-account|PUT|/riders/{riderId}/payout-account|admin
+route|admin|fleet-post-riders-riderId-payout-account-confirm|POST|/riders/{riderId}/payout-account/confirm|admin
 route|admin|fleet-put-riders-riderId-vehicle|PUT|/riders/{riderId}/vehicle|admin
 route|admin|fleet-post-riders-riderId-status-events|POST|/riders/{riderId}/status-events|admin
 route|admin|fleet-get-selfie-reviews|GET|/selfie-reviews|admin

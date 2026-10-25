@@ -43,7 +43,7 @@ import {comingSoonTitle} from '../../customerEmptyStates/domain/customerEmptySta
 import {Icon} from '../../../shared/components/Icon';
 import {LiquidGlassSurface} from '../../../shared/components/LiquidGlassSurface';
 import {CLOUD_FILL_MS, CloudFill} from '../components/CloudFill';
-import {HomeCategoryRail} from '../components/HomeCategoryRail';
+import {CATEGORY_RAIL_PINNED_LIFT, HomeCategoryRail} from '../components/HomeCategoryRail';
 import {HomeFoodTypeMenu} from '../components/HomeFoodTypeMenu';
 import {HomePromoAndKitchens} from '../components/HomePromoAndKitchens';
 import {
@@ -119,6 +119,7 @@ const HEADER_COLLAPSE_END = 80;
 const FLIGHT_WINDOW_MS = 8000;
 const DISH_SCRIM_HEIGHT = 110;
 const PIN_RELEASE_PX = 24;
+const RAIL_SHRINK_MS = 300;
 /** White search, food type and filter controls lift off the red band with a soft shadow. */
 const WHITE_CARD_SHADOW = {
   shadowColor: colors.espressoBrown,
@@ -413,6 +414,17 @@ export function CustomerHomeScreen() {
       useNativeDriver: true,
     }).start();
   }, [headerWhiteness, railPinned]);
+  // 0 in the page, 1 pinned: the category row shrinks like Swiggy's, on the native driver so scrolling can't stutter it.
+  const railPin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(railPin, {
+      toValue: railPinned ? 1 : 0,
+      duration: RAIL_SHRINK_MS,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [railPin, railPinned]);
+  const [railHeight, setRailHeight] = useState(0);
   const [headerSize, setHeaderSize] = useState({width: 0, height: 0});
   const [listViewportHeight, setListViewportHeight] = useState(0);
   const [railOffset, setRailOffset] = useState(0);
@@ -1108,10 +1120,25 @@ export function CustomerHomeScreen() {
           renderItem={({item}) => {
             if (item.kind === 'categories') {
               return (
-                <View style={styles.stickyCategoryWrap}>
+                <View onLayout={event => setRailHeight(event.nativeEvent.layout.height)}>
+                  {/* The white behind the row shrinks from its top with the photos, so the dishes show through the freed strip. */}
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.stickyCategoryBackdrop,
+                      railHeight > 0 && {
+                        transform: [
+                          {translateY: railPin.interpolate({inputRange: [0, 1], outputRange: [0, -CATEGORY_RAIL_PINNED_LIFT / 2]})},
+                          {scaleY: railPin.interpolate({inputRange: [0, 1], outputRange: [1, 1 - CATEGORY_RAIL_PINNED_LIFT / railHeight]})},
+                        ],
+                      },
+                    ]}
+                  />
                   <HomeCategoryRail
                     selectedCategory={selectedCategory}
                     onSelect={selectCategory}
+                    pinProgress={railPin}
+                    pinned={railPinned}
                   />
                 </View>
               );
@@ -1318,7 +1345,12 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xxs,
   },
-  stickyCategoryWrap: {
+  stickyCategoryBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: colors.surfaceBase,
   },
   emptyResultSpace: {

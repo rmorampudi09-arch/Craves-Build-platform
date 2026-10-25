@@ -34,4 +34,4 @@ slot,piece,type,media_ids,status,published_at_ist
 2026-10-24T11:23,ST2,story,,blocked (create_story stopped at an unanswered approval prompt; skipped),2026-10-25 20:25
 2026-10-24T20:23,ST3,story,,blocked (create_story stopped at an unanswered approval prompt; skipped),2026-10-25 20:25
 2026-10-25T11:23,ST6,story,,blocked (create_story stopped at an unanswered approval prompt; skipped),2026-10-25 20:25
-2026-10-25T20:23,ST7,story,,blocked (not attempted: every story call since Fri 23 waits on an approval nobody answers),2026-10-25 20:25
+2026-10-25T20:23,ST7,story,18059406824796641,partial (frame 1 of 4 at 22:24 catch-up; publishing the rest),2026-10-25 20:25

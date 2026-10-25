@@ -36,8 +36,8 @@ interface Props {
   totalLabel: string;
   kitchenName: string | null;
   blurTarget?: RefObject<View | null>;
-  /** Moves the button above the menu while the menu shows, and down to the corner when it hides. */
-  lift: Animated.AnimatedInterpolation<number>;
+  /** Moves the button above the menu while the menu shows, and down to the corner when it hides. Screens without a menu leave it out. */
+  lift?: Animated.AnimatedInterpolation<number>;
   bottom: number;
   onPress: () => void;
 }
@@ -252,7 +252,7 @@ export function FloatingCartButton({
             {
               bottom,
               opacity: appear,
-              transform: [{ translateY: lift }, { scale: appear }],
+              transform: [{ translateY: lift ?? 0 }, { scale: appear }],
             },
           ]}
         >

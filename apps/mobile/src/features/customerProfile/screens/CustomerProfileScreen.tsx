@@ -34,7 +34,6 @@ import type {CustomerProfileHubContract} from '../domain/customerProfileContract
 import {
   CUSTOMER_PROFILE_MENU_ROWS,
   resolveCustomerProfileDisplayName,
-  resolveCustomerProfileInitials,
   resolveCustomerProfilePhoneLabel,
   type CustomerProfileMenuRowModel,
 } from '../presentation/customerProfileUiModel';
@@ -112,9 +111,6 @@ function ProfileReadyContent({
         accessibilityLabel={`${name}. Edit profile`}
         onPress={onEditProfile}
         style={({pressed}) => [styles.identityCard, pressed && styles.rowPressed]}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{resolveCustomerProfileInitials(profile)}</Text>
-        </View>
         <View style={styles.identityCopy}>
           <Text numberOfLines={1} style={styles.profileName}>
             {name}
@@ -403,19 +399,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.white,
     ...elevation.card,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.iconSurface,
-  },
-  avatarText: {
-    color: colors.flameRedAccessible,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.bold,
   },
   identityCopy: {
     minWidth: 0,

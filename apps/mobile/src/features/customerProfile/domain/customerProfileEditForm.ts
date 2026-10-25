@@ -1,8 +1,5 @@
 import type {CustomerProfileIdentity} from './customerProfileContract';
 
-export const CUSTOMER_PROFILE_AVATAR_CONTRACT_UNAVAILABLE_REASON =
-  'avatar-contract-not-exposed-by-approved-backend' as const;
-
 export const customerProfileFieldSchema = {
   firstName: {required: true, maxLength: 100},
   lastName: {required: true, maxLength: 100},
@@ -48,11 +45,6 @@ export type CustomerProfileServerFailure = Readonly<{
 export type CustomerProfileServerValidation = Readonly<{
   fieldErrors: CustomerProfileFieldErrors;
   formError: string | null;
-}>;
-
-export type CustomerProfileAvatarValidation = Readonly<{
-  status: 'unsupported';
-  reason: typeof CUSTOMER_PROFILE_AVATAR_CONTRACT_UNAVAILABLE_REASON;
 }>;
 
 export type CustomerProfileSavePlan =
@@ -286,12 +278,5 @@ export function discardCustomerProfileDraft(
     dirtyFields: getCustomerProfileDirtyFields(state.original, state.original),
     fieldErrors: {},
     formError: null,
-  };
-}
-
-export function validateCustomerProfileAvatarSelection(): CustomerProfileAvatarValidation {
-  return {
-    status: 'unsupported',
-    reason: CUSTOMER_PROFILE_AVATAR_CONTRACT_UNAVAILABLE_REASON,
   };
 }

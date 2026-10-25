@@ -39,14 +39,10 @@ import {
   createCustomerProfileSavePlan,
   shouldConfirmCustomerProfileDiscard,
   updateCustomerProfileEditField,
-  validateCustomerProfileAvatarSelection,
   type CustomerProfileEditFormState,
   type CustomerProfileEditableField,
 } from '../domain/customerProfileEditForm';
-import {
-  resolveCustomerProfileInitials,
-  resolveCustomerProfilePhoneLabel,
-} from '../presentation/customerProfileUiModel';
+import {resolveCustomerProfilePhoneLabel} from '../presentation/customerProfileUiModel';
 import {
   useCustomerProfileQuery,
   useUpdateCustomerProfileMutation,
@@ -57,12 +53,9 @@ type EditProfileNavigation = NativeStackNavigationProp<
   'CustomerProfileEdit'
 >;
 
-const AVATAR_BLOCKED_COPY = 'Adding a profile photo is coming soon.';
-
 function EditProfileSkeleton() {
   return (
     <View accessibilityLabel="Loading edit profile" accessibilityRole="progressbar" style={styles.skeleton}>
-      <View style={styles.skeletonAvatar} />
       <View style={styles.skeletonLine} />
       <View style={styles.skeletonLine} />
       <View style={styles.skeletonLine} />
@@ -76,35 +69,15 @@ function EditProfileForm({
   saving,
   onChange,
   onSave,
-  onAvatarPress,
 }: {
   profile: CustomerProfileIdentity;
   form: CustomerProfileEditFormState;
   saving: boolean;
   onChange: (field: CustomerProfileEditableField, value: string) => void;
   onSave: () => void;
-  onAvatarPress: () => void;
 }) {
   return (
     <View style={styles.formCard}>
-      <View style={styles.avatarWrap}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{resolveCustomerProfileInitials(profile)}</Text>
-        </View>
-        <Pressable
-          accessibilityHint={AVATAR_BLOCKED_COPY}
-          accessibilityLabel="Change profile photo"
-          accessibilityRole="button"
-          onPress={onAvatarPress}
-          style={({pressed}) => [styles.avatarEdit, pressed && styles.pressed]}>
-          <Icon name="account" color={colors.white} size={iconSize.xs} />
-        </Pressable>
-      </View>
-      <Pressable accessibilityRole="button" onPress={onAvatarPress} style={styles.photoCopyButton}>
-        <Text style={styles.photoAction}>Change profile photo</Text>
-      </Pressable>
-      <Text style={styles.photoHelper}>{AVATAR_BLOCKED_COPY}</Text>
-
       <View style={styles.fields}>
         <InputField
           autoCapitalize="words"
@@ -206,13 +179,6 @@ export function CustomerProfileEditScreen() {
     [],
   );
 
-  const handleAvatarPress = useCallback(() => {
-    const validation = validateCustomerProfileAvatarSelection();
-    if (validation.status === 'unsupported') {
-      Alert.alert('Profile photo', AVATAR_BLOCKED_COPY, [{text: 'OK'}]);
-    }
-  }, []);
-
   const handleSave = useCallback(async () => {
     if (!form || updateMutation.isPending) {
       return;
@@ -266,7 +232,6 @@ export function CustomerProfileEditScreen() {
         return form && profile ? (
           <EditProfileForm
             form={form}
-            onAvatarPress={handleAvatarPress}
             onChange={handleChange}
             onSave={handleSave}
             profile={profile}
@@ -364,47 +329,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...elevation.card,
   },
-  avatarWrap: {alignSelf: 'center', position: 'relative'},
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-  },
-  avatarText: {
-    color: colors.flameRed,
-    fontSize: typography.hero,
-    fontWeight: fontWeight.extrabold,
-  },
-  avatarEdit: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.flameRed,
-    overflow: 'hidden',
-  },
-  photoCopyButton: {alignSelf: 'center', padding: spacing.xs},
-  photoAction: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  photoHelper: {
-    color: colors.textSecondary,
-    fontSize: typography.tiny,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
   fields: {gap: spacing.md},
   formError: {
     color: colors.error,
@@ -420,13 +344,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.white,
-  },
-  skeletonAvatar: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.pill,
-    alignSelf: 'center',
-    backgroundColor: colors.surfaceMuted,
   },
   skeletonLine: {height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceMuted},
 });

@@ -23,6 +23,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import type {
+  CustomerCartStackParamList,
   CustomerDishDetailStackParamList,
   CustomerTabParamList,
 } from '../../../app/navigation/types';
@@ -46,7 +47,10 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {FloatingCartButton} from '../../cart/components/FloatingCartButton';
 import type {CartLine} from '../../cart/domain/cartTypes';
+import {selectCartFoodSubtotal, selectCartItemCount} from '../../cart/state/cartSelectors';
+import {formatCartMoney} from '../../cart/viewCartOverlayModel';
 import {
   addCartItem,
   removeCartItem,
@@ -95,7 +99,7 @@ type KitchenProfileRoute = RouteProp<
   'CustomerKitchenProfile'
 >;
 type KitchenProfileNavigation = NavigationProp<
-  CustomerDishDetailStackParamList,
+  CustomerDishDetailStackParamList & CustomerCartStackParamList,
   'CustomerKitchenProfile'
 >;
 
@@ -143,6 +147,9 @@ export function CustomerKitchenProfileScreen() {
   const toggleFavoriteKitchen = useToggleFavoriteKitchen();
   const cartSnapshot = useAppSelector(state => state.cart.snapshot);
   const cartMutations = useAppSelector(state => state.cart.mutations);
+  const cartItemCount = useAppSelector(selectCartItemCount);
+  const cartSubtotal = useAppSelector(selectCartFoodSubtotal);
+  const cartVisible = cartItemCount > 0 && cartSubtotal !== null;
   const scrollRef = useRef<ScrollView>(null);
   const scrollOffsetRef = useRef(0);
   const tabsScrollRef = useRef<ScrollView>(null);
@@ -499,7 +506,7 @@ export function CustomerKitchenProfileScreen() {
       <View style={styles.screen}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, cartVisible && styles.scrollContentWithCart]}
           onMomentumScrollEnd={handleScroll}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -859,6 +866,16 @@ export function CustomerKitchenProfileScreen() {
             <RecoverableErrorBanner message={interactionNotice} style={styles.pinnedNotice} />
           ) : null}
         </View>
+
+        <FloatingCartButton
+          visible={cartVisible}
+          itemCount={cartItemCount}
+          itemsLabel={`${cartItemCount} ${cartItemCount === 1 ? 'item' : 'items'}`}
+          totalLabel={cartSubtotal ? formatCartMoney(cartSubtotal) : ''}
+          kitchenName={cartSnapshot?.lines[0]?.kitchenName ?? null}
+          bottom={spacing.md}
+          onPress={() => navigation.navigate('CustomerCart')}
+        />
       </View>
     </ScreenShell>
   );
@@ -934,6 +951,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xxl,
+  },
+  // Room under the last dish for the 60 dp floating cart button.
+  scrollContentWithCart: {
+    paddingBottom: 60 + spacing.md + spacing.xl,
   },
   photoShade: {
     position: 'absolute',

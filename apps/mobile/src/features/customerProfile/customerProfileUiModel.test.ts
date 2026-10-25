@@ -2,7 +2,6 @@ import type {CustomerProfileIdentity} from './domain/customerProfileContract';
 import {
   CUSTOMER_PROFILE_MENU_ROWS,
   resolveCustomerProfileDisplayName,
-  resolveCustomerProfileInitials,
   resolveCustomerProfilePhoneLabel,
 } from './presentation/customerProfileUiModel';
 
@@ -67,7 +66,6 @@ describe('customerProfileUiModel', () => {
   it('derives display identity only from approved profile fields', () => {
     const full = profile();
     expect(resolveCustomerProfileDisplayName(full)).toBe('Asha Rao');
-    expect(resolveCustomerProfileInitials(full)).toBe('AR');
     expect(resolveCustomerProfilePhoneLabel(full)).toBe(
       'Phone •••• 3210',
     );
@@ -85,7 +83,6 @@ describe('customerProfileUiModel', () => {
       completeness: 'partial',
     });
     expect(resolveCustomerProfileDisplayName(partial)).toBe('asha@example.com');
-    expect(resolveCustomerProfileInitials(partial)).toBe('AS');
     expect(resolveCustomerProfilePhoneLabel(partial)).toBe('No phone number on your account');
   });
 });

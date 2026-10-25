@@ -91,17 +91,6 @@ export function resolveCustomerProfileDisplayName(
   );
 }
 
-export function resolveCustomerProfileInitials(
-  profile: CustomerProfileIdentity,
-): string {
-  const source = resolveCustomerProfileDisplayName(profile).trim();
-  const words = source.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    return `${words[0][0] ?? ''}${words[1][0] ?? ''}`.toUpperCase();
-  }
-  return source.slice(0, 2).toUpperCase() || 'C';
-}
-
 export function resolveCustomerProfilePhoneLabel(
   profile: CustomerProfileIdentity,
 ): string {

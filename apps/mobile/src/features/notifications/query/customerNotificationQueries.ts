@@ -26,6 +26,7 @@ export const CUSTOMER_NOTIFICATION_PAGE_SIZE = 50;
 const CUSTOMER_NOTIFICATION_DOMAIN = 'customer-notifications';
 const CUSTOMER_NOTIFICATION_V2_DOMAIN = 'customer-notifications-v2';
 const CUSTOMER_NOTIFICATION_COUNT_DOMAIN = 'customer-notification-unread-count';
+const MARK_ALL_BATCH_SIZE = 10;
 
 export const customerNotificationQueryPrefix = [
   'craves',
@@ -213,14 +214,37 @@ export function useMarkAllCustomerNotificationsRead() {
 
   return useMutation({
     mutationKey: [...customerNotificationV2QueryPrefix, 'mark-all-read'],
-    mutationFn: () => {
-      if (!CUSTOMER_NOTIFICATION_INBOX_V2_AVAILABLE) {
-        throw new Error('CUSTOMER_NOTIFICATION_INBOX_V2_UNAVAILABLE');
+    mutationFn: async (unreadIds: readonly string[]) => {
+      if (CUSTOMER_NOTIFICATION_INBOX_V2_AVAILABLE) {
+        return customerNotificationInboxApi.markAllRead();
       }
-      return customerNotificationInboxApi.markAllRead();
+      // The live inbox has no read-all route, so mark each loaded unread notice.
+      const readAt = new Date().toISOString();
+      let failed = false;
+      for (let start = 0; start < unreadIds.length; start += MARK_ALL_BATCH_SIZE) {
+        const batch = unreadIds.slice(start, start + MARK_ALL_BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(id => customerShellApi.markNotificationRead(id)),
+        );
+        const readIds = batch.filter((_id, index) => results[index].status === 'fulfilled');
+        failed ||= readIds.length < batch.length;
+        if (identityId) {
+          queryClient.setQueryData<CustomerNotice[]>(
+            createCustomerNotificationQueryKey(identityId),
+            current =>
+              readIds.reduce(
+                (list, id) => applyCustomerNotificationRead(list, id, readAt),
+                current ?? [],
+              ),
+          );
+        }
+      }
+      if (failed) {
+        throw new Error('CUSTOMER_NOTIFICATION_MARK_ALL_PARTIAL');
+      }
     },
     onSuccess: () => {
-      if (!identityId) return;
+      if (!identityId || !CUSTOMER_NOTIFICATION_INBOX_V2_AVAILABLE) return;
       void Promise.all([
         queryClient.invalidateQueries({
           queryKey: createCustomerNotificationV2QueryKey(identityId),

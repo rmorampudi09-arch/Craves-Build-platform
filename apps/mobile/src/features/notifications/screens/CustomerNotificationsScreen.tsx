@@ -30,8 +30,6 @@ import {
 import {Icon, type IconName} from '../../../shared/components/Icon';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {CustomerHeader} from '../../customerShell/components/CustomerHeader';
-import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
 import type {CustomerNotice} from '../../customerShell/api/customerShellApi';
 import {
   CUSTOMER_NOTIFICATION_CATEGORIES,
@@ -129,7 +127,6 @@ export function CustomerNotificationsScreen() {
   const markAllRead = useMarkAllCustomerNotificationsRead();
   const pendingOpenIds = useRef(new Set<string>());
   const [selectedCategory, setSelectedCategory] = useState<CustomerNotificationCategory>('ALL');
-  const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
 
   const notices = useMemo(
     () => notificationsQuery.data ?? [],
@@ -151,28 +148,24 @@ export function CustomerNotificationsScreen() {
     notificationsQuery.refetch().catch(() => undefined);
   }, [notificationsQuery]);
 
+  const markAllDisabled = unreadCount === 0 || markAllRead.isPending;
+
   const markAll = useCallback(async () => {
-    if (
-      !notificationsQuery.v2Available ||
-      unreadCount === 0 ||
-      markAllRead.isPending
-    ) {
+    if (markAllDisabled) {
       return;
     }
 
     try {
-      await markAllRead.mutateAsync();
+      await markAllRead.mutateAsync(
+        notices.filter(notice => notice.readAt === null).map(notice => notice.id),
+      );
     } catch {
       Alert.alert(
         'Notifications could not be marked read',
         'Please try again.',
       );
     }
-  }, [
-    markAllRead,
-    notificationsQuery.v2Available,
-    unreadCount,
-  ]);
+  }, [markAllDisabled, markAllRead, notices]);
 
   const openNotice = useCallback(
     async (notice: CustomerNotice) => {
@@ -316,63 +309,22 @@ export function CustomerNotificationsScreen() {
   return (
     <ScreenShell edges={['top']} keyboardAvoiding={false} testID="customer-notifications">
       <View style={styles.root}>
-        <CustomerHeader
-          title="Notifications"
-          onPressLocation={() => setLocationSelectorVisible(true)}
-          onPressNotifications={refresh}
-        />
         <View style={styles.toolbar}>
-          <View>
-            <Text accessibilityRole="header" style={styles.title}>Notifications</Text>
-            <Text accessibilityLiveRegion="polite" style={styles.subtitle}>
-              {unreadCount > 0
-                ? notificationsQuery.v2Available
-                  ? `${unreadCount} unread`
-                  : `${unreadCount} unread in the latest list`
-                : 'You are caught up'}
-            </Text>
-          </View>
+          <Text accessibilityRole="header" style={styles.title}>Notifications</Text>
           <Pressable
-            accessibilityHint={
-              notificationsQuery.v2Available
-                ? 'Marks every notification in your inbox as read'
-                : 'Coming soon'
-            }
+            accessibilityHint="Marks every notification in your inbox as read"
             accessibilityLabel="Mark all as read"
             accessibilityRole="button"
-            accessibilityState={{
-              disabled:
-                !notificationsQuery.v2Available ||
-                unreadCount === 0 ||
-                markAllRead.isPending,
-            }}
-            disabled={
-              !notificationsQuery.v2Available ||
-              unreadCount === 0 ||
-              markAllRead.isPending
-            }
+            accessibilityState={{disabled: markAllDisabled}}
+            disabled={markAllDisabled}
+            hitSlop={spacing.sm}
             onPress={() => { markAll().catch(() => undefined); }}
-            style={({pressed}) => [
-              notificationsQuery.v2Available && unreadCount > 0
-                ? styles.markAllButton
-                : styles.markAllDisabled,
-              pressed && styles.noticeRowPressed,
-            ]}>
-            <Text
-              style={
-                notificationsQuery.v2Available && unreadCount > 0
-                  ? styles.markAllButtonText
-                  : styles.markAllDisabledText
-              }>
+            style={({pressed}) => [styles.markAll, (pressed || markAllDisabled) && styles.markAllDimmed]}>
+            <Text style={styles.markAllText}>
               {markAllRead.isPending ? 'Marking…' : 'Mark all as read'}
             </Text>
           </Pressable>
         </View>
-        {!notificationsQuery.v2Available && unreadCount > 0 ? (
-          <Text style={styles.markAllReason}>
-            Marking all as read is coming soon.
-          </Text>
-        ) : null}
         <SectionList
           contentContainerStyle={styles.listContent}
           initialNumToRender={12}
@@ -444,10 +396,6 @@ export function CustomerNotificationsScreen() {
           stickySectionHeadersEnabled={false}
           windowSize={7}
         />
-        <CustomerLocationSelector
-          visible={locationSelectorVisible}
-          onClose={() => setLocationSelectorVisible(false)}
-        />
       </View>
     </ScreenShell>
   );
@@ -465,33 +413,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   title: {color: colors.espressoBrown, fontSize: typography.hero, fontWeight: fontWeight.bold},
-  subtitle: {marginTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.small},
-  markAllButton: {
-    minHeight: touchTarget.minimum,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.flameRed,
-    backgroundColor: colors.white,
-  },
-  markAllButtonText: {
-    color: colors.flameRed,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  markAllDisabled: {
-    minHeight: touchTarget.minimum,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceMuted,
-    opacity: 0.65,
-  },
-  markAllDisabledText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
-  markAllReason: {paddingHorizontal: spacing.md, paddingTop: spacing.xxs, color: colors.textSecondary, fontSize: typography.tiny, backgroundColor: colors.white},
+  markAll: {minHeight: touchTarget.minimum, justifyContent: 'center'},
+  markAllDimmed: {opacity: 0.5},
+  markAllText: {color: colors.flameRed, fontSize: typography.small, fontWeight: fontWeight.semibold},
   listContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl},
   chips: {gap: spacing.xs, paddingVertical: spacing.xs, marginBottom: spacing.sm},
   chip: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: borderWidth.standard, borderColor: colors.borderStrong, backgroundColor: colors.white},

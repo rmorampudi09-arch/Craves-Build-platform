@@ -1,7 +1,6 @@
 import {AppApiError} from '../../core/http/apiError';
 import {fullCustomerProfileFixture} from './fixtures/customerProfileFixtures';
 import {
-  CUSTOMER_PROFILE_AVATAR_CONTRACT_UNAVAILABLE_REASON,
   applyCustomerProfileSaveSuccess,
   applyCustomerProfileServerFailure,
   createCustomerProfileEditFormState,
@@ -9,7 +8,6 @@ import {
   discardCustomerProfileDraft,
   shouldConfirmCustomerProfileDiscard,
   updateCustomerProfileEditField,
-  validateCustomerProfileAvatarSelection,
   validateCustomerProfileDraft,
 } from './domain/customerProfileEditForm';
 
@@ -120,12 +118,5 @@ describe('P64 customer profile edit form domain', () => {
     expect(state.original.lastName).toBe('Raman');
     expect(state.draft.lastName).toBe('Raman');
     expect(shouldConfirmCustomerProfileDiscard(state)).toBe(false);
-  });
-
-  it('fails closed for avatar validation until an approved upload contract defines format and size limits', () => {
-    expect(validateCustomerProfileAvatarSelection()).toEqual({
-      status: 'unsupported',
-      reason: CUSTOMER_PROFILE_AVATAR_CONTRACT_UNAVAILABLE_REASON,
-    });
   });
 });

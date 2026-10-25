@@ -1,5 +1,5 @@
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CUSTOMER_APP_VERSION = '1.36.3';
+export const CUSTOMER_APP_VERSION = '1.36.4';
 
 export type CustomerSettingsCapability =
   | 'notificationPreferences'

@@ -43,10 +43,14 @@ public class FleetShiftService {
     /** The rider (a SQL expression, formatted in) has a shift whose credential still works: only such a rider gets or takes an order. */
     public static final String ON_SHIFT = "EXISTS (SELECT 1 FROM fleet_schema.rider_shift h WHERE h.rider_id = %s AND h.ended_at IS NULL "
         + "AND h.credential_revoked_at IS NULL AND h.credential_expires_at > now())";
-    // Riding needs these four, each verified by ops with an expiry date (IST) that has not passed.
+    // Riding a petrol two-wheeler needs these four, each verified by ops with an expiry date (IST) that has not passed;
+    // an electric one needs no PUC and a bicycle none of them (FleetRiderService.REQUIRED_DOCUMENTS).
     private static final String MISSING_DOCUMENTS = """
-        SELECT t.type FROM unnest(ARRAY['DRIVING_LICENCE', 'VEHICLE_RC', 'VEHICLE_INSURANCE', 'PUC']) WITH ORDINALITY AS t(type, n)
-        WHERE NOT EXISTS (SELECT 1 FROM fleet_schema.rider_document d WHERE d.rider_id = ? AND d.type = t.type
+        SELECT t.type FROM fleet_schema.rider r, unnest(CASE r.vehicle_kind
+            WHEN 'BICYCLE' THEN ARRAY[]::text[]
+            WHEN 'ELECTRIC' THEN ARRAY['DRIVING_LICENCE', 'VEHICLE_RC', 'VEHICLE_INSURANCE']
+            ELSE ARRAY['DRIVING_LICENCE', 'VEHICLE_RC', 'VEHICLE_INSURANCE', 'PUC'] END) WITH ORDINALITY AS t(type, n)
+        WHERE r.id = ? AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_document d WHERE d.rider_id = r.id AND d.type = t.type
           AND d.status = 'VERIFIED' AND d.expires_on >= (now() AT TIME ZONE 'Asia/Kolkata')::date)
         ORDER BY t.n""";
     private static final SecureRandom RANDOM = new SecureRandom();

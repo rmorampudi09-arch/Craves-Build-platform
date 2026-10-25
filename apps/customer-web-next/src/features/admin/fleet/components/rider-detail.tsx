@@ -90,7 +90,7 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
         : detail.devices.map(device => <DeviceRow key={device.deviceId} riderId={riderId} device={device} onDone={reload} />)}
     </section>
 
-    <PayoutAccountForm riderId={riderId} kycName={rider.kycName} current={detail.payoutAccount} onDone={reload} />
+    <PayoutAccountForm riderId={riderId} kycName={rider.kycName} current={detail.payoutAccount} submitted={detail.submittedPayoutAccount} onDone={reload} />
 
     <section className="cr-panel space-y-4">
       <h2 className="text-lg font-bold">Status changes</h2>
@@ -207,7 +207,7 @@ function DeviceRow({ riderId, device, onDone }: { riderId: string; device: Devic
   </article>;
 }
 
-function PayoutAccountForm({ riderId, kycName, current, onDone }: { riderId: string; kycName: string; current: RiderDetail["payoutAccount"]; onDone: () => Promise<void> }) {
+function PayoutAccountForm({ riderId, kycName, current, submitted, onDone }: { riderId: string; kycName: string; current: RiderDetail["payoutAccount"]; submitted: RiderDetail["submittedPayoutAccount"]; onDone: () => Promise<void> }) {
   const empty = { method: "UPI" as "UPI" | "BANK", upiId: "", accountNumber: "", ifsc: "", holderName: "", verifiedInPerson: false };
   const [form, setForm] = useState(empty);
   const action = useFleetAction();
@@ -224,10 +224,19 @@ function PayoutAccountForm({ riderId, kycName, current, onDone }: { riderId: str
     }
   }
 
+  async function confirm() {
+    if (await action.run("POST", `riders/${riderId}/payout-account/confirm`, payoutAccountSchema, undefined, "Payout account confirmed.")) await onDone();
+  }
+
   return <form className="cr-panel space-y-3" onSubmit={event => void submit(event)}>
     <h2 className="text-lg font-bold">Payout account</h2>
     <p className="text-sm">{current ? <>{current.method === "UPI" ? "UPI" : "Bank"} {current.maskedAccount}{current.ifsc ? ` · ${current.ifsc}` : ""} · {current.holderName} · set by {current.setBy} on {when(current.setAt)}</> : "No payout account yet. Pay stays in the rider's balance until one is set."}</p>
-    <p className="cr-muted">Set it only with the rider in front of you at the office, after you have seen their ID. The holder name must match the KYC name: <strong>{kycName}</strong>.</p>
+    {submitted && <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">
+      <p><strong>Sent from the app, not paid yet:</strong> {submitted.method === "UPI" ? "UPI" : "Bank"} {submitted.maskedAccount}{submitted.ifsc ? ` · ${submitted.ifsc}` : ""} · {submitted.holderName} · {when(submitted.setAt)}</p>
+      <p className="cr-muted">Check it against the rider&apos;s approved bank proof (the name, the last digits and the IFSC) before confirming. Payouts go to it from the next batch.</p>
+      <button type="button" className="cr-button cr-primary" disabled={action.busy} onClick={() => void confirm()}>Confirm this account</button>
+    </div>}
+    <p className="cr-muted">Or set it yourself with the rider in front of you at the office, after you have seen their ID. The holder name must match the KYC name: <strong>{kycName}</strong>.</p>
     <fieldset className="flex gap-4 text-sm"><legend className={labelClass}>Paid by</legend>
       {(["UPI", "BANK"] as const).map(method => <label key={method} className="flex items-center gap-2"><input type="radio" name="payout-method" checked={form.method === method} onChange={() => setForm({ ...form, method })} />{method === "UPI" ? "UPI" : "Bank account"}</label>)}
     </fieldset>

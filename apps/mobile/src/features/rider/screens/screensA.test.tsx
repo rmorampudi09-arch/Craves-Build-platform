@@ -273,6 +273,69 @@ describe('Account status', () => {
     expect(text).not.toContain('Background check');
   });
 
+  it('lets anyone sign up like a chef, checking the plate and age before sending', async () => {
+    const client = await render(<AccountStatusScreen />, [[riderKeys.me, {...me, status: 'NOT_RIDER', name: ''}]]);
+    expect(allText()).toContain('Become a Craves rider');
+    expect(allText()).toContain('No joining fee');
+    await act(async () => input('rider-join-name').props.onChangeText('  Ravi   Kumar '));
+    await act(async () => input('rider-join-plate').props.onChangeText('ts 09-ea 1234'));
+    await act(async () => press('rider-join-submit').props.onPress());
+    expect(allText()).toContain('confirm you are 18 or older');
+    expect(riderApi.signUp).not.toHaveBeenCalled();
+
+    (riderApi.signUp as jest.Mock).mockResolvedValueOnce({...me, status: 'PENDING'});
+    (riderApi.getProfile as jest.Mock).mockResolvedValue({
+      vehicle: {label: 'Electric two-wheeler'},
+      documents: [{type: 'DL', label: 'Driving licence', status: 'MISSING'}],
+    });
+    await act(async () => press('rider-join-ELECTRIC').props.onPress());
+    await act(async () => press('rider-join-adult').props.onPress());
+    await act(async () => press('rider-join-submit').props.onPress());
+    expect(riderApi.signUp).toHaveBeenCalledWith({
+      name: 'Ravi Kumar', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS09EA1234', adult: true,
+    });
+    expect(client.getQueryData(riderKeys.me)).toMatchObject({status: 'PENDING'});
+    await flush();
+    expect(allText()).toContain('Your sign-up is being checked');
+    expect(allText()).toContain('Driving licence | Not sent');
+    expect(press('rider-upload-DL')).toBeTruthy();
+  });
+
+  it('needs no plate for a bicycle and shows a phone already in use', async () => {
+    await render(<AccountStatusScreen />, [[riderKeys.me, {...me, status: 'NOT_RIDER'}]]);
+    (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
+      new AppApiError('PHONE_IN_USE', 'This number is already a Craves rider on another account. Call rider support.', 409),
+    );
+    await act(async () => input('rider-join-name').props.onChangeText('Sita Devi'));
+    await act(async () => press('rider-join-BICYCLE').props.onPress());
+    expect(tree.root.findAll(node => node.props.testID === 'rider-join-plate')).toHaveLength(0);
+    await act(async () => press('rider-join-adult').props.onPress());
+    await act(async () => press('rider-join-submit').props.onPress());
+    expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'BICYCLE', adult: true});
+    expect(allText()).toContain('This number is already a Craves rider on another account.');
+  });
+
+  it('sends a payout account in the KYC name and shows it waits for ops', async () => {
+    const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
+    expect(input('rider-payout-holder').props.value).toBe('Ravi Kumar');
+    await act(async () => input('rider-payout-upi').props.onChangeText('not a upi'));
+    await act(async () => press('rider-payout-submit').props.onPress());
+    expect(allText()).toContain('Enter a UPI ID like name@bank');
+    expect(riderApi.submitPayoutAccount).not.toHaveBeenCalled();
+
+    (riderApi.submitPayoutAccount as jest.Mock).mockResolvedValueOnce(undefined);
+    const refetch = jest.spyOn(client, 'invalidateQueries');
+    await act(async () => input('rider-payout-upi').props.onChangeText('ravi@okaxis'));
+    await act(async () => press('rider-payout-submit').props.onPress());
+    expect(riderApi.submitPayoutAccount).toHaveBeenCalledWith({method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis'});
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+    expect(press('rider-payout-change')).toBeTruthy();
+
+    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, {...profile, payoutAccountSubmitted: 'xxxxxx4020'}]]);
+    expect(allText()).toContain('Sent xxxxxx4020. Ops checks it against your bank proof before paying into it.');
+    expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
+  });
+
   it('asks for an update when the app is too old', async () => {
     await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
     expect(allText()).toContain('Update the app to continue');

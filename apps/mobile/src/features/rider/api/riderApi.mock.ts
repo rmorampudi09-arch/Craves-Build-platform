@@ -149,6 +149,15 @@ export function createMockRiderApi(options: MockOptions = {}) {
   const latencyMs = options.latencyMs ?? (() => 150 + Math.random() * 450);
   const iso = (ms: number) => new Date(ms).toISOString();
 
+  const SIGN_UP_DOCUMENTS = [
+    ['DL', 'Driving licence'],
+    ['RC', 'Vehicle RC'],
+    ['INSURANCE', 'Vehicle insurance'],
+    ['PUC', 'Pollution (PUC)'],
+    ['PAN', 'PAN card'],
+    ['BANK', 'Bank proof'],
+  ] as const;
+
   function freshMe(): RiderMe {
     return {
       riderId: 'demo-rider-1',
@@ -210,6 +219,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
 
   const state = {
     uploaded: new Set<string>(),
+    payoutSubmitted: null as string | null,
     me: freshMe(),
     online: false,
     shiftStartedAt: 0,
@@ -463,7 +473,13 @@ export function createMockRiderApi(options: MockOptions = {}) {
             label: 'Honda Activa 6G (petrol)',
             regNumberMasked: 'TS 09 •• ••12',
           },
-          documents: (
+          documents: state.me.status === 'PENDING'
+            ? SIGN_UP_DOCUMENTS.map(([type, label]) => ({
+                type,
+                label,
+                status: state.uploaded.has(type) ? ('PENDING' as const) : ('MISSING' as const),
+              }))
+            : (
             [
               {
                 type: 'DL',
@@ -496,7 +512,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
               ? { ...doc, status: 'PENDING' as const, expiresOn: undefined }
               : doc,
           ),
-          payoutAccountMasked: 'UPI ••••@okhdfc',
+          payoutAccountMasked: state.me.status === 'PENDING' ? undefined : 'UPI ••••@okhdfc',
+          payoutAccountSubmitted: state.payoutSubmitted ?? undefined,
           insurance: {
             label: 'Group accident cover, ₹10 lakh, 24×7',
             claimPhone: DEMO_PHONE,
@@ -624,6 +641,24 @@ export function createMockRiderApi(options: MockOptions = {}) {
       respond(() => {
         state.online = false;
         state.offer = null;
+      }),
+    signUp: input =>
+      respond(() => {
+        if (state.me.status === 'NOT_RIDER') {
+          state.me = {...state.me, name: input.name.trim(), language: input.language, status: 'PENDING'};
+        }
+        return {...state.me};
+      }),
+    submitPayoutAccount: input =>
+      respond(() => {
+        const words = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
+        if (words(input.holderName) !== words(state.me.name)) {
+          throw apiError('HOLDER_NAME_MISMATCH', 'The account must be in your name, as on your documents.', 422);
+        }
+        state.payoutSubmitted =
+          input.method === 'UPI'
+            ? `${input.upiId.slice(0, 2)}****${input.upiId.slice(input.upiId.indexOf('@'))}`.toLowerCase()
+            : `xxxxxx${input.accountNumber.slice(-4)}`;
       }),
     uploadDocument: type =>
       respond(() => {

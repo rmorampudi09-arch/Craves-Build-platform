@@ -44,14 +44,35 @@ export interface RiderProfile {
     /** DL, RC, INSURANCE, PUC, PAN or BANK; used to upload a new photo. */
     type?: string;
     label: string;
-    status: 'VERIFIED' | 'PENDING' | 'REJECTED' | 'EXPIRED';
+    /** MISSING: a rider still signing up has not sent this one yet. */
+    status: 'VERIFIED' | 'PENDING' | 'REJECTED' | 'EXPIRED' | 'MISSING';
     expiresOn?: string;
     /** Ops's reason for a rejection, shown to the rider. */
     reason?: string;
   }[];
+  /** The account payouts go to; ops set or confirmed it. */
   payoutAccountMasked?: string;
+  /** An account the rider sent that ops has not confirmed yet; nothing is paid to it until then. */
+  payoutAccountSubmitted?: string;
   insurance?: {label: string; claimPhone: string; claimStatus?: string};
 }
+
+export type VehicleKind = 'PETROL' | 'ELECTRIC' | 'BICYCLE';
+
+/** POST /apply: anyone signed in with an Indian mobile number becomes a PENDING rider. */
+export interface RiderSignUp {
+  name: string;
+  language: 'en' | 'te' | 'hi';
+  vehicleKind: VehicleKind;
+  /** Required unless vehicleKind is BICYCLE. */
+  vehicleRegNumber?: string;
+  adult: boolean;
+}
+
+/** POST /payout-account, in the rider's KYC name; ops confirms it before anything is paid. */
+export type PayoutAccountInput =
+  | {method: 'UPI'; holderName: string; upiId: string}
+  | {method: 'BANK'; holderName: string; accountNumber: string; ifsc: string};
 
 export interface LabelValue {
   label: string;

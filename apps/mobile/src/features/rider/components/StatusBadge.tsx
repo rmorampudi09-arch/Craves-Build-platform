@@ -22,6 +22,7 @@ export const STATUS_TONE: Record<RiderBadgeStatus, BadgeTone> = {
   HELD: 'warning', // "On hold"
   SOON: 'warning', // "Expires soon"
   SCHEDULED: 'neutral',
+  MISSING: 'neutral', // "Not sent"
   REJECTED: 'error', // "Not accepted"
   EXPIRED: 'error',
   FAILED: 'error',

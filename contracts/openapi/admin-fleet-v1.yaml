@@ -182,6 +182,24 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: "PAYOUT_ACCOUNT_NOT_UNIQUE (the UPI ID or account is another rider's).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: "HOLDER_NAME_MISMATCH (holder name differs from the KYC name).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/riders/{riderId}/payout-account/confirm:
+    post:
+      operationId: confirmRiderPayoutAccount
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        Confirms the account the rider sent from the app (submittedPayoutAccount on the rider), after checking it against
+        their bank proof. It becomes the account payouts go to and replaces any earlier one. Audited.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: The confirmed account, masked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayoutAccount' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: "NOT_FOUND, or NO_SUBMITTED_PAYOUT_ACCOUNT (the rider has not sent one).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "PAYOUT_ACCOUNT_NOT_UNIQUE (the UPI ID or account is another rider's).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "HOLDER_NAME_MISMATCH (holder name differs from the KYC name).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/riders/{riderId}/vehicle:
     put:
       operationId: setRiderVehicle
@@ -988,7 +1006,7 @@ components:
         createdAt: { type: string, format: date-time }
     RiderDetail:
       type: object
-      required: [rider, documents, devices, payoutAccount, shifts, statusEvents]
+      required: [rider, documents, devices, payoutAccount, submittedPayoutAccount, shifts, statusEvents]
       properties:
         rider:
           allOf:
@@ -1002,6 +1020,10 @@ components:
         documents: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/RiderDocument' } }
         devices: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/RiderDevice' } }
         payoutAccount: { allOf: [{ $ref: '#/components/schemas/PayoutAccount' }], nullable: true }
+        submittedPayoutAccount:
+          allOf: [{ $ref: '#/components/schemas/PayoutAccount' }]
+          nullable: true
+          description: An account the rider sent from the app, not paid until confirmed (POST .../payout-account/confirm).
         shifts: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/Shift' } }
         statusEvents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/StatusEvent' } }
     RiderDocument:

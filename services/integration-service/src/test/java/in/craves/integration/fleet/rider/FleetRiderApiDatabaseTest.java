@@ -17,9 +17,11 @@ import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.payout.bank.BankDataCipher;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -44,7 +46,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 @WebMvcTest(FleetRiderController.class)
 @ContextConfiguration(classes = {FleetRiderController.class, FleetRiderService.class, FleetShiftService.class, FleetPolicyStore.class,
-    FleetApiAdvice.class, WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class, FleetRiderApiDatabaseTest.Database.class})
+    FleetSignupController.class, FleetSignupService.class, FleetApiAdvice.class, WebSecurityConfiguration.class, CravesJwtAuthenticationFilter.class, FleetRiderApiDatabaseTest.Database.class})
 @TestPropertySource(properties = {"craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true"})
 class FleetRiderApiDatabaseTest {
     @Configuration(proxyBeanMethods = false)
@@ -64,6 +66,10 @@ class FleetRiderApiDatabaseTest {
 
         @Bean FleetProperties fleetProperties() {
             return FleetDatabase.properties(true);
+        }
+
+        @Bean BankDataCipher bankDataCipher(ObjectMapper json) {
+            return new BankDataCipher(json, "test", "{\"test\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}");
         }
     }
 
@@ -174,8 +180,10 @@ class FleetRiderApiDatabaseTest {
             .andExpect(jsonPath("$.vehicle.label").value("Two-wheeler"))
             .andExpect(jsonPath("$.documents[0].type").value("DL")).andExpect(jsonPath("$.documents[0].label").value("Driving licence"))
             .andExpect(jsonPath("$.documents[0].status").value("REJECTED")).andExpect(jsonPath("$.documents[0].reason").value("The photo is blurry"))
-            .andExpect(jsonPath("$.documents[1].type").value("PAN")).andExpect(jsonPath("$.documents[1].reason").doesNotExist())
-            .andExpect(jsonPath("$.payoutAccountMasked").value("ra****@okaxis"))
+            .andExpect(jsonPath("$.documents[1].type").value("RC")).andExpect(jsonPath("$.documents[1].status").value("MISSING"))
+            .andExpect(jsonPath("$.documents[4].type").value("PAN")).andExpect(jsonPath("$.documents[4].reason").doesNotExist())
+            .andExpect(jsonPath("$.documents[5].type").value("BANK")).andExpect(jsonPath("$.documents.length()").value(6))
+            .andExpect(jsonPath("$.payoutAccountMasked").value("ra****@okaxis")).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist())
             .andExpect(jsonPath("$.insurance.claimPhone").value("+914012345678"));
     }
 
@@ -303,6 +311,103 @@ class FleetRiderApiDatabaseTest {
         when(verifier.verify(identity.toString())).thenReturn(new CravesPrincipal(identity, "+919000000009", Set.of("RIDER")));
         mvc.perform(get("/api/v1/rider/terms").header("Authorization", "Bearer " + identity))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
+    }
+
+    @Test
+    void anyoneWithAnIndianNumberSignsUpAsAPendingRiderAndSeesTheDocumentsToSend() throws Exception {
+        UUID identity = UUID.randomUUID();
+        when(verifier.verify("new")).thenReturn(new CravesPrincipal(identity, phone(), Set.of("CUSTOMER")));
+        String body = "{\"name\":\"  Ravi   Kumar \",\"language\":\"te\",\"vehicleKind\":\"ELECTRIC\",\"vehicleRegNumber\":\"ts 09-ea 1234\","
+            + "\"adult\":true}";
+        for (int i = 0; i < 2; i++) {
+            apply("new", body).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.name").value("Ravi Kumar")).andExpect(jsonPath("$.language").value("te"));
+        }
+        assertThat(db.queryForMap("SELECT count(*) AS riders, max(vehicle_kind) AS kind, max(vehicle_reg_number) AS plate, "
+            + "max(vehicle_label) AS label, max(status) AS status FROM fleet_schema.rider WHERE identity_id = ?", identity))
+            .containsEntry("riders", 1L).containsEntry("kind", "ELECTRIC").containsEntry("plate", "TS09EA1234")
+            .containsEntry("label", "Electric two-wheeler").containsEntry("status", "PENDING");
+        // An electric two-wheeler needs no PUC; nothing is sent yet.
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer new")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.documents.length()").value(5)).andExpect(jsonPath("$.documents[0].type").value("DL"))
+            .andExpect(jsonPath("$.documents[3].type").value("PAN"))
+            .andExpect(jsonPath("$.documents[*].status").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("MISSING"))))
+            .andExpect(jsonPath("$.vehicle.label").value("Electric two-wheeler"));
+        // Signing up grants nothing: work routes still need the RIDER role ops grants on activation.
+        mvc.perform(get("/api/v1/rider/home").header("Authorization", "Bearer new")).andExpect(status().isForbidden());
+
+        when(verifier.verify("cyclist")).thenReturn(new CravesPrincipal(UUID.randomUUID(), phone(), Set.of("CUSTOMER")));
+        apply("cyclist", "{\"name\":\"Sita Devi\",\"language\":\"hi\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer cyclist")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.documents.length()").value(2)).andExpect(jsonPath("$.documents[0].type").value("PAN"))
+            .andExpect(jsonPath("$.vehicle.regNumberMasked").doesNotExist());
+    }
+
+    @Test
+    void signUpRefusesMinorsBadPlatesAPhoneAnotherAccountHoldsAndAccountsWithoutAPhone() throws Exception {
+        when(verifier.verify("teen")).thenReturn(new CravesPrincipal(UUID.randomUUID(), phone(), Set.of("CUSTOMER")));
+        String body = "{\"name\":\"Ravi Kumar\",\"language\":\"en\",\"vehicleKind\":\"PETROL\",\"vehicleRegNumber\":\"%s\",\"adult\":%s}";
+        apply("teen", body.formatted("TS09EA1234", false)).andExpect(status().isBadRequest());
+        apply("teen", body.formatted("NOT A PLATE", true)).andExpect(status().isBadRequest());
+        apply("teen", "{\"name\":\"Ravi Kumar\",\"language\":\"en\",\"vehicleKind\":\"TRUCK\",\"adult\":true}").andExpect(status().isBadRequest());
+
+        String phone = phone();
+        db.update("INSERT INTO fleet_schema.rider (id, identity_id, name, phone, created_by) VALUES (?, ?, 'Sita Devi', ?, ?)",
+            UUID.randomUUID(), UUID.randomUUID(), phone, UUID.randomUUID());
+        when(verifier.verify("other")).thenReturn(new CravesPrincipal(UUID.randomUUID(), phone, Set.of("CUSTOMER")));
+        apply("other", body.formatted("TS09EA1234", true)).andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("PHONE_IN_USE"));
+
+        when(verifier.verify("email")).thenReturn(new CravesPrincipal(UUID.randomUUID(), null, Set.of("CUSTOMER")));
+        apply("email", body.formatted("TS09EA1234", true)).andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("PHONE_REQUIRED"));
+    }
+
+    @Test
+    void aPendingRiderSendsAPayoutAccountThatWaitsForOps() throws Exception {
+        UUID ravi = UUID.randomUUID();
+        when(verifier.verify("ravi")).thenReturn(new CravesPrincipal(ravi, phone(), Set.of("CUSTOMER")));
+        apply("ravi", "{\"name\":\"Ravi Kumar\",\"language\":\"en\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}").andExpect(status().isOk());
+        payoutAccount("ravi", "{\"method\":\"UPI\",\"holderName\":\"Sita Devi\",\"upiId\":\"sita@okaxis\"}")
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("HOLDER_NAME_MISMATCH"));
+        payoutAccount("ravi", "{\"method\":\"UPI\",\"holderName\":\"Ravi Kumar\",\"upiId\":\"not a upi\"}").andExpect(status().isBadRequest());
+        String upi = "ravi" + ThreadLocalRandom.current().nextInt(1_000_000) + "@okaxis";
+        payoutAccount("ravi", "{\"method\":\"UPI\",\"holderName\":\"Ravi Kumar\",\"upiId\":\"" + upi.toUpperCase() + "\"}")
+            .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer ravi")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.payoutAccountSubmitted").value("ra****@okaxis")).andExpect(jsonPath("$.payoutAccountMasked").doesNotExist());
+
+        // A second one replaces the first; still nothing is paid until ops confirms.
+        String number = String.valueOf(ThreadLocalRandom.current().nextLong(100_000_000_000L, 999_999_999_999L));
+        payoutAccount("ravi", "{\"method\":\"BANK\",\"holderName\":\"Mr Ravi Kumar\",\"accountNumber\":\"" + number.substring(0, 6) + " "
+            + number.substring(6) + "\",\"ifsc\":\"sbin0001234\"}").andExpect(status().isNoContent());
+        String accounts = "FROM fleet_schema.rider_payout_account a JOIN fleet_schema.rider r ON r.id = a.rider_id WHERE r.identity_id = ?";
+        assertThat(db.queryForList("SELECT a.state || ':' || a.method || ':' || a.verified_in_person || ':' || a.masked_account " + accounts
+            + " ORDER BY a.set_at", String.class, ravi))
+            .containsExactly("REPLACED:UPI:false:ra****@okaxis", "SUBMITTED:BANK:false:xxxxxx" + number.substring(number.length() - 4));
+        assertThat(db.queryForObject("SELECT string_agg(a.encrypted_details || a.masked_account, '') " + accounts, String.class, ravi))
+            .doesNotContain(number).doesNotContain(upi);
+
+        // The same account typed by another rider, even at another branch, is refused.
+        when(verifier.verify("sita")).thenReturn(new CravesPrincipal(UUID.randomUUID(), phone(), Set.of("CUSTOMER")));
+        apply("sita", "{\"name\":\"Sita Devi\",\"language\":\"en\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}").andExpect(status().isOk());
+        payoutAccount("sita", "{\"method\":\"BANK\",\"holderName\":\"Sita Devi\",\"accountNumber\":\"" + number + "\",\"ifsc\":\"SBIN0009999\"}")
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PAYOUT_ACCOUNT_NOT_UNIQUE"));
+
+        when(verifier.verify("stranger")).thenReturn(new CravesPrincipal(UUID.randomUUID(), phone(), Set.of("CUSTOMER")));
+        payoutAccount("stranger", "{\"method\":\"UPI\",\"holderName\":\"Ravi Kumar\",\"upiId\":\"x1@okaxis\"}")
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
+    }
+
+    org.springframework.test.web.servlet.ResultActions apply(String token, String body) throws Exception {
+        return mvc.perform(post("/api/v1/rider/apply").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+            .content(body));
+    }
+
+    org.springframework.test.web.servlet.ResultActions payoutAccount(String token, String body) throws Exception {
+        return mvc.perform(post("/api/v1/rider/payout-account").header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     void accept(String token, String version) throws Exception {

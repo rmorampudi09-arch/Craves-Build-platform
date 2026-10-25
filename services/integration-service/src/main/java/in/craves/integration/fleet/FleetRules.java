@@ -24,8 +24,23 @@ public final class FleetRules {
           WHERE e.rider_id = n.rider_id AND e.kind IN ('RESTORE', 'DEACTIVATE') AND e.created_at >= n.created_at)
         ORDER BY n.created_at DESC LIMIT 1""";
     private static final Set<String> HONORIFICS = Set.of("MR", "MRS", "MS", "MISS", "SHRI", "SMT", "KUMARI", "DR");
+    public static final String RIDER_PHONE = "^\\+91[6-9][0-9]{9}$";
+    public static final String VEHICLE_REGISTRATION = "^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$";
 
     private FleetRules() {
+    }
+
+    /** A UPI ID like name@bank, or a bank account of 9 to 18 digits with its IFSC; never both. */
+    public static boolean validPayoutAccount(String method, String upiId, String accountNumber, String ifsc) {
+        return "UPI".equals(method)
+            ? upiId != null && upiId.matches("^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$") && accountNumber == null
+            : "BANK".equals(method) && accountNumber != null && accountNumber.matches("^[0-9]{9,18}$")
+                && ifsc != null && ifsc.matches("^[A-Z]{4}0[A-Z0-9]{6}$") && upiId == null;
+    }
+
+    /** What the keyed fingerprint hashes: the same account at the same bank, whatever branch IFSC was typed. */
+    public static String payoutAccountKey(String method, String account, String ifsc) {
+        return "UPI".equals(method) ? "UPI:" + account : "BANK:" + ifsc.substring(0, 4) + ":" + account;
     }
 
     /** "+919876543210" becomes "+91 98xxxxx210". */

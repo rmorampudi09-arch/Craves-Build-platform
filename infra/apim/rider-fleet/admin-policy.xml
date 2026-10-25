@@ -3,7 +3,7 @@
     <base />
     <set-variable name="cravesCorrelationId" value="@{
       var cravesCorrelationId = context.Request.Headers.GetValueOrDefault(&quot;X-Craves-Correlation-ID&quot;, &quot;&quot;);
-      if (!System.String.IsNullOrWhiteSpace(cravesCorrelationId)) return cravesCorrelationId;
+      if (!System.String.IsNullOrWhiteSpace(cravesCorrelationId)) { return cravesCorrelationId; }
       var correlationId = context.Request.Headers.GetValueOrDefault(&quot;X-Correlation-ID&quot;, &quot;&quot;);
       return !System.String.IsNullOrWhiteSpace(correlationId) ? correlationId : context.RequestId.ToString();
     }" />

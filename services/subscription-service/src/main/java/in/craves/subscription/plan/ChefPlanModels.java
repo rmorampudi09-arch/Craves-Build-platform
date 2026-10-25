@@ -48,7 +48,9 @@ public final class ChefPlanModels {
         Instant updatedAt,
         /** Relative public path with a ?v= cache-buster, or null while the plan has no photo. */
         String imageUrl,
-        boolean acceptingSubscribers
+        boolean acceptingSubscribers,
+        /** Subscriptions in status ACTIVE only; PAUSED, pending, failed, expired and cancelled ones are not active subscribers. */
+        int activeSubscriberCount
     ) {
     }
 

@@ -4,7 +4,7 @@ import test from "node:test";
 import postcss from "postcss";
 
 const layout = readFileSync(
-  new URL("../../../app/chef/layout.tsx", import.meta.url),
+  new URL("../components/chef-shell.tsx", import.meta.url),
   "utf8",
 );
 const header = readFileSync(
@@ -15,7 +15,7 @@ const navigation = readFileSync(
   new URL("../components/chef-workspace-navigation.tsx", import.meta.url),
   "utf8",
 );
-const moreHub = readFileSync(new URL("../../../app/chef/profile/page.tsx", import.meta.url), "utf8");
+const moreHub = readFileSync(new URL("../components/chef-more-hub.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(
   new URL("../components/chef-mode-dashboard.tsx", import.meta.url),
   "utf8",
@@ -31,11 +31,11 @@ const kitchenPage = readFileSync(
 const styles = readFileSync(new URL("../../../shared/styles/styles.css", import.meta.url), "utf8");
 const chefTheme = postcss.parse(readFileSync(new URL("../styles/chef-mode.css", import.meta.url), "utf8"));
 
+// Meal plans are reached through the Menu tab (?view=plans), not listed again in More.
 const workspaceRoutes = [
-  "/chef/application",
   "/chef/kitchen",
+  "/chef/hours",
   "/chef/menu",
-  "/chef/meal-plans",
   "/chef/orders",
   "/chef/earnings",
   "/chef/operations",
@@ -58,6 +58,8 @@ const deferredDashboardRoutes = [
 test("every chef route inherits the responsive Craves workspace shell", () => {
   assert.match(layout, /className="chef-panel-theme[^"]*min-h-screen/);
   assert.match(layout, /<ChefAppHeader\/>/);
+  // The page carries the chef's language, so screen readers and Telugu/Kannada text shaping follow it.
+  assert.match(layout, /lang=\{language\}/);
   assert.match(layout, /ChefWorkspaceNavigation/);
   assert.match(header, /className="chef-panel-header"/);
   assert.match(header, /className="chef-header-bar"/);
@@ -110,6 +112,30 @@ for (const width of [390, 768, 1440]) {
     }
   });
 }
+
+test("a sheet body takes the chef theme without the page's full height, tab-bar padding or background", () => {
+  const sheet = navigationStyles(".chef-panel-theme.chef-sheet-theme", 390);
+  assert.equal(sheet.get("min-height"), "0");
+  assert.equal(sheet.get("padding-bottom"), "0");
+  assert.equal(sheet.get("background"), "transparent");
+  const dailyLimits = readFileSync(new URL("../components/chef-daily-limits.tsx", import.meta.url), "utf8");
+  assert.equal(dailyLimits.match(/className="chef-panel-theme chef-sheet-theme"/g)?.length, 2);
+});
+
+test("action messages leave by themselves after 3.5 s, wait while held, and skip the slide for reduced motion", () => {
+  const rules = new Map<string, string>();
+  chefTheme.walkRules(rule => rule.walkDecls(declaration => {
+    const media = rule.parent?.type === "atrule" ? `@${(rule.parent as postcss.AtRule).params} ` : "";
+    rules.set(`${media}${rule.selector} ${declaration.prop}`, declaration.value);
+  }));
+  assert.equal(rules.get(".chef-flash.is-success animation"), "chefFlash 3.5s linear both");
+  assert.equal(rules.get(".chef-flash:is(:hover, :focus-within) animation-play-state"), "paused");
+  assert.equal(rules.get("@(prefers-reduced-motion: reduce) .chef-panel-theme .chef-flash.is-success animation-name"), "chefFlashStay");
+  assert.equal(rules.get("@(prefers-reduced-motion: reduce) .chef-panel-theme .chef-flash.is-success animation-duration"), "3.5s");
+  // A message floats over the tab bar like the new-order bar, and moves above that bar when both show.
+  assert.match(rules.get(".chef-order-banner-wrap,\n.chef-flash-region bottom") ?? "", /safe-area-inset-bottom/);
+  assert.equal(rules.get(".chef-panel-theme:has(.chef-order-banner) .chef-flash-region translate"), "0 -4.25rem");
+});
 
 test("chef dashboard keeps daily actions visible and defers advanced areas", () => {
   for (const route of dailyDashboardRoutes) {

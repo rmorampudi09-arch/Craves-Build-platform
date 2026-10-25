@@ -56,6 +56,7 @@ jobs:
           python3 -m unittest discover -s scripts/refund -p 'test_*.py' -v
           python3 scripts/release/tests/test-backend-preflight.py
           python3 scripts/release/tests/test-backend-image-reuse.py
+          python3 scripts/release/check-db-connection-budget.py
           python3 scripts/admin-explorer/test-runtime-readiness.py
           python3 scripts/admin-explorer/test-backend-release.py
           python3 scripts/admin-explorer/test-backend-pinning.py
@@ -133,6 +134,9 @@ jobs:
       EMAIL_TEST_DB_USER: postgres
       EMAIL_TEST_DB_PASSWORD: postgres
       EMAIL_TEST_DISPOSABLE: 'true'
+      CENTRAL_OTP_TEST_DB: jdbc:postgresql://localhost:5432
+      CENTRAL_OTP_TEST_DB_USER: postgres
+      CENTRAL_OTP_TEST_DB_PASSWORD: postgres
       ONBOARDING_TEST_DB_URL: jdbc:postgresql://localhost:5432/chef_onboarding_test
       ONBOARDING_TEST_DB_USER: postgres
       ONBOARDING_TEST_DB_PASSWORD: postgres

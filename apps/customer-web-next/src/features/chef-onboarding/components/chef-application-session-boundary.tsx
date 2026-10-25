@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChefHat, RefreshCw } from "lucide-react";
+import { messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 import { Spinner } from "@/features/chef-onboarding/components/chef-onboarding-ui";
-import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
+import { enterChefMode, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import {
   AuthenticationRequiredError,
   captureSessionContext,
@@ -23,11 +25,39 @@ function sessionScope() {
 const serverScope = () => "server";
 type Check = { scope: string; state: "ready" | "unavailable"; signInHref?: string };
 
+const TEXT = messages({
+  en: {
+    failed: "We couldn’t open your application",
+    opening: "Opening your application",
+    failedText: "Check your connection and try again. If your session has ended, sign in to continue.",
+    loading: "Loading your saved details…",
+    tryAgain: "Try again",
+    signIn: "Sign in",
+  },
+  te: {
+    failed: "మీ దరఖాస్తు తెరవలేకపోయాం",
+    opening: "మీ దరఖాస్తు తెరుస్తున్నాం",
+    failedText: "ఇంటర్నెట్ చూసుకుని మళ్లీ ప్రయత్నించండి. మీ సైన్ ఇన్ ముగిసి ఉంటే, కొనసాగడానికి సైన్ ఇన్ చేయండి.",
+    loading: "సేవ్ చేసిన మీ వివరాలు లోడ్ అవుతున్నాయి…",
+    tryAgain: "మళ్లీ ప్రయత్నించండి",
+    signIn: "సైన్ ఇన్",
+  },
+  kn: {
+    failed: "ನಿಮ್ಮ ಅರ್ಜಿ ತೆರೆಯಲು ಆಗಲಿಲ್ಲ",
+    opening: "ನಿಮ್ಮ ಅರ್ಜಿ ತೆರೆಯುತ್ತಿದೆ",
+    failedText: "ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ. ನಿಮ್ಮ ಸೈನ್ ಇನ್ ಮುಗಿದಿದ್ದರೆ, ಮುಂದುವರಿಸಲು ಸೈನ್ ಇನ್ ಮಾಡಿ.",
+    loading: "ಉಳಿಸಿದ ನಿಮ್ಮ ವಿವರಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ…",
+    tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    signIn: "ಸೈನ್ ಇನ್",
+  },
+});
+
 /**
- * Applicant pages need a current account that signed in to Chef Mode in this tab, not an approved
- * CHEF role. Anyone else goes to /chef/sign-in and comes back here afterwards.
+ * Applicant pages need a current account whose device (or tab) confirmed Chef Mode with a phone OTP,
+ * not an approved CHEF role. Anyone else goes to /chef/sign-in and comes back here afterwards.
  */
 export function ChefApplicationSessionBoundary({ children }: { children: ReactNode }) {
+  const text = useText(TEXT);
   const router = useRouter();
   const navigation = useRef(router);
   useEffect(() => {
@@ -53,8 +83,9 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
       .then((user) => {
         if (!active) return;
         if (user && isSessionReady() && getSession()?.id === user.id) {
-          if (isChefModeVerified(user.id)) setCheck({ scope: sessionScope(), state: "ready" });
-          else signIn();
+          if (!isChefModeVerified(user.id)) return signIn();
+          enterChefMode(user.id);
+          setCheck({ scope: sessionScope(), state: "ready" });
         } else if (!user && !getSession()) signIn();
         // No identity while one is still held and not ready: a sign-out is settling and navigates on its own.
         else if (user || isSessionReady()) setCheck({ scope, state: "unavailable", signInHref });
@@ -80,12 +111,8 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
       <span className={`cob-icon-well cob-icon-well--round${unavailable ? " cob-icon-well--neutral" : ""}`}>
         {unavailable ? <ChefHat size={20} aria-hidden="true" /> : <Spinner red />}
       </span>
-      <h2>{unavailable ? "We couldn’t open your application" : "Opening your application"}</h2>
-      <p role="status">
-        {unavailable
-          ? "Check your connection and try again. If your session has ended, sign in to continue."
-          : "Loading your saved details…"}
-      </p>
+      <h2>{unavailable ? text.failed : text.opening}</h2>
+      <p role="status">{unavailable ? text.failedText : text.loading}</p>
       {unavailable ? (
         <div className="cob-page-actions">
           <button
@@ -97,11 +124,11 @@ export function ChefApplicationSessionBoundary({ children }: { children: ReactNo
             }}
           >
             <RefreshCw size={18} aria-hidden="true" />
-            Try again
+            {text.tryAgain}
           </button>
           {check.signInHref ? (
             <Link href={check.signInHref} className="cob-secondary">
-              Sign in
+              {text.signIn}
             </Link>
           ) : null}
         </div>

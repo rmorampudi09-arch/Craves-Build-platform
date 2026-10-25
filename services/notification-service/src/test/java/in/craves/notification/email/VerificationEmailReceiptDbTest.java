@@ -36,7 +36,7 @@ class VerificationEmailReceiptDbTest {
     @Test void cleanUpgradeReplayAndImmutableReceipts() {
         flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
         jdbc.execute("DROP SCHEMA notification_schema CASCADE");assertEquals(6,flyway("6").migrate().migrationsExecuted);
-        assertEquals(1,flyway(null).migrate().migrationsExecuted);flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
+        assertEquals(2,flyway(null).migrate().migrationsExecuted);flyway(null).validate();assertEquals(0,flyway(null).migrate().migrationsExecuted);
         var request=request();when(transport.send(any())).thenReturn(VerificationEmailTransport.Outcome.ACCEPTED);
         assertEquals(VerificationEmailTransport.Outcome.ACCEPTED,service.deliver(request,"a".repeat(64)));
         assertThrows(RuntimeException.class,()->jdbc.update("UPDATE notification_schema.auth_email_verification_receipt SET status='FAILED' WHERE challenge_id=?",request.challengeId()));

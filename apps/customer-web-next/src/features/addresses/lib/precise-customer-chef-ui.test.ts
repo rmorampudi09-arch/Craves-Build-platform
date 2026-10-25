@@ -118,23 +118,17 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner uses the approved responsive full-art asset while discovery uses the saved default address", () => {
-  assert.match(welcome, /src="\/home\/cravings\/craves-home-banner\.webp"/);
-  assert.match(welcome, /width=\{1983\}/);
-  assert.match(welcome, /height=\{793\}/);
-  assert.match(welcome, /unoptimized/);
-  assert.match(welcome, /className="block h-auto w-full"/);
-  // The approved artwork is shown as it is: no greeting box over it.
-  assert.doesNotMatch(welcome, /greetingName|Hello \{/);
-  assert.doesNotMatch(welcome, /absolute left-/);
-  assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
-  assert.doesNotMatch(welcome, /styles\.heroArtwork/);
-  assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
-  assert.doesNotMatch(welcome, /backdrop-blur-sm/);
-  assert.match(welcome, /Eat for Health\./);
-  assert.match(welcome, /Taste the[\s\S]*Comfort of[\s\S]*Home\./);
-  assert.match(welcome, /dishCount/);
-  assert.doesNotMatch(welcome, /<button/);
+test("welcome banner shows the admin-published promo banners while discovery uses the saved default address", () => {
+  assert.match(welcome, /fetchHomeBanners\(\)/);
+  // No bundled fallback: with no banners (or a failed call) the section is not shown.
+  assert.doesNotMatch(welcome, /craves-home-banner\.webp/);
+  assert.match(welcome, /if \(!count\) return null;/);
+  assert.match(welcome, /aspect-\[2\/1\]/);
+  assert.match(welcome, /export const BANNER_ADVANCE_MS = 4_000;/);
+  assert.match(welcome, /useReducedMotion\(\)/);
+  assert.match(welcome, /visibilitychange/);
+  assert.match(welcome, /Pause banners/);
+  assert.match(welcome, /onClick=\{onOpenSearch\}/);
   assert.doesNotMatch(welcome, /Default address/);
   assert.doesNotMatch(welcome, /Choose default address/);
   assert.doesNotMatch(welcome, /Use current delivery location/);
@@ -158,7 +152,7 @@ test("address manager owns default selection and the shared location-first edito
   assert.match(addresses, /clearKitchenDiscoveryCache/);
   assert.match(addresses, /<AddressEditorFlow/);
   assert.match(addresses, /initialLoadState/);
-  assert.match(addresses, /aria-label="Loading saved addresses"/);
+  assert.match(addresses, /<CustomerSectionSkeleton variant="addresses" label="Loading saved addresses"/);
   assert.match(
     addresses,
     /initialLoadState === "ready" && addresses\.length === 0/,
@@ -181,12 +175,18 @@ test("address manager owns default selection and the shared location-first edito
   assert.doesNotMatch(addressEditor, /Add later/);
 });
 
-test("home rechecks cart availability after default-address changes", () => {
+test("home, the cart and checkout recheck cart availability for the delivery address", () => {
+  // One check (useCartAddressAvailability) for all three; its removal and clearing are tested in home/lib.
   assert.match(home, /CartAddressAvailabilityBanner/);
   assert.match(home, /loadKitchenMenu/);
   assert.match(home, /unavailableCartItems/);
-  assert.match(home, /removeFromCart/);
-  assert.match(home, /clearCart/);
+  assert.match(home, /useCartAddressAvailability\(/);
+  assert.match(cart, /<CartAddressAvailabilityBanner/);
+  assert.match(cart, /useCartAddressAvailability\(\{ items, address \}\)/);
+  assert.match(checkout, /useCartAddressAvailability\(/);
+  // Pay waits only when nothing can reach the address, and the address can't change mid-payment.
+  assert.match(checkout, /noItemReachesAddress \|\|/);
+  assert.match(checkout, /disabled=\{addressChangeBusy \|\| paymentLocked\}/);
   assert.match(cartAddressBanner, /Choose another address/);
   assert.match(cartAddressBanner, /Remove unavailable items/);
   assert.match(cartAddressBanner, /Clear cart & browse here/);

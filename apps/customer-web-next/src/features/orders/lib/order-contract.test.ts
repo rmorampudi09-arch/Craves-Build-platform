@@ -51,3 +51,11 @@ test("validates complete order lists", () => {
   assert.equal(parseCustomerOrders([order])?.length, 1);
   assert.equal(parseCustomerOrders([order, { ...order, id: "bad" }]), null);
 });
+
+test("accepts a meal-plan order, which order-service creates without a checkout", () => {
+  const mealPlanOrder = { ...order, checkoutId: null, status: "CHEF_ACCEPTANCE_PENDING", foodSubtotal: 0, grandTotal: 0, deliveryAddress: null, items: [{ ...order.items[0], unitPrice: 0, lineTotal: 0 }] };
+  assert.equal(parseCustomerOrder(mealPlanOrder)?.checkoutId, null);
+  assert.equal(parseCustomerOrders([order, mealPlanOrder])?.length, 2);
+  assert.equal(parseCustomerOrder({ ...order, checkoutId: "bad" }), null);
+  assert.equal(parseCustomerOrder({ ...order, checkoutId: undefined }), null);
+});

@@ -5,17 +5,27 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AlertCircle, Check, Clock3, RotateCw, SendHorizontal, Ticket } from "lucide-react";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { supportCaseNumber } from "@/shared/lib/order-number";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type Status = "sending" | "sent" | "failed";
 type Bubble = ChatMessage & { id: number; at: number; status?: Status; reveal?: boolean };
 
 const MAX_CONTENT = 2000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSISTANT = "Craves Assistant";
 const SUGGESTIONS = {
   CUSTOMER: ["Where is my order?", "How do refunds work?", "How do I change my delivery address?", "How do I start a meal plan?"],
   CHEF: ["How do I accept an order?", "How do I add a dish?", "Where can I see my earnings?", "Is my application approved?"],
+  GUEST: ["How do I sign up as a home chef?", "I didn't get my OTP", "When can customers order?", "Can someone call me back?"],
 };
+const GREETING = {
+  CUSTOMER: "Hi! I'm the Craves support assistant. Ask me about your orders, payments, or where to find something on Craves.",
+  CHEF: "Hi! I'm the Craves support assistant. Ask me about your kitchen's orders, your menu or where to find something.",
+  GUEST: "Hi! I'm the Craves assistant. I can help you sign in or sign up, find your way around Craves, or ask our team to call you back.",
+};
+/** GUEST: a visitor who is not signed in. They get general and sign-in help and can ask for a callback. */
+export type SupportChatRole = keyof typeof SUGGESTIONS;
 // Only Craves links, emails and the support phone become clickable; anything else the model writes stays plain text.
 const TOKEN = /(https?:\/\/(?:www\.)?craves\.in(?:\/[^\s<>"]*)?|\b[a-z]+@craves\.in\b|\b8367366787\b|"[^"\n]{1,48}")/gi;
 
@@ -140,17 +150,19 @@ function TypingBubble() {
   );
 }
 
-export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" | "CHEF"; orderId?: string }) {
+export function SupportChat({ contextRole, orderId }: { contextRole: SupportChatRole; orderId?: string }) {
+  const guest = contextRole === "GUEST";
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ReactNode>(null);
   const [caseNumber, setCaseNumber] = useState("");
+  const [caseId, setCaseId] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const listRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(1);
-  const signInPath = `${contextRole === "CHEF" ? "/chef/support" : "/support"}${orderId ? `?orderId=${orderId}` : ""}`;
+  const signInPath = `${contextRole === "CHEF" ? "/chef/support/chat" : "/support"}${orderId ? `?orderId=${orderId}` : ""}`;
 
   // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect must not return one.
   const scrollToEnd = useCallback(() => { listRef.current?.lastElementChild?.scrollIntoView?.({ block: "end" }); }, []);
@@ -176,21 +188,21 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
       ...(reply ? [reply] : []),
     ]);
     try {
-      const response = await sessionFetch("/api/support/chat", {
+      const messages = chatHistory([...earlier.filter(message => message.status !== "failed"), outgoing]);
+      const response = await (guest ? fetch : sessionFetch)(guest ? "/api/support/chat/guest" : "/api/support/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({
-          contextRole,
-          orderId,
-          messages: chatHistory([...earlier.filter(message => message.status !== "failed"), outgoing]),
-        }),
+        body: JSON.stringify(guest ? { messages } : { contextRole, orderId, messages }),
       });
-      const body = await response.json().catch(() => null) as { reply?: unknown; supportCase?: { caseNumber?: unknown } | null } | null;
+      const body = await response.json().catch(() => null) as { reply?: unknown; supportCase?: { id?: unknown; caseNumber?: unknown } | null } | null;
       if (response.ok && typeof body?.reply === "string") {
         settle({ status: "sent" }, { id: nextId.current++, role: "assistant", content: body.reply, at: now(), reveal: true });
         setAnnouncement(`${ASSISTANT}: ${body.reply}`);
-        if (typeof body.supportCase?.caseNumber === "string") setCaseNumber(body.supportCase.caseNumber);
+        if (typeof body.supportCase?.caseNumber === "string") {
+          setCaseNumber(body.supportCase.caseNumber);
+          setCaseId(typeof body.supportCase.id === "string" && UUID.test(body.supportCase.id) ? body.supportCase.id : "");
+        }
       } else {
         settle({ status: "failed" });
         setAnnouncement("Message not sent");
@@ -223,7 +235,7 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
     role: "assistant",
     // No time on the greeting: it is server-rendered, and the server clock's time zone differs from the visitor's.
     at: 0,
-    content: `Hi! I'm the Craves support assistant. Ask me about ${contextRole === "CHEF" ? "your kitchen's orders, your menu or where to find something" : "your orders, payments, or where to find something on Craves"}.`,
+    content: GREETING[contextRole],
   };
   const thread = [greeting, ...messages];
   const lastUser = [...messages].reverse().find(message => message.role === "user")?.id;
@@ -240,7 +252,13 @@ export function SupportChat({ contextRole, orderId }: { contextRole: "CUSTOMER" 
         {caseNumber ? (
           <li role="status" className="craves-chat-in mx-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#F1F3F5] px-3 py-1.5 text-xs font-semibold text-[#1A1A1A]">
             <Ticket className="h-3.5 w-3.5 shrink-0 text-[#DE2A14]" aria-hidden="true" />
-            Ticket {caseNumber} created — our team will reply in your notifications
+            {guest ? `Request ${caseNumber} sent — our team will call or email you` : contextRole === "CHEF" ? (
+              // The chef's tickets list shows the same short number, and replies arrive there.
+              <span>
+                Ticket #{supportCaseNumber(caseNumber)} created — see it in{" "}
+                <Link href={caseId ? `/chef/support/tickets/${caseId}` : "/chef/support"} className="underline">Help & support</Link>
+              </span>
+            ) : `Ticket ${caseNumber} created — our team will reply in your notifications`}
           </li>
         ) : null}
       </ol>

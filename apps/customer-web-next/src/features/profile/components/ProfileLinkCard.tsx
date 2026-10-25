@@ -5,25 +5,26 @@ import type { IconType } from "react-icons";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 
 interface ProfileLinkCardProps {
-  to?: string;
+  to: string;
   icon: IconType;
   title: string;
   subtitle: string;
   badge?: string;
-  disabled?: boolean;
 }
 
-type CardBodyProps = Omit<ProfileLinkCardProps, "to">;
-
-function CardBody({
+export function ProfileLinkCard({
+  to,
   icon: Icon,
   title,
   subtitle,
   badge,
-  disabled = false,
-}: CardBodyProps) {
+}: ProfileLinkCardProps) {
   return (
-    <>
+    <Link
+      to={to}
+      onClick={() => rememberReturnRoute(to, "/profile")}
+      className="group flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5 transition-[border-color,box-shadow,opacity] duration-200 hover:border-[#D7DADF] hover:shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
+    >
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
           <Icon className="text-[19px]" aria-hidden="true" />
@@ -45,60 +46,8 @@ function CardBody({
         </div>
       </div>
       <FaChevronRight
-        className={[
-          "shrink-0 text-xs transition-transform",
-          disabled
-            ? "text-[#C9CCD0]"
-            : "text-[#1A1A1A] group-hover:translate-x-0.5",
-        ].join(" ")}
+        className="shrink-0 text-xs text-[#1A1A1A] transition-transform group-hover:translate-x-0.5"
         aria-hidden="true"
-      />
-    </>
-  );
-}
-
-export function ProfileLinkCard({
-  to,
-  icon,
-  title,
-  subtitle,
-  badge,
-  disabled = false,
-}: ProfileLinkCardProps) {
-  const className =
-    "group flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5 transition-[border-color,box-shadow,opacity] duration-200 sm:p-4";
-
-  if (!to || disabled) {
-    return (
-      <div
-        className={className + " cursor-default opacity-75"}
-        aria-disabled="true"
-      >
-        <CardBody
-          icon={icon}
-          title={title}
-          subtitle={subtitle}
-          badge={badge}
-          disabled
-        />
-      </div>
-    );
-  }
-
-  return (
-    <Link
-      to={to}
-      onClick={() => rememberReturnRoute(to, "/profile")}
-      className={
-        className +
-        " hover:border-[#D7DADF] hover:shadow-[0_8px_22px_rgba(26,26,26,0.07)]"
-      }
-    >
-      <CardBody
-        icon={icon}
-        title={title}
-        subtitle={subtitle}
-        badge={badge}
       />
     </Link>
   );

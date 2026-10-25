@@ -86,9 +86,9 @@ class CatalogSellingDatabaseTest {
     }
     @Test void activeMutationRequiresEligibilityButDraftEditingAndClosingRemainAvailable() {
         var principal=new CravesPrincipal(blocked,"",Set.of("CHEF"));
-        var draft=new KitchenProfileRequest("Fixture draft",null,null,null,null,"Fixture address",null,null,null,"Hyderabad","Telangana",null,latitude,longitude,KitchenStatus.DRAFT);
+        var draft=new KitchenProfileRequest("Fixture draft",null,null,null,null,"Fixture address",null,null,null,"Hyderabad","Telangana",null,latitude,longitude,KitchenStatus.DRAFT,null,null,null);
         assertEquals(KitchenStatus.DRAFT,catalog.upsertMyKitchen(principal,draft).status());
-        var active=new KitchenProfileRequest(draft.kitchenName(),null,null,null,null,draft.addressLine1(),null,null,null,draft.city(),draft.state(),null,latitude,longitude,KitchenStatus.ACTIVE);
+        var active=new KitchenProfileRequest(draft.kitchenName(),null,null,null,null,draft.addressLine1(),null,null,null,draft.city(),draft.state(),null,latitude,longitude,KitchenStatus.ACTIVE,null,null,null);
         assertThrows(ApiException.class,()->catalog.upsertMyKitchen(principal,active));
         assertFalse(catalog.updateAvailability(principal,hiddenDish,new AvailabilityRequest(false,"Fixture close")).available());
         assertThrows(ApiException.class,()->catalog.updateAvailability(principal,hiddenDish,new AvailabilityRequest(true,"Fixture reopen")));
@@ -112,7 +112,7 @@ class CatalogSellingDatabaseTest {
         assertEquals("KITCHEN_PROFILE_REQUIRED",assertThrows(ApiException.class,()->catalog.createMenuItem(newcomer,first)).getCode());
 
         var setup=new KitchenProfileRequest("New Chef fixture",null,null,null,null,"Fixture kitchen address",null,null,null,
-            "Hyderabad","Telangana",null,latitude,longitude,null);
+            "Hyderabad","Telangana",null,latitude,longitude,null,null,null,null);
         var createdKitchen=catalog.upsertMyKitchen(newcomer,setup);
         assertEquals(newcomerId,createdKitchen.identityId());
         assertEquals(KitchenStatus.DRAFT,createdKitchen.status());

@@ -2,32 +2,29 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  AlertTriangle,
-  Check,
-  Clock3,
-  LifeBuoy,
-  MapPin,
-  RefreshCw,
-  Store,
-} from "lucide-react";
+import { AlertTriangle, ChevronRight, Clock3, LifeBuoy, MapPin, RefreshCw } from "lucide-react";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
+import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
+import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
 import {
-  formatOrderStatus,
+  isAbandonedUnpaidOrder,
   parseCustomerOrder,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
+import {
+  parseDeliveryStatusResponse,
+  type DeliveryStatusResponse,
+} from "@/features/orders/lib/delivery-status";
+import { homePin, orderJourney, tracksDelivery, type OrderJourney } from "@/features/orders/lib/order-journey";
+import { loadKitchenMenu } from "@/features/dish/api/dishes";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { returnToListPath } from "@/shared/lib/return-scroll";
-
-interface TimelineStep {
-  key: string;
-  label: string;
-  done: boolean;
-  active: boolean;
-}
+import { sessionFetch } from "@/shared/lib/session-fetch";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 
 /** Exact money: whole rupees stay whole, paise are never rounded away. */
 function money(amount: number, currency: string): string {
@@ -73,110 +70,21 @@ function addressLine(order: CustomerOrder): string {
     .join(", ");
 }
 
-const ORDER_STAGE: Record<string, number> = {
-  PAYMENT_PENDING: 0,
-  PAID: 1,
-  CHEF_ACCEPTANCE_PENDING: 1,
-  CHEF_ACCEPTED: 2,
-  PREPARING: 2,
-  READY_FOR_PICKUP: 3,
-  OUT_FOR_DELIVERY: 4,
-  DELIVERED: 5,
+/** Nothing changes after these, so the page stops checking. A rejected order still moves on to its refund. */
+const FINAL_STATUSES = new Set(["DELIVERED", "CANCELLED", "REFUNDED"]);
+
+// Web-only states: an unpaid order nobody came back to, and the landing right after checkout verified a payment.
+const ABANDONED: OrderJourney = {
+  kind: "CLOSED",
+  title: "Payment not completed",
+  detail: "This order wasn’t paid, so it wasn’t sent to the kitchen. If money left your account, contact support with this order number.",
 };
-
-/** Done steps are ticked; the one in progress is the next step not yet done. */
-function timeline(order: CustomerOrder): TimelineStep[] {
-  const stage = ORDER_STAGE[order.status] ?? 0;
-  const kitchen = order.kitchenName;
-  const steps = [
-    { key: "payment", done: "Payment received", next: "Confirming your payment" },
-    { key: "accepted", done: `Accepted by ${kitchen}`, next: `Waiting for ${kitchen} to accept` },
-    { key: "cooking", done: "Cooked and packed", next: "Cooking your order" },
-    { key: "delivery", done: "Picked up for delivery", next: "Waiting for pickup" },
-    { key: "delivered", done: "Delivered", next: "On the way to you" },
-  ];
-  return steps.map((step, index) => {
-    const done = stage > index;
-    const active = !done && stage === index;
-    return { key: step.key, label: done ? step.done : step.next, done, active };
-  });
-}
-
-type Tone = "placed" | "waiting" | "problem";
-
-function summary(order: CustomerOrder): { title: string; next: string; tone: Tone } {
-  const kitchen = order.kitchenName;
-  switch (order.status) {
-    case "PAYMENT_PENDING":
-      return {
-        title: "Confirming your payment",
-        next: "Razorpay is confirming the payment. This page updates by itself, so there’s no need to pay again.",
-        tone: "waiting",
-      };
-    case "PAID":
-    case "CHEF_ACCEPTANCE_PENDING":
-      return {
-        title: "Order placed",
-        next: `${kitchen} is reviewing your order. Their cooking time shows here once they accept.`,
-        tone: "placed",
-      };
-    case "CHEF_ACCEPTED":
-    case "PREPARING":
-      return {
-        title: `${kitchen} is cooking`,
-        next: order.prepTimeMinutes
-          ? `Ready in about ${order.prepTimeMinutes} min, then it’s on its way to you.`
-          : "Your food is being cooked fresh. It goes out for delivery as soon as it’s packed.",
-        tone: "placed",
-      };
-    case "READY_FOR_PICKUP":
-      return {
-        title: "Packed and ready",
-        next: "A delivery partner is picking it up from the kitchen.",
-        tone: "placed",
-      };
-    case "OUT_FOR_DELIVERY":
-      return {
-        title: "On the way",
-        next: "Your order has left the kitchen. Track it for live delivery updates.",
-        tone: "placed",
-      };
-    case "DELIVERED":
-      return { title: "Delivered", next: `Enjoy your meal from ${kitchen}.`, tone: "placed" };
-    case "CHEF_REJECTED":
-      return {
-        title: `${kitchen} couldn’t take this order`,
-        next: "Craves refunds this order to your original payment method. The refund shows here as it moves.",
-        tone: "problem",
-      };
-    case "REFUND_PENDING":
-      return {
-        title: "Refund in progress",
-        next: "Your refund has been sent to your original payment method. Banks can take a few working days to show it.",
-        tone: "problem",
-      };
-    case "REFUNDED":
-      return {
-        title: "Refunded",
-        next: "The amount has been returned to your original payment method.",
-        tone: "problem",
-      };
-    case "REFUND_FAILED":
-      return {
-        title: "Refund delayed",
-        next: "Craves is retrying your refund. Get help below if it doesn’t arrive.",
-        tone: "problem",
-      };
-    case "CANCELLED":
-      return {
-        title: "Order cancelled",
-        next: "This order was cancelled. Any amount paid is refunded to your original payment method.",
-        tone: "problem",
-      };
-    default:
-      return { title: formatOrderStatus(order.status), next: "", tone: "waiting" };
-  }
-}
+const CONFIRMING: OrderJourney = {
+  kind: "KITCHEN",
+  step: -1,
+  title: "Confirming your payment",
+  detail: "Razorpay is confirming the payment. This page updates by itself, so there’s no need to pay again.",
+};
 
 /** Drawn once when the order is placed; static for reduced motion. */
 function PlacedTick() {
@@ -210,14 +118,78 @@ function responseMessage(value: unknown, fallback: string): string {
 
 const CARD = "rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_3px_10px_rgba(26,26,26,0.04)]";
 const UNAVAILABLE = "We couldn’t load this order. Check your connection and try again.";
+/** Like the app: the order, and its delivery once it is ready, every 30 seconds. */
+const POLL_MS = 30_000;
+
+/** The latest delivery update; null when there is none or it didn't load, so the map keeps what it had. */
+async function readDelivery(orderId: string): Promise<DeliveryStatusResponse | null> {
+  try {
+    const response = await sessionFetch(`/api/orders/${encodeURIComponent(orderId)}/delivery-status`, { cache: "no-store" });
+    if (!response.ok) return null;
+    const parsed = parseDeliveryStatusResponse(await response.json());
+    return parsed.orderId.toLowerCase() === orderId.toLowerCase() ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Dish photos from the kitchen's menu, by menu item; a dish no longer on the menu has none. */
+function useDishPhotos(kitchenId: string | undefined): Map<string, string> {
+  const [photos, setPhotos] = useState(() => new Map<string, string>());
+  useEffect(() => {
+    if (!kitchenId) return;
+    let live = true;
+    loadKitchenMenu(kitchenId, { remember: false })
+      .then((dishes) => {
+        if (live) setPhotos(new Map(dishes.filter((dish) => !dish.imageIsPlaceholder && dish.img.startsWith("https://")).map((dish) => [dish.id, dish.img])));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [kitchenId]);
+  return photos;
+}
+
+function DishPhoto({ url }: { url: string | undefined }) {
+  return (
+    <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[#F1F3F5]" aria-hidden="true">
+      {url ? (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+          }}
+        />
+      ) : null}
+    </span>
+  );
+}
 
 /**
  * Where checkout lands after a successful payment, and the order's page from Your orders:
- * what happened, what happens next, the bill and the ways forward (track, get help, orders).
+ * what happened, the map (blurred with the kitchen steps until pickup, live after), the bill and
+ * the ways forward (continue payment, track, rate, get help). `paymentStep` is checkout's own
+ * payment step, shown while the order is unpaid. `justPaid` marks checkout's landing after a verified payment,
+ * which the order can trail while the payment is confirmed.
  */
-export function CustomerOrderStatus({ orderId }: { orderId: string }) {
+export function CustomerOrderStatus({
+  orderId,
+  justPaid = false,
+  paymentStep: PaymentStep,
+}: {
+  orderId: string;
+  justPaid?: boolean;
+  /** `onSettled` reloads the order once a payment attempt ends, paid or not. */
+  paymentStep?: ComponentType<{ order: CustomerOrder; onSettled: () => void }>;
+}) {
   const router = useRouter();
   const [order, setOrder] = useState<CustomerOrder | null>(null);
+  const [delivery, setDelivery] = useState<DeliveryStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -233,10 +205,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
       setError("");
 
       try {
-        const response = await fetch("/api/orders/" + encodeURIComponent(orderId), {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
+        const response = await sessionFetch("/api/orders/" + encodeURIComponent(orderId), { cache: "no-store" });
         const raw = await response.json().catch(() => null);
         if (!response.ok) {
           throw new Error(responseMessage(raw, UNAVAILABLE));
@@ -244,6 +213,10 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
         const parsed = parseCustomerOrder(raw);
         if (!parsed || parsed.id.toLowerCase() !== orderId.toLowerCase()) {
           throw new Error(UNAVAILABLE);
+        }
+        if (tracksDelivery(parsed.status)) {
+          const next = await readDelivery(orderId);
+          if (next) setDelivery(next);
         }
         setOrder(parsed);
         setCheckedAt(new Date());
@@ -258,26 +231,29 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     [orderId],
   );
 
+  // Its age is measured when it was fetched, so a render never changes the answer.
+  const abandoned = order !== null && checkedAt !== null && isAbandonedUnpaidOrder(order, checkedAt.getTime());
+  const settled = order !== null && (abandoned || FINAL_STATUSES.has(order.status));
+
   useEffect(() => {
-    let cancelled = false;
     void refresh();
-
-    const timer = window.setInterval(() => {
-      if (!cancelled && document.visibilityState === "visible") {
-        void refresh(true);
-      }
-    }, 15_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
   }, [refresh]);
+
+  useEffect(() => {
+    if (settled) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh(true);
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh, settled]);
+
+  const { profile: kitchen } = useKitchenProfile(order?.kitchenId);
+  const photos = useDishPhotos(order?.kitchenId);
 
   const header = (
     <TrackingHeader
-      title="Order status"
-      orderId={shortOrderNumber(orderId)}
+      title="Order details"
+      orderNumber={shortOrderNumber(orderId)}
       onBack={() => router.push(returnToListPath() ?? "/orders")}
       onRefresh={() => void refresh(true)}
       refreshing={refreshing || (loading && !order)}
@@ -288,19 +264,9 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     return (
       <div className="min-h-screen bg-white">
         {header}
-        <p className="sr-only" role="status">
-          Loading your order
-        </p>
-        <div
-          className="mx-auto grid max-w-5xl gap-5 px-4 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
-          aria-hidden="true"
-        >
-          <div className="space-y-5">
-            <div className="h-44 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-          </div>
-          <div className="h-80 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-        </div>
+        <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
+          <CustomerSectionSkeleton variant="order" label="Loading your order" />
+        </main>
       </div>
     );
   }
@@ -334,11 +300,12 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
     );
   }
 
-  const status = summary(order);
-  const steps = timeline(order);
+  const unpaid = order.status === "PAYMENT_PENDING";
+  const journey = abandoned ? ABANDONED : unpaid && justPaid ? CONFIRMING : orderJourney(order, delivery?.status ?? null);
+  const home = homePin(order);
   const delivered = order.status === "DELIVERED";
-  const problem = status.tone === "problem";
-  const awaitingPayment = order.status === "PAYMENT_PENDING";
+  const problem = journey.kind === "CLOSED";
+  const awaitingPayment = unpaid && !abandoned && !justPaid;
   const trackable = !problem && !delivered;
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const bill: [string, number][] = [
@@ -358,7 +325,7 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
             {/* What happened and what happens next, with the way forward right under it. */}
             <section className={`${CARD} p-5 md:p-6`} aria-labelledby="order-status-title">
               <div className="flex items-start gap-4">
-                {status.tone === "placed" ? (
+                {!problem && !unpaid ? (
                   <PlacedTick />
                 ) : (
                   <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
@@ -374,10 +341,10 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
                     id="order-status-title"
                     className="font-display text-2xl font-bold leading-tight tracking-[-0.03em]"
                   >
-                    {status.title}
+                    {journey.title}
                   </h2>
-                  {status.next ? (
-                    <p className="mt-1.5 text-[0.9375rem] leading-6 text-[#4A4A4A]">{status.next}</p>
+                  {journey.detail ? (
+                    <p className="mt-1.5 text-[0.9375rem] leading-6 text-[#4A4A4A]">{journey.detail}</p>
                   ) : null}
                   <p className="mt-2 text-sm text-[#6B6B6B]">
                     Order #{shortOrderNumber(order.id)} · Placed {when(order.createdAt)}
@@ -387,10 +354,8 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
 
               {order.chefResponseNote ? (
                 <figure className="mt-4 rounded-xl bg-[#F1F3F5] px-4 py-3">
-                  <blockquote className="text-[0.9375rem] leading-6">“{order.chefResponseNote}”</blockquote>
-                  <figcaption className="mt-1 text-xs font-semibold text-[#6B6B6B]">
-                    {order.kitchenName}
-                  </figcaption>
+                  <figcaption className="text-xs font-semibold text-[#6B6B6B]">Note from the chef</figcaption>
+                  <blockquote className="mt-1 text-[0.9375rem] leading-6">“{order.chefResponseNote}”</blockquote>
                 </figure>
               ) : null}
 
@@ -416,77 +381,59 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
                   </Link>
                 )}
               </div>
-            </section>
-
-            <section className={`${CARD} p-5 md:p-6`} aria-labelledby="order-progress-title">
-              <h2 id="order-progress-title" className="text-base font-semibold">
-                Progress
-              </h2>
-              {problem ? (
-                <p className="mt-2 text-sm leading-6 text-[#4A4A4A]">
-                  {formatOrderStatus(order.status)} · updated {when(order.updatedAt)}
-                </p>
-              ) : (
-                <ol className="relative mt-4 space-y-5 pl-10">
-                  <span
-                    className="absolute left-[13px] top-3 h-[calc(100%-24px)] w-px bg-[#E5E7EB]"
-                    aria-hidden="true"
-                  />
-                  {steps.map((step) => (
-                    <li
-                      key={step.key}
-                      className="relative"
-                      aria-current={step.active ? "step" : undefined}
-                    >
-                      <span
-                        className={[
-                          "absolute -left-10 flex h-7 w-7 items-center justify-center rounded-full border",
-                          step.done
-                            ? "border-[#F62E18] bg-[#F62E18] text-white"
-                            : step.active
-                              ? "border-[#F62E18] bg-white text-[#F62E18]"
-                              : "border-[#D7DADF] bg-[#F1F3F5] text-[#A2A6AA]",
-                        ].join(" ")}
-                      >
-                        {step.done ? (
-                          <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />
-                        ) : (
-                          <span className="relative flex h-2 w-2" aria-hidden="true">
-                            {/* The step in progress breathes; reduced motion holds it still. */}
-                            {step.active ? (
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60 motion-reduce:animate-none" />
-                            ) : null}
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-                          </span>
-                        )}
-                      </span>
-                      <p
-                        className={`text-sm font-semibold ${step.done || step.active ? "text-[#1A1A1A]" : "text-[#8B8F93]"}`}
-                      >
-                        {step.label}
-                        {step.active ? <span className="sr-only"> (in progress)</span> : null}
-                      </p>
-                      {step.active ? (
-                        <p className="mt-0.5 text-xs text-[#6B6B6B]">Now · updated {when(order.updatedAt)}</p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
-              )}
-              <p className="mt-5 text-xs text-[#6B6B6B]" role="status">
+              <p className="mt-4 text-xs text-[#6B6B6B]" role="status">
                 {refreshing
                   ? "Checking for an update…"
-                  : `Updates every 15 seconds${checkedAt ? ` · last checked ${clock.format(checkedAt)}` : ""}`}
+                  : settled && checkedAt
+                    ? `Last checked ${clock.format(checkedAt)}`
+                    : `Updates every 30 seconds${checkedAt ? ` · last checked ${clock.format(checkedAt)}` : ""}`}
               </p>
             </section>
+
+            {delivered ? <OrderReviewCard orderId={order.id} /> : null}
+
+            {journey.kind === "KITCHEN" ? (
+              <OrderMap
+                home={home}
+                courier={null}
+                blurred
+                label="Map, hidden until your order is picked up"
+                className="h-[248px] rounded-2xl"
+              >
+                <KitchenSteps step={journey.step} />
+              </OrderMap>
+            ) : journey.kind === "DELIVERY" ? (
+              <Link
+                href={`/orders/${order.id}/tracking`}
+                aria-label={journey.delivered ? "Delivery history" : "Track live: open the delivery map"}
+                className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+              >
+                <OrderMap
+                  home={home}
+                  courier={delivery?.courierLocation ?? null}
+                  blurred={false}
+                  label="Delivery map"
+                  className="h-[280px] rounded-2xl"
+                >
+                  <span className="pointer-events-none absolute bottom-3 left-3 inline-flex min-h-10 items-center gap-2 rounded-full bg-white pl-3 pr-2 text-[0.9375rem] font-semibold text-[#1A1A1A] shadow-[0_3px_10px_rgba(26,26,26,0.12)]">
+                    <span className="relative flex h-2 w-2" aria-hidden="true">
+                      {journey.delivered ? null : (
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#1F9D55] opacity-60 motion-reduce:animate-none" />
+                      )}
+                      <span className={`relative inline-flex h-2 w-2 rounded-full ${journey.delivered ? "bg-[#6B6B6B]" : "bg-[#1F9D55]"}`} />
+                    </span>
+                    {journey.delivered ? "Delivery history" : "Track live"}
+                    <ChevronRight className="h-[18px] w-[18px] text-[#6B6B6B]" aria-hidden="true" />
+                  </span>
+                </OrderMap>
+              </Link>
+            ) : null}
           </div>
 
           <div className="space-y-5">
             <section className={`${CARD} p-5`} aria-labelledby="order-bill-title">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                  <Store className="h-5 w-5" aria-hidden="true" />
-                </span>
+                <ChefFace photoUrl={kitchen?.chefPhotoUrl} name={kitchen?.displayName ?? order.kitchenName} size={44} />
                 <div className="min-w-0">
                   <h2 id="order-bill-title" className="truncate text-base font-semibold">
                     {order.kitchenName}
@@ -496,10 +443,11 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
                   </p>
                 </div>
               </div>
-              <ul className="mt-4 space-y-2 text-sm">
+              <ul className="mt-4 space-y-3 text-sm">
                 {order.items.map((item) => (
-                  <li key={item.id} className="flex items-start justify-between gap-3">
-                    <span className="min-w-0">
+                  <li key={item.id} className="flex items-center gap-3">
+                    <DishPhoto url={photos.get(item.menuItemId)} />
+                    <span className="min-w-0 flex-1">
                       <span className="font-semibold tabular-nums">{item.quantity} ×</span> {item.itemName}
                     </span>
                     <span className="shrink-0 tabular-nums">{money(item.lineTotal, order.currency)}</span>
@@ -516,11 +464,13 @@ export function CustomerOrderStatus({ orderId }: { orderId: string }) {
                   ) : null,
                 )}
                 <div className="flex justify-between gap-3 border-t border-[#E5E7EB] pt-3 text-base font-bold text-[#1A1A1A]">
-                  <dt>{awaitingPayment ? "To pay" : "Total paid"}</dt>
+                  <dt>{abandoned ? "Order total" : awaitingPayment ? "To pay" : "Total paid"}</dt>
                   <dd className="tabular-nums">{money(order.grandTotal, order.currency)}</dd>
                 </div>
               </dl>
             </section>
+
+            {awaitingPayment && PaymentStep ? <PaymentStep order={order} onSettled={() => void refresh(true)} /> : null}
 
             <section className={`${CARD} p-5`} aria-labelledby="order-address-title">
               <div className="flex items-start gap-3">

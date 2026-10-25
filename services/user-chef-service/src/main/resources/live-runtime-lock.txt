@@ -1,0 +1,25 @@
+# Code user-chef-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.userchef.admin.explorer.AdminExplorerController
+in.craves.userchef.email.AuthEmailProjectionController
+in.craves.userchef.onboarding.ChefOnboardingController
+in.craves.userchef.supportchat.SupportChatController
+in.craves.userchef.web.AdminDirectoryController
+in.craves.userchef.web.AdminSupportCaseController
+in.craves.userchef.web.BackofficeChefDocumentController
+in.craves.userchef.web.ChefApplicationController
+in.craves.userchef.web.ChefApplicationReadinessController
+in.craves.userchef.web.ChefEvidenceController
+in.craves.userchef.web.ChefFinanceApprovalController
+in.craves.userchef.web.ChefReviewController
+in.craves.userchef.web.CustomerAddressGeocodingController
+in.craves.userchef.web.CustomerFavoriteController
+in.craves.userchef.web.CustomerHomeFavoriteController
+in.craves.userchef.web.CustomerLaunchAlertController
+in.craves.userchef.web.CustomerProfileController
+in.craves.userchef.web.InternalBankApplicantController
+in.craves.userchef.web.InternalChefKitchenPhotoController
+in.craves.userchef.web.InternalCustomerAddressController
+in.craves.userchef.web.InternalRoadDistanceController
+in.craves.userchef.web.SupportCaseController

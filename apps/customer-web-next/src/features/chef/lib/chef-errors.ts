@@ -2,6 +2,7 @@
  * The text a chef sees when something fails, with a short reference for support.
  * Used by chef screens (chefApiError / chefErrorText) and chef BFF routes (chefUpstream).
  */
+import { savedLanguage } from "../../../shared/i18n/language.ts";
 
 const CODE = /^[A-Z][A-Z0-9_]{1,80}$/;
 
@@ -10,8 +11,8 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   AUTHENTICATION_REQUIRED: "You are signed out. Sign in again to continue.",
   SESSION_EXPIRED: "Your session expired. Sign in again to continue.",
   // The app already re-reads chef access once by itself, so what remains is almost always Craves' side.
-  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access. Sign in again; if this stays, the problem is on our side, not yours: tell us in More → Get help.",
-  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access. Sign in again; if this stays, the problem is on our side, not yours: tell us in More → Get help.",
+  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.",
+  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.",
   // Kitchen
   KITCHEN_PROFILE_REQUIRED: "Set up your kitchen before adding or managing dishes.",
   KITCHEN_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",
@@ -81,6 +82,273 @@ const STATUS_MESSAGES: Record<number, string> = {
   429: "Too many attempts. Wait a minute and try again.",
 };
 const INVALID_DETAILS = "Some details aren't valid. Check the form and try again.";
+const CHECK_DETAILS = "Check these details and try again: ";
+const UNAVAILABLE = "This part of Craves is temporarily unavailable. Please try again in a few minutes.";
+const GENERIC = "Craves couldn't finish this right now. Please try again in a few minutes.";
+
+/** Every sentence above in Telugu and Kannada, keyed by the English. chef-errors.test.ts keeps none missing. */
+const TRANSLATED: Record<string, { te: string; kn: string }> = {
+  "You are signed out. Sign in again to continue.": {
+    te: "మీరు సైన్ అవుట్ అయ్యారు. కొనసాగడానికి మళ్లీ సైన్ ఇన్ చేయండి.",
+    kn: "ನೀವು ಸೈನ್ ಔಟ್ ಆಗಿದ್ದೀರಿ. ಮುಂದುವರಿಸಲು ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.",
+  },
+  "Your session expired. Sign in again to continue.": {
+    te: "మీ సైన్ ఇన్ సమయం ముగిసింది. కొనసాగడానికి మళ్లీ సైన్ ఇన్ చేయండి.",
+    kn: "ನಿಮ್ಮ ಸೈನ್ ಇನ್ ಸಮಯ ಮುಗಿದಿದೆ. ಮುಂದುವರಿಸಲು ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.",
+  },
+  "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.": {
+    te: "Craves ఇప్పుడు మీ చెఫ్ అనుమతిని నిర్ధారించలేకపోయింది. మేం ఇప్పటికే మళ్లీ ప్రయత్నించాం. 'మళ్లీ ప్రయత్నించండి' నొక్కండి; ఇలాగే జరిగితే అది మా వైపు సమస్య — మరిన్ని → సహాయంలో మాకు చెప్పండి.",
+    kn: "Craves ಈಗ ನಿಮ್ಮ ಚೆಫ್ ಅನುಮತಿಯನ್ನು ಖಚಿತಪಡಿಸಲಾಗಲಿಲ್ಲ. ನಾವು ಈಗಾಗಲೇ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿದ್ದೇವೆ. 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ' ಒತ್ತಿ; ಹೀಗೆಯೇ ಆದರೆ ಅದು ನಮ್ಮ ಕಡೆಯ ಸಮಸ್ಯೆ — ಇನ್ನಷ್ಟು → ಸಹಾಯದಲ್ಲಿ ತಿಳಿಸಿ.",
+  },
+  "Set up your kitchen before adding or managing dishes.": {
+    te: "వంటకాలు జోడించే లేదా మార్చే ముందు మీ వంటగదిని సిద్ధం చేయండి.",
+    kn: "ಖಾದ್ಯಗಳನ್ನು ಸೇರಿಸುವ ಅಥವಾ ಬದಲಾಯಿಸುವ ಮೊದಲು ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಿದ್ಧಪಡಿಸಿ.",
+  },
+  "Your kitchen isn't set up yet. Open Kitchen to create it.": {
+    te: "మీ వంటగది ఇంకా సిద్ధం కాలేదు. దాన్ని సిద్ధం చేయడానికి వంటగది పేజీ తెరవండి.",
+    kn: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಇನ್ನೂ ಸಿದ್ಧವಾಗಿಲ್ಲ. ಅದನ್ನು ಸಿದ್ಧಪಡಿಸಲು ಅಡುಗೆಮನೆ ಪುಟ ತೆರೆಯಿರಿ.",
+  },
+  "Your chef account must be approved before publishing your kitchen or dishes.": {
+    te: "మీ వంటగది లేదా వంటకాలు కస్టమర్లకు చూపించే ముందు మీ చెఫ్ ఖాతా ఆమోదించబడాలి.",
+    kn: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಅಥವಾ ಖಾದ್ಯಗಳನ್ನು ಗ್ರಾಹಕರಿಗೆ ತೋರಿಸುವ ಮೊದಲು ನಿಮ್ಮ ಚೆಫ್ ಖಾತೆ ಅನುಮೋದನೆ ಆಗಬೇಕು.",
+  },
+  "Publishing could not be checked right now. Nothing was published; try again in a few minutes.": {
+    te: "కస్టమర్లకు చూపించవచ్చో ఇప్పుడు చూడలేకపోయాం. ఏదీ చూపించలేదు; కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "ಗ್ರಾಹಕರಿಗೆ ತೋರಿಸಬಹುದೇ ಎಂದು ಈಗ ನೋಡಲಾಗಲಿಲ್ಲ. ಏನನ್ನೂ ತೋರಿಸಿಲ್ಲ; ಕೆಲವು ನಿಮಿಷಗಳ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Enter the packed weight of one portion in grams.": {
+    te: "ఒక పోర్షన్ ప్యాక్ చేసిన బరువును గ్రాములలో రాయండి.",
+    kn: "ಒಂದು ಪೋರ್ಷನ್ ಪ್ಯಾಕ್ ಮಾಡಿದ ತೂಕವನ್ನು ಗ್ರಾಂಗಳಲ್ಲಿ ಬರೆಯಿರಿ.",
+  },
+  "Choose whether this dish needs a thermal box.": {
+    te: "ఈ వంటకానికి థర్మల్ బాక్స్ కావాలో లేదో ఎంచుకోండి.",
+    kn: "ಈ ಖಾದ್ಯಕ್ಕೆ ಥರ್ಮಲ್ ಬಾಕ್ಸ್ ಬೇಕೇ ಎಂದು ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "Add the packed weight and the thermal box choice to this dish before making it available.": {
+    te: "ఈ వంటకాన్ని అందుబాటులో పెట్టే ముందు ప్యాక్ బరువు, థర్మల్ బాక్స్ ఎంపిక జోడించండి.",
+    kn: "ಈ ಖಾದ್ಯವನ್ನು ಲಭ್ಯಗೊಳಿಸುವ ಮೊದಲು ಪ್ಯಾಕ್ ತೂಕ ಮತ್ತು ಥರ್ಮಲ್ ಬಾಕ್ಸ್ ಆಯ್ಕೆ ಸೇರಿಸಿ.",
+  },
+  "This dish no longer exists. Reload your menu.": {
+    te: "ఈ వంటకం ఇప్పుడు లేదు. మీ మెనూను మళ్లీ లోడ్ చేయండి.",
+    kn: "ಈ ಖಾದ್ಯ ಈಗ ಇಲ್ಲ. ನಿಮ್ಮ ಮೆನುವನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "Choose a photo to upload.": {
+    te: "అప్‌లోడ్ చేయడానికి ఒక ఫోటో ఎంచుకోండి.",
+    kn: "ಅಪ್‌ಲೋಡ್ ಮಾಡಲು ಒಂದು ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "This photo is larger than 8 MB. Choose a smaller photo.": {
+    te: "ఈ ఫోటో 8 MB కంటే పెద్దది. చిన్న ఫోటో ఎంచుకోండి.",
+    kn: "ಈ ಫೋಟೋ 8 MB ಗಿಂತ ದೊಡ್ಡದು. ಚಿಕ್ಕ ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "Use a JPEG, PNG or WebP photo.": {
+    te: "JPEG, PNG లేదా WebP ఫోటో వాడండి.",
+    kn: "JPEG, PNG ಅಥವಾ WebP ಫೋಟೋ ಬಳಸಿ.",
+  },
+  "Photo storage is not available yet. Your dish details are saved; add photos once it is fixed.": {
+    te: "ఫోటోలు దాచే సౌకర్యం ఇంకా అందుబాటులో లేదు. మీ వంటకం వివరాలు సేవ్ అయ్యాయి; అది సరి అయ్యాక ఫోటోలు జోడించండి.",
+    kn: "ಫೋಟೋ ಇಡುವ ವ್ಯವಸ್ಥೆ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ. ನಿಮ್ಮ ಖಾದ್ಯದ ವಿವರಗಳನ್ನು ಉಳಿಸಲಾಗಿದೆ; ಅದು ಸರಿಯಾದ ನಂತರ ಫೋಟೋ ಸೇರಿಸಿ.",
+  },
+  "The photo couldn't be read. Try again or choose another photo.": {
+    te: "ఫోటోను చదవలేకపోయాం. మళ్లీ ప్రయత్నించండి లేదా వేరే ఫోటో ఎంచుకోండి.",
+    kn: "ಫೋಟೋವನ್ನು ಓದಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ ಅಥವಾ ಬೇರೆ ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "The photo wasn't saved. Your dish details are safe; try the photo again.": {
+    te: "ఫోటో సేవ్ కాలేదు. మీ వంటకం వివరాలు భద్రంగా ఉన్నాయి; ఫోటోను మళ్లీ ప్రయత్నించండి.",
+    kn: "ಫೋಟೋ ಉಳಿಸಲಾಗಲಿಲ್ಲ. ನಿಮ್ಮ ಖಾದ್ಯದ ವಿವರಗಳು ಸುರಕ್ಷಿತವಾಗಿವೆ; ಫೋಟೋವನ್ನು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "This dish already has 5 photos.": {
+    te: "ఈ వంటకానికి ఇప్పటికే 5 ఫోటోలు ఉన్నాయి.",
+    kn: "ಈ ಖಾದ್ಯಕ್ಕೆ ಈಗಾಗಲೇ 5 ಫೋಟೋಗಳಿವೆ.",
+  },
+  "That photo was already removed. Reload the menu to see the latest photos.": {
+    te: "ఆ ఫోటోను ఇప్పటికే తీసేశారు. తాజా ఫోటోలు చూడటానికి మెనూను మళ్లీ లోడ్ చేయండి.",
+    kn: "ಆ ಫೋಟೋವನ್ನು ಈಗಾಗಲೇ ತೆಗೆದುಹಾಕಲಾಗಿದೆ. ಹೊಸ ಫೋಟೋಗಳನ್ನು ನೋಡಲು ಮೆನುವನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "Choose a JPEG, PNG or WebP photo of 8 MB or less.": {
+    te: "8 MB లేదా అంతకంటే చిన్న JPEG, PNG లేదా WebP ఫోటో ఎంచుకోండి.",
+    kn: "8 MB ಅಥವಾ ಅದಕ್ಕಿಂತ ಚಿಕ್ಕ JPEG, PNG ಅಥವಾ WebP ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "This order couldn't be found. Reload your orders.": {
+    te: "ఈ ఆర్డర్ దొరకలేదు. మీ ఆర్డర్లను మళ్లీ లోడ్ చేయండి.",
+    kn: "ಈ ಆರ್ಡರ್ ಸಿಗಲಿಲ್ಲ. ನಿಮ್ಮ ಆರ್ಡರ್‌ಗಳನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "The time to accept this order has passed, so it can no longer be accepted.": {
+    te: "ఈ ఆర్డర్‌ను ఒప్పుకునే సమయం అయిపోయింది, కాబట్టి ఇప్పుడు ఒప్పుకోలేరు.",
+    kn: "ಈ ಆರ್ಡರ್ ಒಪ್ಪಿಕೊಳ್ಳುವ ಸಮಯ ಮುಗಿದಿದೆ, ಆದ್ದರಿಂದ ಈಗ ಒಪ್ಪಿಕೊಳ್ಳಲು ಆಗುವುದಿಲ್ಲ.",
+  },
+  "This order can't be answered yet. Reload it; if this stays, contact Craves support.": {
+    te: "ఈ ఆర్డర్‌కు ఇంకా జవాబు ఇవ్వలేరు. మళ్లీ లోడ్ చేయండి; ఇలాగే ఉంటే Craves సహాయ బృందాన్ని సంప్రదించండి.",
+    kn: "ಈ ಆರ್ಡರ್‌ಗೆ ಇನ್ನೂ ಉತ್ತರಿಸಲು ಆಗುವುದಿಲ್ಲ. ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ; ಹೀಗೆಯೇ ಇದ್ದರೆ Craves ಸಹಾಯ ತಂಡವನ್ನು ಸಂಪರ್ಕಿಸಿ.",
+  },
+  "This order is already accepted. Reload to see its latest status.": {
+    te: "ఈ ఆర్డర్‌ను ఇప్పటికే ఒప్పుకున్నారు. తాజా స్థితి చూడటానికి మళ్లీ లోడ్ చేయండి.",
+    kn: "ಈ ಆರ್ಡರ್ ಅನ್ನು ಈಗಾಗಲೇ ಒಪ್ಪಿಕೊಳ್ಳಲಾಗಿದೆ. ಹೊಸ ಸ್ಥಿತಿ ನೋಡಲು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "A decision was already recorded for this order. Reload to see its latest status.": {
+    te: "ఈ ఆర్డర్‌పై ఇప్పటికే నిర్ణయం తీసుకున్నారు. తాజా స్థితి చూడటానికి మళ్లీ లోడ్ చేయండి.",
+    kn: "ಈ ಆರ್ಡರ್ ಬಗ್ಗೆ ಈಗಾಗಲೇ ನಿರ್ಧಾರ ಆಗಿದೆ. ಹೊಸ ಸ್ಥಿತಿ ನೋಡಲು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "This order isn't waiting for your answer any more. Reload to see its latest status.": {
+    te: "ఈ ఆర్డర్ ఇప్పుడు మీ జవాబు కోసం ఎదురుచూడటం లేదు. తాజా స్థితి చూడటానికి మళ్లీ లోడ్ చేయండి.",
+    kn: "ಈ ಆರ್ಡರ್ ಈಗ ನಿಮ್ಮ ಉತ್ತರಕ್ಕಾಗಿ ಕಾಯುತ್ತಿಲ್ಲ. ಹೊಸ ಸ್ಥಿತಿ ನೋಡಲು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "A dish in this order is missing its packed weight or thermal box choice. Update it in your menu, then try again.": {
+    te: "ఈ ఆర్డర్‌లోని ఒక వంటకానికి ప్యాక్ బరువు లేదా థర్మల్ బాక్స్ ఎంపిక లేదు. మీ మెనూలో దాన్ని సరిచేసి, మళ్లీ ప్రయత్నించండి.",
+    kn: "ಈ ಆರ್ಡರ್‌ನ ಒಂದು ಖಾದ್ಯಕ್ಕೆ ಪ್ಯಾಕ್ ತೂಕ ಅಥವಾ ಥರ್ಮಲ್ ಬಾಕ್ಸ್ ಆಯ್ಕೆ ಇಲ್ಲ. ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಅದನ್ನು ಸರಿಪಡಿಸಿ, ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Enter how many minutes you need to prepare this order.": {
+    te: "ఈ ఆర్డర్ సిద్ధం చేయడానికి మీకు ఎన్ని నిమిషాలు కావాలో రాయండి.",
+    kn: "ಈ ಆರ್ಡರ್ ಸಿದ್ಧಪಡಿಸಲು ನಿಮಗೆ ಎಷ್ಟು ನಿಮಿಷ ಬೇಕು ಎಂದು ಬರೆಯಿರಿ.",
+  },
+  "This meal plan can only be changed while it is a draft or after it was sent back to you.": {
+    te: "ఈ మీల్ ప్లాన్ డ్రాఫ్ట్‌గా ఉన్నప్పుడు లేదా మీకు తిరిగి పంపిన తర్వాత మాత్రమే మార్చగలరు.",
+    kn: "ಈ ಮೀಲ್ ಪ್ಲಾನ್ ಡ್ರಾಫ್ಟ್ ಆಗಿರುವಾಗ ಅಥವಾ ನಿಮಗೆ ಹಿಂದಿರುಗಿಸಿದ ನಂತರ ಮಾತ್ರ ಬದಲಾಯಿಸಬಹುದು.",
+  },
+  "Give the meal plan a name.": {
+    te: "మీల్ ప్లాన్‌కు ఒక పేరు పెట్టండి.",
+    kn: "ಮೀಲ್ ಪ್ಲಾನ್‌ಗೆ ಒಂದು ಹೆಸರು ಕೊಡಿ.",
+  },
+  "The same dish is added twice to one meal slot. Remove the duplicate.": {
+    te: "ఒకే వంటకం ఒక భోజన సమయంలో రెండుసార్లు ఉంది. ఒకటి తీసేయండి.",
+    kn: "ಒಂದೇ ಖಾದ್ಯ ಒಂದು ಊಟದ ಸಮಯದಲ್ಲಿ ಎರಡು ಬಾರಿ ಇದೆ. ಒಂದನ್ನು ತೆಗೆದುಹಾಕಿ.",
+  },
+  "Weekly meals need a weekday. Pick a day for each meal.": {
+    te: "వారపు భోజనాలకు వారంలో ఒక రోజు కావాలి. ప్రతి భోజనానికి ఒక రోజు ఎంచుకోండి.",
+    kn: "ವಾರದ ಊಟಗಳಿಗೆ ವಾರದ ಒಂದು ದಿನ ಬೇಕು. ಪ್ರತಿ ಊಟಕ್ಕೆ ಒಂದು ದಿನ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "A dish in this plan isn't active any more. Replace it, or make it available in your menu.": {
+    te: "ఈ ప్లాన్‌లోని ఒక వంటకం ఇప్పుడు అందుబాటులో లేదు. దాన్ని మార్చండి, లేదా మీ మెనూలో అందుబాటులో పెట్టండి.",
+    kn: "ಈ ಪ್ಲಾನ್‌ನ ಒಂದು ಖಾದ್ಯ ಈಗ ಲಭ್ಯವಿಲ್ಲ. ಅದನ್ನು ಬದಲಾಯಿಸಿ, ಅಥವಾ ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯಗೊಳಿಸಿ.",
+  },
+  "This meal plan changed while you were editing. Reload it and make your change again.": {
+    te: "మీరు మారుస్తున్నప్పుడే ఈ మీల్ ప్లాన్ మారింది. మళ్లీ లోడ్ చేసి, మీ మార్పు మళ్లీ చేయండి.",
+    kn: "ನೀವು ಬದಲಾಯಿಸುತ್ತಿರುವಾಗಲೇ ಈ ಮೀಲ್ ಪ್ಲಾನ್ ಬದಲಾಗಿದೆ. ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ, ನಿಮ್ಮ ಬದಲಾವಣೆಯನ್ನು ಮತ್ತೆ ಮಾಡಿ.",
+  },
+  "Continue your saved chef application from the Application page.": {
+    te: "సేవ్ చేసిన మీ చెఫ్ దరఖాస్తును దరఖాస్తు పేజీ నుండి కొనసాగించండి.",
+    kn: "ಉಳಿಸಿದ ನಿಮ್ಮ ಚೆಫ್ ಅರ್ಜಿಯನ್ನು ಅರ್ಜಿ ಪುಟದಿಂದ ಮುಂದುವರಿಸಿ.",
+  },
+  "Uploads are locked while your application is being reviewed.": {
+    te: "Craves మీ దరఖాస్తు చూస్తున్నప్పుడు అప్‌లోడ్ చేయలేరు.",
+    kn: "Craves ನಿಮ್ಮ ಅರ್ಜಿ ಪರಿಶೀಲಿಸುತ್ತಿರುವಾಗ ಅಪ್‌ಲೋಡ್ ಮಾಡಲು ಆಗುವುದಿಲ್ಲ.",
+  },
+  "Choose the document type and a file, then upload again.": {
+    te: "పత్రం రకం, ఒక ఫైల్ ఎంచుకుని, మళ్లీ అప్‌లోడ్ చేయండి.",
+    kn: "ದಾಖಲೆಯ ಪ್ರಕಾರ ಮತ್ತು ಒಂದು ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ, ನಂತರ ಮತ್ತೆ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ.",
+  },
+  "Choose a JPG, PNG or PDF file of 10 MB or less.": {
+    te: "10 MB లేదా అంతకంటే చిన్న JPG, PNG లేదా PDF ఫైల్ ఎంచుకోండి.",
+    kn: "10 MB ಅಥವಾ ಅದಕ್ಕಿಂತ ಚಿಕ್ಕ JPG, PNG ಅಥವಾ PDF ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "Photos must be JPG or PNG images.": {
+    te: "ఫోటోలు JPG లేదా PNG గా ఉండాలి.",
+    kn: "ಫೋಟೋಗಳು JPG ಅಥವಾ PNG ಆಗಿರಬೇಕು.",
+  },
+  "Secure document storage is temporarily unavailable. Your file wasn't saved; try again in a few minutes.": {
+    te: "పత్రాలు భద్రంగా దాచే సౌకర్యం ఇప్పుడు పని చేయడం లేదు. మీ ఫైల్ సేవ్ కాలేదు; కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "ದಾಖಲೆಗಳನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಇಡುವ ವ್ಯವಸ್ಥೆ ಈಗ ಕೆಲಸ ಮಾಡುತ್ತಿಲ್ಲ. ನಿಮ್ಮ ಫೈಲ್ ಉಳಿಸಲಾಗಿಲ್ಲ; ಕೆಲವು ನಿಮಿಷಗಳ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Document status is temporarily unavailable. Try again in a few minutes.": {
+    te: "పత్రాల స్థితి ఇప్పుడు కనిపించడం లేదు. కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "ದಾಖಲೆಗಳ ಸ್ಥಿತಿ ಈಗ ಸಿಗುತ್ತಿಲ್ಲ. ಕೆಲವು ನಿಮಿಷಗಳ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "This video isn't ready yet. Try again later.": {
+    te: "ఈ వీడియో ఇంకా సిద్ధం కాలేదు. కాసేపటి తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "ಈ ವೀಡಿಯೊ ಇನ್ನೂ ಸಿದ್ಧವಾಗಿಲ್ಲ. ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Choose a supported language.": {
+    te: "ఇక్కడ ఉన్న భాషల్లో ఒకటి ఎంచుకోండి.",
+    kn: "ಇಲ್ಲಿರುವ ಭಾಷೆಗಳಲ್ಲಿ ಒಂದನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "Secure video playback is unavailable right now. Try again in a few minutes.": {
+    te: "ఇప్పుడు వీడియో ప్లే చేయడం కుదరదు. కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "ಈಗ ವೀಡಿಯೊ ಪ್ಲೇ ಮಾಡಲು ಆಗುವುದಿಲ್ಲ. ಕೆಲವು ನಿಮಿಷಗಳ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "This request couldn't be processed. Check the amount and details, then try again.": {
+    te: "ఇది పూర్తి కాలేదు. మొత్తం, వివరాలు సరిచూసి, మళ్లీ ప్రయత్నించండి.",
+    kn: "ಇದು ಪೂರ್ಣಗೊಳ್ಳಲಿಲ್ಲ. ಮೊತ್ತ ಮತ್ತು ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ, ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "We couldn't verify your payout details. Verify your email and bank details, then try again.": {
+    te: "మీ చెల్లింపు వివరాలను నిర్ధారించలేకపోయాం. మీ ఈమెయిల్, బ్యాంక్ వివరాలు ధృవీకరించి, మళ్లీ ప్రయత్నించండి.",
+    kn: "ನಿಮ್ಮ ಪಾವತಿ ವಿವರಗಳನ್ನು ಖಚಿತಪಡಿಸಲು ಆಗಲಿಲ್ಲ. ನಿಮ್ಮ ಇಮೇಲ್ ಮತ್ತು ಬ್ಯಾಂಕ್ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ, ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Choose a valid statement period: the start date must be before the end date.": {
+    te: "సరైన స్టేట్‌మెంట్ కాలం ఎంచుకోండి: మొదటి తేదీ చివరి తేదీ కంటే ముందు ఉండాలి.",
+    kn: "ಸರಿಯಾದ ಸ್ಟೇಟ್‌ಮೆಂಟ್ ಅವಧಿ ಆಯ್ಕೆಮಾಡಿ: ಆರಂಭದ ದಿನಾಂಕ ಕೊನೆಯ ದಿನಾಂಕಕ್ಕಿಂತ ಮೊದಲು ಇರಬೇಕು.",
+  },
+  "That period has too many entries. Choose a shorter period.": {
+    te: "ఆ కాలంలో చాలా ఎక్కువ వివరాలు ఉన్నాయి. తక్కువ రోజులు ఎంచుకోండి.",
+    kn: "ಆ ಅವಧಿಯಲ್ಲಿ ತುಂಬಾ ಹೆಚ್ಚು ವಿವರಗಳಿವೆ. ಕಡಿಮೆ ದಿನಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "We couldn't reach Craves. Check your internet connection and try again.": {
+    te: "Craves ను చేరలేకపోయాం. ఇంటర్నెట్ చూసుకుని మళ్లీ ప్రయత్నించండి.",
+    kn: "Craves ಅನ್ನು ತಲುಪಲು ಆಗಲಿಲ್ಲ. ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Craves took too long to respond. Please try again.": {
+    te: "Craves జవాబు ఇవ్వడానికి చాలా సమయం పట్టింది. దయచేసి మళ్లీ ప్రయత్నించండి.",
+    kn: "Craves ಉತ್ತರಿಸಲು ತುಂಬಾ ಸಮಯ ತೆಗೆದುಕೊಂಡಿತು. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  "Craves sent a reply this screen couldn't read. Reload the page; if it keeps happening, contact Craves support.": {
+    te: "Craves పంపిన జవాబును ఈ స్క్రీన్ చదవలేకపోయింది. పేజీని మళ్లీ లోడ్ చేయండి; ఇలాగే జరుగుతూ ఉంటే Craves సహాయ బృందాన్ని సంప్రదించండి.",
+    kn: "Craves ಕಳುಹಿಸಿದ ಉತ್ತರವನ್ನು ಈ ಸ್ಕ್ರೀನ್ ಓದಲು ಆಗಲಿಲ್ಲ. ಪುಟವನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ; ಹೀಗೆಯೇ ಆಗುತ್ತಿದ್ದರೆ Craves ಸಹಾಯ ತಂಡವನ್ನು ಸಂಪರ್ಕಿಸಿ.",
+  },
+  "Something on this screen went wrong. Reload the page; if it keeps happening, contact Craves support.": {
+    te: "ఈ స్క్రీన్‌లో ఏదో తప్పు జరిగింది. పేజీని మళ్లీ లోడ్ చేయండి; ఇలాగే జరుగుతూ ఉంటే Craves సహాయ బృందాన్ని సంప్రదించండి.",
+    kn: "ಈ ಸ್ಕ್ರೀನ್‌ನಲ್ಲಿ ಏನೋ ತಪ್ಪಾಗಿದೆ. ಪುಟವನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ; ಹೀಗೆಯೇ ಆಗುತ್ತಿದ್ದರೆ Craves ಸಹಾಯ ತಂಡವನ್ನು ಸಂಪರ್ಕಿಸಿ.",
+  },
+  "This file is too large. Choose a smaller file.": {
+    te: "ఈ ఫైల్ చాలా పెద్దది. చిన్న ఫైల్ ఎంచుకోండి.",
+    kn: "ಈ ಫೈಲ್ ತುಂಬಾ ದೊಡ್ಡದು. ಚಿಕ್ಕ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.",
+  },
+  "Too many attempts. Wait a minute and try again.": {
+    te: "చాలా సార్లు ప్రయత్నించారు. ఒక నిమిషం ఆగి మళ్లీ ప్రయత్నించండి.",
+    kn: "ತುಂಬಾ ಸಲ ಪ್ರಯತ್ನಿಸಿದ್ದೀರಿ. ಒಂದು ನಿಮಿಷ ಕಾದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  [INVALID_DETAILS]: {
+    te: "కొన్ని వివరాలు సరిగా లేవు. ఫారం సరిచూసి మళ్లీ ప్రయత్నించండి.",
+    kn: "ಕೆಲವು ವಿವರಗಳು ಸರಿಯಾಗಿಲ್ಲ. ಫಾರ್ಮ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  // Followed by the field names, which stay as the server sent them.
+  [CHECK_DETAILS]: {
+    te: "ఈ వివరాలు సరిచూసి మళ్లీ ప్రయత్నించండి: ",
+    kn: "ಈ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ: ",
+  },
+  [UNAVAILABLE]: {
+    te: "Craves లో ఈ భాగం ఇప్పుడు పని చేయడం లేదు. దయచేసి కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "Craves ನ ಈ ಭಾಗ ಈಗ ಕೆಲಸ ಮಾಡುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ಕೆಲವು ನಿಮಿಷಗಳ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  [GENERIC]: {
+    te: "Craves ఇప్పుడు దీన్ని పూర్తి చేయలేకపోయింది. దయచేసి కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",
+    kn: "Craves ಈಗ ಇದನ್ನು ಪೂರ್ಣಗೊಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಕೆಲವು ನಿಮಿಷಗಳ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  // Fallbacks the kitchen schedule module (api/chef-kitchen-schedule.ts) hands to chefApiError.
+  "We couldn’t load your opening hours.": {
+    te: "మీ వంటగది సమయాలు లోడ్ చేయలేకపోయాం.",
+    kn: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಮಯ ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ.",
+  },
+  "We couldn’t check that day.": {
+    te: "ఆ రోజును చూడలేకపోయాం.",
+    kn: "ಆ ದಿನವನ್ನು ನೋಡಲು ಆಗಲಿಲ್ಲ.",
+  },
+  "We couldn’t save your hours. Please try again.": {
+    te: "మీ సమయాలు సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి.",
+    kn: "ನಿಮ್ಮ ಸಮಯವನ್ನು ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  },
+  // "Can customers find you?" and Home fallbacks.
+  "We couldn’t check your application.": { te: "మీ దరఖాస్తును చెక్ చేయలేకపోయాం.", kn: "ನಿಮ್ಮ ಅರ್ಜಿಯನ್ನು ಪರಿಶೀಲಿಸಲು ಆಗಲಿಲ್ಲ." },
+  "We couldn’t check your kitchen.": { te: "మీ వంటగదిని చెక్ చేయలేకపోయాం.", kn: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯನ್ನು ಪರಿಶೀಲಿಸಲು ಆಗಲಿಲ್ಲ." },
+  "We couldn’t check your menu.": { te: "మీ మెనూను చెక్ చేయలేకపోయాం.", kn: "ನಿಮ್ಮ ಮೆನುವನ್ನು ಪರಿಶೀಲಿಸಲು ಆಗಲಿಲ್ಲ." },
+  "We couldn’t check your kitchen right now.": { te: "ఇప్పుడు మీ వంటగదిని చెక్ చేయలేకపోయాం.", kn: "ಈಗ ನಿಮ್ಮ ಅಡುಗೆಮನೆಯನ್ನು ಪರಿಶೀಲಿಸಲು ಆಗಲಿಲ್ಲ." },
+  "It couldn’t be loaded.": { te: "దీన్ని తెరవలేకపోయాం.", kn: "ಇದನ್ನು ತೆರೆಯಲು ಆಗಲಿಲ್ಲ." },
+};
+
+/** A sentence from this file in the chef's saved language; anything else (and every server-side call) stays as it is. */
+export function chefErrorWords(english: string): string {
+  const language = savedLanguage();
+  if (!language || language === "en") return english;
+  if (english.startsWith(CHECK_DETAILS)) return TRANSLATED[CHECK_DETAILS][language] + english.slice(CHECK_DETAILS.length);
+  return TRANSLATED[english]?.[language] ?? english;
+}
 
 type Fields = Record<string, unknown>;
 const fields = (value: unknown): Fields => (value && typeof value === "object" ? (value as Fields) : {});
@@ -97,7 +365,7 @@ function exact(code: string | undefined, body: Fields): string | undefined {
   if (!code) return undefined;
   if (code === "VALIDATION_FAILED") {
     const names = Array.isArray(body.details) ? [...new Set(body.details.filter((d): d is string => typeof d === "string").map(fieldName))] : [];
-    return names.length ? `Check these details and try again: ${names.slice(0, 6).join(", ")}.` : INVALID_DETAILS;
+    return names.length ? `${CHECK_DETAILS}${names.slice(0, 6).join(", ")}.` : INVALID_DETAILS;
   }
   return CHEF_ERROR_MESSAGES[code];
 }
@@ -111,7 +379,7 @@ const unreadable = (code: string | undefined) => !!code && code.startsWith("INVA
 /** Family text, used only when nothing more specific was sent. */
 function family(code: string | undefined): string | undefined {
   if (code?.endsWith("_TIMEOUT")) return CHEF_ERROR_MESSAGES.TIMEOUT;
-  if (code?.endsWith("_UNAVAILABLE")) return "This part of Craves is temporarily unavailable. Please try again in a few minutes.";
+  if (code?.endsWith("_UNAVAILABLE")) return UNAVAILABLE;
   return undefined;
 }
 
@@ -124,9 +392,14 @@ export function chefUpstream(raw: unknown): { reason?: string; message?: string 
 }
 
 export class ChefError extends Error {
-  constructor(message: string, readonly ref: string, readonly status: number) {
+  // Plain fields, not constructor parameter properties, so node's type stripping can run this file in tests.
+  readonly ref: string;
+  readonly status: number;
+  constructor(message: string, ref: string, status: number) {
     super(message);
     this.name = "ChefError";
+    this.ref = ref;
+    this.status = status;
   }
 }
 
@@ -145,7 +418,7 @@ export function chefApiError(response: { status: number }, body: unknown, fallba
     ?? (code && OWN_SENTENCE.has(code) ? exact(code, b) : undefined)
     ?? serverText ?? exact(code, b) ?? family(reason) ?? family(code)
     ?? STATUS_MESSAGES[response.status]
-    ?? (fallback || "Craves couldn't finish this right now. Please try again in a few minutes.");
+    ?? (fallback || GENERIC);
   return new ChefError(message, reason ?? code ?? `HTTP_${response.status}`, response.status);
 }
 
@@ -180,14 +453,18 @@ function report(ref: string, status: number) {
   }).catch(() => undefined);
 }
 
-/** Whether a sentence from chefErrorText is about chef access, which "Sign in again" (not a retry) can fix. */
+/** Whether a sentence from chefErrorText is about chef access: offer the access retry and Get help, never a new sign-in. */
 export function isChefAccessText(text: string): boolean {
   return /\(Ref: CHEF_(ACCESS|ROLE)_REQUIRED\)$/.test(text);
 }
 
-/** The sentence a chef screen shows for any failure, ending with a reference such as "(Ref: CHEF_ACCEPTANCE_EXPIRED)". */
+/**
+ * The sentence a chef screen shows for any failure, in the chef's language, ending with a reference such as
+ * "(Ref: CHEF_ACCEPTANCE_EXPIRED)" (the reference stays English: support reads it, and isChefAccessText looks for it).
+ */
 export function chefErrorText(error: unknown, fallback: string): string {
   const failure = classify(error, fallback);
   report(failure.ref, failure.status);
-  return failure.ref === "SCREEN_MESSAGE" ? failure.message : `${failure.message} (Ref: ${failure.ref})`;
+  const message = chefErrorWords(failure.message);
+  return failure.ref === "SCREEN_MESSAGE" ? message : `${message} (Ref: ${failure.ref})`;
 }

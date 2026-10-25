@@ -63,7 +63,7 @@ class EmailVerificationPersistenceTest {
         jdbc.update("INSERT INTO auth_identity(id,firebase_uid,phone_number,email,email_verified) VALUES(?,?,?,'existing@example.test',true)",
             historical,"historical-"+historical,"hist-"+historical.toString().substring(0,20));
         flyway=Flyway.configure().dataSource(source).schemas("email_auth_test").defaultSchema("email_auth_test").load();
-        assertEquals(3,flyway.migrate().migrationsExecuted);
+        assertEquals(6,flyway.migrate().migrationsExecuted);
         assertEquals("existing@example.test",jdbc.queryForObject("SELECT email FROM auth_identity WHERE id=?",String.class,historical));
         assertTrue(Boolean.TRUE.equals(jdbc.queryForObject("SELECT email_verified FROM auth_identity WHERE id=?",Boolean.class,historical)));
         assertEquals(0L,jdbc.queryForObject("SELECT email_revision FROM auth_identity WHERE id=?",Long.class,historical));
@@ -229,12 +229,69 @@ class EmailVerificationPersistenceTest {
         jdbc.execute("DROP SCHEMA IF EXISTS email_auth_clean_test CASCADE");
         var source=jdbc.getDataSource();
         Flyway clean=Flyway.configure().dataSource(source).schemas("email_auth_clean_test").defaultSchema("email_auth_clean_test").load();
-        assertEquals(16,clean.migrate().migrationsExecuted);
+        assertEquals(19,clean.migrate().migrationsExecuted);
         assertEquals(0,clean.migrate().migrationsExecuted);clean.validate();
-        assertEquals(16,jdbc.queryForObject("SELECT count(*) FROM email_auth_clean_test.flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        assertEquals(19,jdbc.queryForObject("SELECT count(*) FROM email_auth_clean_test.flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('academy_schema.learner')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_admission')::text",String.class));
+    }
+
+    static final java.util.concurrent.atomic.AtomicLong TEST_PHONE_BASE = new java.util.concurrent.atomic.AtomicLong(9000000000L);
+    static final String TEMP_CODE="112233";
+    EmailVerificationTestBypass temporaryPolicy(long lifetime) throws Exception {
+        long base=TEST_PHONE_BASE.addAndGet(1000);
+        var labels=new java.util.LinkedHashMap<String,String>();
+        for(int i=1;i<=210;i++) labels.put("+91"+(base+i),"CHEF-E2E-"+String.format("%03d",i));
+        var pairs=java.util.Map.of("qa1@example.test","+91"+(base+1),"qa2@example.test","+91"+(base+2),"qa3@example.test","+91"+(base+3));
+        jdbc.update("UPDATE auth_identity SET phone_number=? WHERE id=?","+91"+(base+1),owner.identityId());
+        owner=new CurrentUser(owner.identityId(),owner.firebaseUid(),"+91"+(base+1),owner.roles(),owner.tokenVersion());
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        return new EmailVerificationTestBypass(true,mapper.writeValueAsString(pairs),true,mapper.writeValueAsString(labels),TEMP_CODE,
+            clock.instant().plusSeconds(lifetime).toString(),clock);
+    }
+    @Test void temporaryDeliveryBypassRetainsWrongCodeAuditAndCanonicalProjection() throws Exception {
+        service=new EmailVerificationService(jdbc,transactions,SETTINGS,transport,clock,temporaryPolicy(3600));
+        var pending=issue("qa1@example.test");UUID id=pending.pending().challengeId();
+        assertTrue(transport.codes.isEmpty());assertFalse(pending.emailVerified());
+        assertEquals("ACCEPTED",pending.pending().deliveryStatus());
+        assertEquals("EMAIL_CODE_INVALID",assertThrows(AuthException.class,()->service.verify(owner,id,"000000")).getCode());
+        assertEquals(1,jdbc.queryForObject("SELECT attempts FROM auth_email_challenge WHERE id=?",Integer.class,id));
+        assertNotEquals(TEMP_CODE,jdbc.queryForObject("SELECT code_mac FROM auth_email_challenge WHERE id=?",String.class,id));
+        var verified=service.verify(owner,id,TEMP_CODE);
+        assertTrue(verified.emailVerified());assertEquals("qa1@example.test",verified.email());assertEquals(List.of("CUSTOMER"),owner.roles());
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection_outbox WHERE identity_id=?",Integer.class,owner.identityId()));
+        assertThrows(AuthException.class,()->service.verify(owner,id,TEMP_CODE));
+    }
+    @Test void temporaryCodeCannotBeUsedByAnotherAccountOrAStalePhoneClaim() throws Exception {
+        service=new EmailVerificationService(jdbc,transactions,SETTINGS,transport,clock,temporaryPolicy(3600));
+        var issued=issue("qa1@example.test");var other=newOwner();
+        assertThrows(AuthException.class,()->service.issue(other,"qa1@example.test",UUID.randomUUID()));
+        assertThrows(AuthException.class,()->service.verify(other,issued.pending().challengeId(),TEMP_CODE));
+        jdbc.update("UPDATE auth_identity SET phone_number=? WHERE id=?","phone-changed-"+owner.identityId().toString().substring(0,10),owner.identityId());
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->service.verify(owner,issued.pending().challengeId(),TEMP_CODE)).getCode());
+        assertFalse(service.state(owner).emailVerified());assertTrue(transport.codes.isEmpty());
+    }
+    @Test void temporaryExpiryIsCheckedEvenWhileChallengeIsStillUnexpired() throws Exception {
+        service=new EmailVerificationService(jdbc,transactions,SETTINGS,transport,clock,temporaryPolicy(90));
+        var issued=issue("qa1@example.test");clock.advance(90);
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->service.verify(owner,issued.pending().challengeId(),TEMP_CODE)).getCode());
+        assertFalse(service.state(owner).emailVerified());
+        assertEquals("EMAIL_REQUEST_INVALID",assertThrows(AuthException.class,()->issue("qa1@example.test")).getCode());
+        assertTrue(transport.codes.isEmpty());
+    }
+    @Test void temporaryBypassPreservesResendCooldownRetryAndNormalEmailTransport() throws Exception {
+        service=new EmailVerificationService(jdbc,transactions,SETTINGS,transport,clock,temporaryPolicy(3600));
+        UUID request=UUID.randomUUID();var first=service.issue(owner,"qa1@example.test",request);
+        assertEquals(first.pending().challengeId(),service.issue(owner,"qa1@example.test",request).pending().challengeId());
+        assertEquals("EMAIL_VERIFICATION_RATE_LIMITED",assertThrows(AuthException.class,()->service.resend(owner,first.pending().challengeId(),UUID.randomUUID())).getCode());
+        clock.advance(60);var second=service.resend(owner,first.pending().challengeId(),UUID.randomUUID());
+        assertNotEquals(first.pending().challengeId(),second.pending().challengeId());
+        assertThrows(AuthException.class,()->service.verify(owner,first.pending().challengeId(),TEMP_CODE));
+        assertTrue(service.verify(owner,second.pending().challengeId(),TEMP_CODE).emailVerified());
+        assertTrue(transport.codes.isEmpty());clock.advance(60);
+        var real=issue("genuine@example.test");assertEquals(1,transport.codes.size());
+        assertTrue(service.verify(owner,real.pending().challengeId(),transport.code(real.pending().challengeId())).emailVerified());
     }
     private static void resetPublicExplorerFixture(JdbcTemplate database) {
         // V9 deliberately uses public, outside the test's default schema. The caller has passed the strict disposable DB guard.

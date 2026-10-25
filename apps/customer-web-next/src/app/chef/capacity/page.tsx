@@ -1,22 +1,26 @@
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
-import { ChefCapacityQuickSetup } from "@/features/chef/components/chef-capacity-quick-setup";
+import { ChefDailyLimits } from "@/features/chef/components/chef-daily-limits";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
+import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
-  title: "Plates per day | Craves Chef",
+  title: "Daily limits | Craves Chef",
   robots: { index: false, follow: false },
 };
 
-export default function ChefCapacityPage() {
+// ?plan= comes from a plan card (&from=menu when it is in the Menu tab): only that plan's days count.
+// Without it, the Menu tab (?from=menu) or More opened the page.
+export default async function ChefCapacityPage({ searchParams }: { searchParams: Promise<{ plan?: string | string[]; from?: string | string[] }> }) {
+  const { plan, from } = await searchParams;
+  const planId = typeof plan === "string" && isUuid(plan) ? plan : null;
+  const back = planId
+    ? from === "menu" ? { href: "/chef/menu?view=plans", label: "Menu" } : { href: "/chef/meal-plans", label: "Meal plans" }
+    : from === "menu" ? { href: "/chef/menu", label: "Menu" } : { href: "/chef/profile", label: "More" };
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader
-          title="Plates per day"
-          description="How many meal plan plates you can cook. Craves already set safe numbers for you. Change them only if you want to."
-          back={{ href: "/chef/meal-plans", label: "Meal plans" }}
-        />
-        <ChefCapacityQuickSetup />
+        <ChefPageHeader title="Daily limits" description="How many plates you can cook" back={back} />
+        <ChefDailyLimits planId={planId} />
       </ChefAccessBoundary>
     </main>
   );

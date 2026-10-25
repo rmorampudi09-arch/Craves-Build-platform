@@ -61,6 +61,7 @@ public class ChefApplicationService {
         this(jdbcTemplate,storageService,authInternalClient,notificationInternalClient,emailProjection,false);
     }
 
+    @Transactional(readOnly = true)
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
         List<ChefApplicationResponse> rows = findApplications("WHERE identity_id = ?", user.identityId());
         if (rows.isEmpty()) {
@@ -152,17 +153,20 @@ public class ChefApplicationService {
         return getDocument(documentId);
     }
 
+    @Transactional(readOnly = true)
     public List<KycDocumentResponse> listMyApplicationEvidence(CurrentUser user) {
         ChefApplicationResponse application = getExistingApplication(user.identityId());
         return listApplicationEvidence(application.id());
     }
 
+    @Transactional(readOnly = true)
     public List<KycDocumentResponse> listApplicationEvidenceForAdmin(CurrentUser admin, UUID applicationId) {
         requireReviewAccess(admin);
         getApplicationForAdmin(admin, applicationId);
         return listApplicationEvidence(applicationId);
     }
 
+    @Transactional(readOnly = true)
     public List<ChefApplicationResponse> listApplications(CurrentUser admin, ChefApplicationStatus status) {
         requireReviewAccess(admin);
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
@@ -171,6 +175,7 @@ public class ChefApplicationService {
         return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber' OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
     }
 
+    @Transactional(readOnly = true)
     public ChefApplicationResponse getApplicationForAdmin(CurrentUser admin, UUID applicationId) {
         requireReviewAccess(admin);
         List<ChefApplicationResponse> rows = findApplications("WHERE id = ?", applicationId);
@@ -347,6 +352,7 @@ public class ChefApplicationService {
         return jdbcTemplate.query("SELECT * FROM chef_kyc_document WHERE id = ?", this::mapDocument, documentId).getFirst();
     }
 
+    // Reads documents inside its row mapper: callers run in a transaction so both reads share one pool connection.
     private List<ChefApplicationResponse> findApplications(String whereClause, Object... args) {
         String sql = "SELECT * FROM chef_application " + whereClause + " ORDER BY submitted_at DESC";
         return jdbcTemplate.query(sql, this::mapApplication, args);

@@ -2,16 +2,19 @@
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   AlertTriangle,
+  BellOff,
   BellRing,
-  LogIn,
+  ChevronRight,
+  Landmark,
   RefreshCw,
   Store,
+  ToggleRight,
   Utensils,
 } from "lucide-react";
-import { signInToChefModeAgain } from "@/features/chef/components/chef-account-menu";
+import { ChefAccessRetry } from "@/features/chef/components/chef-account-menu";
 import { createKitchenFromApplication } from "@/features/chef/lib/chef-kitchen-handoff";
 import {
   ChefEmpty,
@@ -21,8 +24,7 @@ import {
 } from "@/features/chef/components/chef-ui";
 import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
 import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
-import { ChefOrderAlerts } from "@/features/chef/components/chef-order-alerts";
-import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
+import { mergeOrders, noticeNewOrders, useAlertPrefs, useChefOrderPolling, writeAlertPrefs } from "@/features/chef/lib/chef-order-alert";
 import {
   parseChefApplication,
   type ChefApplication,
@@ -38,12 +40,16 @@ import {
   parseChefEarnings,
   type ChefEarning,
 } from "@/features/chef/lib/chef-earnings-contract";
+import { bankStatusSchema } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { getSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
+import { format, messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
 
 type DashboardState = "loading" | "approved" | "error";
+type Part = "application" | "kitchen" | "menu" | "orders" | "earnings";
 
 type Snapshot = {
   application: ChefApplication | null;
@@ -51,20 +57,13 @@ type Snapshot = {
   menu: ChefMenuItem[];
   orders: ChefOrder[];
   earnings: ChefEarning[];
-  unavailable: string[];
+  /** Whether Craves can pay this chef: false only when the bank check said no account was added. */
+  bankAdded: boolean;
+  unavailable: Part[];
   /** Why each unavailable part failed, as shown to the chef. */
-  details: string[];
-  /** A part failed because this sign-in's chef access is out of date: a fresh sign-in fixes it. */
+  details: { part: Part; text: string }[];
+  /** A part failed because Craves couldn’t confirm chef access, even after re-reading it once. */
   accessProblem?: boolean;
-};
-
-type PriorityAction = {
-  title: string;
-  description: string;
-  action: string;
-  href?: string;
-  refresh?: boolean;
-  icon: typeof Store;
 };
 
 const EMPTY: Snapshot = {
@@ -73,9 +72,87 @@ const EMPTY: Snapshot = {
   menu: [],
   orders: [],
   earnings: [],
+  bankAdded: true,
   unavailable: [],
   details: [],
 };
+
+// The welcome after approval shows once, only while it is news: approved recently and no dish yet.
+const WELCOME_DAYS = 30;
+
+const TEXT = messages({
+  en: {
+    loading: "Loading Chef Mode", loadFailedTitle: "Chef Mode couldn’t load", loadFailed: "We couldn’t load Chef Mode right now. Please try again.", tryAgain: "Try again",
+    morning: "Good morning, {name}", afternoon: "Good afternoon, {name}", evening: "Good evening, {name}", chef: "Chef", yourKitchen: "Your Craves kitchen",
+    welcomeTitle: "You’re a Craves chef", welcomeKitchen: "Your kitchen is set up. Add your first dish so customers can find what you cook.",
+    welcomeNoKitchen: "Save your kitchen name and pickup address, then add your first dish.", notNow: "Not now", addFirstDish: "Add my first dish", setUpKitchen: "Set up my kitchen",
+    ordersFailedTitle: "Your orders couldn’t load", ordersFailedAccess: "Craves couldn’t confirm your chef access just now, so new orders won’t show or ring. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Help. You don’t need to sign in again.",
+    someFailed: "Some information couldn’t refresh. Everything else below is up to date.",
+    partApplication: "Application", partKitchen: "Kitchen", partMenu: "Menu", partOrders: "Orders", partEarnings: "Earnings",
+    fixTitle: "Do this so customers can order", checkTitle: "Check your kitchen and menu", checkText: "We couldn’t check your saved kitchen or dishes. Try again before you carry on.",
+    nameTitle: "Give your kitchen a name", nameText: "This is what customers will know your home kitchen by.", nameAction: "Name my kitchen",
+    firstDishTitle: "Add your first dish", firstDishText: "Add one dish so customers can see what you cook.", firstDishAction: "Add a dish",
+    noDishOnTitle: "No dish is on today", noDishOnText: "Your kitchen is open, but customers can’t order anything. Turn on the dishes you are cooking today.", noDishOnAction: "Turn on dishes",
+    soundOffTitle: "Order sound is off", soundOffText: "Your phone won’t ring for new orders. Turn it on so you don’t miss one.", soundOffAction: "Turn sound on",
+    bankTitle: "Add your bank account", bankText: "Craves sends your money to it. You can keep cooking while it is checked.", bankAction: "Add bank account",
+    newOne: "New order: answer now", newMany: "{count} new orders: answer now", inKitchen: "In your kitchen", allOrders: "All orders",
+    noOrders: "No new orders right now.", keepOpen: "Keep Craves open: your phone rings when a customer orders.", checkNow: "Check now",
+    ordersUnknown: "Orders couldn’t load. We keep trying every few seconds.", ordersWaitAccess: "Orders show here as soon as Craves confirms your chef access.",
+    today: "Today", ordersToday: "Orders today", cookingNow: "Cooking now", dishesOn: "Dishes on today", dishesOf: "{on} of {all}", earnedWeek: "Earned this week",
+    soundOn: "Your phone rings for new orders", soundSettings: "Order sound & settings",
+  },
+  te: {
+    loading: "చెఫ్ మోడ్ లోడ్ అవుతోంది", loadFailedTitle: "చెఫ్ మోడ్ లోడ్ కాలేదు", loadFailed: "ఇప్పుడు చెఫ్ మోడ్ లోడ్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి.", tryAgain: "మళ్లీ ప్రయత్నించండి",
+    morning: "శుభోదయం, {name}", afternoon: "నమస్కారం, {name}", evening: "శుభ సాయంత్రం, {name}", chef: "చెఫ్", yourKitchen: "మీ Craves వంటగది",
+    welcomeTitle: "మీరు ఇప్పుడు Craves చెఫ్", welcomeKitchen: "మీ వంటగది సిద్ధంగా ఉంది. కస్టమర్లు చూడాలంటే మీ మొదటి వంటకం జోడించండి.",
+    welcomeNoKitchen: "మీ వంటగది పేరు, పికప్ చిరునామా సేవ్ చేసి, తర్వాత మొదటి వంటకం జోడించండి.", notNow: "ఇప్పుడు కాదు", addFirstDish: "మొదటి వంటకం జోడించండి", setUpKitchen: "వంటగది సిద్ధం చేయండి",
+    ordersFailedTitle: "మీ ఆర్డర్లు లోడ్ కాలేదు", ordersFailedAccess: "Craves ఇప్పుడు మీ చెఫ్ అనుమతిని నిర్ధారించలేకపోయింది, అందుకే కొత్త ఆర్డర్లు కనిపించవు, మోగవు. మేం ఇప్పటికే మళ్లీ ప్రయత్నించాం. 'మళ్లీ ప్రయత్నించండి' నొక్కండి; ఇలాగే జరిగితే అది మా వైపు సమస్య — సహాయంలో మాకు చెప్పండి. మళ్లీ సైన్ ఇన్ అవసరం లేదు.",
+    someFailed: "కొన్ని వివరాలు రిఫ్రెష్ కాలేదు. కింద ఉన్నవన్నీ తాజావే.",
+    partApplication: "దరఖాస్తు", partKitchen: "వంటగది", partMenu: "మెనూ", partOrders: "ఆర్డర్లు", partEarnings: "సంపాదన",
+    fixTitle: "కస్టమర్లు ఆర్డర్ చేయాలంటే ఇది చేయండి", checkTitle: "మీ వంటగది, మెనూ చూడండి", checkText: "మీ వంటగది లేదా వంటకాలను చూడలేకపోయాం. ముందుకెళ్లే ముందు మళ్లీ ప్రయత్నించండి.",
+    nameTitle: "మీ వంటగదికి పేరు పెట్టండి", nameText: "కస్టమర్లు మీ ఇంటి వంటగదిని ఈ పేరుతో గుర్తిస్తారు.", nameAction: "పేరు పెట్టండి",
+    firstDishTitle: "మీ మొదటి వంటకం జోడించండి", firstDishText: "మీరు ఏం వండుతారో కస్టమర్లు చూడాలంటే ఒక వంటకం జోడించండి.", firstDishAction: "వంటకం జోడించండి",
+    noDishOnTitle: "ఈరోజు ఏ వంటకం ఆన్‌లో లేదు", noDishOnText: "మీ వంటగది తెరిచి ఉంది, కానీ కస్టమర్లు ఏమీ ఆర్డర్ చేయలేరు. ఈరోజు వండే వంటకాలను ఆన్ చేయండి.", noDishOnAction: "వంటకాలు ఆన్ చేయండి",
+    soundOffTitle: "ఆర్డర్ శబ్దం ఆఫ్‌లో ఉంది", soundOffText: "కొత్త ఆర్డర్ వస్తే మీ ఫోన్ మోగదు. ఒక్క ఆర్డర్ కూడా మిస్ కాకుండా ఆన్ చేయండి.", soundOffAction: "శబ్దం ఆన్ చేయండి",
+    bankTitle: "మీ బ్యాంక్ ఖాతా జోడించండి", bankText: "Craves మీ డబ్బును దానికే పంపుతుంది. అది చెక్ అయ్యే వరకు మీరు వండుతూనే ఉండవచ్చు.", bankAction: "బ్యాంక్ ఖాతా జోడించండి",
+    newOne: "కొత్త ఆర్డర్: ఇప్పుడే జవాబు ఇవ్వండి", newMany: "{count} కొత్త ఆర్డర్లు: ఇప్పుడే జవాబు ఇవ్వండి", inKitchen: "మీ వంటగదిలో", allOrders: "అన్ని ఆర్డర్లు",
+    noOrders: "ఇప్పుడు కొత్త ఆర్డర్లు లేవు.", keepOpen: "Craves తెరిచే ఉంచండి: కస్టమర్ ఆర్డర్ చేస్తే మీ ఫోన్ మోగుతుంది.", checkNow: "ఇప్పుడు చూడండి",
+    ordersUnknown: "ఆర్డర్లు లోడ్ కాలేదు. కొన్ని సెకన్లకు ఒకసారి మళ్లీ ప్రయత్నిస్తున్నాం.", ordersWaitAccess: "Craves మీ చెఫ్ అనుమతిని నిర్ధారించగానే ఆర్డర్లు ఇక్కడ కనిపిస్తాయి.",
+    today: "ఈరోజు", ordersToday: "ఈరోజు ఆర్డర్లు", cookingNow: "ఇప్పుడు వండుతున్నవి", dishesOn: "ఈరోజు ఆన్‌లో ఉన్న వంటకాలు", dishesOf: "{all} లో {on}", earnedWeek: "ఈ వారం సంపాదన",
+    soundOn: "కొత్త ఆర్డర్లకు మీ ఫోన్ మోగుతుంది", soundSettings: "ఆర్డర్ శబ్దం, సెట్టింగ్స్",
+  },
+  kn: {
+    loading: "ಚೆಫ್ ಮೋಡ್ ಲೋಡ್ ಆಗುತ್ತಿದೆ", loadFailedTitle: "ಚೆಫ್ ಮೋಡ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ", loadFailed: "ಈಗ ಚೆಫ್ ಮೋಡ್ ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    morning: "ಶುಭೋದಯ, {name}", afternoon: "ನಮಸ್ಕಾರ, {name}", evening: "ಶುಭ ಸಂಜೆ, {name}", chef: "ಚೆಫ್", yourKitchen: "ನಿಮ್ಮ Craves ಅಡುಗೆಮನೆ",
+    welcomeTitle: "ನೀವು ಈಗ Craves ಚೆಫ್", welcomeKitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಿದ್ಧವಾಗಿದೆ. ಗ್ರಾಹಕರು ನೋಡಲು ನಿಮ್ಮ ಮೊದಲ ಖಾದ್ಯ ಸೇರಿಸಿ.",
+    welcomeNoKitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಹೆಸರು ಮತ್ತು ಪಿಕಪ್ ವಿಳಾಸ ಉಳಿಸಿ, ನಂತರ ಮೊದಲ ಖಾದ್ಯ ಸೇರಿಸಿ.", notNow: "ಈಗ ಬೇಡ", addFirstDish: "ಮೊದಲ ಖಾದ್ಯ ಸೇರಿಸಿ", setUpKitchen: "ಅಡುಗೆಮನೆ ಸಿದ್ಧಮಾಡಿ",
+    ordersFailedTitle: "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ", ordersFailedAccess: "Craves ಈಗ ನಿಮ್ಮ ಚೆಫ್ ಅನುಮತಿಯನ್ನು ಖಚಿತಪಡಿಸಲಾಗಲಿಲ್ಲ, ಹಾಗಾಗಿ ಹೊಸ ಆರ್ಡರ್‌ಗಳು ಕಾಣುವುದಿಲ್ಲ, ರಿಂಗ್ ಆಗುವುದಿಲ್ಲ. ನಾವು ಈಗಾಗಲೇ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿದ್ದೇವೆ. 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ' ಒತ್ತಿ; ಹೀಗೆಯೇ ಆದರೆ ಅದು ನಮ್ಮ ಕಡೆಯ ಸಮಸ್ಯೆ — ಸಹಾಯದಲ್ಲಿ ತಿಳಿಸಿ. ಮತ್ತೆ ಸೈನ್ ಇನ್ ಬೇಡ.",
+    someFailed: "ಕೆಲವು ವಿವರಗಳು ರಿಫ್ರೆಶ್ ಆಗಲಿಲ್ಲ. ಕೆಳಗಿನ ಉಳಿದವೆಲ್ಲ ಹೊಸದಾಗಿವೆ.",
+    partApplication: "ಅರ್ಜಿ", partKitchen: "ಅಡುಗೆಮನೆ", partMenu: "ಮೆನು", partOrders: "ಆರ್ಡರ್‌ಗಳು", partEarnings: "ಗಳಿಕೆ",
+    fixTitle: "ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಲು ಇದನ್ನು ಮಾಡಿ", checkTitle: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ, ಮೆನು ನೋಡಿ", checkText: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಅಥವಾ ಖಾದ್ಯಗಳನ್ನು ನೋಡಲಾಗಲಿಲ್ಲ. ಮುಂದುವರಿಯುವ ಮೊದಲು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    nameTitle: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಗೆ ಹೆಸರಿಡಿ", nameText: "ಗ್ರಾಹಕರು ನಿಮ್ಮ ಮನೆಯ ಅಡುಗೆಮನೆಯನ್ನು ಈ ಹೆಸರಿನಿಂದ ಗುರುತಿಸುತ್ತಾರೆ.", nameAction: "ಹೆಸರಿಡಿ",
+    firstDishTitle: "ನಿಮ್ಮ ಮೊದಲ ಖಾದ್ಯ ಸೇರಿಸಿ", firstDishText: "ನೀವು ಏನು ಅಡುಗೆ ಮಾಡುತ್ತೀರಿ ಎಂದು ಗ್ರಾಹಕರು ನೋಡಲು ಒಂದು ಖಾದ್ಯ ಸೇರಿಸಿ.", firstDishAction: "ಖಾದ್ಯ ಸೇರಿಸಿ",
+    noDishOnTitle: "ಇಂದು ಯಾವ ಖಾದ್ಯವೂ ಆನ್ ಇಲ್ಲ", noDishOnText: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿದೆ, ಆದರೆ ಗ್ರಾಹಕರು ಏನೂ ಆರ್ಡರ್ ಮಾಡಲಾಗದು. ಇಂದು ಮಾಡುವ ಖಾದ್ಯಗಳನ್ನು ಆನ್ ಮಾಡಿ.", noDishOnAction: "ಖಾದ್ಯಗಳನ್ನು ಆನ್ ಮಾಡಿ",
+    soundOffTitle: "ಆರ್ಡರ್ ಶಬ್ದ ಆಫ್ ಆಗಿದೆ", soundOffText: "ಹೊಸ ಆರ್ಡರ್ ಬಂದರೆ ನಿಮ್ಮ ಫೋನ್ ರಿಂಗ್ ಆಗುವುದಿಲ್ಲ. ಯಾವ ಆರ್ಡರ್ ಕೂಡ ತಪ್ಪದಂತೆ ಆನ್ ಮಾಡಿ.", soundOffAction: "ಶಬ್ದ ಆನ್ ಮಾಡಿ",
+    bankTitle: "ನಿಮ್ಮ ಬ್ಯಾಂಕ್ ಖಾತೆ ಸೇರಿಸಿ", bankText: "Craves ನಿಮ್ಮ ಹಣವನ್ನು ಅದಕ್ಕೇ ಕಳುಹಿಸುತ್ತದೆ. ಅದು ಪರಿಶೀಲನೆ ಆಗುವವರೆಗೂ ನೀವು ಅಡುಗೆ ಮುಂದುವರಿಸಬಹುದು.", bankAction: "ಬ್ಯಾಂಕ್ ಖಾತೆ ಸೇರಿಸಿ",
+    newOne: "ಹೊಸ ಆರ್ಡರ್: ಈಗಲೇ ಉತ್ತರಿಸಿ", newMany: "{count} ಹೊಸ ಆರ್ಡರ್‌ಗಳು: ಈಗಲೇ ಉತ್ತರಿಸಿ", inKitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯಲ್ಲಿ", allOrders: "ಎಲ್ಲಾ ಆರ್ಡರ್‌ಗಳು",
+    noOrders: "ಈಗ ಹೊಸ ಆರ್ಡರ್‌ಗಳಿಲ್ಲ.", keepOpen: "Craves ತೆರೆದೇ ಇಡಿ: ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಿದಾಗ ನಿಮ್ಮ ಫೋನ್ ರಿಂಗ್ ಆಗುತ್ತದೆ.", checkNow: "ಈಗ ನೋಡಿ",
+    ordersUnknown: "ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಕೆಲವು ಸೆಕೆಂಡಿಗೊಮ್ಮೆ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸುತ್ತಿದ್ದೇವೆ.", ordersWaitAccess: "Craves ನಿಮ್ಮ ಚೆಫ್ ಅನುಮತಿ ಖಚಿತಪಡಿಸಿದ ತಕ್ಷಣ ಆರ್ಡರ್‌ಗಳು ಇಲ್ಲಿ ಕಾಣುತ್ತವೆ.",
+    today: "ಇಂದು", ordersToday: "ಇಂದಿನ ಆರ್ಡರ್‌ಗಳು", cookingNow: "ಈಗ ಅಡುಗೆ ಆಗುತ್ತಿರುವವು", dishesOn: "ಇಂದು ಆನ್ ಇರುವ ಖಾದ್ಯಗಳು", dishesOf: "{all} ರಲ್ಲಿ {on}", earnedWeek: "ಈ ವಾರದ ಗಳಿಕೆ",
+    soundOn: "ಹೊಸ ಆರ್ಡರ್‌ಗಳಿಗೆ ನಿಮ್ಮ ಫೋನ್ ರಿಂಗ್ ಆಗುತ್ತದೆ", soundSettings: "ಆರ್ಡರ್ ಶಬ್ದ, ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+  },
+});
+type Text = (typeof TEXT)["en"];
+const PART_LABEL: Record<Part, keyof Text> = { application: "partApplication", kitchen: "partKitchen", menu: "partMenu", orders: "partOrders", earnings: "partEarnings" };
+
+/** One thing that stops customers ordering (or the chef getting paid), with the one button that fixes it. */
+type Fix = {
+  key: string;
+  title: string;
+  text: string;
+  icon: ComponentType<{ className?: string }>;
+  urgent?: boolean;
+} & ({ href: string; action: string } | { onClick: () => void; action: string });
 
 function isThisWeek(value: string): boolean {
   const date = new Date(value);
@@ -91,10 +168,26 @@ function isThisWeek(value: string): boolean {
   return date >= start && date < end;
 }
 
+/** Shows the welcome only right after approval, only while there is no dish, and once per device. */
+export function shouldWelcome(application: ChefApplication, menu: ChefMenuItem[], key: string): boolean {
+  if (application.status !== "APPROVED" || menu.length > 0) return false;
+  const reviewed = application.reviewedAt ? Date.parse(application.reviewedAt) : Number.NaN;
+  // No approval date means no proof the approval is new: a long-time chef on a new phone isn't welcomed again.
+  if (Number.isNaN(reviewed) || Date.now() - reviewed > WELCOME_DAYS * 86_400_000) return false;
+  try {
+    return !window.localStorage.getItem(key);
+  } catch {
+    // Without storage it can't remember the welcome was seen; the "Add your first dish" card still guides.
+    return false;
+  }
+}
+
 export function ChefModeDashboard() {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
+  const alertPrefs = useAlertPrefs();
   const [state, setState] = useState<DashboardState>("loading");
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
-  const [message, setMessage] = useState("Loading your kitchen…");
   const [refreshTick, setRefreshTick] = useState(0);
   const [showApprovalNotice, setShowApprovalNotice] = useState(false);
   const [approvalNoticeKey, setApprovalNoticeKey] = useState("");
@@ -113,6 +206,10 @@ export function ChefModeDashboard() {
         if (raw === null || !parseChefKitchen(raw)) return null;
         return sessionFetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
       });
+      // Only to remind a chef with no bank account; a failed check shows nothing.
+      const bankRequest = sessionFetch("/api/chef-onboarding/bank", { cache: "no-store", credentials: "same-origin" })
+        .then(async (response) => (response.ok ? bankStatusSchema.safeParse(await response.json().catch(() => null)) : null))
+        .catch(() => null);
       const requests = await Promise.allSettled([
         sessionFetch("/api/chef/application", {
           cache: "no-store",
@@ -131,58 +228,59 @@ export function ChefModeDashboard() {
       ]);
 
       if (!active) return;
-      const unavailable: string[] = [];
-      const details: string[] = [];
+      const unavailable: Part[] = [];
+      const details: Snapshot["details"] = [];
       let accessProblem = false;
-      const fail = (label: string, failure: unknown) => {
-        unavailable.push(label);
-        const text = chefErrorText(failure, "It couldn’t be loaded."); // also reports the error to Craves
+      const fail = (part: Part, failure: unknown) => {
+        unavailable.push(part);
+        const message = chefErrorText(failure, "It couldn’t be loaded."); // also reports the error to Craves
         // A stale chef sign-in blocks every section at once; the notice explains it once.
         if (failure instanceof ChefError && /^CHEF_(ACCESS|ROLE)_REQUIRED$/.test(failure.ref)) {
           accessProblem = true;
           return;
         }
-        details.push(`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${text}`);
+        details.push({ part, text: message });
       };
-      const unreadable = (label: string, ref: string) => fail(label, new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, ref, 200));
+      const unreadable = (part: Part, ref: string) => fail(part, new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, ref, 200));
       let application: ChefApplication | null = null;
       let kitchen: ChefKitchen | null = null;
       let menu: ChefMenuItem[] = [];
       let orders: ChefOrder[] = [];
       let earnings: ChefEarning[] = [];
 
+      const parts: Part[] = ["application", "kitchen", "menu", "orders", "earnings"];
       for (let index = 0; index < requests.length; index += 1) {
         const result = requests[index];
-        const label = ["application", "kitchen", "menu", "orders", "earnings"][index]!;
+        const part = parts[index]!;
         if (index === 2 && result.status === "fulfilled" && result.value === null) continue;
         if (result.status !== "fulfilled") {
-          fail(label, result.reason);
+          fail(part, result.reason);
           continue;
         }
         if (!result.value?.ok) {
-          fail(label, result.value ? chefApiError(result.value, await result.value.json().catch(() => null), "") : null);
+          fail(part, result.value ? chefApiError(result.value, await result.value.json().catch(() => null), "") : null);
           continue;
         }
         const raw = await result.value.json().catch(() => undefined);
         if (index === 0) application = parseChefApplication(raw);
         if (index === 1) {
           kitchen = raw === null ? null : parseChefKitchen(raw);
-          if (raw !== null && !kitchen) unreadable(label, "INVALID_KITCHEN_RESPONSE");
+          if (raw !== null && !kitchen) unreadable(part, "INVALID_KITCHEN_RESPONSE");
         }
         if (index === 2) {
           const parsedMenu = parseChefMenuItems(raw);
           if (parsedMenu) menu = parsedMenu;
-          else unreadable(label, "INVALID_MENU_RESPONSE");
+          else unreadable(part, "INVALID_MENU_RESPONSE");
         }
         if (index === 3) {
           const parsedOrders = parseChefOrdersResponse(raw);
           if (parsedOrders) orders = parsedOrders;
-          else unreadable(label, "INVALID_CHEF_ORDERS_RESPONSE");
+          else unreadable(part, "INVALID_CHEF_ORDERS_RESPONSE");
         }
         if (index === 4) {
           const parsedEarnings = parseChefEarnings(raw);
           if (parsedEarnings) earnings = parsedEarnings;
-          else unreadable(label, "INVALID_CHEF_EARNINGS_RESPONSE");
+          else unreadable(part, "INVALID_CHEF_EARNINGS_RESPONSE");
         }
       }
 
@@ -190,28 +288,23 @@ export function ChefModeDashboard() {
         // The application already named the kitchen and its address: save it, so the chef's only step is a first dish.
         kitchen = await createKitchenFromApplication(application, getSession()?.phoneNumber ?? "").catch(() => null);
       }
+      const bank = await bankRequest;
 
       if (!active) return;
       // Orders already waiting when Chef Mode opens are on screen; only later ones ring.
       if (!unavailable.includes("orders")) noticeNewOrders(orders);
-      setSnapshot({ application, kitchen, menu, orders, earnings, unavailable, details, accessProblem });
-      if (application?.status === "APPROVED" && !unavailable.includes("kitchen")) {
+      setSnapshot({ application, kitchen, menu, orders, earnings, bankAdded: !(bank?.success && bank.data.state === "NOT_SUBMITTED"), unavailable, details, accessProblem });
+      if (application?.status === "APPROVED" && !unavailable.includes("kitchen") && !unavailable.includes("menu")) {
         const noticeKey = `craves-chef-approved:${application.id ?? getSession()?.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
-        try {
-          if (!window.localStorage.getItem(noticeKey)) setShowApprovalNotice(true);
-        } catch {
-          setShowApprovalNotice(true);
-        }
+        setShowApprovalNotice(shouldWelcome(application, menu, noticeKey));
       }
       setState("approved");
-      setMessage("");
     }
 
     loadApprovedSnapshot().catch(() => {
       if (!active) return;
       setState("error");
-      setMessage("We couldn’t load Chef Mode right now. Please try again.");
     });
 
     return () => {
@@ -224,8 +317,8 @@ export function ChefModeDashboard() {
     setSnapshot((current) => ({
       ...current,
       orders: mergeOrders(current.orders, orders),
-      unavailable: current.unavailable.filter((label) => label !== "orders"),
-      details: current.details.filter((detail) => !detail.startsWith("Orders:")),
+      unavailable: current.unavailable.filter((part) => part !== "orders"),
+      details: current.details.filter((detail) => detail.part !== "orders"),
     })),
   );
 
@@ -235,7 +328,7 @@ export function ChefModeDashboard() {
       ...current,
       orders: current.orders.map((existing) => (existing.id === order.id ? order : existing)),
     }));
-    setOrderNotice(orderUpdateText(order));
+    setOrderNotice(orderUpdateText(order, language));
     focusOrderAfterUpdate(order.id, "chef-order-update");
   }
 
@@ -259,7 +352,8 @@ export function ChefModeDashboard() {
     const weekCurrency = weekEntries[0]?.currency ?? snapshot.earnings[0]?.currency ?? "INR";
     const weekAmount = weekEntries.reduce((sum, entry) => sum + entry.netPayable, 0);
     const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-    const todayOrders = snapshot.orders.filter(order => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)) === todayKey).length;
+    // Orders the customer hasn't paid for aren't the chef's yet.
+    const todayOrders = snapshot.orders.filter(order => !["PAYMENT_PENDING", "PAID", "CREATED"].includes(order.status) && new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)) === todayKey).length;
     return { actionOrders, activeOrders, cookingCount: cookingOrders.length, availableMenu, weekAmount, weekCurrency, todayOrders };
   }, [snapshot]);
 
@@ -274,19 +368,19 @@ export function ChefModeDashboard() {
     setShowApprovalNotice(false);
   }
 
-  if (state === "loading") return <ChefLoading shape="dashboard" label="Loading Chef Mode" />;
+  if (state === "loading") return <ChefLoading shape="dashboard" label={text.loading} />;
 
   if (state === "error") {
     return (
       <ChefSection>
         <ChefEmpty
           icon={AlertTriangle}
-          title="Chef Mode couldn’t load"
-          text={message}
+          title={text.loadFailedTitle}
+          text={text.loadFailed}
           action={
             <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn is-primary">
               <RefreshCw className="h-5 w-5" aria-hidden="true" />
-              Try again
+              {text.tryAgain}
             </button>
           }
         />
@@ -294,41 +388,24 @@ export function ChefModeDashboard() {
     );
   }
 
-  // Setup comes first; with the kitchen ready, the orders below are the whole job.
-  let priority: PriorityAction | null = null;
-  if (snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu")) {
-    priority = {
-      title: "Check your kitchen and menu",
-      description: "We couldn’t check your saved kitchen or dishes. Try again before you carry on.",
-      action: "Try again",
-      refresh: true,
-      icon: RefreshCw,
-    };
-  } else if (!snapshot.kitchen) {
-    priority = {
-      title: "Give your kitchen a name",
-      description: "This is what customers will know your home kitchen by.",
-      action: "Name my kitchen",
-      href: "/chef/kitchen",
-      icon: Store,
-    };
-  } else if (snapshot.menu.length === 0) {
-    priority = {
-      title: "Add your first dish",
-      description: "Add one dish so customers can see what you cook.",
-      action: "Add a dish",
-      href: "/chef/menu",
-      icon: Utensils,
-    };
-  }
+  const refresh = () => setRefreshTick((value) => value + 1);
+  const kitchenOrMenuUnknown = snapshot.unavailable.includes("kitchen") || snapshot.unavailable.includes("menu");
+  const takingOrders = snapshot.kitchen?.status === "ACTIVE";
+  // Setup first; then what stops a customer ordering today; then what stops the chef hearing or getting paid.
+  const fixes: Fix[] = [];
+  if (kitchenOrMenuUnknown) fixes.push({ key: "check", title: text.checkTitle, text: text.checkText, icon: RefreshCw, onClick: refresh, action: text.tryAgain });
+  else if (!snapshot.kitchen) fixes.push({ key: "name", title: text.nameTitle, text: text.nameText, icon: Store, href: "/chef/kitchen", action: text.nameAction, urgent: true });
+  else if (snapshot.menu.length === 0) fixes.push({ key: "first-dish", title: text.firstDishTitle, text: text.firstDishText, icon: Utensils, href: "/chef/menu", action: text.firstDishAction, urgent: true });
+  else if (takingOrders && stats.availableMenu.length === 0) fixes.push({ key: "no-dish-on", title: text.noDishOnTitle, text: text.noDishOnText, icon: ToggleRight, href: "/chef/menu", action: text.noDishOnAction, urgent: true });
+  if (!alertPrefs.ring) fixes.push({ key: "sound", title: text.soundOffTitle, text: text.soundOffText, icon: BellOff, onClick: () => writeAlertPrefs({ ...alertPrefs, ring: true }), action: text.soundOffAction });
+  if (!snapshot.bankAdded) fixes.push({ key: "bank", title: text.bankTitle, text: text.bankText, icon: Landmark, href: "/chef/bank", action: text.bankAction });
 
-  const kitchenName = snapshot.kitchen?.kitchenName || "Your Craves kitchen";
+  const kitchenName = snapshot.kitchen?.kitchenName || text.yourKitchen;
   // The chef's name from the application: never the phone number, never the customer profile.
-  const firstName = snapshot.application?.firstName?.trim() || "Chef";
+  const firstName = snapshot.application?.firstName?.trim() || text.chef;
   const ordersUnknown = snapshot.unavailable.includes("orders");
   const newOrders = stats.actionOrders;
   const activeOrders = stats.activeOrders;
-  const quiet = !priority && newOrders.length === 0 && activeOrders.length === 0;
 
   return (
     <>
@@ -338,23 +415,19 @@ export function ChefModeDashboard() {
         onOpenChange={(open) => {
           if (!open) dismissApprovalNotice();
         }}
-        title="You’re a Craves chef"
-        description={
-          snapshot.kitchen
-            ? "Your kitchen is set up. Add your first dish so customers can find what you cook."
-            : "Save your kitchen name and pickup address, then add your first dish."
-        }
+        title={text.welcomeTitle}
+        description={snapshot.kitchen ? text.welcomeKitchen : text.welcomeNoKitchen}
         footer={
           <>
             <button type="button" onClick={dismissApprovalNotice} className={secondaryActionClass}>
-              Not now
+              {text.notNow}
             </button>
             <Link
               href={snapshot.kitchen ? "/chef/menu" : "/chef/kitchen"}
               onClick={dismissApprovalNotice}
               className="craves-primary-action w-full sm:w-auto"
             >
-              {snapshot.kitchen ? "Add my first dish" : "Set up my kitchen"}
+              {snapshot.kitchen ? text.addFirstDish : text.setUpKitchen}
             </Link>
           </>
         }
@@ -362,7 +435,7 @@ export function ChefModeDashboard() {
 
       <div className="chef-stack">
         <header className="min-w-0">
-          <h1 className="chef-page-title">{greeting()}, {firstName}</h1>
+          <h1 className="chef-page-title">{format(text[greeting()], { name: firstName })}</h1>
           <p className="mt-1 truncate text-[0.9375rem] font-semibold text-[#6B6B6B]">{kitchenName}</p>
         </header>
 
@@ -370,21 +443,17 @@ export function ChefModeDashboard() {
           <ChefNotice icon={AlertTriangle} role="status">
             {snapshot.accessProblem ? (
               <>
-                <p className="font-semibold">Sign in again to load your orders</p>
-                <p className="mt-1 text-[#6B6B6B]">
-                  Craves couldn’t confirm your chef access, so new orders won’t show or ring. If this stays after you
-                  sign in again, the problem is on our side, not yours: tell us in More → Get help.
-                </p>
+                <p className="font-semibold">{text.ordersFailedTitle}</p>
+                <p className="mt-1 text-[#6B6B6B]">{text.ordersFailedAccess}</p>
               </>
             ) : (
-              <p>Some information couldn’t refresh. Everything else below is up to date.</p>
+              <p>{text.someFailed}</p>
             )}
-            {snapshot.details.map((detail) => <p key={detail} className="mt-1 text-[#6B6B6B]">{detail}</p>)}
+            {snapshot.details.map((detail) => <p key={detail.part} className="mt-1 text-[#6B6B6B]">{text[PART_LABEL[detail.part]]}: {detail.text}</p>)}
             {snapshot.accessProblem ? (
-              <button type="button" onClick={signInToChefModeAgain} className="chef-btn is-primary mt-3 w-full sm:w-auto">
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                Sign in again
-              </button>
+              <div className="mt-3">
+                <ChefAccessRetry onRetry={refresh} />
+              </div>
             ) : null}
           </ChefNotice>
         ) : null}
@@ -393,40 +462,40 @@ export function ChefModeDashboard() {
           <ChefKitchenSwitch
             kitchen={snapshot.kitchen}
             onChange={(kitchen) => setSnapshot((current) => ({ ...current, kitchen }))}
+            cookingCount={stats.cookingCount}
           />
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-5">
           <div className="chef-stack">
-            {priority ? (
-              <ChefSection>
-                <div className="flex items-start gap-4">
-                  <span className="chef-row-icon"><priority.icon className="h-5 w-5" aria-hidden="true" /></span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="chef-section-title">{priority.title}</h2>
-                    <p className="mt-1 text-[0.9375rem] leading-6 text-[#6B6B6B]">{priority.description}</p>
-                    {priority.href ? (
-                      <Link href={priority.href} className="chef-btn is-primary is-tall mt-4 w-full sm:w-auto">
-                        {priority.action}
-                      </Link>
-                    ) : (
-                      <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn mt-4 w-full sm:w-auto">
-                        <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                        {priority.action}
-                      </button>
-                    )}
+            {fixes.length > 0 ? (
+              <section className="chef-stack" aria-labelledby="chef-fixes">
+                <h2 id="chef-fixes" className="sr-only">{text.fixTitle}</h2>
+                {fixes.map((fix) => (
+                  <div key={fix.key} className={`chef-fix-card${fix.urgent ? " is-urgent" : ""}`}>
+                    <span className="chef-fix-card-icon"><fix.icon className="h-5 w-5" aria-hidden="true" /></span>
+                    <h3 className="chef-fix-card-title">{fix.title}</h3>
+                    <p className="chef-fix-card-text">{fix.text}</p>
+                    <div className="chef-fix-card-action">
+                      {"href" in fix ? (
+                        <Link href={fix.href} className={`chef-btn w-full sm:w-auto${fix.urgent ? " is-primary" : ""}`}>{fix.action}</Link>
+                      ) : (
+                        <button type="button" onClick={fix.onClick} className="chef-btn w-full sm:w-auto">{fix.action}</button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </ChefSection>
+                ))}
+              </section>
             ) : null}
 
+            {/* Times itself out (ChefFlash), paused while pointed at or focused. */}
             <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
             {newOrders.length > 0 ? (
               <section className="chef-stack" aria-labelledby="chef-new-orders">
                 <h2 id="chef-new-orders" className="chef-group-title is-attention">
                   <BellRing className="h-5 w-5" aria-hidden="true" />
-                  {newOrders.length === 1 ? "New order: answer now" : `${newOrders.length} new orders: answer now`}
+                  {newOrders.length === 1 ? text.newOne : format(text.newMany, { count: newOrders.length })}
                 </h2>
                 {newOrders.map((order) => (
                   <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
@@ -437,8 +506,8 @@ export function ChefModeDashboard() {
             {activeOrders.length > 0 ? (
               <section className="chef-stack" aria-labelledby="chef-active-orders">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 id="chef-active-orders" className="chef-group-title">In your kitchen</h2>
-                  <Link href="/chef/orders" className="chef-btn is-small">All orders</Link>
+                  <h2 id="chef-active-orders" className="chef-group-title">{text.inKitchen}</h2>
+                  <Link href="/chef/orders" className="chef-btn is-small">{text.allOrders}</Link>
                 </div>
                 {activeOrders.map((order) => (
                   <ChefOrderCard key={order.id} order={order} onUpdated={updateOrder} />
@@ -446,53 +515,55 @@ export function ChefModeDashboard() {
               </section>
             ) : null}
 
-            {quiet ? (
-              <ChefSection>
-                <ChefEmpty
-                  icon={BellRing}
-                  title={ordersUnknown ? "Orders couldn’t load" : "No orders right now"}
-                  text={
-                    ordersUnknown
-                      ? snapshot.accessProblem
-                        ? "They show here once you sign in again."
-                        : "We’ll keep trying every few seconds. You can also check now."
-                      : "Keep Craves open. Your phone rings and the order shows here as soon as a customer orders."
-                  }
-                  action={
-                    snapshot.accessProblem ? undefined : (
-                      <button type="button" onClick={() => setRefreshTick((value) => value + 1)} className="chef-btn">
-                        <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                        Check now
-                      </button>
-                    )
-                  }
-                />
-              </ChefSection>
+            {newOrders.length === 0 && activeOrders.length === 0 ? (
+              // A calm moment is one line, not a screen-sized card: the switch and the fixes stay on top.
+              <div className="chef-quiet-line" role="status">
+                <BellRing className="h-5 w-5" aria-hidden="true" />
+                <p className="min-w-0 flex-1">
+                  {ordersUnknown ? (snapshot.accessProblem ? text.ordersWaitAccess : text.ordersUnknown) : <><strong>{text.noOrders}</strong> {text.keepOpen}</>}
+                </p>
+                {snapshot.accessProblem ? null : (
+                  <button type="button" onClick={refresh} className="chef-btn is-small shrink-0">
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {text.checkNow}
+                  </button>
+                )}
+              </div>
             ) : null}
           </div>
 
           <div className="chef-stack">
-            <ChefSection title="Today" flush labelledBy="chef-today">
+            <ChefSection title={text.today} flush labelledBy="chef-today">
               <div className="chef-stats mt-1 border-t border-[#E3E6EA]">
                 <Link href="/chef/orders" className="chef-stat">
-                  <p className="chef-stat-label">Orders today</p>
+                  <p className="chef-stat-label">{text.ordersToday}</p>
                   <p className="chef-stat-value">{ordersUnknown ? "—" : stats.todayOrders}</p>
                 </Link>
                 <Link href="/chef/orders" className="chef-stat">
-                  <p className="chef-stat-label">Cooking now</p>
+                  <p className="chef-stat-label">{text.cookingNow}</p>
                   <p className="chef-stat-value">{ordersUnknown ? "—" : stats.cookingCount}</p>
                 </Link>
                 <Link href="/chef/menu" className="chef-stat">
-                  <p className="chef-stat-label">Dishes on today</p>
-                  <p className="chef-stat-value">{snapshot.menu.length ? `${stats.availableMenu.length} of ${snapshot.menu.length}` : "0"}</p>
+                  <p className="chef-stat-label">{text.dishesOn}</p>
+                  <p className="chef-stat-value">{snapshot.menu.length ? format(text.dishesOf, { on: stats.availableMenu.length, all: snapshot.menu.length }) : "0"}</p>
                 </Link>
                 <Link href="/chef/earnings" className="chef-stat">
-                  <p className="chef-stat-label">Earned this week</p>
+                  <p className="chef-stat-label">{text.earnedWeek}</p>
                   <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
                 </Link>
               </div>
             </ChefSection>
-            <ChefOrderAlerts />
+            {alertPrefs.ring ? (
+              // Sound settings live in Order settings; Home only says the phone will ring.
+              <Link href="/chef/preferences" className="chef-section chef-row">
+                <span className="chef-row-icon"><BellRing className="h-5 w-5" aria-hidden="true" /></span>
+                <span className="chef-row-main">
+                  <span className="chef-row-title block">{text.soundOn}</span>
+                  <span className="chef-row-meta block">{text.soundSettings}</span>
+                </span>
+                <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
+              </Link>
+            ) : null}
           </div>
         </div>
       </div>
@@ -501,11 +572,11 @@ export function ChefModeDashboard() {
 }
 
 /** Good morning/afternoon/evening in India time. */
-function greeting(): string {
+function greeting(): "morning" | "afternoon" | "evening" {
   const hour = Number(new Intl.DateTimeFormat("en-IN", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Kolkata" }).format(new Date()));
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
 }
 
 export default ChefModeDashboard;

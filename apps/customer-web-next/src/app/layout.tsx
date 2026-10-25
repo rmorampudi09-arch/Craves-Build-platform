@@ -7,9 +7,10 @@ import { BottomNav } from "@/features/customer-shell/components/BottomNav";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { NewCustomerProfileGate } from "@/features/profile/components/new-customer-profile-gate";
+import { SupportLauncher } from "@/features/support/components/SupportLauncher";
 import { MotionPreferences } from "@/shared/components/layout/MotionPreferences";
 import { StructuredData } from "@/features/seo/components/StructuredData";
-import { cravesLogoUrl, cravesSiteGraph, seoKeywords, siteUrl } from "@/features/seo/lib/seo-craves";
+import { cravesSiteGraph, seoKeywords, shareImage, siteUrl } from "@/features/seo/lib/seo-craves";
 
 import "../shared/styles/styles.css";
 import "../shared/styles/craves-theme.css";
@@ -40,29 +41,30 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering in Hyderabad and Bangalore with Craves.",
+    "Order homemade food from trusted home chefs in Hyderabad and Bangalore. Biryani, tiffin, lunch, dinner and meal plans, delivered to your door.",
   keywords: seoKeywords(),
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
   alternates: {
-    canonical: siteUrl,
+    // "./" resolves to each page's own path; siteUrl made every page claim to be the homepage.
+    canonical: "./",
   },
   openGraph: {
+    images: [shareImage],
     title: "Craves — Homemade Food from Trusted Home Chefs",
     description:
       "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering with Craves.",
-    url: siteUrl,
+    url: "./",
     siteName: "Craves",
-    images: [{ url: cravesLogoUrl, width: 512, height: 512, alt: "Craves" }],
     locale: "en_IN",
     type: "website",
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
+    images: [shareImage],
     title: "Craves — Homemade Food from Trusted Home Chefs",
     description:
       "Homemade food discovery and home-chef ordering for Hyderabad and Bangalore.",
-    images: [cravesLogoUrl],
   },
   icons: {
     icon: canonicalLogo,
@@ -96,6 +98,7 @@ export default function RootLayout({
           <ChefModeGuard />
           <NewCustomerProfileGate />
           <SessionEndedPrompt />
+          <SupportLauncher />
         </MotionPreferences>
       </body>
     </html>

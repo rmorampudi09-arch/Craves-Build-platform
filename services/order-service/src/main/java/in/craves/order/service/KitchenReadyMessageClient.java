@@ -4,6 +4,7 @@ import in.craves.order.config.NotificationClientProperties;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +30,7 @@ public class KitchenReadyMessageClient {
     public void send(OrderResponse order) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("orderId", order.id().toString());
-        payload.put("checkoutId", order.checkoutId().toString());
+        payload.put("checkoutId", Objects.toString(order.checkoutId(), null));
         payload.put("kitchenId", order.kitchenId().toString());
         payload.put("kitchenName", order.kitchenName());
         payload.put("grandTotal", order.grandTotal().toPlainString());

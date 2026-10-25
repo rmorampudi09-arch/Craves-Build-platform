@@ -35,6 +35,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
+import {shortOrderNumber} from '../../../utils/orderNumber';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
@@ -63,10 +64,6 @@ type ChefPreparingOrdersNavigation = CompositeNavigationProp<
     NativeStackNavigationProp<ChefProductStackParamList>
   >
 >;
-
-function shortOrderReference(orderId: string): string {
-  return `#${orderId.replace(/-/g, '').slice(-8).toUpperCase()}`;
-}
 
 function formatTimer(timer: ChefPrepTimer | undefined): string {
   if (!timer) {
@@ -166,7 +163,7 @@ function PreparingOrderCard({
   order: ChefOperationalOrder;
   timer: ChefPrepTimer | undefined;
 }) {
-  const reference = shortOrderReference(order.id);
+  const reference = `#${shortOrderNumber(order.id)}`;
   const items = order.items ?? [];
   const timerLabel = formatTimer(timer);
   const busy = action !== undefined;

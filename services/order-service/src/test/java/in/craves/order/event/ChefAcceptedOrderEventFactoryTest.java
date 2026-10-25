@@ -16,7 +16,7 @@ class ChefAcceptedOrderEventFactoryTest {
 
     @Test
     void createsIntegrationCompatibleChefAcceptedOrderEvent() throws Exception {
-        UUID chefSubOrderId = UUID.randomUUID();
+        UUID chefSubOrderId = UUID.fromString("0bde0000-0000-4000-8000-000000000101");
         UUID checkoutId = UUID.randomUUID();
         UUID correlationId = UUID.randomUUID();
         Instant acceptedAt = Instant.parse("2026-07-16T10:00:00Z");
@@ -74,6 +74,13 @@ class ChefAcceptedOrderEventFactoryTest {
             .isEqualTo("Craves Test Kitchen");
         assertThat(json.path("data").path("deliveryRequest").path("dropoff").path("contactName").asText())
             .isEqualTo("Test Customer");
+        // The order number Borzo and Pidge riders quote at the kitchen; never the Craves delivery code.
+        JsonNode request = json.path("data").path("deliveryRequest");
+        assertThat(request.path("matter").asText()).isEqualTo("Food order #0BDE0000");
+        assertThat(request.path("pickup").path("note").asText())
+            .isEqualTo("Craves order #0BDE0000. Match this number with the kitchen.")
+            .hasSizeLessThan(100);
+        assertThat(request.path("dropoff").path("note").asText()).isEqualTo("Craves order #0BDE0000.");
     }
 
     @Test

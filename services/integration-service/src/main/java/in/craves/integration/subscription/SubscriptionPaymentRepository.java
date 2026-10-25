@@ -2,6 +2,7 @@ package in.craves.integration.subscription;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import in.craves.integration.subscription.SubscriptionPaymentModels.EventEnvelope;
+import in.craves.integration.subscription.SubscriptionPaymentModels.InvoiceVoidedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.PaymentRequestedData;
 import in.craves.integration.subscription.SubscriptionPaymentModels.SubscriptionPaymentResponse;
 import java.math.BigDecimal;
@@ -26,17 +27,11 @@ public class SubscriptionPaymentRepository {
 
     @Transactional
     public boolean acceptRequest(EventEnvelope<PaymentRequestedData> event, JsonNode rawPayload) {
-        int inbox = jdbcTemplate.update(
-            "INSERT INTO payment_schema.subscription_payment_request_inbox " +
-                "(event_id, event_type, event_version, correlation_id, causation_id, subject, payload, processing_status, received_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, CAST(? AS jsonb), 'RECEIVED', now()) ON CONFLICT (event_id) DO NOTHING",
-            event.eventId(), event.eventType(), event.eventVersion(), event.correlationId(), event.causationId(),
-            event.subject(), rawPayload.toString()
-        );
-        if (inbox == 0) {
+        PaymentRequestedData data = event.data();
+        lockInvoice(data.invoiceId());
+        if (!received(event, rawPayload)) {
             return false;
         }
-        PaymentRequestedData data = event.data();
         int intent = jdbcTemplate.update(
             "INSERT INTO payment_schema.subscription_payment_intent " +
                 "(id, invoice_id, subscription_id, plan_id, customer_identity_id, chef_identity_id, cycle_start, cycle_end, amount, currency, status, created_at, updated_at) " +
@@ -45,11 +40,56 @@ public class SubscriptionPaymentRepository {
             UUID.randomUUID(), data.invoiceId(), data.subscriptionId(), data.planId(), data.customerIdentityId(),
             data.chefIdentityId(), data.cycleStart(), data.cycleEnd(), data.amount(), data.currency()
         );
+        // A void that arrived before this request (out of order) still applies.
+        cancelIfVoided(data.invoiceId());
+        processed(event, intent == 1 ? "PROCESSED" : "DUPLICATE");
+        return intent == 1;
+    }
+
+    /** True when an unpaid intent was cancelled; a PAID one keeps its money and an unknown invoice is voided on arrival. */
+    @Transactional
+    public boolean acceptVoided(EventEnvelope<InvoiceVoidedData> event, JsonNode rawPayload) {
+        lockInvoice(event.data().invoiceId());
+        if (!received(event, rawPayload)) {
+            return false;
+        }
+        boolean cancelled = cancelIfVoided(event.data().invoiceId());
+        processed(event, "PROCESSED");
+        return cancelled;
+    }
+
+    /** Serializes the request and void of one invoice, so neither commits unseen by the other. */
+    private void lockInvoice(UUID invoiceId) {
+        jdbcTemplate.query("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> null, "subscription-invoice/" + invoiceId);
+    }
+
+    private boolean received(EventEnvelope<?> event, JsonNode rawPayload) {
+        return jdbcTemplate.update(
+            "INSERT INTO payment_schema.subscription_payment_request_inbox " +
+                "(event_id, event_type, event_version, correlation_id, causation_id, subject, payload, processing_status, received_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, CAST(? AS jsonb), 'RECEIVED', now()) ON CONFLICT (event_id) DO NOTHING",
+            event.eventId(), event.eventType(), event.eventVersion(), event.correlationId(), event.causationId(),
+            event.subject(), rawPayload.toString()
+        ) == 1;
+    }
+
+    private void processed(EventEnvelope<?> event, String status) {
         jdbcTemplate.update(
             "UPDATE payment_schema.subscription_payment_request_inbox SET processing_status = ?, processed_at = now() WHERE event_id = ?",
-            intent == 1 ? "PROCESSED" : "DUPLICATE", event.eventId()
+            status, event.eventId()
         );
-        return intent == 1;
+    }
+
+    // shortcut: finds the void by scanning the inbox (no index on subject); add a partial index if the inbox grows large.
+    private boolean cancelIfVoided(UUID invoiceId) {
+        return jdbcTemplate.update(
+            "UPDATE payment_schema.subscription_payment_intent p SET status = 'CANCELLED', " +
+                "last_error = i.payload -> 'data' ->> 'reason', updated_at = now() " +
+                "FROM payment_schema.subscription_payment_request_inbox i " +
+                "WHERE p.invoice_id = ? AND p.status NOT IN ('PAID', 'CANCELLED') " +
+                "AND i.event_type = ? AND i.subject = p.invoice_id",
+            invoiceId, SubscriptionPaymentModels.INVOICE_VOIDED
+        ) == 1;
     }
 
     public Optional<PaymentIntent> findByInvoice(UUID invoiceId) {
@@ -62,7 +102,7 @@ public class SubscriptionPaymentRepository {
 
     public Optional<PaymentIntent> findLatestBySubscription(UUID subscriptionId) {
         return jdbcTemplate.query(
-            "SELECT * FROM payment_schema.subscription_payment_intent WHERE subscription_id = ? " +
+            "SELECT * FROM payment_schema.subscription_payment_intent WHERE subscription_id = ? AND status <> 'CANCELLED' " +
                 "ORDER BY cycle_start DESC, created_at DESC LIMIT 1",
             this::mapIntent,
             subscriptionId
@@ -141,10 +181,12 @@ public class SubscriptionPaymentRepository {
             );
             return false;
         }
+        // A voided (CANCELLED) intent only ever moves to PAID: money taken on its existing order is still recorded.
         int updated = jdbcTemplate.update(
             "UPDATE payment_schema.subscription_payment_intent SET status = ?, provider_status = ?, provider_payment_id = COALESCE(?, provider_payment_id), " +
-                "paid_at = CASE WHEN ? = 'PAID' THEN now() ELSE paid_at END, updated_at = now() WHERE id = ? AND status <> 'PAID'",
-            normalizedStatus, providerStatus, providerPaymentId, normalizedStatus, intent.id()
+                "paid_at = CASE WHEN ? = 'PAID' THEN now() ELSE paid_at END, updated_at = now() " +
+                "WHERE id = ? AND status <> 'PAID' AND (status <> 'CANCELLED' OR ? = 'PAID')",
+            normalizedStatus, providerStatus, providerPaymentId, normalizedStatus, intent.id(), normalizedStatus
         );
         if (updated != 1) {
             return false;
@@ -173,8 +215,9 @@ public class SubscriptionPaymentRepository {
             WITH candidates AS (
                 SELECT id
                   FROM payment_schema.subscription_payment_status_outbox
-                 WHERE (status IN ('PENDING', 'FAILED') AND next_attempt_at <= now() AND attempt_count < ?)
-                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute'))
+                 WHERE attempt_count < ?
+                   AND ((status IN ('PENDING', 'FAILED') AND next_attempt_at <= now())
+                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))
                  ORDER BY created_at
                  FOR UPDATE SKIP LOCKED
                  LIMIT ?
@@ -194,6 +237,18 @@ public class SubscriptionPaymentRepository {
                 rs.getInt("attempt_count"), lockToken
             ),
             maxAttempts, staleLockMinutes, batchSize, lockToken
+        );
+    }
+
+    /** CH-02: a lease that expired on the final attempt (or a FAILED row past a lowered limit) can never be claimed. */
+    public int deadLetterExpiredOutbox(int maxAttempts, int staleLockMinutes) {
+        return jdbcTemplate.update(
+            "UPDATE payment_schema.subscription_payment_status_outbox SET status = 'DEAD_LETTER', " +
+                "last_error = COALESCE(last_error, 'Publication attempts exhausted; the last lease expired'), " +
+                "lock_token = NULL, locked_at = NULL, updated_at = now() " +
+                "WHERE attempt_count >= ? AND (status = 'FAILED' " +
+                "OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))",
+            maxAttempts, staleLockMinutes
         );
     }
 

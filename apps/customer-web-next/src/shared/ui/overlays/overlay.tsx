@@ -21,6 +21,15 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
+
+// Customer pages have no language provider and read English; chef pages read the chef's language.
+const TEXT = messages({
+  en: { close: "Close", discardTitle: "Discard your changes?", discardText: "What you typed here will be lost.", discard: "Discard", keep: "Keep editing" },
+  te: { close: "మూసివేయండి", discardTitle: "మార్పులు వదిలేయాలా?", discardText: "మీరు ఇక్కడ రాసింది పోతుంది.", discard: "వదిలేయండి", keep: "రాయడం కొనసాగించండి" },
+  kn: { close: "ಮುಚ್ಚಿ", discardTitle: "ಬದಲಾವಣೆಗಳನ್ನು ಬಿಡಬೇಕೇ?", discardText: "ನೀವು ಇಲ್ಲಿ ಬರೆದದ್ದು ಹೋಗುತ್ತದೆ.", discard: "ಬಿಡಿ", keep: "ಬರೆಯುವುದನ್ನು ಮುಂದುವರಿಸಿ" },
+});
 
 /** Neutral pill for Cancel/Back beside a `craves-primary-action`. */
 export const secondaryActionClass =
@@ -164,6 +173,7 @@ export type OverlayProps = {
 export function DiscardChangesPrompt({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: () => void }) {
   const keep = useRef<HTMLButtonElement>(null);
   const id = useId();
+  const text = useText(TEXT);
   useEffect(() => {
     keep.current?.focus();
   }, []);
@@ -175,17 +185,17 @@ export function DiscardChangesPrompt({ onKeep, onDiscard }: { onKeep: () => void
       className="mt-6 rounded-2xl bg-[#F1F3F5] p-4"
     >
       <p id={`${id}-title`} className="text-base font-bold text-[#1A1A1A]">
-        Discard your changes?
+        {text.discardTitle}
       </p>
       <p id={`${id}-text`} className="mt-1 text-sm leading-6 text-[#6B6B6B]">
-        What you typed here will be lost.
+        {text.discardText}
       </p>
       <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={onDiscard} className={secondaryActionClass + " sm:!bg-white"}>
-          Discard
+          {text.discard}
         </button>
         <button ref={keep} type="button" onClick={onKeep} className="craves-primary-action w-full sm:w-auto">
-          Keep editing
+          {text.keep}
         </button>
       </div>
     </div>
@@ -204,9 +214,11 @@ function Overlay({
   busy = false,
   unsavedChanges = false,
   dismissible = true,
-  closeLabel = "Close",
+  closeLabel,
 }: OverlayProps & { kind: "sheet" | "dialog"; closeLabel?: string }) {
   const locked = busy || !dismissible;
+  const { language } = useLanguage();
+  const text = useText(TEXT);
   const reduceMotion = useReducedMotion();
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -288,6 +300,7 @@ function Overlay({
                 }}
               >
                 <motion.div
+                  lang={language}
                   initial={hidden}
                   animate={{ ...shown, transition: ENTER }}
                   exit={{ ...hidden, transition: EXIT }}
@@ -313,7 +326,7 @@ function Overlay({
                     {kind === "sheet" && dismissible ? (
                       <RadixDialog.Close
                         disabled={busy}
-                        aria-label={closeLabel}
+                        aria-label={closeLabel ?? text.close}
                         className="-mr-1 -mt-1 flex !h-11 !min-h-11 !w-11 !min-w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] !shadow-none"
                       >
                         <X className="h-5 w-5" aria-hidden="true" />

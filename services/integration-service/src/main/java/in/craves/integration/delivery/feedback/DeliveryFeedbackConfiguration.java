@@ -1,20 +1,16 @@
 package in.craves.integration.delivery.feedback;
 
+import in.craves.integration.config.SchedulerLagWatchdog;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration(proxyBeanMethods = false)
 public class DeliveryFeedbackConfiguration {
-    // Adding a named scheduler must not silently make it the default for all existing jobs.
-    @Bean(name = "taskScheduler")
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "taskScheduler")
-    public ThreadPoolTaskScheduler taskScheduler(org.springframework.boot.task.TaskSchedulerBuilder builder) {
-        return builder.build();
-    }
+    // The default taskScheduler lives in WorkerSchedulingConfiguration with the other worker pools.
     @Bean(name = "deliveryFeedbackScheduler")
     public ThreadPoolTaskScheduler deliveryFeedbackScheduler() {
-        var scheduler = new ThreadPoolTaskScheduler();
+        var scheduler = new SchedulerLagWatchdog.MonitoredTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("delivery-feedback-");
         scheduler.setWaitForTasksToCompleteOnShutdown(true);

@@ -31,22 +31,17 @@ for env_name in \
   CUSTOMER_WEB_APP_NAME \
   CUSTOMER_WEB_APP_FQDN \
   CUSTOMER_WEB_STATIC_IP \
-  CUSTOMER_WEB_CERTIFICATE_NAME \
-  KEY_VAULT_NAME \
   CUSTOMER_APEX_HOSTNAME \
   CUSTOMER_WWW_HOSTNAME \
-  CUSTOMER_DOMAIN_VERIFICATION_ID \
   FRONT_DOOR_PROFILE_NAME \
   FRONT_DOOR_ENDPOINT_HOSTNAME \
-  APIM_HOSTNAME \
-  APIM_EXPECTED_CNAME \
-  ROLLBACK_WWW_HOSTNAME; do
+  API_HOSTNAME \
+  ADMIN_HOSTNAME; do
   require_env "$env_name"
 done
 
-EXPECTED_APEX_ACME_ZONE="_acme-challenge.${CUSTOMER_APEX_HOSTNAME}"
-EXPECTED_WWW_ACME_ZONE="_acme-challenge.${CUSTOMER_WWW_HOSTNAME}"
-EXPECTED_CERTIFICATE_ID_SUFFIX="/managedEnvironments/${CONTAINER_APP_ENVIRONMENT_NAME}/certificates/${CUSTOMER_WEB_CERTIFICATE_NAME}"
+# Every public hostname is a Front Door custom domain; Front Door terminates TLS for all of them.
+PUBLIC_HOSTNAMES=("$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME" "$API_HOSTNAME" "$ADMIN_HOSTNAME")
 CERT_MIN_REMAINING_DAYS="${CERT_MIN_REMAINING_DAYS:-30}"
 
 if ! [[ "$CERT_MIN_REMAINING_DAYS" =~ ^[0-9]+$ ]]; then
@@ -141,15 +136,6 @@ ENVIRONMENT_IP="$(
     --only-show-errors
 )"
 
-VERIFY_ID="$(
-  az containerapp show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$CUSTOMER_WEB_APP_NAME" \
-    --query properties.customDomainVerificationId \
-    --output tsv \
-    --only-show-errors
-)"
-
 if [[ "$RUNNING_STATUS" == "Running" ]]; then
   record_pass "Container App running status is Running."
 else
@@ -174,128 +160,37 @@ else
   record_failure "Environment IP changed to $ENVIRONMENT_IP."
 fi
 
-if [[ "$VERIFY_ID" == "$CUSTOMER_DOMAIN_VERIFICATION_ID" ]]; then
-  record_pass "Custom-domain verification ID matches expected value."
-else
-  record_failure "Custom-domain verification ID changed."
-fi
-
 echo ""
 echo "============================================================"
-echo "2. CUSTOM DOMAINS AND CERTIFICATE BINDING"
+echo "2. PUBLIC TLS CERTIFICATES"
 echo "============================================================"
 
-CUSTOM_DOMAINS="$(
-  az containerapp show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$CUSTOMER_WEB_APP_NAME" \
-    --query 'properties.configuration.ingress.customDomains[].{name:name,bindingType:bindingType,certificateId:certificateId}' \
-    --output json \
-    --only-show-errors
-)"
-
-echo "$CUSTOM_DOMAINS"
-
-for HOSTNAME in "$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME"; do
-  BINDING_TYPE="$(
-    az containerapp show \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$CUSTOMER_WEB_APP_NAME" \
-      --query "properties.configuration.ingress.customDomains[?name=='${HOSTNAME}'].bindingType | [0]" \
-      --output tsv \
-      --only-show-errors
-  )"
-
-  CERTIFICATE_ID="$(
-    az containerapp show \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$CUSTOMER_WEB_APP_NAME" \
-      --query "properties.configuration.ingress.customDomains[?name=='${HOSTNAME}'].certificateId | [0]" \
-      --output tsv \
-      --only-show-errors
-  )"
-
-  if [[ "$BINDING_TYPE" == "SniEnabled" ]]; then
-    record_pass "$HOSTNAME is SNI enabled."
-  else
-    record_failure "$HOSTNAME binding type is ${BINDING_TYPE:-empty}."
-  fi
-
-  if [[ "$CERTIFICATE_ID" == *"$EXPECTED_CERTIFICATE_ID_SUFFIX" ]]; then
-    record_pass "$HOSTNAME uses $CUSTOMER_WEB_CERTIFICATE_NAME."
-  else
-    record_failure "$HOSTNAME is bound to unexpected certificate ID: ${CERTIFICATE_ID:-empty}."
-  fi
-done
-
-CERT_STATE="$(
-  az containerapp env certificate list \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$CONTAINER_APP_ENVIRONMENT_NAME" \
-    --query "[?name=='${CUSTOMER_WEB_CERTIFICATE_NAME}'].properties.provisioningState | [0]" \
-    --output tsv \
-    --only-show-errors
-)"
-
-CERT_VALID="$(
-  az containerapp env certificate list \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$CONTAINER_APP_ENVIRONMENT_NAME" \
-    --query "[?name=='${CUSTOMER_WEB_CERTIFICATE_NAME}'].properties.valid | [0]" \
-    --output tsv \
-    --only-show-errors
-)"
-
-if [[ "$CERT_STATE" == "Succeeded" ]]; then
-  record_pass "Container Apps certificate provisioning state is Succeeded."
-else
-  record_failure "Certificate provisioning state is ${CERT_STATE:-empty}."
-fi
-
-if [[ "${CERT_VALID,,}" == "true" ]]; then
-  record_pass "Container Apps certificate is valid."
-else
-  record_failure "Container Apps certificate valid flag is ${CERT_VALID:-empty}."
-fi
-
 TEMP_CERT_DIR="$(mktemp -d)"
-TEMP_CERT="$TEMP_CERT_DIR/certificate.pem"
 trap 'rm -rf "$TEMP_CERT_DIR"' EXIT
 
-az keyvault certificate download \
-  --vault-name "$KEY_VAULT_NAME" \
-  --name "$CUSTOMER_WEB_CERTIFICATE_NAME" \
-  --file "$TEMP_CERT" \
-  --encoding PEM \
-  --only-show-errors \
-  --output none
+for HOSTNAME in "${PUBLIC_HOSTNAMES[@]}"; do
+  SERVED_CERT="$TEMP_CERT_DIR/${HOSTNAME}.pem"
 
-CERT_SAN="$(openssl x509 -in "$TEMP_CERT" -noout -ext subjectAltName)"
-CERT_NOT_AFTER="$(openssl x509 -in "$TEMP_CERT" -noout -enddate | cut -d= -f2-)"
+  if ! openssl s_client -connect "${HOSTNAME}:443" -servername "$HOSTNAME" </dev/null 2>/dev/null \
+    | openssl x509 -outform PEM >"$SERVED_CERT" 2>/dev/null; then
+    record_failure "$HOSTNAME did not present a TLS certificate."
+    continue
+  fi
 
-echo "Certificate expiry: $CERT_NOT_AFTER"
-echo "$CERT_SAN"
+  echo "$HOSTNAME certificate expiry: $(openssl x509 -in "$SERVED_CERT" -noout -enddate | cut -d= -f2-)"
 
-if grep -Fq "DNS:${CUSTOMER_APEX_HOSTNAME}" <<<"$CERT_SAN"; then
-  record_pass "Certificate contains ${CUSTOMER_APEX_HOSTNAME}."
-else
-  record_failure "Certificate SAN is missing ${CUSTOMER_APEX_HOSTNAME}."
-fi
+  if openssl x509 -in "$SERVED_CERT" -noout -checkhost "$HOSTNAME" | grep -Fq ' does match '; then
+    record_pass "$HOSTNAME certificate covers the hostname."
+  else
+    record_failure "$HOSTNAME certificate does not cover the hostname."
+  fi
 
-if grep -Fq "DNS:${CUSTOMER_WWW_HOSTNAME}" <<<"$CERT_SAN"; then
-  record_pass "Certificate contains ${CUSTOMER_WWW_HOSTNAME}."
-else
-  record_failure "Certificate SAN is missing ${CUSTOMER_WWW_HOSTNAME}."
-fi
-
-if openssl x509 \
-  -in "$TEMP_CERT" \
-  -checkend "$CERT_MIN_REMAINING_SECONDS" \
-  -noout >/dev/null 2>&1; then
-  record_pass "Certificate has more than ${CERT_MIN_REMAINING_DAYS} days remaining."
-else
-  record_failure "Certificate has ${CERT_MIN_REMAINING_DAYS} days or less remaining."
-fi
+  if openssl x509 -in "$SERVED_CERT" -noout -checkend "$CERT_MIN_REMAINING_SECONDS" >/dev/null 2>&1; then
+    record_pass "$HOSTNAME certificate has more than ${CERT_MIN_REMAINING_DAYS} days remaining."
+  else
+    record_failure "$HOSTNAME certificate has ${CERT_MIN_REMAINING_DAYS} days or less remaining."
+  fi
+done
 
 echo ""
 echo "============================================================"
@@ -343,7 +238,7 @@ else
   record_failure "Front Door endpoint is not healthy (name=${FRONT_DOOR_ENDPOINT_NAME:-empty}, enabled=${FRONT_DOOR_ENDPOINT_STATE:-empty}, provisioning=${FRONT_DOOR_ENDPOINT_PROVISIONING:-empty})."
 fi
 
-for HOSTNAME in "$CUSTOMER_APEX_HOSTNAME" "$CUSTOMER_WWW_HOSTNAME"; do
+for HOSTNAME in "${PUBLIC_HOSTNAMES[@]}"; do
   DOMAIN_STATE="$(
     jq -r \
       --arg hostname "$HOSTNAME" \
@@ -398,31 +293,6 @@ for VALUE in "$AUTH_WWW" "$GOOGLE_WWW" "$CLOUDFLARE_WWW"; do
   fi
 done
 
-ASUID_APEX="$(dig @8.8.8.8 "asuid.${CUSTOMER_APEX_HOSTNAME}" TXT +short | tr -d '"')"
-ASUID_WWW="$(dig @8.8.8.8 "asuid.${CUSTOMER_WWW_HOSTNAME}" TXT +short | tr -d '"')"
-
-if [[ "$ASUID_APEX" == "$CUSTOMER_DOMAIN_VERIFICATION_ID" ]]; then
-  record_pass "asuid apex verification record is correct."
-else
-  record_failure "asuid apex verification record mismatch."
-fi
-
-if [[ "$ASUID_WWW" == "$CUSTOMER_DOMAIN_VERIFICATION_ID" ]]; then
-  record_pass "asuid www verification record is correct."
-else
-  record_failure "asuid www verification record mismatch."
-fi
-
-for ZONE in "$EXPECTED_APEX_ACME_ZONE" "$EXPECTED_WWW_ACME_ZONE"; do
-  NS_COUNT="$(dig "$ZONE" NS +short | sed '/^$/d' | wc -l | tr -d ' ')"
-
-  if [[ "$NS_COUNT" -eq 4 ]]; then
-    record_pass "$ZONE has four delegated nameservers."
-  else
-    record_failure "$ZONE has $NS_COUNT delegated nameservers instead of four."
-  fi
-done
-
 echo ""
 echo "============================================================"
 echo "4. LIVE CUSTOMER HTTPS"
@@ -471,68 +341,43 @@ done
 
 echo ""
 echo "============================================================"
-echo "5. APIM TLS AND DNS REGRESSION CHECK"
+echo "5. API GATEWAY DNS AND TLS"
 echo "============================================================"
 
-API_CNAME="$(dig @8.8.8.8 "$APIM_HOSTNAME" CNAME +short | sed 's/\.$//')"
+# api.craves.in goes through Front Door to APIM, like the customer site.
+API_CNAME="$(dig @8.8.8.8 "$API_HOSTNAME" CNAME +short | sed 's/\.$//')"
 API_CURL="$(
   curl -sS \
     --connect-timeout 15 \
     -o /dev/null \
     -w '%{http_code}|%{ssl_verify_result}|%{remote_ip}' \
-    "https://${APIM_HOSTNAME}/" || true
+    "https://${API_HOSTNAME}/" || true
 )"
 
 IFS='|' read -r API_HTTP API_TLS API_REMOTE <<<"$API_CURL"
 
-printf 'APIM CNAME: %s\n' "$API_CNAME"
-printf 'APIM root: HTTP %s, TLS %s, remote %s\n' \
+printf 'API CNAME: %s\n' "$API_CNAME"
+printf 'API root: HTTP %s, TLS %s, remote %s\n' \
   "${API_HTTP:-empty}" \
   "${API_TLS:-empty}" \
   "${API_REMOTE:-empty}"
 
-if [[ "$API_CNAME" == "$APIM_EXPECTED_CNAME" ]]; then
-  record_pass "api.craves.in CNAME points to the expected APIM gateway."
+if [[ "$API_CNAME" == "$FRONT_DOOR_ENDPOINT_HOSTNAME" ]]; then
+  record_pass "$API_HOSTNAME CNAME points to the Front Door endpoint."
 else
-  record_failure "api.craves.in CNAME changed to ${API_CNAME:-empty}; expected $APIM_EXPECTED_CNAME."
+  record_failure "$API_HOSTNAME CNAME changed to ${API_CNAME:-empty}; expected $FRONT_DOOR_ENDPOINT_HOSTNAME."
 fi
 
 if [[ "$API_TLS" == "0" ]]; then
-  record_pass "APIM TLS verification succeeds."
+  record_pass "API TLS verification succeeds."
 else
-  record_failure "APIM TLS verification result is ${API_TLS:-empty}."
+  record_failure "API TLS verification result is ${API_TLS:-empty}."
 fi
 
 if [[ "$API_HTTP" == "404" || "$API_HTTP" == "200" ]]; then
-  record_pass "APIM root status is acceptable ($API_HTTP)."
+  record_pass "API root status is acceptable ($API_HTTP)."
 else
-  record_failure "Unexpected APIM root HTTP status ${API_HTTP:-empty}."
-fi
-
-echo ""
-echo "============================================================"
-echo "6. ROLLBACK TARGET AVAILABILITY"
-echo "============================================================"
-
-ROLLBACK_CURL="$(
-  curl -sS \
-    --connect-timeout 15 \
-    -o /dev/null \
-    -w '%{http_code}|%{ssl_verify_result}' \
-    "https://${ROLLBACK_WWW_HOSTNAME}/" || true
-)"
-
-IFS='|' read -r ROLLBACK_HTTP ROLLBACK_TLS <<<"$ROLLBACK_CURL"
-
-printf '%s -> HTTP %s, TLS %s\n' \
-  "$ROLLBACK_WWW_HOSTNAME" \
-  "${ROLLBACK_HTTP:-empty}" \
-  "${ROLLBACK_TLS:-empty}"
-
-if [[ "$ROLLBACK_TLS" == "0" && "$ROLLBACK_HTTP" =~ ^[234] ]]; then
-  record_pass "Legacy Static Web App rollback target is still reachable."
-else
-  record_failure "Legacy Static Web App rollback target is not healthy enough for rollback."
+  record_failure "Unexpected API root HTTP status ${API_HTTP:-empty}."
 fi
 
 echo ""
@@ -547,6 +392,3 @@ fi
 
 printf 'PRODUCTION_STABILIZATION_STATUS=PASS\n'
 printf 'CUSTOMER_WEB_LATEST_READY_REVISION=%s\n' "$READY_REVISION"
-printf 'CUSTOMER_WEB_CERTIFICATE=%s\n' "$CUSTOMER_WEB_CERTIFICATE_NAME"
-printf 'CUSTOMER_WEB_CERTIFICATE_NOT_AFTER=%s\n' "$CERT_NOT_AFTER"
-printf 'LEGACY_ROLLBACK_TARGET_AVAILABLE=true\n'

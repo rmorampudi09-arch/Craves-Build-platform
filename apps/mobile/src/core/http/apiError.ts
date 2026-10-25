@@ -5,6 +5,7 @@ interface BackendErrorPayload {
   code?: unknown;
   message?: unknown;
   details?: unknown;
+  attemptsLeft?: unknown;
 }
 
 const stackTracePattern =
@@ -20,6 +21,8 @@ export class AppApiError extends Error {
     readonly cancelled = false,
     readonly details: readonly string[] = [],
     readonly retryAfterSeconds?: number,
+    /** Tries left after a wrong code (rider delivery OTP: 422 OTP_INVALID). */
+    readonly attemptsLeft?: number,
   ) {
     super(message);
     this.name = 'AppApiError';
@@ -111,6 +114,9 @@ function publicHttpMessage(status: number, backendMessage?: string): string {
   if (status === 422) {
     return backendMessage ?? 'Some information could not be accepted.';
   }
+  if (status === 423) {
+    return backendMessage ?? 'This is locked for now.';
+  }
   if (status === 429) {
     return 'Too many requests. Please wait a moment and try again.';
   }
@@ -154,6 +160,7 @@ export function toAppApiError(error: unknown): AppApiError {
     const code = normalizedBackendCode(error.response?.data?.code, status);
     const backendMessage = safeBackendMessage(error.response?.data?.message);
     const details = safeBackendDetails(error.response?.data?.details);
+    const attemptsLeft = error.response?.data?.attemptsLeft;
     const message = status
       ? publicHttpMessage(status, backendMessage)
       : 'We could not reach Craves. Check your connection and try again.';
@@ -167,6 +174,7 @@ export function toAppApiError(error: unknown): AppApiError {
       false,
       details,
       retryAfterSecondsFrom(error),
+      typeof attemptsLeft === 'number' && Number.isInteger(attemptsLeft) && attemptsLeft >= 0 ? attemptsLeft : undefined,
     );
   }
 

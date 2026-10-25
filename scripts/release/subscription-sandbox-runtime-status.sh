@@ -122,7 +122,7 @@ expect_flag "$ORDER_APP" CRAVES_SUBSCRIPTION_ORDER_CONSUMER_ENABLED true "Order 
 expect_flag "$ORDER_APP" CRAVES_SUBSCRIPTION_ORDER_CALLBACK_WORKER_ENABLED true "Order Service"
 
 verify_bus_subscription "$PAYMENT_REQUEST_SUB" subscription-payment-requested \
-  "event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED'"
+  "event_type = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR eventType = 'SUBSCRIPTION_PAYMENT_REQUESTED' OR event_type = 'SUBSCRIPTION_INVOICE_VOIDED' OR eventType = 'SUBSCRIPTION_INVOICE_VOIDED'"
 verify_bus_subscription "$PAYMENT_STATUS_SUB" subscription-payment-status \
   "event_type = 'SUBSCRIPTION_PAYMENT_STATUS_CHANGED' OR eventType = 'SUBSCRIPTION_PAYMENT_STATUS_CHANGED'"
 verify_bus_subscription "$ORDER_REQUEST_SUB" subscription-order-requested \

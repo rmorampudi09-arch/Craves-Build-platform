@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import styles from "./CustomerPageSkeleton.module.css";
 
@@ -12,6 +13,11 @@ export type CustomerSectionSkeletonVariant =
   | "notifications"
   | "saved"
   | "checkout"
+  | "checkout-details"
+  | "orders"
+  | "order"
+  | "tracking"
+  | "addresses"
   | "plans"
   | "plan-form"
   | "plan-details";
@@ -156,26 +162,35 @@ function DishBody() {
   );
 }
 
+/** The kitchen page's order: photo band, chef face over its edge, name, fact chips, bio, category tabs, dishes. */
 function KitchenBody() {
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-      <div className="rounded-[1.75rem] border border-[#E5E7EB] p-5 sm:p-6 md:rounded-[2rem] md:p-7">
-        <SkeletonBlock className="h-3 w-32 rounded-full" soft />
-        <SkeletonBlock className="mt-3 h-8 w-2/3 rounded-full" />
-        <SkeletonBlock className="mt-4 h-3.5 w-full max-w-xl rounded-full" soft />
+    <>
+      <SkeletonBlock className="h-[75vw] max-h-[28rem] w-full rounded-none" soft />
+      <div className="mx-auto max-w-6xl px-4 md:px-6">
+        <SkeletonBlock className="-mt-[46px] h-[92px] w-[92px] rounded-full ring-4 ring-white" />
+        <SkeletonBlock className="mt-2 h-8 w-2/3 max-w-sm rounded-full" />
+        <SkeletonBlock className="mt-2 h-3.5 w-1/2 max-w-xs rounded-full" soft />
+        <div className="mt-3 flex gap-2">
+          {["w-20", "w-24", "w-16"].map((width) => (
+            <SkeletonBlock key={width} className={`h-7 ${width} rounded-full`} soft />
+          ))}
+        </div>
+        <SkeletonBlock className="mt-3 h-3.5 w-full max-w-xl rounded-full" soft />
         <SkeletonBlock className="mt-2 h-3.5 w-4/5 max-w-lg rounded-full" soft />
-        <div className="mt-5 grid grid-cols-2 gap-2.5 lg:max-w-[27rem]">
-          {Array.from({ length: 4 }, (_, index) => (
-            <SkeletonBlock key={index} className="h-20 rounded-2xl" soft />
+        <div className="mt-6 flex gap-2 border-b border-[#E5E7EB] py-2.5">
+          {["w-28", "w-24", "w-20"].map((width) => (
+            <SkeletonBlock key={width} className={`h-10 ${width} rounded-full`} soft />
+          ))}
+        </div>
+        <SkeletonBlock className="mt-6 h-6 w-36 rounded-full" />
+        <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <CardSkeleton key={index} media="aspect-[16/9] sm:aspect-[16/10]" />
           ))}
         </div>
       </div>
-      <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }, (_, index) => (
-          <CardSkeleton key={index} media="aspect-[16/9] sm:aspect-[16/10]" />
-        ))}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -222,6 +237,27 @@ function CartBody() {
   );
 }
 
+/** A Chefs-tab kitchen card: chef face, name and heart, then the photo strip and the prep time and price line. */
+export function KitchenDiscoverCardSkeleton() {
+  return (
+    <div className="rounded-[1.35rem] border border-[#E5E7EB] bg-white p-3 sm:p-3.5" aria-hidden="true">
+      <div className="flex items-center gap-3">
+        <SkeletonBlock className="h-14 w-14 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <SkeletonBlock className="h-4 w-2/3 rounded-full" />
+          <SkeletonBlock className="h-3 w-1/2 rounded-full" soft />
+        </div>
+        <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" soft />
+      </div>
+      <SkeletonBlock className="mt-3 h-[9.5rem] w-full rounded-2xl" />
+      <div className="mt-3 flex justify-between gap-3">
+        <SkeletonBlock className="h-3 w-32 rounded-full" soft />
+        <SkeletonBlock className="h-3 w-16 rounded-full" soft />
+      </div>
+    </div>
+  );
+}
+
 function ChefsBody() {
   return (
     <div className="mx-auto max-w-[88rem] px-4 pt-3 md:px-7 md:pt-4 lg:px-10">
@@ -229,7 +265,7 @@ function ChefsBody() {
       <SkeletonBlock className="mt-3 h-8 w-64 max-w-full rounded-full" />
       <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }, (_, index) => (
-          <CardSkeleton key={index} media="aspect-[16/9]" />
+          <KitchenDiscoverCardSkeleton key={index} />
         ))}
       </div>
     </div>
@@ -429,6 +465,223 @@ function CheckoutBody() {
   );
 }
 
+/** The summary card on /checkout/[id]: status, reference, the five amounts and two actions. */
+function CheckoutDetailsBody() {
+  return (
+    <div className="rounded-[30px] border border-[#E5E7EB] bg-white p-7">
+      <SkeletonBlock className="h-3 w-28 rounded-full" soft />
+      <SkeletonBlock className="mt-4 h-8 w-56 max-w-full rounded-full" />
+      <SkeletonBlock className="mt-4 h-3.5 w-40 rounded-full" soft />
+      <div className="mt-6 space-y-3">
+        {[0, 1, 2, 3, 4].map((line) => (
+          <div key={line} className="flex justify-between border-b border-[#F1F3F5] pb-3">
+            <SkeletonBlock className="h-4 w-28 rounded-full" soft />
+            <SkeletonBlock className="h-4 w-16 rounded-full" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <SkeletonBlock className="h-11 w-48 rounded-full" />
+        <SkeletonBlock className="h-11 w-32 rounded-full" soft />
+      </div>
+    </div>
+  );
+}
+
+const ORDER_CARD = "rounded-2xl border border-[#E5E7EB] bg-white";
+
+/** Your orders: the "In progress" heading, then order cards (kitchen, date, status, dishes, total). */
+function OrdersBody() {
+  return (
+    <>
+      <SkeletonBlock className="mb-3 h-4 w-28 rounded-full" />
+      <div className="space-y-3">
+        {[0, 1, 2].map((order) => (
+          <div key={order} className={`${ORDER_CARD} p-4 md:p-5`}>
+            <div className="flex items-start gap-3.5">
+              <SkeletonBlock className="h-12 w-12 shrink-0 rounded-full" soft />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <SkeletonBlock className="h-4 w-2/5 rounded-full" />
+                    <SkeletonBlock className="h-3 w-3/5 rounded-full" soft />
+                  </div>
+                  <SkeletonBlock className="h-6 w-24 shrink-0 rounded-full" soft />
+                </div>
+                <SkeletonBlock className="mt-3 h-3.5 w-3/4 rounded-full" soft />
+                <div className="mt-3 flex min-h-11 items-center border-t border-[#E5E7EB] pt-3">
+                  <SkeletonBlock className="h-4 w-32 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** Kitchen, dish lines and the bill, as on an order's status and tracking pages. */
+function OrderBillSkeleton() {
+  return (
+    <div className={`${ORDER_CARD} p-5`}>
+      <div className="flex items-center gap-3">
+        <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" soft />
+        <div className="flex-1 space-y-1.5">
+          <SkeletonBlock className="h-4 w-2/3 rounded-full" />
+          <SkeletonBlock className="h-3 w-16 rounded-full" soft />
+        </div>
+      </div>
+      <div className="mt-4 space-y-2.5">
+        {[0, 1].map((line) => (
+          <div key={line} className="flex justify-between gap-3">
+            <SkeletonBlock className="h-3.5 w-3/5 rounded-full" soft />
+            <SkeletonBlock className="h-3.5 w-12 rounded-full" soft />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 space-y-2 border-t border-[#E5E7EB] pt-4">
+        {[0, 1, 2].map((line) => (
+          <div key={line} className="flex justify-between gap-3">
+            <SkeletonBlock className="h-3 w-24 rounded-full" soft />
+            <SkeletonBlock className="h-3 w-12 rounded-full" soft />
+          </div>
+        ))}
+        <div className="flex justify-between gap-3 border-t border-[#E5E7EB] pt-3">
+          <SkeletonBlock className="h-4 w-20 rounded-full" />
+          <SkeletonBlock className="h-4 w-16 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeliveryAddressSkeleton() {
+  return (
+    <div className={`${ORDER_CARD} p-5`}>
+      <div className="flex items-start gap-3">
+        <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" soft />
+        <div className="flex-1 space-y-2">
+          <SkeletonBlock className="h-4 w-1/2 rounded-full" />
+          <SkeletonBlock className="h-3.5 w-full rounded-full" soft />
+          <SkeletonBlock className="h-3.5 w-3/4 rounded-full" soft />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One order: what happened with its two actions, the five progress steps, then bill and address. */
+function OrderBody() {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+      <div className="space-y-5">
+        <div className={`${ORDER_CARD} p-5 md:p-6`}>
+          <div className="flex items-start gap-4">
+            <SkeletonBlock className="h-14 w-14 shrink-0 rounded-full" soft />
+            <div className="min-w-0 flex-1 space-y-2.5">
+              <SkeletonBlock className="h-7 w-2/3 rounded-full" />
+              <SkeletonBlock className="h-3.5 w-full rounded-full" soft />
+              <SkeletonBlock className="h-3 w-1/2 rounded-full" soft />
+            </div>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <SkeletonBlock className="h-12 rounded-full" soft />
+            <SkeletonBlock className="h-12 rounded-full" />
+          </div>
+        </div>
+        <div className={`${ORDER_CARD} p-5 md:p-6`}>
+          <SkeletonBlock className="h-4 w-24 rounded-full" />
+          <div className="mt-4 space-y-5">
+            {[0, 1, 2, 3, 4].map((step) => (
+              <div key={step} className="flex items-center gap-3">
+                <SkeletonBlock className="h-7 w-7 shrink-0 rounded-full" soft />
+                <SkeletonBlock className="h-3.5 w-48 max-w-full rounded-full" soft />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-5">
+        <OrderBillSkeleton />
+        <DeliveryAddressSkeleton />
+      </div>
+    </div>
+  );
+}
+
+/** Tracking: current status, the updates timeline and address, with the summary at the side. */
+function TrackingBody() {
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      <div className="space-y-5">
+        <div className={`${ORDER_CARD} p-5 md:p-6`}>
+          <SkeletonBlock className="h-7 w-1/2 rounded-full" />
+          <SkeletonBlock className="mt-3 h-3.5 w-full max-w-xl rounded-full" soft />
+          <SkeletonBlock className="mt-2 h-3.5 w-2/3 max-w-md rounded-full" soft />
+        </div>
+        <div className={`${ORDER_CARD} p-5 md:p-6`}>
+          <div className="flex items-center justify-between gap-3">
+            <SkeletonBlock className="h-6 w-56 max-w-[70%] rounded-full" />
+            <SkeletonBlock className="h-10 w-24 rounded-xl" soft />
+          </div>
+          <div className="mt-5 space-y-6 rounded-xl border border-[#E5E7EB] p-4 sm:p-5">
+            {[0, 1, 2].map((step) => (
+              <div key={step} className="flex items-start gap-3">
+                <SkeletonBlock className="h-7 w-7 shrink-0 rounded-full" soft />
+                <div className="flex-1 space-y-1.5 pt-1">
+                  <SkeletonBlock className="h-3.5 w-40 max-w-full rounded-full" />
+                  <SkeletonBlock className="h-3 w-24 rounded-full" soft />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <DeliveryAddressSkeleton />
+      </div>
+      <div className="space-y-5">
+        <OrderBillSkeleton />
+        <div className={`${ORDER_CARD} p-5`}>
+          <div className="flex items-center gap-3">
+            <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" soft />
+            <SkeletonBlock className="h-4 w-24 rounded-full" />
+          </div>
+          <SkeletonBlock className="mt-3 h-3 w-full rounded-full" soft />
+          <SkeletonBlock className="mt-2 h-3 w-4/5 rounded-full" soft />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Saved address cards: pin, name, receiver, address, then Set as default, Edit and Delete. */
+function AddressesBody() {
+  return (
+    <div className="space-y-4">
+      {[0, 1].map((address) => (
+        <div
+          key={address}
+          className="rounded-[24px] border border-[#E5E7EB] bg-white px-5 py-5 md:px-6 md:py-6"
+        >
+          <div className="flex items-start gap-4">
+            <SkeletonBlock className="h-12 w-12 shrink-0 rounded-2xl md:h-14 md:w-14" soft />
+            <div className="min-w-0 flex-1">
+              <SkeletonBlock className="h-5 w-28 rounded-full" />
+              <SkeletonBlock className="mt-3 h-4 w-40 max-w-full rounded-full" soft />
+              <SkeletonBlock className="mt-3 h-4 w-full max-w-md rounded-full" soft />
+            </div>
+          </div>
+          <div className="mt-5 flex gap-2 border-t border-[#F1F3F5] pt-4">
+            <SkeletonBlock className="h-10 flex-1 rounded-xl sm:w-36 sm:flex-none" soft />
+            <SkeletonBlock className="h-10 w-20 rounded-xl" soft />
+            <SkeletonBlock className="h-10 w-20 rounded-xl" soft />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PlanCardSkeleton() {
   return (
     <div className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5">
@@ -515,6 +768,11 @@ const SECTION_BODIES: Record<CustomerSectionSkeletonVariant, () => React.ReactNo
   notifications: NotificationsBody,
   saved: SavedBody,
   checkout: CheckoutBody,
+  "checkout-details": CheckoutDetailsBody,
+  orders: OrdersBody,
+  order: OrderBody,
+  tracking: TrackingBody,
+  addresses: AddressesBody,
   plans: PlansBody,
   "plan-form": PlanFormBody,
   "plan-details": PlanDetailsBody,
@@ -567,7 +825,8 @@ export function CustomerPageSkeleton({
 
 /**
  * The content area of a page that keeps its own header while loading (Profile, Notifications,
- * Saved, Checkout, meal plans). Render it where the content goes; the page keeps Back working.
+ * Saved, Checkout, orders, tracking, addresses, meal plans). Render it where the content goes;
+ * the page keeps Back working.
  */
 export function CustomerSectionSkeleton({
   variant,
@@ -581,6 +840,50 @@ export function CustomerSectionSkeleton({
     <div aria-busy="true">
       <SkeletonStatus label={label} />
       <Body />
+    </div>
+  );
+}
+
+/**
+ * loading.tsx for pages that draw their own header (orders, an order, tracking, addresses):
+ * Back, logo and title where the page puts them, then the body the page shows while it loads.
+ */
+export function CustomerRouteSkeleton({
+  title,
+  backHref,
+  backLabel,
+  variant,
+  label,
+  width = "max-w-5xl",
+}: {
+  title: string;
+  backHref: string;
+  backLabel: string;
+  variant: CustomerSectionSkeletonVariant;
+  label: string;
+  /** The page's own content width, so nothing shifts when it takes over. */
+  width?: "max-w-4xl" | "max-w-5xl";
+}) {
+  return (
+    <div className="min-h-screen bg-white text-[#1A1A1A]">
+      <header className="border-b border-[#E5E7EB] bg-white">
+        <div className={`mx-auto flex min-h-[72px] ${width} items-center gap-3 px-4 py-3 md:px-6`}>
+          <Link
+            href={backHref}
+            aria-label={backLabel}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </Link>
+          <Link href="/home" aria-label="Craves home" className="shrink-0 rounded-xl">
+            <CravesLogo size="sm" decorative />
+          </Link>
+          <p className="truncate text-lg font-semibold tracking-[-0.03em]">{title}</p>
+        </div>
+      </header>
+      <main className={`mx-auto ${width} px-4 py-5 md:px-6 md:py-6`}>
+        <CustomerSectionSkeleton variant={variant} label={label} />
+      </main>
     </div>
   );
 }

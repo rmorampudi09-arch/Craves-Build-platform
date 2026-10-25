@@ -7,6 +7,7 @@ import {
   parseKitchenDiscovery,
   type NearbyKitchen,
 } from "@/features/home/lib/discovery-contract";
+import type { SpiceLevel } from "@/shared/lib/spice-level";
 
 export type KitchenDiscoveryResult = {
   kitchens: NearbyKitchen[];
@@ -14,7 +15,7 @@ export type KitchenDiscoveryResult = {
 };
 
 const KITCHEN_DISCOVERY_SNAPSHOT_KEY =
-  "craves.customer.kitchen-discovery.snapshot.v1";
+  "craves.customer.kitchen-discovery.snapshot.v2";
 
 let discoveredKitchens: NearbyKitchen[] = [];
 let kitchenDiscoveryRadiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS;
@@ -74,6 +75,7 @@ export async function discoverKitchens(
   latitude: number,
   longitude: number,
   radiusMeters = DEFAULT_DISCOVERY_RADIUS_METERS,
+  spiceLevel?: SpiceLevel,
 ): Promise<KitchenDiscoveryResult> {
   let usedRadius = radiusMeters;
 
@@ -86,6 +88,7 @@ export async function discoverKitchens(
       page: "0",
       size: "50",
     });
+    if (spiceLevel) query.set("spiceLevel", spiceLevel);
 
     const response = await fetch(`/api/discovery/kitchens?${query}`, {
       cache: "no-store",
@@ -112,6 +115,8 @@ export async function discoverKitchens(
     const serviceableKitchens = payload.kitchens.filter(
       (kitchen) => kitchen.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS,
     );
+    // A spice-filtered list must not replace the nearby kitchens Home and the kitchen pages reuse.
+    if (spiceLevel) return { kitchens: serviceableKitchens, radiusMeters: candidateRadius };
 
     if (serviceableKitchens.length > 0) {
       discoveredKitchens = serviceableKitchens;
@@ -135,11 +140,6 @@ export function allKitchens(): NearbyKitchen[] {
   return discoveredKitchens.filter(
     (kitchen) => kitchen.distanceMeters <= MAX_DISCOVERY_RADIUS_METERS,
   );
-}
-
-export function getKitchenDiscoveryRadiusMeters(): number {
-  hydrateKitchenSnapshot();
-  return kitchenDiscoveryRadiusMeters;
 }
 
 export function clearKitchenDiscoveryCache(): void {

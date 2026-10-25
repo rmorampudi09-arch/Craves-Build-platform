@@ -14,11 +14,13 @@ interface CartAddressAvailabilityBannerProps {
   onResolve: () => void;
   onChooseAddress: () => void;
   onClose: () => void;
+  /** The page column it sits in; Home's by default. */
+  className?: string;
 }
 
 /**
- * Shown at the top of Home, once per address change, when the cart holds food the kitchen
- * can't deliver to the new address. Inline, not a pop-up: browsing stays possible.
+ * Shown at the top of Home and the cart, once per address change, when the cart holds food the
+ * kitchen can't deliver to the new address. Inline, not a pop-up: browsing stays possible.
  */
 export function CartAddressAvailabilityBanner({
   open,
@@ -30,6 +32,7 @@ export function CartAddressAvailabilityBanner({
   onResolve,
   onChooseAddress,
   onClose,
+  className = "mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10",
 }: CartAddressAvailabilityBannerProps) {
   const allUnavailable = unavailableItems.length === totalCartItems;
   const unavailableQuantity = unavailableItems.reduce((total, item) => total + item.qty, 0);
@@ -45,7 +48,7 @@ export function CartAddressAvailabilityBanner({
 
   return (
     // Polite live region: a banner that appears after the cart is rechecked is read out.
-    <div aria-live="polite" className="mx-auto max-w-[88rem] px-4 md:px-7 lg:px-10">
+    <div aria-live="polite" className={className}>
       <AnimatePresence initial={false}>
         {open && unavailableItems.length > 0 ? (
           <motion.section

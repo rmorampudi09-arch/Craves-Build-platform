@@ -357,5 +357,41 @@ class ChefOnboardingDatabaseTest {
         assertThrows(ApiException.class,()->run(()->content.publish(user,article.id(),new PublishRequest(1L,true))));
         assertThrows(ApiException.class,()->run(()->content.publish(admin,article.id(),new PublishRequest(1L,false))));
     }
-}
 
+    // Registration kitchen photos are published only from an APPROVED application, and only the two photo types.
+    RegistrationKitchenPhotoService kitchenPhotos() {
+        when(storage.downloadKycDocument(anyString(),anyString(),anyString(),anyString(),anyLong()))
+            .thenReturn(new BlobDocumentStorageService.StoredDocumentBytes("photo.jpg","image/jpeg",new byte[]{1,2,3,4}));
+        return new RegistrationKitchenPhotoService(jdbc,storage);
+    }
+    void approveDirectly() {
+        jdbc.update("UPDATE chef_application SET status='APPROVED', reviewed_at=now() WHERE identity_id=?",user.identityId());
+    }
+    @Test void servesApprovedApplicantsKitchenPhoto() {
+        save(ProofKind.PAN,"12345678901234");photos();approveDirectly();
+        var photo=kitchenPhotos().approvedKitchenPhoto(user.identityId(),1);
+        assertTrue(photo.isPresent());
+        assertEquals("image/jpeg",photo.get().contentType());
+        verify(storage).downloadKycDocument("documents","kyc/synthetic","photo.jpg","image/jpeg",20L);
+        assertTrue(kitchenPhotos().approvedKitchenPhoto(user.identityId(),2).isPresent());
+    }
+    @Test void hidesPhotosOfPendingApplication() {
+        save(ProofKind.PAN,"12345678901234");photos();
+        assertTrue(kitchenPhotos().approvedKitchenPhoto(user.identityId(),1).isEmpty());
+        verify(storage,never()).downloadKycDocument(anyString(),anyString(),anyString(),anyString(),anyLong());
+    }
+    @Test void skipsRemovedAndRejectedPhotos() {
+        save(ProofKind.PAN,"12345678901234");photos();approveDirectly();
+        jdbc.update("UPDATE chef_kyc_document SET removed_at=now() WHERE identity_id=? AND document_type='KITCHEN_PHOTO_1'",user.identityId());
+        jdbc.update("UPDATE chef_kyc_document SET status='REJECTED' WHERE identity_id=? AND document_type='KITCHEN_PHOTO_2'",user.identityId());
+        assertTrue(kitchenPhotos().approvedKitchenPhoto(user.identityId(),1).isEmpty());
+        assertTrue(kitchenPhotos().approvedKitchenPhoto(user.identityId(),2).isEmpty());
+    }
+    @Test void neverServesNonKitchenDocuments() {
+        save(ProofKind.PAN,"12345678901234");
+        upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);approveDirectly();
+        var photos=kitchenPhotos();
+        for(int slot=0;slot<=3;slot++) assertTrue(photos.approvedKitchenPhoto(user.identityId(),slot).isEmpty());
+        verify(storage,never()).downloadKycDocument(anyString(),anyString(),anyString(),anyString(),anyLong());
+    }
+}

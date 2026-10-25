@@ -1,18 +1,18 @@
 import type { MetadataRoute } from "next";
 
 import {
+  cityAreaUrl,
   cityFoodUrl,
   cityUrl,
   foodIntents,
   foodUrl,
   launchCities,
+  seoContentUpdated,
   siteUrl,
 } from "@/features/seo/lib/seo-craves";
 
 const publicRoutes = [
   "",
-  "/home",
-  "/discover",
   "/chefs",
   "/subscriptions/plans",
   "/products-pricing",
@@ -24,7 +24,7 @@ const publicRoutes = [
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
+  const now = seoContentUpdated;
   const cityRoutes = launchCities.map((city) => ({
     url: cityUrl(city),
     lastModified: now,
@@ -37,6 +37,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: "weekly" as const,
       priority: food.slug === "homemade-food" ? 0.85 : 0.75,
+    })),
+  );
+  const cityAreaRoutes = launchCities.flatMap((city) =>
+    city.neighborhoods.map((area) => ({
+      url: cityAreaUrl(city, area),
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
     })),
   );
   const foodRoutes = foodIntents.map((food) => ({
@@ -55,6 +63,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     })),
     ...cityRoutes,
     ...cityFoodRoutes,
+    ...cityAreaRoutes,
     ...foodRoutes,
   ];
 }

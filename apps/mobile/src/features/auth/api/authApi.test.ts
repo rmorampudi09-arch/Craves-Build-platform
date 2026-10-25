@@ -92,4 +92,34 @@ describe('authApi exact auth contracts', () => {
       authApi.exchangeFirebaseToken('invalid-firebase-id-token'),
     ).rejects.toBe(error);
   });
+
+  describe('central phone OTP (MSG91)', () => {
+    const challengeId = 'c'.repeat(43);
+    const customToken = 't'.repeat(200);
+
+    it('sends the 10 digits with country code 91, and the challenge on a resend', async () => {
+      postMock.mockResolvedValue({data: {challengeId, expiresAt: 1, resendAvailableAt: 2}});
+      await expect(authApi.sendPhoneOtp('9848012345')).resolves.toBe(challengeId);
+      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/otp/send', {phoneNumber: '9848012345', countryCode: '91'}, {timeout: 15000});
+      await authApi.sendPhoneOtp('9848012345', challengeId);
+      expect(postMock).toHaveBeenLastCalledWith(
+        '/api/v1/auth/otp/send',
+        {phoneNumber: '9848012345', countryCode: '91', challengeId},
+        {timeout: 15000},
+      );
+    });
+
+    it('verifies the code and answers the Firebase custom token', async () => {
+      postMock.mockResolvedValue({data: {firebaseCustomToken: customToken}});
+      await expect(authApi.verifyPhoneOtp(challengeId, '482913')).resolves.toBe(customToken);
+      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/otp/verify', {challengeId, otp: '482913'}, {timeout: 15000});
+    });
+
+    it('refuses answers that are not the expected shape', async () => {
+      postMock.mockResolvedValue({data: {challengeId: 'short'}});
+      await expect(authApi.sendPhoneOtp('9848012345')).rejects.toMatchObject({code: 'OTP_UNAVAILABLE'});
+      postMock.mockResolvedValue({data: {firebaseCustomToken: 'short'}});
+      await expect(authApi.verifyPhoneOtp(challengeId, '482913')).rejects.toMatchObject({code: 'OTP_UNAVAILABLE'});
+    });
+  });
 });

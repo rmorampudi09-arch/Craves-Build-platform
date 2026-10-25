@@ -55,7 +55,26 @@ public class RefundStatusChangedServiceBusProcessor {
             );
         }
 
-        this.processorClient = builder
+        this.processorClient = properties.isSessionEnabled()
+            // CH-06: a session-enabled subscription (SessionId = order) hands each order's events over one at a time,
+            // in publish order, across replicas. Off until the *-v3 subscription exists and the flag is turned on.
+            ? builder
+                .sessionProcessor()
+                .topicName(properties.getTopicName())
+                .subscriptionName(properties.getSessionSubscriptionName())
+                .receiveMode(ServiceBusReceiveMode.PEEK_LOCK)
+                .disableAutoComplete()
+                .maxConcurrentSessions(properties.validatedMaxConcurrentMessages())
+                .prefetchCount(properties.validatedPrefetchCount())
+                .maxAutoLockRenewDuration(properties.maxAutoLockRenewDuration())
+                .processMessage(this::processMessage)
+                .processError(context -> LOGGER.error(
+                    "Refund status Service Bus session processor error entityPath={}",
+                    context.getEntityPath(),
+                    context.getException()
+                ))
+                .buildProcessorClient()
+            : builder
             .processor()
             .topicName(properties.getTopicName())
             .subscriptionName(properties.getSubscriptionName())

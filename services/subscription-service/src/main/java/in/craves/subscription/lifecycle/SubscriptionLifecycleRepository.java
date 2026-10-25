@@ -86,6 +86,8 @@ public class SubscriptionLifecycleRepository {
         ).stream().findFirst();
     }
 
+    // Nested reads in the row mapper share this transaction's connection instead of taking a second one from the pool.
+    @Transactional(readOnly = true)
     public List<CustomerOccurrenceResponse> listOccurrences(UUID subscriptionId, UUID customerIdentityId, int limit) {
         if (findOwned(subscriptionId, customerIdentityId).isEmpty()) {
             return List.of();
@@ -110,12 +112,16 @@ public class SubscriptionLifecycleRepository {
     }
 
     @Transactional
-    public boolean pause(UUID subscriptionId, UUID customerIdentityId, String reason) {
+    public boolean pause(
+        UUID subscriptionId, UUID customerIdentityId, String reason,
+        LocalDate pausedFrom, LocalDate billStart, int usedDays, LocalDate autoResumeDate
+    ) {
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET status = 'PAUSED', updated_at = now(), " +
-                "generation_lock_token = NULL, generation_locked_at = NULL " +
+                "generation_lock_token = NULL, generation_locked_at = NULL, " +
+                "paused_from = ?, pause_bill_start = ?, pause_days_used = ?, pause_auto_resume_date = ? " +
                 "WHERE id = ? AND customer_identity_id = ? AND status = 'ACTIVE'",
-            subscriptionId, customerIdentityId
+            pausedFrom, billStart, usedDays, autoResumeDate, subscriptionId, customerIdentityId
         );
         if (updated != 1) return false;
         insertSubscriptionHistory(subscriptionId, "ACTIVE", "PAUSED", reason, customerIdentityId);
@@ -129,7 +135,8 @@ public class SubscriptionLifecycleRepository {
         if (locked == null || !("ACTIVE".equals(locked.status()) || "PAUSED".equals(locked.status()))) return false;
         int updated = jdbcTemplate.update(
             "UPDATE subscription_schema.customer_subscription SET status = 'CANCELLED', end_date = current_date, " +
-                "next_service_date = NULL, generation_lock_token = NULL, generation_locked_at = NULL, updated_at = now() " +
+                "next_service_date = NULL, generation_lock_token = NULL, generation_locked_at = NULL, updated_at = now(), " +
+                "paused_from = NULL, pause_auto_resume_date = NULL " +
                 "WHERE id = ? AND customer_identity_id = ? AND status = ?",
             subscriptionId, customerIdentityId, locked.status()
         );
@@ -150,6 +157,62 @@ public class SubscriptionLifecycleRepository {
         if (updated != 1) return false;
         insertSubscriptionHistory(subscriptionId, "PAUSED", "ACTIVE", reason, customerIdentityId);
         return true;
+    }
+
+    public PauseUsage pauseUsage(UUID subscriptionId) {
+        return jdbcTemplate.queryForObject(
+            "SELECT pause_bill_start, pause_days_used, paused_from, pause_auto_resume_date " +
+                "FROM subscription_schema.customer_subscription WHERE id = ?",
+            (rs, rowNum) -> new PauseUsage(
+                rs.getObject("pause_bill_start", LocalDate.class),
+                rs.getInt("pause_days_used"),
+                rs.getObject("paused_from", LocalDate.class),
+                rs.getObject("pause_auto_resume_date", LocalDate.class)
+            ), subscriptionId
+        );
+    }
+
+    /** Start of the paid bill covering onDate; ₹0 credit invoices (extra days) are not bills. */
+    public LocalDate currentBillStart(UUID subscriptionId, LocalDate onDate) {
+        return jdbcTemplate.queryForObject(
+            "SELECT COALESCE((SELECT max(cycle_start) FROM subscription_schema.subscription_invoice " +
+                "WHERE subscription_id = ? AND status = 'PAID' AND amount > 0 AND cycle_start <= ?), " +
+                "(SELECT start_date FROM subscription_schema.customer_subscription WHERE id = ?))",
+            LocalDate.class, subscriptionId, onDate, subscriptionId
+        );
+    }
+
+    /** First day a pause takes a meal away: meals already sent to the chef are still delivered. */
+    public LocalDate firstUnservedDate(UUID subscriptionId, LocalDate today) {
+        LocalDate lastSent = jdbcTemplate.queryForObject(
+            "SELECT max(service_date) FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
+                "AND status IN ('ORDER_REQUESTED', 'ORDER_CREATED', 'FAILED') AND service_date >= ?",
+            LocalDate.class, subscriptionId, today
+        );
+        return lastSent == null ? today : lastSent.plusDays(1);
+    }
+
+    /** Customer pauses whose allowance ends on or before `through`; pauses from before the allowance have no date. */
+    public List<AutoResumeCandidate> dueAutoResumes(LocalDate through, int limit) {
+        return jdbcTemplate.query(
+            "SELECT id, customer_identity_id, pause_auto_resume_date FROM subscription_schema.customer_subscription " +
+                "WHERE status = 'PAUSED' AND pause_auto_resume_date <= ? ORDER BY pause_auto_resume_date, id LIMIT ?",
+            (rs, rowNum) -> new AutoResumeCandidate(
+                rs.getObject("id", UUID.class),
+                rs.getObject("customer_identity_id", UUID.class),
+                rs.getObject("pause_auto_resume_date", LocalDate.class)
+            ), through, limit
+        );
+    }
+
+    /** Adds the days this pause used to the bill's count and ends the running pause. */
+    public void closePause(UUID subscriptionId, LocalDate resumeDate) {
+        jdbcTemplate.update(
+            "UPDATE subscription_schema.customer_subscription SET " +
+                "pause_days_used = pause_days_used + CASE WHEN paused_from IS NULL THEN 0 ELSE GREATEST(0, CAST(? AS date) - paused_from) END, " +
+                "paused_from = NULL, pause_auto_resume_date = NULL, updated_at = now() WHERE id = ?",
+            resumeDate, subscriptionId
+        );
     }
 
     @Transactional
@@ -273,7 +336,7 @@ public class SubscriptionLifecycleRepository {
         );
     }
 
-    private void cancelUndispatchedOccurrences(UUID subscriptionId, UUID actorIdentityId, String source) {
+    public void cancelUndispatchedOccurrences(UUID subscriptionId, UUID actorIdentityId, String source) {
         List<OccurrenceState> candidates = jdbcTemplate.query(
             "SELECT id, status FROM subscription_schema.subscription_occurrence WHERE subscription_id = ? " +
                 "AND status IN ('BILLING_PENDING', 'PAYMENT_PENDING', 'READY_FOR_ORDER') FOR UPDATE",
@@ -324,5 +387,7 @@ public class SubscriptionLifecycleRepository {
 
     public record OwnedSubscription(UUID id, UUID customerIdentityId, UUID planId, String status, LocalDate nextServiceDate) {}
     public record ScheduleClock(String timezone, LocalTime serviceTime) {}
+    public record PauseUsage(LocalDate billStart, int usedDays, LocalDate pausedFrom, LocalDate autoResumeDate) {}
+    public record AutoResumeCandidate(UUID subscriptionId, UUID customerIdentityId, LocalDate autoResumeDate) {}
     private record OccurrenceState(UUID id, String status) {}
 }

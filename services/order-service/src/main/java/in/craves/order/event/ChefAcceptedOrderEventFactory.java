@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import in.craves.order.delivery.PickupLocationReference;
+import in.craves.order.domain.OrderNumber;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryItemData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryRequestData;
 import in.craves.order.event.ChefAcceptedOrderEventData.DeliveryStopData;
@@ -40,6 +41,8 @@ public class ChefAcceptedOrderEventFactory {
         UUID eventId = UUID.randomUUID();
         UUID correlationId = requestedCorrelationId == null ? eventId : requestedCorrelationId;
         UUID causationId = causationId(idempotencyKey);
+        // Borzo and Pidge riders see these notes; the number is what the kitchen and customer see on the order.
+        String orderNumber = OrderNumber.of(source.orderId());
 
         DeliveryStopData pickup = new DeliveryStopData(
             address(
@@ -57,7 +60,7 @@ public class ChefAcceptedOrderEventFactory {
             source.pickupLongitude(),
             null,
             null,
-            null,
+            "Craves order #" + orderNumber + ". Match this number with the kitchen.",
             source.pickupAddressLine1(),
             source.pickupAddressLine2(),
             source.pickupLandmark(),
@@ -84,7 +87,7 @@ public class ChefAcceptedOrderEventFactory {
             source.dropoffLongitude(),
             null,
             null,
-            null,
+            "Craves order #" + orderNumber + ".",
             source.dropoffAddressLine1(),
             source.dropoffAddressLine2(),
             source.dropoffLandmark(),
@@ -131,7 +134,7 @@ public class ChefAcceptedOrderEventFactory {
             null,
             source.pickupAreaName(),
             new DeliveryRequestData(
-                "Food order " + source.orderId(),
+                "Food order #" + orderNumber,
                 source.totalPackageWeightGrams(),
                 source.thermoboxRequired(),
                 pickup,

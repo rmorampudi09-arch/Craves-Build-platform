@@ -103,6 +103,8 @@ interface CheckoutPaymentButtonProps {
   failure: CheckoutPaymentFailure;
   ensureCheckout: () => Promise<CustomerCheckout>;
   onFailure: (failure: CheckoutPaymentFailure) => void;
+  /** True while a payment is being opened, paid or confirmed: checkout then keeps its address. */
+  onPaymentLockChange?: (locked: boolean) => void;
 }
 
 function money(amount: number, currency: string): string {
@@ -187,6 +189,7 @@ export function CheckoutPaymentButton({
   failure,
   ensureCheckout,
   onFailure,
+  onPaymentLockChange,
 }: CheckoutPaymentButtonProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -194,6 +197,11 @@ export function CheckoutPaymentButton({
   const [checking, setChecking] = useState(false);
   const [checkProblem, setCheckProblem] = useState("");
   const [notice, setNotice] = useState("");
+
+  const paymentLocked = busy || pending !== null;
+  useEffect(() => {
+    onPaymentLockChange?.(paymentLocked);
+  }, [onPaymentLockChange, paymentLocked]);
 
   const finishConfirmedOrder = useCallback(async (currentCheckout: CustomerCheckout) => {
     const orderId = currentCheckout.orders[0]?.id;
@@ -207,7 +215,8 @@ export function CheckoutPaymentButton({
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
     window.sessionStorage.removeItem("craves.checkout.operationId");
-    router.replace(`/orders/${orderId}`);
+    // The order can trail a verified payment: paid=1 keeps its page from offering Pay again meanwhile.
+    router.replace(`/orders/${orderId}?paid=1`);
   }, [router]);
 
   const checkStatus = useCallback(async (paymentOrderId: string) => {
@@ -442,7 +451,7 @@ export function CheckoutPaymentButton({
 
   if (pending) {
     return (
-      <div className={barClass}>
+      <div data-craves-action-bar className={barClass}>
         <div className="mx-auto max-w-2xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:px-0 lg:pb-0 lg:pt-4">
           <div role="status" className="lg:rounded-xl lg:bg-[#F1F3F5] lg:p-4">
             <p className="text-base font-bold text-[#1A1A1A]">
@@ -478,7 +487,7 @@ export function CheckoutPaymentButton({
   const paymentProblem = failure && !failure.section ? failure : null;
 
   return (
-    <div className={barClass}>
+    <div data-craves-action-bar className={barClass}>
       {paymentProblem ? (
         <div
           role="alert"

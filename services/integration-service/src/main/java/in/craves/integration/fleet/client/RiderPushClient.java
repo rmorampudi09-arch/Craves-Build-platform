@@ -1,0 +1,103 @@
+package in.craves.integration.fleet.client;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.fleet.FleetProperties;
+import java.time.Duration;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+
+/**
+ * notification-service's rider calls (header X-Craves-Internal-Key): POST /internal/v1/push/realtime, one high-priority
+ * FCM data message per offer, and POST /internal/v1/ops-alerts. Neither is retried here: notification-service retries a
+ * push once while the offer is open, offers also reach the app on every /locations call, and an ops alert that fails is
+ * a CRAVES_ALERT log line instead.
+ */
+@Component
+@ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
+public class RiderPushClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RiderPushClient.class);
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    private final RestClient client;
+    private final String secret;
+
+    @Autowired
+    public RiderPushClient(FleetProperties properties, @Value("${craves.fleet.services.notification-base-url:}") String baseUrl,
+                           RestClient.Builder builder) {
+        this.secret = properties.internalServiceKey();
+        if (!StringUtils.hasText(baseUrl) || !StringUtils.hasText(secret)) {
+            this.client = null;
+            return;
+        }
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(2));
+        factory.setReadTimeout(Duration.ofSeconds(30)); // notification-service waits for FCM, retries once, up to ~25 s
+        this.client = builder.clone().baseUrl(baseUrl).requestFactory(factory).build();
+    }
+
+    RiderPushClient(RestClient client, String secret) {
+        this.client = client;
+        this.secret = secret;
+    }
+
+    /**
+     * Rings the offer on the rider's phone. ttlSeconds is the time left on the offer (1 to 600). Returns SENT, EXPIRED,
+     * OFF, or notification-service's code (TOKEN_UNREGISTERED, TOKEN_INVALID, FCM_*, PUSH_DISABLED, ...).
+     */
+    public String offer(String fcmToken, UUID offerId, String offerJson, String title, String body, int ttlSeconds) {
+        if (ttlSeconds < 1) {
+            return "EXPIRED";
+        }
+        if (client == null) {
+            return "OFF";
+        }
+        Map<String, Object> request = Map.of("app", "rider", "token", fcmToken,
+            "data", Map.of("type", "OFFER", "offerId", offerId.toString(), "offer", offerJson),
+            "notification", Map.of("title", title, "body", body),
+            "ttlSeconds", Math.min(600, ttlSeconds), "collapseKey", "offer-" + offerId);
+        try {
+            return client.post().uri("/internal/v1/push/realtime").header("X-Craves-Internal-Key", secret)
+                .contentType(MediaType.APPLICATION_JSON).body(request)
+                .exchange((ignored, response) -> {
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        return "SENT";
+                    }
+                    JsonNode reply = JSON.readTree(response.getBody().readAllBytes());
+                    return reply != null && reply.path("code").isTextual() ? reply.path("code").asText()
+                        : "HTTP_" + response.getStatusCode().value();
+                });
+        } catch (RestClientException exception) {
+            return "UNREACHABLE";
+        }
+    }
+
+    /** True when notification-service accepted the alert (202). kind is upper snake case. */
+    public boolean opsAlert(String kind, String title, String body, Map<String, String> data) {
+        boolean sent = false;
+        if (client != null) {
+            try {
+                sent = client.post().uri("/internal/v1/ops-alerts").header("X-Craves-Internal-Key", secret)
+                    .contentType(MediaType.APPLICATION_JSON).body(Map.of("kind", kind, "title", title, "body", body, "data", data))
+                    .exchange((ignored, response) -> response.getStatusCode().value() == 202);
+            } catch (RestClientException exception) {
+                sent = false;
+            }
+        }
+        if (!sent) {
+            LOGGER.error("CRAVES_ALERT alert={} title={} data={} (ops alert not delivered)", kind, title, data);
+        }
+        return sent;
+    }
+}

@@ -3,14 +3,21 @@ package in.craves.subscription.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
+import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditRepository;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
+import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.security.CurrentUser;
@@ -20,6 +27,7 @@ import in.craves.subscription.web.ApiDtos.PlanResponse;
 import in.craves.subscription.web.ApiDtos.PublicPlanResponse;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -36,9 +44,18 @@ class SubscriptionServiceOwnershipTest {
     private final SubscriptionRepository repository = mock(SubscriptionRepository.class);
     private final CapacityService capacityService = mock(CapacityService.class);
     private final PlanImageRepository planImages = mock(PlanImageRepository.class);
+    private final SubscriptionBillingRepository billingRepository = mock(SubscriptionBillingRepository.class);
+    private final SubscriptionLifecycleRepository lifecycleRepository = mock(SubscriptionLifecycleRepository.class);
 
-    private final SubscriptionService service =
-        new SubscriptionService(repository, capacityService, planImages, billing(true, 7));
+    private final SubscriptionService service = new SubscriptionService(
+        repository, capacityService, planImages, billing(true, 7),
+        new DayCreditService(mock(DayCreditRepository.class), billingRepository, mock(OccurrenceRepository.class), false, Clock.systemUTC()), lifecycleRepository
+    );
+
+    private static final UUID SUBSCRIPTION_ID = UUID.fromString("55555555-5555-4555-8555-555555555555");
+    private static final CurrentUser ADMIN = new CurrentUser(
+        UUID.fromString("22222222-2222-4222-8222-222222222222"), "firebase-admin", "+917777777777", List.of("SUBSCRIPTION_ADMIN")
+    );
 
     @Test
     void chefCannotUseAdministratorPlanListing() {
@@ -101,6 +118,35 @@ class SubscriptionServiceOwnershipTest {
     }
 
     @Test
+    void addressFartherThanTenKilometresFromTheChefIsRejectedBeforeAnySubscriptionIsCreated() {
+        CurrentUser customer = new CurrentUser(CUSTOMER_ID, "firebase-customer", "+918888888888", List.of("CUSTOMER"));
+        UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        UUID addressId = UUID.fromString("66666666-6666-4666-8666-666666666666");
+        PlanResponse stored = plan(CHEF_ID, "ACTIVE");
+        when(repository.findActivePlanById(planId)).thenReturn(Optional.of(stored));
+        when(repository.isPlanAcceptingSubscribers(planId)).thenReturn(true);
+        when(capacityService.isPlanBookable(stored)).thenReturn(true);
+        when(repository.isAddressNearChef(CUSTOMER_ID, addressId, CHEF_ID, 10_000)).thenReturn(false);
+        CreateSubscriptionRequest request = new CreateSubscriptionRequest(planId, LocalDate.now().plusDays(1), addressId, null);
+
+        assertThatThrownBy(() -> service.createSubscription(request, "enroll-key-0001", customer))
+            .isInstanceOfSatisfying(ApiException.class, error -> {
+                assertThat(error.getStatus()).isEqualTo(400);
+                assertThat(error.getCode()).isEqualTo("DELIVERY_ADDRESS_OUT_OF_RANGE");
+            });
+
+        verify(repository, never()).createSubscription(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void nearbyPlansNeedBothCoordinates() {
+        assertThatThrownBy(() -> service.listActivePlans(17.44, null))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("LOCATION_INCOMPLETE"));
+        assertThatThrownBy(() -> service.listActivePlans(95.0, 78.37))
+            .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("LOCATION_INVALID"));
+    }
+
+    @Test
     void missingPlanImageIsAnApiNotFound() {
         UUID planId = UUID.fromString("44444444-4444-4444-8444-444444444444");
         when(planImages.findImage(planId)).thenReturn(Optional.empty());
@@ -150,6 +196,8 @@ class SubscriptionServiceOwnershipTest {
             "/api/v1/subscriptions/plans/44444444-4444-4444-8444-444444444444/image?v=1790000000"
         );
         when(repository.findSubscriptionById(subscriptionId)).thenReturn(Optional.of(stored));
+        when(lifecycleRepository.currentBillStart(eq(subscriptionId), any())).thenReturn(LocalDate.now());
+        when(lifecycleRepository.pauseUsage(subscriptionId)).thenReturn(new PauseUsage(null, 0, null, null));
 
         CustomerSubscriptionResponse response = service.getMine(subscriptionId, customer);
 
@@ -174,6 +222,79 @@ class SubscriptionServiceOwnershipTest {
         assertThat(SubscriptionService.nextChargeDate(null, billing(true, 7), today)).isNull();
         // With automatic billing off nothing renews, so no date is promised.
         assertThat(SubscriptionService.nextChargeDate(LocalDate.parse("2026-10-25"), billing(false, 7), today)).isNull();
+    }
+
+    @Test
+    void adminResumeCarriesPausedPaidDaysForward() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("PAUSED", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "ACTIVE", "Customer asked by phone", ADMIN);
+
+        // With no next service date the admin resume starts today.
+        verify(billingRepository).applyPauseCredit(SUBSCRIPTION_ID, TODAY);
+        // The status change only applies if nobody changed the plan since it was read.
+        verify(repository).updateSubscriptionStatus(SUBSCRIPTION_ID, "PAUSED", "ACTIVE", "Customer asked by phone", ADMIN.identityId());
+    }
+
+    @Test
+    void adminActivationOfAnUnpaidSignUpAppliesNoCredit() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("PENDING_PAYMENT", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "ACTIVE", "Paid by bank transfer", ADMIN);
+
+        verify(billingRepository, never()).applyPauseCredit(any(), any());
+    }
+
+    @Test
+    void adminPauseCancelsQueuedMeals() {
+        assertAdminChangeCancelsQueuedMeals("PAUSED");
+    }
+
+    @Test
+    void adminCancelCancelsQueuedMeals() {
+        assertAdminChangeCancelsQueuedMeals("CANCELLED");
+    }
+
+    @Test
+    void adminExpireCancelsQueuedMeals() {
+        assertAdminChangeCancelsQueuedMeals("EXPIRED");
+    }
+
+    @Test
+    void adminPaymentFailedLeavesMeals() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("ACTIVE", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "PAYMENT_FAILED", "Bank reversed the payment", ADMIN);
+
+        verify(lifecycleRepository, never()).cancelUndispatchedOccurrences(any(), any(), any());
+    }
+
+    @Test
+    void adminMovingAPausedPlanElsewhereEndsItsPause() {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("PAUSED", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, "CANCELLED", "Customer asked by phone", ADMIN);
+
+        // Otherwise a later admin pause would carry the old restart date and be restarted by the sweep.
+        verify(lifecycleRepository).closePause(eq(SUBSCRIPTION_ID), any());
+    }
+
+    // The order worker sends every READY_FOR_ORDER meal without checking the plan's status.
+    private void assertAdminChangeCancelsQueuedMeals(String target) {
+        when(repository.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(subscription("ACTIVE", null)));
+
+        service.adminChangeStatus(SUBSCRIPTION_ID, target, "Customer asked by phone", ADMIN);
+
+        verify(lifecycleRepository).cancelUndispatchedOccurrences(SUBSCRIPTION_ID, ADMIN.identityId(), "ADMIN_STATUS_CHANGE");
+    }
+
+    private static SubscriptionResponse subscription(String status, LocalDate nextServiceDate) {
+        return new SubscriptionResponse(
+            SUBSCRIPTION_ID, CUSTOMER_ID, UUID.fromString("44444444-4444-4444-8444-444444444444"), CHEF_ID, status,
+            TODAY.minusDays(14), null, nextServiceDate, UUID.fromString("66666666-6666-4666-8666-666666666666"), null,
+            Instant.parse("2026-07-30T00:00:00Z"), Instant.parse("2026-07-30T00:00:00Z"),
+            "Weekly meals", "WEEKLY", new BigDecimal("1200.00"), "INR", TODAY, null
+        );
     }
 
     private static SubscriptionBillingProperties billing(boolean generatorEnabled, int horizonDays) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/shared/ui/buttons/button";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
@@ -494,7 +495,17 @@ export function ChefApplicationWorkspace() {
 
   if (step === "welcome") {
     return <section className="chef-step overflow-hidden rounded-3xl border border-[#E5E7EB] bg-white shadow-[var(--shadow-card)]">
-      <img src="/chef/chef-welcome.webp" alt="A home chef cooking in her kitchen" className="aspect-[16/9] w-full object-cover object-[center_35%]" fetchPriority="high" />
+      {/* The first job of a home kitchen, prep, for the first step of becoming a Craves chef. */}
+      <Image
+        src="/landing-v20/images/story-grid/prep-1.png"
+        alt="A smiling home chef in a red apron slicing cucumbers on a wooden board, with fresh vegetables around her"
+        width={1760}
+        height={990}
+        sizes="(min-width: 768px) 720px, calc(100vw - 2rem)"
+        loading="eager"
+        fetchPriority="high"
+        className="aspect-[16/9] h-auto w-full object-cover"
+      />
       <div className="p-6 md:p-9">
         <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Cook for your neighbourhood on Craves</h1>
         <p className="mt-2 text-[0.9375rem] leading-6 text-[#6B6B6B]">Apply in a few steps. Your progress is saved, so you can finish later.</p>

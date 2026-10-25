@@ -18,7 +18,7 @@ import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideC
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { UndoToast } from "@/shared/ui/overlays/undo-toast";
 import { spring } from "@/shared/lib/motion";
-import type { CustomerNotification } from "@/features/notifications/lib/notification-contract";
+import { isKitchenNotice, type CustomerNotification } from "@/features/notifications/lib/notification-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 
 type NotificationFilter = "all" | "unread" | "read";
@@ -58,31 +58,9 @@ function notificationTimestamp(createdAt: string, group: NotificationGroup) {
   return `${day}, ${time}`;
 }
 
-type NoticeAudience = "customer" | "chef";
-// Sent to customers despite the CHEF_ prefix: "the chef accepted/declined your order".
-const CUSTOMER_CHEF_TYPES = new Set(["CHEF_ACCEPTED_ORDER", "CHEF_REJECTED_ORDER"]);
-
-function isKitchenNotice(notice: CustomerNotification): boolean {
-  const type = notice.noticeType.toUpperCase();
-  return (type.startsWith("CHEF_") && !CUSTOMER_CHEF_TYPES.has(type)) ||
-    (notice.targetType ?? "").toUpperCase().startsWith("CHEF_");
-}
-
-/** About food the person bought; Chef Mode leaves these to the customer app. Unknown types show in both. */
-function isOwnOrderNotice(notice: CustomerNotification): boolean {
-  const type = notice.noticeType.toUpperCase();
-  return !isKitchenNotice(notice) && (CUSTOMER_CHEF_TYPES.has(type) || /^(ORDER|PAYMENT|DELIVERY|REFUND)_/.test(type));
-}
-
-/** Where a notice leads: the order to answer or track, or the chef application. */
-function noticeLink(notice: CustomerNotification, audience: NoticeAudience): { to: string; label: string } | null {
-  const target = (notice.targetType ?? "").toUpperCase();
-  if (audience === "chef") {
-    if ((target === "ORDER" || target === "CHEF_ORDER") && notice.targetId) return { to: `/chef/orders/${notice.targetId}`, label: "Open order" };
-    if (target === "CHEF_APPLICATION") return { to: "/chef/application/status", label: "See application" };
-    return null;
-  }
-  if (target === "ORDER" && notice.targetId && !isKitchenNotice(notice)) return { to: `/orders/${notice.targetId}`, label: "View order" };
+/** Where a notice leads: the customer's own order. A kitchen's order belongs to Chef Mode. */
+function noticeLink(notice: CustomerNotification): { to: string; label: string } | null {
+  if ((notice.targetType ?? "").toUpperCase() === "ORDER" && notice.targetId && !isKitchenNotice(notice)) return { to: `/orders/${notice.targetId}`, label: "View order" };
   return null;
 }
 
@@ -120,7 +98,7 @@ function NotificationTypeIcon({ notice }: { notice: CustomerNotification }) {
   return <Icon className="text-lg" aria-hidden="true" />;
 }
 
-export default function NotificationsPage({ audience = "customer" }: { audience?: NoticeAudience }) {
+export default function NotificationsPage() {
   const navigate = useNavigate();
   const [notices, setNotices] = useState<CustomerNotification[]>([]);
   const [filter, setFilter] = useState<NotificationFilter>("all");
@@ -172,9 +150,7 @@ export default function NotificationsPage({ audience = "customer" }: { audience?
       }
       if (!active) return;
 
-      const loadedNotices = (body as CustomerNotification[]).filter(
-        (notice) => !dismissed.has(notice.id) && !(audience === "chef" && isOwnOrderNotice(notice)),
-      );
+      const loadedNotices = (body as CustomerNotification[]).filter((notice) => !dismissed.has(notice.id));
       setNotices(loadedNotices);
       setLoading(false);
     })().catch((caught) => {
@@ -190,7 +166,7 @@ export default function NotificationsPage({ audience = "customer" }: { audience?
     return () => {
       active = false;
     };
-  }, [audience, navigate]);
+  }, [navigate]);
 
   // Opening a notice's order counts as reading it; the list catches up even if the request fails.
   function openNotice(notice: CustomerNotification) {
@@ -414,7 +390,7 @@ export default function NotificationsPage({ audience = "customer" }: { audience?
                 <ul className="space-y-3">
                   {group.notices.map((notice) => {
                     const unread = !notice.readAt;
-                    const link = noticeLink(notice, audience);
+                    const link = noticeLink(notice);
                     return (
                       <li key={notice.id}>
                         <article className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:px-5">

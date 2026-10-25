@@ -6,7 +6,7 @@ import in.craves.auth.repository.AuthIdentityRoleRepository;
 import in.craves.auth.security.CurrentUser;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Authoritative, uncached account check after the existing JWT/admin-session filters. */
 @RestController
-@ConditionalOnProperty(name="CRAVES_REFERRAL_SOURCE_ENABLED", havingValue="true")
+@ConditionalOnExpression("${CRAVES_REFERRAL_SOURCE_ENABLED:false} or ${CRAVES_REFERRAL_MEMBER_READ_ENABLED:false}")
 public class ReferralAccessController {
     private final AuthIdentityRepository identities;
     private final AuthIdentityRoleRepository roles;

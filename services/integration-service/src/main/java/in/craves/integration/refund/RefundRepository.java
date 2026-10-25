@@ -290,6 +290,28 @@ public class RefundRepository {
         );
     }
 
+    /**
+     * CH-02: the claim only reclaims expired leases below the attempt limit, so a lease that expired on the
+     * final attempt would stay PROCESSING forever. Dead-letter it (and FAILED rows past a lowered limit).
+     */
+    public int deadLetterExpiredStatusOutbox(int maxAttempts, int staleLockSeconds) {
+        return jdbcTemplate.update(
+            """
+                UPDATE payment_schema.refund_status_outbox
+                SET status = 'DEAD_LETTER', lock_token = NULL, locked_at = NULL,
+                    last_error = COALESCE(last_error, 'Publication attempts exhausted; the last lease expired'),
+                    updated_at = now()
+                WHERE attempt_count >= ?
+                  AND (
+                      status = 'FAILED'
+                      OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 second'))
+                  )
+                """,
+            maxAttempts,
+            staleLockSeconds
+        );
+    }
+
     public boolean markStatusPublished(UUID id, UUID lockToken, String brokerMessageId) {
         return jdbcTemplate.update(
             """

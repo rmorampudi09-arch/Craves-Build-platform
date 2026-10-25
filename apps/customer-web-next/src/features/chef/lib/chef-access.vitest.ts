@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefAccessBoundary } from "../components/chef-access-boundary";
-import { isChefModeVerified, markChefModeVerified } from "./chef-mode";
+import { isChefModeTab, isChefModeVerified, markChefModeVerified } from "./chef-mode";
 import { getSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
@@ -22,6 +22,7 @@ beforeEach(() => {
   me = customer;
   refreshed = chef;
   sessionStorage.clear();
+  localStorage.clear();
   navigation.replace.mockReset();
   window.history.replaceState(null, "", "/chef/earnings?range=week");
   setSessionIdentity(customer);
@@ -57,13 +58,20 @@ it("opens a chef approved after their last sign-in with a token refresh instead 
   expect(calls("/api/auth/refresh")).toBeGreaterThanOrEqual(1);
 });
 
-it("sends the chef to a fresh Chef Mode sign-in when a refresh still has no CHEF role", async () => {
+it("says chef access isn't switched on yet, without a new sign-in, when a refresh still has no CHEF role", async () => {
   refreshed = customer;
   open();
-  await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith(signInHere));
-  expect(navigation.replace).not.toHaveBeenCalledWith("/chef/application/status");
-  expect(isChefModeVerified(customer.id)).toBe(false);
+  await screen.findByRole("heading", { name: "Your chef access is on its way" });
+  expect(screen.getByRole("alert").textContent).toContain("you don’t need to sign in again");
+  // Chef support is behind this same check, so the way out is the open contact page.
+  expect(screen.getByRole("link", { name: "Contact support" }).getAttribute("href")).toBe("/contact");
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(isChefModeVerified(customer.id)).toBe(true);
   expect(screen.queryByText("Chef earnings")).toBeNull();
+  // Once Craves switches the role on, Try again opens the page.
+  refreshed = chef;
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByText("Chef earnings");
 });
 
 it("offers a retry, not a sign-in, when the role refresh is temporarily unavailable", async () => {
@@ -76,14 +84,27 @@ it("offers a retry, not a sign-in, when the role refresh is temporarily unavaila
   await screen.findByText("Chef earnings");
 });
 
-it("sends a signed-in customer who has not opened Chef Mode in this tab to the chef sign-in", async () => {
+it("sends a signed-in customer who has not opened Chef Mode on this device to the chef sign-in", async () => {
   sessionStorage.clear();
+  localStorage.clear();
   me = chef;
   setSessionIdentity(chef);
   open();
   await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith(signInHere));
   expect(calls("/api/chef/application")).toBe(0);
   expect(screen.queryByText("Chef earnings")).toBeNull();
+});
+
+it("opens Chef Mode in a new tab of a device that already confirmed it, and the tab joins Chef Mode", async () => {
+  me = chef;
+  setSessionIdentity(chef);
+  markChefModeVerified(chef.id);
+  // A new tab, a notification click or a restarted browser: empty sessionStorage, same localStorage.
+  sessionStorage.clear();
+  open();
+  await screen.findByText("Chef earnings");
+  expect(navigation.replace).not.toHaveBeenCalled();
+  expect(isChefModeTab(chef.id)).toBe(true);
 });
 
 it("shows the next chef tab at once, without checking access again", async () => {
@@ -93,6 +114,8 @@ it("shows the next chef tab at once, without checking access again", async () =>
   markChefModeVerified(chef.id);
   const first = open();
   await screen.findByText("Chef earnings");
+  // The session already carries CHEF: no refresh, so no rotation another tab could collide with.
+  expect(calls("/api/auth/refresh")).toBe(0);
   first.unmount();
   const requests = fetcher.mock.calls.length;
   open();

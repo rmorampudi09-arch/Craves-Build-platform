@@ -1,0 +1,23 @@
+# Read-only status of the rider API and the admin fleet API on the mobile gateway. Writes nothing.
+trigger: none
+pr: none
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - task: AzureCLI@2
+    displayName: Verify rider and admin fleet APIM status
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: scriptPath
+      scriptPath: scripts/apim/status-rider-fleet-apim.sh

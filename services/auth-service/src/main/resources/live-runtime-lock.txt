@@ -1,0 +1,25 @@
+# Code auth-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.auth.academy.AcademyController
+in.craves.auth.admin.AdminAccountInterventionController
+in.craves.auth.admin.InternalAdminRoleController
+in.craves.auth.admin.explorer.AdminExplorerController
+in.craves.auth.email.EmailVerificationController
+in.craves.auth.referrals.ReferralAccessController
+in.craves.auth.referrals.ReferralEnrollmentController
+in.craves.auth.web.AdminSessionPolicyController
+in.craves.auth.web.AuthController
+in.craves.auth.web.InternalIdentityController
+in.craves.auth.web.InternalRoleController
+
+# Restored to main from the live overlays (see docs/runbooks/live-runtime-safety.md, "Auth").
+in.craves.auth.msg91.Msg91Controller
+in.craves.auth.msg91.Msg91Properties
+in.craves.auth.centralotp.CentralOtpController
+in.craves.auth.centralotp.CentralOtpStore
+in.craves.auth.centralotp.CentralOtpProvider
+in.craves.auth.centralotp.CentralOtpIdentity
+in.craves.auth.centralotp.CentralOtpRequestLimit
+in.craves.auth.centralotp.CentralOtpTestBypass
+in.craves.auth.email.EmailVerificationTestBypass

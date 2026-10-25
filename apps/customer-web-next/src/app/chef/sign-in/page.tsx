@@ -11,13 +11,14 @@ export const metadata = {
 export default async function ChefSignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ returnTo?: string | string[] }>;
+  searchParams: Promise<{ returnTo?: string | string[]; method?: string | string[] }>;
 }) {
-  const { returnTo } = await searchParams;
+  const { returnTo, method } = await searchParams;
   return (
     <ChefSignIn
       returnTo={safeChefReturnTo(returnTo)}
       centralOtp={process.env.CRAVES_CENTRAL_OTP_ENABLED === "true"}
+      email={method === "email"}
     />
   );
 }

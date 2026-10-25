@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "android": "react-native run-android",
+    "android": "react-native run-android --mode customerDebug",
+    "android:rider": "react-native run-android --mode riderDebug --appId com.cravesapp.rider",
     "ios": "react-native run-ios",
     "lint": "eslint . && node scripts/check-feature-boundaries.mjs",
     "start": "react-native start",

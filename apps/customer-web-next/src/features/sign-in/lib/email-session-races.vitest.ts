@@ -262,6 +262,8 @@ describe("logout and refresh generation boundaries", () => {
   });
 
   it("shares refresh only within a generation and old completion cannot erase a new in-flight refresh", async () => {
+    // Generation sharing only: Node 24+ exposes navigator.locks, whose cross-tab queue (tested in the auth suite) would hold the new refresh.
+    vi.stubGlobal("navigator", {});
     const older = deferred<Response>();
     const newer = deferred<Response>();
     const fetcher = vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)

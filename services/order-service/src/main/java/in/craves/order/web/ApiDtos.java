@@ -1,6 +1,7 @@
 package in.craves.order.web;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -210,8 +211,42 @@ public final class ApiDtos {
         @JsonIgnore KitchenPickupSnapshotResponse pickupAddress,
         List<OrderItemResponse> items,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        // Chef-only additions: omitted when empty, so customer and admin views stay as before; the one difference is
+        // chefHandedOverAt, which is always present (null until handed over) on every order view.
+        @JsonInclude(JsonInclude.Include.NON_NULL) Instant chefAcceptanceExpiresAt,
+        @JsonInclude(JsonInclude.Include.NON_NULL) String customerNote,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<OrderStatusHistoryEntry> statusHistory,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DeliveryPartnerResponse deliveryPartner,
+        // Always present (null until handed over) so the app can tell the server supports hand-over.
+        @JsonInclude(JsonInclude.Include.ALWAYS) Instant chefHandedOverAt
     ) {
+        public OrderResponse(
+            UUID id,
+            UUID checkoutId,
+            UUID customerIdentityId,
+            UUID kitchenId,
+            String kitchenName,
+            OrderStatus status,
+            String currency,
+            BigDecimal foodSubtotal,
+            BigDecimal platformFee,
+            BigDecimal taxAmount,
+            BigDecimal deliveryFee,
+            BigDecimal grandTotal,
+            String chefResponseNote,
+            Integer prepTimeMinutes,
+            CustomerAddressSnapshotResponse deliveryAddress,
+            KitchenPickupSnapshotResponse pickupAddress,
+            List<OrderItemResponse> items,
+            Instant createdAt,
+            Instant updatedAt
+        ) {
+            this(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency, foodSubtotal,
+                platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes, deliveryAddress,
+                pickupAddress, items, createdAt, updatedAt, null, null, null, null, null);
+        }
+
         public OrderResponse(
             UUID id,
             UUID checkoutId,
@@ -253,6 +288,38 @@ public final class ApiDtos {
                 updatedAt
             );
         }
+
+        public OrderResponse withChefDetails(
+            Instant chefAcceptanceExpiresAt,
+            String customerNote,
+            DeliveryPartnerResponse deliveryPartner,
+            Instant chefHandedOverAt
+        ) {
+            return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
+                foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,
+                deliveryAddress, pickupAddress, items, createdAt, updatedAt, chefAcceptanceExpiresAt, customerNote,
+                statusHistory, deliveryPartner, chefHandedOverAt);
+        }
+
+        public OrderResponse withItems(List<OrderItemResponse> orderItems) {
+            return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
+                foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,
+                deliveryAddress, pickupAddress, orderItems, createdAt, updatedAt, chefAcceptanceExpiresAt, customerNote,
+                statusHistory, deliveryPartner, chefHandedOverAt);
+        }
+
+        public OrderResponse withStatusHistory(List<OrderStatusHistoryEntry> history) {
+            return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
+                foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,
+                deliveryAddress, pickupAddress, items, createdAt, updatedAt, chefAcceptanceExpiresAt, customerNote,
+                history, deliveryPartner, chefHandedOverAt);
+        }
+    }
+
+    public record OrderStatusHistoryEntry(OrderStatus status, Instant at) {
+    }
+
+    public record DeliveryPartnerResponse(String name, String phone, String photoUrl, Instant pickupEtaAt) {
     }
 
     public record ChefAcceptRequest(@NotNull @Min(1) Integer prepTimeMinutes, String note) {

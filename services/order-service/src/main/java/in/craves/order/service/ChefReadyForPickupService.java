@@ -59,10 +59,11 @@ public class ChefReadyForPickupService {
                 UPDATE order_schema.customer_order
                 SET ready_at = now(), updated_at = now()
                 WHERE id = ? AND status = 'READY_FOR_PICKUP'
-                RETURNING checkout_id, ready_at
+                RETURNING COALESCE(checkout_id, id) AS delivery_checkout_id, ready_at
                 """,
+            // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages.
             (resultSet, rowNumber) -> new ReadyState(
-                resultSet.getObject("checkout_id", UUID.class),
+                resultSet.getObject("delivery_checkout_id", UUID.class),
                 resultSet.getTimestamp("ready_at").toInstant()
             ),
             chefSubOrderId

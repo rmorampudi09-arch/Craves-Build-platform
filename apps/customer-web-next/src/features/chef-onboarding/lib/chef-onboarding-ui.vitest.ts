@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // All identities, bank accounts, documents and HTTP responses are isolated fixtures.
-import { createElement, useEffect } from "react";
+import { createElement, useEffect, type ReactElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
@@ -9,6 +9,12 @@ import { ChefApplicationStatus } from "../components/chef-application-status";
 import { ChefAccessBoundary } from "../../chef/components/chef-access-boundary";
 import { ChefOnboardingBank } from "../components/chef-onboarding-bank";
 import { prepareChefUpload } from "../components/chef-onboarding-upload";
+import { ChefReviewDetails } from "../components/chef-onboarding-sections";
+import { DocumentCenter } from "../components/document-center";
+import { DateOfBirthPicker } from "../components/chef-date-of-birth";
+import type { ChefOnboardingFlow } from "../components/use-chef-onboarding";
+import { LanguageProvider } from "../../../shared/i18n/language-context";
+import type { Language } from "../../../shared/i18n/language";
 import {
   EMPTY_ONBOARDING,
   parseOnboardingState,
@@ -585,6 +591,51 @@ describe("Authoritative status and bank verification", () => {
     const file = new File(["fixture"], "photo.png", { type: "image/png" });
     Object.defineProperty(file, "size", { value: 10 * 1024 * 1024 + 1 });
     await expect(prepareChefUpload(file, false)).rejects.toThrow("up to 10 MB");
+  });
+});
+
+describe("The application in Telugu and Kannada", () => {
+  function inLanguage(language: Language, element: ReactElement) {
+    return render(createElement(LanguageProvider, { initial: language, chosen: true }, element));
+  }
+  it("asks for bank details and explains a wrong file in the chef's language", async () => {
+    inLanguage("te", createElement(ChefOnboardingBank, {
+      name: "Fixture Chef", bank: { ...bank, id: null, state: "NOT_SUBMITTED" }, unavailable: false, busy: false,
+      onSaved: vi.fn(), onBusy: vi.fn(), onRefresh: vi.fn(),
+    }));
+    fireEvent.submit(document.getElementById("chef-bank-form")!);
+    expect(await screen.findByText("6 నుంచి 24 అంకెల బ్యాంక్ ఖాతా నంబర్ రాయండి.")).toBeTruthy();
+    expect(screen.getByLabelText("IFSC కోడ్")).toBeTruthy();
+    await expect(prepareChefUpload(new File(["x"], "id.gif", { type: "image/gif" }), false, "kn")).rejects.toThrow(
+      "PDF, JPG, PNG, HEIC ಅಥವಾ WebP ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.",
+    );
+  });
+  it("shows Review in Kannada with every name and number filled in", () => {
+    const flow = {
+      details: saved.details, state: saved, bank, busy: false, terms: false, fieldErrors: [], setTerms: vi.fn(), edit: vi.fn(),
+    } as unknown as ChefOnboardingFlow;
+    inLanguage("kn", createElement(ChefReviewDetails, { flow }));
+    expect(screen.getByRole("button", { name: "ನಿಮ್ಮ ವಿವರಗಳು ಬದಲಾಯಿಸಿ" })).toBeTruthy();
+    expect(screen.getByText("PAN ಕಾರ್ಡ್")).toBeTruthy();
+    expect(screen.getByLabelText(/Craves ಚೆಫ್ ನಿಯಮಗಳು/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\{\w+\}/);
+  });
+  it("labels the date of birth calendar in Telugu while months stay English", async () => {
+    inLanguage("te", createElement(DateOfBirthPicker, { id: "dob", labelId: "dob-label", value: "", max: "2008-01-01", onChange: vi.fn() }));
+    fireEvent.click(screen.getByRole("button", { name: "పుట్టిన తేదీ ఎంచుకోండి" }));
+    fireEvent.click(await screen.findByRole("button", { name: "1990" }));
+    expect(await screen.findByRole("group", { name: "1990 లో నెల" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "January 1990" })).toBeTruthy();
+  });
+  it("makes PDF statements in Telugu", async () => {
+    fetcher.mockImplementation((url) => Promise.resolve(Response.json(String(url).startsWith("/api/documents/capabilities")
+      ? { enabled: true, emailEnabled: true, types: ["CHEF_EARNINGS_STATEMENT"], maxPeriodDays: 31, maxRows: 1000, taxInvoicesEnabled: false }
+      : { items: [], nextCursor: null })));
+    inLanguage("te", createElement(DocumentCenter, { mode: "chef" }));
+    expect(await screen.findByRole("button", { name: "PDF తయారు చేయండి" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "ఈ నెల" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "బ్యాంక్‌కు పంపిన డబ్బు" })).toBeTruthy();
+    expect(screen.getByText("ఇంకా PDFలు లేవు")).toBeTruthy();
   });
 });
 

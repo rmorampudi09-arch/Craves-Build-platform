@@ -24,6 +24,7 @@ import {
   loadSession,
 } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { AddressEditorFlow } from "@/features/addresses/components/AddressEditorFlow";
 import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 
@@ -320,29 +321,7 @@ export default function AddressesPage() {
         </div>
 
         {initialLoadState === "loading" ? (
-          <div
-            className="space-y-4"
-            role="status"
-            aria-label="Loading saved addresses"
-          >
-            {Array.from({ length: 2 }, (_, index) => (
-              <div
-                key={index}
-                className="rounded-[24px] border border-[#E5E7EB] bg-white px-5 py-5 shadow-[0_4px_18px_rgba(26,26,26,0.04)] md:px-6 md:py-6"
-                aria-hidden="true"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 shrink-0 animate-pulse rounded-2xl bg-[#F1F3F5] md:h-14 md:w-14" />
-                  <div className="min-w-0 flex-1">
-                    <div className="h-5 w-28 animate-pulse rounded-full bg-[#F1F3F5]" />
-                    <div className="mt-3 h-4 w-40 animate-pulse rounded-full bg-[#F1F3F5]" />
-                    <div className="mt-3 h-4 w-full max-w-md animate-pulse rounded-full bg-[#F1F3F5]" />
-                  </div>
-                </div>
-              </div>
-            ))}
-            <span className="sr-only">Loading saved addresses…</span>
-          </div>
+          <CustomerSectionSkeleton variant="addresses" label="Loading saved addresses" />
         ) : null}
 
         {initialLoadState === "error" ? (

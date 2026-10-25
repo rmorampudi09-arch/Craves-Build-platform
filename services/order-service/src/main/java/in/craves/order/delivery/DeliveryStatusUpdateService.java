@@ -1,5 +1,8 @@
 package in.craves.order.delivery;
 
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import in.craves.order.delivery.DeliveryStatusEventValidator.DeliveryStatusValidationException;
 import in.craves.order.delivery.DeliveryStatusModels.DeliveryStatusChangedData;
 import in.craves.order.delivery.DeliveryStatusModels.EventEnvelope;
@@ -8,15 +11,20 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeliveryStatusUpdateService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DeliveryStatusUpdateService.class);
     private static final Set<String> INELIGIBLE_ORDER_STATUSES = Set.of(
         "CHEF_REJECTED",
         "CANCELLED",
@@ -29,11 +37,39 @@ public class DeliveryStatusUpdateService {
         "IN_TRANSIT",
         "AT_DROPOFF"
     );
+    private static final Set<String> PRE_ASSIGNMENT_STATUSES = Set.of(
+        "PENDING",
+        "SEARCHING",
+        "DELAYED"
+    );
+    private static final Set<String> STALE_BORZO_HANDOFF_STATUSES = Set.of(
+        "PENDING", "SEARCHING", "DELAYED"
+    );
+    // A Craves rider's order can go to Borzo or Pidge only before the rider picked it up.
+    private static final Set<String> RIDER_BEFORE_PICKUP_STATUSES = Set.of(
+        "COURIER_ASSIGNED", "COURIER_TO_PICKUP", "AT_PICKUP"
+    );
 
     private final JdbcTemplate jdbcTemplate;
     private final DeliveryStatusEventValidator validator;
     private final DeliveryStatusTransitionPolicy transitionPolicy;
     private final DeliveryStatusCustomerNotificationService notificationService;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public DeliveryStatusUpdateService(
+        JdbcTemplate jdbcTemplate,
+        DeliveryStatusEventValidator validator,
+        DeliveryStatusTransitionPolicy transitionPolicy,
+        DeliveryStatusCustomerNotificationService notificationService,
+        ObjectMapper objectMapper
+    ) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.validator = validator;
+        this.transitionPolicy = transitionPolicy;
+        this.notificationService = notificationService;
+        this.objectMapper = objectMapper;
+    }
 
     public DeliveryStatusUpdateService(
         JdbcTemplate jdbcTemplate,
@@ -41,10 +77,8 @@ public class DeliveryStatusUpdateService {
         DeliveryStatusTransitionPolicy transitionPolicy,
         DeliveryStatusCustomerNotificationService notificationService
     ) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.validator = validator;
-        this.transitionPolicy = transitionPolicy;
-        this.notificationService = notificationService;
+        this(jdbcTemplate, validator, transitionPolicy, notificationService,
+            new ObjectMapper().findAndRegisterModules());
     }
 
     @Transactional
@@ -89,8 +123,37 @@ public class DeliveryStatusUpdateService {
         }
 
         LockedOrder order = lockOrder(data.chefSubOrderId());
-        validateOrder(order, data);
+        if (isSupersededBorzoEvent(order, data)) {
+            markInbox(event.eventId(), "STALE");
+            return new ProcessingResult(false, false, "STALE");
+        }
+        try {
+            validateOrder(order, data);
+        } catch (PriorProviderProjectionMissingException exception) {
+            bufferHandoff(event.eventId());
+            return new ProcessingResult(false, false, "WAITING_FOR_PRIOR_PROVIDER");
+        } catch (HandoffProjectionMissingException exception) {
+            bufferPidgeStatus(event.eventId());
+            return new ProcessingResult(false, false, "WAITING_FOR_HANDOFF");
+        }
 
+        ProcessingResult result = applyValidated(event, order);
+        if (result.applied() && initialHandoff(data)) {
+            drainBufferedPidgeStatuses(data.chefSubOrderId(), data.deliveryJobId());
+        }
+        if (result.applied() && !data.hasHandoff()
+            && ("borzo".equalsIgnoreCase(data.providerId())
+                || DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID.equalsIgnoreCase(data.providerId()))) {
+            drainBufferedHandoffs(data.chefSubOrderId(), data.deliveryJobId());
+        }
+        return result;
+    }
+
+    private ProcessingResult applyValidated(
+        EventEnvelope<DeliveryStatusChangedData> event,
+        LockedOrder order
+    ) {
+        DeliveryStatusChangedData data = event.data();
         Decision decision = transitionPolicy.decide(
             order.deliveryStatus(),
             order.deliveryTrackingUrl(),
@@ -99,6 +162,28 @@ public class DeliveryStatusUpdateService {
             data.trackingUrl(),
             data.observedAt()
         );
+        // A confirmed provider handoff changes the delivery even when both providers report
+        // the same normalized status and neither has supplied a tracking URL yet.
+        if (initialHandoff(data) && decision == Decision.NO_CHANGE) {
+            decision = Decision.APPLY;
+        }
+
+        // A new provider's courier is not the previous one's: the chef stops seeing the courier (or Craves rider) handed over.
+        if (initialHandoff(data) && decision == Decision.APPLY) {
+            jdbcTemplate.update(
+                """
+                    UPDATE order_schema.customer_order
+                    SET delivery_partner_name = NULL, delivery_partner_phone = NULL,
+                        delivery_partner_photo_url = NULL, delivery_partner_pickup_eta_at = NULL
+                    WHERE id = ?
+                    """,
+                data.chefSubOrderId()
+            );
+        }
+        // Courier details ride on any report newer than the stored one (a same-status report can still refresh them).
+        if (decision == Decision.APPLY || decision == Decision.NO_CHANGE) {
+            storeCourier(data);
+        }
 
         if (decision != Decision.APPLY) {
             markInbox(event.eventId(), decision.name());
@@ -168,10 +253,35 @@ public class DeliveryStatusUpdateService {
         return new ProcessingResult(true, false, "PROCESSED");
     }
 
+    /** Fields the event carries replace the stored courier; fields it leaves out (or blank) keep their value. */
+    private void storeCourier(DeliveryStatusChangedData data) {
+        if (data.courierName() == null && data.courierPhone() == null
+            && data.courierPhotoUrl() == null && data.pickupEtaAt() == null) {
+            return;
+        }
+        jdbcTemplate.update(
+            """
+                UPDATE order_schema.customer_order
+                SET delivery_partner_name = COALESCE(NULLIF(btrim(CAST(? AS text)), ''), delivery_partner_name),
+                    delivery_partner_phone = COALESCE(NULLIF(btrim(CAST(? AS text)), ''), delivery_partner_phone),
+                    delivery_partner_photo_url = COALESCE(NULLIF(btrim(CAST(? AS text)), ''), delivery_partner_photo_url),
+                    delivery_partner_pickup_eta_at = COALESCE(CAST(? AS timestamptz), delivery_partner_pickup_eta_at),
+                    updated_at = now()
+                WHERE id = ?
+                """,
+            data.courierName(),
+            data.courierPhone(),
+            data.courierPhotoUrl(),
+            data.pickupEtaAt() == null ? null : Timestamp.from(data.pickupEtaAt()),
+            data.chefSubOrderId()
+        );
+    }
+
     private LockedOrder lockOrder(UUID orderId) {
+        // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages.
         return jdbcTemplate.query(
             """
-                SELECT id, checkout_id, customer_identity_id, status,
+                SELECT id, COALESCE(checkout_id, id) AS checkout_id, customer_identity_id, status,
                        accepted_at, refund_requested_at,
                        delivery_job_id, delivery_provider_id,
                        delivery_provider_delivery_id, delivery_status,
@@ -208,6 +318,70 @@ public class DeliveryStatusUpdateService {
                 "Delivery job identifier changed for the chef sub-order"
             );
         }
+        if (initialHandoff(data)) {
+            boolean fromRider = DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID
+                .equalsIgnoreCase(data.handoffFromProviderId());
+            if ((order.deliveryProviderId() != null
+                    && !data.handoffFromProviderId().equalsIgnoreCase(order.deliveryProviderId()))
+                || (order.deliveryProviderDeliveryId() != null
+                    && !order.deliveryProviderDeliveryId().equals(data.handoffFromProviderDeliveryId()))
+                || (order.deliveryStatus() != null
+                    && !(fromRider ? RIDER_BEFORE_PICKUP_STATUSES : PRE_ASSIGNMENT_STATUSES)
+                        .contains(order.deliveryStatus()))) {
+                throw new DeliveryStatusNonRetryableException(fromRider
+                    ? "Delivery handoff does not match a Craves rider before pickup"
+                    : "Delivery handoff does not match an unassigned Borzo delivery"
+                );
+            }
+            if (order.deliveryJobId() == null || order.deliveryProviderId() == null
+                || order.deliveryProviderDeliveryId() == null || order.deliveryStatus() == null) {
+                throw new PriorProviderProjectionMissingException(
+                    "Prior delivery projection has not arrived yet"
+                );
+            }
+            if ("DELAYED".equals(order.deliveryStatus())
+                && courierPreviouslyAssigned(order.id(), order.deliveryJobId(), order.deliveryProviderDeliveryId())) {
+                throw new DeliveryStatusNonRetryableException(
+                    "Delayed Borzo delivery already had an assigned courier"
+                );
+            }
+            return;
+        }
+        if ("pidge".equalsIgnoreCase(data.providerId())
+            && "borzo".equalsIgnoreCase(order.deliveryProviderId())) {
+            if (order.deliveryJobId() == null
+                || order.deliveryProviderDeliveryId() == null
+                || order.deliveryStatus() == null
+                || !PRE_ASSIGNMENT_STATUSES.contains(order.deliveryStatus())
+                || (continuation(data) && !order.deliveryProviderDeliveryId()
+                    .equals(data.handoffFromProviderDeliveryId()))
+                || ("DELAYED".equals(order.deliveryStatus())
+                    && courierPreviouslyAssigned(order.id(), order.deliveryJobId(),
+                        order.deliveryProviderDeliveryId()))) {
+                throw new DeliveryStatusNonRetryableException(
+                    "Pidge status does not match an unassigned Borzo delivery"
+                );
+            }
+            throw new HandoffProjectionMissingException(
+                "Pidge handoff projection has not arrived yet"
+            );
+        }
+        if (continuation(data)) {
+            if (order.deliveryJobId() == null && order.deliveryProviderId() == null
+                && order.deliveryProviderDeliveryId() == null && order.deliveryStatus() == null) {
+                throw new HandoffProjectionMissingException(
+                    "Pidge handoff projection has not arrived yet"
+                );
+            }
+            if (!"pidge".equalsIgnoreCase(order.deliveryProviderId())
+                || !Objects.equals(order.deliveryProviderDeliveryId(), data.providerDeliveryId())
+                || order.deliveryStatus() == null
+                || !hasMatchingAcceptedHandoff(data)) {
+                throw new DeliveryStatusNonRetryableException(
+                    "Pidge continuation does not match an accepted Borzo handoff"
+                );
+            }
+        }
         if (order.deliveryProviderId() != null
             && !order.deliveryProviderId().equalsIgnoreCase(data.providerId())) {
             throw new DeliveryStatusNonRetryableException(
@@ -221,6 +395,227 @@ public class DeliveryStatusUpdateService {
             );
         }
     }
+
+    private static boolean continuation(DeliveryStatusChangedData data) {
+        return Boolean.TRUE.equals(data.handoffContinuation());
+    }
+
+    private static boolean initialHandoff(DeliveryStatusChangedData data) {
+        return data.hasHandoff() && !continuation(data);
+    }
+
+    private boolean hasMatchingAcceptedHandoff(DeliveryStatusChangedData data) {
+        Boolean matched = jdbcTemplate.queryForObject(
+            """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM order_schema.delivery_status_inbox i
+                    JOIN order_schema.order_delivery_status_history h ON h.event_id = i.event_id
+                    WHERE i.chef_sub_order_id = ? AND i.delivery_job_id = ?
+                      AND lower(i.provider_id) = 'pidge'
+                      AND i.provider_delivery_id = ?
+                      AND i.processing_status = 'PROCESSED'
+                      AND lower(h.provider_id) = 'pidge'
+                      AND h.provider_delivery_id = ?
+                      AND lower(i.payload -> 'data' ->> 'handoffFromProviderId') = 'borzo'
+                      AND i.payload -> 'data' ->> 'handoffFromProviderDeliveryId' = ?
+                      AND coalesce(i.payload -> 'data' ->> 'handoffContinuation', 'false') = 'false'
+                )
+                """,
+            Boolean.class,
+            data.chefSubOrderId(),
+            data.deliveryJobId(),
+            data.providerDeliveryId(),
+            data.providerDeliveryId(),
+            data.handoffFromProviderDeliveryId()
+        );
+        return Boolean.TRUE.equals(matched);
+    }
+
+    /** Whether this Borzo delivery ever had a courier; a Craves rider earlier on the same job does not count. */
+    private boolean courierPreviouslyAssigned(UUID chefSubOrderId, UUID deliveryJobId, String borzoProviderDeliveryId) {
+        Boolean matched = jdbcTemplate.queryForObject(
+            """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM order_schema.order_delivery_status_history h
+                    WHERE h.order_id = ? AND h.delivery_job_id = ? AND h.provider_delivery_id = ?
+                      AND h.new_status IN (
+                          'COURIER_ASSIGNED', 'COURIER_TO_PICKUP', 'AT_PICKUP',
+                          'PICKED_UP', 'IN_TRANSIT', 'AT_DROPOFF', 'DELIVERED',
+                          'RETURNING', 'RETURNED'
+                      )
+                )
+                """,
+            Boolean.class,
+            chefSubOrderId,
+            deliveryJobId,
+            borzoProviderDeliveryId
+        );
+        return Boolean.TRUE.equals(matched);
+    }
+
+    private boolean isSupersededBorzoEvent(LockedOrder order,
+                                           DeliveryStatusChangedData data) {
+        if (data.hasHandoff()
+            || !"pidge".equalsIgnoreCase(order.deliveryProviderId())
+            || !"borzo".equalsIgnoreCase(data.providerId())
+            || !Objects.equals(order.deliveryJobId(), data.deliveryJobId())
+            || !STALE_BORZO_HANDOFF_STATUSES.contains(data.status())) {
+            return false;
+        }
+        Boolean matched = jdbcTemplate.queryForObject(
+            """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM order_schema.delivery_status_inbox i
+                    JOIN order_schema.order_delivery_status_history h
+                      ON h.event_id = i.event_id
+                    WHERE i.chef_sub_order_id = ? AND i.delivery_job_id = ?
+                      AND lower(i.provider_id) = 'pidge'
+                      AND lower(h.provider_id) = 'pidge'
+                      AND i.processing_status = 'PROCESSED'
+                      AND lower(i.payload -> 'data' ->> 'handoffFromProviderId') = 'borzo'
+                      AND i.payload -> 'data' ->> 'handoffFromProviderDeliveryId' = ?
+                      AND i.observed_at > ?
+                )
+                """,
+            Boolean.class,
+            data.chefSubOrderId(),
+            data.deliveryJobId(),
+            data.providerDeliveryId(),
+            Timestamp.from(data.observedAt())
+        );
+        return Boolean.TRUE.equals(matched);
+    }
+
+    private void bufferHandoff(UUID eventId) {
+        int updated = jdbcTemplate.update(
+            """
+                UPDATE order_schema.delivery_status_inbox
+                SET processing_status = 'WAITING_FOR_PRIOR_PROVIDER', processed_at = NULL
+                WHERE event_id = ? AND processing_status = 'RECEIVED'
+                """,
+            eventId
+        );
+        if (updated != 1) {
+            throw new DeliveryStatusRetryableException("Delivery handoff could not be buffered");
+        }
+    }
+
+    private void bufferPidgeStatus(UUID eventId) {
+        int updated = jdbcTemplate.update(
+            """
+                UPDATE order_schema.delivery_status_inbox
+                SET processing_status = 'WAITING_FOR_HANDOFF', processed_at = NULL
+                WHERE event_id = ? AND processing_status = 'RECEIVED'
+                """,
+            eventId
+        );
+        if (updated != 1) {
+            throw new DeliveryStatusRetryableException("Pidge status could not be buffered");
+        }
+    }
+
+    private void drainBufferedHandoffs(UUID chefSubOrderId, UUID deliveryJobId) {
+        List<BufferedDeliveryEvent> waiting = jdbcTemplate.query(
+            """
+                SELECT event_id, payload::text AS raw_payload
+                FROM order_schema.delivery_status_inbox
+                WHERE chef_sub_order_id = ? AND delivery_job_id = ?
+                  AND processing_status = 'WAITING_FOR_PRIOR_PROVIDER'
+                ORDER BY observed_at, received_at, event_id
+                FOR UPDATE
+                """,
+            (rs, rowNumber) -> new BufferedDeliveryEvent(
+                rs.getObject("event_id", UUID.class), rs.getString("raw_payload")
+            ),
+            chefSubOrderId,
+            deliveryJobId
+        );
+        JavaType eventType = objectMapper.getTypeFactory().constructParametricType(
+            EventEnvelope.class, DeliveryStatusChangedData.class
+        );
+        for (BufferedDeliveryEvent buffered : waiting) {
+            try {
+                EventEnvelope<DeliveryStatusChangedData> event = objectMapper.readValue(
+                    buffered.rawPayload(), eventType
+                );
+                if (!buffered.eventId().equals(event.eventId())) {
+                    throw new DeliveryStatusValidationException("Buffered handoff event ID changed");
+                }
+                validator.validate(event);
+                if (!initialHandoff(event.data())) {
+                    throw new DeliveryStatusValidationException(
+                        "Buffered handoff event is not a provider handoff"
+                    );
+                }
+                LockedOrder current = lockOrder(chefSubOrderId);
+                validateOrder(current, event.data());
+                ProcessingResult applied = applyValidated(event, current);
+                if (applied.applied()) {
+                    drainBufferedPidgeStatuses(chefSubOrderId, deliveryJobId);
+                }
+            } catch (PriorProviderProjectionMissingException exception) {
+                // Keep the durable inbox row until the matching Borzo projection is available.
+                return;
+            } catch (DeliveryStatusValidationException | JsonProcessingException exception) {
+                markInbox(buffered.eventId(), "REJECTED");
+                LOGGER.error("Buffered delivery handoff rejected eventId={} deliveryJobId={} reason={}",
+                    buffered.eventId(), deliveryJobId, exception.getMessage());
+            }
+        }
+    }
+
+    private void drainBufferedPidgeStatuses(UUID chefSubOrderId, UUID deliveryJobId) {
+        List<BufferedDeliveryEvent> waiting = jdbcTemplate.query(
+            """
+                SELECT event_id, payload::text AS raw_payload
+                FROM order_schema.delivery_status_inbox
+                WHERE chef_sub_order_id = ? AND delivery_job_id = ?
+                  AND processing_status = 'WAITING_FOR_HANDOFF'
+                ORDER BY observed_at, received_at, event_id
+                FOR UPDATE
+                """,
+            (rs, rowNumber) -> new BufferedDeliveryEvent(
+                rs.getObject("event_id", UUID.class), rs.getString("raw_payload")
+            ),
+            chefSubOrderId,
+            deliveryJobId
+        );
+        JavaType eventType = objectMapper.getTypeFactory().constructParametricType(
+            EventEnvelope.class, DeliveryStatusChangedData.class
+        );
+        for (BufferedDeliveryEvent buffered : waiting) {
+            try {
+                EventEnvelope<DeliveryStatusChangedData> event = objectMapper.readValue(
+                    buffered.rawPayload(), eventType
+                );
+                if (!buffered.eventId().equals(event.eventId())) {
+                    throw new DeliveryStatusValidationException("Buffered Pidge event ID changed");
+                }
+                validator.validate(event);
+                if (!"pidge".equalsIgnoreCase(event.data().providerId())
+                    || initialHandoff(event.data())) {
+                    throw new DeliveryStatusValidationException(
+                        "Buffered Pidge event is not a follow-on status"
+                    );
+                }
+                LockedOrder current = lockOrder(chefSubOrderId);
+                validateOrder(current, event.data());
+                applyValidated(event, current);
+            } catch (HandoffProjectionMissingException exception) {
+                // The inbox row remains available until a matching handoff is projected.
+                return;
+            } catch (DeliveryStatusValidationException | JsonProcessingException exception) {
+                markInbox(buffered.eventId(), "REJECTED");
+                LOGGER.error("Buffered Pidge status rejected eventId={} deliveryJobId={} reason={}",
+                    buffered.eventId(), deliveryJobId, exception.getMessage());
+            }
+        }
+    }
+
+    private record BufferedDeliveryEvent(UUID eventId, String rawPayload) {}
 
     private void synchronizeCommercialOrderStatus(
         LockedOrder order,
@@ -330,6 +725,18 @@ public class DeliveryStatusUpdateService {
 
     public static class DeliveryStatusRetryableException extends RuntimeException {
         public DeliveryStatusRetryableException(String message) {
+            super(message);
+        }
+    }
+
+    private static class PriorProviderProjectionMissingException extends DeliveryStatusRetryableException {
+        private PriorProviderProjectionMissingException(String message) {
+            super(message);
+        }
+    }
+
+    private static class HandoffProjectionMissingException extends DeliveryStatusRetryableException {
+        private HandoffProjectionMissingException(String message) {
             super(message);
         }
     }

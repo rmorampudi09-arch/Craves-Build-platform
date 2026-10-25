@@ -4,18 +4,21 @@ import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 interface TrackingHeaderProps {
-  orderId: string;
+  /** Already short: shortOrderNumber(id). */
+  orderNumber: string;
   /** The page's one h1. */
   title?: string;
   onBack: () => void;
+  backLabel?: string;
   onRefresh: () => void;
   refreshing?: boolean;
 }
 
 export function TrackingHeader({
-  orderId,
+  orderNumber,
   title = "Track order",
   onBack,
+  backLabel = "Back to orders",
   onRefresh,
   refreshing = false,
 }: TrackingHeaderProps) {
@@ -26,7 +29,7 @@ export function TrackingHeader({
           type="button"
           onClick={onBack}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
-          aria-label="Back to orders"
+          aria-label={backLabel}
         >
           <FaArrowLeft className="text-lg" aria-hidden="true" />
         </button>
@@ -44,7 +47,7 @@ export function TrackingHeader({
             {title}
           </h1>
           <p className="mt-0.5 truncate text-xs text-[#6B6B6B]">
-            Order #{orderId.slice(-8).toUpperCase()}
+            Order #{orderNumber}
           </p>
         </div>
 

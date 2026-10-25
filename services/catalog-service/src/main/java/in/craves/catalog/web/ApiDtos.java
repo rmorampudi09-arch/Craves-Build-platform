@@ -1,9 +1,11 @@
 package in.craves.catalog.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -17,8 +19,13 @@ public final class ApiDtos {
         DRAFT, ACTIVE, INACTIVE, SUSPENDED
     }
 
+    /** ARCHIVED is set only by the chef's DELETE of a dish; it is hidden from every customer and chef list. */
     public enum MenuItemStatus {
-        DRAFT, ACTIVE, INACTIVE
+        DRAFT, ACTIVE, INACTIVE, ARCHIVED
+    }
+
+    public enum KitchenPhotoKind {
+        CHEF, KITCHEN
     }
 
     public enum FoodType {
@@ -44,8 +51,19 @@ public final class ApiDtos {
         String postalCode,
         BigDecimal latitude,
         BigDecimal longitude,
-        KitchenStatus status
+        KitchenStatus status,
+        // Optional: absent or null keeps the stored value (craves.in and app 1.30.0 do not send them).
+        List<String> cuisines,
+        List<String> serviceAreas,
+        SocialLinks socialLinks
     ) {
+    }
+
+    public record SocialLinks(String instagram, String facebook, String youtube, String website) {
+    }
+
+    /** Body and response of the chef's order settings; defaultPrepMinutes is 5-120 or null (unset). */
+    public record KitchenSettings(@NotNull Boolean autoAcceptOrders, Integer defaultPrepMinutes) {
     }
 
     public record KitchenProfileResponse(
@@ -67,8 +85,29 @@ public final class ApiDtos {
         BigDecimal longitude,
         KitchenStatus status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String chefPhotoUrl,
+        String kitchenPhotoUrl,
+        // Kitchen photo slots 1 and 2 that are set, in slot order; never null.
+        List<String> kitchenPhotoUrls,
+        List<String> cuisines,
+        List<String> serviceAreas,
+        SocialLinks socialLinks,
+        // Chef and internal (order-service) reads only; null, so omitted from JSON, on public reads.
+        @JsonInclude(JsonInclude.Include.NON_NULL) Boolean autoAcceptOrders,
+        @JsonInclude(JsonInclude.Include.NON_NULL) Integer defaultPrepMinutes
     ) {
+        public KitchenProfileResponse {
+        kitchenPhotoUrls = kitchenPhotoUrls == null ? List.of() : List.copyOf(kitchenPhotoUrls);
+        }
+
+        public KitchenProfileResponse withoutChefSettings() {
+            return new KitchenProfileResponse(
+                id, identityId, kitchenName, displayName, description, phoneNumber, email, addressLine1, addressLine2, landmark,
+                areaName, city, state, postalCode, latitude, longitude, status, createdAt, updatedAt,
+                chefPhotoUrl, kitchenPhotoUrl, kitchenPhotoUrls, cuisines, serviceAreas, socialLinks, null, null
+            );
+        }
     }
 
     public record MenuItemRequest(
@@ -108,6 +147,11 @@ public final class ApiDtos {
         Instant createdAt,
         Instant updatedAt
     ) {
+        public MenuItemResponse withImages(List<MenuItemImageResponse> itemImages) {
+            return new MenuItemResponse(id, kitchenId, itemName, description, category, foodType, price, currency, servesCount,
+                preparationTimeMinutes, spiceLevel, unitPackageWeightGrams, thermoboxRequired, available, status, itemImages,
+                createdAt, updatedAt);
+        }
     }
 
     public record MenuItemImageResponse(
@@ -122,6 +166,9 @@ public final class ApiDtos {
         boolean primary,
         Instant createdAt
     ) {
+    }
+
+    public record ChefAvatarRequest(@NotBlank @Size(max = 40) String avatarId) {
     }
 
     public record AvailabilityRequest(
@@ -140,8 +187,13 @@ public final class ApiDtos {
         BigDecimal latitude,
         BigDecimal longitude,
         BigDecimal distanceKm,
-        long activeMenuItemCount
+        long activeMenuItemCount,
+        String chefPhotoUrl,
+        List<String> kitchenPhotoUrls
     ) {
+        public PublicKitchenSummaryResponse {
+        kitchenPhotoUrls = kitchenPhotoUrls == null ? List.of() : List.copyOf(kitchenPhotoUrls);
+        }
     }
 
     public record DiscoveryRadiusResponse(

@@ -2,6 +2,7 @@ package in.craves.subscription.payment;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
 import in.craves.subscription.repository.SubscriptionRepository;
 import in.craves.subscription.web.ApiDtos.SubscriptionResponse;
@@ -21,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class SubscriptionPaymentStatusService {
     private static final String EVENT_TYPE = "SUBSCRIPTION_PAYMENT_STATUS_CHANGED";
+    private static final String PAUSE_VOIDED = SubscriptionBillingRepository.PAUSE_VOIDED;
+    private static final String PAID_AFTER_VOID = SubscriptionBillingRepository.PAID_AFTER_VOID;
     private static final Set<String> STATUSES = Set.of("PAYMENT_PENDING", "PAID", "FAILED", "CANCELLED");
 
     private final JdbcTemplate jdbcTemplate;
@@ -84,6 +87,23 @@ public class SubscriptionPaymentStatusService {
             // A transport replay must not reacquire capacity after pause/cancel.
             complete(eventId, "DUPLICATE", null);
             return false;
+        }
+        if (PAUSE_VOIDED.equals(invoice.failureCode()) || PAID_AFTER_VOID.equals(invoice.failureCode())) {
+            // A resume voided this cycle: it must never reactivate the plan, release meals or fail the resumed plan.
+            if (!"PAID".equals(status) || PAID_AFTER_VOID.equals(invoice.failureCode())) {
+                complete(eventId, "PROCESSED", null);
+                return false;
+            }
+            // Keep the captured-money fact for a manual refund.
+            jdbcTemplate.update(
+                "UPDATE subscription_schema.subscription_invoice SET failure_code = ?, " +
+                    "failure_message = 'Payment received for a cycle voided by a pause; refund manually', " +
+                    "provider_payment_intent_id = ?, provider_status = ?, provider_payment_id = ?, paid_at = now(), updated_at = now() " +
+                    "WHERE id = ?",
+                PAID_AFTER_VOID, paymentIntentId, providerStatus, providerPaymentId, invoiceId
+            );
+            complete(eventId, "FAILED", PAID_AFTER_VOID);
+            return true;
         }
 
         // Serialize with customer lifecycle changes before touching capacity.
@@ -216,12 +236,13 @@ public class SubscriptionPaymentStatusService {
 
     private Invoice findInvoice(UUID invoiceId, UUID subscriptionId) {
         return jdbcTemplate.query(
-            "SELECT id, subscription_id, cycle_start, cycle_end, amount, currency, status " +
+            "SELECT id, subscription_id, cycle_start, cycle_end, amount, currency, status, failure_code " +
                 "FROM subscription_schema.subscription_invoice WHERE id = ? AND subscription_id = ? FOR UPDATE",
             (rs, rowNum) -> new Invoice(
                 rs.getObject("id", UUID.class), rs.getObject("subscription_id", UUID.class),
                 rs.getObject("cycle_start", LocalDate.class), rs.getObject("cycle_end", LocalDate.class),
-                rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("status")
+                rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("status"),
+                rs.getString("failure_code")
             ),
             invoiceId, subscriptionId
         ).stream().findFirst().orElseThrow(
@@ -315,7 +336,8 @@ public class SubscriptionPaymentStatusService {
         LocalDate cycleEnd,
         BigDecimal amount,
         String currency,
-        String status
+        String status,
+        String failureCode
     ) {
     }
 

@@ -2,8 +2,10 @@ package in.craves.subscription.order;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.order.OccurrenceOrderModels.OrderItem;
 import in.craves.subscription.order.OccurrenceOrderModels.OrderRequestedData;
+import in.craves.subscription.order.OccurrenceOrderRepository.DeclinedMeal;
 import in.craves.subscription.order.OccurrenceOrderRepository.OccurrenceClaim;
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OccurrenceOrderService {
@@ -19,20 +22,33 @@ public class OccurrenceOrderService {
     private final OccurrenceOrderProperties properties;
     private final OccurrenceOrderRepository repository;
     private final ObjectMapper objectMapper;
+    private final DayCreditService dayCreditService;
 
     public OccurrenceOrderService(
         OccurrenceOrderProperties properties,
         OccurrenceOrderRepository repository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        DayCreditService dayCreditService
     ) {
         this.properties = properties;
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.dayCreditService = dayCreditService;
+    }
+
+    /** The chef declined (or never accepted) this meal: the day is added to the end of the plan, or offered as a choice. */
+    @Transactional
+    public void orderDeclined(UUID occurrenceId, UUID orderId) {
+        DeclinedMeal meal = repository.markOrderDeclined(occurrenceId, orderId);
+        if (meal == null) {
+            return;
+        }
+        dayCreditService.declined(meal.subscriptionId(), meal.planId(), meal.serviceDate(), meal.mealSlotCode());
     }
 
     public DispatchSummary queueDueOccurrences() {
         List<OccurrenceClaim> claims = repository.claimReady(
-            properties.getLeadHours(),
+            Instant.now(),
             properties.getStaleLockMinutes(),
             properties.getBatchSize()
         );

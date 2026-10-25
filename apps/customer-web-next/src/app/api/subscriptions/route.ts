@@ -2,6 +2,7 @@ import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { parseCreateSubscriptionInput, parseCustomerSubscription, parseCustomerSubscriptions } from "@/features/meal-plans/lib/subscription-contract";
 import { isSameOrigin } from "@/shared/lib/request-security";
+import { upstreamFailure } from "@/shared/lib/feature-availability";
 import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,11 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(input),
     }, SUBSCRIPTION_UPSTREAM_TIMEOUT_MS);
     const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return errorResponse(upstream.status);
+    if (!upstream.ok) {
+      // Keeps the server's code, e.g. DELIVERY_ADDRESS_OUT_OF_RANGE for an address over 10 km from the chef.
+      const failure = upstreamFailure(upstream.status, body, "SUBSCRIPTION_REQUEST_FAILED");
+      return NextResponse.json({ code: failure.code }, { status: failure.status });
+    }
     const subscription = parseCustomerSubscription(body);
     return subscription ? NextResponse.json(subscription, { status: 201, headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ code: "INVALID_SUBSCRIPTION_RESPONSE" }, { status: 502 });
   } catch (error) {

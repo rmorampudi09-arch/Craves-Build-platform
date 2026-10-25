@@ -1,5 +1,7 @@
 # Referral backend integration
 
+**12 Oct 2026: the chef programme is being activated in the live subscription — see [CHEF_ACTIVATION_20261012.md](CHEF_ACTIVATION_20261012.md) and the [chef terms](CHEF_REFERRAL_TERMS_V1.md). Customer wallet, discounts, cash-outs and referral payouts stay off.** The status below is the September history.
+
 Status: **implementation in progress; production integration is not complete**.
 Backend-only draft PR: [#358](https://github.com/rmorampudi09-arch/Craves-Build-platform/pull/358).
 The user's approval covers engineering and Azure access. It does not supply missing policy values or evidence of legal, tax, funding and recipient reviews.

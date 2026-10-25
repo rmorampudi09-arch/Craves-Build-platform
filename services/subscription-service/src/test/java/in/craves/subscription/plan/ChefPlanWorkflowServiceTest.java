@@ -59,6 +59,31 @@ class ChefPlanWorkflowServiceTest {
     }
 
     @Test
+    void acceptsFortnightlyBillingPeriod() {
+        CurrentUser chef = new CurrentUser(CHEF_ID, "firebase-chef", "+919999999999", List.of("CHEF"));
+        ChefPlanInput input = new ChefPlanInput("Two-week lunches", null, "FORTNIGHTLY", new BigDecimal("2400.00"), "INR");
+        when(repository.create(eq(CHEF_ID), any(String.class), any(ChefPlanInput.class)))
+            .thenAnswer(invocation -> plan("DRAFT", invocation.getArgument(1)));
+
+        service.create(input, chef);
+
+        verify(repository).create(eq(CHEF_ID), any(String.class), eq(new ChefPlanInput("Two-week lunches", null, "FORTNIGHTLY", new BigDecimal("2400.00"), "INR")));
+    }
+
+    @Test
+    void rejectsUnknownBillingPeriod() {
+        CurrentUser chef = new CurrentUser(CHEF_ID, "firebase-chef", "+919999999999", List.of("CHEF"));
+        ChefPlanInput input = new ChefPlanInput("Daily lunches", null, "DAILY", new BigDecimal("100.00"), "INR");
+
+        assertThatThrownBy(() -> service.create(input, chef))
+            .isInstanceOf(ApiException.class)
+            .satisfies(error -> {
+                assertThat(((ApiException) error).getCode()).isEqualTo("INVALID_BILLING_PERIOD");
+                assertThat(error.getMessage()).isEqualTo("billingPeriod must be WEEKLY, FORTNIGHTLY or MONTHLY");
+            });
+    }
+
+    @Test
     void nonChefCannotCreateMealPlan() {
         CurrentUser customer = new CurrentUser(CHEF_ID, "firebase-customer", "+919999999999", List.of("CUSTOMER"));
         ChefPlanInput input = new ChefPlanInput("Weekly lunches", null, "WEEKLY", new BigDecimal("1200.00"), "INR");
@@ -274,7 +299,7 @@ class ChefPlanWorkflowServiceTest {
     private static ChefPlanResponse plan(String status, String code, boolean acceptingSubscribers) {
         return new ChefPlanResponse(
             PLAN_ID, code, "Weekly lunches", "Home lunches", "WEEKLY", new BigDecimal("1200.00"), "INR",
-            status, null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z"), null, acceptingSubscribers
+            status, null, null, null, Instant.parse("2026-08-13T00:00:00Z"), Instant.parse("2026-08-13T00:00:00Z"), null, acceptingSubscribers, 0
         );
     }
 }

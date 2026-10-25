@@ -22,9 +22,17 @@ public class EmailVerificationService {
     private final EmailVerificationSettings settings;
     private final EmailVerificationTransport transport;
     private final Clock clock;
+    private final EmailVerificationTestBypass testBypass;
     public EmailVerificationService(JdbcTemplate jdbc, PlatformTransactionManager manager,
         EmailVerificationSettings settings, EmailVerificationTransport transport, Clock clock) {
+        this(jdbc, manager, settings, transport, clock, EmailVerificationTestBypass.disabled(clock));
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public EmailVerificationService(JdbcTemplate jdbc, PlatformTransactionManager manager,
+        EmailVerificationSettings settings, EmailVerificationTransport transport, Clock clock,
+        EmailVerificationTestBypass testBypass) {
         this.jdbc=jdbc; tx=new TransactionTemplate(manager); this.settings=settings; this.transport=transport; this.clock=clock;
+        this.testBypass=testBypass;
     }
     public EmailVerificationState state(CurrentUser user) {
         requireEnabled();
@@ -59,7 +67,15 @@ public class EmailVerificationService {
         if (issued!=null) {
             // Do not keep a transaction/row lock open while contacting ACS through Notification.
             String delivery;
-            try { delivery=transport.send(issued.id,user.identityId(),issued.email,issued.code,issued.expiresAt); }
+            try {
+                if (testBypass.configured(issued.email)) {
+                    testCode(user,issued.email);
+                    testBypass.audit("send",user,issued.email);
+                    delivery="ACCEPTED";
+                } else {
+                    delivery=transport.send(issued.id,user.identityId(),issued.email,issued.code,issued.expiresAt);
+                }
+            }
             catch (Exception ignored) { delivery="UNKNOWN"; }
             if (!List.of("ACCEPTED","UNKNOWN","UNAVAILABLE").contains(delivery)) delivery="UNKNOWN";
             jdbc.update("UPDATE auth_email_challenge SET delivery_status=? WHERE id=? AND delivery_status='PENDING'",
@@ -69,6 +85,7 @@ public class EmailVerificationService {
     }
     private Issuance issueLocked(CurrentUser user, String email, UUID requestId, UUID parentChallenge, Instant now) {
         Identity identity=identity(user);
+        String testCode=testCode(user,email);
         List<Challenge> previous=jdbc.query("SELECT * FROM auth_email_challenge WHERE identity_id=? AND request_id=?",
             this::challenge,user.identityId(),requestId);
         if (!previous.isEmpty()) {
@@ -99,7 +116,7 @@ public class EmailVerificationService {
         if (count!=null && count>=10) throw rateLimited();
         jdbc.update("UPDATE auth_email_challenge SET status='SUPERSEDED',completed_at=? WHERE identity_id=? AND status='PENDING'",
             Timestamp.from(now),user.identityId());
-        UUID id=UUID.randomUUID(); String code=EmailVerificationCrypto.newCode(); Instant expires=now.plusSeconds(600);
+        UUID id=UUID.randomUUID(); String code=testCode == null ? EmailVerificationCrypto.newCode() : testCode; Instant expires=now.plusSeconds(600);
         jdbc.update("INSERT INTO auth_email_challenge(id,identity_id,request_id,parent_challenge_id,pending_email,recipient_key,code_mac,status,created_at,expires_at,resend_available_at) " +
             "VALUES(?,?,?,?,?,?,?,'PENDING',?,?,?)",id,user.identityId(),requestId,parentChallenge,email,recipientKey,
             EmailVerificationCrypto.codeMac(settings.codeKey(),user.identityId(),email,id,code),
@@ -121,6 +138,7 @@ public class EmailVerificationService {
         if (rows.isEmpty()) return false;
         Challenge challenge=rows.getFirst();
         if (!"PENDING".equals(challenge.status)) return false;
+        testCode(user,challenge.email);
         if (!challenge.expiresAt.isAfter(now)) {
             jdbc.update("UPDATE auth_email_challenge SET status='EXPIRED',completed_at=? WHERE id=?",Timestamp.from(now),id);
             audit(user.identityId(),id,"CHALLENGE_EXPIRED",identity.revision,now); return false;
@@ -139,6 +157,7 @@ public class EmailVerificationService {
         jdbc.update("INSERT INTO auth_email_projection_outbox(event_id,identity_id,email,email_revision,verified_at,created_at,next_attempt_at) VALUES(?,?,?,?,?,?,?)",
             UUID.randomUUID(),user.identityId(),challenge.email,revision,Timestamp.from(now),Timestamp.from(now),Timestamp.from(now));
         audit(user.identityId(),id,"EMAIL_VERIFIED",revision,now);
+        testBypass.audit("verify",user,challenge.email);
         return true;
     }
     private EmailVerificationState stateLocked(CurrentUser user, Instant now) {
@@ -170,6 +189,13 @@ public class EmailVerificationService {
     private void audit(UUID owner,UUID challenge,String action,long revision,Instant now) {
         jdbc.update("INSERT INTO auth_email_audit(id,identity_id,challenge_id,action,email_revision,created_at) VALUES(?,?,?,?,?,?)",
             UUID.randomUUID(),owner,challenge,action,revision,Timestamp.from(now));
+    }
+    private String testCode(CurrentUser user, String email) {
+        if (!testBypass.configured(email)) return null;
+        String actualPhone=jdbc.queryForObject("SELECT phone_number FROM auth_identity WHERE id=?",String.class,user.identityId());
+        if (!java.util.Objects.equals(actualPhone,user.phoneNumber()))
+            throw AuthException.badRequest("EMAIL_REQUEST_INVALID","This temporary test email cannot be verified by this account right now.");
+        return testBypass.codeFor(user,email);
     }
     private void requireEnabled() {
         if (!settings.enabled()) throw new AuthException(HttpStatus.SERVICE_UNAVAILABLE,"EMAIL_VERIFICATION_DISABLED","Email verification is temporarily unavailable");

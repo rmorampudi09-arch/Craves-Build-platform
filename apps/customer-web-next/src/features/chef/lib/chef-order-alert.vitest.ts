@@ -6,10 +6,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderWatcher } from "../components/chef-order-watcher";
 import { ChefOrderInbox } from "../components/chef-order-inbox";
-import { fetchChefOrders, mergeOrders, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
+import { fetchChefOrders, isAwaitingAnswer, mergeOrders, noteOrderAnswered, noticeNewOrders, orderWords, resetOrderAlertsForTests, writeAlertPrefs } from "./chef-order-alert";
 import type { ChefOrder } from "./chef-order-contract";
-import { markChefModeVerified } from "./chef-mode";
-import { captureSessionContext, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
+import { isChefModeTab, markChefModeVerified } from "./chef-mode";
+import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 vi.mock("next/navigation", () => ({ usePathname: vi.fn(() => "/chef/menu"), useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
@@ -22,8 +22,8 @@ function order(id: string, status: ChefOrder["status"], updatedAt = "2026-10-10T
     createdAt: "2026-10-10T08:01:00Z", updatedAt,
   };
 }
-const A = "0bde0000-0000-4000-8000-000000000101";
-const B = "0bde0000-0000-4000-8000-000000000102";
+const A = "0bde0101-0000-4000-8000-000000000101";
+const B = "0bde0102-0000-4000-8000-000000000102";
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -56,6 +56,21 @@ describe("new-order alerts", () => {
     expect(noticeNewOrders([order(A, "CHEF_ACCEPTANCE_PENDING")])).toHaveLength(1);
     expect(noticeNewOrders([order(B, "PREPARING")])).toEqual([]);
     expect(vibrate).not.toHaveBeenCalled();
+  });
+
+  it("an answered order stays answered when a check that left earlier still lists it as waiting", () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-10T08:02:00Z") });
+    try {
+      noticeNewOrders([order(A, "CHEF_ACCEPTANCE_PENDING")]);
+      expect(isAwaitingAnswer(order(A, "CHEF_ACCEPTANCE_PENDING"))).toBe(true);
+      noteOrderAnswered(order(A, "CHEF_ACCEPTED"));
+      expect(isAwaitingAnswer(order(A, "CHEF_ACCEPTANCE_PENDING"))).toBe(false);
+      vi.advanceTimersByTime(61_000);
+      // The server still says waiting a minute later: believe it.
+      expect(isAwaitingAnswer(order(A, "CHEF_ACCEPTANCE_PENDING"))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the chef's own newer copy when an older check comes back, and reads pieces aloud plainly", () => {
@@ -109,7 +124,7 @@ describe("order watcher on pages without an order list", () => {
       ? Response.json([order(A, "CHEF_ACCEPTANCE_PENDING"), order(B, "CHEF_ACCEPTANCE_PENDING")])
       : Response.json({}, { status: 404 }));
     await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
-    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^New order 000102\. 2 Rasmalai 4 pieces\.$/));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^New order 0BDE0102\. 2 Rasmalai 4 pieces\.$/));
     expect(screen.getByRole("link", { name: /2 new orders waiting/ }).getAttribute("href")).toBe("/chef");
   });
 });
@@ -124,6 +139,38 @@ describe("orders keep working when the sign-in cookie expires", () => {
     expect(await fetchChefOrders()).toBeNull();
     expect(calls.slice(0, 2)).toEqual(["/api/chef/orders", "/api/auth/refresh"]);
     await waitFor(() => expect(calls).toContain("/api/auth/me"));
+  });
+
+  it("never ends Chef Mode when another tab renewed the sign-in first or Craves is reconnecting", async () => {
+    const chef: CravesIdentity = { id: "61111111-1111-4111-8111-111111111111", phoneNumber: "+910000000002", displayName: "Asha Rao", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER", "CHEF"] };
+    setSessionIdentity(chef);
+    markChefModeVerified(chef.id);
+    const calls: string[] = [];
+    let renewed = false;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === "/api/auth/refresh") {
+        renewed = true; // the other tab's new cookies arrive meanwhile
+        return Response.json({ code: "REFRESH_SUPERSEDED" }, { status: 409 });
+      }
+      return renewed ? Response.json([order(A, "CHEF_ACCEPTANCE_PENDING")]) : Response.json({ code: "SESSION_EXPIRED" }, { status: 401 });
+    }));
+    expect((await fetchChefOrders())?.map((o) => o.id)).toEqual([A]);
+
+    // A 409 from the orders route, then an expired cookie while the refresh is unavailable (sessionFetch's 503).
+    for (const ordersStatus of [409, 401]) {
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        calls.push(String(input));
+        return Response.json({}, { status: String(input) === "/api/auth/refresh" ? 503 : ordersStatus });
+      });
+      expect(await fetchChefOrders()).toBeNull();
+    }
+    await act(async () => {});
+    expect(calls).not.toContain("/api/auth/me");
+    expect(isChefModeTab(chef.id)).toBe(true);
+    expect(getSession()?.id).toBe(chef.id);
+    invalidateSession(captureSessionContext());
   });
 });
 
@@ -145,20 +192,21 @@ describe("Orders screen", () => {
 
   it("never moves the chef off the tab they chose when new orders arrive", async () => {
     render(createElement(ChefOrderInbox));
-    await screen.findByRole("heading", { name: /Order #000101/ });
-    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    await screen.findByRole("heading", { name: /Order #0BDE0101/ });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     list = [order(C, "CHEF_ACCEPTANCE_PENDING"), ...list];
     await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
     await waitFor(() => expect(screen.getByRole("button", { name: /^New/ }).textContent).toContain("2"));
-    expect(screen.getByRole("button", { name: /^All/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /^Past/ }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("says what happened after Accept, follows the order to Cooking and keeps focus on it", async () => {
     render(createElement(ChefOrderInbox));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose another time" }));
     fireEvent.click(screen.getByText("45"));
     fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
-    await screen.findByText("Order #000101 accepted. Start cooking: ready in about 45 min.");
+    await screen.findByText("Order #0BDE0101 accepted. Start cooking: ready in about 45 min.");
     expect(screen.getByRole("button", { name: /^Cooking/ }).getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => expect(document.activeElement?.id).toBe(`chef-order-${A}`));
     expect(screen.getByRole("button", { name: "Food is ready for pickup" })).toBeTruthy();

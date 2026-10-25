@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 
 export type CodeSlotsStatus = "idle" | "verifying" | "success" | "error";
 
@@ -61,7 +61,7 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
     bounce = 0.2,
     settle = 0.3,
     rise = 8,
-    cascade = 20,
+    cascade = 14,
     mask = false,
     caret = true,
     outcome = "accept",
@@ -77,7 +77,18 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
 ) {
   const [own, setOwn] = useState("");
   const [focused, setFocused] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  // Set when a complete code made the field let go of focus (mouse or trackpad).
+  const released = useRef(false);
+  useImperativeHandle(ref, () => field.current as HTMLInputElement, []);
   const code = (value ?? own).replace(/\D/g, "").slice(0, length);
+
+  // A wrong code clears the slots: take focus back so the code can be typed again straight away.
+  useEffect(() => {
+    if (!released.current || status !== "error" || code || disabled) return;
+    released.current = false;
+    field.current?.focus();
+  }, [status, code, disabled]);
 
   // The caret always sits after the last digit: typing appends, Backspace removes the last one.
   const pinCaret = (target: HTMLInputElement) => {
@@ -110,7 +121,7 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
     >
       <input
         {...input}
-        ref={ref}
+        ref={field}
         type="text"
         inputMode="numeric"
         autoComplete="one-time-code"
@@ -118,15 +129,32 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
         // No maxLength: the browser would cut a pasted "123 456" or "Your OTP is 123456" before the
         // digits are picked out below.
         spellCheck={false}
+        // Password managers draw their own white menus over one-time-code fields; these opt out.
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-bwignore="true"
+        data-form-type="other"
         disabled={disabled}
         value={code}
         aria-invalid={status === "error" || undefined}
         className="code-slots-input"
         onChange={(event) => {
-          const next = event.target.value.replace(/\D/g, "").slice(0, length);
+          const digits = event.target.value.replace(/\D/g, "");
+          // The caret is pinned to the end, so a full code pasted after some typed digits arrives
+          // appended to them: the pasted code replaces them instead of being cut to "123654".
+          const added = digits.startsWith(code) ? digits.slice(code.length) : "";
+          const next = (added.length >= length ? added : digits).slice(0, length);
           if (value === undefined) setOwn(next);
           onChange?.(next);
-          if (next.length === length && next !== code) onComplete?.(next);
+          if (next.length !== length || next === code) return;
+          // With a mouse or trackpad nothing needs the field once the code is checked by itself, and
+          // letting go closes any autofill list, paste bubble or clipboard panel over the slots.
+          // Touch keeps focus, so the keypad is still up for a retry.
+          if (onComplete && window.matchMedia?.("(pointer: fine)")?.matches) {
+            released.current = true;
+            event.target.blur();
+          }
+          onComplete?.(next);
         }}
         onFocus={(event) => {
           setFocused(true);

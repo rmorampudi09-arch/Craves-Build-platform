@@ -26,12 +26,24 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
   assert.match(codeSlots, /autoComplete="one-time-code"/);
   assert.match(codeSlots, /inputMode="numeric"/);
   assert.match(codeSlots, /className="code-slots-row" aria-hidden="true"/);
-  for (const motion of [/bounce = 0\.2/, /settle = 0\.3/, /rise = 8/, /cascade = 20/, /outcome = "accept"/])
+  for (const motion of [/bounce = 0\.2/, /settle = 0\.3/, /rise = 8/, /cascade = 14/, /outcome = "accept"/])
     assert.match(codeSlots, motion);
+  // A correct code turns green quickly while the next page loads (no fixed wait before it opens).
+  assert.match(codeSlotStyles, /cs-accept 260ms/);
+  assert.doesNotMatch(standalone, /setTimeout\(resolve/);
   assert.match(codeSlotStyles, /prefers-reduced-motion: reduce/);
   // Theme rules paint inputs with !important from Tailwind's components layer; only a reset in the
   // earlier base layer keeps the real input invisible over the slots (chef sign-in showed a white box).
-  assert.match(codeSlotStyles, /@layer base \{\s*\.code-slots \.code-slots-input\.code-slots-input \{[^}]*background: transparent !important/);  // A wrong code turns the borders red; it never fills the slots with a red tint.
+  assert.match(codeSlotStyles, /@layer base \{\s*\.code-slots \.code-slots-input\.code-slots-input \{[^}]*background: transparent !important/);
+  assert.match(codeSlotStyles, /@layer base \{[^}]*-webkit-text-fill-color: transparent !important/);
+  // Autofill paints its own !important background, which only a days-long colour transition holds
+  // off; an inset box-shadow would cover the slots too. Password manager menus are opted out.
+  assert.match(codeSlotStyles, /\.code-slots-input:-webkit-autofill[^{]*\{[^}]*transition: background-color 600000s/);
+  assert.match(codeSlotStyles, /\.code-slots-input:autofill \{[^}]*transition: background-color 600000s/);
+  assert.doesNotMatch(codeSlotStyles, /box-shadow: [^;]*inset/);
+  for (const optOut of [/data-lpignore="true"/, /data-1p-ignore="true"/, /data-bwignore="true"/, /data-form-type="other"/])
+    assert.match(codeSlots, optOut);
+  // A wrong code turns the borders red; it never fills the slots with a red tint.
   assert.doesNotMatch(codeSlotStyles, /is-error[^}]*background: var\(--cs-danger\)/);
   assert.match(source("../landing-modal/AuthModal.tsx"), /<CodeSlots/);
 

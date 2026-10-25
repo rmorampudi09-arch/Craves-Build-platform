@@ -1,0 +1,10 @@
+# Code notification-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.notification.api.AppNotificationController
+in.craves.notification.api.InternalNotificationController
+in.craves.notification.api.NotificationDeliveryController
+in.craves.notification.documents.DocumentController
+in.craves.notification.email.VerificationEmailController
+in.craves.notification.recovery.AdminNotificationRecoveryController
+in.craves.notification.api.InternalRealtimeController

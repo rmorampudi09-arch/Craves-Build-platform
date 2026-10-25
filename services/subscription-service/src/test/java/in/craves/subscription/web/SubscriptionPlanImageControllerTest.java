@@ -56,7 +56,7 @@ class SubscriptionPlanImageControllerTest {
 
     @Test
     void publicPlanListSerializesImageUrlAsNullWhenThePlanHasNoImage() throws Exception {
-        when(service.listActivePlans()).thenReturn(List.of(publicPlan(null)));
+        when(service.listActivePlans(null, null)).thenReturn(List.of(publicPlan(null)));
 
         mockMvc.perform(get("/api/v1/subscriptions/plans"))
             .andExpect(status().isOk())
@@ -66,7 +66,7 @@ class SubscriptionPlanImageControllerTest {
 
     @Test
     void publicPlanListCarriesTheVersionedImagePath() throws Exception {
-        when(service.listActivePlans()).thenReturn(List.of(publicPlan(IMAGE_PATH)));
+        when(service.listActivePlans(null, null)).thenReturn(List.of(publicPlan(IMAGE_PATH)));
 
         mockMvc.perform(get("/api/v1/subscriptions/plans"))
             .andExpect(status().isOk())
@@ -100,7 +100,7 @@ class SubscriptionPlanImageControllerTest {
         JsonNode node = json.valueToTree(new CustomerSubscriptionResponse(
             UUID.randomUUID(), PLAN_ID, "ACTIVE", LocalDate.parse("2026-10-12"), null,
             LocalDate.parse("2026-10-12"), UUID.randomUUID(), null, Instant.now(), Instant.now(),
-            "Weekly meals", "WEEKLY", new BigDecimal("1200.00"), "INR", null, null
+            "Weekly meals", "WEEKLY", new BigDecimal("1200.00"), "INR", null, null, 1, 0, LocalDate.parse("2026-10-14"), List.of()
         ));
 
         assertThat(node.get("planName").asText()).isEqualTo("Weekly meals");
@@ -111,6 +111,10 @@ class SubscriptionPlanImageControllerTest {
         assertThat(node.get("nextBillingDate").isNull()).isTrue();
         assertThat(node.has("planImageUrl")).isTrue();
         assertThat(node.get("planImageUrl").isNull()).isTrue();
+        assertThat(node.get("pauseDaysPerBill").asInt()).isEqualTo(1);
+        assertThat(node.get("pauseDaysLeft").asInt()).isZero();
+        assertThat(node.get("pauseAutoResumeDate").asText()).isEqualTo("2026-10-14");
+        assertThat(node.get("dayCredits").isArray()).isTrue();
     }
 
     @Test

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseChefKitchen, parseChefKitchenInput } from "./chef-kitchen-contract.ts";
+import { CHEF_AVATAR_IDS, chefAvatarGateStep, chefAvatarIdFromUrl, chefAvatarUrl, isSocialLink, kitchenPhotoSlots, parseChefKitchen, parseChefKitchenInput } from "./chef-kitchen-contract.ts";
 
 const kitchen = {
   id: "11111111-2222-4333-8444-555555555555",
@@ -63,3 +63,78 @@ for (const [field, limit] of [["kitchenName", 160], ["displayName", 160], ["city
     assert.equal(parseChefKitchenInput({ ...input, [field]: 123 }), null);
   });
 }
+
+test("lists the 18 drawn faces and finds the face a picture link points to", () => {
+  assert.equal(CHEF_AVATAR_IDS.length, 18);
+  assert.equal(CHEF_AVATAR_IDS[0], "chef-avatar-01");
+  assert.equal(CHEF_AVATAR_IDS[17], "chef-avatar-18");
+  assert.equal(chefAvatarUrl("chef-avatar-07"), "https://craves.in/media/public/chef-avatars/chef-avatar-07.jpg");
+  assert.equal(chefAvatarIdFromUrl(chefAvatarUrl("chef-avatar-07")), "chef-avatar-07");
+  assert.equal(chefAvatarIdFromUrl("https://cdn.example/x/chef-avatar-18.jpg?v=2"), "chef-avatar-18");
+  for (const other of [null, undefined, "", "https://craves.in/media/chef-avatar-19.jpg", "https://craves.in/media/kitchen.jpg", "https://craves.in/chef-avatar-01.png"]) {
+    assert.equal(chefAvatarIdFromUrl(other), null);
+  }
+});
+
+test("asks for a picture only for a loaded, unsuspended kitchen whose server says it has none", () => {
+  const loaded = parseChefKitchen({ ...kitchen, chefPhotoUrl: null })!;
+  assert.equal(chefAvatarGateStep(loaded), "ask");
+  assert.equal(chefAvatarGateStep({ ...loaded, status: "DRAFT" }), "ask");
+  assert.equal(chefAvatarGateStep({ ...loaded, status: "SUSPENDED" }), "open");
+  assert.equal(chefAvatarGateStep({ ...loaded, chefPhotoUrl: chefAvatarUrl("chef-avatar-02") }), "open");
+  assert.equal(chefAvatarGateStep(parseChefKitchen(kitchen)), "open"); // an older server leaves the field out
+  assert.equal(chefAvatarGateStep(null), "open"); // no kitchen yet
+  assert.equal(chefAvatarGateStep("failed"), "open");
+});
+
+test("keeps the chef picture only when the server sent it, and only as an https link", () => {
+  assert.equal("chefPhotoUrl" in parseChefKitchen(kitchen)!, false);
+  assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: null })?.chefPhotoUrl, null);
+  assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: chefAvatarUrl("chef-avatar-03") })?.chefPhotoUrl, chefAvatarUrl("chef-avatar-03"));
+  assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: "http://craves.in/a.jpg" })?.chefPhotoUrl, null);
+  assert.equal(parseChefKitchen({ ...kitchen, chefPhotoUrl: 42 })?.chefPhotoUrl, null);
+});
+
+test("keeps https kitchen photos only, and tells the overall photo from the cooking setup", () => {
+  const k1 = "https://craves.in/media/k1.jpg", k2 = "https://craves.in/media/k2.jpg";
+  const parsed = parseChefKitchen({ ...kitchen, kitchenPhotoUrl: k1, kitchenPhotoUrls: [k1, "http://craves.in/x.jpg", 7, k2, "https://craves.in/media/k3.jpg"] })!;
+  assert.deepEqual(parsed.kitchenPhotoUrls, [k1, k2]);
+  assert.deepEqual(kitchenPhotoSlots(parsed), [k1, k2]);
+  assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrls: [k1] }), [k1, null]);
+  assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrl: null, kitchenPhotoUrls: [] }), [null, null]);
+  // Support emptied slot 1: the overall photo is the one to add next.
+  assert.deepEqual(kitchenPhotoSlots({ ...parsed, kitchenPhotoUrl: null, kitchenPhotoUrls: [k2] }), [null, k2]);
+  assert.equal(kitchenPhotoSlots(parseChefKitchen(kitchen)!), undefined);
+  assert.equal("kitchenPhotoUrl" in parseChefKitchen(kitchen)!, false);
+});
+
+const links = { instagram: "https://instagram.com/asha", facebook: null, youtube: null, website: "https://asha.example" };
+
+test("keeps cuisines, delivery areas and links only when the server sent them", () => {
+  const plain = parseChefKitchen(kitchen)!;
+  for (const field of ["cuisines", "serviceAreas", "socialLinks"]) assert.equal(field in plain, false, field);
+  const full = parseChefKitchen({ ...kitchen, cuisines: [" Biryani "], serviceAreas: [], socialLinks: { ...links, facebook: "  ", extra: "x" } })!;
+  assert.deepEqual(full.cuisines, ["Biryani"]);
+  assert.deepEqual(full.serviceAreas, []);
+  assert.deepEqual(full.socialLinks, links);
+});
+
+test("accepts only https links with a host, of up to 200 characters", () => {
+  for (const good of ["", "  ", "https://instagram.com/asha", "HTTPS://asha.example/a?b=c", `https://a.example/${"x".repeat(200 - 18)}`]) assert.equal(isSocialLink(good), true, good);
+  for (const bad of ["http://asha.example", "instagram.com/asha", "javascript:alert(1)", "https://", `https://a.example/${"x".repeat(200 - 17)}`]) assert.equal(isSocialLink(bad), false, bad);
+});
+
+test("sends cuisines, delivery areas and links only when given, and only as Catalog accepts them", () => {
+  const draft = { ...kitchen, status: "DRAFT" };
+  const plain = parseChefKitchenInput(draft)!;
+  for (const field of ["cuisines", "serviceAreas", "socialLinks"]) assert.equal(field in plain, false, field);
+  assert.equal("cuisines" in parseChefKitchenInput({ ...draft, cuisines: null })!, false);
+  const full = parseChefKitchenInput({ ...draft, cuisines: [" Biryani ", "x".repeat(40)], serviceAreas: [], socialLinks: { ...links, facebook: "", youtube: undefined } })!;
+  assert.deepEqual(full.cuisines, ["Biryani", "x".repeat(40)]);
+  assert.deepEqual(full.serviceAreas, []);
+  assert.deepEqual(full.socialLinks, links);
+  for (const bad of [
+    { cuisines: Array.from({ length: 11 }, (_, i) => `c${i}`) }, { cuisines: ["x".repeat(41)] }, { cuisines: [" "] }, { cuisines: [7] }, { cuisines: "Biryani" },
+    { serviceAreas: ["ok", ""] }, { socialLinks: { ...links, website: "http://asha.example" } }, { socialLinks: { ...links, instagram: 5 } }, { socialLinks: "https://x.example" }, { socialLinks: [] },
+  ]) assert.equal(parseChefKitchenInput({ ...draft, ...bad }), null, JSON.stringify(bad));
+});

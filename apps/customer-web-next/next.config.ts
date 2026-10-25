@@ -35,7 +35,15 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
-        source: "/api/:path*",
+        // Vite content-hashed landing bundles; with max-age=0 the edge re-fetched them on every visit.
+        source: "/landing-v20/assets/:filename(index-[A-Za-z0-9_-]{8}\\.(?:js|css))",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
+        // Except the photo routes: their own headers cache a photo and keep errors no-store, and
+        // Next drops a route's Cache-Control when a rule here has set one.
+        source:
+          "/api/:path((?!(?:catalog/banners|chef/subscription-plans|subscriptions/plans)/[^/]+/image$).*)",
         headers: [
           { key: "Cache-Control", value: "private, no-store, max-age=0" },
           { key: "Pragma", value: "no-cache" },
@@ -51,7 +59,7 @@ const nextConfig: NextConfig = {
       {
         // Page routes only: a path with a dot is a static file (see the rule above).
         source:
-          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support)([^.]*)",
+          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support|help|refer)([^.]*)",
         headers: [
           {
             key: "Cache-Control",
@@ -67,6 +75,15 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=()" }
+        ],
+      },
+      {
+        // The static landing page frames the assistant chat; only craves.in itself may frame it.
+        source: "/assistant",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "Cache-Control", value: "private, no-store, no-cache, max-age=0, must-revalidate" },
         ],
       },
     ];

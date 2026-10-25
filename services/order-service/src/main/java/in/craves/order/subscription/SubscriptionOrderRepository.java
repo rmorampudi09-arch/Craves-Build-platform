@@ -7,6 +7,7 @@ import in.craves.order.subscription.SubscriptionOrderModels.RequestedData;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -76,11 +77,13 @@ public class SubscriptionOrderRepository {
                 pickup_landmark, pickup_area_name, pickup_city, pickup_state, pickup_postal_code,
                 pickup_latitude, pickup_longitude,
                 order_source, subscription_occurrence_id, subscription_id, scheduled_service_at,
-                financial_allocation_status, created_at, updated_at
+                financial_allocation_status, chef_acceptance_requested_at, chef_acceptance_expires_at, created_at, updated_at
             ) VALUES (
                 ?, NULL, ?, ?, ?, 'CHEF_ACCEPTANCE_PENDING', 'INR', ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                'SUBSCRIPTION', ?, ?, ?, 'PENDING_POLICY', now(), now()
+                'SUBSCRIPTION', ?, ?, ?, 'PENDING_POLICY',
+                -- The chef answers by an hour before the meal (at least 30 minutes); silence then counts as a decline.
+                now(), GREATEST(CAST(? AS timestamptz) - INTERVAL '1 hour', now() + INTERVAL '30 minutes'), now(), now()
             )
             """,
             orderId,
@@ -115,7 +118,9 @@ public class SubscriptionOrderRepository {
             pickup.longitude(),
             event.data().occurrenceId(),
             event.data().subscriptionId(),
-            event.data().scheduledServiceAt()
+            // The driver cannot bind an Instant.
+            Timestamp.from(event.data().scheduledServiceAt()),
+            Timestamp.from(event.data().scheduledServiceAt())
         );
 
         for (ValidatedItem item : items) {
@@ -150,8 +155,9 @@ public class SubscriptionOrderRepository {
             WITH candidates AS (
                 SELECT id
                   FROM order_schema.subscription_order_callback_outbox
-                 WHERE (status IN ('PENDING', 'FAILED') AND next_attempt_at <= now() AND attempt_count < ?)
-                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute'))
+                 WHERE attempt_count < ?
+                   AND ((status IN ('PENDING', 'FAILED') AND next_attempt_at <= now())
+                    OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))
                  ORDER BY created_at
                  FOR UPDATE SKIP LOCKED
                  LIMIT ?
@@ -161,7 +167,7 @@ public class SubscriptionOrderRepository {
                    attempt_count = attempt_count + 1, last_error = NULL, updated_at = now()
               FROM candidates candidate
              WHERE callback.id = candidate.id
-            RETURNING callback.id, callback.occurrence_id, callback.order_id, callback.attempt_count
+            RETURNING callback.id, callback.occurrence_id, callback.order_id, callback.attempt_count, callback.chef_declined
             """;
         return jdbcTemplate.query(
             sql,
@@ -170,9 +176,22 @@ public class SubscriptionOrderRepository {
                 rs.getObject("occurrence_id", UUID.class),
                 rs.getObject("order_id", UUID.class),
                 rs.getInt("attempt_count"),
-                lockToken
+                lockToken,
+                rs.getBoolean("chef_declined")
             ),
             maxAttempts, staleMinutes, batchSize, lockToken
+        );
+    }
+
+    /** A lease that expired on the final attempt (or a FAILED row past a lowered limit) can never be claimed again. */
+    public int deadLetterExhaustedCallbacks(int maxAttempts, int staleMinutes) {
+        return jdbcTemplate.update(
+            "UPDATE order_schema.subscription_order_callback_outbox SET status = 'DEAD_LETTER', " +
+                "last_error = COALESCE(last_error, 'Callback attempts exhausted; the last lease expired'), " +
+                "lock_token = NULL, locked_at = NULL, updated_at = now() " +
+                "WHERE attempt_count >= ? AND (status = 'FAILED' " +
+                "OR (status = 'PROCESSING' AND locked_at < now() - (? * INTERVAL '1 minute')))",
+            maxAttempts, staleMinutes
         );
     }
 
@@ -195,6 +214,22 @@ public class SubscriptionOrderRepository {
             dead ? 0L : delay,
             safe(error),
             record.id(), record.lockToken()
+        );
+    }
+
+    /**
+     * Tells Subscription Service that the chef declined (or never accepted) this meal-plan order, so the day is added to
+     * the end of the plan. Reuses the order's callback row; a delivery still in flight loses its lock and is sent as a decline.
+     */
+    public void queueChefDeclined(UUID orderId) {
+        jdbcTemplate.update(
+            "INSERT INTO order_schema.subscription_order_callback_outbox " +
+                "(id, occurrence_id, order_id, status, chef_declined, created_at, updated_at) " +
+                "SELECT ?, subscription_occurrence_id, id, 'PENDING', TRUE, now(), now() FROM order_schema.customer_order " +
+                "WHERE id = ? AND subscription_occurrence_id IS NOT NULL " +
+                "ON CONFLICT (occurrence_id) DO UPDATE SET chef_declined = TRUE, status = 'PENDING', attempt_count = 0, " +
+                "next_attempt_at = now(), lock_token = NULL, locked_at = NULL, delivered_at = NULL, last_error = NULL, updated_at = now()",
+            UUID.randomUUID(), orderId
         );
     }
 

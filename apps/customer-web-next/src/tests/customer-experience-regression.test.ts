@@ -22,15 +22,15 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   const header = source("../features/home/components/BrowseHeader.tsx");
   const skeleton = source("../shared/components/loading/CustomerPageSkeleton.tsx");
 
-  assert.match(banner, /\/home\/cravings\/craves-home-banner\.webp/);
-  assert.match(banner, /unoptimized/);
+  assert.match(banner, /fetchHomeBanners\(\)/);
+  assert.match(banner, /snap-x snap-mandatory/);
   assert.match(home, /CustomerPageSkeleton/);
   assert.match(home, /loadMoreDiscoveredDishes/);
   assert.match(home, /hasMoreDiscoveredDishes/);
-  assert.match(home, /dishImagesByKitchen=\{kitchenDishImages\}/);
+  assert.match(home, /dishes=\{nearbyDishes\}/);
   assert.match(chefs, /CustomerPageSkeleton/);
   assert.match(chefs, /discoverDishes\(/);
-  assert.match(chefs, /dishImagesByKitchen=\{dishImagesByKitchen\}/);
+  assert.match(chefs, /dishes=\{dishes\}/);
   assert.match(kitchens, /KitchenDishPreview/);
   // Kitchen photos slide on by themselves (the next one follows from the right) only with a
   // Pause photos control (WCAG 2.2.2), never for reduced motion, only while the card is on
@@ -62,7 +62,8 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(progressiveImage, /unoptimized = true/);
   assert.match(cartItemList, /priorityImage=\{index < 4\}/);
   assert.match(cartItemRow, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
-  assert.match(wishlist, /fetchPriority=\{index < 4 \? "high" : "auto"\}/);
+  assert.match(wishlist, /eager=\{index < 4\}/);
+  assert.match(source("../features/favorites/components/SavedDishCard.tsx"), /fetchPriority=\{eager \? "high" : "auto"\}/);
   assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
@@ -128,7 +129,7 @@ test("reviewed checkout never traps the customer while restoring the cart", () =
 test("access-token expiry preserves refresh login instead of bouncing customers to landing", () => {
   const authMe = source("../app/api/auth/me/route.ts");
   const authClient = source("../features/auth/api/cravesAuth.ts");
-  const sessionFetch = source("../features/auth/api/sessionFetch.ts");
+  const sessionFetch = source("../shared/lib/session-fetch.ts");
 
   assert.doesNotMatch(authMe, /clearSessionCookies/);
   assert.match(authClient, /refreshSessionForGeneration/);
@@ -209,14 +210,29 @@ test("every page loads in its own shape under its own header, and quick loads sh
     ["../features/notifications/screens/Notifications.tsx", "notifications"],
     ["../features/favorites/screens/Wishlist.tsx", "saved"],
     ["../features/checkout/screens/Checkout.tsx", "checkout"],
+    ["../features/checkout/components/customer-checkout.tsx", "checkout-details"],
+    ["../features/orders/screens/OrderHistory.tsx", "orders"],
+    ["../features/orders/components/CustomerOrderStatus.tsx", "order"],
+    ["../features/orders/screens/OrderTracking.tsx", "tracking"],
+    ["../features/addresses/screens/Addresses.tsx", "addresses"],
     ["../features/meal-plans/components/subscription-plan-browser.tsx", "plans"],
     ["../features/meal-plans/components/subscription-enrollment-form.tsx", "plan-form"],
     ["../features/meal-plans/components/subscription-details.tsx", "plan-details"],
   ] as const) {
     const contents = source(screen);
     assert.match(contents, new RegExp(`<CustomerSectionSkeleton variant="${variant}"`), screen);
-    // Never Home's shape (the default variant) on a page that is not Home.
+    // Never Home's shape (the default variant) on a page that is not Home, and no bare pulse boxes.
     assert.doesNotMatch(contents, /<CustomerPageSkeleton(?![^>]*variant=)/, screen);
+    assert.doesNotMatch(contents, /animate-pulse|Loading checkout…/, screen);
+  }
+  // Route changes to pages with their own header show that page's shape at once.
+  for (const [route, variant] of [
+    ["../app/orders/loading.tsx", "orders"],
+    ["../app/orders/[orderId]/loading.tsx", "order"],
+    ["../app/orders/[orderId]/tracking/loading.tsx", "tracking"],
+    ["../app/addresses/loading.tsx", "addresses"],
+  ] as const) {
+    assert.match(source(route), new RegExp(`<CustomerRouteSkeleton[\\s\\S]*variant="${variant}"`), route);
   }
   // Blocks fade in only after 300 ms, so fast loads and quick revisits never flash a skeleton.
   assert.match(source("../shared/components/loading/CustomerPageSkeleton.module.css"), /cravesSkeletonReveal 200ms ease-out 300ms both/);
@@ -225,8 +241,8 @@ test("every page loads in its own shape under its own header, and quick loads sh
   const boundary = source("../features/chef/components/chef-access-boundary.tsx");
   assert.match(boundary, /<ChefLoading shape=\{loadingShape\}/);
   assert.doesNotMatch(boundary, /animate-pulse/);
-  assert.match(source("../features/chef/components/chef-subscription-plan-manager.tsx"), /if \(!loaded\) return <ChefLoading shape="plans"/);
-  assert.match(source("../features/chef/components/chef-capacity-quick-setup.tsx"), /if \(message === LOADING_PLATES\) return <ChefLoading/);
+  assert.match(source("../features/chef/components/chef-subscription-plan-manager.tsx"), /<ChefLoading shape="plans"/);
+  assert.match(source("../features/chef/components/chef-daily-limits.tsx"), /if \(!data\)\s+return <ChefLoading/);
   assert.doesNotMatch(source("../features/chef-onboarding/styles/chef-onboarding.css"), /#f2d3cf/i);
 });
 

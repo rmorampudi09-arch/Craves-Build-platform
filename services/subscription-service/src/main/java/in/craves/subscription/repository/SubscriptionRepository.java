@@ -79,6 +79,49 @@ public class SubscriptionRepository {
         return jdbcTemplate.query(sql, this::mapPlan);
     }
 
+    /** Straight-line (haversine) metres between two points given as SQL expressions in degrees. */
+    private static String metresBetween(String lat1, String lng1, String lat2, String lng2) {
+        return "(12742000 * asin(sqrt(power(sin(radians(" + lat2 + " - " + lat1 + ") / 2), 2) + cos(radians(" + lat1 + ")) * cos(radians(" + lat2 + ")) * power(sin(radians(" + lng2 + " - " + lng1 + ") / 2), 2))))";
+    }
+
+    // Catalog's kitchens and User-Chef's addresses live in this same database (craves_business_db).
+
+    /** Active plans whose chef has an active kitchen within radiusMeters of the point. */
+    public List<PlanResponse> listActivePlansNear(double latitude, double longitude, int radiusMeters) {
+        return jdbcTemplate.query(
+            "SELECT p.id, p.plan_code, p.chef_identity_id, p.name, p.description, p.billing_period, " +
+                "p.amount, p.currency, p.status, p.created_at, p.updated_at " +
+                "FROM subscription_schema.subscription_plan p " +
+                "WHERE p.status = 'ACTIVE' AND p.chef_identity_id IS NOT NULL AND p.accepting_subscribers = TRUE " +
+                "AND EXISTS (SELECT 1 FROM subscription_schema.subscription_plan_schedule s " +
+                "WHERE s.plan_id = p.id AND s.status = 'ACTIVE') " +
+                "AND EXISTS (SELECT 1 FROM subscription_schema.subscription_plan_policy pp " +
+                "WHERE pp.plan_id = p.id AND pp.status = 'ACTIVE') " +
+                "AND EXISTS (SELECT 1 FROM catalog_schema.kitchen_profile kp " +
+                "CROSS JOIN (SELECT CAST(? AS double precision) AS lat, CAST(? AS double precision) AS lng) here " +
+                "WHERE kp.identity_id = p.chef_identity_id AND kp.status = 'ACTIVE' " +
+                "AND kp.latitude IS NOT NULL AND kp.longitude IS NOT NULL " +
+                "AND " + metresBetween("here.lat", "here.lng", "kp.latitude", "kp.longitude") + " <= ?) " +
+                "ORDER BY p.created_at DESC",
+            this::mapPlan,
+            latitude, longitude, radiusMeters
+        );
+    }
+
+    /** True when the customer owns this active address and it lies within radiusMeters of the chef's active kitchen. */
+    public boolean isAddressNearChef(UUID customerIdentityId, UUID addressId, UUID chefIdentityId, int radiusMeters) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM public.customer_address a " +
+                "JOIN catalog_schema.kitchen_profile kp ON kp.identity_id = ? AND kp.status = 'ACTIVE' " +
+                "WHERE a.id = ? AND a.identity_id = ? AND a.is_active " +
+                "AND a.latitude IS NOT NULL AND a.longitude IS NOT NULL " +
+                "AND kp.latitude IS NOT NULL AND kp.longitude IS NOT NULL " +
+                "AND " + metresBetween("a.latitude", "a.longitude", "kp.latitude", "kp.longitude") + " <= ?)",
+            Boolean.class,
+            chefIdentityId, addressId, customerIdentityId, radiusMeters
+        ));
+    }
+
     public List<PlanResponse> listPlansForChef(UUID chefIdentityId) {
         return jdbcTemplate.query(
             "SELECT id, plan_code, chef_identity_id, name, description, billing_period, amount, currency, status, created_at, updated_at " +
@@ -243,19 +286,22 @@ public class SubscriptionRepository {
     }
 
     @Transactional
-    public SubscriptionResponse updateSubscriptionStatus(UUID id, String newStatus, String reason, UUID actorIdentityId) {
-        SubscriptionResponse existing = findSubscriptionById(id)
-            .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));
+    public SubscriptionResponse updateSubscriptionStatus(UUID id, String expectedStatus, String newStatus, String reason, UUID actorIdentityId) {
+        // Only from the status the caller read, so two concurrent changes (e.g. two resumes) cannot both apply.
         int updated = jdbcTemplate.update(
-            "UPDATE subscription_schema.customer_subscription SET status = ?, updated_at = now() WHERE id = ?",
+            "UPDATE subscription_schema.customer_subscription SET status = ?, updated_at = now() WHERE id = ? AND status = ?",
             newStatus,
-            id
+            id,
+            expectedStatus
         );
         if (updated == 0) {
-            throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
+            if (findSubscriptionById(id).isEmpty()) {
+                throw ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found");
+            }
+            throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription status changed before this update could be applied");
         }
-        if (!existing.status().equals(newStatus)) {
-            insertHistory(id, existing.status(), newStatus, reason, actorIdentityId);
+        if (!expectedStatus.equals(newStatus)) {
+            insertHistory(id, expectedStatus, newStatus, reason, actorIdentityId);
         }
         return findSubscriptionById(id)
             .orElseThrow(() -> ApiException.notFound("SUBSCRIPTION_NOT_FOUND", "Subscription was not found"));

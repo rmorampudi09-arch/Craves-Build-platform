@@ -1,0 +1,110 @@
+# Chef referral programme in the live rmorampudi09 subscription (721906c9). Manual runs only.
+#   inspect  read-only live state
+#   test     referral-service tests on a disposable agent database (sourceSha + this branch's files)
+#   release  build the referral image from a GitHub main SHA, apply additive migrations, roll the image
+#   activate record the owner-approved chef policy and switch on the engine and its three sources
+#   verify   re-check the activated state
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    displayName: Operation
+    type: string
+    default: inspect
+    values: [inspect, test, release, activate, verify]
+  - name: sourceSha
+    displayName: GitHub commit (test base, or the main commit to release/activate)
+    type: string
+    default: main
+  - name: confirm
+    displayName: Type RELEASE_REFERRAL_ENGINE or ACTIVATE_CHEF_REFERRALS for production changes
+    type: string
+    default: NO_CHANGE
+  - name: ownerIdentity
+    displayName: Owner admin identity id approving the chef policy (activate only)
+    type: string
+    default: auto
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+  github: $(Agent.TempDirectory)/github
+
+steps:
+  - checkout: self
+  - script: |
+      set -euo pipefail
+      git clone -q --filter=blob:none https://github.com/rmorampudi09-arch/Craves-Build-platform.git "$(github)"
+      cd "$(github)"
+      SHA='${{ parameters.sourceSha }}'
+      [[ "$SHA" == main ]] && SHA=$(git rev-parse origin/main)
+      git checkout -q "$SHA"
+      git merge-base --is-ancestor HEAD origin/main || { echo "Commit is not on GitHub main" >&2; exit 1; }
+      git log -1 --format='source %H %s'
+      echo "##vso[task.setvariable variable=resolvedSha]$(git rev-parse HEAD)"
+    displayName: Clone reviewed GitHub source
+
+  - ${{ if eq(parameters.operation, 'test') }}:
+    - script: |
+        set -euo pipefail
+        cd "$(Build.SourcesDirectory)"
+        # Overlay this branch's candidate files on the GitHub base; nothing else changes.
+        for path in services scripts docs azure-pipelines-referral-chef.yml; do [[ -e "$path" ]] && cp -R "$path" "$(github)/"; done
+        cd "$(github)" && git status --short
+        docker run -d --name referral-pg -e POSTGRES_DB=referral_test -e POSTGRES_USER=referral_ci -e POSTGRES_PASSWORD=disposable-referral-ci-only -p 5432:5432 postgres:16 >/dev/null
+        for i in $(seq 1 30); do docker exec referral-pg pg_isready -U referral_ci -d referral_test >/dev/null 2>&1 && break; sleep 2; done
+        docker exec referral-pg createdb -U referral_ci referral_owner_test
+        export JAVA_HOME="$JAVA_HOME_21_X64" PATH="$JAVA_HOME_21_X64/bin:$PATH"
+        export REFERRAL_TEST_CONFIRM=YES_DISPOSABLE_REFERRAL_TEST_ONLY REFERRAL_TEST_JDBC_URL=jdbc:postgresql://localhost:5432/referral_test \
+          REFERRAL_OWNER_TEST_JDBC_URL=jdbc:postgresql://localhost:5432/referral_owner_test REFERRAL_TEST_DB_USER=referral_ci \
+          REFERRAL_TEST_DB_PASSWORD=disposable-referral-ci-only PGHOST=localhost PGUSER=referral_ci PGPASSWORD=disposable-referral-ci-only \
+          CRAVES_DISPOSABLE_TEST_DATABASE=true
+        status=0
+        mvn -B -ntp -f services/referral-service/pom.xml verify || status=$?
+        python3 - <<'PY'
+        import glob, xml.etree.ElementTree as ET
+        total = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+        for path in sorted(glob.glob('services/referral-service/target/*-reports/TEST-*.xml')):
+            s = ET.parse(path).getroot()
+            counts = {k: int(s.get(k, '0')) for k in total}
+            for k in total: total[k] += counts[k]
+            print(s.get('name').rsplit('.', 1)[-1], counts)
+            for case in s.iter('testcase'):
+                for bad in list(case.findall('failure')) + list(case.findall('error')):
+                    print('  FAIL', case.get('name'), (bad.get('message') or '')[:300])
+        print('TOTAL', total)
+        PY
+        exit $status
+      displayName: Referral-service tests on a disposable database
+
+  - ${{ if ne(parameters.operation, 'test') }}:
+    - task: AzureCLI@2
+      displayName: Chef referral ${{ parameters.operation }}
+      timeoutInMinutes: 60
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          set +x
+          OP='${{ parameters.operation }}'
+          CONFIRM='${{ parameters.confirm }}'
+          OWNER='${{ parameters.ownerIdentity }}'
+          [[ "$OWNER" == auto ]] || export REFERRAL_OWNER_IDENTITY="$OWNER"
+          export PATH="$JAVA_HOME_21_X64/bin:$PATH"
+          az extension add --name containerapp --upgrade --yes --only-show-errors >/dev/null
+          SCRIPT="$(github)/scripts/referrals/chef_activation.py"
+          [[ -f "$SCRIPT" ]] || SCRIPT="$(Build.SourcesDirectory)/scripts/referrals/chef_activation.py"
+          case "$OP" in
+            inspect|verify) python3 "$SCRIPT" "$OP" ;;
+            release)
+              [[ "$CONFIRM" == RELEASE_REFERRAL_ENGINE ]] || { echo 'Type RELEASE_REFERRAL_ENGINE to release' >&2; exit 1; }
+              python3 "$SCRIPT" release "$(github)" "$(resolvedSha)" ;;
+            activate)
+              [[ "$CONFIRM" == ACTIVATE_CHEF_REFERRALS ]] || { echo 'Type ACTIVATE_CHEF_REFERRALS to activate' >&2; exit 1; }
+              python3 "$SCRIPT" activate "$(github)" ;;
+          esac

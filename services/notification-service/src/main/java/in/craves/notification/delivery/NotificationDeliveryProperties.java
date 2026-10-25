@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 public class NotificationDeliveryProperties {
     private boolean workerEnabled = false;
     private boolean pushEnabled = false;
+    private boolean realtimePushEnabled = false;
     private boolean emailEnabled = false;
     private int batchSize = 50;
     private int maxAttempts = 8;
@@ -34,7 +35,7 @@ public class NotificationDeliveryProperties {
         if (fixedDelayMs < 1000) {
             throw new IllegalStateException("Notification delivery delay must be at least 1000 ms");
         }
-        if (pushEnabled && !StringUtils.hasText(firebaseServiceAccountJsonBase64)) {
+        if ((pushEnabled || realtimePushEnabled) && !StringUtils.hasText(firebaseServiceAccountJsonBase64)) {
             throw new IllegalStateException("Firebase service account secret is required when push delivery is enabled");
         }
         if (emailEnabled && (!StringUtils.hasText(acsEmailConnectionString)
@@ -53,6 +54,8 @@ public class NotificationDeliveryProperties {
     public void setWorkerEnabled(boolean value) { this.workerEnabled = value; }
     public boolean isPushEnabled() { return pushEnabled; }
     public void setPushEnabled(boolean value) { this.pushEnabled = value; }
+    public boolean isRealtimePushEnabled() { return realtimePushEnabled; }
+    public void setRealtimePushEnabled(boolean value) { this.realtimePushEnabled = value; }
     public boolean isEmailEnabled() { return emailEnabled; }
     public void setEmailEnabled(boolean value) { this.emailEnabled = value; }
     public int getBatchSize() { return batchSize; }

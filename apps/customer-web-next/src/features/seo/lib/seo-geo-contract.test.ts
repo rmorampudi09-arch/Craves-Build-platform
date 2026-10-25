@@ -27,6 +27,68 @@ test("seo discovery covers Hyderabad, Bangalore and major food intents", () => {
   assert.match(foodPage, /launchCities/);
 });
 
+test("every neighborhood has its own page slug that never collides with a food slug", async () => {
+  const { launchCities, foodIntents, areaSlug } = await import("./seo-craves.ts");
+  const foodSlugs = new Set(foodIntents.map((food) => food.slug));
+  for (const city of launchCities) {
+    const slugs = city.neighborhoods.map(areaSlug);
+    assert.equal(new Set(slugs).size, slugs.length, `duplicate area in ${city.slug}`);
+    for (const slug of slugs) {
+      assert.match(slug, /^[a-z0-9]+(-[a-z0-9]+)*$/);
+      assert.ok(!foodSlugs.has(slug), `area slug ${slug} collides with a food slug`);
+    }
+  }
+  assert.ok(launchCities[0].neighborhoods.includes("Kukatpally"));
+});
+
+test("FAQ schema matches the FAQ rendered on the page and nearby areas stay local", async () => {
+  const { launchCities, localFaq, nearbyAreas, cityStructuredData } = await import("./seo-craves.ts");
+  const hyderabad = launchCities[0];
+  const graph = cityStructuredData(hyderabad, undefined, "Kukatpally")["@graph"];
+  const faqNode = graph.find((node: { "@type": string }) => node["@type"] === "FAQPage") as {
+    mainEntity: { name: string }[];
+  };
+  assert.deepEqual(
+    faqNode.mainEntity.map((q) => q.name),
+    localFaq(hyderabad, undefined, "Kukatpally").map((q) => q.question),
+  );
+  assert.match(source("../components/LocalDiscoveryPage.tsx"), /localFaq\(/);
+
+  for (const area of [hyderabad.neighborhoods[0], "Kukatpally", hyderabad.neighborhoods.at(-1)!]) {
+    const nearby = nearbyAreas(hyderabad, area);
+    assert.equal(nearby.length, 6, area);
+    assert.ok(!nearby.includes(area));
+  }
+});
+
+test("static homepage ships SEO head and crawlable content", () => {
+  const landing = source("../../../../public/landing-v20/index.html");
+  assert.match(landing, /<link rel="canonical" href="https:\/\/craves\.in\/"/);
+  assert.match(landing, /property="og:image" content="https:\/\/craves\.in\/opengraph-image"/);
+  assert.match(landing, /"@id":"https:\/\/craves\.in\/#organization"/);
+  assert.match(landing, /<div id="root">.*<h1>.*href="\/hyderabad\/gachibowli"/s);
+});
+
+test("homepage JSON-LD is the same graph every Next page ships", async () => {
+  const { cravesSiteGraph } = await import("./seo-craves.ts");
+  const landing = source("../../../../public/landing-v20/index.html");
+  const json = landing.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)?.[1];
+  assert.ok(json, "homepage JSON-LD missing");
+  // Regenerate with: node --experimental-strip-types -e 'import("./src/features/seo/lib/seo-craves.ts").then(m=>console.log(JSON.stringify(m.cravesSiteGraph())))'
+  assert.deepEqual(JSON.parse(json), cravesSiteGraph());
+});
+
+test("sitemap skips sign-in-only pages and IndexNow key file matches the submit script", async () => {
+  const { readdirSync } = await import("node:fs");
+  const sitemap = source("../../../app/sitemap.ts");
+  assert.doesNotMatch(sitemap, /"\/home"|"\/discover"/);
+  const script = source("../../../../scripts/indexnow-submit.mjs");
+  const key = script.match(/const key = "([0-9a-f]{32})"/)?.[1];
+  assert.ok(key, "IndexNow key missing");
+  assert.ok(readdirSync(new URL("../../../../public/", import.meta.url)).includes(`${key}.txt`));
+  assert.equal(source(`../../../../public/${key}.txt`), key);
+});
+
 test("ai search crawler files advertise Craves facts without exposing private routes", () => {
   const robots = source("../../../../public/robots.txt");
   const llms = source("../../../../public/llms.txt");
@@ -34,9 +96,13 @@ test("ai search crawler files advertise Craves facts without exposing private ro
   assert.match(robots, /User-agent: OAI-SearchBot/);
   assert.match(robots, /User-agent: ChatGPT-User/);
   assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Disallow: \/checkout/);
+  assert.match(robots, /Disallow: \/admin/);
+  assert.doesNotMatch(robots, /Disallow: \/chefs/);
   assert.match(robots, /Sitemap: https:\/\/craves\.in\/sitemap\.xml/);
   assert.match(llms, /Hyderabad/);
   assert.match(llms, /Bangalore/);
   assert.match(llms, /homemade food marketplace/i);
   assert.match(llms, /\/hyderabad\/biryani/);
+  assert.match(llms, /\/hyderabad\/gachibowli/);
 });

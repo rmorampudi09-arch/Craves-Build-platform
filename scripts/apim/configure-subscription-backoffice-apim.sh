@@ -143,6 +143,7 @@ CHEF_PARAM='[{"name":"chefIdentityId","type":"string","required":true}]'
 APP_PARAM='[{"name":"applicationId","type":"string","required":true}]'
 APP_DOC_PARAMS='[{"name":"applicationId","type":"string","required":true},{"name":"documentId","type":"string","required":true}]'
 ADMIN_STATUS_PARAMS='[{"name":"subscriptionId","type":"string","required":true},{"name":"status","type":"string","required":true}]'
+DAY_CREDIT_PARAMS='[{"name":"subscriptionId","type":"string","required":true},{"name":"creditId","type":"string","required":true}]'
 
 SUB_API=$(ensure_api "api/v1/subscriptions" "craves-subscriptions-v1" "Craves Subscriptions API" "${SUB_BASE}/api/v1/subscriptions")
 ADMIN_PLAN_API=$(ensure_api "api/v1/admin/subscription-plans" "craves-admin-subscription-plans-v1" "Craves Admin Subscription Plans API" "${SUB_BASE}/api/v1/admin/subscription-plans")
@@ -163,6 +164,7 @@ put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "paus
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "resume-customer-subscription" "PATCH" "/{subscriptionId}/resume" "Resume customer subscription" "$UUID_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "cancel-customer-subscription" "PATCH" "/{subscriptionId}/cancel" "Cancel customer subscription" "$UUID_PARAM"
 put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "skip-subscription-meal" "POST" "/{subscriptionId}/skips" "Skip scheduled meal" "$UUID_PARAM"
+put_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$AUTH_POLICY" "choose-subscription-day-credit" "POST" "/{subscriptionId}/day-credits/{creditId}/choice" "Choose refund or extra day" "$DAY_CREDIT_PARAMS"
 
 put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "list-admin-subscription-plans" "GET" "/" "List admin subscription plans" '[]'
 put_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$AUTH_POLICY" "create-admin-subscription-plan" "POST" "/" "Create admin subscription plan" '[]'
@@ -197,7 +199,7 @@ put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "
 put_operation "$CHEF_REVIEW_API" "${USER_BASE}/api/v1/backoffice/chef-reviews" "$AUTH_POLICY" "get-chef-proof-content" "GET" "/{applicationId}/documents/{documentId}/content" "Get chef proof content" "$APP_DOC_PARAMS"
 
 for ID in list-subscription-plans get-subscription-plan get-subscription-plan-schedule get-subscription-plan-policy; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" false; done
-for ID in create-customer-subscription list-customer-subscriptions get-customer-subscription list-subscription-occurrences pause-customer-subscription resume-customer-subscription cancel-customer-subscription skip-subscription-meal; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" true; done
+for ID in create-customer-subscription list-customer-subscriptions get-customer-subscription list-subscription-occurrences pause-customer-subscription resume-customer-subscription cancel-customer-subscription skip-subscription-meal choose-subscription-day-credit; do verify_operation "$SUB_API" "${SUB_BASE}/api/v1/subscriptions" "$ID" true; done
 for ID in list-admin-subscription-plans create-admin-subscription-plan update-admin-subscription-plan-status get-admin-plan-schedule put-admin-plan-schedule activate-admin-plan-schedule get-admin-plan-policy put-admin-plan-policy activate-admin-plan-policy get-admin-plan-readiness; do verify_operation "$ADMIN_PLAN_API" "${SUB_BASE}/api/v1/admin/subscription-plans" "$ID" true; done
 for ID in list-admin-subscriptions get-admin-subscription-history update-admin-subscription-status; do verify_operation "$ADMIN_SUB_API" "${SUB_BASE}/api/v1/admin/subscriptions" "$ID" true; done
 for ID in get-chef-subscription-capacity put-chef-slot-capacity-rule put-chef-menu-capacity-rule put-chef-slot-capacity-override put-chef-menu-capacity-override; do verify_operation "$CHEF_CAPACITY_API" "${SUB_BASE}/api/v1/chef/subscription-capacity" "$ID" true; done

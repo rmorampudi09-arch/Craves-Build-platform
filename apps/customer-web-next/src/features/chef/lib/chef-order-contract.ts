@@ -1,3 +1,5 @@
+import { safeChefPhotoUrl } from "../../../shared/lib/chef-photo.ts";
+
 export type ChefOrderStatus =
   | "PAYMENT_PENDING"
   | "PAID"
@@ -36,6 +38,14 @@ export type ChefDeliveryAddress = {
   postalCode: string;
 };
 
+/** The courier the delivery provider assigned. photoUrl is https only. */
+export type ChefDeliveryPartner = {
+  name: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  pickupEtaAt: string | null;
+};
+
 export type ChefOrder = {
   id: string;
   kitchenName: string | null;
@@ -52,6 +62,15 @@ export type ChefOrder = {
   items: ChefOrderItem[];
   createdAt: string;
   updatedAt: string;
+  /** The checkout the customer paid in; null for a meal-plan order, which has none. */
+  checkoutId?: string | null;
+  /** The server's deadline to accept or decline a new order. */
+  chefAcceptanceExpiresAt?: string | null;
+  /** What the customer wrote at checkout. */
+  customerNote?: string | null;
+  deliveryPartner?: ChefDeliveryPartner | null;
+  /** Null until the chef hands the order over; absent when the server has no hand-over yet, so the button stays hidden. */
+  chefHandedOverAt?: string | null;
 };
 
 const CANONICAL_UUID =
@@ -177,6 +196,18 @@ function parseAddress(value: unknown): ChefDeliveryAddress | null {
   };
 }
 
+function parsePartner(value: unknown): ChefDeliveryPartner | null {
+  const raw = record(value);
+  return raw
+    ? {
+        name: optional(raw.name, 120),
+        phone: optional(raw.phone, 40),
+        photoUrl: safeChefPhotoUrl(raw.photoUrl),
+        pickupEtaAt: instant(raw.pickupEtaAt),
+      }
+    : null;
+}
+
 export function parseChefOrder(value: unknown): ChefOrder | null {
   const raw = record(value);
   if (!raw) return null;
@@ -225,6 +256,11 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     items: items as ChefOrderItem[],
     createdAt,
     updatedAt,
+    checkoutId: isCanonicalUuid(raw.checkoutId) ? raw.checkoutId : null,
+    chefAcceptanceExpiresAt: instant(raw.chefAcceptanceExpiresAt),
+    customerNote: optional(raw.customerNote, 500),
+    deliveryPartner: parsePartner(raw.deliveryPartner),
+    ...(raw.chefHandedOverAt === null || instant(raw.chefHandedOverAt) ? { chefHandedOverAt: instant(raw.chefHandedOverAt) } : {}),
   };
 }
 
@@ -240,8 +276,8 @@ export function parseChefOrders(value: unknown): ChefOrder[] | null {
  * APIM and older deployed BFF revisions have returned either a direct JSON
  * array, Spring Page `{ content: [...] }`, or named `{ orders: [...] }` /
  * `{ data: [...] }` envelopes. All variants still pass the same strict order
- * allow-list; unknown fields such as identity, checkout and pickup snapshots
- * are discarded.
+ * allow-list; unknown fields such as identity and pickup snapshots are
+ * discarded.
  */
 export function parseChefOrdersResponse(value: unknown): ChefOrder[] | null {
   if (Array.isArray(value)) return parseChefOrders(value);
@@ -277,4 +313,22 @@ export function formatChefOrderStatus(status: ChefOrderStatus): string {
     .split("_")
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+export type ChefOrderHistoryPage = { orders: ChefOrder[]; nextCursor: string | null; hasMore: boolean };
+
+export function isChefOrderStatus(value: unknown): value is ChefOrderStatus {
+  return typeof value === "string" && STATUSES.has(value as ChefOrderStatus);
+}
+
+const PAGE_KEYS = new Set(["orders", "nextCursor", "hasMore"]);
+
+/** order-service OrderPageResponse from GET /api/v1/chef/orders/page: only these keys, unique orders, and hasMore needs a cursor. */
+export function parseChefOrderHistoryPage(value: unknown): ChefOrderHistoryPage | null {
+  const raw = record(value);
+  if (!raw || Object.keys(raw).some((key) => !PAGE_KEYS.has(key)) || typeof raw.hasMore !== "boolean") return null;
+  const orders = parseChefOrders(raw.orders);
+  const nextCursor = raw.nextCursor == null ? null : typeof raw.nextCursor === "string" && raw.nextCursor.length >= 1 && raw.nextCursor.length <= 512 ? raw.nextCursor : undefined;
+  if (!orders || orders.length > 100 || new Set(orders.map((order) => order.id)).size !== orders.length || nextCursor === undefined || (raw.hasMore && !nextCursor)) return null;
+  return { orders, nextCursor, hasMore: raw.hasMore };
 }

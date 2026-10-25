@@ -1,4 +1,5 @@
 import type {ChefOperationalOrderStatus} from '../../chefShell/api/chefOperationalApi';
+import {shortOrderNumber} from '../../../utils/orderNumber';
 
 export type ChefDashboardSalesRange = '7D' | '30D' | '90D';
 
@@ -55,7 +56,6 @@ export function formatChefDashboardOrderStatus(
 }
 
 export function shortChefDashboardOrderReference(orderId: string): string {
-  const compact = orderId.replace(/-/g, '');
-  const suffix = compact.slice(-6).toUpperCase();
-  return suffix ? `#${suffix}` : '#ORDER';
+  const number = shortOrderNumber(orderId);
+  return number ? `#${number}` : '#ORDER';
 }

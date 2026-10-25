@@ -9,23 +9,21 @@ schedules:
         - main
     always: true
 
+# The rebuilt production environment (Azure subscription 1, "kmqgfy"), as every pipeline that targets it.
 variables:
-  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
+  subscriptionId: 721906c9-4a72-4606-830b-d3e7ace093ff
   resourceGroup: rg-craves-prodlow-centralindia
-  containerAppEnvironmentName: cae-craves-prodlow-l3ing6
+  containerAppEnvironmentName: cae-craves-prodlow-kmqgfy
   customerWebAppName: ca-craves-web-prodlow
-  customerWebAppFqdn: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
-  customerWebStaticIp: 4.187.245.188
-  customerWebCertificateName: craves-web-tls
-  keyVaultName: kvcravesprodlowl3ing6
+  customerWebAppFqdn: ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
+  customerWebStaticIp: 20.235.225.35
   customerApexHostname: craves.in
   customerWwwHostname: www.craves.in
-  customerDomainVerificationId: 8CBF8092F604318F13145F6181237B80D12FD1336F3F37C199AA8D7099FF5DF1
   frontDoorProfileName: afd-craves-prodlow
-  frontDoorEndpointHostname: craves-prodlow-4f897b61-d4e6bvhscdbzbgbv.z01.azurefd.net
-  apimHostname: api.craves.in
-  apimExpectedCname: apim-craves-prodlow-kmqgfy.azure-api.net
-  rollbackWwwHostname: lemon-bay-06f924610.7.azurestaticapps.net
+  frontDoorEndpointHostname: craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net
+  apiHostname: api.craves.in
+  adminHostname: admin.craves.in
   certMinRemainingDays: 30
   integrationAppName: ca-craves-integration-service-pr
 
@@ -69,16 +67,12 @@ steps:
         export CUSTOMER_WEB_APP_NAME='$(customerWebAppName)'
         export CUSTOMER_WEB_APP_FQDN='$(customerWebAppFqdn)'
         export CUSTOMER_WEB_STATIC_IP='$(customerWebStaticIp)'
-        export CUSTOMER_WEB_CERTIFICATE_NAME='$(customerWebCertificateName)'
-        export KEY_VAULT_NAME='$(keyVaultName)'
         export CUSTOMER_APEX_HOSTNAME='$(customerApexHostname)'
         export CUSTOMER_WWW_HOSTNAME='$(customerWwwHostname)'
-        export CUSTOMER_DOMAIN_VERIFICATION_ID='$(customerDomainVerificationId)'
         export FRONT_DOOR_PROFILE_NAME='$(frontDoorProfileName)'
         export FRONT_DOOR_ENDPOINT_HOSTNAME='$(frontDoorEndpointHostname)'
-        export APIM_HOSTNAME='$(apimHostname)'
-        export APIM_EXPECTED_CNAME='$(apimExpectedCname)'
-        export ROLLBACK_WWW_HOSTNAME='$(rollbackWwwHostname)'
+        export API_HOSTNAME='$(apiHostname)'
+        export ADMIN_HOSTNAME='$(adminHostname)'
         export CERT_MIN_REMAINING_DAYS='$(certMinRemainingDays)'
 
         bash infra/operations/production-stabilization/check-production.sh

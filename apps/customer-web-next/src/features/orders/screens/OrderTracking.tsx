@@ -17,9 +17,14 @@ import {
 } from "@/features/orders/lib/delivery-status";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { trackingPresentation } from "@/features/orders/lib/tracking-presentation";
+import { hasLeftKitchen, homePin, orderJourney } from "@/features/orders/lib/order-journey";
+import { LockedMapNote, OrderMap } from "@/features/orders/components/OrderMap";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { CurrentStatusCard } from "@/features/orders/components/CurrentStatusCard";
+import { DeliveryCodeCard } from "@/features/orders/components/DeliveryCodeCard";
 import { OrderTimeline } from "@/features/orders/components/OrderTimeline";
 import { DeliveryAddressCard } from "@/features/orders/components/DeliveryAddressCard";
 import { TrackingOrderSummaryCard } from "@/features/orders/components/TrackingOrderSummaryCard";
@@ -70,14 +75,8 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
       setError("");
       try {
         const [orderResponse, deliveryResponse] = await Promise.all([
-          fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
-          fetch(`/api/orders/${encodeURIComponent(orderId)}/delivery-status`, {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
+          sessionFetch(`/api/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" }),
+          sessionFetch(`/api/orders/${encodeURIComponent(orderId)}/delivery-status`, { cache: "no-store" }),
         ]);
 
         const orderRaw = await orderResponse.json().catch(() => null);
@@ -163,6 +162,9 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
   if (!id || !UUID.test(id)) return null;
 
   const currentPresentation = trackingPresentation(order?.status ?? null, delivery?.status ?? null);
+  const pickedUp = order
+    ? orderJourney(order, delivery?.status ?? null).kind === "DELIVERY"
+    : hasLeftKitchen(delivery?.status ?? null);
   const address = order?.deliveryAddress
     ? [
         order.deliveryAddress.addressLine1,
@@ -198,29 +200,16 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
   return (
     <div className="min-h-screen bg-white pb-16 text-[#1A1A1A]">
       <TrackingHeader
-        // The header only displays this: pass the short number customers see everywhere.
-        orderId={shortOrderNumber(id)}
-        onBack={() => navigate({ to: "/orders" })}
+        orderNumber={shortOrderNumber(id)}
+        onBack={() => navigate({ to: `/orders/${id}` })}
+        backLabel="Back to order details"
         onRefresh={() => void refresh(id, true)}
         refreshing={busy}
       />
 
       <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
         {loading ? (
-          <div
-            className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
-            aria-hidden="true"
-          >
-            <div className="space-y-5">
-              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            </div>
-            <div className="space-y-5">
-              <div className="h-72 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-              <div className="h-40 animate-pulse rounded-2xl bg-[#F1F3F5]" />
-            </div>
-          </div>
+          <CustomerSectionSkeleton variant="tracking" label="Loading order tracking" />
         ) : !order ? (
           <section className="rounded-2xl border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-12">
             <AlertTriangle
@@ -252,12 +241,29 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
           </section>
         ) : (
           <div className="space-y-5">
+            <OrderMap
+              home={homePin(order)}
+              courier={delivery?.courierLocation ?? null}
+              blurred={!pickedUp}
+              interactive
+              label={pickedUp ? "Delivery map" : "Map, hidden until your order is picked up"}
+              className="h-[46vh] min-h-64 max-h-[32rem] rounded-2xl"
+            >
+              {pickedUp ? null : (
+                <div className="pointer-events-none absolute inset-0 grid place-items-center p-4">
+                  <LockedMapNote />
+                </div>
+              )}
+            </OrderMap>
+
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
               <div className="space-y-5">
                 <CurrentStatusCard
                   label={currentPresentation.label}
                   desc={currentPresentation.description}
                 />
+
+                {delivery?.deliveryCode && <DeliveryCodeCard code={delivery.deliveryCode} />}
 
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -289,7 +295,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
                     rel="noopener noreferrer"
                     className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold !text-[#C4200F] shadow-[0_3px_10px_rgba(0,0,0,0.05)] transition-colors hover:bg-[#F1F3F5]"
                   >
-                    Track with the delivery partner
+                    Open partner tracking
                     <ExternalLink className="h-4 w-4" aria-hidden="true" />
                   </a>
                 )}

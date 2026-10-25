@@ -25,6 +25,8 @@ public class InternalAdminRoleRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    // Nested reads in the row mapper share this transaction's connection instead of taking a second one from the pool.
+    @Transactional(readOnly = true)
     public List<InternalAdminUserResponse> list(int limit) {
         List<Object> arguments = new ArrayList<>(MANAGED_ROLES);
         arguments.add(limit);
@@ -49,6 +51,7 @@ public class InternalAdminRoleRepository {
         );
     }
 
+    @Transactional(readOnly = true)
     public InternalAdminUserResponse find(UUID identityId) {
         return jdbcTemplate.query(
             """

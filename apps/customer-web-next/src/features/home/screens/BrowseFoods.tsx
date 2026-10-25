@@ -31,7 +31,6 @@ import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
 import { ALL_DISHES_CATEGORY } from "@/features/home/lib/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
-  formatDiscoveryRadius,
 } from "@/features/home/lib/catalog-discovery-policy";
 import { type NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import {
@@ -49,20 +48,21 @@ import {
   sortDishes,
   type DishView,
 } from "@/features/home/lib/dish-filters";
+import {
+  deliveryPlaceLabel,
+  useCartAddressAvailability,
+} from "@/features/home/lib/cart-address-availability";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 import {
   cartCount,
-  clearCart,
   getCart,
   loadCart,
-  removeFromCart,
   subscribeCart,
   type CartItem,
 } from "@/features/cart/api/cravesCart";
 import {
   allDishes,
   discoverDishes,
-  getDiscoveryRadiusMeters,
   hasMoreDiscoveredDishes,
   loadKitchenMenu,
   loadMoreDiscoveredDishes,
@@ -71,7 +71,6 @@ import {
 import {
   allKitchens,
   discoverKitchens,
-  getKitchenDiscoveryRadiusMeters,
 } from "@/features/chefs/api/kitchens";
 import {
   clearSession,
@@ -149,7 +148,8 @@ export const routeMeta = {
   }),
 };
 
-const CART_AVAILABILITY_DISMISSED_KEY = "craves-cart-availability-dismissed";
+/** The cart check keeps the menus it reads in Home's dish cache, like any kitchen menu Home opens. */
+const readKitchenMenu = (kitchenId: string) => loadKitchenMenu(kitchenId);
 /** Where dish photos were served from last time, so the next visit can connect early. */
 const MEDIA_ORIGIN_KEY = "craves.media-origin";
 
@@ -240,17 +240,6 @@ function BrowseFoodsPage() {
   }, []);
   const [cartItemCount, setCartItemCount] = useState(() => (hydrating ? 0 : cartCount()));
   const [cartItems, setCartItems] = useState<CartItem[]>(() => (hydrating ? [] : getCart()));
-  const [unavailableCartItems, setUnavailableCartItems] = useState<CartItem[]>([]);
-  // Remembered for the browser session so the dialog doesn't reopen on every visit to /home.
-  const [dismissedCartAvailabilityKey, setDismissedCartAvailabilityKey] = useState<string | null>(() => {
-    try {
-      return typeof window === "undefined" ? null : window.sessionStorage.getItem(CART_AVAILABILITY_DISMISSED_KEY);
-    } catch {
-      return null;
-    }
-  });
-  const [cartRepairBusy, setCartRepairBusy] = useState(false);
-  const [cartRepairError, setCartRepairError] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
   const [defaultAddressResolved, setDefaultAddressResolved] = useState(() =>
     Boolean(initialCache.address),
@@ -266,15 +255,6 @@ function BrowseFoodsPage() {
       ? "Fresh homemade food available near your default delivery address."
       : "Loading your default delivery address…",
   );
-  const [radiusLabel, setRadiusLabel] = useState<string | null>(() => {
-    if (initialCache.kitchens.length > 0) {
-      return formatDiscoveryRadius(getKitchenDiscoveryRadiusMeters());
-    }
-    if (initialCache.dishes.length > 0) {
-      return formatDiscoveryRadius(getDiscoveryRadiusMeters());
-    }
-    return null;
-  });
   // After a full page load has hydrated the empty Home, paint the cached Home before the first
   // frame, so a reload shows your address, cart and dishes at once (the network then refreshes).
   const startedEmpty = useRef(hydrating);
@@ -295,7 +275,6 @@ function BrowseFoodsPage() {
     setKitchenDiscoveryVerified(true);
     setDiscoveryState("ready");
     setCatalogMessage("Fresh homemade food available near your default delivery address.");
-    setRadiusLabel(formatDiscoveryRadius(cachedKitchens.length > 0 ? getKitchenDiscoveryRadiusMeters() : getDiscoveryRadiusMeters()));
   }, []);
 
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -325,7 +304,6 @@ function BrowseFoodsPage() {
       setKitchens([]);
       setKitchenDiscoveryVerified(false);
       setNearbyDishes([]);
-      setRadiusLabel(null);
       setDiscoveryState("address-required");
       setCatalogMessage(
         "Choose a default delivery address so Craves can show nearby home kitchens.",
@@ -339,7 +317,6 @@ function BrowseFoodsPage() {
       setKitchens([]);
       setKitchenDiscoveryVerified(false);
       setNearbyDishes([]);
-      setRadiusLabel(null);
       setDiscoveryState("loading");
       setCatalogMessage("Loading food near your default delivery address…");
     }
@@ -373,14 +350,6 @@ function BrowseFoodsPage() {
       setNearbyDishes([]);
     }
 
-    if (kitchenResult.status === "fulfilled") {
-      setRadiusLabel(formatDiscoveryRadius(kitchenResult.value.radiusMeters));
-    } else if (dishResult.status === "fulfilled") {
-      setRadiusLabel(formatDiscoveryRadius(getDiscoveryRadiusMeters()));
-    } else if (!preserveExisting) {
-      setRadiusLabel(null);
-    }
-
     if (kitchenResult.status === "rejected" && dishResult.status === "rejected") {
       if (preserveExisting) {
         setDiscoveryState("ready");
@@ -397,7 +366,7 @@ function BrowseFoodsPage() {
 
     setDiscoveryState("ready");
     if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
-      setCatalogMessage("No active home kitchens or dishes are available within 50 km of your default address.");
+      setCatalogMessage("No active home kitchens or dishes are available within 10 km of your default address.");
     } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
       setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
     } else {
@@ -684,7 +653,6 @@ function BrowseFoodsPage() {
         setKitchens([]);
         setKitchenDiscoveryVerified(false);
         setNearbyDishes([]);
-        setRadiusLabel(null);
         setDiscoveryState("error");
         setDefaultAddressResolved(true);
         setCatalogMessage(
@@ -710,76 +678,23 @@ function BrowseFoodsPage() {
     };
   }, [navigate, refreshDiscovery, sessionRetryNonce]);
 
-  useEffect(() => {
-    let active = true;
-
-    void (async () => {
-      setCartRepairError(null);
-      if (
-        !defaultAddressResolved ||
-        discoveryState !== "ready" ||
-        !kitchenDiscoveryVerified ||
-        cartItems.length === 0 ||
-        typeof address?.lat !== "number" ||
-        typeof address.lng !== "number"
-      ) {
-        setUnavailableCartItems([]);
-        return;
-      }
-
-      const nearbyKitchenIds = new Set(kitchens.map((kitchen) => kitchen.id));
-      const outOfRangeItems = cartItems.filter(
-        (item) => !nearbyKitchenIds.has(item.kitchenId),
-      );
-      if (outOfRangeItems.length > 0) {
-        setUnavailableCartItems(outOfRangeItems);
-        return;
-      }
-
-      const nearbyDishIds = new Set(nearbyDishes.map((dish) => dish.id));
-      const unresolvedItems = cartItems.filter(
-        (item) => !nearbyDishIds.has(item.menuItemId),
-      );
-      if (unresolvedItems.length === 0) {
-        setUnavailableCartItems([]);
-        return;
-      }
-
-      const kitchenIds = Array.from(new Set(unresolvedItems.map((item) => item.kitchenId)));
-      const menuResults = await Promise.all(
-        kitchenIds.map(async (kitchenId) => {
-          try {
-            const menu = await loadKitchenMenu(kitchenId);
-            return [kitchenId, new Set(menu.map((dish) => dish.id))] as const;
-          } catch {
-            return [kitchenId, null] as const;
-          }
-        }),
-      );
-      if (!active) return;
-
-      const menuIdsByKitchen = new Map(menuResults);
-      setUnavailableCartItems(
-        unresolvedItems.filter((item) => {
-          const menuIds = menuIdsByKitchen.get(item.kitchenId);
-          return menuIds instanceof Set && !menuIds.has(item.menuItemId);
-        }),
-      );
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [
-    address?.lat,
-    address?.lng,
-    cartItems,
-    defaultAddressResolved,
-    discoveryState,
-    kitchenDiscoveryVerified,
-    kitchens,
-    nearbyDishes,
-  ]);
+  const nearbyKitchenIds = useMemo(() => new Set(kitchens.map((kitchen) => kitchen.id)), [kitchens]);
+  const nearbyDishIds = useMemo(() => new Set(nearbyDishes.map((dish) => dish.id)), [nearbyDishes]);
+  const {
+    unavailableItems: unavailableCartItems,
+    open: cartAvailabilityOpen,
+    busy: cartRepairBusy,
+    error: cartRepairError,
+    resolve: resolveUnavailableCartItems,
+    dismiss: dismissCartAvailability,
+  } = useCartAddressAvailability({
+    items: cartItems,
+    // Checked against what Home discovered for this address, once discovery has answered.
+    address: defaultAddressResolved && discoveryState === "ready" && kitchenDiscoveryVerified ? address : null,
+    nearbyKitchenIds,
+    nearbyDishIds,
+    readMenu: readKitchenMenu,
+  });
 
   const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
     const result: Partial<Record<CravingCategory, string>> = {};
@@ -813,18 +728,6 @@ function BrowseFoodsPage() {
     } catch {
       // Storage blocked: nothing to remember.
     }
-  }, [nearbyDishes]);
-
-  const kitchenDishImages = useMemo<Record<string, string[]>>(() => {
-    const grouped: Record<string, string[]> = {};
-    for (const dish of nearbyDishes) {
-      if (!dish.kitchenId || dish.imageIsPlaceholder || !dish.img) continue;
-      const current = grouped[dish.kitchenId] ?? [];
-      if (!current.includes(dish.img) && current.length < 5) {
-        grouped[dish.kitchenId] = [...current, dish.img];
-      }
-    }
-    return grouped;
   }, [nearbyDishes]);
 
   const filteredKitchens = kitchens;
@@ -866,15 +769,7 @@ function BrowseFoodsPage() {
     revealDishes();
   }, [revealDishes]);
 
-  const locationLabel = address
-    ? Array.from(
-        new Set(
-          [address.hno, address.street, address.mandal, address.city]
-            .map((part) => part?.trim())
-            .filter((part): part is string => Boolean(part)),
-        ),
-      ).join(", ")
-    : "Choose delivery location";
+  const locationLabel = address ? deliveryPlaceLabel(address) : "Choose delivery location";
   const rawLocationType = address?.label?.trim();
   const normalizedLocationType = rawLocationType?.toUpperCase();
   const locationTypeLabel =
@@ -893,42 +788,6 @@ function BrowseFoodsPage() {
         : nearbyDishes.filter((dish) => matchesFoodPreference(dish, foodPreference)),
     [foodPreference, nearbyDishes],
   );
-
-  const cartAvailabilityKey = unavailableCartItems.length > 0
-    ? `${address?.id ?? `${address?.lat ?? ""}:${address?.lng ?? ""}`}|${unavailableCartItems
-        .map((item) => item.id)
-        .sort()
-        .join(",")}`
-    : null;
-
-  const cartAvailabilityOpen = Boolean(
-    cartAvailabilityKey && cartAvailabilityKey !== dismissedCartAvailabilityKey,
-  );
-
-  const resolveUnavailableCartItems = useCallback(async () => {
-    if (unavailableCartItems.length === 0 || cartRepairBusy) return;
-    setCartRepairBusy(true);
-    setCartRepairError(null);
-    try {
-      if (unavailableCartItems.length === cartItems.length) {
-        await clearCart();
-      } else {
-        for (const item of unavailableCartItems) {
-          await removeFromCart(item.id);
-        }
-      }
-      setUnavailableCartItems([]);
-      setDismissedCartAvailabilityKey(null);
-    } catch (error) {
-      setCartRepairError(
-        error instanceof Error
-          ? error.message
-          : "Your cart could not be updated. Please try again.",
-      );
-    } finally {
-      setCartRepairBusy(false);
-    }
-  }, [cartItems.length, cartRepairBusy, unavailableCartItems]);
 
   const openAddressManager = useCallback(() => {
     rememberReturnRoute("/addresses", "/home");
@@ -1010,25 +869,10 @@ function BrowseFoodsPage() {
           error={cartRepairError}
           onResolve={() => void resolveUnavailableCartItems()}
           onChooseAddress={openAddressManager}
-          onClose={() => {
-            if (cartAvailabilityKey) {
-              setDismissedCartAvailabilityKey(cartAvailabilityKey);
-              try {
-                window.sessionStorage.setItem(CART_AVAILABILITY_DISMISSED_KEY, cartAvailabilityKey);
-              } catch {
-                // Private mode: the dismissal still holds for this page view.
-              }
-            }
-          }}
+          onClose={dismissCartAvailability}
         />
 
-        <WelcomeBanner
-          dishCount={nearbyDishes.length}
-          radiusLabel={radiusLabel}
-          defaultAddressLabel={locationLabel}
-          hasDefaultAddress={Boolean(address?.lat != null && address?.lng != null)}
-          onManageDefaultAddress={openAddressManager}
-        />
+        <WelcomeBanner onOpenSearch={openSearchOnTap} />
 
         <HomeCategoryRail
           selected={homeCategory}
@@ -1052,7 +896,7 @@ function BrowseFoodsPage() {
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
-          dishImagesByKitchen={kitchenDishImages}
+          dishes={nearbyDishes}
           limit={6}
         />
 

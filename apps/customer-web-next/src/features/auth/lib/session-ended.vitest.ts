@@ -19,6 +19,7 @@ afterAll(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  localStorage.clear();
 });
 
 describe("an ended sign-in", () => {
@@ -29,6 +30,18 @@ describe("an ended sign-in", () => {
       String(input) === "/api/auth/refresh" ? Response.json({ code: "REFRESH_REJECTED" }, { status: 401 }) : Response.json({}, { status: 401 })));
     expect((await sessionFetch("/api/customer/profile")).status).toBe(401);
     expect(ended).toHaveBeenCalledTimes(1);
+    window.removeEventListener(SESSION_ENDED_EVENT, ended);
+  });
+
+  it("is not announced when another tab's renewal superseded this one", async () => {
+    const ended = vi.fn();
+    window.addEventListener(SESSION_ENDED_EVENT, ended);
+    const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+      String(input) === "/api/auth/refresh" ? Response.json({ code: "REFRESH_SUPERSEDED" }, { status: 409 }) : Response.json({}, { status: 401 }));
+    vi.stubGlobal("fetch", fetcher);
+    expect((await sessionFetch("/api/customer/profile")).status).toBe(401);
+    expect(fetcher.mock.calls.filter(([url]) => String(url) === "/api/auth/refresh")).toHaveLength(2);
+    expect(ended).not.toHaveBeenCalled();
     window.removeEventListener(SESSION_ENDED_EVENT, ended);
   });
 
@@ -95,5 +108,30 @@ describe("one refresh at a time", () => {
     await sync;
     expect((await orders).status).toBe(200);
     expect(refreshes).toBe(1);
+  });
+
+  it("takes turns with other tabs and skips its own refresh when one renewed the sign-in meanwhile", async () => {
+    const identity = { id: "32345678-1234-4123-8123-123456789012", phoneNumber: "+919876543212", displayName: "Lata", email: null, emailVerified: false, status: "ACTIVE", roles: ["CHEF"] };
+    setSessionIdentity({ ...identity, roles: [] });
+    const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+      String(input) === "/api/auth/me" ? Response.json(identity) : Response.json({ identity }));
+    vi.stubGlobal("fetch", fetcher);
+    const request = vi.fn(async (_name: string, work: () => Promise<unknown>) => {
+      // Another tab finishes renewing the shared cookies while this one waits for the lock. A strictly later time:
+      // in the same millisecond as this tab's own last refresh (an earlier test's), it would read as this tab's own.
+      localStorage.setItem("craves.session.refreshed-at", String(Date.now() + 1));
+      return work();
+    });
+    vi.stubGlobal("navigator", { ...navigator, locks: { request } });
+    expect((await synchronizeSessionRoles())?.roles).toEqual(["CHEF"]);
+    expect(request).toHaveBeenCalledWith("craves-session-refresh", expect.any(Function));
+    expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual(["/api/auth/me"]);
+
+    // Nobody renewed meanwhile: this tab refreshes and records it, so the others can skip theirs.
+    localStorage.clear();
+    request.mockImplementation(async (_name, work) => work());
+    await synchronizeSessionRoles();
+    expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual(["/api/auth/me", "/api/auth/refresh"]);
+    expect(Number(localStorage.getItem("craves.session.refreshed-at"))).toBeGreaterThan(0);
   });
 });

@@ -2,8 +2,16 @@
 
 import type { ReactNode } from "react";
 import { AlertCircle, Check, CheckCircle2, Info, Lock } from "lucide-react";
+import { messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 
 /** Small presentational primitives shared by every Chef onboarding screen. */
+
+const TEXT = messages({
+  en: { complete: "Complete", optional: " (optional)", verified: "Verified" },
+  te: { complete: "పూర్తయింది", optional: " (కావాలంటే)", verified: "ధృవీకరించబడింది" },
+  kn: { complete: "ಪೂರ್ಣಗೊಂಡಿದೆ", optional: " (ಬೇಕಿದ್ದರೆ)", verified: "ಪರಿಶೀಲಿಸಲಾಗಿದೆ" },
+});
 
 export function Card({
   icon,
@@ -24,6 +32,7 @@ export function Card({
   id?: string;
   labelledBy?: string;
 }) {
+  const text = useText(TEXT);
   const headingId = labelledBy ?? (id && title ? `${id}-title` : undefined);
   return (
     <section
@@ -40,7 +49,7 @@ export function Card({
             {subtitle ? <p>{subtitle}</p> : null}
           </div>
           {done ? (
-            <span className="cob-done-tick" role="img" aria-label="Complete">
+            <span className="cob-done-tick" role="img" aria-label={text.complete}>
               <Check size={15} strokeWidth={3} aria-hidden="true" />
             </span>
           ) : null}
@@ -77,12 +86,13 @@ export function FieldShell({
   children: ReactNode;
   after?: ReactNode;
 }) {
+  const text = useText(TEXT);
   return (
     <div className="cob-field">
       {/* Required fields carry a red * (drawn by CSS, so it never joins the field's name). */}
       <label className="cob-label" htmlFor={id} data-required={optional ? undefined : ""}>
         {label}
-        {optional ? <span className="cob-optional"> (optional)</span> : null}
+        {optional ? <span className="cob-optional">{text.optional}</span> : null}
       </label>
       {children}
       {error ? (
@@ -101,11 +111,12 @@ export function describedBy(id: string, error?: string | null, helper?: ReactNod
   return error ? `${id}-error` : helper ? `${id}-helper` : undefined;
 }
 
-export function VerifiedBadge({ label = "Verified" }: { label?: string }) {
+export function VerifiedBadge({ label }: { label?: string }) {
+  const text = useText(TEXT);
   return (
     <span className="cob-verified">
       <CheckCircle2 size={15} aria-hidden="true" />
-      {label}
+      {label ?? text.verified}
     </span>
   );
 }

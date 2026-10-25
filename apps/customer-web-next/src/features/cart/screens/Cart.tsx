@@ -4,7 +4,12 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clock3, Plus, RefreshCw, Store, Undo2 } from "lucide-react";
-import { loadSession } from "@/features/auth/api/cravesAuth";
+import { loadSelectedAddress, loadSession, type CravesAddress } from "@/features/auth/api/cravesAuth";
+import { CartAddressAvailabilityBanner } from "@/features/home/components/CartAddressAvailabilityBanner";
+import {
+  deliveryPlaceLabel,
+  useCartAddressAvailability,
+} from "@/features/home/lib/cart-address-availability";
 import {
   addToCart,
   cartCurrency,
@@ -71,6 +76,9 @@ function CartPage() {
   const [instructions, setInstructions] = useState("");
   const [leadMinutes, setLeadMinutes] = useState<number | null>(null);
   const [undoItem, setUndoItem] = useState<CartItem | null>(null);
+  // The default delivery address, the one Home browses and checkout starts with.
+  const [address, setAddress] = useState<CravesAddress | null>(null);
+  const availability = useCartAddressAvailability({ items, address });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -113,6 +121,12 @@ function CartPage() {
         return;
       }
       void refresh();
+      // Without the address the cart just isn't checked: a network problem never blocks it.
+      void loadSelectedAddress()
+        .then((selected) => {
+          if (active) setAddress(selected);
+        })
+        .catch(() => undefined);
     });
     const unsubscribe = subscribeCart(() => setItems(getCart()));
     return () => {
@@ -264,6 +278,18 @@ function CartPage() {
   return (
     <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">
       <CartHeader onBack={() => navigate({ to: "/home" })} />
+      <CartAddressAvailabilityBanner
+        className="mx-auto max-w-2xl px-4 md:px-6"
+        open={availability.open}
+        addressLabel={address ? deliveryPlaceLabel(address) : ""}
+        unavailableItems={availability.unavailableItems}
+        totalCartItems={items.length}
+        busy={availability.busy}
+        error={availability.error}
+        onResolve={() => void availability.resolve()}
+        onChooseAddress={() => navigate({ to: "/addresses" })}
+        onClose={availability.dismiss}
+      />
       <main className="mx-auto max-w-2xl px-4 pb-8 pt-5 md:px-6 md:pt-7">
         {message && items.length === 0 ? (
           <div className="rounded-[8px] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_12px_rgba(0,0,0,0.06)]">

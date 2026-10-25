@@ -17,6 +17,7 @@ import in.craves.userchef.web.SupportCaseDtos.UpdateSupportCaseStatusRequest;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +37,7 @@ public class SupportCaseService {
     private static final int MAX_SUBJECT_LENGTH = 160;
     private static final int MAX_MESSAGE_LENGTH = 5000;
     private static final int MAX_STATUS_NOTE_LENGTH = 500;
+    private static final String GUEST = "GUEST";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -84,6 +86,32 @@ public class SupportCaseService {
         insertMessage(caseId, user.identityId(), requesterRole, message, false);
         insertStatusHistory(caseId, null, SupportCaseStatus.OPEN, user.identityId(), requesterRole, null);
         return getMine(user, caseId);
+    }
+
+    /** A callback request from a website visitor who is not signed in; their contact details are in {@code message}. */
+    @Transactional
+    public SupportCaseSummaryResponse createGuest(String subject, String message) {
+        subject = requireText(subject, "SUBJECT_REQUIRED", "Subject is required");
+        message = requireText(message, "MESSAGE_REQUIRED", "Message is required");
+        validateLength(subject, MAX_SUBJECT_LENGTH, "SUBJECT_TOO_LONG", "Subject must be 160 characters or fewer");
+        validateLength(message, MAX_MESSAGE_LENGTH, "MESSAGE_TOO_LONG", "Message must be 5000 characters or fewer");
+        UUID caseId = UUID.randomUUID();
+        jdbc.update(
+            """
+                INSERT INTO support_case(
+                    id, case_number, requester_identity_id, requester_role,
+                    subject, status, last_requester_message_at, created_at, updated_at
+                )
+                VALUES (:id, :caseNumber, NULL, 'GUEST', :subject, 'OPEN', now(), now(), now())
+                """,
+            new MapSqlParameterSource()
+                .addValue("id", caseId)
+                .addValue("caseNumber", caseNumber(caseId))
+                .addValue("subject", subject)
+        );
+        insertMessage(caseId, null, GUEST, message, false);
+        insertStatusHistory(caseId, null, SupportCaseStatus.OPEN, null, GUEST, null);
+        return requireCase(caseId);
     }
 
     public SupportCasePageResponse listMine(
@@ -396,7 +424,7 @@ public class SupportCaseService {
             new MapSqlParameterSource()
                 .addValue("id", messageId)
                 .addValue("caseId", caseId)
-                .addValue("senderIdentityId", senderIdentityId)
+                .addValue("senderIdentityId", senderIdentityId, Types.OTHER) // NULL for guests
                 .addValue("senderRole", senderRole)
                 .addValue("body", message)
                 .addValue("internalNote", internalNote)
@@ -425,7 +453,7 @@ public class SupportCaseService {
                 .addValue("caseId", caseId)
                 .addValue("oldStatus", oldStatus == null ? null : oldStatus.name())
                 .addValue("newStatus", newStatus.name())
-                .addValue("actorIdentityId", actorIdentityId)
+                .addValue("actorIdentityId", actorIdentityId, Types.OTHER)
                 .addValue("actorRole", actorRole)
                 .addValue("note", note)
         );
@@ -441,6 +469,9 @@ public class SupportCaseService {
         String body,
         SupportCaseStatus status
     ) {
+        if (supportCase.requesterIdentityId() == null) {
+            return; // Guest callback request: no account to notify; the team uses the contact details in the case.
+        }
         jdbc.update(
             """
                 INSERT INTO notification_outbox(

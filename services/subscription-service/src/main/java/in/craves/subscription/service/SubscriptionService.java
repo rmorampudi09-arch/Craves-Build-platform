@@ -2,7 +2,11 @@ package in.craves.subscription.service;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
+import in.craves.subscription.lifecycle.PauseAllowance.PauseStatus;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleService;
 import in.craves.subscription.plan.PlanImageRepository;
 import in.craves.subscription.plan.PlanImageRepository.PlanImage;
 import in.craves.subscription.repository.SubscriptionRepository;
@@ -30,22 +34,47 @@ public class SubscriptionService {
     );
     private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[A-Za-z0-9._:-]{8,128}$");
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
+    /** Meal plans are offered within this distance of the chef's kitchen, the same radius the app uses for dishes. */
+    static final int PLAN_RADIUS_METERS = 10_000;
 
     private final SubscriptionRepository repository;
     private final CapacityService capacityService;
     private final PlanImageRepository planImages;
     private final SubscriptionBillingProperties billing;
+    private final DayCreditService dayCreditService;
+    private final SubscriptionLifecycleRepository lifecycleRepository;
 
     public SubscriptionService(
         SubscriptionRepository repository,
         CapacityService capacityService,
         PlanImageRepository planImages,
-        SubscriptionBillingProperties billing
+        SubscriptionBillingProperties billing,
+        DayCreditService dayCreditService,
+        SubscriptionLifecycleRepository lifecycleRepository
     ) {
         this.repository = repository;
         this.capacityService = capacityService;
         this.planImages = planImages;
         this.billing = billing;
+        this.dayCreditService = dayCreditService;
+        this.lifecycleRepository = lifecycleRepository;
+    }
+
+    /** Without a location every plan is listed, as older app versions expect; with one, only plans within 10 km. */
+    public List<PublicPlanResponse> listActivePlans(Double latitude, Double longitude) {
+        if ((latitude == null) != (longitude == null)) {
+            throw ApiException.badRequest("LOCATION_INCOMPLETE", "Send both latitude and longitude, or neither");
+        }
+        if (latitude == null) {
+            return listActivePlans();
+        }
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            throw ApiException.badRequest("LOCATION_INVALID", "latitude or longitude is out of range");
+        }
+        return repository.listActivePlansNear(latitude, longitude, PLAN_RADIUS_METERS).stream()
+            .filter(capacityService::isPlanBookable)
+            .map(this::toPublicPlan)
+            .toList();
     }
 
     public List<PublicPlanResponse> listActivePlans() {
@@ -122,6 +151,12 @@ public class SubscriptionService {
         if (request.deliveryAddressId() == null) {
             throw ApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", "deliveryAddressId is required for meal subscriptions");
         }
+        if (!repository.isAddressNearChef(user.identityId(), request.deliveryAddressId(), plan.chefIdentityId(), PLAN_RADIUS_METERS)) {
+            throw ApiException.badRequest(
+                "DELIVERY_ADDRESS_OUT_OF_RANGE",
+                "This chef delivers meal plans within 10 km of their kitchen. Choose an address closer to the chef."
+            );
+        }
         SubscriptionResponse stored = repository.createSubscription(
             user.identityId(),
             plan,
@@ -169,7 +204,13 @@ public class SubscriptionService {
                 LocalDate resumeDate = subscription.nextServiceDate() == null
                     ? LocalDate.now(BUSINESS_ZONE)
                     : subscription.nextServiceDate().isBefore(LocalDate.now(BUSINESS_ZONE)) ? LocalDate.now(BUSINESS_ZONE) : subscription.nextServiceDate();
-                capacityService.reacquireForResume(subscription, resumeDate);
+                // A customer pause keeps the chef's spot; only an admin pause (or one from before that rule) released it.
+                if (!capacityService.hasCommittedCapacity(subscription.id())) {
+                    capacityService.reacquireForResume(subscription, resumeDate);
+                }
+                lifecycleRepository.closePause(subscription.id(), resumeDate);
+                // Before the status update so the returned subscription already shows the moved billing date.
+                dayCreditService.creditPausedDays(subscription.id(), resumeDate);
             } else {
                 capacityService.commitForActivation(subscription);
             }
@@ -178,7 +219,18 @@ public class SubscriptionService {
         } else if (Set.of("PAYMENT_FAILED", "EXPIRED", "CANCELLED").contains(normalized)) {
             capacityService.releaseForPauseOrTerminal(subscription, LocalDate.now(BUSINESS_ZONE), "Administrator moved subscription to " + normalized + ": " + reason.trim());
         }
-        return repository.updateSubscriptionStatus(subscription.id(), normalized, reason.trim(), user.identityId());
+        if ("PAUSED".equals(subscription.status()) && !"ACTIVE".equals(normalized)) {
+            // Ends the customer's pause so a later admin pause never inherits its restart date.
+            lifecycleRepository.closePause(subscription.id(), LocalDate.now(BUSINESS_ZONE));
+        }
+        SubscriptionResponse updated = repository.updateSubscriptionStatus(
+            subscription.id(), subscription.status(), normalized, reason.trim(), user.identityId()
+        );
+        if (Set.of("PAUSED", "CANCELLED", "EXPIRED").contains(normalized)) {
+            // The order worker sends every queued meal without checking the plan, so stop them here as the customer paths do.
+            lifecycleRepository.cancelUndispatchedOccurrences(subscription.id(), user.identityId(), "ADMIN_STATUS_CHANGE");
+        }
+        return updated;
     }
 
     private SubscriptionResponse getOwnedSubscription(UUID subscriptionId, CurrentUser user) {
@@ -225,13 +277,16 @@ public class SubscriptionService {
     }
 
     private CustomerSubscriptionResponse toCustomerSubscription(SubscriptionResponse subscription) {
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        PauseStatus pause = SubscriptionLifecycleService.pauseStatus(lifecycleRepository, subscription, today);
         return new CustomerSubscriptionResponse(
             subscription.id(), subscription.planId(), subscription.status(), subscription.startDate(),
             subscription.endDate(), subscription.nextServiceDate(), subscription.deliveryAddressId(),
             subscription.notes(), subscription.createdAt(), subscription.updatedAt(),
             subscription.planName(), subscription.billingPeriod(), subscription.amount(), subscription.currency(),
-            nextChargeDate(subscription.nextBillingDate(), billing, LocalDate.now(BUSINESS_ZONE)),
-            subscription.planImageUrl()
+            nextChargeDate(subscription.nextBillingDate(), billing, today),
+            subscription.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate(),
+            dayCreditService.forCustomer(subscription.id())
         );
     }
 

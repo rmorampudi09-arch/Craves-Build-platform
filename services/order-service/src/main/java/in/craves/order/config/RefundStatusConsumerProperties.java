@@ -13,6 +13,24 @@ public class RefundStatusConsumerProperties {
     private int maxConcurrentMessages = 2;
     private int prefetchCount = 4;
     private int maxDeliveryAttempts = 5;
+    private boolean sessionEnabled = false;
+    private String sessionSubscriptionName = "order-service-refund-status-changed-v3";
+
+    public boolean isSessionEnabled() {
+        return sessionEnabled;
+    }
+
+    public void setSessionEnabled(boolean sessionEnabled) {
+        this.sessionEnabled = sessionEnabled;
+    }
+
+    public String getSessionSubscriptionName() {
+        return sessionSubscriptionName;
+    }
+
+    public void setSessionSubscriptionName(String sessionSubscriptionName) {
+        this.sessionSubscriptionName = sessionSubscriptionName;
+    }
 
     public boolean isEnabled() {
         return enabled;

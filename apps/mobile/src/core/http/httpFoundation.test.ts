@@ -177,6 +177,28 @@ describe('typed HTTP client foundation', () => {
     expect(normalized.message).toBe('Enter a valid phone number.');
   });
 
+  it('carries the tries left on a wrong code and the server message on a lock', () => {
+    const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const refused = (status: number, data: Record<string, unknown>) =>
+      toAppApiError(
+        new AxiosError('refused', 'ERR_BAD_REQUEST', config, undefined, {
+          data,
+          status,
+          statusText: '',
+          headers: new AxiosHeaders(),
+          config,
+        }),
+      );
+
+    const wrong = refused(422, {code: 'OTP_INVALID', message: "That OTP didn't match.", attemptsLeft: 3});
+    expect(wrong.attemptsLeft).toBe(3);
+    expect(refused(422, {code: 'OTP_INVALID', attemptsLeft: '3'}).attemptsLeft).toBeUndefined();
+    const locked = refused(423, {code: 'OTP_LOCKED', message: 'Too many wrong OTPs. Use the photo option.'});
+    expect(locked.code).toBe('OTP_LOCKED');
+    expect(locked.message).toBe('Too many wrong OTPs. Use the photo option.');
+    expect(locked.attemptsLeft).toBeUndefined();
+  });
+
   it('exposes delta-seconds Retry-After on rate-limited responses', () => {
     const config = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
     const rateLimited = (retryAfter: string) =>

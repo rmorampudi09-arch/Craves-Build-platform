@@ -33,6 +33,9 @@ class OccurrenceOrderInternalSecurityTest {
     @MockBean
     private OccurrenceOrderRepository repository;
 
+    @MockBean
+    private OccurrenceOrderService service;
+
     @Test
     void internalCallbackReachesSecretGuardWithoutBearerToken() throws Exception {
         UUID occurrenceId = UUID.randomUUID();
@@ -48,5 +51,18 @@ class OccurrenceOrderInternalSecurityTest {
             .andExpect(jsonPath("$.message").value("Invalid internal service credential"));
 
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    void declineCallbackNeedsTheInternalSecret() throws Exception {
+        when(properties.validInternalAccess("wrong-internal-secret")).thenReturn(false);
+
+        mockMvc.perform(post("/internal/v1/subscription-occurrences/{occurrenceId}/order-declined", UUID.randomUUID())
+                .header("X-Craves-Internal-Secret", "wrong-internal-secret")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"orderId\":\"" + UUID.randomUUID() + "\"}"))
+            .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(service);
     }
 }

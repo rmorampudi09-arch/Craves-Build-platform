@@ -20,7 +20,10 @@ export async function renewServerSession(base: string, token: string, requestId:
         method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ refreshToken: token, requestId }), cache: "no-store", signal: AbortSignal.timeout(10_000),
       });
-      if (!upstream.ok) return { failure: refreshFailure(upstream.status, upstream.headers.get("retry-after")) };
+      if (!upstream.ok) {
+        const body = (await upstream.json().catch(() => null)) as { code?: unknown } | null;
+        return { failure: refreshFailure(upstream.status, upstream.headers.get("retry-after"), typeof body?.code === "string" ? body.code : undefined) };
+      }
       const session = parseSessionExchange(await upstream.json().catch(() => null));
       return session ? { session } : { failure: refreshFailure(502) };
     } catch { return { failure: refreshFailure(503) }; }

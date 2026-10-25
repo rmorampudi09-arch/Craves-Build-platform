@@ -34,8 +34,12 @@ public class NotificationDeliveryWorker {
         this.emailAdapter = emailAdapter;
     }
 
-    @Scheduled(fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.notification.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
     public void deliver() {
+        int deadLettered = repository.deadLetterExpired(properties.getMaxAttempts(), properties.getStaleLockMinutes());
+        if (deadLettered > 0) {
+            LOGGER.error("CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=notification_request reason=attempts_exhausted count={}", deadLettered);
+        }
         if (properties.isPushEnabled()) {
             deliverPush();
         }

@@ -4,9 +4,13 @@ import in.craves.catalog.security.CravesPrincipal;
 import in.craves.catalog.service.BulkMenuAvailabilityService;
 import in.craves.catalog.service.CatalogService;
 import in.craves.catalog.service.DiscoveryCacheService;
+import in.craves.catalog.service.KitchenPhotoImporter;
 import in.craves.catalog.web.ApiDtos.AvailabilityRequest;
+import in.craves.catalog.web.ApiDtos.ChefAvatarRequest;
+import in.craves.catalog.web.ApiDtos.KitchenPhotoKind;
 import in.craves.catalog.web.ApiDtos.KitchenProfileRequest;
 import in.craves.catalog.web.ApiDtos.KitchenProfileResponse;
+import in.craves.catalog.web.ApiDtos.KitchenSettings;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import in.craves.catalog.web.ApiDtos.MenuItemRequest;
 import in.craves.catalog.web.ApiDtos.MenuItemResponse;
@@ -15,6 +19,7 @@ import in.craves.catalog.web.BulkMenuAvailabilityDtos.BulkAvailabilityResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +30,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,15 +40,18 @@ public class KitchenController {
     private final CatalogService catalogService;
     private final BulkMenuAvailabilityService bulkMenuAvailabilityService;
     private final DiscoveryCacheService discoveryCacheService;
+    private final KitchenPhotoImporter kitchenPhotoImporter;
 
     public KitchenController(
         CatalogService catalogService,
         BulkMenuAvailabilityService bulkMenuAvailabilityService,
-        DiscoveryCacheService discoveryCacheService
+        DiscoveryCacheService discoveryCacheService,
+        KitchenPhotoImporter kitchenPhotoImporter
     ) {
         this.catalogService = catalogService;
         this.bulkMenuAvailabilityService = bulkMenuAvailabilityService;
         this.discoveryCacheService = discoveryCacheService;
+        this.kitchenPhotoImporter = kitchenPhotoImporter;
     }
 
     @GetMapping
@@ -57,7 +66,53 @@ public class KitchenController {
     ) {
         KitchenProfileResponse response = catalogService.upsertMyKitchen(principal, request);
         discoveryCacheService.invalidateAllDiscovery();
+        // Committed by now; copies approved registration photos once (a no-op for kitchens already imported).
+        kitchenPhotoImporter.importInBackground(response.id());
         return response;
+    }
+
+    @PostMapping("/photos")
+    public KitchenProfileResponse uploadPhoto(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @RequestParam KitchenPhotoKind kind,
+        @RequestParam MultipartFile file
+    ) {
+        KitchenProfileResponse response = catalogService.uploadKitchenPhoto(principal, kind, file);
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
+    @PutMapping("/chef-avatar")
+    public KitchenProfileResponse setChefAvatar(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody ChefAvatarRequest request
+    ) {
+        KitchenProfileResponse response = catalogService.setChefAvatar(principal, request.avatarId());
+        discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
+    @DeleteMapping("/photos/{kind}")
+    public KitchenProfileResponse deletePhoto(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable KitchenPhotoKind kind
+    ) {
+        KitchenProfileResponse response = catalogService.deleteKitchenPhoto(principal, kind);
+        if (kind == KitchenPhotoKind.CHEF) discoveryCacheService.invalidateAllDiscovery();
+        return response;
+    }
+
+    @GetMapping("/settings")
+    public KitchenSettings getSettings(@AuthenticationPrincipal CravesPrincipal principal) {
+        return catalogService.getKitchenSettings(principal);
+    }
+
+    @PutMapping("/settings")
+    public KitchenSettings updateSettings(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @Valid @RequestBody KitchenSettings request
+    ) {
+        return catalogService.updateKitchenSettings(principal, request);
     }
 
     @GetMapping("/menu-items")
@@ -84,6 +139,16 @@ public class KitchenController {
         MenuItemResponse response = catalogService.updateMenuItem(principal, menuItemId, request);
         discoveryCacheService.invalidateAllDiscovery();
         return response;
+    }
+
+    @DeleteMapping("/menu-items/{menuItemId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void archiveMenuItem(
+        @AuthenticationPrincipal CravesPrincipal principal,
+        @PathVariable UUID menuItemId
+    ) {
+        catalogService.archiveMenuItem(principal, menuItemId);
+        discoveryCacheService.invalidateAllDiscovery();
     }
 
     @PatchMapping("/menu-items/{menuItemId}/availability")

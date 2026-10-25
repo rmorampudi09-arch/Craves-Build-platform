@@ -74,23 +74,46 @@ public class SupportAssistant {
                "order_id": {"type": "string", "description": "Order id (UUID) when the issue is about one order"}}}}
         ]
         """;
+    private static final String GUEST_TOOLS = """
+        [
+          {"name": "request_callback",
+           "description": "Send a callback request to the Craves support team for a visitor who is not signed in. Only call this after the visitor agreed and gave their name and a phone number or an email. At most once per conversation.",
+           "input_schema": {"type": "object", "additionalProperties": false, "required": ["name", "subject", "details"],
+             "properties": {
+               "name": {"type": "string", "description": "The visitor's name, at most 80 characters"},
+               "phone": {"type": "string", "description": "10-digit Indian mobile number the visitor gave"},
+               "email": {"type": "string", "description": "Email address the visitor gave"},
+               "subject": {"type": "string", "description": "Short subject, at most 120 characters"},
+               "details": {"type": "string", "description": "What the visitor needs, at most 1500 characters. Never include OTPs, card numbers or passwords."}}}}
+        ]
+        """;
+    static final String GUEST = "GUEST";
+    // All callback requests together, per replica: stops a script filling the support inbox.
+    static final int CALLBACKS_PER_MINUTE = 5;
+    static final int CALLBACKS_PER_DAY = 60;
+    private static final UUID ALL_CALLBACKS = UUID.nameUUIDFromBytes("support-guest:callbacks".getBytes(StandardCharsets.UTF_8));
+    private static final Pattern INDIAN_MOBILE = Pattern.compile("[6-9]\\d{9}");
+    private static final Pattern EMAIL = Pattern.compile("[^\\s@]{1,64}@[^\\s@]{1,190}\\.[A-Za-z]{2,24}");
 
     private final ClaudeMessagesClient claude;
     private final SupportOrderClient orders;
     private final SupportCaseService supportCases;
     private final ObjectMapper objectMapper;
     private final LongSupplier clock;
+    private final SupportChatLimiter limiter;
     private final String guide;
     private final JsonNode tools;
+    private final JsonNode guestTools;
 
     @Autowired
     public SupportAssistant(
         ClaudeMessagesClient claude,
         SupportOrderClient orders,
         SupportCaseService supportCases,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        SupportChatLimiter limiter
     ) {
-        this(claude, orders, supportCases, objectMapper, System::currentTimeMillis);
+        this(claude, orders, supportCases, objectMapper, System::currentTimeMillis, limiter);
     }
 
     SupportAssistant(
@@ -100,7 +123,19 @@ public class SupportAssistant {
         ObjectMapper objectMapper,
         LongSupplier clock
     ) {
+        this(claude, orders, supportCases, objectMapper, clock, new SupportChatLimiter(clock));
+    }
+
+    SupportAssistant(
+        ClaudeMessagesClient claude,
+        SupportOrderClient orders,
+        SupportCaseService supportCases,
+        ObjectMapper objectMapper,
+        LongSupplier clock,
+        SupportChatLimiter limiter
+    ) {
         this.claude = claude;
+        this.limiter = limiter;
         this.orders = orders;
         this.supportCases = supportCases;
         this.objectMapper = objectMapper;
@@ -108,6 +143,7 @@ public class SupportAssistant {
         this.guide = loadGuide();
         try {
             this.tools = objectMapper.readTree(TOOLS);
+            this.guestTools = objectMapper.readTree(GUEST_TOOLS);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Support assistant tool definitions are invalid", exception);
         }
@@ -126,7 +162,17 @@ public class SupportAssistant {
         UUID contextOrderId,
         List<ChatMessage> history
     ) {
-        Turn turn = new Turn(user, role, bearer, history);
+        return run(new Turn(user, role, bearer, history), channel, contextOrderId);
+    }
+
+    /** A reply for a visitor who is not signed in: no account tools, only a callback request. */
+    public SupportChatResponse guestReply(String channel, List<ChatMessage> history) {
+        return run(new Turn(null, GUEST, null, history), channel, null);
+    }
+
+    private SupportChatResponse run(Turn turn, String channel, UUID contextOrderId) {
+        List<ChatMessage> history = turn.history;
+        String role = turn.role;
         ArrayNode conversation = objectMapper.createArrayNode();
         int start = history.size() - 1; // The latest user message is always kept.
         int chars = history.get(start).content().length();
@@ -153,7 +199,7 @@ public class SupportAssistant {
                 if (turn.ticket == null) {
                     throw exception;
                 }
-                return new SupportChatResponse(ticketOpened(turn.ticket), turn.ticket);
+                return new SupportChatResponse(ticketOpened(turn), turn.ticket);
             }
             JsonNode content = response.path("content");
             if (!"tool_use".equals(response.path("stop_reason").asText()) || round == MAX_ROUNDS) {
@@ -181,7 +227,7 @@ public class SupportAssistant {
                     : runTool(turn, block));
             }
         }
-        return new SupportChatResponse(turn.ticket == null ? FALLBACK : ticketOpened(turn.ticket), turn.ticket);
+        return new SupportChatResponse(turn.ticket == null ? FALLBACK : ticketOpened(turn), turn.ticket);
     }
 
     private ObjectNode request(String role, String channel, UUID contextOrderId, ArrayNode conversation, boolean lastRound) {
@@ -191,15 +237,15 @@ public class SupportAssistant {
         // Tools plus the static guide form a stable prefix, so it is cached across turns and users.
         system.addObject().put("type", "text").put("text", guide)
             .putObject("cache_control").put("type", "ephemeral");
-        system.addObject().put("type", "text").put("text", "Signed-in user role: " + role
-            + ". " + switch (channel == null ? "" : channel) {
+        system.addObject().put("type", "text").put("text", (GUEST.equals(role) ? GUEST_CONTEXT : "Signed-in user role: " + role + ". ")
+            + switch (channel == null ? "" : channel) {
                 case "WEB" -> "The user is chatting on the Craves website (craves.in).";
                 case "APP" -> "The user is chatting in the Craves mobile app.";
                 default -> "It is not known whether the user is on the website or the app; if steps differ, give both briefly.";
             }
             + " Today is " + LocalDate.now(IST) + " (India time)."
             + (contextOrderId == null ? "" : " The user opened this chat from order " + contextOrderId + "."));
-        body.set("tools", tools);
+        body.set("tools", GUEST.equals(role) ? guestTools : tools);
         // On the last round the model must answer in text instead of asking for another tool.
         body.putObject("tool_choice").put("type", lastRound ? "none" : "auto");
         body.set("messages", conversation);
@@ -213,6 +259,12 @@ public class SupportAssistant {
         JsonNode input = call.path("input");
         boolean chef = "CHEF".equals(turn.role);
         try {
+            if (GUEST.equals(turn.role)) {
+                if (!"request_callback".equals(call.path("name").asText())) {
+                    throw new ToolError("Unknown tool.");
+                }
+                return result.put("content", objectMapper.writeValueAsString(requestCallback(turn, input)));
+            }
             JsonNode output = switch (call.path("name").asText()) {
                 case "get_my_recent_orders" -> orders.recentOrders(turn.bearer, chef);
                 case "get_order_details" -> {
@@ -291,6 +343,35 @@ public class SupportAssistant {
         return objectMapper.createObjectNode().put("ticket", turn.ticket.caseNumber()).put("status", "OPEN");
     }
 
+    private ObjectNode requestCallback(Turn turn, JsonNode input) {
+        if (turn.ticket != null) {
+            throw new ToolError("Callback request " + turn.ticket.caseNumber() + " is already sent for this conversation.");
+        }
+        String name = clip(mask(input.path("name").asText("")), 80);
+        String phone = input.path("phone").asText("").replaceAll("[\\s()-]", "").replaceFirst("^(\\+?91|0)(?=\\d{10}$)", "");
+        String email = input.path("email").asText("").trim();
+        String subject = clip(mask(input.path("subject").asText("")), 120);
+        String details = clip(mask(input.path("details").asText("")), 1500);
+        if (name.isEmpty() || subject.isEmpty() || details.isEmpty()) {
+            throw new ToolError("name, subject and details are required.");
+        }
+        boolean hasPhone = INDIAN_MOBILE.matcher(phone).matches();
+        boolean hasEmail = email.length() <= 254 && EMAIL.matcher(email).matches();
+        if (!hasPhone && !hasEmail) {
+            throw new ToolError("Ask the visitor for a 10-digit Indian mobile number or a valid email address.");
+        }
+        try {
+            limiter.admit(ALL_CALLBACKS, CALLBACKS_PER_MINUTE, CALLBACKS_PER_DAY);
+        } catch (SupportChatLimiter.Limited limited) {
+            throw new ToolError("Callback requests are paused for now. Ask the visitor to email support@craves.in or call 8367366787.");
+        }
+        String contact = TICKET_PREFIX + "Callback request from a website visitor who is not signed in.\nName: " + name
+            + (hasPhone ? "\nPhone: " + phone : "") + (hasEmail ? "\nEmail: " + email : "") + "\n\n";
+        var created = supportCases.createGuest("Callback: " + subject, contact + details + userWords(turn.history));
+        turn.ticket = new SupportCaseRef(created.id(), created.caseNumber());
+        return objectMapper.createObjectNode().put("reference", turn.ticket.caseNumber()).put("status", "SENT");
+    }
+
     /** The requester's own recent messages, so the team sees their words, not only the model's summary. */
     private static String userWords(List<ChatMessage> history) {
         List<ChatMessage> fromUser = history.stream().filter(message -> "user".equals(message.role())).toList();
@@ -301,9 +382,12 @@ public class SupportAssistant {
         return words.toString();
     }
 
-    private static String ticketOpened(SupportCaseRef ticket) {
-        return "I've opened ticket " + ticket.caseNumber()
-            + " for the Craves support team. They'll reply in your notifications.";
+    private static String ticketOpened(Turn turn) {
+        return GUEST.equals(turn.role)
+            ? "I've sent your callback request (reference " + turn.ticket.caseNumber()
+                + ") to the Craves support team. They'll contact you on the phone number or email you gave."
+            : "I've opened ticket " + turn.ticket.caseNumber()
+                + " for the Craves support team. They'll reply in your notifications.";
     }
 
     private static String text(JsonNode content) {
@@ -344,6 +428,12 @@ public class SupportAssistant {
             throw new UncheckedIOException(exception);
         }
     }
+
+    private static final String GUEST_CONTEXT = "The person chatting is a visitor who has not signed in. You cannot see any "
+        + "account, order or ticket. Help with general questions about Craves, signing in and signing up, and finding "
+        + "things. For anything about a specific order or account, ask them to sign in first and use the support chat "
+        + "again, or offer a callback request. Before calling request_callback, get their name and a phone number or "
+        + "email, tell them in one line what you will send, and ask if that's OK. ";
 
     static ApiException unavailable() {
         return new ApiException(503, "SUPPORT_CHAT_UNAVAILABLE",

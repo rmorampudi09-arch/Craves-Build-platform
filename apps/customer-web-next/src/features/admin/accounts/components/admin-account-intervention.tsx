@@ -9,6 +9,8 @@ import type {
 } from "@/features/admin/accounts/lib/admin-account-intervention-contract";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Sent as an HTTP header, so printable ASCII only.
+const ADMIN_REASON = /^[\x20-\x7E]{10,500}$/;
 
 function displayDate(value: string | null): string {
   if (!value) return "Not recorded";
@@ -31,6 +33,7 @@ export function AdminAccountIntervention() {
   const [status, setStatus] = useState<AdminAccountInterventionStatus | null>(null);
   const [action, setAction] = useState<AdminAccountAction>("SUSPEND");
   const [reason, setReason] = useState("");
+  const [lookupReason, setLookupReason] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [message, setMessage] = useState("Load an exact identity UUID before any intervention is allowed.");
   const [busy, setBusy] = useState(false);
@@ -52,10 +55,17 @@ export function AdminAccountIntervention() {
       setMessage("Enter a valid identity UUID.");
       return;
     }
+    // Auth audits every status read and rejects it without an operator reason.
+    const normalizedLookupReason = lookupReason.replace(/[\r\n]+/g, " ").trim();
+    if (!ADMIN_REASON.test(normalizedLookupReason)) {
+      setStatus(null);
+      setMessage("The lookup reason must contain 10–500 characters (English letters, numbers and punctuation).");
+      return;
+    }
     setIdentityId(normalizedIdentityId);
     setBusy(true);
     try {
-      const result = await request(`/api/admin/accounts/${normalizedIdentityId}`);
+      const result = await request(`/api/admin/accounts/${normalizedIdentityId}`, { headers: { "X-Admin-Reason": normalizedLookupReason } });
       setStatus(result);
       setConfirmation("");
       setMessage("Identity status loaded. Review the masked account evidence before choosing an action.");
@@ -113,6 +123,9 @@ export function AdminAccountIntervention() {
         <p className="mt-3 text-sm leading-6 text-slate-600">Only an exact backend identity UUID is accepted. Phone and Firebase identifiers are never requested or displayed.</p>
         <label className="mt-5 block text-sm font-bold">Identity UUID
           <input value={identityId} onChange={event => { setIdentityId(event.target.value.trim().toLowerCase()); setStatus(null); }} autoComplete="off" spellCheck={false} maxLength={64} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
+        </label>
+        <label className="mt-5 block text-sm font-bold">Reason for this lookup
+          <textarea value={lookupReason} onChange={event => setLookupReason(event.target.value)} minLength={10} maxLength={500} placeholder="For example: Chef reported they cannot sign in" className="mt-2 min-h-24 w-full rounded-2xl bg-white p-4 text-slate-950" required />
         </label>
         <button disabled={busy} className="mt-5 min-h-12 w-full rounded-2xl bg-[#6930CA] font-bold text-white disabled:opacity-50">{busy ? "Checking…" : "Load audited status"}</button>
       </form>

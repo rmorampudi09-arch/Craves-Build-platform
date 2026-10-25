@@ -1,6 +1,7 @@
 package in.craves.integration.delivery.feedback;
 
 import static org.assertj.core.api.Assertions.*;
+import in.craves.integration.config.WorkerSchedulingConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration;
@@ -10,7 +11,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 class DeliveryFeedbackConfigurationTest {
     @Test void feedbackSchedulerDoesNotReplaceExistingDefaultScheduler() {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(TaskSchedulingAutoConfiguration.class))
-            .withUserConfiguration(DeliveryFeedbackConfiguration.class)
+            .withUserConfiguration(DeliveryFeedbackConfiguration.class, WorkerSchedulingConfiguration.class)
             .withPropertyValues("spring.task.scheduling.pool.size=4")
             .run(context->{
                 assertThat(context).hasNotFailed();

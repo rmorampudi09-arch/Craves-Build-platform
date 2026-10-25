@@ -66,6 +66,20 @@ class VerificationEmailTemplateTest {
         org.mockito.Mockito.when(client.beginSend(org.mockito.ArgumentMatchers.any(com.azure.communication.email.models.EmailMessage.class))).thenThrow(new IllegalStateException("simulated-timeout"));
         assertEquals(VerificationEmailTransport.Outcome.UNKNOWN,transport.send(VerificationEmailSecurityTest.dto()));
     }
+    @Test @SuppressWarnings("unchecked") void opsAlertIsOnePlainTextEmailToEveryOpsLead() {
+        var properties=new in.craves.notification.delivery.NotificationDeliveryProperties();
+        properties.setAcsEmailSenderAddress("sender@example.test");properties.setAcsEmailConnectionString("endpoint=https://example.test/;accesskey=dGVzdA==");
+        var transport=new VerificationEmailTransport(properties);
+        var client=org.mockito.Mockito.mock(com.azure.communication.email.EmailClient.class);
+        org.mockito.Mockito.when(client.beginSend(org.mockito.ArgumentMatchers.any(com.azure.communication.email.models.EmailMessage.class))).thenReturn(org.mockito.Mockito.mock(com.azure.core.util.polling.SyncPoller.class));
+        transport.acs=client;
+        assertEquals(VerificationEmailTransport.Outcome.ACCEPTED,transport.sendPlainText(java.util.List.of("lead@example.test","backup@example.test"),"Craves SOS: Rider SOS","Ravi pressed SOS"));
+        var sent=org.mockito.ArgumentCaptor.forClass(com.azure.communication.email.models.EmailMessage.class);
+        org.mockito.Mockito.verify(client).beginSend(sent.capture());
+        assertEquals(java.util.List.of("lead@example.test","backup@example.test"),sent.getValue().getToRecipients().stream().map(com.azure.communication.email.models.EmailAddress::getAddress).toList());
+        assertEquals("Craves SOS: Rider SOS",sent.getValue().getSubject());assertEquals("Ravi pressed SOS",sent.getValue().getBodyPlainText());
+        assertEquals(VerificationEmailTransport.Outcome.UNAVAILABLE,new VerificationEmailTransport(new in.craves.notification.delivery.NotificationDeliveryProperties()).sendPlainText(java.util.List.of("lead@example.test"),"s","t"));
+    }
     @Test void absentAcsConfigurationNeverCallsProvider() {
         var transport=new VerificationEmailTransport(new in.craves.notification.delivery.NotificationDeliveryProperties());
         assertFalse(transport.configured()); assertEquals(VerificationEmailTransport.Outcome.UNAVAILABLE,transport.send(VerificationEmailSecurityTest.dto()));

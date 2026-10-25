@@ -1,5 +1,6 @@
 package in.craves.order.service;
 
+import in.craves.order.delivery.DeliveryCodeService;
 import in.craves.order.event.ChefAcceptedOrderEventFactory;
 import in.craves.order.event.ChefAcceptedOrderEventSource;
 import in.craves.order.event.ChefAcceptedOrderEventSource.DeliveryItemSource;
@@ -30,17 +31,20 @@ public class ChefAcceptanceService {
     private final OrderService orderService;
     private final ChefAcceptedOrderEventFactory eventFactory;
     private final OrderDomainOutboxRepository outboxRepository;
+    private final DeliveryCodeService deliveryCodes;
 
     public ChefAcceptanceService(
         JdbcTemplate jdbcTemplate,
         OrderService orderService,
         ChefAcceptedOrderEventFactory eventFactory,
-        OrderDomainOutboxRepository outboxRepository
+        OrderDomainOutboxRepository outboxRepository,
+        DeliveryCodeService deliveryCodes
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.orderService = orderService;
         this.eventFactory = eventFactory;
         this.outboxRepository = outboxRepository;
+        this.deliveryCodes = deliveryCodes;
     }
 
     @Transactional
@@ -50,6 +54,19 @@ public class ChefAcceptanceService {
         ChefAcceptRequest request,
         UUID correlationId,
         String idempotencyKey
+    ) {
+        return accept(principal, orderId, request, correlationId, idempotencyKey, null);
+    }
+
+    /** auditReason, when given, is the status-history reason instead of the chef's note (used by auto-accept). */
+    @Transactional
+    public OrderResponse accept(
+        CravesPrincipal principal,
+        UUID orderId,
+        ChefAcceptRequest request,
+        UUID correlationId,
+        String idempotencyKey,
+        String auditReason
     ) {
         if (request == null || request.prepTimeMinutes() == null) {
             throw OrderApiException.badRequest(
@@ -112,7 +129,7 @@ public class ChefAcceptanceService {
             OrderStatus.CHEF_ACCEPTANCE_PENDING.name(),
             OrderStatus.CHEF_ACCEPTED.name(),
             principal.identityId(),
-            safeReason(request.note())
+            auditReason != null ? auditReason : safeReason(request.note())
         );
 
         ChefAcceptedOrderEventSource eventSource = loadEventSource(orderId);
@@ -123,6 +140,8 @@ public class ChefAcceptanceService {
                 "The chef acceptance event already exists for this order."
             );
         }
+        // Same transaction as the event, so every accepted order (auto-accept too) has a code.
+        deliveryCodes.ensureCode(orderId);
 
         return orderService.getOrderForChef(principal, orderId);
     }
@@ -187,7 +206,8 @@ public class ChefAcceptanceService {
         );
 
         return jdbcTemplate.query(
-            "SELECT * FROM order_schema.customer_order WHERE id = ?",
+            // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages.
+            "SELECT *, COALESCE(checkout_id, id) AS delivery_checkout_id FROM order_schema.customer_order WHERE id = ?",
             (resultSet, rowNumber) -> mapEventSource(resultSet, deliveryItems),
             orderId
         ).stream().findFirst().orElseThrow(() -> OrderApiException.notFound(
@@ -211,7 +231,7 @@ public class ChefAcceptanceService {
 
         return new ChefAcceptedOrderEventSource(
             resultSet.getObject("id", UUID.class),
-            resultSet.getObject("checkout_id", UUID.class),
+            resultSet.getObject("delivery_checkout_id", UUID.class),
             instant(resultSet, "accepted_at"),
             instant(resultSet, "ready_at"),
             totalPackageWeightGrams,

@@ -57,6 +57,9 @@ jobs:
           persist-credentials: false
 
       - name: Verify clean convergence scope
+        # Only the convergence branch itself had to be Delivery-Intelligence-only (merged in af123056b). Later PRs
+        # that touch these paths, e.g. WebSecurityConfiguration, still run every gate below.
+        if: github.ref == 'refs/heads/feature/delivery-intelligence-source-convergence-20260910' || github.head_ref == 'feature/delivery-intelligence-source-convergence-20260910'
         shell: bash
         run: |
           set -euo pipefail

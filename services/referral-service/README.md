@@ -83,7 +83,7 @@ Inject secret values through the approved Key Vault/container secret references 
 | Key | Purpose |
 | --- | --- |
 | `REFERRAL_DB_URL`, `REFERRAL_DB_USER`, `REFERRAL_DB_PASSWORD` | Restricted runtime datasource for the isolated schema. Remote PostgreSQL requires reviewed TLS/hostname verification; never use a migration owner or superuser as runtime. |
-| `REFERRAL_DB_POOL_SIZE` | Defaults to eight connections. Account for all replicas before changing the database budget. |
+| `REFERRAL_DB_POOL_SIZE` | Defaults to four connections. The server is shared: `scripts/release/check-db-connection-budget.py` keeps pool × replicas across services within 45. |
 | `CRAVES_JWT_VERIFICATION_PEM_BASE64` | Existing Auth RSA **public** verification PEM, base64-encoded; never Auth's private signing key. |
 | `CRAVES_JWT_ISSUER`, `CRAVES_JWT_AUDIENCE` | Exact existing Auth contract values. |
 | `SPRING_DATA_REDIS_HOST`, `SPRING_DATA_REDIS_PORT`, `SPRING_DATA_REDIS_USERNAME`, `SPRING_DATA_REDIS_PASSWORD`, `SPRING_DATA_REDIS_SSL_ENABLED` | Reviewed TLS connection to the actual Auth revocation projection. Validate namespace, publisher, token-version and TTL/recovery semantics. |

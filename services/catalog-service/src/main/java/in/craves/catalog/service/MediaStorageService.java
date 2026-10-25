@@ -7,6 +7,7 @@ import com.azure.storage.blob.BlobContainerClientBuilder;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import in.craves.catalog.config.CatalogStorageProperties;
 import in.craves.catalog.exception.ApiException;
+import in.craves.catalog.web.ApiDtos.KitchenPhotoKind;
 import in.craves.catalog.web.ApiDtos.MenuItemImageResponse;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +31,8 @@ public class MediaStorageService {
     private static final Logger log = LoggerFactory.getLogger(MediaStorageService.class);
     // Redirects are not followed: only the exact Azure Blob URL stored for the photo is read.
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NEVER).build();
+    /** Drawn faces chefs pick instead of a real photo: one file per face, shared by every chef who picked it. */
+    public static final String CHEF_AVATAR_FOLDER = "public/chef-avatars/";
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
         "image/jpeg",
         "image/png",
@@ -47,9 +50,23 @@ public class MediaStorageService {
     }
 
     public StoredMedia uploadMenuImage(UUID kitchenId, UUID menuItemId, MultipartFile file) {
+        return upload("public/dishes/" + kitchenId + "/" + menuItemId + "/", file, "menu-image");
+    }
+
+    /** Chef or kitchen storefront photo; same type, size and optimisation rules as dish photos. */
+    public StoredMedia uploadKitchenImage(UUID kitchenId, KitchenPhotoKind kind, MultipartFile file) {
+        return upload("public/kitchens/" + kitchenId + "/" + kind.name().toLowerCase(Locale.ROOT) + "/", file, "kitchen-photo");
+    }
+
+    /** A kitchen photo copied in from elsewhere (the chef's approved registration photos); same optimisation as uploads. */
+    public StoredMedia storeKitchenImage(UUID kitchenId, String fileName, byte[] data, String contentType) {
+        return store("public/kitchens/" + kitchenId + "/kitchen/" + UUID.randomUUID() + "-" + sanitize(fileName), data, contentType);
+    }
+
+    private StoredMedia upload(String folder, MultipartFile file, String fallbackName) {
         validate(file);
-        String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : "menu-image";
-        String blobName = "public/dishes/" + kitchenId + "/" + menuItemId + "/" + UUID.randomUUID() + "-" + sanitize(originalFileName);
+        String originalFileName = StringUtils.hasText(file.getOriginalFilename()) ? file.getOriginalFilename() : fallbackName;
+        String blobName = folder + UUID.randomUUID() + "-" + sanitize(originalFileName);
         byte[] data;
         try {
             data = file.getBytes();
@@ -57,6 +74,21 @@ public class MediaStorageService {
             throw new ApiException(500, "MEDIA_UPLOAD_FAILED", "Could not read uploaded media file");
         }
         return store(blobName, data, file.getContentType());
+    }
+
+    public String chefAvatarUrl(String avatarId) {
+        return publicBaseUrl() + "/" + CHEF_AVATAR_FOLDER + avatarId + ".jpg";
+    }
+
+    /** Best effort: removes the blob a public photo URL of this store points at; anything else is ignored. */
+    public void deleteByPublicUrl(String url) {
+        try {
+            String prefix = publicBaseUrl() + "/";
+            // Shared by every chef who picked that face, so switching faces must never delete the file.
+            if (url != null && url.startsWith(prefix) && !url.startsWith(prefix + CHEF_AVATAR_FOLDER)) deleteQuietly(url.substring(prefix.length()));
+        } catch (RuntimeException ex) {
+            log.warn("Photo blob could not be removed: {}", ex.getClass().getSimpleName());
+        }
     }
 
     /** Best effort: a missing blob or unconfigured store never blocks removing the photo record. */
@@ -107,8 +139,17 @@ public class MediaStorageService {
     }
 
     /** Shrinks the photo when it is oversized, then stores it with long-lived caching for browsers and Front Door. */
+    /** Shrunk and stripped of camera metadata (GPS); a photo that cannot be read is refused. */
+    static MenuPhotoOptimizer.Photo publishable(byte[] data, String contentType) {
+        try {
+            return PhotoMetadata.clean(data, contentType);
+        } catch (IllegalArgumentException ex) {
+            throw ApiException.badRequest("PHOTO_UNREADABLE", "This photo could not be read. Please try another photo.");
+        }
+    }
+
     private StoredMedia store(String blobName, byte[] data, String contentType) {
-        MenuPhotoOptimizer.Photo photo = MenuPhotoOptimizer.optimize(data, contentType);
+        MenuPhotoOptimizer.Photo photo = publishable(data, contentType);
         BlobClient blobClient = containerClient().getBlobClient(blobName);
         blobClient.upload(BinaryData.fromBytes(photo.data()), true);
         blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType(photo.contentType()).setCacheControl(CACHE_CONTROL));

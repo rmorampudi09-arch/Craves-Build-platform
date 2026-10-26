@@ -32,6 +32,10 @@ export type Dish = {
   serves?: string;
   /** How many people one order serves, when the kitchen said ("Serves 2" on menu rows). */
   servesCount?: number;
+  /** One pack's weight in grams, when the kitchen gave it. */
+  packGrams?: number;
+  /** Packed in a thermobox so it arrives hot. */
+  thermobox?: boolean;
   originalPrice?: number;
   spiceLevel?: "Mild" | "Medium" | "Spicy";
   reviewCount?: number;
@@ -234,6 +238,8 @@ function mapDetail(item: PublicMenuItemDetail): Dish {
     kitchenDescription: item.kitchenDescription ?? undefined,
     serves: servesLabel(item.servesCount),
     servesCount: item.servesCount ?? undefined,
+    packGrams: item.unitPackageWeightGrams ?? undefined,
+    thermobox: item.thermoboxRequired === true,
     spiceLevel: spiceLabel(item.spiceLevel),
     areaName: item.areaName ?? undefined,
     city: item.city ?? undefined,
@@ -456,24 +462,3 @@ export function getDish(id: string): Dish | undefined {
   return discoveredDishes.find((dish) => dish.id === id);
 }
 
-export function getSimilarDishes(dish: Dish, limit = 4): Dish[] {
-  const sameKitchen = discoveredDishes.filter(
-    (candidate) =>
-      candidate.id !== dish.id &&
-      Boolean(dish.kitchenId) &&
-      candidate.kitchenId === dish.kitchenId,
-  );
-  const sameCategory = discoveredDishes.filter(
-    (candidate) =>
-      candidate.id !== dish.id &&
-      candidate.category === dish.category &&
-      candidate.kitchenId !== dish.kitchenId,
-  );
-
-  return [...sameKitchen, ...sameCategory]
-    .filter(
-      (candidate, index, items) =>
-        items.findIndex((item) => item.id === candidate.id) === index,
-    )
-    .slice(0, limit);
-}

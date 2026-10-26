@@ -94,9 +94,12 @@ def operation_policy(operation_id, path):
     backend_path = '/api/v1/documents' + ('' if path == '/' else path)
     ET.SubElement(inbound, 'rewrite-uri', {'template': backend_path, 'copy-unmatched-params': 'true'})
     if operation_id == 'create-document':
-        validation = ET.SubElement(inbound, 'validate-content', {
-            'unspecified-content-type-action': 'prevent', 'max-size': '2048', 'size-exceeded-action': 'prevent'})
-        ET.SubElement(validation, 'content', {'type': 'application/json', 'validate-as': 'json', 'action': 'prevent'})
+        # validate-content answered every application/json body with 400 "internal error" in production
+        # (26 Oct 2026), so no client could create a PDF. The Notification Service validates the body;
+        # the gateway keeps only the 2 KB cap.
+        when = ET.SubElement(ET.SubElement(inbound, 'choose'), 'when', {
+            'condition': '@(context.Request.Body != null && context.Request.Body.As<string>(preserveContent: true).Length > 2048)'})
+        ET.SubElement(ET.SubElement(when, 'return-response'), 'set-status', {'code': '413', 'reason': 'Payload Too Large'})
     for scope in ['backend', 'outbound', 'on-error']: ET.SubElement(ET.SubElement(root, scope), 'base')
     return ET.tostring(root, encoding='unicode')
 

@@ -48,7 +48,7 @@ function SaveKitchenToggle({
       onClick={() => void toggle().then(onChange)}
       disabled={busy}
       aria-pressed={saved}
-      className="mt-2 inline-flex !min-h-10 items-center rounded-full !border-0 !bg-[#FDEAE8] px-3 text-xs font-bold !text-[#D92714] !shadow-none transition-colors hover:!bg-[#FBD5D0] disabled:cursor-wait disabled:opacity-50"
+      className="mt-2 inline-flex !min-h-11 items-center rounded-full !border-0 !bg-[#FDEAE8] px-3 text-xs font-bold !text-[#D92714] !shadow-none transition-colors hover:!bg-[#FBD5D0] disabled:cursor-wait disabled:opacity-50"
     >
       {saved ? "Kitchen saved" : "Save kitchen"}
       <span className="sr-only">: {kitchenName}</span>
@@ -162,7 +162,7 @@ export function SavedDishCard({
           type="button"
           onClick={onRemove}
           disabled={busy}
-          className="flex h-12 !min-h-12 w-12 !min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] active:scale-[0.94] disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none"
+          className="flex h-12 !min-h-12 w-12 !min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50"
           aria-label={`Remove ${name} from saved dishes`}
         >
           <Heart className="h-6 w-6 fill-current" aria-hidden="true" />

@@ -100,7 +100,7 @@ export function CartStepper({
           }}
           disabled={disabled || !canAdd}
           aria-label={`Add ${name} to cart`}
-          className={`absolute inset-0 flex !min-h-0 !min-w-0 items-center justify-center rounded-[10px] !border-0 !bg-[#D92714] !p-0 text-[1.0625rem] font-bold !text-white !shadow-[0_5px_10px_rgba(246,46,24,0.25)] ${HIT} hover:!bg-[#C4200F] active:scale-[0.985] disabled:cursor-not-allowed disabled:!bg-[#F1F3F5] disabled:!text-[#6B6B6B] disabled:!shadow-none motion-reduce:transform-none ${fade}`}
+          className={`absolute inset-0 flex !min-h-0 !min-w-0 items-center justify-center rounded-[10px] !border-0 !bg-[#D92714] !p-0 text-[1.0625rem] font-bold !text-white !shadow-[0_5px_10px_rgba(246,46,24,0.25)] ${HIT} hover:!bg-[#C4200F] motion-safe:active:scale-[0.985] disabled:cursor-not-allowed disabled:!bg-[#F1F3F5] disabled:!text-[#6B6B6B] disabled:!shadow-none ${fade}`}
         >
           Add
         </button>

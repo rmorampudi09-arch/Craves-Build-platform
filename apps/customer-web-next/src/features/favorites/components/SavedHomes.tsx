@@ -49,7 +49,7 @@ function onWatches(watches: FavoriteWatch[]): Set<WatchKey> {
 
 /** The bell and the heart: 48 px soft red circles, as in the app (1.35). */
 const ROUND_ACTION =
-  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#FDEAE8] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FBD5D0] active:scale-[0.94] disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none";
+  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#FDEAE8] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FBD5D0] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
 
 function SavedHomeRow({
   entry,

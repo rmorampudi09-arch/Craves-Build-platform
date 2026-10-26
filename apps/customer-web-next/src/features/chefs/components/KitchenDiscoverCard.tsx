@@ -16,7 +16,7 @@ function KitchenHeart({ kitchenId, name }: { kitchenId: string; name: string }) 
       disabled={busy}
       aria-pressed={saved}
       aria-label={saved ? `Remove ${name} from saved` : `Save ${name}`}
-      className="absolute right-3 top-4 flex h-12 !min-h-12 w-12 !min-w-12 items-center justify-center rounded-full !border-0 !bg-[#F7F5F3] !p-0 !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] active:scale-[0.94] disabled:cursor-wait disabled:!opacity-100 motion-reduce:transform-none"
+      className="absolute right-3 top-4 flex h-12 !min-h-12 w-12 !min-w-12 items-center justify-center rounded-full !border-0 !bg-[#F7F5F3] !p-0 !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:!opacity-100"
     >
       <Heart className={`h-6 w-6 ${saved ? "fill-[#F62E18] text-[#F62E18]" : "text-[#261A15]"}`} aria-hidden="true" />
     </button>

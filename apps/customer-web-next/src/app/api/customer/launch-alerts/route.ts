@@ -25,9 +25,13 @@ async function forward(request: NextRequest, path: string, init?: RequestInit) {
       return failure(mapped.status, mapped.code);
     }
     const status = parseLaunchAlertStatus(body);
-    return status ? NextResponse.json(status, { headers }) : failure(502, "INVALID_LAUNCH_ALERT_RESPONSE");
+    return status
+      ? NextResponse.json(status, { headers })
+      : failure(502, "INVALID_LAUNCH_ALERT_RESPONSE");
   } catch (error) {
-    return error instanceof SessionRequiredError ? failure(401, "SESSION_EXPIRED") : failure(503, "LAUNCH_ALERT_UNAVAILABLE");
+    return error instanceof SessionRequiredError
+      ? failure(401, "SESSION_EXPIRED")
+      : failure(503, "LAUNCH_ALERT_UNAVAILABLE");
   }
 }
 
@@ -36,7 +40,10 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const spot = parseLaunchAlertSpot(params.get("latitude"), params.get("longitude"));
   if (!spot) return failure(400, "INVALID_LAUNCH_ALERT_SPOT");
-  const query = new URLSearchParams({ latitude: String(spot.latitude), longitude: String(spot.longitude) });
+  const query = new URLSearchParams({
+    latitude: String(spot.latitude),
+    longitude: String(spot.longitude),
+  });
   return forward(request, `/customer/launch-alerts?${query}`);
 }
 

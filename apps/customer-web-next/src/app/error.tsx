@@ -19,7 +19,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
           title={offline ? "You’re offline" : "This page didn’t load"}
           message={
             offline
-              ? "Check your Wi-Fi or mobile data, then try again."
+              ? "Check your Wi‑Fi or mobile data, then try again."
               : "Something went wrong on our side while loading it. Try again; if it keeps happening, chat with support and share the reference below."
           }
           className="py-0 md:py-0"

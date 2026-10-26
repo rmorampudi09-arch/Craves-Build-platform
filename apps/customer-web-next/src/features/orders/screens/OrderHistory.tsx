@@ -364,7 +364,7 @@ export default function OrdersPage() {
       <EmptyState
         illustration={status === "offline" ? "offline" : "loadError"}
         title={status === "offline" ? "You’re offline" : "We couldn’t load your orders"}
-        message={status === "offline" ? "Check your Wi-Fi or mobile data, then try again." : "Check your connection and try again. Your orders are safe."}
+        message={status === "offline" ? "Check your Wi‑Fi or mobile data, then try again." : "Check your connection and try again. Your orders are safe."}
         role="alert"
       >
         <button type="button" onClick={retry} className="craves-primary-action">

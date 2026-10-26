@@ -4,7 +4,7 @@ steps:
   - task: AzureCLI@2
     displayName: Preflight exact email runtime and gateway ownership
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -14,7 +14,7 @@ steps:
   - task: AzureCLI@2
     displayName: Build tested Auth, Notification and UserChef images
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -29,7 +29,7 @@ steps:
   - task: AzureCLI@2
     displayName: Deploy email services with gates closed and runtime preserved
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -49,7 +49,7 @@ steps:
             exit 1
           fi
         }
-        deploy_email notification-service ca-craves-notification-service-p 'cravesprodlowacr82121.azurecr.io/craves/notification-service@sha256:bb15cc81121173ef2c701f2edc4e967a7cf7ed4fb26f5e5cb4fae1d777145b44'
+        deploy_email notification-service ca-craves-notification-service-p 'cravesrm09prodlow6bf632.azurecr.io/craves/notification-service@sha256:bb15cc81121173ef2c701f2edc4e967a7cf7ed4fb26f5e5cb4fae1d777145b44'
         deploy_email auth-service ca-craves-auth-service-prodlow 'cravesrm09prodlow6bf632.azurecr.io/craves/auth-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324'
-        deploy_email user-chef-service ca-craves-user-chef-service-prod 'cravesprodlowacr82121.azurecr.io/craves/user-chef-service@sha256:fa546c94af8eb329593d158589e0bffee96e19d6f84a55f937032de1f74fa93d'
+        deploy_email user-chef-service ca-craves-user-chef-service-prod 'cravesrm09prodlow6bf632.azurecr.io/craves/user-chef-service@sha256:fa546c94af8eb329593d158589e0bffee96e19d6f84a55f937032de1f74fa93d'
         python3 scripts/email/customer-email-release.py --source "$(Build.SourceVersion)" --activate

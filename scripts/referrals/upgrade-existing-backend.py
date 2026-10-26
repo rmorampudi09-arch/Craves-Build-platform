@@ -13,14 +13,14 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUB = '721906c9-4a72-4606-830b-d3e7ace093ff'
 RG = 'rg-craves-prodlow-centralindia'
 APP = 'ca-craves-referral-prodlow'
-VAULT = 'kvcravesprodlowl3ing6'
-REGISTRY = 'cravesprodlowacr82121'
+VAULT = 'kvcravesprodlowkmqgfy'
+REGISTRY = 'cravesrm09prodlow6bf632'
 REPOSITORY = 'craves/referral-service'
 SOURCE = '135df3d23c61bc14e1ce742f9cf9f5f25a09d0e1'
-HOST = 'pg-craves-prodlow-l3ing6.postgres.database.azure.com'
+HOST = 'pg-craves-prodlow-kmqgfy.postgres.database.azure.com'
 DATABASE = 'craves_referral_db'
 OWNER = 'craves_referral_owner'
 RUNTIME = 'craves_referral_runtime'

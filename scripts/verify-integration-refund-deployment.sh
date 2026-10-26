@@ -3,7 +3,7 @@ set -euo pipefail
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
 APP="${APP:-ca-craves-integration-service-pr}"
-SB_NAMESPACE="${SB_NAMESPACE:-sb-craves-prodlow-l3ing6}"
+SB_NAMESPACE="${SB_NAMESPACE:-sb-craves-prodlow-kmqgfy}"
 SB_TOPIC="${SB_TOPIC:-craves-domain-events}"
 REFUND_SUBSCRIPTION="${REFUND_SUBSCRIPTION:-integration-service-refund-requested}"
 EXPECTED_IMAGE_PART="craves/integration-service"

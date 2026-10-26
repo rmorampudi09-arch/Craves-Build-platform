@@ -195,7 +195,7 @@ Default parameters:
 
 ```text
 resourceGroupName: rg-craves-prodlow-centralindia
-apimName: apim-craves-prodlow-l3ing6
+apimName: apim-craves-prodlow-kmqgfy
 orderContainerAppName: ca-craves-order-service-prodlow
 apiId: empty, auto-resolve by path
 runAuthenticatedSmoke: false

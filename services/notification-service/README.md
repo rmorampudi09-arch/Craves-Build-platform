@@ -84,7 +84,7 @@ curl http://localhost:8080/api/v1/notifications/in-app \
 Use `azure-pipelines-notification-service.yml`. The pipeline expects the Azure DevOps variable:
 
 ```text
-AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
+AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection
 ```
 
 Container App runtime env vars must be configured separately using Azure Container App secrets/env vars. Do not paste live secrets into source control.

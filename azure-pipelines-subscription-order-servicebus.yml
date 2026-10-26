@@ -8,7 +8,7 @@ parameters:
 
 variables:
   resourceGroup: rg-craves-prodlow-centralindia
-  serviceBusNamespace: sb-craves-prodlow-l3ing6
+  serviceBusNamespace: sb-craves-prodlow-kmqgfy
   topicName: craves-domain-events
   orderSubscription: order-service-subscription-order-requested
 

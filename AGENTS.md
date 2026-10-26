@@ -2,6 +2,7 @@
 
 **Never break or remove anything production is running.** Read `docs/runbooks/live-runtime-safety.md` before building, deploying or changing a service.
 
+- Production is Azure subscription 721906c9 (DevOps org rmorampudi09, service connection Craves-RMORAMPUDI09-Service-Connection); names and ids are in docs/runbooks/production-environment.md. Subscription 4f897b61, names ending l3ing6, registry cravesprodlowacr82121, Craves-Dev-Service-Connection and the ravitejamorampudi7777 org are retired: never use them.
 - Deploy only code that is on GitHub `main`. If you build from a branch, Azure Repos or your machine, merge that source to `main` the same day, and put the commit in the image tag.
 - Before rebuilding a service from `main`, check that `main` contains everything the live image runs (see the runbook).
 - Each backend service has `src/main/resources/live-runtime-lock.txt`. In production, a build that lacks any listed class refuses to start. Never delete a line to get a deploy through: restore the missing code. Remove a line only when retiring that code on purpose, and say so in the PR.

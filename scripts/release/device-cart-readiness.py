@@ -75,7 +75,7 @@ if parsed.scheme != 'https' or not parsed.hostname.endswith('.vault.azure.net') 
     raise SystemExit('Unexpected Key Vault reference')
 key = az('keyvault', 'secret', 'show', '--id', secret_url)['value']
 catalog_id = '8990a560-5720-4273-be46-5a8e9fba1169'
-origin = 'https://ca-craves-catalog-service-prodlo.happysand-aedc7165.centralindia.azurecontainerapps.io/api/v1/catalog'
+origin = 'https://ca-craves-catalog-service-prodlo.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/catalog'
 gateway = 'https://apim-craves-prodlow-kmqgfy.azure-api.net/api/v1/catalog'
 if env.get('CRAVES_CATALOG_BASE_URL', {}).get('value') != gateway:
     raise SystemExit('Catalog destination changed; review before probing')

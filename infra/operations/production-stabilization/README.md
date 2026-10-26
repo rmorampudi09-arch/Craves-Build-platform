@@ -64,7 +64,7 @@ Do not immediately roll back on a single failed assertion. Use the failed sectio
 
 ## History
 
-Until 24 Oct 2026 this module checked the first environment (subscription `4f897b61-…`, `cae-craves-prodlow-l3ing6`), with `craves-web-tls` bound on the customer Container App and the legacy Static Web App as a rollback target. Production moved to the rebuilt environment, so those checks failed on `az account set` and were retired with it.
+Until 24 Oct 2026 this module checked the first, now retired environment (see "Retired: never use" in docs/runbooks/production-environment.md), with `craves-web-tls` bound on the customer Container App and the legacy Static Web App as a rollback target. Production moved to the rebuilt environment, so those checks failed on `az account set` and were retired with it.
 
 ## Cost note
 

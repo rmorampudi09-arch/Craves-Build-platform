@@ -19,7 +19,7 @@ variables:
   modulePath: apps/api-test-dashboard
   imageRepository: craves/api-test-dashboard
   azureServiceConnection: $(AZURE_SERVICE_CONNECTION)
-  dashboardBaseUrl: https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+  dashboardBaseUrl: https://ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
 
 pool:
   vmImage: ubuntu-latest

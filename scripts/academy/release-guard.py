@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RG = 'rg-craves-prodlow-centralindia'
 APP = 'ca-craves-auth-service-prodlow'
-PG = 'pg-craves-prodlow-l3ing6'
+PG = 'pg-craves-prodlow-kmqgfy'
 BASELINE = '6691aa2ff663e51a257407b9b1f4b5b7b4ba87d5'
 PREFIXES = (
     'services/auth-service/src/main/java/in/craves/auth/academy/',

@@ -19,7 +19,7 @@ parameters:
     default: $(Build.BuildId)
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   modulePath: services/integration-service
   imageRepository: craves/integration-service
 

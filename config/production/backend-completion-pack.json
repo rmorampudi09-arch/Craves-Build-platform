@@ -6,7 +6,7 @@
   "preserveRuntimeEnvironmentOnDeployment": true,
   "externalProviderActivationDeferred": true,
   "azure": {
-    "serviceConnection": "Craves-Dev-Service-Connection",
+    "serviceConnection": "Craves-RMORAMPUDI09-Service-Connection",
     "resourceGroup": "rg-craves-prodlow-centralindia",
     "location": "centralindia",
     "containerRegistry": "cravesrm09prodlow6bf632",

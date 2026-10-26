@@ -7,7 +7,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUB = '721906c9-4a72-4606-830b-d3e7ace093ff'
 RG = 'rg-craves-prodlow-centralindia'
 APIM = 'apim-craves-prodlow-kmqgfy'
 BASE = f'https://management.azure.com/subscriptions/{SUB}/resourceGroups/{RG}/providers/Microsoft.ApiManagement/service/{APIM}'

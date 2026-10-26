@@ -33,7 +33,7 @@ parameters:
   - name: academyExpectedCurrentImage
     displayName: Expected current Auth image; refuse an unexpectedly newer baseline
     type: string
-    default: cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:ffdeb9a3fabc532a4b0bcd6baeff36b5b11188a036d7e353f5a7317150606070
+    default: cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:ffdeb9a3fabc532a4b0bcd6baeff36b5b11188a036d7e353f5a7317150606070
 
 variables:
   modulePath: services/auth-service

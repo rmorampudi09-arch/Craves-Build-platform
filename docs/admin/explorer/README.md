@@ -171,7 +171,7 @@ and [subscription throttling](https://learn.microsoft.com/en-us/azure/api-manage
 
 1. Refresh main/feature head, pending PRs and Flyway versions. Review the exact diff.
    Require all applicable checks on one exact reviewed release SHA.
-2. Use the existing `Craves-Dev-Service-Connection`. Deploy only the reviewed Auth,
+2. Use the existing `Craves-RMORAMPUDI09-Service-Connection`. Deploy only the reviewed Auth,
    User/Chef and Order builds with the flag still false. Do not run a broad service
    rollout for this module. Preserve existing configuration and one-replica limits.
 3. Verify each audit and admission migration in its owning DB. Review DDL privileges and audit

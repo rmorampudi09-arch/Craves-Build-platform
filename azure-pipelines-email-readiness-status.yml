@@ -102,7 +102,7 @@ steps:
           REFERRAL_UPGRADE_CONFIRMATION: ${{ parameters.referralUpgradeConfirmation }}
           REFERRAL_UPGRADE_DIGEST: ${{ parameters.referralUpgradeDigest }}
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -120,7 +120,7 @@ steps:
       - task: AzureCLI@2
         displayName: Compare applied Finance migrations without repair or writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -134,7 +134,7 @@ steps:
       - task: AzureCLI@2
         displayName: Inspect recorded PostgreSQL backups without writes or restores
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -147,7 +147,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read refund, subscription and security readiness without writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -166,7 +166,7 @@ steps:
           REQUESTED_IMAGE_TAG: ${{ parameters.financeSourceReleaseSha }}
           SOURCE_REGRESSION_RUN_ID: ${{ parameters.financeSourceRegressionRunId }}
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -192,7 +192,7 @@ steps:
           REQUESTED_IMAGE_TAG: ${{ parameters.catalogFinanceReadSource }}
           CATALOG_READ_REGRESSION_RUN_ID: ${{ parameters.catalogFinanceReadRegressionRunId }}
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -219,7 +219,7 @@ steps:
           AUTH_VERIFY_IMAGE: ${{ parameters.authVerificationImage }}
           AUTH_VERIFY_FINGERPRINT: ${{ parameters.authVerificationFingerprint }}
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -234,7 +234,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read Auth protection settings without activation or customer requests
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -248,7 +248,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read web template shape differences without settings values
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -261,7 +261,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read email operational counts without account data or writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -275,7 +275,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read applied email migration checksums without database writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -292,7 +292,7 @@ steps:
           FINANCE_PRIVACY_ACTION: ${{ parameters.action }}
           EXPECTED_FINANCE_PRIVACY_SOURCE: ${{ parameters.expectedFinancePrivacySource }}
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -309,7 +309,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read existing gateway policy fingerprints without writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -327,7 +327,7 @@ steps:
       - task: AzureCLI@2
         displayName: Capture launch serving metadata and safety baseline without writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -343,7 +343,7 @@ steps:
       - task: AzureCLI@2
         displayName: Inspect email runtime metadata without secret values
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -360,7 +360,7 @@ steps:
       - task: AzureCLI@2
         displayName: Inspect customer routes and optionally repair review writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -375,7 +375,7 @@ steps:
       - task: AzureCLI@2
         displayName: Read cart dependencies and live revision, without secrets or writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -388,7 +388,7 @@ steps:
       - task: AzureCLI@2
         displayName: Inspect owned cart policy structure without values or writes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |
@@ -399,7 +399,7 @@ steps:
       - task: AzureCLI@2
         displayName: Verify pinned healthy Order image and finish owned cart routes
         inputs:
-          azureSubscription: Craves-Dev-Service-Connection
+          azureSubscription: Craves-RMORAMPUDI09-Service-Connection
           scriptType: bash
           scriptLocation: inlineScript
           inlineScript: |

@@ -2,7 +2,7 @@ trigger: none
 pr: none
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   DELIVERY_PRODUCTIONIZATION_BASE_SHA: f0b4c27973bb987bccf68bb1f1a44e1250d94bd4
 
 pool:
@@ -201,7 +201,7 @@ steps:
         exit 2
       fi
 
-      if grep -R -Fq 'apim-craves-prodlowl3ing6' \
+      if grep -R -Fq 'apim-craves-prodlowkmqgfy' \
         azure-pipelines-delivery-provider-production-activation.yml \
         azure-pipelines-delivery-provider-coordinated-activation.yml \
         azure-pipelines-delivery-provider-webhooks-apim.yml \
@@ -252,7 +252,7 @@ steps:
         azure-pipelines-shiprocket-production-activation.yml \
         azure-pipelines-delhivery-environment.yml
       do
-        grep -Fq 'AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection' "$file" || {
+        grep -Fq 'AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection' "$file" || {
           echo "ERROR: $file does not pin the approved Azure service connection." >&2
           exit 2
         }

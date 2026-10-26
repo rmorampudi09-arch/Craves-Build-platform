@@ -13,7 +13,7 @@ steps:
       REQUESTED_IMAGE_TAG: ${{ parameters.sourceSha }}
       AUTH_REGRESSION_RUN_ID: ${{ parameters.regressionRunId }}
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |

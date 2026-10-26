@@ -20,7 +20,7 @@ import uuid
 import configure_bank_runtime as shared
 
 RG = "rg-craves-prodlow-centralindia"
-SUB = "4f897b61-9b52-44b4-8cf1-bdac281cc1aa"
+SUB = "721906c9-4a72-4606-830b-d3e7ace093ff"
 APPS = {"integration": "ca-craves-integration-service-pr", "catalog": "ca-craves-catalog-service-prodlo"}
 SECRET = "craves-catalog-finance-read-v1"
 LOCAL = "catalog-finance-read"

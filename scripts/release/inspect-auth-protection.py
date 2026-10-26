@@ -4,7 +4,7 @@ import json
 import re
 import subprocess
 
-SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUB = '721906c9-4a72-4606-830b-d3e7ace093ff'
 RG = 'rg-craves-prodlow-centralindia'
 APP = 'ca-craves-auth-service-prodlow'
 PREFIX = 'CRAVES_AUTH_RATE_LIMIT_'

@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # PDF production deployment — 2026-09-11
 
 ## Deployed source and evidence

@@ -16,7 +16,7 @@ parameters:
     default: ca-craves-order-service-prodlow
   - name: serviceBusNamespace
     type: string
-    default: sb-craves-prodlow-l3ing6
+    default: sb-craves-prodlow-kmqgfy
   - name: serviceBusTopic
     type: string
     default: craves-domain-events

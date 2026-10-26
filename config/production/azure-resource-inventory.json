@@ -2,10 +2,26 @@
   "schemaVersion": 1,
   "environment": "prodlow",
   "region": "centralindia",
+  "subscriptionId": "721906c9-4a72-4606-830b-d3e7ace093ff",
+  "tenantId": "1e7e43ac-c7f5-4d47-a74f-289a7cc21508",
   "resourceGroup": "rg-craves-prodlow-centralindia",
   "containerRegistry": "cravesrm09prodlow6bf632",
   "apiManagement": "apim-craves-prodlow-kmqgfy",
-  "serviceBusNamespace": "sb-craves-prodlow-l3ing6",
+  "serviceBusNamespace": "sb-craves-prodlow-kmqgfy",
+  "containerAppsEnvironment": "cae-craves-prodlow-kmqgfy",
+  "containerAppsDefaultDomain": "yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
+  "keyVault": "kvcravesprodlowkmqgfy",
+  "postgresServer": "pg-craves-prodlow-kmqgfy",
+  "storageAccount": "stcravesprodlowkmqgfy",
+  "mediaStorageAccount": "stcravesmediakmqgfy",
+  "frontDoorProfile": "afd-craves-prodlow",
+  "frontDoorEndpointHostname": "craves-prodlow-721906c9-cfb3dyb2b7hnhee2.z02.azurefd.net",
+  "publicApiHost": "api.craves.in",
+  "azureDevOps": {
+    "organization": "rmorampudi09",
+    "project": "Craves",
+    "serviceConnection": "Craves-RMORAMPUDI09-Service-Connection"
+  },
   "containerApps": {
     "auth": "ca-craves-auth-service-prodlow",
     "userChef": "ca-craves-user-chef-service-prod",
@@ -24,6 +40,7 @@
   ],
   "notes": [
     "Names are the existing Azure resources and are intentionally shortened where Azure naming limits required it.",
-    "This file is source inventory only and does not create or modify Azure resources."
+    "This file is source inventory only and does not create or modify Azure resources.",
+    "Human-readable copy and the retired names: docs/runbooks/production-environment.md."
   ]
 }

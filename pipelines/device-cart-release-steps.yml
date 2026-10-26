@@ -23,7 +23,7 @@ steps:
   - task: AzureCLI@2
     displayName: Preflight exact live image and cart gateway ownership
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -33,7 +33,7 @@ steps:
   - task: AzureCLI@2
     displayName: Build and publish immutable tested Order image
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -46,7 +46,7 @@ steps:
   - task: AzureCLI@2
     displayName: Deploy Order only, preserving runtime and guarded rollback
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |

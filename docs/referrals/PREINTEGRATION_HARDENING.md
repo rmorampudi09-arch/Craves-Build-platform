@@ -60,7 +60,7 @@ This is the safe default, read directly by the new service security configuratio
 
 The existing Auth documentation describes short-lived `craves:auth:revocation:<UUID>` entries containing `ACTIVE|minimumVersion` or `SUSPENDED|minimumVersion`, with TTL linked to access-token lifetime plus grace. A real, normal TTL expiry can therefore mean no current revocation. Enable the compatibility opt-in only after reviewing the actual publisher, namespace, access-token lifetime, TTL/grace, outage/recovery and eviction behaviour. Opt-in accepts an absent key under that reviewed contract; it does not turn a Redis outage or malformed projection into success. Do not change or flush the existing Auth projection or disable its current security controls.
 
-Keep all seven programme/public/execution flags off until separately approved activation. No production value of the new flag was written here. Current/previous source HMAC values must remain distinct across Auth, Order and Finance; use Key Vault references, never chat or Git. Existing Azure DevOps service connection remains `Craves-Dev-Service-Connection`; this build workflow performs no Azure login.
+Keep all seven programme/public/execution flags off until separately approved activation. No production value of the new flag was written here. Current/previous source HMAC values must remain distinct across Auth, Order and Finance; use Key Vault references, never chat or Git. Existing Azure DevOps service connection remains `Craves-RMORAMPUDI09-Service-Connection`; this build workflow performs no Azure login.
 
 ## 5. Retry identities and recovery are different concepts
 

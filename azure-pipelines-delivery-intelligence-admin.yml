@@ -7,7 +7,7 @@ parameters:
     default: false
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
 
 pool:
   vmImage: ubuntu-latest

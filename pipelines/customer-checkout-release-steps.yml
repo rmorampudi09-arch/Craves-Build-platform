@@ -28,7 +28,7 @@ steps:
   - task: AzureCLI@2
     displayName: Preflight, build and publish tested checkout image
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -42,7 +42,7 @@ steps:
   - task: AzureCLI@2
     displayName: Deploy exact checkout image and publish operation pair
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |

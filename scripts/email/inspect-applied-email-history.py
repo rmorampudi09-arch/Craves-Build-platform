@@ -13,9 +13,9 @@ from urllib.parse import urlparse, parse_qs
 import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
-SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUB = '721906c9-4a72-4606-830b-d3e7ace093ff'
 RG = 'rg-craves-prodlow-centralindia'
-VAULT = 'https://kvcravesprodlowl3ing6.vault.azure.net/secrets/'
+VAULT = 'https://kvcravesprodlowkmqgfy.vault.azure.net/secrets/'
 APPS = {'auth-service': ('ca-craves-auth-service-prodlow', 'public'),
         'user-chef-service': ('ca-craves-user-chef-service-prod', 'public'),
         'notification-service': ('ca-craves-notification-service-p', 'notification_schema')}

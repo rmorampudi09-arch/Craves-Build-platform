@@ -30,7 +30,7 @@ parameters:
 variables:
   appPath: apps/customer-web-next
   imageRepository: craves/customer-web-next
-  expectedSubscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  expectedSubscriptionId: 721906c9-4a72-4606-830b-d3e7ace093ff
 
 pool:
   vmImage: ubuntu-latest

@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 API_ID="${CATALOG_API_ID:-craves-catalog-v1}"
 OPERATION_ID="get-internal-kitchen"
 API_VERSION="${API_VERSION:-2022-08-01}"

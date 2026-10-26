@@ -3,7 +3,7 @@ import test from "node:test";
 import { isRequestOriginAllowed } from "./request-security.ts";
 
 const publicOrigin =
-  "https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io";
+  "https://ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io";
 
 test("accepts a direct same-origin request", () => {
   assert.equal(
@@ -21,7 +21,7 @@ test("accepts the Azure Container Apps public origin behind its internal proxy",
       origin: publicOrigin,
       requestUrl: "http://localhost:3000/api/auth/session",
       forwardedProto: "https",
-      forwardedHost: "ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io",
+      forwardedHost: "ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
       host: "localhost:3000",
     }),
     true,
@@ -34,7 +34,7 @@ test("uses the public Host header when Azure forwards only the protocol", () => 
       origin: publicOrigin,
       requestUrl: "http://localhost:3000/api/auth/session",
       forwardedProto: "https",
-      host: "ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io",
+      host: "ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
     }),
     true,
   );
@@ -47,7 +47,7 @@ test("uses the value added by the closest trusted proxy", () => {
       requestUrl: "http://localhost:3000/api/auth/session",
       forwardedProto: "http, https",
       forwardedHost:
-        "attacker.example, ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io",
+        "attacker.example, ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
     }),
     true,
   );
@@ -59,7 +59,7 @@ test("rejects a cross-origin request", () => {
       origin: "https://attacker.example",
       requestUrl: "http://localhost:3000/api/auth/session",
       forwardedProto: "https",
-      forwardedHost: "ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io",
+      forwardedHost: "ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io",
     }),
     false,
   );

@@ -13,7 +13,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-BASE = 'https://management.azure.com/subscriptions/4f897b61-9b52-44b4-8cf1-bdac281cc1aa/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-l3ing6'
+BASE = 'https://management.azure.com/subscriptions/721906c9-4a72-4606-830b-d3e7ace093ff/resourceGroups/rg-craves-prodlow-centralindia/providers/Microsoft.ApiManagement/service/apim-craves-prodlow-kmqgfy'
 API_IDS = ('craves-finance-admin-v1', 'craves-chef-finance-v1')
 EXPECTED_POLICY_SHA = '0baf929ee9c73bea0300be249bb656213033c0b8009883f48a05d4746d43acca'
 EXPECTED_GLOBAL_SHA = '8e678113f285cd7bef4e758a8f7d3ca893310d891d6301e791b0537132fbedc5'

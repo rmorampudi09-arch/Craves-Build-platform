@@ -6,7 +6,7 @@ RG="${RESOURCE_GROUP:-rg-craves-prodlow-centralindia}"
 SUB_APP="${SUBSCRIPTION_APP:-ca-craves-subscription-service-p}"
 INT_APP="${INTEGRATION_APP:-ca-craves-integration-service-pr}"
 ORDER_APP="${ORDER_APP:-ca-craves-order-service-prodlow}"
-SB_NS="${SERVICE_BUS_NAMESPACE:-sb-craves-prodlow-l3ing6}"
+SB_NS="${SERVICE_BUS_NAMESPACE:-sb-craves-prodlow-kmqgfy}"
 SB_TOPIC="${SERVICE_BUS_TOPIC:-craves-domain-events}"
 APIM_HOST="${APIM_HOST:-api.craves.in}"
 HEALTH_ATTEMPTS="${CRAVES_RUNTIME_HEALTH_ATTEMPTS:-6}"
@@ -175,7 +175,7 @@ assert_not_true "$INT_APP" CRAVES_CASHFREE_PRODUCTION_PAYMENT_EXECUTION_ENABLED 
 echo "PASS: Cashfree rollout is sandbox-only; production activation/execution are off"
 
 if command -v bash >/dev/null && [[ -f scripts/apim/status-subscription-payments-apim.sh ]]; then
-  RG="$RG" APIM="${APIM_NAME:-apim-craves-prodlow-l3ing6}" INTEGRATION_APP="$INT_APP" \
+  RG="$RG" APIM="${APIM_NAME:-apim-craves-prodlow-kmqgfy}" INTEGRATION_APP="$INT_APP" \
     bash scripts/apim/status-subscription-payments-apim.sh
 else
   warn "APIM status helper was not available in the current working directory"

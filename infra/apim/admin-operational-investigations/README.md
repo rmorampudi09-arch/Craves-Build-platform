@@ -49,7 +49,7 @@ azure-pipelines-admin-operational-investigations-apim-rollback.yml
 The Azure pipelines use the established variable:
 
 ```text
-AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
+AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection
 ```
 
 Do not place service-principal credentials in Git or chat.

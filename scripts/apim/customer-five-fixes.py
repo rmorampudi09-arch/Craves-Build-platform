@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 spec = importlib.util.spec_from_file_location('safe_cart', Path(__file__).with_name('device-safe-cart-routes.py'))
 safe = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(safe)
-EXPECTED = 'cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0'
+EXPECTED = 'cravesrm09prodlow6bf632.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0'
 WRITES = [('create-order-review', 'POST'), ('update-order-review', 'PUT')]
 PATH = '/{orderId}/review'
 
@@ -40,7 +40,7 @@ def main(apply=False):
             'latest':props['latestRevisionName'],'ready':props['latestReadyRevisionName'],'settings':metadata}))
         if 'user-chef-service@sha256:' in container['image']:
             reference = container['image'].split('.azurecr.io/', 1)[1]
-            info = safe.az('acr', 'manifest', 'show-metadata', '--registry', 'cravesprodlowacr82121', '--name', reference)
+            info = safe.az('acr', 'manifest', 'show-metadata', '--registry', 'cravesrm09prodlow6bf632', '--name', reference)
             print('USER_CHEF_SOURCE_TAGS ' + json.dumps(info.get('tags', [])))
     base = f'https://management.azure.com/subscriptions/{safe.SUB}/resourceGroups/{safe.RG}/providers/Microsoft.ApiManagement/service/{safe.APIM}'
     safe.read_policies(base)

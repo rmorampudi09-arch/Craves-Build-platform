@@ -7,7 +7,7 @@ parameters:
     default: false
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
 
 pool:
   vmImage: ubuntu-latest
@@ -58,7 +58,7 @@ steps:
         set +x
         rg=rg-craves-prodlow-centralindia
         app=ca-craves-delivery-intel-prodlow
-        registry=cravesprodlowacr82121
+        registry=cravesrm09prodlow6bf632
         repository=craves/delivery-intelligence-admin
         tag='$(Build.SourceVersion)'
         [[ "$tag" =~ ^[a-f0-9]{40}$ ]]

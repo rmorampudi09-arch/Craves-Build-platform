@@ -127,7 +127,7 @@ them. Do not reset attempts, mark them SUCCESS/FAILED or synthesize provider IDs
 ## Guarded configuration release
 
 Use the existing `azure-pipelines-refund-production-activation.yml` definition
-with `Craves-Dev-Service-Connection` and its existing approval controls. This is
+with `Craves-RMORAMPUDI09-Service-Connection` and its existing approval controls. This is
 only the existing Integration app; it creates no resource and preserves exactly
 one replica. Review the PR and CI first.
 

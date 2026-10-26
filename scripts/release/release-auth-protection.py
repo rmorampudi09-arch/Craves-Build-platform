@@ -26,7 +26,7 @@ require = runtime.require
 APP, RG, SUB = inventory.APP, inventory.RG, inventory.SUB
 SETTINGS = {name: str(spec[1]).lower() for name, spec in inventory.SETTINGS.items()}
 SETTINGS.update(CRAVES_AUTH_RATE_LIMIT_ENABLED='true', CRAVES_AUTH_RATE_LIMIT_MODE='postgres')
-IMAGE = r'cravesprodlowacr82121\.azurecr\.io/craves/auth-service@sha256:[a-f0-9]{64}'
+IMAGE = r'cravesrm09prodlow6bf632\.azurecr\.io/craves/auth-service@sha256:[a-f0-9]{64}'
 
 
 def valid_image(image):

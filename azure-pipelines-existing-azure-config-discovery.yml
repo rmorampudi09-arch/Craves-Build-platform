@@ -18,14 +18,14 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  azureServiceConnection: Craves-Dev-Service-Connection
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
-  communicationService: acs-craves-prodlow-4f897b61
-  emailService: ecs-craves-prodlow-4f897b61
+  communicationService: acs-craves-prodlow-721906c9
+  emailService: ecs-craves-prodlow-721906c9
   dataLocation: India
   notificationApp: ca-craves-notification-service-p
   authApp: ca-craves-auth-service-prodlow
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   notificationImageRepository: craves/notification-service
 
 steps:

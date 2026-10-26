@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Administrator portal repair — September 13, 2026
 
 Status at 06:12 UTC: all three authenticated portals load successfully. Academy is enabled and its live learning, persistence, report and plan-conflict checks passed. Admin access correction PR333 is deployed successfully through Azure run 38904. Delivery Intelligence release 38899 is verified successful. Auth, main admin and Delivery Intelligence each have latest=ready, Single mode and min/max replicas 1/1.

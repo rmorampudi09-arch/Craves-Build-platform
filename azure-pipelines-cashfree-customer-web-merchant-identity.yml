@@ -29,7 +29,7 @@ steps:
         CRAVES_PUBLIC_SUPPORT_PHONE_INPUT: ${{ parameters.publicSupportPhone }}
         CRAVES_REGISTERED_BUSINESS_NAME_INPUT: ${{ parameters.registeredBusinessName }}
       inputs:
-        azureSubscription: 'Craves-Dev-Service-Connection'
+        azureSubscription: 'Craves-RMORAMPUDI09-Service-Connection'
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |

@@ -66,7 +66,7 @@ The script does not create new APIM APIs or relax existing subscription settings
 - `confirmConfigureFavoritesP2P3=true`
 - `confirmRollbackFavoritesP2P3=true`
 
-They cannot both be true in the same run. The pipeline uses the existing service connection `Craves-Dev-Service-Connection` and does not require a new secret.
+They cannot both be true in the same run. The pipeline uses the existing service connection `Craves-RMORAMPUDI09-Service-Connection` and does not require a new secret.
 
 After configuration it probes representative routes without authentication and requires HTTP 401, proving the operations are not accidentally public.
 

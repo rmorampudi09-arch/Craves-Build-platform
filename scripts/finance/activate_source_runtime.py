@@ -139,8 +139,8 @@ def image_check(role, app):
     service = role + '-service'
     same = subprocess.run(['git', 'diff', '--quiet', SOURCES[role], 'HEAD', '--', 'services/' + service], cwd=ROOT).returncode
     require(same == 0, 'Deployed service source differs from reviewed build context')
-    repository = 'cravesprodlowacr82121.azurecr.io/craves/' + service
-    digest = az('acr', 'repository', 'show', '--name', 'cravesprodlowacr82121', '--image', 'craves/' + service + ':' + SOURCES[role], '--query', 'digest')
+    repository = 'cravesrm09prodlow6bf632.azurecr.io/craves/' + service
+    digest = az('acr', 'repository', 'show', '--name', 'cravesrm09prodlow6bf632', '--image', 'craves/' + service + ':' + SOURCES[role], '--query', 'digest')
     require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest), 'Invalid registry digest')
     require(app['properties']['template']['containers'][0]['image'] in (repository + ':' + SOURCES[role], repository + '@' + digest), 'Service image is not the reviewed release')
 

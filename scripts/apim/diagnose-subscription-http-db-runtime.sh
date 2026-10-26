@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 SUB_APP="${SUB_APP:-ca-craves-subscription-service-p}"
 DATABASE_NAME="${DATABASE_NAME:-craves_business_db}"
 

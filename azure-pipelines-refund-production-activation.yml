@@ -26,7 +26,7 @@ parameters:
     default: '{"executableRefundCount":0,"reconcilableRefundCount":0,"processingRefundCount":0,"refundDeadLetterCount":0,"unknownOutcomeCount":0,"historicalModeMismatchCount":0,"statusOutboxDeadLetterCount":0,"requestInboxFailureCount":0}'
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
 
 pool:
   vmImage: ubuntu-latest

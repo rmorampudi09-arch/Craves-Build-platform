@@ -21,18 +21,18 @@ parameters:
     default: support@craves.in
 
 variables:
-  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  subscriptionId: 721906c9-4a72-4606-830b-d3e7ace093ff
   resourceGroup: rg-craves-prodlow-centralindia
   apexDnsZoneName: _acme-challenge.craves.in
   wwwDnsZoneName: _acme-challenge.www.craves.in
   parentDnsServer: ns51.domaincontrol.com
-  keyVaultName: kvcravesprodlowl3ing6
+  keyVaultName: kvcravesprodlowkmqgfy
   keyVaultCertificateName: craves-web-tls
-  containerAppEnvironmentName: cae-craves-prodlow-l3ing6
+  containerAppEnvironmentName: cae-craves-prodlow-kmqgfy
   containerAppName: ca-craves-web-prodlow
   apexHostname: craves.in
   wwwHostname: www.craves.in
-  containerAppDefaultHostname: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+  containerAppDefaultHostname: ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
   containerAppCertificateApiVersion: 2024-02-02-preview
   acmeShVersion: 3.1.4
   renewBeforeDays: 30

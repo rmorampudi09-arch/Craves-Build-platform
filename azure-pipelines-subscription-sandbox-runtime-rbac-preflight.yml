@@ -30,7 +30,7 @@ parameters:
   - name: serviceBusNamespace
     displayName: Service Bus namespace
     type: string
-    default: sb-craves-prodlow-l3ing6
+    default: sb-craves-prodlow-kmqgfy
 
   - name: serviceBusTopic
     displayName: Service Bus topic

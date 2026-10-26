@@ -67,7 +67,7 @@ class Acceptance:
 
     def secret(self, name):
         url = self.refs[self.env[name]["secretRef"]]["keyVaultUrl"]
-        assert url.startswith("https://kvcravesprodlowl3ing6.vault.azure.net/secrets/"), "Unexpected secret origin"
+        assert url.startswith("https://kvcravesprodlowkmqgfy.vault.azure.net/secrets/"), "Unexpected secret origin"
         return az("keyvault", "secret", "show", "--id", url, "--query", "value", "-o", "tsv")
 
     def sql(self, sql):

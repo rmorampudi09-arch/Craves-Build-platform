@@ -106,7 +106,7 @@ export function ChefReviews() {
     }
   }
 
-  const head = <ChefPageHead title={text.title} back={{ href: "/chef/profile", label: pageText("More", language) }} />;
+  const head = <ChefPageHead title={text.title} back={{ href: "/chef/profile", label: pageText("Profile", language) }} />;
   if (load.state === "loading") return <div>{head}<ChefLoading shape="notifications" head={false} label={text.loading} /></div>;
   if (load.state !== "ready" || load.reviews.length === 0) {
     const empty =

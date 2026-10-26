@@ -14,7 +14,8 @@ const names = (items: { itemName: string }[]) => items.map((item) => item.itemNa
 
 test("the pills count on, off (switched off or taken off the menu) and drafts", () => {
   assert.deepEqual(menuCounts(menu), { ALL: 5, ON: 2, OFF: 2, DRAFT: 1 });
-  assert.deepEqual(sortCategories(["Amma's specials", "Tiffins", "Biryani", "Sweets", "Biryani"]), ["Biryani", "Tiffins", "Sweets", "Amma's specials"]);
+  // Keys are the app's category names; dishes saved as "Tiffins" or "Sweets" fold into Tiffin and Sweet Item.
+  assert.deepEqual(sortCategories(["Amma's specials", "Tiffin", "Biryani", "Sweet Item", "Biryani"]), ["Biryani", "Tiffin", "Sweet Item", "Amma's specials"]);
 });
 
 test("a filter and the search words narrow the list together", () => {

@@ -37,7 +37,7 @@ describe("Menu list", () => {
   it("counts the pills, flags what keeps customers out, and narrows by pill and search", async () => {
     open([dish(1, "Chicken dum biryani", "Biryani", "ACTIVE", true), dish(2, "Veg biryani", "Biryani", "ACTIVE", false), dish(3, "Idli", "Tiffins", "ACTIVE", true, null), dish(4, "Rasmalai", "Sweets", "DRAFT", false)]);
     const pills = await screen.findByRole("group", { name: "Show dishes" });
-    expect(within(pills).getAllByRole("button").map((pill) => pill.textContent)).toEqual(["All 4", "On 2", "Off 1", "Drafts 1", "Biryani", "Tiffins", "Sweets"]);
+    expect(within(pills).getAllByRole("button").map((pill) => pill.textContent)).toEqual(["All 4", "On 2", "Off 1", "Drafts 1", "Biryani", "Tiffin", "Sweet Item"]);
     expect(screen.getByText("2 of 4 dishes customers can order")).toBeTruthy();
     expect(screen.getByText("Off for customers")).toBeTruthy();
     expect(screen.getByText("Prep time missing")).toBeTruthy();

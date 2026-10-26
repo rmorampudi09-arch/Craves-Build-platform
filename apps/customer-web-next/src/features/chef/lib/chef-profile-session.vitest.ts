@@ -370,7 +370,7 @@ describe("Chef menu save and recovery", () => {
   }
   async function fillRequired() {
     fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture dish" } });
-    await pickCategory("Meals");
+    await pickCategory("Rice");
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "500" } });
@@ -622,7 +622,7 @@ describe("Chef menu save and recovery", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish name/)));
     expect(screen.getByText("Give your dish a name.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture" } });
-    await pickCategory("Meals");
+    await pickCategory("Rice");
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Veg" })));
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));

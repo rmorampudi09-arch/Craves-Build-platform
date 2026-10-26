@@ -45,6 +45,8 @@ interface BrowseHeaderProps {
    * white clouds rise over it and the header turns white.
    */
   tone?: "white" | "red";
+  /** Placeholder for every search field in the header (the Chefs tab searches kitchens and areas). */
+  searchPlaceholder?: string;
 }
 
 /** Home's red: the accessible flame red, so white text on it passes 4.5:1. */
@@ -95,6 +97,7 @@ export function BrowseHeader({
   onBack,
   backLabel = "Back to home",
   tone = "white",
+  searchPlaceholder,
 }: BrowseHeaderProps) {
   const openLocation = () => {
     rememberReturnRoute("/addresses", toCustomerReturnRoute(returnPath));
@@ -204,7 +207,7 @@ export function BrowseHeader({
               onClick={onSearchActivate}
               onKeyDown={submitSearch}
               onChange={(event) => onSearchTermChange(event.target.value)}
-              placeholder="Search homemade dishes or kitchens"
+              placeholder={searchPlaceholder ?? "Search homemade dishes or kitchens"}
               data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-xs font-semibold text-[#1A1A1A] lg:text-sm shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
@@ -350,7 +353,7 @@ export function BrowseHeader({
                 onClick={onSearchActivate}
                 onKeyDown={submitSearch}
                 onChange={(event) => onSearchTermChange(event.target.value)}
-                placeholder="Search dishes, kitchens"
+                placeholder={searchPlaceholder ?? "Search dishes, kitchens"}
                 data-craves-bare-input
                 className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
                 type="text"
@@ -390,7 +393,7 @@ export function BrowseHeader({
               onClick={onSearchActivate}
               onKeyDown={submitSearch}
               onChange={(event) => onSearchTermChange(event.target.value)}
-              placeholder="Search dishes or kitchens"
+              placeholder={searchPlaceholder ?? "Search dishes or kitchens"}
               data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"

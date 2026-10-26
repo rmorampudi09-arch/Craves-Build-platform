@@ -525,6 +525,56 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
 /* The drawing sits on the section's white, like the page it belongs to. */
 .chef-empty-image { height: 9.5rem; width: auto; max-width: 100%; object-fit: contain; }
 @media (min-width: 640px) { .chef-empty-image { height: 11rem; } }
+/* Red underline tabs (ChefUnderlineTabs), as in the app's Orders, Menu and Payout history. */
+.chef-underline-tabs {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--chef-line);
+  scrollbar-width: none;
+}
+.chef-underline-tabs::-webkit-scrollbar { display: none; }
+.chef-panel-theme .chef-underline-tab,
+.chef-underline-tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  margin-bottom: -1px;
+  padding: 0 0.125rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--chef-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms var(--chef-ease), border-color 150ms var(--chef-ease);
+}
+.chef-underline-tab:hover { color: var(--chef-text); }
+.chef-panel-theme .chef-underline-tab[aria-pressed="true"],
+.chef-underline-tab[aria-pressed="true"] {
+  border-bottom-color: #f62e18;
+  color: #d92714;
+  font-weight: 700;
+}
+.chef-underline-tab:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; border-radius: 4px; }
+.chef-underline-count { font-weight: 700; color: inherit; }
+.chef-underline-count.is-urgent {
+  display: inline-grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: #f62e18;
+  color: #fff;
+  font-size: 0.75rem;
+}
 /* The app's empty-state drawings (EmptyIllustration), 240 × 190. */
 .chef-empty-drawing { width: 12rem; }
 @media (min-width: 640px) { .chef-empty-drawing { width: 14rem; } }

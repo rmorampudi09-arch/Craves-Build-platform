@@ -216,6 +216,41 @@ export function ChefEmpty({
   );
 }
 
+/**
+ * Red underline tabs with counts, as in the app (1.34.5) on Orders, Menu and Payout history. Buttons
+ * with aria-pressed, like the chips they replace; `urgent` puts the count in a red badge (new orders).
+ */
+export function ChefUnderlineTabs<T extends string>({
+  label,
+  tabs,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  tabs: readonly { value: T; label: ReactNode; count?: number; urgent?: boolean }[];
+  value: T;
+  onChange: (next: T) => void;
+  className?: string;
+}) {
+  return (
+    <nav aria-label={label} className={className ? `chef-underline-tabs ${className}` : "chef-underline-tabs"}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.value}
+          type="button"
+          aria-pressed={tab.value === value}
+          onClick={() => onChange(tab.value)}
+          className="chef-underline-tab"
+        >
+          {tab.label}
+          {tab.count ? <span className={tab.urgent ? "chef-underline-count is-urgent" : "chef-underline-count"}>{tab.count}</span> : null}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 const FLASH_TEXT = messages({
   en: { close: "Close message" },
   te: { close: "సందేశం మూసివేయండి" },

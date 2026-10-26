@@ -3,13 +3,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
 import { createElement } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ChefKitchenForm } from "../components/chef-kitchen-form";
 import { setSessionIdentity } from "../../auth/api/cravesAuth";
 
+const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/chef/kitchen",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: router.push, replace: vi.fn() }),
 }));
 vi.mock("../../addresses/components/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
 
@@ -49,6 +50,7 @@ afterAll(() => {
   MotionGlobalConfig.skipAnimations = false;
 });
 beforeEach(() => {
+  router.push.mockReset();
   setSessionIdentity({
     id: "61111111-1111-4111-8111-111111111111",
     phoneNumber: "+919999999999",
@@ -281,4 +283,38 @@ it("asks Craves support to move the kitchen, and keeps the message when support 
   await screen.findByText("Chat is on its way");
   expect((screen.getByLabelText("Your new kitchen address") as HTMLTextAreaElement).value).toBe("4 New Street");
   expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("asks before leaving kitchen details with changes not saved, and keeps them on Keep editing", async () => {
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
+  // Nothing changed yet: the way out is free.
+  const unload = () => window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+  expect(unload()).toBe(true);
+  fireEvent.change(field("Kitchen name"), { target: { value: "Asha's new kitchen" } });
+  expect(unload()).toBe(false);
+
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  const dialog = await screen.findByRole("dialog", { name: "Leave without saving?" });
+  expect(dialog.textContent).toContain("Your changes to the kitchen details will be lost.");
+  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(field("Kitchen name").value).toBe("Asha's new kitchen");
+
+  // A link elsewhere on the page is held back too, then followed on Leave.
+  fireEvent.click(screen.getByRole("link", { name: /^(Profile|More)$/ }));
+  expect(router.push).not.toHaveBeenCalled();
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Leave without saving?" })).getByRole("button", { name: "Leave" }));
+  expect(router.push).toHaveBeenCalledExactlyOnceWith("/chef/profile");
+});
+
+it("the step's Back throws the changes away on Leave and shows the kitchen as saved", async () => {
+  open();
+  fireEvent.click(await screen.findByRole("button", { name: "Edit kitchen details" }));
+  fireEvent.change(field("Kitchen name"), { target: { value: "Not saved" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Leave without saving?" })).getByRole("button", { name: "Leave" }));
+  expect(await screen.findByRole("heading", { name: "Fixture kitchen" })).toBeTruthy();
+  expect(screen.queryByText("Not saved")).toBeNull();
+  expect(saved).toBeNull();
 });

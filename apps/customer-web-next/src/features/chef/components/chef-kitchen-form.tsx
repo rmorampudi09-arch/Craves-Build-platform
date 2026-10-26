@@ -22,7 +22,9 @@ import { shrinkPhoto } from "@/features/chef/lib/shrink-photo";
 import { ChefAvatarGrid } from "@/features/chef/components/chef-avatar";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
-import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { useRouter } from "next/navigation";
+import { useLeaveGuard } from "@/features/chef/lib/use-leave-guard";
 import { parseOnboardingState } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import {
@@ -77,6 +79,7 @@ const TEXT = messages({
     pausedNote: "Craves has paused this kitchen for now. Your saved details are still here.", edit: "Edit kitchen details", goToMenu: "Go to my menu",
     photos: "Photos", yourPicture: "Your picture", comingSoon: "Coming soon", saving: "Saving…", overallFirst: "Add the overall kitchen photo first.",
     overall: "Overall kitchen", setup: "Cooking setup", photoAdded: ": photo added", changePicture: "Change your picture", cancel: "Cancel", save: "Save",
+    leaveTitle: "Leave without saving?", leaveText: "Your changes to the kitchen details will be lost.", keepEditing: "Keep editing", leave: "Leave",
     kitchenPhoto: "Kitchen photo", photoLocks: "Photos can’t be changed once added.", chooseAnother: "Choose another", usePhoto: "Use this photo",
     photoAlt: "Your kitchen photo", takePhoto: "Take a photo", gallery: "Choose from gallery",
     stepName: "Name", nameTitle: "What should customers call your kitchen?", nameHelp: "Choose a simple name you’ll be happy to see next to your food.",
@@ -125,6 +128,7 @@ const TEXT = messages({
     pausedNote: "Craves ప్రస్తుతానికి ఈ వంటగదిని ఆపింది. మీరు సేవ్ చేసిన వివరాలు ఇక్కడే ఉన్నాయి.", edit: "వంటగది వివరాలు మార్చండి", goToMenu: "నా మెనూకి వెళ్లండి",
     photos: "ఫోటోలు", yourPicture: "మీ చిత్రం", comingSoon: "త్వరలో వస్తుంది", saving: "సేవ్ అవుతోంది…", overallFirst: "ముందు వంటగది మొత్తం ఫోటో జోడించండి.",
     overall: "వంటగది మొత్తం", setup: "వంట చేసే చోటు", photoAdded: ": ఫోటో జోడించారు", changePicture: "మీ చిత్రం మార్చండి", cancel: "రద్దు చేయండి", save: "సేవ్ చేయండి",
+    leaveTitle: "సేవ్ చేయకుండా వెళ్లాలా?", leaveText: "వంటగది వివరాల్లో మీరు చేసిన మార్పులు పోతాయి.", keepEditing: "రాయడం కొనసాగించండి", leave: "వెళ్లండి",
     kitchenPhoto: "వంటగది ఫోటో", photoLocks: "జోడించిన తర్వాత ఫోటోలు మార్చలేరు.", chooseAnother: "వేరేది ఎంచుకోండి", usePhoto: "ఈ ఫోటో వాడండి",
     photoAlt: "మీ వంటగది ఫోటో", takePhoto: "ఫోటో తీయండి", gallery: "గ్యాలరీ నుండి ఎంచుకోండి",
     stepName: "పేరు", nameTitle: "కస్టమర్లు మీ వంటగదిని ఏ పేరుతో పిలవాలి?", nameHelp: "మీ ఆహారం పక్కన చూడటానికి మీకు నచ్చే సులభమైన పేరు ఎంచుకోండి.",
@@ -173,6 +177,7 @@ const TEXT = messages({
     pausedNote: "Craves ಸದ್ಯಕ್ಕೆ ಈ ಅಡುಗೆಮನೆ ನಿಲ್ಲಿಸಿದೆ. ನೀವು ಉಳಿಸಿದ ವಿವರಗಳು ಇಲ್ಲೇ ಇವೆ.", edit: "ಅಡುಗೆಮನೆ ವಿವರ ಬದಲಾಯಿಸಿ", goToMenu: "ನನ್ನ ಮೆನುಗೆ ಹೋಗಿ",
     photos: "ಫೋಟೋಗಳು", yourPicture: "ನಿಮ್ಮ ಚಿತ್ರ", comingSoon: "ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ", saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ…", overallFirst: "ಮೊದಲು ಅಡುಗೆಮನೆಯ ಪೂರ್ಣ ಫೋಟೋ ಸೇರಿಸಿ.",
     overall: "ಪೂರ್ಣ ಅಡುಗೆಮನೆ", setup: "ಅಡುಗೆ ಮಾಡುವ ಜಾಗ", photoAdded: ": ಫೋಟೋ ಸೇರಿಸಲಾಗಿದೆ", changePicture: "ನಿಮ್ಮ ಚಿತ್ರ ಬದಲಾಯಿಸಿ", cancel: "ರದ್ದುಮಾಡಿ", save: "ಉಳಿಸಿ",
+    leaveTitle: "ಉಳಿಸದೆ ಹೊರಡಬೇಕೇ?", leaveText: "ಅಡುಗೆಮನೆ ವಿವರಗಳಲ್ಲಿ ನೀವು ಮಾಡಿದ ಬದಲಾವಣೆಗಳು ಹೋಗುತ್ತವೆ.", keepEditing: "ಬರೆಯುವುದನ್ನು ಮುಂದುವರಿಸಿ", leave: "ಹೊರಡಿ",
     kitchenPhoto: "ಅಡುಗೆಮನೆ ಫೋಟೋ", photoLocks: "ಸೇರಿಸಿದ ನಂತರ ಫೋಟೋಗಳನ್ನು ಬದಲಾಯಿಸಲು ಆಗುವುದಿಲ್ಲ.", chooseAnother: "ಬೇರೆಯದು ಆಯ್ಕೆಮಾಡಿ", usePhoto: "ಈ ಫೋಟೋ ಬಳಸಿ",
     photoAlt: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಫೋಟೋ", takePhoto: "ಫೋಟೋ ತೆಗೆಯಿರಿ", gallery: "ಗ್ಯಾಲರಿಯಿಂದ ಆಯ್ಕೆಮಾಡಿ",
     stepName: "ಹೆಸರು", nameTitle: "ಗ್ರಾಹಕರು ನಿಮ್ಮ ಅಡುಗೆಮನೆಯನ್ನು ಯಾವ ಹೆಸರಿನಿಂದ ಕರೆಯಬೇಕು?", nameHelp: "ನಿಮ್ಮ ಆಹಾರದ ಪಕ್ಕ ನೋಡಲು ನಿಮಗೆ ಇಷ್ಟವಾಗುವ ಸರಳ ಹೆಸರು ಆಯ್ಕೆಮಾಡಿ.",
@@ -434,6 +439,8 @@ export function ChefKitchenForm() {
     Object.hasOwn(CUISINE_WORDS.en, item) ? CUISINE_WORDS[language][item as keyof (typeof CUISINE_WORDS)["en"]] : item;
   const [kitchen, setKitchen] = useState<ChefKitchen | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  // The details as saved (or as first filled in): the form differs from them while there are unsaved changes.
+  const [baseline, setBaseline] = useState<FormState>(EMPTY);
   const [step, setStep] = useState<SetupStep>("name");
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState(text.loading);
@@ -534,6 +541,7 @@ export function ChefKitchenForm() {
           initial.longitude = String(onboardingBody.details.longitude ?? "");
         }
         setForm(initial);
+        setBaseline(initial);
         setStep(nextKitchen ? "summary" : "name");
         setMessage("");
         setLoaded(true);
@@ -716,6 +724,7 @@ export function ChefKitchenForm() {
       const nextKitchen = result as unknown as ChefKitchen;
       setKitchen(nextKitchen);
       setForm(fromKitchen(nextKitchen));
+      setBaseline(fromKitchen(nextKitchen));
       setMessage("");
       setNotice(text.saved);
       setStep("summary");
@@ -786,6 +795,43 @@ export function ChefKitchenForm() {
   const photoSlots: (string | null | undefined)[] = kitchen ? kitchenPhotoSlots(kitchen) ?? [undefined, undefined] : [];
   const nextPhotoSlot = photoSlots.indexOf(null);
   const mapped = Boolean(form.latitude.trim()) && Boolean(form.longitude.trim());
+
+  // Leaving the edit steps with changes not saved asks first (app: "Leave without saving?"), for a link
+  // anywhere on the page, the step's own Back to the summary, and closing or reloading the tab.
+  const router = useRouter();
+  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  const unsaved = loaded && step !== "summary" && JSON.stringify(form) !== JSON.stringify(baseline);
+  useLeaveGuard(unsaved, (href) => setLeaving(() => () => router.push(href)));
+  const leaveEdit = () => {
+    const back = () => {
+      setForm(baseline);
+      go("summary");
+    };
+    if (unsaved) setLeaving(() => back);
+    else back();
+  };
+  const leaveDialog = (
+    <Dialog
+      open={leaving !== null}
+      onOpenChange={(open) => !open && setLeaving(null)}
+      title={text.leaveTitle}
+      description={text.leaveText}
+      footer={<>
+        <button type="button" className={secondaryActionClass} onClick={() => setLeaving(null)}>{text.keepEditing}</button>
+        <button
+          type="button"
+          className="craves-primary-action w-full sm:w-auto"
+          onClick={() => {
+            const leave = leaving;
+            setLeaving(null);
+            leave?.();
+          }}
+        >
+          {text.leave}
+        </button>
+      </>}
+    />
+  );
 
   if (!loaded) {
     return <ChefLoading shape="kitchen" label={text.loadingLabel} />;
@@ -920,7 +966,7 @@ export function ChefKitchenForm() {
       <>
       <PageBack />
       <section className="chef-section mt-2 p-5 md:p-7">
-        <StepHeader label={text.stepName} onBack={kitchen ? () => go("summary") : undefined} />
+        <StepHeader label={text.stepName} onBack={kitchen ? leaveEdit : undefined} />
         <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Store className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">{text.nameTitle}</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text.nameHelp}</p>
@@ -942,6 +988,7 @@ export function ChefKitchenForm() {
         {message ? <p id="kitchen-field-error" role="alert" className="chef-field-error mt-4">{message}</p> : null}
         <button type="button" onClick={continueName} className="chef-btn is-primary is-block mt-7">{text.continue}</button>
       </section>
+      {leaveDialog}
       </>
     );
   }
@@ -1006,6 +1053,7 @@ export function ChefKitchenForm() {
           )}
         </Sheet>
       </section>
+      {leaveDialog}
       </>
     );
   }
@@ -1032,6 +1080,7 @@ export function ChefKitchenForm() {
       {message ? <p id="kitchen-field-error" role="alert" className="mt-4 rounded-2xl bg-[#F1F3F5] p-4 text-sm font-medium text-[#C4200F]">{message}</p> : null}
       <button type="button" disabled={busy || locating || suspended} onClick={() => void save()} className="chef-btn is-primary is-block mt-7">{busy ? text.saving : text.saveKitchen}</button>
     </section>
+    {leaveDialog}
     </>
   );
 }

@@ -28,6 +28,7 @@ import {
 } from "@/features/chef/lib/chef-order-contract";
 import { ChefOrderCard, OrderUpdateNotice, chefStatusIcon, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
 import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
+import { ChefScheduledOrders, useScheduledOrders } from "@/features/chef/components/chef-scheduled-orders";
 import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { PAST_KINDS, finishedAt, groupPastOrders, inboxViewOf, pastGroupLabel, pastKindOf, type InboxView, type PastKind } from "@/features/chef/lib/chef-order-filters";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
@@ -44,7 +45,7 @@ const TEXT = messages({
     loadFailed: "We couldn’t load your orders right now.", readFailed: "We couldn’t read the latest orders. Please refresh.",
     title: "Orders", updated: "Updated {time}", subtitle: "New orders that need an answer come first.", refresh: "Refresh",
     loading: "Loading chef orders", failedTitle: "Orders couldn’t load", tryAgain: "Try again",
-    tabsLabel: "Choose which orders to see", tabNew: "New", tabCooking: "Cooking", tabReady: "Ready", tabPast: "Past",
+    tabsLabel: "Choose which orders to see", tabNew: "New", tabCooking: "Cooking", tabReady: "Ready", tabScheduled: "Scheduled", tabPast: "Past",
     newTitle: "No new orders", newText: "New orders show up here. Keep Craves open while your kitchen is open.",
     cookingTitle: "Nothing cooking", cookingText: "Orders you accept show up here while you cook them.",
     readyTitle: "Nothing waiting for pickup", readyText: "When you mark an order ready, it waits here for the delivery partner.", seeNew: "See new orders",
@@ -58,7 +59,7 @@ const TEXT = messages({
     loadFailed: "ఇప్పుడు మీ ఆర్డర్లు లోడ్ చేయలేకపోయాం.", readFailed: "తాజా ఆర్డర్లు చదవలేకపోయాం. 'మళ్లీ చూడండి' నొక్కండి.",
     title: "ఆర్డర్లు", updated: "{time} కి అప్‌డేట్ అయింది", subtitle: "జవాబు ఇవ్వాల్సిన కొత్త ఆర్డర్లు ముందు కనిపిస్తాయి.", refresh: "మళ్లీ చూడండి",
     loading: "ఆర్డర్లు లోడ్ అవుతున్నాయి", failedTitle: "ఆర్డర్లు లోడ్ కాలేదు", tryAgain: "మళ్లీ ప్రయత్నించండి",
-    tabsLabel: "ఏ ఆర్డర్లు చూడాలో ఎంచుకోండి", tabNew: "కొత్తవి", tabCooking: "వంట అవుతోంది", tabReady: "సిద్ధం", tabPast: "పాతవి",
+    tabsLabel: "ఏ ఆర్డర్లు చూడాలో ఎంచుకోండి", tabNew: "కొత్తవి", tabCooking: "వంట అవుతోంది", tabReady: "సిద్ధం", tabScheduled: "షెడ్యూల్", tabPast: "పాతవి",
     newTitle: "కొత్త ఆర్డర్లు లేవు", newText: "కొత్త ఆర్డర్లు ఇక్కడ కనిపిస్తాయి. మీ వంటగది తెరిచి ఉన్నప్పుడు Craves తెరిచే ఉంచండి.",
     cookingTitle: "ఏదీ వండటం లేదు", cookingText: "మీరు ఒప్పుకున్న ఆర్డర్లు వండుతున్నప్పుడు ఇక్కడ కనిపిస్తాయి.",
     readyTitle: "పికప్ కోసం ఏదీ లేదు", readyText: "ఆర్డర్ సిద్ధం అని గుర్తిస్తే, డెలివరీ వ్యక్తి కోసం ఇక్కడ ఎదురుచూస్తుంది.", seeNew: "కొత్త ఆర్డర్లు చూడండి",
@@ -72,7 +73,7 @@ const TEXT = messages({
     loadFailed: "ಈಗ ನಿಮ್ಮ ಆರ್ಡರ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ.", readFailed: "ಇತ್ತೀಚಿನ ಆರ್ಡರ್‌ಗಳನ್ನು ಓದಲಾಗಲಿಲ್ಲ. 'ಮತ್ತೆ ನೋಡಿ' ಒತ್ತಿ.",
     title: "ಆರ್ಡರ್‌ಗಳು", updated: "{time} ಕ್ಕೆ ಅಪ್‌ಡೇಟ್ ಆಗಿದೆ", subtitle: "ಉತ್ತರಿಸಬೇಕಾದ ಹೊಸ ಆರ್ಡರ್‌ಗಳು ಮೊದಲು ಕಾಣುತ್ತವೆ.", refresh: "ಮತ್ತೆ ನೋಡಿ",
     loading: "ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ", failedTitle: "ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
-    tabsLabel: "ಯಾವ ಆರ್ಡರ್‌ಗಳನ್ನು ನೋಡಬೇಕು ಎಂದು ಆಯ್ಕೆಮಾಡಿ", tabNew: "ಹೊಸದು", tabCooking: "ಅಡುಗೆ ಆಗುತ್ತಿದೆ", tabReady: "ಸಿದ್ಧ", tabPast: "ಹಳೆಯವು",
+    tabsLabel: "ಯಾವ ಆರ್ಡರ್‌ಗಳನ್ನು ನೋಡಬೇಕು ಎಂದು ಆಯ್ಕೆಮಾಡಿ", tabNew: "ಹೊಸದು", tabCooking: "ಅಡುಗೆ ಆಗುತ್ತಿದೆ", tabReady: "ಸಿದ್ಧ", tabScheduled: "ಶೆಡ್ಯೂಲ್", tabPast: "ಹಳೆಯವು",
     newTitle: "ಹೊಸ ಆರ್ಡರ್‌ಗಳಿಲ್ಲ", newText: "ಹೊಸ ಆರ್ಡರ್‌ಗಳು ಇಲ್ಲಿ ಕಾಣುತ್ತವೆ. ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿರುವಾಗ Craves ತೆರೆದೇ ಇಡಿ.",
     cookingTitle: "ಯಾವುದೂ ಅಡುಗೆ ಆಗುತ್ತಿಲ್ಲ", cookingText: "ನೀವು ಒಪ್ಪಿಕೊಂಡ ಆರ್ಡರ್‌ಗಳು ಅಡುಗೆ ಮಾಡುವಾಗ ಇಲ್ಲಿ ಕಾಣುತ್ತವೆ.",
     readyTitle: "ಪಿಕಪ್‌ಗಾಗಿ ಯಾವುದೂ ಇಲ್ಲ", readyText: "ಆರ್ಡರ್ ಸಿದ್ಧ ಎಂದು ಗುರುತಿಸಿದಾಗ, ಅದು ಡೆಲಿವರಿ ವ್ಯಕ್ತಿಗಾಗಿ ಇಲ್ಲಿ ಕಾಯುತ್ತದೆ.", seeNew: "ಹೊಸ ಆರ್ಡರ್‌ಗಳನ್ನು ನೋಡಿ",
@@ -94,7 +95,9 @@ export function ChefOrderInbox() {
   const text = useText(TEXT);
   const { language } = useLanguage();
   const [orders, setOrders] = useState<ChefOrder[]>([]);
-  const [view, setView] = useState<InboxView>("NEEDS_ANSWER");
+  // Scheduled is its own list (requests for a later time), beside the order tabs.
+  const [view, setView] = useState<InboxView | "SCHEDULED">("NEEDS_ANSWER");
+  const scheduled = useScheduledOrders();
   const [kind, setKind] = useState<PastKind>("ALL");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -212,6 +215,8 @@ export function ChefOrderInbox() {
     { value: "NEEDS_ANSWER", label: text.tabNew, count: counts.NEEDS_ANSWER, urgent: true },
     { value: "IN_PROGRESS", label: text.tabCooking, count: counts.IN_PROGRESS },
     { value: "READY", label: text.tabReady, count: counts.READY },
+    // No number until the list is known: not while it loads, failed, or isn't live yet.
+    { value: "SCHEDULED", label: text.tabScheduled, count: scheduled.state === "ready" ? scheduled.pending.length : undefined },
     { value: "PREVIOUS", label: text.tabPast },
   ] as const;
   const seeNew = <button type="button" onClick={() => setView("NEEDS_ANSWER")} className="chef-btn">{text.seeNew}</button>;
@@ -222,7 +227,7 @@ export function ChefOrderInbox() {
         title={text.title}
         subtitle={lastUpdatedAt ? format(text.updated, { time: lastUpdatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }).toLowerCase() }) : text.subtitle}
         action={
-          <button type="button" disabled={refreshing || loading} onClick={() => void load(true)} className="chef-btn is-small" aria-busy={refreshing}>
+          <button type="button" disabled={refreshing || loading} onClick={() => { void load(true); void scheduled.reload(); }} className="chef-btn is-small" aria-busy={refreshing}>
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
             {text.refresh}
           </button>
@@ -252,7 +257,9 @@ export function ChefOrderInbox() {
 
           <OrderUpdateNotice id="chef-order-update" text={orderNotice} />
 
-          {view === "NEEDS_ANSWER" && liveOrders.length === 0 ? (
+          {view === "SCHEDULED" ? (
+            <ChefScheduledOrders queue={scheduled} orders={orders} onSeeNew={() => setView("NEEDS_ANSWER")} />
+          ) : view === "NEEDS_ANSWER" && liveOrders.length === 0 ? (
             <>
               <ChefSection>
                 <ChefEmpty illustration="newOrders" title={text.newTitle} text={text.newText} />

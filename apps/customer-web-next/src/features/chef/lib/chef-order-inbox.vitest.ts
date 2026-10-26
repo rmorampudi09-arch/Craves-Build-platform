@@ -115,12 +115,12 @@ describe("Past orders", () => {
 });
 
 describe("tabs", () => {
-  it("are New, Cooking, Ready and Past, open on the first with orders, and count no unpaid order", async () => {
+  it("are New, Cooking, Ready, Scheduled and Past, open on the first with orders, and count no unpaid order", async () => {
     live = [order(9, "PAYMENT_PENDING"), order(8, "READY_FOR_PICKUP"), order(7, "REFUNDED"), order(6, "CANCELLED"), order(5)];
     pages["/api/chef/orders/page?limit=20"] = Response.json({ orders: [], nextCursor: null, hasMore: false });
     render(createElement(ChefOrderInbox));
     const tabs = await screen.findByRole("navigation", { name: "Choose which orders to see" }, slow);
-    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready1", "Past"]);
+    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready1", "Scheduled", "Past"]);
     // The inbox picks its opening tab in an effect after the tabs first render.
     await waitFor(() => expect(screen.getByRole("button", { name: /^Ready/ }).getAttribute("aria-pressed")).toBe("true"), slow);
     fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
@@ -132,7 +132,7 @@ describe("tabs", () => {
     render(createElement(ChefOrderInbox));
     expect(await screen.findByRole("heading", { name: "No new orders" }, slow)).toBeTruthy();
     const tabs = screen.getByRole("navigation", { name: "Choose which orders to see" });
-    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready", "Past"]);
+    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready", "Scheduled", "Past"]);
   });
 
   it("moves a picked-up order to Past, where chips and day groups sort it", async () => {

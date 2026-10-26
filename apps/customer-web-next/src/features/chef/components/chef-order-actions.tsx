@@ -206,7 +206,7 @@ function CountdownLine({ countdown }: { countdown: Countdown }) {
 }
 
 /** One reason from a short list, as tiles: the chef reads `labels`, the answer is the English reason. */
-function ReasonTiles<K extends string>({ name, reasons, labels, value, onChange }: { name: string; reasons: Record<K, string>; labels: Record<K, string>; value: string; onChange(reason: string): void }) {
+export function ReasonTiles<K extends string>({ name, reasons, labels, value, onChange }: { name: string; reasons: Record<K, string>; labels: Record<K, string>; value: string; onChange(reason: string): void }) {
   const legend = useText(TEXT).reason;
   return (
     <fieldset className="grid gap-2">

@@ -108,7 +108,8 @@ describe("Past orders", () => {
       hasMore: false,
     });
     render(createElement(ChefOrderInbox));
-    fireEvent.click(await screen.findByRole("button", { name: "See past orders" }, slow));
+    expect(await screen.findByRole("heading", { name: "No new orders" }, slow)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     await waitFor(() => expect(rows()).toEqual(["0BDE0102"]));
   });
 });
@@ -119,17 +120,32 @@ describe("tabs", () => {
     pages["/api/chef/orders/page?limit=20"] = Response.json({ orders: [], nextCursor: null, hasMore: false });
     render(createElement(ChefOrderInbox));
     const tabs = await screen.findByRole("navigation", { name: "Choose which orders to see" }, slow);
-    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready1", "Past3"]);
+    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready1", "Past"]);
     // The inbox picks its opening tab in an effect after the tabs first render.
     await waitFor(() => expect(screen.getByRole("button", { name: /^Ready/ }).getAttribute("aria-pressed")).toBe("true"), slow);
     fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     await waitFor(() => expect(rows()).toEqual(["0BDE0107", "0BDE0106", "0BDE0105"]), slow);
   });
 
-  it("shows the empty kitchen when the only orders are unpaid", async () => {
+  it("shows an empty New tab when the only orders are unpaid", async () => {
     live = [order(6, "PAYMENT_PENDING"), order(7, "PAID")];
     render(createElement(ChefOrderInbox));
-    expect(await screen.findByRole("heading", { name: "No orders right now" }, slow)).toBeTruthy();
-    expect(screen.queryByRole("navigation", { name: "Choose which orders to see" })).toBeNull();
+    expect(await screen.findByRole("heading", { name: "No new orders" }, slow)).toBeTruthy();
+    const tabs = screen.getByRole("navigation", { name: "Choose which orders to see" });
+    expect(within(tabs).getAllByRole("button").map((tab) => tab.textContent)).toEqual(["New", "Cooking", "Ready", "Past"]);
+  });
+
+  it("moves a picked-up order to Past, where chips and day groups sort it", async () => {
+    live = [order(8, "OUT_FOR_DELIVERY"), order(7, "CHEF_REJECTED"), order(6)];
+    pages["/api/chef/orders/page?limit=20"] = Response.json({ orders: [], nextCursor: null, hasMore: false });
+    render(createElement(ChefOrderInbox));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Past/ }).getAttribute("aria-pressed")).toBe("true"), slow);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      "8 Oct · 1 order · ₹298", "7 Oct · 1 order", "6 Oct · 1 order · ₹298",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "On the way" }));
+    expect(rows()).toEqual(["0BDE0108"]);
+    fireEvent.click(screen.getByRole("button", { name: "Cancelled" }));
+    expect(await screen.findByRole("heading", { name: "No orders here" })).toBeTruthy();
   });
 });

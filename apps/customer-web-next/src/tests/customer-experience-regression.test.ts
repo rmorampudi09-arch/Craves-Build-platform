@@ -168,7 +168,7 @@ test("favorites hydrate the shared cart and notifications offer read-all and und
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
   assert.match(notifications, /Mark all as read/);
-  assert.match(notifications, /fetch\("\/api\/notifications\/in-app\/read-all"/);
+  assert.match(notifications, /[fF]etch\("\/api\/notifications\/in-app\/read-all"/);
   assert.match(notifications, /<UndoToast/);
   assert.match(notifications, /CustomerPageSkeleton/);
   assert.match(notifications, /Clear read/);

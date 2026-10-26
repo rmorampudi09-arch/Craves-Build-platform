@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 // Synthetic kitchen, dishes and photo URLs; nothing is fetched.
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/features/home/components/DishCard", () => ({ DishCard: ({ dish }: { dish: { name: string } }) => createElement("article", null, dish.name) }));
 
 import { KitchenHeader } from "@/features/chefs/components/KitchenHeader";
 import { KitchenMenu } from "@/features/chefs/components/KitchenMenu";
@@ -72,7 +70,10 @@ describe("KitchenHeader", () => {
 });
 
 describe("KitchenMenu", () => {
-  const dish = (id: string, name: string, category: string) => ({ id, name, category, kitchenId: KITCHEN }) as Dish;
+  const dish = (id: string, name: string, category: string) => ({
+    id, name, category, kitchenId: KITCHEN, chef: "Ammi's Dastarkhwan", price: 180, currency: "INR", img: "/brand/craves-logo.svg",
+    imageIsPlaceholder: true, time: "20 min", prepMinutes: 20, servesCount: 2, veg: false, foodType: "NON_VEG",
+  }) as Dish;
 
   it("groups dishes under category tabs that jump to their section", () => {
     const scrollIntoView = vi.fn();
@@ -80,7 +81,7 @@ describe("KitchenMenu", () => {
     HTMLElement.prototype.scrollTo = vi.fn();
     render(createElement(KitchenMenu, { dishes: [dish("1", "Mutton biryani", "Biryani"), dish("2", "Samosa", "Snakes"), dish("3", "Veg biryani", "biryani")] }));
 
-    const tabs = screen.getAllByRole("button");
+    const tabs = within(screen.getByRole("navigation", { name: "Menu categories" })).getAllByRole("button");
     expect(tabs.map((tab) => tab.textContent)).toEqual(["Biryani2", "Snacks1"]);
     expect(screen.getByRole("heading", { name: "Biryani" })).toBeTruthy();
     expect(screen.getByText("Veg biryani")).toBeTruthy();
@@ -90,5 +91,19 @@ describe("KitchenMenu", () => {
     expect(tabs[0]!.getAttribute("aria-current")).toBe("true");
     expect(tabs[1]!.getAttribute("aria-current")).toBeNull();
     expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: "start" }));
+  });
+
+  it("shows each dish as a row with its mark, price, time and serves, and Add only while the kitchen delivers here", () => {
+    HTMLElement.prototype.scrollTo = vi.fn();
+    const dishes = [dish("1", "Mutton biryani", "Biryani")];
+    const { rerender } = render(createElement(KitchenMenu, { dishes }));
+    expect(screen.getByRole("img", { name: "Non-veg" })).toBeTruthy();
+    expect(screen.getByText("₹180")).toBeTruthy();
+    expect(screen.getByText("20 min · Serves 2")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Mutton biryani/ }).getAttribute("href")).toBe("/dish/1");
+    expect(screen.getByRole("button", { name: "Add Mutton biryani to cart" })).toBeTruthy();
+    rerender(createElement(KitchenMenu, { dishes, orderable: false }));
+    expect(screen.queryByRole("button", { name: "Add Mutton biryani to cart" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Save Mutton biryani" })).toBeTruthy();
   });
 });

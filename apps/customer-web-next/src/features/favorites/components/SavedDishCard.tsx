@@ -22,10 +22,12 @@ const TONE: Record<SavedTone, string> = {
   muted: "bg-[#F1F3F5] text-[#6B6B6B]",
 };
 
+/** "₹180", or "₹180.50" when there are paise, as in the app. */
 function money(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency,
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(amount);
 }

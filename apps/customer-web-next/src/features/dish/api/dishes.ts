@@ -30,6 +30,8 @@ export type Dish = {
   kitchenDescription?: string;
   ingredients?: string[];
   serves?: string;
+  /** How many people one order serves, when the kitchen said ("Serves 2" on menu rows). */
+  servesCount?: number;
   originalPrice?: number;
   spiceLevel?: "Mild" | "Medium" | "Spicy";
   reviewCount?: number;
@@ -182,6 +184,7 @@ function mapNearbyItem(item: NearbyMenuItem): Dish {
     foodType: item.foodType,
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
     serves: servesLabel(item.servesCount),
+    servesCount: item.servesCount ?? undefined,
     spiceLevel: spiceLabel(item.spiceLevel),
     distanceMeters: item.distanceMeters,
     areaName: item.areaName ?? undefined,
@@ -230,6 +233,7 @@ function mapDetail(item: PublicMenuItemDetail): Dish {
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
     kitchenDescription: item.kitchenDescription ?? undefined,
     serves: servesLabel(item.servesCount),
+    servesCount: item.servesCount ?? undefined,
     spiceLevel: spiceLabel(item.spiceLevel),
     areaName: item.areaName ?? undefined,
     city: item.city ?? undefined,

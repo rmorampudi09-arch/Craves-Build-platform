@@ -55,7 +55,8 @@ export function CartStepper({
   const fade = morph ? "animate-[craves-fade-in_150ms_ease-out] motion-reduce:animate-none" : "";
 
   return (
-    <div ref={rootRef} className={cn("relative h-10 w-[6.5rem]", className)}>
+    // Add is 92 px wide and the stepper 104, as in the app.
+    <div ref={rootRef} className={cn("relative h-10", inCart ? "w-[6.5rem]" : "w-[5.75rem]", className)}>
       {inCart ? (
         <div
           role="group"

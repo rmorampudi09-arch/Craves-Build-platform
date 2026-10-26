@@ -542,6 +542,7 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
 }
 .chef-underline-tabs::-webkit-scrollbar { display: none; }
 .chef-underline-tabs .chef-underline-tab {
+  position: relative;
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -550,7 +551,6 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   margin-bottom: -1px;
   padding: 0 0.125rem;
   border: 0;
-  border-bottom: 3px solid transparent;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -559,17 +559,24 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 150ms var(--chef-ease), border-color 150ms var(--chef-ease);
+  transition: color 150ms var(--chef-ease);
 }
-/* The global control rule paints every button's border grey with !important (0,2,1); these outrank it. */
-.chef-underline-tabs .chef-underline-tab:not([aria-pressed="true"]) { border-color: transparent !important; }
+/* The underline is a bar, not a border: the global control rules repaint button borders with !important. */
+.chef-underline-tabs .chef-underline-tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: transparent;
+  transition: background-color 150ms var(--chef-ease);
+}
 .chef-underline-tabs .chef-underline-tab:hover { color: var(--chef-text); }
 .chef-underline-tabs .chef-underline-tab[aria-pressed="true"] {
-  border-bottom-color: #f62e18 !important;
   color: #d92714;
   font-weight: 700;
 }
-.chef-underline-tab:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; border-radius: 4px; }
+.chef-underline-tabs .chef-underline-tab[aria-pressed="true"]::after { background: #f62e18; }
+.chef-underline-tab:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
 .chef-underline-count { font-weight: 700; color: inherit; }
 .chef-underline-count.is-urgent {
   display: inline-grid;

@@ -28,11 +28,13 @@ paths:
     post:
       summary: Sign up as a rider with the OTP-verified phone of this sign-in; the rider is PENDING until ops activates them
       description: |
-        For anyone signed in with an Indian mobile number; no RIDER role. Answers /me. Someone who already is a rider (or
-        whom ops added for this phone) gets their /me unchanged, so a repeat is harmless. vehicleRegNumber is required
-        unless vehicleKind is BICYCLE (letters and digits as on the RC; spaces and dashes are ignored). 400
-        VALIDATION_FAILED (name, language, vehicle, plate, or adult not true); 409 PHONE_IN_USE (the phone is a rider on
-        another account); 422 PHONE_REQUIRED (the sign-in carries no Indian mobile number).
+        For anyone signed in with an Indian mobile number; no RIDER role. Answers /me. A PENDING rider sends it again to
+        correct their name, language, vehicle and plate; an empty vehicleRegNumber keeps the plate on file. A new name sets
+        aside a payout account sent in the old one (the rider sends it again). Past PENDING, the rider gets their /me
+        unchanged, so a repeat is harmless. vehicleRegNumber is required unless vehicleKind is BICYCLE (letters and digits
+        as on the RC; spaces and dashes are ignored). 400 VALIDATION_FAILED (name, language, vehicle, plate, or adult not
+        true); 409 PHONE_IN_USE (the phone is a rider on another account); 422 PHONE_REQUIRED (the sign-in carries no
+        Indian mobile number); 422 NAME_LOCKED (a new name after ops accepted the PAN card).
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SignUp'}}}}
       responses: {'200': {description: Signed up, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}}
   /payout-account:
@@ -253,7 +255,7 @@ components:
       type: object
       required: [vehicle, documents]
       properties:
-        vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}}}
+        vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}, kind: {type: string, enum: [PETROL, ELECTRIC, BICYCLE], description: As the rider signed up; absent for a rider ops added before sign-up existed}}}
         documents:
           type: array
           items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED, MISSING]}, expiresOn: {type: string, format: date}, reason: {type: string}}}

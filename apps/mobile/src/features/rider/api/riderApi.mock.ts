@@ -17,9 +17,17 @@ import type {
   TripAction,
   TripEarning,
   TripStep,
+  VehicleKind,
 } from './contract';
 
 const DEMO_PHONE = '+910000000000';
+const VEHICLE_LABELS: Record<VehicleKind, string> = {
+  PETROL: 'Petrol two-wheeler',
+  ELECTRIC: 'Electric two-wheeler',
+  BICYCLE: 'Bicycle',
+};
+/** The words of a name in any order or case, like the server's FleetRules.sameName. */
+const nameWords = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
 export const DEMO_OTP = '1234';
 const MAX_OTP_TRIES = 5;
 const PAGE_SIZE = 20;
@@ -220,6 +228,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
   const state = {
     uploaded: new Set<string>(),
     payoutSubmitted: null as string | null,
+    /** What the rider signed up with; null shows the demo rider's own scooter. */
+    vehicle: null as { kind: VehicleKind; plate?: string } | null,
     me: freshMe(),
     online: false,
     shiftStartedAt: 0,
@@ -469,10 +479,16 @@ export function createMockRiderApi(options: MockOptions = {}) {
     getProfile: () =>
       respond(
         (): RiderProfile => ({
-          vehicle: {
-            label: 'Honda Activa 6G (petrol)',
-            regNumberMasked: 'TS 09 •• ••12',
-          },
+          vehicle: state.vehicle
+            ? {
+                label: VEHICLE_LABELS[state.vehicle.kind],
+                regNumberMasked: state.vehicle.plate && `${state.vehicle.plate.slice(0, 4)}xx${state.vehicle.plate.slice(-4)}`,
+                kind: state.vehicle.kind,
+              }
+            : {
+                label: 'Honda Activa 6G (petrol)',
+                regNumberMasked: 'TS 09 •• ••12',
+              },
           documents: state.me.status === 'PENDING'
             ? SIGN_UP_DOCUMENTS.map(([type, label]) => ({
                 type,
@@ -644,15 +660,23 @@ export function createMockRiderApi(options: MockOptions = {}) {
       }),
     signUp: input =>
       respond(() => {
-        if (state.me.status === 'NOT_RIDER') {
+        if (state.me.status === 'NOT_RIDER' || state.me.status === 'PENDING') {
+          // A PENDING rider corrects their details; an empty plate keeps the one on file.
+          const plate = input.vehicleKind === 'BICYCLE' ? undefined : input.vehicleRegNumber || state.vehicle?.plate;
+          if (input.vehicleKind !== 'BICYCLE' && !plate) {
+            throw apiError('VALIDATION_FAILED', 'Enter the number plate as on the RC, like TS09EA1234.', 400);
+          }
+          if (state.me.status === 'PENDING' && nameWords(input.name) !== nameWords(state.me.name)) {
+            state.payoutSubmitted = null; // sent in the old name, so ops could never confirm it
+          }
           state.me = {...state.me, name: input.name.trim(), language: input.language, status: 'PENDING'};
+          state.vehicle = {kind: input.vehicleKind, plate};
         }
         return {...state.me};
       }),
     submitPayoutAccount: input =>
       respond(() => {
-        const words = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
-        if (words(input.holderName) !== words(state.me.name)) {
+        if (nameWords(input.holderName) !== nameWords(state.me.name)) {
           throw apiError('HOLDER_NAME_MISMATCH', 'The account must be in your name, as on your documents.', 422);
         }
         state.payoutSubmitted =
@@ -889,6 +913,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
         loseNextRace: false,
         deviceNotBound: false,
         stopReason: null,
+        payoutSubmitted: null,
+        vehicle: null,
       });
       state.seen.clear();
       state.uploaded.clear();

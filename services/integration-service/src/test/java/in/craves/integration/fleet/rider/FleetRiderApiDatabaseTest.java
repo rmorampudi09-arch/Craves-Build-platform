@@ -400,6 +400,48 @@ class FleetRiderApiDatabaseTest {
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
     }
 
+    @Test
+    void aPendingRiderCorrectsTheirSignUpButNotTheNameOnAnAcceptedPanCard() throws Exception {
+        UUID gopi = UUID.randomUUID();
+        when(verifier.verify("gopi")).thenReturn(new CravesPrincipal(gopi, phone(), Set.of("CUSTOMER")));
+        apply("gopi", "{\"name\":\"K Gopi\",\"language\":\"en\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}").andExpect(status().isOk());
+        String upi = "gopi" + ThreadLocalRandom.current().nextInt(1_000_000) + "@axl";
+        payoutAccount("gopi", "{\"method\":\"UPI\",\"holderName\":\"K Gopi\",\"upiId\":\"" + upi + "\"}").andExpect(status().isNoContent());
+
+        // A scooter needs a plate. The new name sets aside the account sent in the old one: ops could never confirm it.
+        String scooter = "{\"name\":\"Kancharla Gopi\",\"language\":\"te\",\"vehicleKind\":\"ELECTRIC\",%s\"adult\":true}";
+        apply("gopi", scooter.formatted("")).andExpect(status().isBadRequest());
+        apply("gopi", scooter.formatted("\"vehicleRegNumber\":\"ts 08 ab 4821\",")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("PENDING")).andExpect(jsonPath("$.name").value("Kancharla Gopi"))
+            .andExpect(jsonPath("$.language").value("te"));
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer gopi")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicle.kind").value("ELECTRIC")).andExpect(jsonPath("$.vehicle.regNumberMasked").value("TS08xx4821"))
+            .andExpect(jsonPath("$.documents.length()").value(5)).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist());
+
+        // An empty plate keeps the one on file.
+        apply("gopi", "{\"name\":\"Kancharla Gopi\",\"language\":\"en\",\"vehicleKind\":\"PETROL\",\"vehicleRegNumber\":\"\",\"adult\":true}")
+            .andExpect(status().isOk());
+        String details = "SELECT count(*) AS riders, max(name) AS name, max(vehicle_kind) AS kind, max(vehicle_reg_number) AS plate, "
+            + "max(language) AS language FROM fleet_schema.rider WHERE identity_id = ?";
+        assertThat(db.queryForMap(details, gopi)).containsEntry("riders", 1L).containsEntry("kind", "PETROL")
+            .containsEntry("plate", "TS08AB4821").containsEntry("language", "en");
+
+        // Once ops accepts the PAN card the name is locked; the same words in another order and everything else still change.
+        UUID rider = db.queryForObject("SELECT id FROM fleet_schema.rider WHERE identity_id = ?", UUID.class, gopi);
+        db.update("INSERT INTO fleet_schema.rider_document (id, rider_id, type, status, blob_name, content_type, size_bytes, reviewed_at) "
+            + "VALUES (?, ?, 'PAN', 'VERIFIED', 'riders/p', 'image/jpeg', 10, now())", UUID.randomUUID(), rider);
+        apply("gopi", "{\"name\":\"Ravi Kumar\",\"language\":\"en\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("NAME_LOCKED"));
+        apply("gopi", "{\"name\":\"Gopi Kancharla\",\"language\":\"hi\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
+            .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Gopi Kancharla"));
+
+        // Past sign-up, details are ops's to change.
+        db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE' WHERE id = ?", rider);
+        apply("gopi", scooter.formatted("\"vehicleRegNumber\":\"TS09EA1234\",")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.name").value("Gopi Kancharla")).andExpect(jsonPath("$.language").value("hi"));
+        assertThat(db.queryForMap(details, gopi)).containsEntry("kind", "BICYCLE").containsEntry("plate", null);
+    }
+
     org.springframework.test.web.servlet.ResultActions apply(String token, String body) throws Exception {
         return mvc.perform(post("/api/v1/rider/apply").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
             .content(body));

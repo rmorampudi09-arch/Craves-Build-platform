@@ -1,7 +1,7 @@
 // Screens 1–8 of "Rider app P1: screens to the design": every state of sign-in, account status, terms,
 // phone setup, home, go online and the offer.
 import React from 'react';
-import {AccessibilityInfo, Alert, StyleSheet, Text} from 'react-native';
+import {AccessibilityInfo, Alert, Keyboard, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AxiosError} from 'axios';
@@ -317,23 +317,136 @@ describe('Account status', () => {
 
   it('sends a payout account in the KYC name and shows it waits for ops', async () => {
     const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
+    expect(allText()).toContain("Add a UPI ID or bank account in your own name, Ravi Kumar. We can't pay into anyone else's account.");
     expect(input('rider-payout-holder').props.value).toBe('Ravi Kumar');
+    expect(press('rider-payout-cancel')).toBeUndefined();
     await act(async () => input('rider-payout-upi').props.onChangeText('not a upi'));
     await act(async () => press('rider-payout-submit').props.onPress());
     expect(allText()).toContain('Enter a UPI ID like name@bank');
     expect(riderApi.submitPayoutAccount).not.toHaveBeenCalled();
 
     (riderApi.submitPayoutAccount as jest.Mock).mockResolvedValueOnce(undefined);
+    (riderApi.getProfile as jest.Mock).mockResolvedValue({...profile, payoutAccountSubmitted: 'ra****@okaxis'});
     const refetch = jest.spyOn(client, 'invalidateQueries');
     await act(async () => input('rider-payout-upi').props.onChangeText('ravi@okaxis'));
     await act(async () => press('rider-payout-submit').props.onPress());
     expect(riderApi.submitPayoutAccount).toHaveBeenCalledWith({method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis'});
     expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+    expect(allText()).toContain('Sent ra****@okaxis. | Checking');
     expect(press('rider-payout-change')).toBeTruthy();
-
-    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, {...profile, payoutAccountSubmitted: 'xxxxxx4020'}]]);
-    expect(allText()).toContain('Sent xxxxxx4020. Ops checks it against your bank proof before paying into it.');
     expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
+  });
+
+  it('says plainly what ops checks on a sent account, and lets the rider back out of changing it', async () => {
+    await render(<AccountStatusScreen />, [
+      [riderKeys.me, pending],
+      [riderKeys.profile, {...profile, payoutAccountMasked: 'xxxxxx1111', payoutAccountSubmitted: 'xxxxxx4020'}],
+    ]);
+    const text = allText();
+    expect(text).toContain('Payouts go to xxxxxx1111. | Accepted');
+    expect(text).toContain('Sent xxxxxx4020. | Checking');
+    expect(text).toContain('Ops checks that this account is in your name, using your bank proof. Nothing is paid into it until then.');
+    expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
+
+    await act(async () => press('rider-payout-change').props.onPress());
+    expect(input('rider-payout-upi').props.helperText).toContain('Find it in your UPI app');
+    await act(async () => press('rider-payout-cancel').props.onPress());
+    expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
+    expect(riderApi.submitPayoutAccount).not.toHaveBeenCalled();
+  });
+
+  it('says what counts as bank proof while it still has to be sent', async () => {
+    await render(<AccountStatusScreen />, [
+      [riderKeys.me, pending],
+      [riderKeys.profile, {...profile, documents: [{type: 'BANK', label: 'Bank proof', status: 'MISSING'}, {type: 'PAN', label: 'PAN card', status: 'PENDING'}]}],
+    ]);
+    expect(allText()).toContain("Bank proof | Not sent | A photo of your passbook's first page or a cancelled cheque.");
+    expect(press('rider-upload-BANK')).toBeTruthy();
+  });
+
+  describe('a pending rider correcting their sign-up', () => {
+    const signedUp: RiderMe = {...pending, name: 'K Gopi'};
+    const bicycle: RiderProfile = {...profile, vehicle: {label: 'Bicycle', kind: 'BICYCLE'}, payoutAccountSubmitted: '90****@axl'};
+    const scooter: RiderProfile = {...profile, vehicle: {label: 'Petrol two-wheeler', regNumberMasked: 'TS08xx4821', kind: 'PETROL'}};
+
+    it('shows the details on file and changes them, warning that a new name means sending the payout account again', async () => {
+      const client = await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, bicycle]]);
+      expect(allText()).toContain('Your details | Name | K Gopi | App language | English | Vehicle | Bicycle');
+      expect(allText()).not.toContain('Number plate');
+
+      await act(async () => press('rider-details-change').props.onPress());
+      expect(input('rider-join-name').props.value).toBe('K Gopi');
+      expect(tree.root.findAll(node => node.props.testID === 'rider-join-adult')).toHaveLength(0);
+      expect(tree.root.findAll(node => node.props.testID === 'rider-join-resend-payout')).toHaveLength(0);
+      await act(async () => input('rider-join-name').props.onChangeText('Kancharla Gopi Nishanth'));
+      expect(allText()).toContain('Your payout account is in your old name. After you save, send it again in the new name.');
+
+      // A bicycle had no plate, so a scooter needs one.
+      await act(async () => press('rider-join-ELECTRIC').props.onPress());
+      await act(async () => press('rider-join-submit').props.onPress());
+      expect(allText()).toContain('Enter your full name, and the number plate as on the RC.');
+      expect(riderApi.signUp).not.toHaveBeenCalled();
+
+      (riderApi.signUp as jest.Mock).mockResolvedValueOnce({...signedUp, name: 'Kancharla Gopi Nishanth'});
+      (riderApi.getProfile as jest.Mock).mockResolvedValue({...scooter, vehicle: {label: 'Electric two-wheeler', regNumberMasked: 'TS08xx4821', kind: 'ELECTRIC'}});
+      await act(async () => input('rider-join-plate').props.onChangeText('ts 08 ab 4821'));
+      await act(async () => press('rider-join-submit').props.onPress());
+      expect(riderApi.signUp).toHaveBeenCalledWith({
+        name: 'Kancharla Gopi Nishanth', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS08AB4821', adult: true,
+      });
+      expect(client.getQueryData(riderKeys.me)).toMatchObject({name: 'Kancharla Gopi Nishanth'});
+      await flush();
+      const text = allText();
+      expect(text).toContain('Details saved.');
+      expect(text).toContain('Name | Kancharla Gopi Nishanth');
+      expect(text).toContain('Vehicle | Electric bike or scooter | Number plate | TS08xx4821');
+      // The account sent in the old name is gone, so the form asks again, in the new name.
+      expect(input('rider-payout-holder').props.value).toBe('Kancharla Gopi Nishanth');
+    });
+
+    it('keeps the plate on file when it is left empty, and Cancel sends nothing', async () => {
+      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
+      expect(allText()).toContain('Number plate | TS08xx4821');
+      await act(async () => press('rider-details-change').props.onPress());
+      expect(input('rider-join-PETROL').props.selected).toBe(true);
+      expect(input('rider-join-plate').props.helperText).toBe('Leave empty to keep TS08xx4821.');
+      await act(async () => press('rider-join-cancel').props.onPress());
+      expect(tree.root.findAll(node => node.props.testID === 'rider-join-name')).toHaveLength(0);
+      expect(riderApi.signUp).not.toHaveBeenCalled();
+
+      (riderApi.signUp as jest.Mock).mockResolvedValueOnce(signedUp);
+      await act(async () => press('rider-details-change').props.onPress());
+      await act(async () => press('rider-join-submit').props.onPress());
+      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'K Gopi', language: 'en', vehicleKind: 'PETROL', vehicleRegNumber: '', adult: true});
+    });
+
+    it("shows the server's words when ops already accepted the PAN card in the old name", async () => {
+      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
+      (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
+        new AppApiError('NAME_LOCKED', 'Ops has already accepted your PAN card in this name. Call rider support to change it.', 422),
+      );
+      await act(async () => press('rider-details-change').props.onPress());
+      await act(async () => input('rider-join-name').props.onChangeText('Ravi Kumar'));
+      await act(async () => press('rider-join-submit').props.onPress());
+      expect(allText()).toContain('Ops has already accepted your PAN card in this name.');
+      expect(input('rider-join-name').props.value).toBe('Ravi Kumar');
+    });
+
+    it('drops the pinned footer while the keyboard is up, so the form keeps the room', async () => {
+      const listeners: Record<string, () => void> = {};
+      const keyboard = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, listener) => {
+        listeners[event] = listener as () => void;
+        return {remove: jest.fn()} as never;
+      });
+      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
+      expect(press('rider-call-support')).toBeTruthy();
+      act(() => listeners.keyboardDidShow());
+      expect(press('rider-call-support')).toBeUndefined();
+      expect(press('rider-payout-submit')).toBeTruthy();
+      act(() => listeners.keyboardDidHide());
+      expect(press('rider-call-support')).toBeTruthy();
+      keyboard.mockRestore();
+    });
   });
 
   it('asks for an update when the app is too old', async () => {

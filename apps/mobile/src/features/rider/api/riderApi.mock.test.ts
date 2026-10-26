@@ -24,6 +24,34 @@ describe('mock rider server', () => {
     expect(await mock.api.acceptOffer('anything', 'k-accept')).toEqual(trip);
   });
 
+  it('lets a pending rider correct their sign-up, setting aside an account sent in the old name', async () => {
+    const mock = setup();
+    mock.controls.setStatus('PENDING');
+    await mock.api.signUp({ name: 'K Gopi', language: 'en', vehicleKind: 'BICYCLE', adult: true });
+    await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'K Gopi', upiId: 'gopi@axl' });
+    expect((await mock.api.getProfile()).payoutAccountSubmitted).toBe('go****@axl');
+
+    // A bicycle had no plate on file, so a scooter needs one.
+    await expect(
+      mock.api.signUp({ name: 'K Gopi', language: 'en', vehicleKind: 'PETROL', adult: true }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    const me = await mock.api.signUp({
+      name: 'Kancharla Gopi',
+      language: 'te',
+      vehicleKind: 'PETROL',
+      vehicleRegNumber: 'TS08AB4821',
+      adult: true,
+    });
+    expect(me).toMatchObject({ name: 'Kancharla Gopi', language: 'te', status: 'PENDING' });
+    const profile = await mock.api.getProfile();
+    expect(profile.vehicle).toEqual({ label: 'Petrol two-wheeler', regNumberMasked: 'TS08xx4821', kind: 'PETROL' });
+    expect(profile.payoutAccountSubmitted).toBeUndefined();
+
+    // An empty plate keeps the one on file.
+    await mock.api.signUp({ name: 'Kancharla Gopi', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: '', adult: true });
+    expect((await mock.api.getProfile()).vehicle).toMatchObject({ kind: 'ELECTRIC', regNumberMasked: 'TS08xx4821' });
+  });
+
   it('expires an offer after 40 seconds', async () => {
     const mock = setup();
     await mock.api.startShift('file:///selfie.jpg', 'android-id-1');

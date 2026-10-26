@@ -39,7 +39,10 @@ public class FleetSignupService {
         this.cipher = cipher;
     }
 
-    /** Creates the PENDING rider for this phone; for someone who already is a rider it only answers /me. */
+    /**
+     * Creates the PENDING rider for this phone. A rider still PENDING sends it again to correct their details (an empty plate
+     * keeps the one on file); for anyone further along it only answers /me.
+     */
     @Transactional
     public RiderMe signUp(CravesPrincipal principal, SignUp input) {
         String phone = principal.phoneNumber();
@@ -60,16 +63,23 @@ public class FleetSignupService {
         String registration = null;
         if (!"BICYCLE".equals(input.vehicleKind())) {
             registration = input.vehicleRegNumber() == null ? "" : input.vehicleRegNumber().replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
-            if (!registration.matches(FleetRules.VEHICLE_REGISTRATION)) {
-                throw FleetApiException.invalid("Enter the number plate as on the RC, like TS09EA1234.");
+            if (!registration.isEmpty() && !registration.matches(FleetRules.VEHICLE_REGISTRATION)) {
+                throw invalidPlate();
             }
         }
         if (!Boolean.TRUE.equals(input.adult())) {
             throw FleetApiException.invalid("Riders must be 18 or older.");
         }
         RiderMe me = riders.me(principal); // links a rider ops already added for this phone
+        if ("PENDING".equals(me.status())) {
+            changeDetails(principal.identityId(), name, input.language(), input.vehicleKind(), label, registration);
+            return riders.me(principal);
+        }
         if (!"NOT_RIDER".equals(me.status())) {
             return me;
+        }
+        if ("".equals(registration)) {
+            throw invalidPlate();
         }
         UUID identity = principal.identityId();
         // ON CONFLICT: a double tap, or the phone already belongs to another account's rider (answered below).
@@ -81,6 +91,36 @@ public class FleetSignupService {
             throw FleetApiException.conflict("PHONE_IN_USE", "This number is already a Craves rider on another account. Call rider support.");
         }
         return me;
+    }
+
+    /**
+     * A PENDING rider correcting their sign-up. The name is locked once ops accepted the PAN card in it. A new name also sets
+     * aside a payout account sent in the old one: ops could never confirm it, so the rider sends it again.
+     */
+    private void changeDetails(UUID identityId, String name, String language, String kind, String label, String registration) {
+        jdbc.queryForObject("SELECT id FROM fleet_schema.rider WHERE identity_id = ? FOR UPDATE", UUID.class, identityId);
+        FleetRiderService.Rider rider = riders.rider(identityId);
+        String plate = "".equals(registration) ? rider.vehicleRegNumber() : registration;
+        if (registration != null && plate == null) {
+            throw invalidPlate();
+        }
+        boolean renamed = !FleetRules.sameName(name, rider.name());
+        if (renamed && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_document "
+            + "WHERE rider_id = ? AND type = 'PAN' AND status = 'VERIFIED')", Boolean.class, rider.id()))) {
+            throw FleetApiException.unprocessable("NAME_LOCKED",
+                "Ops has already accepted your PAN card in this name. Call rider support to change it.");
+        }
+        jdbc.update("UPDATE fleet_schema.rider SET name = ?, language = ?, vehicle_kind = ?, vehicle_label = ?, vehicle_reg_number = ?, "
+            + "updated_at = now() WHERE id = ? AND status = 'PENDING'", name, language, kind, label, plate, rider.id());
+        if (renamed) {
+            jdbc.queryForList("SELECT id, holder_name FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'",
+                rider.id()).stream().filter(sent -> !FleetRules.sameName((String) sent.get("holder_name"), name))
+                .forEach(sent -> jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE id = ?", sent.get("id")));
+        }
+    }
+
+    private static FleetApiException invalidPlate() {
+        return FleetApiException.invalid("Enter the number plate as on the RC, like TS09EA1234.");
     }
 
     /**

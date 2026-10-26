@@ -62,7 +62,8 @@ export type VehicleKind = 'PETROL' | 'ELECTRIC' | 'BICYCLE';
 
 /**
  * POST /apply: anyone signed in with an Indian mobile number becomes a PENDING rider. A PENDING rider sends it again to
- * correct their details; 422 NAME_LOCKED once ops accepted the PAN card in the old name.
+ * correct their details: 422 NAME_LOCKED once ops checked a document or payout account in the old name, 422 VEHICLE_LOCKED
+ * for another vehicle or plate once ops accepted the RC.
  */
 export interface RiderSignUp {
   name: string;

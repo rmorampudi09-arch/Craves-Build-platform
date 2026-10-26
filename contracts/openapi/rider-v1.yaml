@@ -34,7 +34,10 @@ paths:
         unchanged, so a repeat is harmless. vehicleRegNumber is required unless vehicleKind is BICYCLE (letters and digits
         as on the RC; spaces and dashes are ignored). 400 VALIDATION_FAILED (name, language, vehicle, plate, or adult not
         true); 409 PHONE_IN_USE (the phone is a rider on another account); 422 PHONE_REQUIRED (the sign-in carries no
-        Indian mobile number); 422 NAME_LOCKED (a new name after ops accepted the PAN card).
+        Indian mobile number); 422 NAME_LOCKED (a new name once ops accepted the PAN card, driving licence or bank
+        proof, or confirmed a payout account); 422 VEHICLE_LOCKED (another vehicle kind or plate once ops accepted the
+        RC; the same plate, or an empty one, on the same kind is not a change). The language and any allowed change
+        still save.
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SignUp'}}}}
       responses: {'200': {description: Signed up, content: {application/json: {schema: {$ref: '#/components/schemas/RiderMe'}}}}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}}
   /payout-account:

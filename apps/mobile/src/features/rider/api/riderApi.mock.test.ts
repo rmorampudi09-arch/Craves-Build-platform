@@ -52,6 +52,25 @@ describe('mock rider server', () => {
     expect((await mock.api.getProfile()).vehicle).toMatchObject({ kind: 'ELECTRIC', regNumberMasked: 'TS08xx4821' });
   });
 
+  it('keeps what ops already checked: no new name after an accepted account or document, no other vehicle after the RC', async () => {
+    const mock = setup();
+    mock.controls.setStatus('PENDING');
+    await mock.api.signUp({ name: 'K Gopi', language: 'en', vehicleKind: 'PETROL', vehicleRegNumber: 'TS08AB4821', adult: true });
+    await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'K Gopi', upiId: 'gopi@axl' });
+    await mock.api.uploadDocument('RC', 'file:///rc.jpg');
+    mock.controls.acceptSignUp();
+    const profile = await mock.api.getProfile();
+    expect(profile.payoutAccountMasked).toBe('go****@axl');
+    expect(profile.documents.find(doc => doc.type === 'RC')?.status).toBe('VERIFIED');
+
+    const details = { name: 'K Gopi', language: 'en' as const, vehicleKind: 'PETROL' as const, vehicleRegNumber: '', adult: true };
+    await expect(mock.api.signUp({ ...details, name: 'Ravi Kumar' })).rejects.toMatchObject({ code: 'NAME_LOCKED' });
+    await expect(mock.api.signUp({ ...details, vehicleKind: 'ELECTRIC' })).rejects.toMatchObject({ code: 'VEHICLE_LOCKED' });
+    await expect(mock.api.signUp({ ...details, vehicleRegNumber: 'TS10AB1234' })).rejects.toMatchObject({ code: 'VEHICLE_LOCKED' });
+    // The same words in another order, the same plate and a new language still save.
+    expect(await mock.api.signUp({ ...details, name: 'Gopi K', language: 'hi' })).toMatchObject({ name: 'Gopi K', language: 'hi' });
+  });
+
   it('expires an offer after 40 seconds', async () => {
     const mock = setup();
     await mock.api.startShift('file:///selfie.jpg', 'android-id-1');

@@ -420,16 +420,30 @@ describe('Account status', () => {
       expect(riderApi.signUp).toHaveBeenCalledWith({name: 'K Gopi', language: 'en', vehicleKind: 'PETROL', vehicleRegNumber: '', adult: true});
     });
 
-    it("shows the server's words when ops already accepted the PAN card in the old name", async () => {
+    it("shows the server's words when ops already checked a document or account in the old name", async () => {
       await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
       (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
-        new AppApiError('NAME_LOCKED', 'Ops has already accepted your PAN card in this name. Call rider support to change it.', 422),
+        new AppApiError('NAME_LOCKED', 'Ops has already checked your documents or payout account in this name. Call rider support to change it.', 422),
       );
       await act(async () => press('rider-details-change').props.onPress());
       await act(async () => input('rider-join-name').props.onChangeText('Ravi Kumar'));
       await act(async () => press('rider-join-submit').props.onPress());
-      expect(allText()).toContain('Ops has already accepted your PAN card in this name.');
+      expect(allText()).toContain('Ops has already checked your documents or payout account in this name.');
       expect(input('rider-join-name').props.value).toBe('Ravi Kumar');
+    });
+
+    it("shows the server's words when ops already accepted the RC for this vehicle", async () => {
+      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
+      (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
+        new AppApiError('VEHICLE_LOCKED', 'Ops has already accepted your RC for this vehicle. Call rider support to change it.', 422),
+      );
+      await act(async () => press('rider-details-change').props.onPress());
+      await act(async () => press('rider-join-ELECTRIC').props.onPress());
+      await act(async () => press('rider-join-submit').props.onPress());
+      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'K Gopi', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: '', adult: true});
+      expect(allText()).toContain('Ops has already accepted your RC for this vehicle. Call rider support to change it.');
+      // The form stays open with the rider's choice, so they can put it back or call support.
+      expect(input('rider-join-ELECTRIC').props.selected).toBe(true);
     });
 
     it('drops the pinned footer while the keyboard is up, so the form keeps the room', async () => {

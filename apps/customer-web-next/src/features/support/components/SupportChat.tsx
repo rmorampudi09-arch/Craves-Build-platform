@@ -24,6 +24,8 @@ const GREETING = {
   CHEF: "Hi! I'm the Craves support assistant. Ask me about your kitchen's orders, your menu or where to find something.",
   GUEST: "Hi! I'm the Craves assistant. I can help you sign in or sign up, find your way around Craves, or ask our team to call you back.",
 };
+/** Opened from an order (the app's words, SupportChatScreen.tsx). */
+const ORDER_GREETING = "Hi! How can I help with this order? You can also ask where to find anything in the app.";
 /** GUEST: a visitor who is not signed in. They get general and sign-in help and can ask for a callback. */
 export type SupportChatRole = keyof typeof SUGGESTIONS;
 // Only Craves links, emails and the support phone become clickable; anything else the model writes stays plain text.
@@ -235,7 +237,7 @@ export function SupportChat({ contextRole, orderId }: { contextRole: SupportChat
     role: "assistant",
     // No time on the greeting: it is server-rendered, and the server clock's time zone differs from the visitor's.
     at: 0,
-    content: GREETING[contextRole],
+    content: orderId ? ORDER_GREETING : GREETING[contextRole],
   };
   const thread = [greeting, ...messages];
   const lastUser = [...messages].reverse().find(message => message.role === "user")?.id;

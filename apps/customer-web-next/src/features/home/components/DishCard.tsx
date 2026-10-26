@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { memo, useEffect, useRef, useState } from "react";
+import { FaPepperHot } from "react-icons/fa";
 import {
   ChefHat,
   Clock3,
@@ -311,6 +312,14 @@ export const DishCard = memo(function DishCard({
               <Clock3 className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
               {dish.time}
             </span>
+            {/* Beside the cooking time, as in the app: a chilli and Mild, Medium or Spicy. */}
+            {dish.spiceLevel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
+                <FaPepperHot className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
+                <span className="sr-only">Spice: </span>
+                {dish.spiceLevel}
+              </span>
+            ) : null}
             {dish.serves ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
                 <UsersRound className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />

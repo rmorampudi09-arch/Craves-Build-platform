@@ -2,13 +2,12 @@
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
-import { ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
+import { ChefEmpty, ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import Link from "next/link";
 import { AddressMapPicker } from "@/features/addresses/components/AddressMapPicker";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createSupportCase, SupportCaseError } from "@/shared/lib/support-cases-client";
 import { SUPPORT_MESSAGE_MAX } from "@/shared/lib/support-cases-contract";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import {
   ArrowLeft,
   Camera,
@@ -999,7 +998,8 @@ export function ChefKitchenForm() {
             <p role="status" className="mt-5 text-[0.9375rem] leading-6 text-[#1A1A1A]">{text.moveSent}</p>
           ) : (
             <>
-              {moveState === "unavailable" ? <div className="mt-5"><ComingSoon title={text.chatSoonTitle} message={text.chatSoonText} /></div> : null}
+              {/* Sheets open outside the chef page: the theme brings the chef colours along. */}
+              {moveState === "unavailable" ? <div className="chef-panel-theme chef-sheet-theme mt-2"><ChefEmpty illustration="comingSoon" title={text.chatSoonTitle} text={text.chatSoonText} /></div> : null}
               <label className="mt-5 block text-sm font-semibold text-[#1A1A1A]">{text.newAddress}<textarea value={moveDraft} onChange={(event) => setMoveDraft(event.target.value)} className={`${INPUT_CLASS} min-h-28`} maxLength={SUPPORT_MESSAGE_MAX} /></label>
               {moveState === "failed" ? <p role="alert" className="mt-3 text-sm font-medium text-[#C4200F]">{text.sendFailed}</p> : null}
             </>

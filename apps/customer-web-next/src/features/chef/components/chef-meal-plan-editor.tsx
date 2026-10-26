@@ -314,7 +314,7 @@ export function ChefMealPlanEditor({
       {error ? (
         <ChefSection>
           <ChefEmpty
-            icon={AlertTriangle}
+            illustration="loadError"
             title={text.planLoadTitle}
             text={error}
             action={

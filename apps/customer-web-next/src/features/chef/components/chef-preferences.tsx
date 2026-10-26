@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { isComingSoon } from "@/features/chef/api/chef-kitchen-schedule";
@@ -129,14 +128,16 @@ export function ChefPreferences() {
   }
   if (load.state === "soon") {
     return (
-      <ComingSoon title={text.soonTitle} message={text.soonText} />
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.soonTitle} text={text.soonText} />
+      </ChefSection>
     );
   }
   if (load.state === "error") {
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.failedTitle}
           text={load.message}
           action={

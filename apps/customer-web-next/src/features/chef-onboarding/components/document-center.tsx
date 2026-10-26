@@ -232,7 +232,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
     }
   }
 
-  if (capabilities && !capabilities.enabled) return mode === "customer" ? null : <ChefSection><ChefEmpty icon={FileText} title={text.offTitle} text={text.offText} /></ChefSection>;
+  if (capabilities && !capabilities.enabled) return mode === "customer" ? null : <ChefSection><ChefEmpty illustration="comingSoon" title={text.offTitle} text={text.offText} /></ChefSection>;
   if (mode === "customer" && !orders.length) return null;
   if (mode === "chef") {
     // Until PDFs are known to be on and the first list is in, the form could vanish and "No PDFs yet" be untrue.
@@ -279,7 +279,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
           action={<button className="chef-btn is-small" type="button" disabled={busy || !capabilities?.enabled} onClick={() => void action(refresh)}><RefreshCw className="h-4 w-4" aria-hidden="true" />{text.refresh}</button>}
         >
           {items.length === 0 ? (
-            <ChefEmpty icon={FileText} title={text.noneTitle} text={text.noneText} />
+            <ChefEmpty illustration="earnings" title={text.noneTitle} text={text.noneText} />
           ) : (
             <ul className="chef-list border-t border-[#E3E6EA]">
               {items.map((item) => (

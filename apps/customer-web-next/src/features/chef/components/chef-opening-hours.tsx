@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, CalendarDays, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
+import { CalendarDays, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import {
   changeKitchenSchedule,
@@ -452,17 +451,16 @@ export function ChefOpeningHours() {
   }
   if (view.state === "soon") {
     return (
-      <ComingSoon
-        title={text.soonTitle}
-        message={text.soonText}
-      />
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.soonTitle} text={text.soonText} />
+      </ChefSection>
     );
   }
   if (view.state === "error") {
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.loadFailed}
           text={view.message}
           action={

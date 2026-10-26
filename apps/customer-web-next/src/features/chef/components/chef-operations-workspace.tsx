@@ -245,7 +245,7 @@ export function ChefOperationsWorkspace() {
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.failedTitle}
           text={error}
           action={

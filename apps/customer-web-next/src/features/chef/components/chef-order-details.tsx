@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
+  Check,
   ChevronDown,
   Clock3,
   LifeBuoy,
@@ -27,8 +28,9 @@ import {
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
-import { ChefOrderProgress, CustomerNote, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
+import { CustomerNote, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
 import { useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
+import { chefOrderTimeline } from "@/features/chef/lib/chef-order-timeline";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import {
   parseChefOrderResponse,
@@ -47,7 +49,7 @@ const TEXT = messages({
     toCookOne: "{count} item to cook", toCookMany: "{count} items to cook", delivery: "Delivery", call: "Call {phone}", message: "Message customer",
     bill: "Customer’s bill", food: "Food", platformFee: "Platform fee", tax: "Tax", customerPaid: "Customer paid", orderTotal: "Order total",
     billNote: "This is what the customer paid, not your earning. Your earning for this order appears in Earnings once it is delivered.",
-    refreshOrder: "Refresh order", updated: "Updated {time}",
+    refreshOrder: "Refresh order", updated: "Updated {time}", openMap: "Open in Google Maps", done: "done",
   },
   te: {
     unavailable: "ఈ ఆర్డర్ మీ వంటగదికి అందుబాటులో లేదు.", loadFailed: "ఇప్పుడు ఈ ఆర్డర్ లోడ్ చేయలేకపోయాం.", readFailed: "ఈ ఆర్డర్ చదవలేకపోయాం. దయచేసి మళ్లీ చూడండి.",
@@ -57,7 +59,7 @@ const TEXT = messages({
     toCookOne: "వండాల్సినవి: {count} ఐటమ్", toCookMany: "వండాల్సినవి: {count} ఐటమ్‌లు", delivery: "డెలివరీ", call: "{phone} కి కాల్ చేయండి", message: "కస్టమర్‌కు మెసేజ్ చేయండి",
     bill: "కస్టమర్ బిల్లు", food: "ఆహారం", platformFee: "ప్లాట్‌ఫామ్ ఫీజు", tax: "పన్ను", customerPaid: "కస్టమర్ చెల్లించినది", orderTotal: "ఆర్డర్ మొత్తం",
     billNote: "ఇది కస్టమర్ చెల్లించిన మొత్తం, మీ సంపాదన కాదు. ఈ ఆర్డర్ డెలివరీ అయిన తర్వాత మీ సంపాదన 'సంపాదన'లో కనిపిస్తుంది.",
-    refreshOrder: "ఆర్డర్ మళ్లీ చూడండి", updated: "{time} కి అప్‌డేట్ అయింది",
+    refreshOrder: "ఆర్డర్ మళ్లీ చూడండి", updated: "{time} కి అప్‌డేట్ అయింది", openMap: "Google Maps లో తెరవండి", done: "పూర్తయింది",
   },
   kn: {
     unavailable: "ಈ ಆರ್ಡರ್ ನಿಮ್ಮ ಅಡುಗೆಮನೆಗೆ ಲಭ್ಯವಿಲ್ಲ.", loadFailed: "ಈಗ ಈ ಆರ್ಡರ್ ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ.", readFailed: "ಈ ಆರ್ಡರ್ ಓದಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ನೋಡಿ.",
@@ -67,7 +69,7 @@ const TEXT = messages({
     toCookOne: "ಅಡುಗೆ ಮಾಡಬೇಕಾದ್ದು: {count} ಐಟಮ್", toCookMany: "ಅಡುಗೆ ಮಾಡಬೇಕಾದ್ದು: {count} ಐಟಮ್‌ಗಳು", delivery: "ಡೆಲಿವರಿ", call: "{phone} ಗೆ ಕರೆ ಮಾಡಿ", message: "ಗ್ರಾಹಕರಿಗೆ ಮೆಸೇಜ್ ಮಾಡಿ",
     bill: "ಗ್ರಾಹಕರ ಬಿಲ್", food: "ಆಹಾರ", platformFee: "ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ಶುಲ್ಕ", tax: "ತೆರಿಗೆ", customerPaid: "ಗ್ರಾಹಕರು ಪಾವತಿಸಿದ್ದು", orderTotal: "ಆರ್ಡರ್ ಒಟ್ಟು",
     billNote: "ಇದು ಗ್ರಾಹಕರು ಪಾವತಿಸಿದ ಮೊತ್ತ, ನಿಮ್ಮ ಗಳಿಕೆ ಅಲ್ಲ. ಈ ಆರ್ಡರ್ ಡೆಲಿವರಿ ಆದ ನಂತರ ನಿಮ್ಮ ಗಳಿಕೆ 'ಗಳಿಕೆ'ಯಲ್ಲಿ ಕಾಣುತ್ತದೆ.",
-    refreshOrder: "ಆರ್ಡರ್ ಮತ್ತೆ ನೋಡಿ", updated: "{time} ಕ್ಕೆ ಅಪ್‌ಡೇಟ್ ಆಗಿದೆ",
+    refreshOrder: "ಆರ್ಡರ್ ಮತ್ತೆ ನೋಡಿ", updated: "{time} ಕ್ಕೆ ಅಪ್‌ಡೇಟ್ ಆಗಿದೆ", openMap: "Google Maps ನಲ್ಲಿ ತೆರೆಯಿರಿ", done: "ಮುಗಿದಿದೆ",
   },
 });
 
@@ -76,15 +78,36 @@ const FOOD_TYPE = messages({
   te: { VEG: "వెజ్", NON_VEG: "నాన్-వెజ్", EGG: "ఎగ్" },
   kn: { VEG: "ವೆಜ್", NON_VEG: "ನಾನ್-ವೆಜ್", EGG: "ಎಗ್" },
 });
-/** Orders on the normal path show the picture steps; declined or refunded ones don't. */
-const PROGRESS_STATES = {
-  CHEF_ACCEPTANCE_PENDING: true,
-  CHEF_ACCEPTED: true,
-  PREPARING: true,
-  READY_FOR_PICKUP: true,
-  OUT_FOR_DELIVERY: true,
-  DELIVERED: true,
-};
+/** Steps with their times, done ones ticked green, the current one dark (app Status card). */
+function OrderTimeline({ order }: { order: ChefOrder }) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
+  const steps = chefOrderTimeline(order, language);
+  return (
+    <ol className="grid">
+      {steps.map((step, index) => (
+        <li key={index} className="relative flex gap-3 pb-4 last:pb-0" aria-current={step.state === "now" ? "step" : undefined}>
+          {index < steps.length - 1 ? (
+            <span aria-hidden="true" className={`absolute bottom-0 left-[11px] top-7 w-0.5 rounded-full ${step.state === "done" ? "bg-[#17803D]" : "bg-[#E3E6EA]"}`} />
+          ) : null}
+          <span
+            aria-hidden="true"
+            className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-white ${step.state === "done" ? "bg-[#17803D]" : step.state === "now" ? "bg-[#1A1A1A]" : "border-2 border-[#D3D7DD] bg-white"}`}
+          >
+            {step.state === "done" ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+          </span>
+          <span className="min-w-0 pt-0.5">
+            <span className={`block font-semibold leading-5 ${step.state === "todo" ? "text-[#6B6B6B]" : "text-[#1A1A1A]"}`}>
+              {step.label}
+              {step.state === "done" ? <span className="sr-only"> ({text.done})</span> : null}
+            </span>
+            {step.detail ? <span className="mt-0.5 block text-[0.875rem] text-[#6B6B6B]">{step.detail}</span> : null}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function itemMetadata(item: ChefOrder["items"][number], language: Language = "en"): string {
   const foodTypes: Record<string, string> = FOOD_TYPE[language];
@@ -132,12 +155,15 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
     void load();
   }, [load]);
 
+  // Only this page's own read carries the status history; a newer copy from the list or an answer keeps it.
+  const withHistory = (fresh: ChefOrder, current: ChefOrder | null): ChefOrder => ({ ...fresh, statusHistory: fresh.statusHistory ?? current?.statusHistory });
+
   // The order moves on by itself (picked up, delivered): keep it current without a refresh.
   useChefOrderPolling(Boolean(order), (orders) => {
     const fresh = orders.find((candidate) => candidate.id.toLowerCase() === orderId.toLowerCase());
     if (!fresh) return;
     setOrder((current) =>
-      current && Date.parse(current.updatedAt) > Date.parse(fresh.updatedAt) ? current : fresh,
+      current && Date.parse(current.updatedAt) > Date.parse(fresh.updatedAt) ? current : withHistory(fresh, current),
     );
     setLastUpdatedAt(new Date());
   });
@@ -179,11 +205,21 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
         .join(", ")
     : null;
   const phone = order.deliveryAddress?.contactPhoneNumber.replace(/[^\d+]/g, "");
+  const pin = order.deliveryAddress?.latitude != null && order.deliveryAddress.longitude != null
+    ? `https://www.google.com/maps/search/?api=1&query=${order.deliveryAddress.latitude},${order.deliveryAddress.longitude}`
+    : null;
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const status = chefOrderStatus(order.status, language);
   const currency = { currency: order.currency };
   // Not paid yet: nothing to cook, and the customer's contact details stay private until they pay.
   const unpaid = isUnpaidOrder(order.status);
+  // A new order's page is its question; a finished one's is its story, so the steps lead; otherwise they follow the work.
+  const timeline = unpaid || order.status === "CHEF_ACCEPTANCE_PENDING" ? null : (
+    <ChefSection title={text.whereItIs} labelledBy="chef-order-status">
+      <OrderTimeline order={order} />
+    </ChefSection>
+  );
+  const finished = ["OUT_FOR_DELIVERY", "DELIVERED", "CHEF_REJECTED", "CANCELLED", "REFUND_PENDING", "REFUNDED", "REFUND_FAILED"].includes(order.status);
 
   return (
     <div>
@@ -205,13 +241,8 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
       />
 
       <div className="chef-stack">
-        {unpaid ? (
-          <ChefNotice icon={Clock3}>{text.unpaid}</ChefNotice>
-        ) : order.status in PROGRESS_STATES ? (
-          <section className="chef-section px-2 py-4" aria-label={text.whereItIs}>
-            <ChefOrderProgress status={order.status} />
-          </section>
-        ) : null}
+        {unpaid ? <ChefNotice icon={Clock3}>{text.unpaid}</ChefNotice> : null}
+        {finished ? timeline : null}
         <ChefSection
           title={format(itemCount === 1 ? text.toCookOne : text.toCookMany, { count: itemCount })}
           flush
@@ -243,7 +274,7 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
           </div>
         </ChefSection>
 
-        {unpaid ? null : <ChefOrderActions order={order} onUpdated={setOrder} />}
+        {unpaid ? null : <ChefOrderActions order={order} onUpdated={(next) => setOrder((current) => withHistory(next, current))} />}
 
         {order.deliveryAddress && address && needsCustomerContact(order.status) ? (
           <ChefSection title={text.delivery} labelledBy="chef-order-delivery">
@@ -258,9 +289,22 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
                 {text.message}
               </a>
             </div>
-            <p className="mt-2 flex gap-2 text-[0.9375rem] leading-6 text-[#6B6B6B]"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />{address}</p>
+            {pin ? (
+              // The pin the customer dropped, in Google Maps (its app on a phone).
+              <a href={pin} target="_blank" rel="noopener noreferrer" className="mt-2 flex min-h-11 gap-2 rounded-xl text-[0.9375rem] leading-6 text-[#1A1A1A] no-underline">
+                <MapPin className="mt-1 h-4 w-4 shrink-0 text-[#D92714]" aria-hidden="true" />
+                <span className="min-w-0">
+                  {address}
+                  <span className="mt-0.5 block font-semibold text-[#D92714] underline underline-offset-2">{text.openMap}</span>
+                </span>
+              </a>
+            ) : (
+              <p className="mt-2 flex gap-2 text-[0.9375rem] leading-6 text-[#6B6B6B]"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />{address}</p>
+            )}
           </ChefSection>
         ) : null}
+
+        {finished ? null : timeline}
 
         <details className="chef-section group">
           <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 font-semibold text-[#1A1A1A] md:px-5 [&::-webkit-details-marker]:hidden">

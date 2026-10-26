@@ -33,7 +33,7 @@ test("delivery location control uses the compact Swiggy-Zomato style address but
   assert.match(header, /rounded-\[1\.1rem\] border px-2\.5/);
   // White header: a bordered white card; Home's red top: bare white text on the red.
   assert.match(header, /"border-\[#E5E7EB\] !bg-white !text-\[#1A1A1A\] shadow-\[0_4px_16px_rgba\(26,26,26,0\.07\)\]"/);
-  assert.match(header, /red \? "border-transparent bg-transparent px-0 text-white"/);
+  assert.match(header, /red \? "!border-transparent !bg-transparent px-0 !text-white !shadow-none"/);
   assert.match(header, /<FaMapMarkerAlt/);
   assert.match(header, /<ChevronDown/);
   assert.match(header, /\{locationTypeLabel\}/);

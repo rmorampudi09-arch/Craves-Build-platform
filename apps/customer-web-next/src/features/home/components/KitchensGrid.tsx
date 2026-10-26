@@ -39,7 +39,7 @@ const CARD_WIDTH = "w-[clamp(248px,74vw,286px)] shrink-0 snap-start lg:w-[calc((
 /** The row runs edge to edge on phones and tablets, and leaves room for focus rings and shadows. */
 const ROW = "-mx-4 flex gap-3 px-4 pb-7 pt-2 md:-mx-7 md:px-7 lg:gap-5";
 const HOME_HEADING = "font-display text-[1.375rem] font-black tracking-[-0.03em] text-[#1A1A1A] md:text-2xl lg:text-[1.75rem]";
-const ICON_BUTTON = "flex h-12 w-12 shrink-0 items-center justify-center rounded-full !p-0 !text-[#1A1A1A] !shadow-none hover:!bg-[#F1F3F5]";
+const ARROW_BUTTON = "flex h-12 w-12 shrink-0 items-center justify-center rounded-full !border !border-[#E5E7EB] !bg-white !p-0 !text-[#1A1A1A] !shadow-none hover:!bg-[#F1F3F5]";
 
 interface KitchensGridProps {
   kitchens: NearbyKitchen[];
@@ -207,7 +207,7 @@ function TopKitchenCard({
   const name = kitchen.kitchenName;
   return (
     // The heart is the card button's sibling, so neither control sits inside the other.
-    <li className={`${CARD_WIDTH} relative`}>
+    <li className={`${CARD_WIDTH} group relative transition-[translate] duration-(--dur-component) ease-out motion-safe:hover:-translate-y-0.5`}>
       <div
         role="button"
         tabIndex={0}
@@ -220,7 +220,7 @@ function TopKitchenCard({
             onOpen();
           }
         }}
-        className="group flex h-full cursor-pointer flex-col rounded-[20px] border !border-[#E3DDD8] bg-white text-left shadow-[0_6px_14px_rgba(38,26,21,0.08)] transition-[box-shadow,translate] duration-(--dur-component) ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_18px_rgba(38,26,21,0.12)] motion-reduce:transform-none"
+        className="flex h-full cursor-pointer flex-col rounded-[20px] border !border-[#E3DDD8] bg-white text-left shadow-[0_6px_14px_rgba(38,26,21,0.08)] transition-shadow duration-(--dur-component) ease-out group-hover:shadow-[0_10px_18px_rgba(38,26,21,0.12)]"
       >
         <div className="relative">
           <KitchenPhotos images={summary.imageUrls} autoplay={autoplay} delayMs={order * PHOTO_STAGGER_MS} priority={order < 4} />
@@ -360,22 +360,12 @@ function TopKitchens({ kitchens, searchTerm, state, message, onSelectKitchen, on
         </h2>
         {state === "ready" ? (
           <>
-            {slideshow ? (
-              <button
-                type="button"
-                onClick={togglePhotos}
-                aria-label={photosPaused ? "Play kitchen photos" : "Pause kitchen photos"}
-                className={`${ICON_BUTTON} !border-0 !bg-transparent`}
-              >
-                {photosPaused ? <Play className="h-4 w-4" aria-hidden="true" /> : <Pause className="h-4 w-4" aria-hidden="true" />}
-              </button>
-            ) : null}
             {edges.left || edges.right ? (
               <div className="hidden items-center gap-2 md:flex">
-                <button type="button" onClick={() => scrollRow(row, -1, row?.clientWidth)} disabled={!edges.left} aria-label="Show previous kitchens" className={`${ICON_BUTTON} !border !border-[#E5E7EB] !bg-white`}>
+                <button type="button" onClick={() => scrollRow(row, -1, row?.clientWidth)} disabled={!edges.left} aria-label="Show previous kitchens" className={ARROW_BUTTON}>
                   <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => scrollRow(row, 1, row?.clientWidth)} disabled={!edges.right} aria-label="Show more kitchens" className={`${ICON_BUTTON} !border !border-[#E5E7EB] !bg-white`}>
+                <button type="button" onClick={() => scrollRow(row, 1, row?.clientWidth)} disabled={!edges.right} aria-label="Show more kitchens" className={ARROW_BUTTON}>
                   <ChevronRight className="h-5 w-5" aria-hidden="true" />
                 </button>
               </div>
@@ -397,22 +387,37 @@ function TopKitchens({ kitchens, searchTerm, state, message, onSelectKitchen, on
           <TopKitchenSkeletons />
         </>
       ) : state === "ready" ? (
-        <ul
-          ref={setRow}
-          role="list"
-          className={`${ROW} snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:scroll-px-7 lg:-mx-4 lg:px-4 lg:scroll-px-4 [&::-webkit-scrollbar]:hidden`}
-        >
-          {cards.map(({ kitchen, summary }, index) => (
-            <TopKitchenCard
-              key={kitchen.id}
-              kitchen={kitchen}
-              summary={summary}
-              order={index}
-              autoplay={slideshow && !photosPaused}
-              onOpen={() => onSelectKitchen(kitchen)}
-            />
-          ))}
-        </ul>
+        <>
+          <ul
+            ref={setRow}
+            role="list"
+            className={`${ROW} snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:scroll-px-7 lg:-mx-4 lg:px-4 lg:scroll-px-4 [&::-webkit-scrollbar]:hidden`}
+          >
+            {cards.map(({ kitchen, summary }, index) => (
+              <TopKitchenCard
+                key={kitchen.id}
+                kitchen={kitchen}
+                summary={summary}
+                order={index}
+                autoplay={slideshow && !photosPaused}
+                onOpen={() => onSelectKitchen(kitchen)}
+              />
+            ))}
+          </ul>
+          {/* Under the row, like the banner's: the header stays one line on phones. */}
+          {slideshow ? (
+            <div className="-mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={togglePhotos}
+                className="inline-flex min-h-12 items-center gap-1.5 rounded-full px-3 text-[0.8125rem] font-semibold !border-0 !bg-transparent !text-[#6B6B6B] !shadow-none hover:!bg-[#F1F3F5]"
+              >
+                {photosPaused ? <Play className="h-3.5 w-3.5" aria-hidden="true" /> : <Pause className="h-3.5 w-3.5" aria-hidden="true" />}
+                {photosPaused ? "Play kitchen photos" : "Pause kitchen photos"}
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : (
         <KitchenStates state={state} searchTerm={searchTerm} message={message} onRetry={onRetry} onManageAddress={onManageAddress} />
       )}

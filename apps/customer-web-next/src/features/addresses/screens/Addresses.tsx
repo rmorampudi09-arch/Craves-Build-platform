@@ -27,6 +27,7 @@ import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideC
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { AddressEditorFlow } from "@/features/addresses/components/AddressEditorFlow";
 import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 
 function displayPhone(value: string): string {
@@ -107,15 +108,17 @@ export default function AddressesPage() {
         contactPhoneNumber: current.phoneNumber || current.phone || "",
       });
       await load();
-    })().catch((error) => {
+    })().catch(() => {
+      // The page says what happened in its own words; never the server's or the browser's.
       setInitialLoadState("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Your saved addresses didn’t load. Check your connection and try again.",
-      );
+      setMessage("");
     });
   }, [load, navigate]);
+
+  function retry() {
+    setInitialLoadState("loading");
+    load().catch(() => setInitialLoadState("error"));
+  }
 
   function beginCreate() {
     setEditorAddress(null);
@@ -325,36 +328,31 @@ export default function AddressesPage() {
         ) : null}
 
         {initialLoadState === "error" ? (
-          <div
+          <EmptyState
+            illustration={typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "loadError"}
+            title="We couldn’t load your saved addresses"
+            message="Check your connection and try again."
             role="alert"
-            className="rounded-[24px] border border-[#E5E7EB] bg-white px-6 py-8 text-center"
+            compact
           >
-            <AlertTriangle className="mx-auto h-8 w-8 text-[#F62E18]" />
-            <h2 className="mt-3 font-display text-xl font-black">
-              Saved addresses could not be loaded
-            </h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-              {message}
-            </p>
-          </div>
+            <button type="button" onClick={retry} className="craves-primary-action">
+              Try again
+            </button>
+          </EmptyState>
         ) : null}
 
         {initialLoadState === "ready" && addresses.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-[#D7DADF] bg-white px-6 py-10 text-center">
-            <MapPin className="mx-auto h-8 w-8 text-[#F62E18]" />
-            <h2 className="mt-3 font-display text-xl font-black">No saved addresses yet</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-              Add your first delivery address, then select it as default for nearby dishes and kitchens.
-            </p>
-            <button
-              type="button"
-              onClick={beginCreate}
-              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl !border !border-[#E5E7EB] !bg-[#F1F3F5] px-5 py-2.5 text-sm font-black !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none"
-            >
-              <Plus className="h-4.5 w-4.5" />
-              Add New Address
+          <EmptyState
+            illustration="addresses"
+            title="No saved addresses"
+            message="Add where you’d like your food delivered. You can save home, work and more."
+            compact
+          >
+            <button type="button" onClick={beginCreate} className="craves-primary-action">
+              <Plus className="h-5 w-5" aria-hidden="true" />
+              Add new address
             </button>
-          </div>
+          </EmptyState>
         ) : null}
 
         <p role="status" className="mt-6 px-1 text-sm text-[#6B6B6B]">

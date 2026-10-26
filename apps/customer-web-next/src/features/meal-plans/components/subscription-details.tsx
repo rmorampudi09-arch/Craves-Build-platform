@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import { indiaBusinessDate, parseCustomerSubscription, type CustomerSubscription, type DayCredit, type DayCreditChoice } from "@/features/meal-plans/lib/subscription-contract";
 import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
-import { changeDeadline, dayCreditCard, formatMoney, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "@/features/meal-plans/lib/meal-plan-copy";
+import { changeDeadline, dayCreditCard, formatMoney, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planActions, planDay, resumeDateFor, type PlanAction } from "@/features/meal-plans/lib/meal-plan-copy";
 import { billingUnit } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { firstDishPhoto } from "@/features/meal-plans/api/plan-cover";
 import { PlanPhoto } from "@/features/meal-plans/components/plan-photo";
@@ -74,7 +74,8 @@ function areaLine(address: CustomerAddress): string {
   return [...new Set([address.areaName ?? address.districtName, address.city].filter(Boolean))].join(", ");
 }
 
-export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string }) {
+/** `openAction`: a My plans card's Pause, Resume or Skip a meal, opened here once the plan allows it. */
+export function SubscriptionDetails({ subscriptionId, openAction }: { subscriptionId: string; openAction?: PlanAction }) {
   const [item, setItem] = useState<CustomerSubscription | null>(null);
   const [policy, setPolicy] = useState<SubscriptionPlanPolicy | null>(null);
   const [schedule, setSchedule] = useState<PublicSubscriptionSchedule | null>(null);
@@ -89,6 +90,7 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [meal, setMeal] = useState<SubscriptionOccurrence | null>(null);
   const [pick, setPick] = useState<{ credit: DayCredit; choice: DayCreditChoice } | null>(null);
+  const askedAction = useRef(openAction ?? null);
 
   const load = useCallback(async () => {
     const subscriptionResponse = await sessionFetch(`/api/subscriptions/${subscriptionId}`, { cache: "no-store" });
@@ -109,10 +111,27 @@ export function SubscriptionDetails({ subscriptionId }: { subscriptionId: string
     const addressBody = addressResponse?.ok ? await addressResponse.json().catch(() => null) : null;
     setAddresses(Array.isArray(addressBody) ? addressBody as CustomerAddress[] : []);
 
-    if (policyResponse.ok) setPolicy(await policyResponse.json() as SubscriptionPlanPolicy); else setPolicy(null);
-    if (scheduleResponse.ok) setSchedule(await scheduleResponse.json() as PublicSubscriptionSchedule); else setSchedule(null);
+    const loadedPolicy = policyResponse.ok ? await policyResponse.json() as SubscriptionPlanPolicy : null;
+    const loadedSchedule = scheduleResponse.ok ? await scheduleResponse.json() as PublicSubscriptionSchedule : null;
+    setPolicy(loadedPolicy);
+    setSchedule(loadedSchedule);
     if (occurrenceResponse.ok) setOccurrences(await occurrenceResponse.json() as SubscriptionOccurrence[]); else setOccurrences([]);
     setMessage("");
+
+    // Once, on arrival from a card: the same first step as this page's own button, if the plan allows it now.
+    const asked = askedAction.current;
+    askedAction.current = null;
+    if (asked) {
+      const now = new Date();
+      const restartOn = resumeDateFor(now, loadedPolicy?.resumeLeadMinutes ?? 0, loadedSchedule?.items.map(entry => entry.serviceTime).sort()[0] ?? null);
+      if (planActions(current, loadedPolicy, restartOn, indiaBusinessDate(now)).includes(asked)) {
+        setSheet({ action: asked, step: 1 });
+        setSheetDate(asked === "resume" ? restartOn : asked === "skip" ? current.nextServiceDate || "" : "");
+        setReason("");
+        setSheetError("");
+        setTyped(false);
+      }
+    }
   }, [subscriptionId]);
 
   useEffect(() => { void load().catch(error => setMessage(error instanceof Error ? error.message : "We couldn’t load your meal plan. Please try again.")); }, [load]);

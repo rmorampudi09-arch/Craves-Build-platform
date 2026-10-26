@@ -91,3 +91,11 @@ it("lets a visitor who is not signed in ask for a callback", async () => {
   expect(JSON.parse(init.body)).toEqual({ messages: [{ role: "user", content: "Please call me on 9876543210" }] });
   expect(init.credentials).toBeUndefined();
 });
+
+it("greets a chat opened from an order about that order, like the app", () => {
+  render(createElement(SupportChat, { contextRole: "CUSTOMER", orderId: "0b6f3f1e-8d0a-4c43-9a3e-2f7f6c2d9b11" }));
+  expect(screen.getByText("Hi! How can I help with this order? You can also ask where to find anything in the app.")).toBeTruthy();
+  cleanup();
+  render(createElement(SupportChat, { contextRole: "CUSTOMER" }));
+  expect(screen.getByText(/^Hi! I'm the Craves support assistant\. Ask me about your orders/)).toBeTruthy();
+});

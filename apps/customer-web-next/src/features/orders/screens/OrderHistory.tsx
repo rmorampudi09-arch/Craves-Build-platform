@@ -1,21 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, Bell, ChevronRight, RefreshCw, RotateCw, UtensilsCrossed } from "lucide-react";
 import {
-  FaArrowLeft,
-  FaArrowRight,
-  FaArrowRotateRight,
-  FaBagShopping,
-  FaCircleExclamation,
-} from "react-icons/fa6";
-import {
-  formatOrderStatus,
-  isAbandonedUnpaidOrder,
+  parseCustomerOrderPage,
   parseCustomerOrders,
   type CustomerOrder,
 } from "@/features/orders/lib/order-contract";
-import { YourUsualRail } from "@/features/orders/components/YourUsualRail";
+import {
+  formatOrderDate,
+  ORDER_TABS,
+  orderAction,
+  orderItemsLine,
+  ordersInTab,
+  orderStatusPill,
+  TONE_PILL,
+  type OrderTab,
+} from "@/features/orders/lib/order-presentation";
+import { useDishPhotos } from "@/features/orders/api/dish-photos";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
@@ -25,26 +28,33 @@ import { loadKitchenMenu } from "@/features/dish/api/dishes";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
+import { notificationsLabel, UnreadBadge, useCustomerUnreadCount } from "@/shared/components/notifications/unread-badge";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
+import { sessionFetch } from "@/shared/lib/session-fetch";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/navigation/tabs";
 
 // Read and cleared by the cart page, which shows it once (same key as checkout uses).
 const CART_NOTICE_KEY = "craves.cart.notice";
 const dishList = new Intl.ListFormat("en-IN", { type: "conjunction" });
+/** Like the app: 20 orders a page, then "Load older orders". */
+const PAGE_SIZE = 20;
+const REORDER_FAILED = "We couldn’t add these dishes to your cart. Please try again.";
 
-const ACTIVE_STATUSES = new Set([
-  "PAYMENT_PENDING",
-  "PAID",
-  "CHEF_ACCEPTANCE_PENDING",
-  "CHEF_ACCEPTED",
-  "PREPARING",
-  "READY_FOR_PICKUP",
-  "OUT_FOR_DELIVERY",
-  "REFUND_PENDING",
-]);
+const EMPTY_TAB: Record<Exclude<OrderTab, "ALL">, [string, string]> = {
+  UPCOMING: ["No upcoming orders", "Orders that are being made or are on their way show up here."],
+  COMPLETED: ["No completed orders yet", "Delivered orders show up here, ready to order again."],
+  CANCELLED: ["No cancelled orders", "Declined, cancelled and refunded orders show up here."],
+};
 
-/** Still on its way. An abandoned unpaid checkout is history, not progress. */
-function inProgress(order: CustomerOrder, now: number): boolean {
-  return ACTIVE_STATUSES.has(order.status) && !isAbandonedUnpaidOrder(order, now);
+type Problem = "session" | "offline" | "error";
+
+/** The sign-in, not the orders, is what failed; the page asks for that, not for a reload. */
+class SignInProblem extends Error {}
+
+function problemOf(caught: unknown): Problem {
+  if (caught instanceof SignInProblem) return "session";
+  return typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "error";
 }
 
 function money(amount: number, currency: string): string {
@@ -60,39 +70,22 @@ function money(amount: number, currency: string): string {
   }
 }
 
-/** "Sat, 10 Oct · 12:42 pm": the day first, so past orders are easy to tell apart; the year only when it isn't this one. */
-export function formatOrderDate(value: string, now = new Date()): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const day = date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
-  });
-  const time = date
-    .toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })
-    .toLowerCase();
-  return `${day} · ${time}`;
-}
+const newestFirst = (left: CustomerOrder, right: CustomerOrder) =>
+  new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
 
-function itemSummary(order: CustomerOrder): string {
-  if (order.items.length === 0) return "Order items unavailable";
-  return order.items.map((item) => `${item.quantity} × ${item.itemName}`).join(", ");
-}
-
-function statusClass(status: string): string {
-  if (
-    status === "CHEF_REJECTED" ||
-    status === "CANCELLED" ||
-    status === "REFUND_FAILED"
-  ) {
-    return "bg-[#F1F3F5] text-[#C4200F]";
-  }
-  if (status.startsWith("REFUND")) {
-    return "bg-[#F1F3F5] text-[#6B6B6B]";
-  }
-  return "bg-[#F1F3F5] text-[#1A1A1A]";
+/** One page of orders, newest first. Before the paged list is live (or if it fails), today's list of the latest 50. */
+async function readOrders(cursor: string | null): Promise<{ orders: CustomerOrder[]; cursor: string | null }> {
+  const response = await sessionFetch(`/api/orders/page?limit=${PAGE_SIZE}${cursor ? `&cursor=${cursor}` : ""}`, { cache: "no-store" });
+  if (response.status === 401) throw new SignInProblem();
+  const page = response.ok ? parseCustomerOrderPage(await response.json().catch(() => null)) : null;
+  if (page) return { orders: page.orders, cursor: page.hasMore ? page.nextCursor : null };
+  if (cursor) throw new Error("ORDER_HISTORY_UNAVAILABLE");
+  const legacy = await sessionFetch("/api/orders", { cache: "no-store" });
+  if (legacy.status === 401) throw new SignInProblem();
+  const raw = await legacy.json().catch(() => null);
+  const orders = legacy.ok ? parseCustomerOrders(raw) : null;
+  if (!orders) throw new Error("ORDERS_UNAVAILABLE");
+  return { orders: [...orders].sort(newestFirst), cursor: null };
 }
 
 /**
@@ -124,89 +117,202 @@ export async function reorderIntoCart(order: CustomerOrder): Promise<{ added: nu
   return { added, note };
 }
 
-/** The chef's picture on an order card; one profile read per kitchen, shared by its cards. */
-function OrderChefFace({ kitchenId }: { kitchenId: string }) {
-  const { profile } = useKitchenProfile(kitchenId);
-  return <ChefFace photoUrl={profile?.chefPhotoUrl} size={48} />;
+function DishTile({ url }: { url: string | undefined }) {
+  return (
+    <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[#F7F5F3] text-[#B4ABA6]" aria-hidden="true">
+      {url ? (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+          }}
+        />
+      ) : (
+        <UtensilsCrossed className="h-5 w-5" />
+      )}
+    </span>
+  );
 }
 
+type Reorder = { orderId: string; busy: boolean; message: string } | null;
+
+/** The app's order card. The whole card opens the order; Reorder and Track order are their own buttons above it. */
+function OrderCard({
+  order,
+  now,
+  reorder,
+  onReorder,
+}: {
+  order: CustomerOrder;
+  now: number;
+  reorder: Reorder;
+  onReorder: (order: CustomerOrder) => void;
+}) {
+  const { profile } = useKitchenProfile(order.kitchenId);
+  const photos = useDishPhotos(order.kitchenId);
+  const pill = orderStatusPill(order, now);
+  const action = orderAction(order.status);
+  const shown = order.items.slice(0, 3);
+  const more = order.items.length - shown.length;
+  const mine = reorder?.orderId === order.id ? reorder : null;
+  return (
+    <article className="relative flex h-full flex-col gap-3 rounded-[20px] border border-[#E3DDD8] bg-white p-4 transition-colors duration-150 hover:border-[#D5CEC8] hover:bg-[#FCFBFA]">
+      <div className="flex items-center gap-3">
+        <ChefFace photoUrl={profile?.chefPhotoUrl} size={48} />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-xl font-bold leading-7 text-[#261A15]">
+            {/* Its ::after covers the card, so a click anywhere opens the order; focus rings the whole card. */}
+            <Link
+              to={`/orders/${order.id}`}
+              className="after:absolute after:inset-0 after:rounded-[20px] focus-visible:!outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[#1A1A1A]"
+            >
+              {order.kitchenName}
+            </Link>
+          </h3>
+          <p className="text-[0.9375rem] leading-5 text-[#706864]">
+            <time dateTime={order.createdAt}>{formatOrderDate(order.createdAt)}</time> · #{shortOrderNumber(order.id)}
+          </p>
+        </div>
+        <p className="shrink-0 text-xl font-bold tabular-nums text-[#261A15]">{money(order.grandTotal, order.currency)}</p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {shown.map((item) => (
+          <DishTile key={item.id} url={photos.get(item.menuItemId)} />
+        ))}
+        {more > 0 ? (
+          // The line beside it names every dish, so the tile is only a picture.
+          <span aria-hidden="true" className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[10px] bg-[#F7F5F3] text-[0.9375rem] font-semibold text-[#261A15]">
+            +{more}
+          </span>
+        ) : null}
+        <p className="ml-1 line-clamp-2 min-w-0 flex-1 text-[0.9375rem] leading-5 text-[#706864]">{orderItemsLine(order.items)}</p>
+      </div>
+
+      <div className="mt-auto flex min-h-11 items-center justify-between gap-2 border-t border-[#E3DDD8] pt-3">
+        <span className={`min-w-0 truncate rounded-full px-3 text-[0.9375rem] font-bold leading-[30px] ${TONE_PILL[pill.tone]}`}>
+          {pill.label}
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {action === "REORDER" ? (
+            <button
+              type="button"
+              disabled={reorder?.busy}
+              aria-busy={mine?.busy}
+              onClick={() => onReorder(order)}
+              className="relative z-10 inline-flex min-h-11 items-center gap-1.5 rounded-full !border !border-[#E3DDD8] !bg-white px-3.5 text-[0.9375rem] font-semibold !text-[#261A15] !shadow-none hover:!bg-[#F7F5F3]"
+            >
+              <RotateCw className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
+              {mine?.busy ? "Adding…" : "Reorder"} <span className="sr-only">from {order.kitchenName}</span>
+            </button>
+          ) : null}
+          {action === "TRACK" ? (
+            <Link
+              to={`/orders/${order.id}/tracking`}
+              className="relative z-10 inline-flex min-h-11 items-center gap-0.5 rounded-full pl-2 text-[1.0625rem] font-bold text-[#D92714] hover:underline hover:underline-offset-4"
+            >
+              Track order <span className="sr-only">from {order.kitchenName}</span>
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          ) : (
+            // The card itself opens the order; this only says so.
+            <span aria-hidden="true" className="inline-flex min-h-11 items-center pl-2 text-[1.0625rem] font-bold text-[#D92714]">
+              Details
+            </span>
+          )}
+        </div>
+      </div>
+      {mine?.message ? (
+        <p role="status" className="relative z-10 text-sm font-medium text-[#C4200F]">
+          {mine.message}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+/** My Orders, like the app: All, Upcoming, Completed and Cancelled, 20 at a time, newest first. */
 export default function OrdersPage() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [reorder, setReorder] = useState<{ orderId: string; busy: boolean; message: string } | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | Problem>("loading");
+  const [tab, setTab] = useState<OrderTab>("ALL");
+  const [signedIn, setSignedIn] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const rememberScroll = useReturnScroll(!loading);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const [older, setOlder] = useState<"idle" | "loading" | "failed">("idle");
+  const [reorder, setReorder] = useState<Reorder>(null);
+  // Ages are measured from the moment the list loaded, so a render never changes them.
+  const [loadedAt, setLoadedAt] = useState(0);
+  const unread = useCustomerUnreadCount(signedIn);
+  const rememberScroll = useReturnScroll(status === "ready");
 
   const load = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
-    else setLoading(true);
-    setError("");
+    else setStatus("loading");
+    setRefreshFailed(false);
     try {
-      const response = await fetch("/api/orders", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const raw = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          raw &&
-          typeof raw === "object" &&
-          "message" in raw &&
-          typeof raw.message === "string"
-            ? raw.message
-            : "Your orders didn’t load. Check your connection and try again.";
-        throw new Error(message);
-      }
-      const parsed = parseCustomerOrders(raw);
-      if (!parsed) throw new Error("Craves returned an invalid orders response.");
-      setOrders(
-        [...parsed].sort(
-          (left, right) =>
-            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-        ),
-      );
-      setLastUpdatedAt(new Date());
+      const page = await readOrders(null);
+      setOrders(page.orders);
+      setCursor(page.cursor);
+      setOlder("idle");
+      setLoadedAt(Date.now());
+      setStatus("ready");
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Your orders didn’t load. Check your connection and try again.",
-      );
+      // A refresh that fails keeps the list on screen.
+      if (background) setRefreshFailed(true);
+      else setStatus(problemOf(caught));
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+  const start = useCallback(
+    (isActive: () => boolean = () => true) => {
+      loadSession({ keepOnOutage: true }).then(
+        (session) => {
+          if (!isActive()) return;
+          if (!session) {
+            navigate({ to: "/" });
+            return;
+          }
+          setSignedIn(true);
+          void load();
+        },
+        // The sign-in couldn't be checked (offline, or Craves didn't answer): not the same as signed out.
+        () => {
+          if (isActive()) setStatus("session");
+        },
+      );
+    },
+    [load, navigate],
+  );
+
   useEffect(() => {
     let active = true;
-    void loadSession().then((session) => {
-      if (!active) return;
-      if (!session) {
-        navigate({ to: "/" });
-        return;
-      }
-      void load();
-    });
+    start(() => active);
     return () => {
       active = false;
     };
-  }, [load, navigate]);
+  }, [start]);
 
-  // Ages are measured from the moment this list loaded, so a render never changes them.
-  const now = lastUpdatedAt?.getTime() ?? 0;
-  // Orders that are still on their way come first, then everything else.
-  const sections = useMemo(
-    () =>
-      [
-        { title: "In progress", orders: orders.filter((order) => inProgress(order, now)) },
-        { title: "Past orders", orders: orders.filter((order) => !inProgress(order, now)) },
-      ].filter((section) => section.orders.length > 0),
-    [now, orders],
-  );
+  async function loadOlder() {
+    if (!cursor || older === "loading") return;
+    setOlder("loading");
+    try {
+      const page = await readOrders(cursor);
+      setOrders((current) => [...current, ...page.orders.filter((order) => !current.some((item) => item.id === order.id))]);
+      setCursor(page.cursor);
+      setOlder("idle");
+    } catch {
+      setOlder("failed");
+    }
+  }
 
   async function orderAgain(order: CustomerOrder) {
     if (reorder?.busy) return;
@@ -221,208 +327,158 @@ export default function OrdersPage() {
       navigate({ to: "/cart" });
     } catch (error) {
       // "Keep current cart" was the customer's choice: nothing to report.
-      setReorder(
-        error instanceof CartKeptError
-          ? null
-          : {
-              orderId: order.id,
-              busy: false,
-              message:
-                error instanceof Error && error.message
-                  ? error.message
-                  : "We couldn’t add these dishes to your cart. Please try again.",
-            },
-      );
+      setReorder(error instanceof CartKeptError ? null : { orderId: order.id, busy: false, message: REORDER_FAILED });
     }
+  }
+
+  const visible = ordersInTab(orders, tab, loadedAt);
+  const retry =
+    status === "session"
+      ? () => {
+          setStatus("loading");
+          start();
+        }
+      : () => void load();
+
+  let body;
+  if (status === "loading") {
+    body = <CustomerSectionSkeleton variant="orders" label="Loading your orders" />;
+  } else if (status === "session") {
+    body = (
+      <EmptyState
+        illustration="session"
+        title="We couldn’t sign you back in"
+        message="Check your connection and try again. You can also sign in again with your phone number."
+        role="alert"
+      >
+        <button type="button" onClick={retry} className="craves-primary-action">
+          Try again
+        </button>
+        <a href={`/sign-in?returnTo=${encodeURIComponent("/orders")}`} className={emptyStateSecondaryAction}>
+          Go to sign in
+        </a>
+      </EmptyState>
+    );
+  } else if (status === "offline" || status === "error") {
+    body = (
+      <EmptyState
+        illustration={status === "offline" ? "offline" : "loadError"}
+        title={status === "offline" ? "You’re offline" : "We couldn’t load your orders"}
+        message={status === "offline" ? "Check your Wi‑Fi or mobile data, then try again." : "Check your connection and try again. Your orders are safe."}
+        role="alert"
+      >
+        <button type="button" onClick={retry} className="craves-primary-action">
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+          Try again
+        </button>
+      </EmptyState>
+    );
+  } else if (orders.length === 0) {
+    body = (
+      <EmptyState
+        illustration="orders"
+        title="No orders yet"
+        message="When you order from a home chef, you can follow it live from the kitchen to your door here."
+      >
+        <Link to="/home" className="craves-primary-action">
+          Find something to eat
+        </Link>
+      </EmptyState>
+    );
+  } else {
+    body = (
+      <Tabs value={tab} onValueChange={(value) => setTab(value as OrderTab)} className="mt-4">
+        <TabsList aria-label="Order filters" className="flex h-auto w-full rounded-full bg-[#F7F5F3] p-1 text-[#706864]">
+          {ORDER_TABS.map(({ key, label }) => (
+            <TabsTrigger
+              key={key}
+              value={key}
+              className="min-h-[2.75rem] min-w-0 flex-1 rounded-full !border-0 !bg-transparent px-1.5 text-[0.9375rem] font-semibold !text-[#706864] !shadow-none data-[state=active]:!bg-white data-[state=active]:font-bold data-[state=active]:!text-[#261A15] data-[state=active]:!shadow-[0_1px_3px_rgba(38,26,21,0.12)]"
+            >
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={tab} className="mt-4">
+          {visible.length === 0 && tab !== "ALL" ? (
+            <EmptyState illustration="orders" title={EMPTY_TAB[tab][0]} message={EMPTY_TAB[tab][1]} heading="h2" compact />
+          ) : (
+            <ul className="grid gap-3.5 lg:grid-cols-2">
+              {visible.map((order) => (
+                <li key={order.id}>
+                  <OrderCard order={order} now={loadedAt} reorder={reorder} onReorder={(item) => void orderAgain(item)} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {cursor ? (
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadOlder()}
+                disabled={older === "loading"}
+                aria-busy={older === "loading"}
+                className="min-h-11 rounded-full !border-0 !bg-[#EFEEEE] px-6 text-[0.9375rem] font-semibold !text-[#261A15] !shadow-none hover:!bg-[#E6E4E3]"
+              >
+                {older === "loading" ? "Loading…" : "Load older orders"}
+              </button>
+              {older === "failed" ? (
+                <p role="alert" className="text-sm font-medium text-[#C4200F]">
+                  Older orders didn’t load. Try again.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </TabsContent>
+      </Tabs>
+    );
   }
 
   return (
     <div className="min-h-screen bg-white pb-20 text-ink" onClickCapture={rememberScroll}>
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-4 md:px-6 md:py-5">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
           <Link
             to="/profile"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!bg-[#F1F3F5]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
             aria-label="Back to profile"
           >
-            <FaArrowLeft className="text-lg" aria-hidden="true" />
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
-
-          <Link
-            to="/home"
-            className="shrink-0 rounded-lg"
-            aria-label="Craves home"
-          >
+          <Link to="/home" className="shrink-0 rounded-lg" aria-label="Craves home">
             <CravesLogo size="sm" decorative />
           </Link>
-
-          <div className="min-w-0">
-            <h1 className="mt-0.5 text-xl font-semibold leading-tight text-[#1A1A1A]">
-              Your orders
-            </h1>
-          </div>
-
           <button
             type="button"
-            disabled={refreshing || loading}
+            disabled={refreshing || status !== "ready"}
             onClick={() => void load(true)}
             className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none disabled:opacity-50"
             aria-label="Refresh orders"
           >
-            <FaArrowRotateRight
-              className={`text-sm ${refreshing ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
           </button>
-          {lastUpdatedAt && (
-            <span className="sr-only">
-              Last refreshed {lastUpdatedAt.toLocaleTimeString("en-IN")}
-            </span>
-          )}
         </div>
       </AutoHideCustomerHeader>
 
-      <main className="mx-auto max-w-4xl px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
-        {/* Repeat baskets come from delivered orders: none delivered, nothing to ask for. */}
-        {!loading && orders.some((order) => order.status === "DELIVERED") ? <YourUsualRail /> : null}
-        <section aria-live="polite">
-          {loading ? (
-            <CustomerSectionSkeleton variant="orders" label="Loading your orders" />
-          ) : error && orders.length === 0 ? (
-            <div className="rounded-2xl border border-[#D8DADD] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.07)] md:p-10">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#C4200F]">
-                <FaCircleExclamation className="text-xl" aria-hidden="true" />
-              </span>
-              <h2 className="mt-4 text-xl font-semibold text-[#1A1A1A]">
-                Orders unavailable
-              </h2>
-              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-                {error}
-              </p>
-              <button
-                type="button"
-                onClick={() => void load()}
-                className="craves-primary-action mt-6"
-              >
-                <FaArrowRotateRight className="text-base" aria-hidden="true" />
-                Try again
-              </button>
-            </div>
-          ) : orders.length === 0 ? (
-            <div className="rounded-2xl border border-[#D8DADD] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.07)] md:p-10">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                <FaBagShopping className="text-xl" aria-hidden="true" />
-              </span>
-              <h2 className="mt-4 text-xl font-semibold text-[#1A1A1A]">
-                No orders yet
-              </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-                Your first Craves order will appear here after checkout.
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/home" })}
-                className="craves-primary-action mt-6"
-              >
-                Browse food
-                <FaArrowRight className="text-sm" aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-7">
-              {sections.map((section) => (
-                <section key={section.title} aria-label={section.title}>
-                  <h2 className="mb-3 text-sm font-semibold text-[#1A1A1A]">
-                    {section.title} ({section.orders.length})
-                  </h2>
-                  <ul className="space-y-3">
-                    {section.orders.map((order) => {
-                      const active = inProgress(order, now);
-                      const unpaid = order.status === "PAYMENT_PENDING";
-                      const abandoned = unpaid && !active;
-                      const reordering = reorder?.orderId === order.id ? reorder : null;
-                      return (
-                        <li
-                          key={order.id}
-                          className="relative rounded-2xl border border-[#D8DADD] bg-white p-4 shadow-[0_3px_10px_rgba(0,0,0,0.07)] transition-[border-color,box-shadow] duration-200 hover:border-[#C9CCD0] hover:shadow-[0_4px_14px_rgba(0,0,0,0.09)] md:p-5"
-                        >
-                          <div className="flex items-start gap-3.5">
-                            <OrderChefFace kitchenId={order.kitchenId} />
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <h3 className="truncate text-base font-semibold text-[#1A1A1A]">
-                                    {/* The whole card opens the order, like the app; tracking is one tap on from there. Its ::after covers the card. */}
-                                    <Link
-                                      to={`/orders/${order.id}`}
-                                      aria-label={`View order from ${order.kitchenName}`}
-                                      className="after:absolute after:inset-0 after:rounded-2xl"
-                                    >
-                                      {order.kitchenName}
-                                    </Link>
-                                  </h3>
-                                  {/* Date and order number on their own lines on phones, one line from 640 px. */}
-                                  <p className="mt-1 text-[13px] text-[#6B6B6B]">
-                                    <time dateTime={order.createdAt} className="block sm:inline">
-                                      {formatOrderDate(order.createdAt)}
-                                    </time>
-                                    <span className="hidden sm:inline"> · </span>
-                                    <span className="block sm:inline">Order #{shortOrderNumber(order.id)}</span>
-                                  </p>
-                                </div>
-                                <span
-                                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-4 ${abandoned ? "bg-[#F1F3F5] text-[#6B6B6B]" : statusClass(order.status)}`}
-                                >
-                                  {abandoned ? "Payment not completed" : formatOrderStatus(order.status)}
-                                </span>
-                              </div>
-
-                              <p className="mt-2 truncate text-[13px] font-medium text-[#1A1A1A]">
-                                {itemSummary(order)}
-                              </p>
-
-                              <div className="mt-3 flex min-h-11 items-center justify-between gap-4 border-t border-[#E5E7EB] pt-3">
-                                <p className="text-sm font-semibold text-[#1A1A1A]">
-                                  {money(order.grandTotal, order.currency)}
-                                  <span className="font-normal text-[#6B6B6B]">{unpaid ? " total" : " total paid"}</span>
-                                </p>
-                                {order.status === "DELIVERED" ? (
-                                  <button
-                                    type="button"
-                                    disabled={reorder?.busy}
-                                    aria-busy={reordering?.busy}
-                                    onClick={() => void orderAgain(order)}
-                                    className="relative z-10 min-h-11 shrink-0 rounded-full !border-0 !bg-[#F1F3F5] px-4 text-sm font-bold !text-[#1A1A1A] !shadow-none"
-                                  >
-                                    {reordering?.busy ? "Adding…" : "Order again"}
-                                  </button>
-                                ) : null}
-                              </div>
-                              {reordering?.message ? (
-                                <p role="status" className="relative z-10 mt-2 text-sm font-medium text-[#C4200F]">
-                                  {reordering.message}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          )}
-
-          {error && orders.length > 0 && (
-            <p
-              role="alert"
-              className="mt-5 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]"
-            >
-              {error}
+      <main className="mx-auto max-w-5xl px-4 pb-8 pt-5 md:px-6 md:pb-10">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="font-display text-[2.125rem] font-bold leading-tight tracking-[-0.02em] text-[#261A15]">My Orders</h1>
+          <Link
+            to="/notifications"
+            aria-label={notificationsLabel(unread)}
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FDEAE8] text-[#D92714] transition-colors hover:bg-[#FBD5D0]"
+          >
+            <Bell className="h-5 w-5" aria-hidden="true" />
+            <UnreadBadge count={unread} />
+          </Link>
+        </div>
+        <section aria-label="Your orders">
+          {body}
+          {refreshFailed ? (
+            <p role="alert" className="mt-5 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]">
+              Your orders didn’t refresh. Check your connection and try again.
             </p>
-          )}
+          ) : null}
         </section>
       </main>
     </div>

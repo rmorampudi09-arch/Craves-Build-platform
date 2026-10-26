@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, ChevronRight, Clock3, LifeBuoy, MapPin, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronRight, Clock3, LifeBuoy, MapPin, RefreshCw, Wallet } from "lucide-react";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
 import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
@@ -18,7 +18,8 @@ import {
   type DeliveryStatusResponse,
 } from "@/features/orders/lib/delivery-status";
 import { homePin, orderJourney, tracksDelivery, type OrderJourney } from "@/features/orders/lib/order-journey";
-import { loadKitchenMenu } from "@/features/dish/api/dishes";
+import { paymentStatus, TONE_TEXT } from "@/features/orders/lib/order-presentation";
+import { useDishPhotos } from "@/features/orders/api/dish-photos";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { shortOrderNumber } from "@/shared/lib/order-number";
@@ -52,6 +53,11 @@ const dayAndTime = new Intl.DateTimeFormat("en-IN", {
 function when(value: string): string {
   const date = new Date(value);
   return (date.toDateString() === new Date().toDateString() ? clock : dayAndTime).format(date);
+}
+
+// The server stores snacks as "Snakes"; people read "Snacks".
+function categoryLabel(category: string): string {
+  return category === "Snakes" ? "Snacks" : category;
 }
 
 function addressLine(order: CustomerOrder): string {
@@ -131,24 +137,6 @@ async function readDelivery(orderId: string): Promise<DeliveryStatusResponse | n
   } catch {
     return null;
   }
-}
-
-/** Dish photos from the kitchen's menu, by menu item; a dish no longer on the menu has none. */
-function useDishPhotos(kitchenId: string | undefined): Map<string, string> {
-  const [photos, setPhotos] = useState(() => new Map<string, string>());
-  useEffect(() => {
-    if (!kitchenId) return;
-    let live = true;
-    loadKitchenMenu(kitchenId, { remember: false })
-      .then((dishes) => {
-        if (live) setPhotos(new Map(dishes.filter((dish) => !dish.imageIsPlaceholder && dish.img.startsWith("https://")).map((dish) => [dish.id, dish.img])));
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [kitchenId]);
-  return photos;
 }
 
 function DishPhoto({ url }: { url: string | undefined }) {
@@ -308,6 +296,7 @@ export function CustomerOrderStatus({
   const awaitingPayment = unpaid && !abandoned && !justPaid;
   const trackable = !problem && !delivered;
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const payment = paymentStatus(order.status, { abandoned, confirming: unpaid && justPaid });
   const bill: [string, number][] = [
     ["Item total", order.foodSubtotal],
     ["Platform fee", order.platformFee],
@@ -448,7 +437,11 @@ export function CustomerOrderStatus({
                   <li key={item.id} className="flex items-center gap-3">
                     <DishPhoto url={photos.get(item.menuItemId)} />
                     <span className="min-w-0 flex-1">
-                      <span className="font-semibold tabular-nums">{item.quantity} ×</span> {item.itemName}
+                      <span className="block font-semibold">{item.itemName}</span>
+                      {/* Like the app: "2 × ₹120 · Main course". */}
+                      <span className="block text-[0.8125rem] tabular-nums text-[#6B6B6B]">
+                        {item.quantity} × {money(item.unitPrice, order.currency)} · {categoryLabel(item.category)}
+                      </span>
                     </span>
                     <span className="shrink-0 tabular-nums">{money(item.lineTotal, order.currency)}</span>
                   </li>
@@ -484,6 +477,17 @@ export function CustomerOrderStatus({
                   <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">{addressLine(order)}</p>
                 </div>
               </div>
+              {payment ? (
+                <div className="mt-4 flex items-start gap-3 border-t border-[#E5E7EB] pt-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                    <Wallet className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold">Payment</h3>
+                    <p className={`mt-1 text-sm font-semibold ${TONE_TEXT[payment.tone]}`}>{payment.label}</p>
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <nav aria-label="More from this order" className="flex flex-wrap gap-3">

@@ -5,7 +5,9 @@ import type {ChefProfileStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
 import {borderWidth, colors, fontWeight, iconSize, spacing, textDefaults, touchTarget, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
+import {appSounds, useSoundsEnabled} from '../../../shared/sound/appSounds';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
+import {ChefSwitch} from '../components/ChefSwitch';
 import {
   ChefCard,
   ChefScreen,
@@ -24,7 +26,7 @@ import {useChefRead} from '../state/useChefRead';
 import {useKitchenOpenState} from '../state/useKitchenOpenState';
 
 // shortcut: written here, not read from the app, so it must be bumped with versionName in android/app/build.gradle.
-export const CHEF_APP_VERSION = '1.36.7';
+export const CHEF_APP_VERSION = '1.36.9';
 
 
 type Dialog = 'switch' | 'logout' | null;
@@ -38,6 +40,7 @@ export function ChefProfileScreen() {
   const accountResolution = useAppSelector(state => state.auth.accountResolution);
   const kitchenState = useKitchenOpenState();
   const {kitchen} = kitchenState;
+  const soundsOn = useSoundsEnabled();
   // The reviews screen reads the same entry, so opening it afterwards needs no second wait.
   const summary = useChefRead('chef-review-summary', signal => chefReviewsApi.summary(kitchen?.id as string, signal), {
     entityId: kitchen?.id,
@@ -182,6 +185,12 @@ export function ChefProfileScreen() {
       <SectionHeader title="More" />
       <ListGroup dividers={false}>
         <ListRow compact icon="gift" onPress={open('ChefReferral')} title="Refer a chef" />
+        <ListRow
+          compact
+          icon="volume"
+          right={<ChefSwitch label="Sounds" value={soundsOn} onChange={appSounds.setEnabled} />}
+          title="Sounds"
+        />
         <ListRow compact icon="filter" onPress={open('ChefAppPreferences')} title="Preferences" />
         <ListRow compact icon="headset" onPress={open('ChefSupport')} title="Help & support" />
         <ListRow compact icon="lock" onPress={open('ChefSecurity')} title="Login & security" />

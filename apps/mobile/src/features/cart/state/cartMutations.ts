@@ -1,5 +1,6 @@
 import type {AppDispatch, RootState} from '../../../app/store/store';
 import {AppApiError, toAppApiError} from '../../../core/http/apiError';
+import {appSounds} from '../../../shared/sound/appSounds';
 import {cartApi} from '../api/cartApi';
 import type {CartSnapshot} from '../domain/cartTypes';
 import {cartActions} from './cartSlice';
@@ -183,6 +184,7 @@ export function switchCartKitchen(
           command.quantity,
           command.expectedKitchenId,
         );
+        void appSounds.play('addToCart');
         return markMutationSucceeded(dispatch, key, requestId, snapshot);
       } catch (error) {
         return markMutationFailed(
@@ -219,6 +221,7 @@ export function addCartItem(command: AddCartItemCommand): CartMutationThunk {
     return enqueueMutation(async () => {
       try {
         const snapshot = await cartApi.addItem(command.menuItemId, command.quantity);
+        void appSounds.play('addToCart');
         return markMutationSucceeded(dispatch, key, requestId, snapshot);
       } catch (error) {
         return markMutationFailed(

@@ -64,7 +64,9 @@ import {
   useCustomerOrderDetailQuery,
   useCustomerOrderTrackingQuery,
 } from '../query/customerOrdersQueries';
+import {fetchOrderReceiptPdf, shareOrderReceipt} from '../api/customerOrderReceiptApi';
 import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
+import {appSounds} from '../../../shared/sound/appSounds';
 
 type DetailRoute = RouteProp<CustomerOrdersStackParamList, 'CustomerOrderDetail'>;
 type DetailNavigation = NavigationProp<CustomerOrdersStackParamList, 'CustomerOrderDetail'>;
@@ -235,11 +237,20 @@ export function CustomerOrderDetailScreen() {
   const authPhone = useAppSelector(state => state.auth.identity?.phoneNumber ?? null);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
   const queryError = detail.error ? toAppApiError(detail.error) : null;
   const offline = queryError?.code === 'NETWORK_ERROR';
   const live = order ? LIVE_STATUSES.has(order.status) : false;
   const refetchDetail = detail.refetch;
   const refetchTracking = tracking.refetch;
+
+  const orderStatus = order?.status;
+  const deliveryStatus = tracking.data?.status;
+  useEffect(() => {
+    if (orderStatus) void appSounds.orderStatusSeen(`order:${route.params.orderId}`, orderStatus);
+    if (deliveryStatus) void appSounds.orderStatusSeen(`delivery:${route.params.orderId}`, deliveryStatus);
+  }, [deliveryStatus, orderStatus, route.params.orderId]);
 
   // The steps and the map follow the order while it is on screen, like the tracking screen.
   useEffect(() => {
@@ -350,6 +361,21 @@ export function CustomerOrderDetailScreen() {
 
   const openTracking = () => {
     navigation.navigate('CustomerOrderTracking', {orderId: order.id});
+  };
+
+  const downloadReceipt = async () => {
+    if (receiptBusy) return;
+    setReceiptBusy(true);
+    setReceiptError(null);
+    try {
+      const pdf = await fetchOrderReceiptPdf(order.id);
+      await shareOrderReceipt(pdf, `craves-receipt-${getCustomerOrderDisplayReference(order.id)}.pdf`);
+    } catch (error) {
+      const apiError = toAppApiError(error);
+      setReceiptError(apiError.code.startsWith('DOCUMENT_') ? apiError.message : "Couldn't make the receipt. Try again.");
+    } finally {
+      setReceiptBusy(false);
+    }
   };
 
   const showContactChefUnavailable = () => {
@@ -587,6 +613,33 @@ export function CustomerOrderDetailScreen() {
               {formatCustomerOrderMoney(order.grandTotal)}
             </Text>
           </View>
+          {order.status === 'DELIVERED' ? (
+            <>
+              <Pressable
+                accessibilityLabel="Download receipt as PDF"
+                accessibilityRole="button"
+                accessibilityState={{busy: receiptBusy, disabled: receiptBusy}}
+                disabled={receiptBusy}
+                onPress={() => {
+                  void downloadReceipt();
+                }}
+                style={({pressed}) => [styles.receiptLink, pressed && styles.pressed]}>
+                {receiptBusy ? (
+                  <ActivityIndicator color={colors.flameRed} size="small" />
+                ) : (
+                  <Icon name="download" size={iconSize.sm} color={colors.flameRedAccessible} surface={false} />
+                )}
+                <Text style={[iosType.subheadline, iosWeight.semibold, styles.redText]}>
+                  {receiptBusy ? 'Preparing your receipt…' : 'Download receipt (PDF)'}
+                </Text>
+              </Pressable>
+              {receiptError ? (
+                <Text accessibilityLiveRegion="polite" style={[iosType.footnote, styles.redText, styles.receiptError]}>
+                  {receiptError}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -833,6 +886,15 @@ const styles = StyleSheet.create({
     borderTopWidth: HAIRLINE,
     borderTopColor: colors.borderStrong,
   },
+  receiptLink: {
+    minHeight: 44,
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  receiptError: {textAlign: 'center'},
   infoRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   infoIcon: {
     width: 36,

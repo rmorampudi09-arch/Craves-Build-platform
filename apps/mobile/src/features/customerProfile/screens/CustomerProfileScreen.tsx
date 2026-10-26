@@ -5,6 +5,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -27,6 +28,7 @@ import {Icon} from '../../../shared/components/Icon';
 import {IconButton} from '../../../shared/components/IconButton';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {appSounds, useSoundsEnabled} from '../../../shared/sound/appSounds';
 import {authActions} from '../../auth/state/authSlice';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {CustomerBellButton} from '../../notifications/components/CustomerBellButton';
@@ -88,6 +90,27 @@ function ProfileMenuRow({row, disabled = false, onPress}: ProfileMenuRowProps) {
   );
 }
 
+function SoundsRow() {
+  const on = useSoundsEnabled();
+  return (
+    <View style={styles.menuRow}>
+      <View style={styles.menuIcon}>
+        <Icon name="volume" size={iconSize.md} color={colors.flameRed} surface={false} />
+      </View>
+      <View style={styles.menuCopy}>
+        <Text style={styles.menuTitle}>Sounds</Text>
+      </View>
+      <Switch
+        accessibilityLabel="Sounds"
+        onValueChange={appSounds.setEnabled}
+        thumbColor={colors.white}
+        trackColor={{false: colors.borderStrong, true: colors.flameRed}}
+        value={on}
+      />
+    </View>
+  );
+}
+
 function ProfileReadyContent({
   data,
   loggingOut,
@@ -127,15 +150,17 @@ function ProfileReadyContent({
 
       <View style={styles.menuCard}>
         {CUSTOMER_PROFILE_MENU_ROWS.map(row => (
-          <ProfileMenuRow
-            key={row.id}
-            row={row}
-            disabled={
-              (loggingOut && row.id === 'logout') ||
-              (switchingRole && row.id === 'switch-chef')
-            }
-            onPress={() => onMenuPress(row)}
-          />
+          <React.Fragment key={row.id}>
+            {row.id === 'switch-chef' ? <SoundsRow /> : null}
+            <ProfileMenuRow
+              row={row}
+              disabled={
+                (loggingOut && row.id === 'logout') ||
+                (switchingRole && row.id === 'switch-chef')
+              }
+              onPress={() => onMenuPress(row)}
+            />
+          </React.Fragment>
         ))}
       </View>
     </View>

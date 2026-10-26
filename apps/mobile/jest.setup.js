@@ -120,6 +120,16 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-audio', () => ({
+  setAudioModeAsync: jest.fn(async () => undefined),
+  createAudioPlayer: jest.fn(() => ({
+    currentTime: 0,
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekTo: jest.fn(async () => undefined),
+  })),
+}));
+
 jest.mock('expo-font', () => ({
   useFonts: jest.fn(() => [true, null]),
 }));

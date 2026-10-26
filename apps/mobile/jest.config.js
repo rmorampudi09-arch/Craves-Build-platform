@@ -3,7 +3,7 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testPathIgnorePatterns: ['/node_modules/', '<rootDir>/backend-patches/'],
   transform: {
-    '^.+\\.(ttf|otf)$':
+    '^.+\\.(ttf|otf|wav)$':
       '<rootDir>/node_modules/@react-native/jest-preset/jest/assetFileTransformer.js',
   },
   moduleNameMapper: {

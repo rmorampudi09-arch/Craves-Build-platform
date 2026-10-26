@@ -44,6 +44,7 @@ import {
   useCustomerOrderDetailQuery,
   useCustomerOrderTrackingQuery,
 } from '../query/customerOrdersQueries';
+import {appSounds} from '../../../shared/sound/appSounds';
 
 type TrackingRoute = RouteProp<CustomerOrdersStackParamList, 'CustomerOrderTracking'>;
 type TrackingNavigation = NavigationProp<
@@ -91,6 +92,11 @@ export function CustomerOrderTrackingScreen() {
     const subscription = AppState.addEventListener('change', setAppState);
     return () => subscription.remove();
   }, []);
+
+  const deliveryStatus = projection?.status;
+  useEffect(() => {
+    if (deliveryStatus) void appSounds.orderStatusSeen(`delivery:${route.params.orderId}`, deliveryStatus);
+  }, [deliveryStatus, route.params.orderId]);
 
   useEffect(() => {
     if (

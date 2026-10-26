@@ -4,7 +4,9 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import {useEffect} from 'react';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
+import {appSounds} from '../../../shared/sound/appSounds';
 import {useAppSelector} from '../../../app/store/hooks';
 import {
   customerShellApi,
@@ -131,6 +133,14 @@ export function useCustomerNotificationsListQuery() {
   const unreadCount = CUSTOMER_NOTIFICATION_INBOX_V2_AVAILABLE
     ? countQuery.data?.unreadCount ?? 0
     : unreadNoticeCount(notices);
+  // The 0 shown before the first load is not a real count, so it must not make the next one sound new.
+  const unreadLoaded = CUSTOMER_NOTIFICATION_INBOX_V2_AVAILABLE
+    ? countQuery.data !== undefined
+    : legacyQuery.data !== undefined;
+
+  useEffect(() => {
+    if (identityId && unreadLoaded) void appSounds.unreadCountSeen(identityId, unreadCount);
+  }, [identityId, unreadCount, unreadLoaded]);
 
   const refetch = async () => {
     if (CUSTOMER_NOTIFICATION_INBOX_V2_AVAILABLE) {

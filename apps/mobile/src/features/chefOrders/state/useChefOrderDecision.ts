@@ -11,6 +11,7 @@ import {
 } from '../domain/chefOrderDecision';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
 import {createChefOrderDetailQueryKey} from './useChefOrderDetailContract';
+import {appSounds} from '../../../shared/sound/appSounds';
 
 export interface ChefOrderDecisionState {
   action: ChefOrderDecisionKind | null;
@@ -69,6 +70,7 @@ export function useChefOrderDecision(orderId: string): ChefOrderDecisionState {
       actionPromise = execute()
         .then(async result => {
           reconcile(result.order);
+          if (kind === 'accept') void appSounds.play('chefOrderDone');
           operational.refresh().catch(() => undefined);
           return result.order;
         })

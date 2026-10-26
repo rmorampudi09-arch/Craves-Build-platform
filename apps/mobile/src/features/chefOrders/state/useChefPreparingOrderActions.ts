@@ -11,6 +11,7 @@ import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProv
 import {useReportFeedback} from './useReportFeedback';
 import {dialablePhone} from '../domain/chefOrderDetailModel';
 import {createChefOrderDetailQueryKey} from './useChefOrderDetailContract';
+import {appSounds} from '../../../shared/sound/appSounds';
 
 export type ChefPreparingOrderAction = 'marking-ready' | 'calling';
 
@@ -147,6 +148,7 @@ export function useChefPreparingOrderActions(): ChefPreparingOrderActions {
           ready.prepTimeMinutes,
         );
         operational.refresh().catch(() => undefined);
+        void appSounds.play('chefOrderDone');
         report({kind: 'success', message: 'Order marked ready for pickup.'});
       } catch (cause: unknown) {
         const appError = cause instanceof AppApiError ? cause : toAppApiError(cause);

@@ -8,6 +8,7 @@ import {
 } from '../domain/chefOrderDecision';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
 import {useReportFeedback} from './useReportFeedback';
+import {appSounds} from '../../../shared/sound/appSounds';
 
 export type ChefNewOrderAction = 'accepting' | 'rejecting';
 
@@ -67,6 +68,7 @@ export function useChefNewOrderActions(): ChefNewOrderActionsState {
       try {
         const order = await execute();
         reconcile(order);
+        if (action === 'accepting') void appSounds.play('chefOrderDone');
         report({
           kind: 'success',
           message:

@@ -10,6 +10,7 @@ import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {shouldRetryQuery} from '../../../app/query/queryPolicy';
 import {useAppSelector} from '../../../app/store/hooks';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
+import {appSounds} from '../../../shared/sound/appSounds';
 import {
   CHEF_NOTIFICATION_PAGE_SIZE,
   chefNotificationInboxApi,
@@ -247,6 +248,9 @@ export function ChefOperationalProvider({children}: React.PropsWithChildren) {
   });
 
   const orders = React.useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  React.useEffect(() => {
+    if (identityId && ordersQuery.data) void appSounds.chefOrdersSeen(identityId, ordersQuery.data);
+  }, [identityId, ordersQuery.data]);
   // Chef mode never lists or counts the customer's own order notices.
   const notices = React.useMemo(
     () =>

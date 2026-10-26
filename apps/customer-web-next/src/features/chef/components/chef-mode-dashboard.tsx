@@ -582,11 +582,12 @@ export function ChefModeDashboard() {
                   <p className="chef-stat-label">{text.earnedWeek}</p>
                   <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
                 </Link>
-                {snapshot.reviews ? (
+                {/* Only a real average: a chef with no reviews yet gets no empty "—" tile. */}
+                {snapshot.reviews && snapshot.reviews.average !== null ? (
                   <Link href="/chef/reviews" className="chef-stat col-span-2 !border-r-0">
                     <p className="chef-stat-label">{text.rating}</p>
                     <p className="chef-stat-value">
-                      {snapshot.reviews.average === null ? "—" : <>{snapshot.reviews.average.toFixed(1)}<span aria-hidden="true"> ★</span></>}
+                      {snapshot.reviews.average.toFixed(1)}<span aria-hidden="true"> ★</span>
                     </p>
                   </Link>
                 ) : null}
@@ -595,7 +596,8 @@ export function ChefModeDashboard() {
             <section className="rounded-[var(--chef-radius)] bg-[#261A15] p-4 text-white md:p-5" aria-labelledby="chef-home-balance">
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <h2 id="chef-home-balance" className="text-[0.875rem] font-semibold text-white/80">{text.available}</h2>
+                  {/* Not text-white: a legacy chef rule turns any heading with "text-white" ink-coloured. */}
+                  <h2 id="chef-home-balance" className="text-[0.875rem] font-semibold text-[#EFE6E1]">{text.available}</h2>
                   <p className="chef-amount mt-1 truncate font-display text-[1.75rem] font-bold leading-tight">{snapshot.balance ? formatInr(snapshot.balance.available) : "—"}</p>
                 </div>
                 <Wallet className="h-7 w-7 shrink-0" aria-hidden="true" />

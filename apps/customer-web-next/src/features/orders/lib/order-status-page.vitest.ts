@@ -99,6 +99,10 @@ describe("order status after payment", () => {
     expect(screen.getByText("Live map opens once your order is picked up")).toBeTruthy();
     expect(screen.getByText("₹1,125.30")).toBeTruthy();
     expect(screen.getByText("₹51.30")).toBeTruthy();
+    // Each dish reads like the app: the name, then "2 × ₹329 · Biryani".
+    expect(screen.getByText("Hyderabadi Chicken Dum Biryani")).toBeTruthy();
+    expect(screen.getByText("2 × ₹329 · Biryani")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Payment" }).nextElementSibling?.textContent).toBe("Paid");
     expect(screen.getByRole("link", { name: "Track order" }).getAttribute("href")).toBe(`/orders/${fixture.id}/tracking`);
     expect(screen.getByRole("link", { name: /Get help/ }).getAttribute("href")).toBe(`/support?orderId=${fixture.id}`);
     expect(screen.getByRole("link", { name: "Your orders" }).getAttribute("href")).toBe("/orders");
@@ -140,6 +144,8 @@ describe("order status after payment", () => {
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     expect(await screen.findByRole("heading", { name: "Chef declined" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "How was your order?" })).toBeNull();
+    // Whether money moves back shows as the refund's own status; nothing to claim yet.
+    expect(screen.queryByRole("heading", { name: "Payment" })).toBeNull();
     expect(screen.getByRole("link", { name: "Browse dishes" }).getAttribute("href")).toBe("/home");
   });
 
@@ -157,6 +163,7 @@ describe("order status after payment", () => {
       ).toBeTruthy();
       expect(screen.getByRole("link", { name: /Get help/ }).getAttribute("href")).toBe(`/support?orderId=${fixture.id}`);
       expect(screen.getByText("Order total")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "Payment" }).nextElementSibling?.textContent).toBe("Payment not completed");
       expect(screen.queryByText(/Razorpay is confirming/)).toBeNull();
       // It says one thing: no kitchen steps waiting for the chef, and no Pay.
       expect(screen.queryByTestId("order-map")).toBeNull();

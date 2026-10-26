@@ -10,6 +10,7 @@ export interface RuntimeConfig {
 export const CRAVES_PRODUCTION_API_ORIGIN = 'https://api.craves.in';
 
 const API_VERSION_PREFIX = '/api/v1';
+// The APIM host is from the retired subscription 4f897b61; it stays so a build still configured with it is sent to api.craves.in.
 const LEGACY_PRODUCTION_API_ORIGINS = new Set([
   'https://api.example.invalid',
   'https://apim-craves-prodlow-l3ing6.azure-api.net',

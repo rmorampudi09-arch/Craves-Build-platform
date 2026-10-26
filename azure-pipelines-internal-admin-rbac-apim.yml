@@ -12,7 +12,7 @@ parameters:
   - name: apimServiceName
     displayName: API Management service
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlow-kmqgfy
   - name: authContainerAppName
     displayName: Auth Service Container App
     type: string

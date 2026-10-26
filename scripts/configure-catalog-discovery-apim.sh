@@ -2,7 +2,7 @@
 set -euo pipefail
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 CATALOG_APP="${CATALOG_APP:-ca-craves-catalog-service-prodlo}"
 API_ID="${API_ID:-craves-catalog-discovery-v1}"
 API_PATH="${API_PATH:-api/v1/discovery}"

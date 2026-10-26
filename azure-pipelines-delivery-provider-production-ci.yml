@@ -2,7 +2,7 @@ trigger: none
 pr: none
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   DELIVERY_PRODUCTIONIZATION_BASE_SHA: f0b4c27973bb987bccf68bb1f1a44e1250d94bd4
 
 pool:
@@ -171,13 +171,13 @@ steps:
         exit 2
       fi
 
-      grep -Fq 'default: apim-craves-prodlow-l3ing6' "$borzo"
+      grep -Fq 'default: apim-craves-prodlow-kmqgfy' "$borzo"
       grep -Fq 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true' "$borzo"
       grep -Fq "status NOT IN ('DELIVERED','CANCELLED','RETURNED','FAILED')" "$borzo"
       grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=false' "$borzo"
       grep -Fq 'CRAVES_DELIVERY_COMMAND_ENABLED=true' "$borzo"
 
-      grep -Fq 'default: apim-craves-prodlow-l3ing6' "$coordinated"
+      grep -Fq 'default: apim-craves-prodlow-kmqgfy' "$coordinated"
       grep -Fq 'VENDOR_PRIVATE_API_CONTRACT_REQUIRED' "$coordinated"
       grep -Fq 'ENTERPRISE_API_ONBOARDING_REQUIRED' "$coordinated"
       grep -Fq 'INTRACITY_API_PRODUCT_NOT_VERIFIED' "$coordinated"
@@ -201,7 +201,7 @@ steps:
         exit 2
       fi
 
-      if grep -R -Fq 'apim-craves-prodlowl3ing6' \
+      if grep -R -Fq 'apim-craves-prodlowkmqgfy' \
         azure-pipelines-delivery-provider-production-activation.yml \
         azure-pipelines-delivery-provider-coordinated-activation.yml \
         azure-pipelines-delivery-provider-webhooks-apim.yml \
@@ -252,7 +252,7 @@ steps:
         azure-pipelines-shiprocket-production-activation.yml \
         azure-pipelines-delhivery-environment.yml
       do
-        grep -Fq 'AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection' "$file" || {
+        grep -Fq 'AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection' "$file" || {
           echo "ERROR: $file does not pin the approved Azure service connection." >&2
           exit 2
         }

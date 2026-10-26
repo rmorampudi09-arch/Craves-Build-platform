@@ -93,7 +93,7 @@ parameters:
     default: ca-craves-order-service-prodlow
   - name: serviceBusNamespace
     type: string
-    default: sb-craves-prodlow-l3ing6
+    default: sb-craves-prodlow-kmqgfy
   - name: deliveryQueueName
     type: string
     default: delivery-command
@@ -105,10 +105,10 @@ parameters:
     default: order-service-delivery-status-changed
   - name: apimName
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlow-kmqgfy
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
 
 pool:
   vmImage: ubuntu-latest

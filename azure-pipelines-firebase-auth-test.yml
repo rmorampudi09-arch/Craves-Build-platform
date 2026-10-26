@@ -7,7 +7,7 @@ parameters:
     default: rg-craves-prodlow-centralindia
   - name: acrName
     type: string
-    default: cravesprodlowacr82121
+    default: cravesrm09prodlow6bf632
   - name: containerAppName
     type: string
     default: ca-craves-web-prodlow
@@ -19,7 +19,7 @@ variables:
   modulePath: apps/api-test-dashboard
   imageRepository: craves/api-test-dashboard
   azureServiceConnection: $(AZURE_SERVICE_CONNECTION)
-  dashboardBaseUrl: https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+  dashboardBaseUrl: https://ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
 
 pool:
   vmImage: ubuntu-latest

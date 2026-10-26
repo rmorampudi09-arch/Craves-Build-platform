@@ -10,18 +10,18 @@ trigger:
 pr: none
 
 variables:
-  azureServiceConnection: Craves-Dev-Service-Connection
-  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+  subscriptionId: 721906c9-4a72-4606-830b-d3e7ace093ff
   resourceGroup: rg-craves-prodlow-centralindia
-  keyVaultName: kvcravesprodlowl3ing6
+  keyVaultName: kvcravesprodlowkmqgfy
   firebaseServiceAccountSecret: craves-auth-firebase-service-account-json-base64
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   containerAppName: ca-craves-web-ui-test
   productionContainerAppName: ca-craves-web-prodlow
   appPath: apps/customer-web-next
   imageRepository: craves/customer-web-next
   apiBaseUrl: https://api.craves.in/api/v1
-  testFqdn: ca-craves-web-ui-test.happysand-aedc7165.centralindia.azurecontainerapps.io
+  testFqdn: ca-craves-web-ui-test.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
 
 pool:
   vmImage: ubuntu-latest

@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 NOTIFICATION_APP="${NOTIFICATION_APP:-ca-craves-notification-service-p}"
 API_ID="${API_ID:-craves-admin-notification-recovery-v1}"
 API_PATH="${API_PATH:-api/v1/admin/notifications/operations}"

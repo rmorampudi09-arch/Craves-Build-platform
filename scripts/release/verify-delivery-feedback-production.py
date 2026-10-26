@@ -31,7 +31,7 @@ def main():
     refs = json.loads(ops.az("containerapp", "secret", "list", "-g", rg, "-n", app_name, "-o", "json"))
     secret_ref = env["CRAVES_INTERNAL_SERVICE_KEY"]["secretRef"]
     secret_url = next(r["keyVaultUrl"] for r in refs if r["name"] == secret_ref)
-    assert secret_url.startswith("https://kvcravesprodlowl3ing6.vault.azure.net/secrets/")
+    assert secret_url.startswith("https://kvcravesprodlowkmqgfy.vault.azure.net/secrets/")
     secret = ops.az("keyvault", "secret", "show", "--id", secret_url, "--query", "value", "-o", "tsv")
     base = "https://" + app["properties"]["configuration"]["ingress"]["fqdn"]
     url = base + "/internal/v1/delivery-intelligence/feedback/readiness"

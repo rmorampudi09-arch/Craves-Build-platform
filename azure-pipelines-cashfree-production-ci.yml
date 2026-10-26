@@ -103,7 +103,7 @@ steps:
       test -f "$merchant_identity"
       grep -Fq 'CRAVES_PUBLIC_SUPPORT_PHONE_INPUT' "$merchant_identity"
       grep -Fq 'CRAVES_REGISTERED_BUSINESS_NAME_INPUT' "$merchant_identity"
-      grep -Fq "azureSubscription: 'Craves-Dev-Service-Connection'" "$merchant_identity"
+      grep -Fq "azureSubscription: 'Craves-RMORAMPUDI09-Service-Connection'" "$merchant_identity"
 
       test -f "$webhook_policy"
       test -f "$webhook_script"
@@ -116,5 +116,5 @@ steps:
       ! grep -Fq 'Bearer ' "$webhook_policy"
       grep -Fq 'urlTemplate": "/webhooks/cashfree"' "$webhook_script"
       grep -Fq 'expected HTTP 400 for missing provider headers' "$webhook_script"
-      grep -Fq "azureSubscription: 'Craves-Dev-Service-Connection'" "$webhook_pipeline"
+      grep -Fq "azureSubscription: 'Craves-RMORAMPUDI09-Service-Connection'" "$webhook_pipeline"
     displayName: Verify production payment, public web, merchant identity and APIM safety guards

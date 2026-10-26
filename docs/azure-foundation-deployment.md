@@ -30,9 +30,9 @@ Repository variables:
 
 ## Current target
 
-- Tenant: `6ac26780-f774-41e0-bf31-45f5e6e7167d`
+- Tenant: `1e7e43ac-c7f5-4d47-a74f-289a7cc21508`
 - Subscription: `Craves-Dev`
-- Subscription ID: `4f897b61-9b52-44b4-8cf1-bdac281cc1aa`
+- Subscription ID: `721906c9-4a72-4606-830b-d3e7ace093ff`
 - Primary requested region: `southindia`
 - Practical fallback/default for current deployment: `centralindia`
 - Resource group if using South India: `rg-craves-prodlow-southindia`
@@ -83,7 +83,7 @@ Do not run `deploy` directly as the first action.
 Run from Azure Cloud Shell after confirming the correct subscription is selected.
 
 ```bash
-az account set --subscription 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+az account set --subscription 721906c9-4a72-4606-830b-d3e7ace093ff
 
 az account show --query "{Name:name, SubscriptionId:id, TenantId:tenantId}" -o table
 
@@ -108,7 +108,7 @@ az deployment group validate \
   --parameters location=southindia \
                environmentName=prodlow \
                projectName=craves \
-               acrName=cravesprodlowacr82121 \
+               acrName=cravesrm09prodlow6bf632 \
                postgresAdminPassword='<use-rotated-password-from-secret-store>'
 
 az deployment group what-if \
@@ -117,7 +117,7 @@ az deployment group what-if \
   --parameters location=southindia \
                environmentName=prodlow \
                projectName=craves \
-               acrName=cravesprodlowacr82121 \
+               acrName=cravesrm09prodlow6bf632 \
                postgresAdminPassword='<use-rotated-password-from-secret-store>'
 ```
 
@@ -131,7 +131,7 @@ az deployment group create \
   --parameters location=southindia \
                environmentName=prodlow \
                projectName=craves \
-               acrName=cravesprodlowacr82121 \
+               acrName=cravesrm09prodlow6bf632 \
                postgresAdminPassword='<use-rotated-password-from-secret-store>'
 ```
 
@@ -150,7 +150,7 @@ az deployment group validate \
   --parameters location=centralindia \
                environmentName=prodlow \
                projectName=craves \
-               acrName=cravesprodlowacr82121 \
+               acrName=cravesrm09prodlow6bf632 \
                postgresAdminPassword='<use-rotated-password-from-secret-store>'
 
 az deployment group what-if \
@@ -159,7 +159,7 @@ az deployment group what-if \
   --parameters location=centralindia \
                environmentName=prodlow \
                projectName=craves \
-               acrName=cravesprodlowacr82121 \
+               acrName=cravesrm09prodlow6bf632 \
                postgresAdminPassword='<use-rotated-password-from-secret-store>'
 ```
 
@@ -173,7 +173,7 @@ az deployment group create \
   --parameters location=centralindia \
                environmentName=prodlow \
                projectName=craves \
-               acrName=cravesprodlowacr82121 \
+               acrName=cravesrm09prodlow6bf632 \
                postgresAdminPassword='<use-rotated-password-from-secret-store>'
 ```
 

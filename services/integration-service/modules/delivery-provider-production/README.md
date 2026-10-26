@@ -302,7 +302,7 @@ The source/deployment controls are:
 Approved Azure service connection:
 
 ```text
-Craves-Dev-Service-Connection
+Craves-RMORAMPUDI09-Service-Connection
 ```
 
 ### 10.1 CI gate

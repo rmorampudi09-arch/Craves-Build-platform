@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Deploy the connected Craves customer web
 
 This package updates only the existing Next.js web module and the guarded web deployment pipeline. It does not provision Azure resources and does not change Spring Boot services, API Management, databases, Firebase configuration, Cashfree secrets, or delivery-provider settings.

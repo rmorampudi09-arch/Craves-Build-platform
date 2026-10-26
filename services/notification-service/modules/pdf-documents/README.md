@@ -95,7 +95,7 @@ Set `CRAVES_DOCUMENTS_SOURCES_ENABLED=true` separately in Order, Integration and
 
 The document email gateway reuses these existing Notification Service settings from application.yml: `ACS_EMAIL_CONNECTION_STRING`, `ACS_EMAIL_SENDER_ADDRESS`, optional `ACS_EMAIL_REPLY_TO_ADDRESS`, `CRAVES_AUTH_INTERNAL_BASE_URL`, and `CRAVES_AUTH_INTERNAL_SERVICE_SECRET`. Reuse the existing Azure secret references; no new key is invented. Existing database connection and JWT verification settings are unchanged. Secrets belong in Azure Key Vault / Container App secret bindings, never source code, PR comments or chat.
 
-The established Azure DevOps service connection remains `Craves-Dev-Service-Connection`. GitHub CI needs no Azure, Firebase, payment-provider or email credentials. The optional Azure read-only preflight reuses the already-defined GitHub OIDC keys `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`; it does not export their values. Do not rotate keys to make document CI pass.
+The established Azure DevOps service connection remains `Craves-RMORAMPUDI09-Service-Connection`. GitHub CI needs no Azure, Firebase, payment-provider or email credentials. The optional Azure read-only preflight reuses the already-defined GitHub OIDC keys `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`; it does not export their values. Do not rotate keys to make document CI pass.
 
 ## 6. Local and continuous verification
 

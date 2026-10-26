@@ -104,7 +104,7 @@ Readiness distinguishes encryption configured, provider adapter configured and w
 
 ## One-time release configuration — automated values, no secrets in chat
 
-The new pipeline reuses **`Craves-Dev-Service-Connection`**. Defaults are read-only planning. It reads existing resource addresses and identities and can create missing internal secrets securely without asking the user to invent their values.
+The new pipeline reuses **`Craves-RMORAMPUDI09-Service-Connection`**. Defaults are read-only planning. It reads existing resource addresses and identities and can create missing internal secrets securely without asking the user to invent their values.
 
 Known existing targets:
 
@@ -112,7 +112,7 @@ Known existing targets:
 - Integration: `ca-craves-integration-service-pr`
 - User/Chef: `ca-craves-user-chef-service-prod`
 - Order: `ca-craves-order-service-prodlow`
-- APIM: `apim-craves-prodlow-l3ing6`
+- APIM: `apim-craves-prodlow-kmqgfy`
 
 The helper discovers an unambiguous existing Key Vault and existing managed identities. It does not create resources, add role assignments, grant itself access or scale applications. A missing/ambiguous resource or insufficient permission stops the run with a safe error. A pre-existing different secret/env binding is not overwritten. Cloud changes are not a cross-resource transaction; run one controlled release at a time and retain its plan/check evidence.
 

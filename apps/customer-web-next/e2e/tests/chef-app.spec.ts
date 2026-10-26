@@ -48,8 +48,8 @@ test("every tab opens its page and marks itself current", async ({ page, backend
   for (const [tab, url, heading] of [
     ["Orders", /\/chef\/orders$/, "Orders"],
     ["Menu", /\/chef\/menu$/, "Menu"],
-    ["Money", /\/chef\/earnings$/, "Money"],
-    ["More", /\/chef\/profile$/, "More"],
+    ["Earnings", /\/chef\/earnings$/, "Earnings"],
+    ["Profile", /\/chef\/profile$/, "Profile"],
     ["Home", /\/chef$/, /^Good (morning|afternoon|evening)/],
   ] as const) {
     await nav(page).getByRole("link", { name: tab }).click();

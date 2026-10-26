@@ -122,7 +122,7 @@ const STATUS_LABEL = messages({
 });
 
 /**
- * The chef's earnings entries. `sales` (the Money tab) shows only the sales for a period; without it, the totals
+ * The chef's earnings entries. `sales` (the Earnings tab) shows only the sales for a period; without it, the totals
  * and the money from each order (/chef/earnings/orders).
  */
 export function ChefEarningsLedger({ sales = false }: { sales?: boolean }) {

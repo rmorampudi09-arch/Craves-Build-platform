@@ -32,11 +32,11 @@ test.describe("approved chef", () => {
     ["/chef", /^Good (morning|afternoon|evening)/],
     ["/chef/orders", "Orders"],
     ["/chef/menu", "Menu"],
-    ["/chef/earnings", "Money"],
+    ["/chef/earnings", "Earnings"],
     ["/chef/finance", "Balance & payouts"],
     ["/chef/bank", "Bank account"],
     ["/chef/statements", "Statements"],
-    ["/chef/profile", "More"],
+    ["/chef/profile", "Profile"],
     ["/chef/kitchen", "Kitchen"],
     ["/chef/operations", "Can customers find you?"],
   ] as const) {

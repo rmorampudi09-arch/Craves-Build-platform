@@ -11,7 +11,7 @@ export default function ChefPayoutHistoryPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Payout history" description="Money sent to your bank." back={{ href: "/chef/earnings", label: "Money" }} />
+        <ChefPageHeader title="Payout history" description="Money sent to your bank." back={{ href: "/chef/earnings", label: "Earnings" }} />
         <ChefPayoutHistory />
       </ChefAccessBoundary>
     </main>

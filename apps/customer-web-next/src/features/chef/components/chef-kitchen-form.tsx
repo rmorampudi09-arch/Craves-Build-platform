@@ -325,7 +325,7 @@ function addressSummary(form: FormState): string {
 }
 
 // The way out of the page, apart from each setup step's own Back.
-const PAGE_BACK = { href: "/chef/profile", label: "More" } as const;
+const PAGE_BACK = { href: "/chef/profile", label: "Profile" } as const;
 function PageBack() {
   const { language } = useLanguage();
   return (

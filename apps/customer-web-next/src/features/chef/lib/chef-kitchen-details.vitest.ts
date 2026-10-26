@@ -302,7 +302,7 @@ it("asks before leaving kitchen details with changes not saved, and keeps them o
   expect(field("Kitchen name").value).toBe("Asha's new kitchen");
 
   // A link elsewhere on the page is held back too, then followed on Leave.
-  fireEvent.click(screen.getByRole("link", { name: /^(Profile|More)$/ }));
+  fireEvent.click(screen.getByRole("link", { name: "Profile" }));
   expect(router.push).not.toHaveBeenCalled();
   fireEvent.click(within(await screen.findByRole("dialog", { name: "Leave without saving?" })).getByRole("button", { name: "Leave" }));
   expect(router.push).toHaveBeenCalledExactlyOnceWith("/chef/profile");

@@ -11,8 +11,8 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   AUTHENTICATION_REQUIRED: "You are signed out. Sign in again to continue.",
   SESSION_EXPIRED: "Your session expired. Sign in again to continue.",
   // The app already re-reads chef access once by itself, so what remains is almost always Craves' side.
-  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.",
-  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.",
+  CHEF_ACCESS_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Help.",
+  CHEF_ROLE_REQUIRED: "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Help.",
   // Kitchen
   KITCHEN_PROFILE_REQUIRED: "Set up your kitchen before adding or managing dishes.",
   KITCHEN_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",
@@ -96,9 +96,9 @@ const TRANSLATED: Record<string, { te: string; kn: string }> = {
     te: "మీ సైన్ ఇన్ సమయం ముగిసింది. కొనసాగడానికి మళ్లీ సైన్ ఇన్ చేయండి.",
     kn: "ನಿಮ್ಮ ಸೈನ್ ಇನ್ ಸಮಯ ಮುಗಿದಿದೆ. ಮುಂದುವರಿಸಲು ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.",
   },
-  "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in More → Help & support.": {
-    te: "Craves ఇప్పుడు మీ చెఫ్ అనుమతిని నిర్ధారించలేకపోయింది. మేం ఇప్పటికే మళ్లీ ప్రయత్నించాం. 'మళ్లీ ప్రయత్నించండి' నొక్కండి; ఇలాగే జరిగితే అది మా వైపు సమస్య — మరిన్ని → సహాయంలో మాకు చెప్పండి.",
-    kn: "Craves ಈಗ ನಿಮ್ಮ ಚೆಫ್ ಅನುಮತಿಯನ್ನು ಖಚಿತಪಡಿಸಲಾಗಲಿಲ್ಲ. ನಾವು ಈಗಾಗಲೇ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿದ್ದೇವೆ. 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ' ಒತ್ತಿ; ಹೀಗೆಯೇ ಆದರೆ ಅದು ನಮ್ಮ ಕಡೆಯ ಸಮಸ್ಯೆ — ಇನ್ನಷ್ಟು → ಸಹಾಯದಲ್ಲಿ ತಿಳಿಸಿ.",
+  "Craves couldn’t confirm your chef access just now. We already tried again for you. Tap Try again; if it keeps happening, it’s on our side — tell us in Help.": {
+    te: "Craves ఇప్పుడు మీ చెఫ్ అనుమతిని నిర్ధారించలేకపోయింది. మేం ఇప్పటికే మళ్లీ ప్రయత్నించాం. 'మళ్లీ ప్రయత్నించండి' నొక్కండి; ఇలాగే జరిగితే అది మా వైపు సమస్య — సహాయంలో మాకు చెప్పండి.",
+    kn: "Craves ಈಗ ನಿಮ್ಮ ಚೆಫ್ ಅನುಮತಿಯನ್ನು ಖಚಿತಪಡಿಸಲಾಗಲಿಲ್ಲ. ನಾವು ಈಗಾಗಲೇ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿದ್ದೇವೆ. 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ' ಒತ್ತಿ; ಹೀಗೆಯೇ ಆದರೆ ಅದು ನಮ್ಮ ಕಡೆಯ ಸಮಸ್ಯೆ — ಸಹಾಯದಲ್ಲಿ ತಿಳಿಸಿ.",
   },
   "Set up your kitchen before adding or managing dishes.": {
     te: "వంటకాలు జోడించే లేదా మార్చే ముందు మీ వంటగదిని సిద్ధం చేయండి.",

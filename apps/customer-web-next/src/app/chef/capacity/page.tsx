@@ -15,7 +15,7 @@ export default async function ChefCapacityPage({ searchParams }: { searchParams:
   const planId = typeof plan === "string" && isUuid(plan) ? plan : null;
   const back = planId
     ? from === "menu" ? { href: "/chef/menu?view=plans", label: "Menu" } : { href: "/chef/meal-plans", label: "Meal plans" }
-    : from === "menu" ? { href: "/chef/menu", label: "Menu" } : { href: "/chef/profile", label: "More" };
+    : from === "menu" ? { href: "/chef/menu", label: "Menu" } : { href: "/chef/profile", label: "Profile" };
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>

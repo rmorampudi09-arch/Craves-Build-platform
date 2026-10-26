@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
-import { BadgeIndianRupee, ClipboardList, House, LayoutGrid, Utensils } from "lucide-react";
+import { ClipboardList, House, UserRound, Utensils, Wallet } from "lucide-react";
 import { chefDeviceAccount, isChefModeVerified } from "@/features/chef/lib/chef-mode";
 import { useWaitingOrderCount } from "@/features/chef/lib/chef-order-alert";
 import { getSession, subscribeSession, type CravesUser } from "@/features/auth/api/cravesAuth";
@@ -11,31 +11,31 @@ import { format, messages } from "@/shared/i18n/language";
 import { useText } from "@/shared/i18n/language-context";
 
 const TEXT = messages({
-  en: { home: "Home", orders: "Orders", menu: "Menu", money: "Money", more: "More", workspace: "Chef workspace", primary: "Chef primary navigation", waiting: "{count} waiting", waitingOne: "{count} waiting" },
-  te: { home: "హోమ్", orders: "ఆర్డర్లు", menu: "మెనూ", money: "డబ్బు", more: "మరిన్ని", workspace: "చెఫ్ పేజీలు", primary: "చెఫ్ ముఖ్య మెనూ", waiting: "{count} వేచి ఉన్నాయి", waitingOne: "{count} వేచి ఉంది" },
-  kn: { home: "ಹೋಮ್", orders: "ಆರ್ಡರ್‌ಗಳು", menu: "ಮೆನು", money: "ಹಣ", more: "ಇನ್ನಷ್ಟು", workspace: "ಚೆಫ್ ಪುಟಗಳು", primary: "ಚೆಫ್ ಮುಖ್ಯ ಮೆನು", waiting: "{count} ಕಾಯುತ್ತಿವೆ", waitingOne: "{count} ಕಾಯುತ್ತಿದೆ" },
+  en: { home: "Home", orders: "Orders", menu: "Menu", earnings: "Earnings", profile: "Profile", workspace: "Chef workspace", primary: "Chef primary navigation", waiting: "{count} waiting", waitingOne: "{count} waiting" },
+  te: { home: "హోమ్", orders: "ఆర్డర్లు", menu: "మెనూ", earnings: "సంపాదన", profile: "ప్రొఫైల్", workspace: "చెఫ్ పేజీలు", primary: "చెఫ్ ముఖ్య మెనూ", waiting: "{count} వేచి ఉన్నాయి", waitingOne: "{count} వేచి ఉంది" },
+  kn: { home: "ಹೋಮ್", orders: "ಆರ್ಡರ್‌ಗಳು", menu: "ಮೆನು", earnings: "ಗಳಿಕೆ", profile: "ಪ್ರೊಫೈಲ್", workspace: "ಚೆಫ್ ಪುಟಗಳು", primary: "ಚೆಫ್ ಮುಖ್ಯ ಮೆನು", waiting: "{count} ಕಾಯುತ್ತಿವೆ", waitingOne: "{count} ಕಾಯುತ್ತಿದೆ" },
 });
 
-// The same five tabs on phones and desktop; every other chef page is listed in More (/chef/profile).
+// The same five tabs on phones and desktop, named as in the app; every other chef page is listed in Profile (/chef/profile).
 const primaryLinks = [
   { href: "/chef", key: "home", icon: House },
   { href: "/chef/orders", key: "orders", icon: ClipboardList },
   { href: "/chef/menu", key: "menu", icon: Utensils },
-  { href: "/chef/earnings", key: "money", icon: BadgeIndianRupee },
-  { href: "/chef/profile", key: "more", icon: LayoutGrid },
+  { href: "/chef/earnings", key: "earnings", icon: Wallet },
+  { href: "/chef/profile", key: "profile", icon: UserRound },
 ] as const;
 
 /** The tab a page belongs to; Notifications has none (the header bell marks it). */
 function activeHref(pathname: string): string | null {
   if (pathname === "/chef") return "/chef";
   if (pathname === "/chef/notifications") return null;
-  // Money pages open from Money; Meal plans from Menu. Anything else (Daily limits too) keeps More highlighted.
+  // Money pages open from Earnings; Meal plans from Menu. Anything else (Daily limits too) keeps Profile highlighted.
   if (/^\/chef\/(?:finance|statements|bank)(?:\/|$)/.test(pathname)) return "/chef/earnings";
   if (pathname === "/chef/meal-plans") return "/chef/menu";
   const tab = primaryLinks.find(
     ({ href }) => href !== "/chef" && (pathname === href || pathname.startsWith(`${href}/`)),
   );
-  // Pages opened from More keep More highlighted.
+  // Pages opened from Profile keep Profile highlighted.
   return tab?.href ?? "/chef/profile";
 }
 function hasChefRole(user: CravesUser | null) {

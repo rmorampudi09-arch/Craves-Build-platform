@@ -74,16 +74,16 @@ describe("Chef navigation placement", () => {
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
   });
   it.each([
-    ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Money", "page"],
-    ["/chef/finance", "Money", "true"], ["/chef/statements", "Money", "true"], ["/chef/bank", "Money", "true"],
-    ["/chef/earnings/payouts", "Money", "true"], ["/chef/earnings/orders", "Money", "true"], ["/chef/meal-plans", "Menu", "true"],
-    ["/chef/profile", "More", "page"], ["/chef/kitchen", "More", "true"], ["/chef/operations", "More", "true"], ["/chef/hours", "More", "true"],
-    ["/chef/capacity", "More", "true"], ["/chef/support", "More", "true"], ["/chef/application/status", "More", "true"],
+    ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Earnings", "page"],
+    ["/chef/finance", "Earnings", "true"], ["/chef/statements", "Earnings", "true"], ["/chef/bank", "Earnings", "true"],
+    ["/chef/earnings/payouts", "Earnings", "true"], ["/chef/earnings/orders", "Earnings", "true"], ["/chef/meal-plans", "Menu", "true"],
+    ["/chef/profile", "Profile", "page"], ["/chef/kitchen", "Profile", "true"], ["/chef/operations", "Profile", "true"], ["/chef/hours", "Profile", "true"],
+    ["/chef/capacity", "Profile", "true"], ["/chef/support", "Profile", "true"], ["/chef/application/status", "Profile", "true"],
   ])("keeps labeled active navigation for %s", (pathname, label, current) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Money", "More"]);
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "Profile"]);
     expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe(current);
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });

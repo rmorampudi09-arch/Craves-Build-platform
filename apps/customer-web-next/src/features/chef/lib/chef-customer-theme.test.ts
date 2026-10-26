@@ -31,7 +31,7 @@ const kitchenPage = readFileSync(
 const styles = readFileSync(new URL("../../../shared/styles/styles.css", import.meta.url), "utf8");
 const chefTheme = postcss.parse(readFileSync(new URL("../styles/chef-mode.css", import.meta.url), "utf8"));
 
-// Meal plans are reached through the Menu tab (?view=plans), not listed again in More.
+// Meal plans are reached through the Menu tab (?view=plans), not listed again in Profile.
 const workspaceRoutes = [
   "/chef/kitchen",
   "/chef/hours",

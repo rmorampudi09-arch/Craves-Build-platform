@@ -95,7 +95,7 @@ export function ChefAppHeader() {
             </Link>
           ) : null}
           {/* The menu needs the signed-in account; until the check answers, a circle keeps its place. */}
-          {/* On phones the More tab holds the account; the menu stays for laptops and for applicants. */}
+          {/* On phones the Profile tab holds the account; the menu stays for laptops and for applicants. */}
           <div className={workspace ? "is-desktop-only" : undefined}>
             {pending ? <span className="chef-account-placeholder" aria-hidden="true" /> : <ChefAccountMenu />}
           </div>

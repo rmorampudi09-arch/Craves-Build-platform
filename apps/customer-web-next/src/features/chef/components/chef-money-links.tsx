@@ -30,7 +30,7 @@ const TEXT = messages({
   },
 });
 
-/** The Money tab's other pages; the bank row says whether an account is there yet. */
+/** The Earnings tab's other pages; the bank row says whether an account is there yet. */
 export function ChefMoneyLinks() {
   const text = useText(TEXT);
   const bank = useChefBank();

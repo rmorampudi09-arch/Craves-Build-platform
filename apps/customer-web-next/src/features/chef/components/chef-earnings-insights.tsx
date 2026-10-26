@@ -357,7 +357,7 @@ function DateRangeSheet({
 }
 
 /**
- * Sales for a period, on the Money tab: what was earned and delivered against the period before, each day's earnings
+ * Sales for a period, on the Earnings tab: what was earned and delivered against the period before, each day's earnings
  * (a day opens its orders), the best sellers and how orders ended. Days are India days. The ledger hands in its
  * entries; the orders are the latest ones plus older pages, read only as far back as the period before needs.
  */

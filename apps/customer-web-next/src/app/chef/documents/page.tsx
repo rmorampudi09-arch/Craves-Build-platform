@@ -11,7 +11,7 @@ export default function ChefDocumentsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Documents & verification" back={{ href: "/chef/profile", label: "More" }} />
+        <ChefPageHeader title="Documents & verification" back={{ href: "/chef/profile", label: "Profile" }} />
         <ChefDocuments />
       </ChefAccessBoundary>
     </main>

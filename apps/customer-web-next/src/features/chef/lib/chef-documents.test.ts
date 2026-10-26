@@ -6,9 +6,9 @@ import {
 } from "../../chef-onboarding/lib/chef-onboarding-v2-contract.ts";
 import {
   documentRows,
+  documentsSummary,
   formatFssai,
   hasNoApplication,
-  uploadChoices,
   verificationBanner,
 } from "./chef-documents.ts";
 
@@ -116,20 +116,30 @@ test("the FSSAI line shows Approved once Craves verified it, and is left out wit
   assert.equal(formatFssai("ABC"), "ABC");
 });
 
-test("upload choices name the chef's own ID proof", () => {
-  assert.deepEqual(
-    uploadChoices(
-      state({
-        details: {
-          ...EMPTY_ONBOARDING,
-          proofKind: "OTHER_GOVERNMENT_ID",
-          otherGovernmentId: "Voter ID",
-        },
-      }),
-    ).map((choice) => choice.title),
-    ["Voter ID · front", "Voter ID · back", "Kitchen photo", "Cooking setup photo"],
+test("the Profile row names what was checked, as in the app: FSSAI, Aadhaar", () => {
+  assert.equal(documentsSummary(state()), "FSSAI, Aadhaar");
+  assert.equal(
+    documentsSummary(state({ details: { ...EMPTY_ONBOARDING, proofKind: "PAN", fssaiNumber: "" } })),
+    "PAN",
   );
-  assert.equal(uploadChoices(state({ details: null }))[0].title, "ID proof · front");
+  assert.equal(
+    documentsSummary(
+      state({ details: { ...EMPTY_ONBOARDING, proofKind: "OTHER_GOVERNMENT_ID", fssaiNumber: "12345678901234" } }),
+      "te",
+    ),
+    "FSSAI, గుర్తింపు కార్డు",
+  );
+  assert.equal(documentsSummary(state({ details: null })), "");
+  // A file of another ID is still named by the proof the chef chose.
+  assert.deepEqual(
+    documentRows(
+      state({
+        details: { ...EMPTY_ONBOARDING, proofKind: "OTHER_GOVERNMENT_ID", otherGovernmentId: "Voter ID" },
+        documents: [document("1", "SELECTED_PROOF_FRONT", "UPLOADED")],
+      }),
+    ).map((row) => row.title),
+    ["Voter ID · front"],
+  );
 });
 
 test("the banner follows the application", () => {

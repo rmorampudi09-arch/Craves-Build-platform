@@ -274,7 +274,7 @@ export default function OrdersPage() {
 
   const start = useCallback(
     (isActive: () => boolean = () => true) => {
-      loadSession().then(
+      loadSession({ keepOnOutage: true }).then(
         (session) => {
           if (!isActive()) return;
           if (!session) {

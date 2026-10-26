@@ -172,7 +172,7 @@ export default function NotificationsPage() {
       void (async () => {
         let session;
         try {
-          session = await loadSession();
+          session = await loadSession({ keepOnOutage: true });
         } catch {
           // The sign-in couldn't be checked (offline, or Craves didn't answer): not the same as signed out.
           if (isActive()) setStatus("session");

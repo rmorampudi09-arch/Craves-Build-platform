@@ -133,7 +133,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
 
   const begin = useCallback(
     (isActive: () => boolean = () => true) => {
-      loadSession().then(
+      loadSession({ keepOnOutage: true }).then(
         (session) => {
           if (!isActive()) return;
           if (!session) {

@@ -131,24 +131,24 @@ describe("chef finance owner boundaries", () => {
   it("shows the authoritative verified email alongside real finance panels", async () => {
     render(createElement(ChefFinancePage));
     await screen.findByDisplayValue("a@example.invalid");
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     // The money summary PDF moved to Statements; Balance & payouts keeps how the balance is worked out.
     expect(screen.getByText("How your balance is worked out")).toBeTruthy();
   });
 
   it("clears bank inputs and the old balance on owner change and ignores a late refresh", async () => {
     render(createElement(Fragment, null, createElement(ChefFinancePage), createElement(ChefBankPage)));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/chef/finance/balance" && identity?.id === a.id ? late.promise : normal(input));
     fireEvent.click(screen.getByRole("button", { name: "Check balance again" }));
     change(b);
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
-    await screen.findByRole("button", { name: "Send ₹22.00 to my bank" });
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
+    await screen.findByRole("button", { name: "Withdraw ₹22.00" });
     expect((screen.getByLabelText("Account number") as HTMLInputElement).value).toBe("");
     await act(async () => { late.resolve(Response.json(balance(a))); });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
@@ -189,9 +189,9 @@ describe("chef finance owner boundaries", () => {
 
   it("removes finance and gives sign-in guidance for an inactive owner", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     change({ ...a, status: "SUSPENDED" });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
   });
 
@@ -199,10 +199,10 @@ describe("chef finance owner boundaries", () => {
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     let signingOut!: Promise<void>;
     act(() => { signingOut = clearSession(); });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     identity = null;
     expect(navigate).not.toHaveBeenCalled();
     await act(async () => { late.resolve(Response.json({ signedOut: true })); await signingOut; });

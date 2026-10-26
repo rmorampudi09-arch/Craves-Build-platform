@@ -102,6 +102,14 @@ export function payoutStatusView(
   return { label: words[key], tone, note: words[`${key}Note`] };
 }
 
+/**
+ * A withdrawal answer that is a clear no (a 4xx other than a timeout): no transfer was made for its key, so a new
+ * request may start. Anything else (5xx, a timeout, no answer) may have made one: only the same request goes again.
+ */
+export function withdrawalRefused(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408;
+}
+
 /** Newest-first rows under "October"-style India-month headings; the year is added only for another year. */
 export function groupByMonth<T>(
   rows: readonly T[],

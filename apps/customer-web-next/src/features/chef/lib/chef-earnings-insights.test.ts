@@ -17,7 +17,7 @@ import {
   periodText,
   summarizeEarnings,
 } from "./chef-earnings-insights.ts";
-import { groupByMonth, payoutStatusView } from "./chef-payout-presentation.ts";
+import { groupByMonth, payoutStatusView, withdrawalRefused } from "./chef-payout-presentation.ts";
 
 const at = (iso: string) => Date.parse(iso);
 // Thu 15 Oct 2026, 10:00 in India.
@@ -278,6 +278,12 @@ test("payout history words and India-month groups", () => {
     ["warning", "warning", "warning", "warning", "success", "danger", "muted"],
   );
   assert.equal(payoutStatusView("toString").label, "Craves is checking");
+  // Only a clear no frees a new withdrawal; a timeout or a server problem may have sent the money.
+  assert.deepEqual(
+    [400, 401, 403, 404, 409, 422, 429].map(withdrawalRefused),
+    [true, true, true, true, true, true, true],
+  );
+  assert.deepEqual([0, 200, 408, 500, 502, 503, 504].map(withdrawalRefused), [false, false, false, false, false, false, false]);
   assert.deepEqual(payoutStatusView("PAID", "te"), { label: "చెల్లించాం", tone: "success", note: "డబ్బు మీ బ్యాంక్‌కు చేరింది." });
   assert.equal(payoutStatusView("UNKNOWN", "kn").label, "Craves ಪರಿಶೀಲಿಸುತ್ತಿದೆ");
   // Balance & payouts shows the same words as Payout history.

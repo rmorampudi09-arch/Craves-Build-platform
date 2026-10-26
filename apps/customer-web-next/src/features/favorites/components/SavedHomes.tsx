@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, BellPlus, BellRing, ChefHat, Heart, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Bell, BellPlus, Check, Heart, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import { resolveFavoriteHomes, SavedResolveError } from "@/features/favorites/api/savedResolve";
 import {
@@ -28,6 +28,7 @@ import type { FavoriteWatch } from "@/shared/lib/favorite-entities-contract";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 // "more": the list stays up while the next pages load.
 type Status = "loading" | "unavailable" | "list-error" | "resolve-error" | "ready" | "more";
@@ -47,30 +48,9 @@ function onWatches(watches: FavoriteWatch[]): Set<WatchKey> {
   );
 }
 
-function Notice({
-  title,
-  detail,
-  action,
-  onAction,
-}: {
-  title: string;
-  detail: string;
-  action: string;
-  onAction: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-[#E5E7EB] bg-white px-6 py-10 text-center shadow-sm">
-      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-[#C4200F]">
-        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <h2 className="mt-4 font-display text-lg font-black">{title}</h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">{detail}</p>
-      <button type="button" onClick={onAction} className="craves-primary-action mt-5">
-        {action}
-      </button>
-    </div>
-  );
-}
+/** The bell and the heart: 48 px soft red circles, as in the app (1.35). */
+const ROUND_ACTION =
+  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#FDEAE8] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FBD5D0] active:scale-[0.94] disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none";
 
 function SavedHomeRow({
   entry,
@@ -91,53 +71,65 @@ function SavedHomeRow({
   const name = favoriteHomeName(card);
   const area = [card.areaName, card.city].filter(Boolean).join(", ");
   const state = favoriteHomeState(card);
+  const cooking = state.tone === "positive";
   const alerts = watched !== null && isWatched(entry, watched);
-  const body: ReactNode = (
-    <>
-      <ChefFace photoUrl={profile?.chefPhotoUrl} name={name} size={56} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-display text-base font-black">{name}</span>
+  const nameClass = "block truncate font-display text-xl font-bold leading-7 text-[#261A15]";
+  return (
+    // The whole card opens the kitchen (the name's link stretches over it); the bell and heart sit above it as their own buttons.
+    <li className="relative flex items-center gap-3 rounded-[20px] border border-[#E3DDD8] bg-white px-4 py-3.5 transition-colors duration-150 hover:border-[#D5CEC8]">
+      {/* No initials here: like the app, a chef without a picture shows the chef hat. */}
+      <ChefFace
+        photoUrl={profile?.chefPhotoUrl}
+        size={56}
+        className="bg-[#FDEAE8] text-[#D92714]"
+      />
+      <div className="min-w-0 flex-1">
+        {kitchenId ? (
+          <Link
+            to="/kitchen/$id"
+            params={{ id: kitchenId }}
+            className={`${nameClass} rounded-sm after:absolute after:inset-0 after:rounded-[20px] focus-visible:!outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-[#1A1A1A] focus-visible:after:outline-solid`}
+          >
+            {name}
+          </Link>
+        ) : (
+          <p className={nameClass}>{name}</p>
+        )}
         {area ? (
-          <span className="block truncate text-xs font-semibold text-[#6B6B6B]">{area}</span>
+          <p className="truncate text-[0.9375rem] leading-5 text-[#706864]">{area}</p>
         ) : null}
-        <span
-          className={`mt-1 flex items-center gap-1.5 text-xs font-bold ${state.tone === "positive" ? "text-[#2E7D32]" : "text-[#6B6B6B]"}`}
+        <p
+          className={`mt-0.5 flex items-center gap-1.5 text-[0.9375rem] font-bold leading-5 ${cooking ? "text-[#166B49]" : "text-[#706864]"}`}
         >
-          {state.tone === "positive" ? (
-            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[#2E7D32]" />
+          {cooking ? (
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[#29B47B]" />
           ) : null}
           {state.title}
-        </span>
-      </span>
-    </>
-  );
-  return (
-    <li className="flex items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-[0_4px_16px_rgba(26,26,26,0.04)]">
-      {kitchenId ? (
-        <Link
-          to="/kitchen/$id"
-          params={{ id: kitchenId }}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl transition-colors hover:text-[#F62E18]"
-        >
-          {body}
-        </Link>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
-      )}
+        </p>
+      </div>
       {watched !== null ? (
         <button
           type="button"
           onClick={onToggleWatch}
           disabled={busy}
-          aria-pressed={alerts}
-          aria-label={`Cooking alerts from ${name}`}
+          aria-label={
+            alerts
+              ? `Stop cooking alerts from ${name}`
+              : `Alert me in the app when ${name} is cooking`
+          }
           title={alerts ? "Cooking alerts on" : "Get cooking alerts"}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18] transition-colors hover:text-[#C4200F] disabled:cursor-wait disabled:opacity-50"
+          className={ROUND_ACTION}
         >
           {alerts ? (
-            <BellRing className="h-5 w-5 fill-current" aria-hidden="true" />
+            <span aria-hidden="true" className="relative h-[22px] w-[22px]">
+              <Bell className="absolute inset-0 h-full w-full fill-current" />
+              <Check
+                strokeWidth={4}
+                className="absolute left-1/2 top-[44%] h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 text-white"
+              />
+            </span>
           ) : (
-            <BellPlus className="h-5 w-5" aria-hidden="true" />
+            <BellPlus className="h-[22px] w-[22px]" aria-hidden="true" />
           )}
         </button>
       ) : null}
@@ -146,9 +138,9 @@ function SavedHomeRow({
         onClick={onRemove}
         disabled={busy}
         aria-label={`Remove ${name} from saved`}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-transparent text-[#F62E18] transition-colors hover:text-[#C4200F] disabled:cursor-wait disabled:opacity-50"
+        className={ROUND_ACTION}
       >
-        <Heart className="h-5 w-5 fill-current" aria-hidden="true" />
+        <Heart className="h-[22px] w-[22px] fill-current" aria-hidden="true" />
       </button>
     </li>
   );
@@ -301,44 +293,52 @@ export function SavedHomes() {
   }
   if (status === "list-error") {
     return (
-      <Notice
+      <EmptyState
+        role="alert"
+        illustration="loadError"
         title="Saved home chefs could not be loaded"
-        detail="Check your connection and try again."
-        action="Try again"
-        onAction={() => void load()}
-      />
+        message="Check your connection and try again."
+      >
+        <button type="button" onClick={() => void load()} className="craves-primary-action">
+          Try again
+        </button>
+      </EmptyState>
     );
   }
   if (status === "resolve-error") {
     return (
-      <Notice
+      <EmptyState
+        illustration="saved"
         title="Your saved home chefs are safe"
-        detail="We could not check who is cooking today. Nothing was removed."
-        action="Check again"
-        onAction={() => void load()}
-      />
+        message="We could not check who is cooking today. Nothing was removed."
+      >
+        <button type="button" onClick={() => void load()} className="craves-primary-action">
+          Check again
+        </button>
+      </EmptyState>
     );
   }
   const hasMore = Boolean(saved?.kitchenCursor || saved?.chefCursor);
   if (entries.length === 0 && !hasMore) {
     return (
-      <div className="px-4 py-12 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-          <ChefHat className="h-6 w-6" aria-hidden="true" />
-        </span>
-        <h2 className="mt-4 font-display text-xl font-black">No saved home chefs yet</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#6B6B6B]">
-          Tap the heart on any kitchen to save its home chef here.
-        </p>
-        {notice ? (
-          <p role="status" className="mt-3 text-sm font-semibold">
-            {notice}
-          </p>
-        ) : null}
-        <Link to="/home" className="craves-primary-action mt-5">
-          Browse meals
+      <EmptyState
+        illustration="saved"
+        title="No saved home chefs yet"
+        message={
+          <>
+            Tap the heart on any kitchen to keep its home chef here.
+            {notice ? (
+              <span role="status" className="mt-2 block font-semibold text-[#1A1A1A]">
+                {notice}
+              </span>
+            ) : null}
+          </>
+        }
+      >
+        <Link to="/chefs" className="craves-primary-action">
+          Explore home chefs
         </Link>
-      </div>
+      </EmptyState>
     );
   }
   return (
@@ -351,7 +351,8 @@ export function SavedHomes() {
       >
         {notice}
       </p>
-      <ul className="space-y-3">
+      {/* One column on phones (as in the app), two side by side from tablet width. */}
+      <ul className="grid gap-3 md:grid-cols-2">
         {entries.map((entry) => (
           <SavedHomeRow
             key={`${entry.card.requestedType}:${entry.card.requestedId}`}
@@ -369,7 +370,7 @@ export function SavedHomes() {
           disabled={busy || status === "more"}
           aria-busy={status === "more"}
           onClick={() => void load(saved)}
-          className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl !border !border-[#D8DADD] !bg-white text-sm font-bold !text-[#C4200F] !shadow-none"
+          className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] !border !bg-white text-[0.9375rem] font-bold !text-[#D92714] !shadow-none hover:!bg-[#FDEAE8] md:mx-auto md:w-auto md:px-6"
         >
           {status === "more" ? (
             <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
@@ -377,7 +378,7 @@ export function SavedHomes() {
           Load more saved home chefs
         </button>
       ) : null}
-      <p className="mt-3 px-1 text-sm text-[#6B6B6B]">
+      <p className="mt-3 px-1 text-[0.9375rem] text-[#706864]">
         Tap the heart on any kitchen to save its home chef here.
       </p>
     </>

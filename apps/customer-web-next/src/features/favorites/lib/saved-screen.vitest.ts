@@ -172,8 +172,9 @@ describe("Saved screen", () => {
     const fetch = stub();
     render(createElement(WishlistPage));
     fireEvent.mouseDown(await screen.findByRole("tab", { name: "Home chefs" }));
-    const bell = await screen.findByRole("button", { name: "Cooking alerts from Asha's kitchen" });
-    expect(bell.getAttribute("aria-pressed")).toBe("false");
+    const bell = await screen.findByRole("button", {
+      name: "Alert me in the app when Asha's kitchen is cooking",
+    });
     expect(
       screen
         .getAllByRole("listitem")
@@ -184,7 +185,9 @@ describe("Saved screen", () => {
     );
 
     fireEvent.click(bell);
-    await waitFor(() => expect(bell.getAttribute("aria-pressed")).toBe("true"));
+    expect(
+      await screen.findByRole("button", { name: "Stop cooking alerts from Asha's kitchen" }),
+    ).toBe(bell);
     expect(
       fetch.mock.calls
         .filter(([, init]) => init?.method === "PUT")
@@ -195,6 +198,9 @@ describe("Saved screen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Asha's kitchen from saved" }));
     expect(await screen.findByText("No saved home chefs yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Explore home chefs" }).getAttribute("href")).toBe(
+      "/chefs",
+    );
     expect(
       fetch.mock.calls
         .filter(([, init]) => init?.method === "DELETE")

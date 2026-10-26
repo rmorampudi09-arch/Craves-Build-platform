@@ -916,16 +916,7 @@ function BrowseFoodsPage() {
 
         <WelcomeBanner onOpenSearch={openSearchOnTap} />
 
-        <HomeCategoryRail
-          selected={homeCategory}
-          onSelect={(nextCategory) => {
-            // aria-pressed chips: tapping the selected one again shows every dish.
-            setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
-            setSearchTerm("");
-            revealDishes();
-          }}
-        />
-
+        {/* As in the app: banner, top kitchens, the category row (it pins while scrolling), then dishes. */}
         <KitchensGrid
           kitchens={kitchens}
           searchTerm=""
@@ -939,6 +930,16 @@ function BrowseFoodsPage() {
           onManageAddress={openAddressManager}
           dishes={dietDishes}
           limit={8}
+        />
+
+        <HomeCategoryRail
+          selected={homeCategory}
+          onSelect={(nextCategory) => {
+            // aria-pressed chips: tapping the selected one again shows every dish.
+            setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
+            setSearchTerm("");
+            revealDishes();
+          }}
         />
 
         <DishesGrid

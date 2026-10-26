@@ -44,6 +44,9 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /:hover, :focus-within/);
   assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|setSwiped/);
   assert.match(home, /limit=\{8\}/);
+  // The app's order: banner, top kitchens, the category row, then "Popular near you".
+  assert.match(home, /<WelcomeBanner[\s\S]*<KitchensGrid[\s\S]*<HomeCategoryRail[\s\S]*<DishesGrid/);
+  assert.match(dishes, /"Popular near you"/);
   // Phones and tablets swipe a snap row with the next card peeking in; desktop shows four with arrows.
   assert.match(kitchens, /w-\[clamp\(248px,74vw,286px\)\]/);
   assert.match(kitchens, /snap-x snap-mandatory/);

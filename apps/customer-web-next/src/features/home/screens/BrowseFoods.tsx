@@ -21,16 +21,18 @@ import { CartAddressAvailabilityBanner } from "@/features/home/components/CartAd
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { DishesGrid } from "@/features/home/components/DishesGrid";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
-import {
-  HomeCategoryRail,
-  type CravingCategory,
-} from "@/features/home/components/HomeCategoryRail";
+import { HomeCategoryRail } from "@/features/home/components/HomeCategoryRail";
 import { HomeComingSoon } from "@/features/home/components/HomeComingSoon";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
 import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
-import { ALL_DISHES_CATEGORY } from "@/features/home/lib/dishCategories";
+import {
+  ALL_DISHES_CATEGORY,
+  inMenuCategory,
+  menuCategoryLabel,
+  type MenuCategory,
+} from "@/features/home/lib/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
 } from "@/features/home/lib/catalog-discovery-policy";
@@ -114,31 +116,6 @@ function loadHomeSearchOverlay(): Promise<SearchOverlay> {
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
-/** A dish belongs to a craving when its name, category or description mentions one of its words. */
-function matchesCraving(dish: Dish, keywords: readonly string[] | null): boolean {
-  if (!keywords) return true;
-  const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
-  return keywords.some((keyword) => searchable.includes(keyword));
-}
-
-const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
-  Biryani: ["biryani"],
-  Tiffins: ["tiffin", "dosa", "idli", "pongal", "upma", "breakfast"],
-  Curry: ["curry", "kura", "gravy"],
-  Pickles: ["pickle", "pachadi", "chutney"],
-  Meals: ["meal", "thali", "lunch", "dinner"],
-  Snacks: ["snack", "pakoda", "pakora", "samosa", "chaat", "vada"],
-  Sweets: ["sweet", "dessert", "halwa", "kheer", "laddu", "ladoo"],
-  Desserts: ["dessert", "pudding", "custard", "mousse"],
-  Cake: ["cake", "pastry", "cupcake"],
-  "Fast Food": ["fast food", "burger", "pizza", "sandwich", "noodles", "fries"],
-  "Ice Cream": ["ice cream", "kulfi", "gelato"],
-};
-
-const CRAVING_CATEGORIES = new Set<CravingCategory>(
-  Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[],
-);
-
 export const routeMeta = {
   head: () => ({
     meta: [
@@ -156,10 +133,6 @@ export const routeMeta = {
 const readKitchenMenu = (kitchenId: string) => loadKitchenMenu(kitchenId);
 /** Where dish photos were served from last time, so the next visit can connect early. */
 const MEDIA_ORIGIN_KEY = "craves.media-origin";
-
-function isCravingCategory(value: string | null): value is CravingCategory {
-  return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
-}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -224,7 +197,7 @@ function BrowseFoodsPage() {
 
   const [user, setUser] = useState<CravesUser | null>(initialCache.user);
   const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
-  const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
+  const [homeCategory, setHomeCategory] = useState<MenuCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
   const [dishFilters, setDishFilters] = useState<HomeDishFilters>(DEFAULT_DISH_FILTERS);
@@ -424,9 +397,7 @@ function BrowseFoodsPage() {
     window.history.scrollRestoration = "manual";
     pendingHomeScrollYRef.current = Math.max(0, restored.scrollY);
 
-    setHomeCategory(
-      isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
-    );
+    setHomeCategory(restored.homeCategory);
     setDishSort(restored.dishSort);
     setFoodPreference(restored.foodPreference);
     setDishFilters(restored.dishFilters);
@@ -725,20 +696,6 @@ function BrowseFoodsPage() {
     readMenu: readKitchenMenu,
   });
 
-  const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
-    const result: Partial<Record<CravingCategory, string>> = {};
-    for (const nextCategory of Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[]) {
-      const keywords = HOME_CATEGORY_KEYWORDS[nextCategory];
-      const matchingDish = nearbyDishes.find((dish) => {
-        if (dish.imageIsPlaceholder) return false;
-        const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
-        return keywords.some((keyword) => searchable.includes(keyword));
-      });
-      if (matchingDish) result[nextCategory] = matchingDish.img;
-    }
-    return result;
-  }, [nearbyDishes]);
-
   // Dish photos come from one storage host: open that connection while discovery is loading,
   // instead of after the first card asks for its photo.
   useEffect(() => {
@@ -775,11 +732,10 @@ function BrowseFoodsPage() {
   }, [dietDishes, kitchens, listFoodPreference]);
 
   const filteredDishes = useMemo(() => {
-    const homeKeywords = listCategory ? HOME_CATEGORY_KEYWORDS[listCategory] : null;
     return sortDishes(
       nearbyDishes.filter(
         (dish) =>
-          matchesCraving(dish, homeKeywords) &&
+          inMenuCategory(dish, listCategory) &&
           matchesFoodPreference(dish, listFoodPreference) &&
           matchesDishFilters(dish, listDishFilters),
       ),
@@ -787,13 +743,12 @@ function BrowseFoodsPage() {
     );
   }, [listCategory, listDishFilters, listFoodPreference, listSort, nearbyDishes]);
 
-  // The filter sheet's "Show N dishes": the same rules on the current craving, for a draft view.
+  // The filter sheet's "Show N dishes": the same rules on the current category, for a draft view.
   const countDishes = useCallback(
     (view: DishView) => {
-      const keywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
       return nearbyDishes.filter(
         (dish) =>
-          matchesCraving(dish, keywords) &&
+          inMenuCategory(dish, homeCategory) &&
           matchesFoodPreference(dish, view.foodPreference) &&
           matchesDishFilters(dish, view.filters),
       ).length;
@@ -969,7 +924,6 @@ function BrowseFoodsPage() {
 
         <HomeCategoryRail
           selected={homeCategory}
-          images={categoryImages}
           onSelect={(nextCategory) => {
             // aria-pressed chips: tapping the selected one again shows every dish.
             setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
@@ -999,7 +953,7 @@ function BrowseFoodsPage() {
 
         <DishesGrid
           dishes={filteredDishes}
-          selectedCategory={listCategory ?? ALL_DISHES_CATEGORY}
+          selectedCategory={listCategory ? menuCategoryLabel(listCategory) : ALL_DISHES_CATEGORY}
           searchTerm=""
           state={discoveryState}
           message={catalogMessage}

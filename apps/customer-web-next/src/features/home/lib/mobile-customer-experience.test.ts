@@ -79,7 +79,7 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.doesNotMatch(cravings, /md:static/);
 });
 
-test("mobile browse keeps dish proportions and cart glass with larger craving images", () => {
+test("mobile browse keeps dish proportions and cart glass, with the app's category photos", () => {
   const card = source("../components/DishCard.tsx");
   const grid = source("../components/DishesGrid.tsx");
   const cravings = source("../components/HomeCategoryRail.tsx");
@@ -90,7 +90,9 @@ test("mobile browse keeps dish proportions and cart glass with larger craving im
   assert.doesNotMatch(card, /aspect-\[4\/3\]/);
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
-  assert.match(cravings, /h-\[5\.75rem\] w-\[5\.75rem\]/);
+  // The app's 128 px category photos, shown at the app's 64 px (72 px from md) so they stay sharp.
+  assert.match(cravings, /h-16 w-16 [^"]*md:h-\[4\.5rem\] md:w-\[4\.5rem\]/);
+  assert.match(cravings, /image: "\/home\/categories\/all\.webp"/);
   // Tabs and the cart bar share one floating glass bar (the desktop cart bar's glass);
   // only View cart is coloured (leaf green, AA).
   assert.match(nav, /\$\{glass\.glassDock\} pointer-events-auto relative isolate/);

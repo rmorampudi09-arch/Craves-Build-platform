@@ -83,6 +83,18 @@ describe("dish filters", () => {
     }));
     expect(readHomeReturnState()).toMatchObject({ dishSort: "name-a-z", dishFilters: { ...DEFAULT_DISH_FILTERS, spice: "MEDIUM" } });
   });
+
+  it("restores the chosen category, moves old names onto the new chips and drops the rest", () => {
+    const save = (homeCategory: string | null) => window.sessionStorage.setItem("craves:customer-home-return-state", JSON.stringify({
+      scrollY: 0, searchTerm: "", searchOpen: false, homeCategory, dishSort: "recommended", foodPreference: "all", dishFilters: {}, savedAt: Date.now(),
+    }));
+    save("Roti & Chapati");
+    expect(readHomeReturnState()?.homeCategory).toBe("Roti & Chapati");
+    save("Tiffins");
+    expect(readHomeReturnState()?.homeCategory).toBe("Tiffin");
+    save("Pickles");
+    expect(readHomeReturnState()?.homeCategory).toBeNull();
+  });
 });
 
 describe("filter bar", () => {

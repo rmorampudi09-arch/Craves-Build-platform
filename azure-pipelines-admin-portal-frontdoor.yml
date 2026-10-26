@@ -23,7 +23,7 @@ parameters:
     default: afd-craves-prodlow
   - name: adminContainerAppName
     type: string
-    default: ca-craves-admin-web-prodlow
+    default: ca-craves-admin-r92-ffe80e7c
   - name: adminHostname
     type: string
     default: admin.craves.in

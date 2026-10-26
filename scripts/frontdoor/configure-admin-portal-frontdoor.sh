@@ -5,7 +5,7 @@ set +x
 ACTION="${ACTION:-discover}"
 RG="${RESOURCE_GROUP:-rg-craves-prodlow-centralindia}"
 PROFILE="${FRONT_DOOR_PROFILE:-afd-craves-prodlow}"
-ADMIN_APP="${ADMIN_CONTAINER_APP:-ca-craves-admin-web-prodlow}"
+ADMIN_APP="${ADMIN_CONTAINER_APP:-ca-craves-admin-r92-ffe80e7c}"
 ADMIN_HOSTNAME="${ADMIN_HOSTNAME:-admin.craves.in}"
 ADMIN_DOMAIN_RESOURCE="${ADMIN_DOMAIN_RESOURCE:-admin-craves-in}"
 ADMIN_ORIGIN_GROUP="${ADMIN_ORIGIN_GROUP:-craves-admin-origin-group}"

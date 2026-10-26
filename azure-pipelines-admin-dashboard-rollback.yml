@@ -13,7 +13,7 @@ parameters:
     default: cravesrm09prodlow6bf632
   - name: containerAppName
     type: string
-    default: ca-craves-admin-web-prodlow
+    default: ca-craves-admin-r92-ffe80e7c
   - name: rollbackImageTag
     type: string
     default: ""

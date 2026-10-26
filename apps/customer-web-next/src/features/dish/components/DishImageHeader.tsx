@@ -77,12 +77,9 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
     try {
       if (favorite) await removeCustomerFavorite(dish.id);
       else await saveCustomerFavorite(dish.id);
-    } catch (error) {
-      setFavoriteError(
-        error instanceof Error
-          ? error.message
-          : "Saved dishes didn’t update. Try again.",
-      );
+    } catch {
+      // Our words, never the server's.
+      setFavoriteError("Saved dishes didn’t update. Try again.");
     } finally {
       setFavoriteBusy(false);
     }

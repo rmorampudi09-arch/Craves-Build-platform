@@ -11,9 +11,8 @@ export const KITCHEN_SORT_LABELS: Record<KitchenView["sort"], string> = {
   "name-a-z": "Name A–Z",
 };
 
-/** Name A–Z goes by the name on the card, as the catalog does; equal names keep the nearest first. */
+/** Name A–Z goes by the kitchen name, the name on the card (as in the app); equal names keep the nearest first. */
 export function sortKitchens(kitchens: NearbyKitchen[], sort: KitchenView["sort"]): NearbyKitchen[] {
   if (sort === "recommended") return kitchens;
-  const name = (kitchen: NearbyKitchen) => kitchen.displayName || kitchen.kitchenName;
-  return [...kitchens].sort((left, right) => name(left).localeCompare(name(right), "en-IN"));
+  return [...kitchens].sort((left, right) => left.kitchenName.localeCompare(right.kitchenName, "en-IN"));
 }

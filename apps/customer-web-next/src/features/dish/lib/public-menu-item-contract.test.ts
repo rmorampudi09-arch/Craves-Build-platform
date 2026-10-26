@@ -82,3 +82,14 @@ test("rejects non-https catalog images without failing the item", () => {
   assert.equal(parsed?.primaryImageUrl, null);
   assert.deepEqual(parsed?.imageUrls, []);
 });
+
+test("keeps the pack weight and thermobox flag the app shows, and drops ones that are not valid", () => {
+  const parsed = parsePublicMenuItemDetail({ ...item, unitPackageWeightGrams: 250, thermoboxRequired: true }, kitchen);
+  assert.equal(parsed?.unitPackageWeightGrams, 250);
+  assert.equal(parsed?.thermoboxRequired, true);
+  const odd = parsePublicMenuItemDetail({ ...item, unitPackageWeightGrams: "heavy", thermoboxRequired: "yes" }, kitchen);
+  assert.equal(odd?.unitPackageWeightGrams, null);
+  assert.equal(odd?.thermoboxRequired, null);
+  // An older catalog that sends neither still parses.
+  assert.equal(parsePublicMenuItemDetail(item, kitchen)?.unitPackageWeightGrams, null);
+});

@@ -41,3 +41,10 @@ it("without photos shows the bio; opening and saving are separate buttons", () =
   fireEvent.click(screen.getByRole("button", { name: "View Ammi's Dastarkhwan kitchen" }));
   expect(onOpen).toHaveBeenCalledOnce();
 });
+
+it("leads with the kitchen name, and shows its initials in red on cream without a chef picture", () => {
+  render(createElement(KitchenDiscoverCard, { kitchen: { ...kitchen, displayName: "Ayesha Begum" }, summary: undefined, onOpen: () => {} }));
+  expect(screen.getByRole("button", { name: "View Ammi's Dastarkhwan kitchen" })).toBeTruthy();
+  expect(screen.queryByText("Ayesha Begum")).toBeNull();
+  expect(screen.getByText("AD").className).toMatch(/bg-\[#FFF5E9\].*text-\[#D92714\]|text-\[#D92714\].*bg-\[#FFF5E9\]/);
+});

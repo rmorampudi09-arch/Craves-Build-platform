@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 const catalog = vi.hoisted(() => vi.fn());
 vi.mock("@/shared/lib/public-api", () => ({ publicApiFetch: catalog }));
 import { GET } from "@/app/api/discovery/kitchens/route";
-import { allKitchens, discoverKitchens } from "@/features/chefs/api/kitchens";
+import { allKitchens, discoverKitchens, loadKitchenPage } from "@/features/chefs/api/kitchens";
 
 const kitchen = (id: string) => ({
   id,
@@ -79,5 +79,23 @@ describe("Chefs tab spice filter", () => {
     ]);
     expect(fetch.mock.calls[1][0]).toContain("spiceLevel=SPICY");
     expect(allKitchens()).toHaveLength(2);
+  });
+});
+
+describe("Chefs tab pages", () => {
+  it("says when more kitchens are in reach, and reads the next page without touching Home's cache", async () => {
+    const fetch = vi.fn(async (url: string) => {
+      const next = new URL(url, "https://craves.in").searchParams.get("page") === "1";
+      const body = page([kitchen(next ? "4a000000-0000-4000-8000-000000000003" : "4a000000-0000-4000-8000-000000000001")]);
+      return Response.json({ ...body, page: { page: next ? 1 : 0, size: 1, totalElements: 2, totalPages: 2, hasNext: !next } });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const first = await discoverKitchens(17.4, 78.4);
+    expect([first.hasNext, first.totalElements]).toEqual([true, 2]);
+    const second = await loadKitchenPage(17.4, 78.4, 10_000, 1, "MILD");
+    expect(second.kitchens.map((item) => item.id)).toEqual(["4a000000-0000-4000-8000-000000000003"]);
+    expect(second.hasNext).toBe(false);
+    expect(fetch.mock.calls[1][0]).toContain("page=1&size=50&spiceLevel=MILD");
+    expect(allKitchens().map((item) => item.id)).toEqual(["4a000000-0000-4000-8000-000000000001"]);
   });
 });

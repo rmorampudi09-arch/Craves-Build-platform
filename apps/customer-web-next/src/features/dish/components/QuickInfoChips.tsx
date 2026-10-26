@@ -1,4 +1,4 @@
-import { Clock, Drumstick, EggFried, Flame, Leaf, Users } from "lucide-react";
+import { Clock, Drumstick, EggFried, Flame, Leaf, Package, Users } from "lucide-react";
 import type { Dish } from "@/features/dish/api/dishes";
 
 export function QuickInfoChips({ dish }: { dish: Dish }) {
@@ -16,6 +16,8 @@ export function QuickInfoChips({ dish }: { dish: Dish }) {
     { icon: Users, label: "Serves", value: dish.serves ?? "Not specified", iconColor: "text-[#F62E18]" },
     { icon: Flame, label: "Spice", value: dish.spiceLevel ?? "Not specified", iconColor: "text-[#F62E18]" },
     { icon: typeMeta.icon, label: "Food type", value: typeMeta.value, iconColor: typeMeta.iconColor },
+    // The app's "Pack 250 g", only when the kitchen gave the weight.
+    ...(dish.packGrams ? [{ icon: Package, label: "Pack", value: `${dish.packGrams} g`, iconColor: "text-[#F62E18]" }] : []),
   ];
 
   return (

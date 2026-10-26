@@ -59,9 +59,9 @@ export function WishlistHeartButton({
     try {
       if (saved) await removeCustomerFavorite(item.id);
       else await saveCustomerFavorite(item.id);
-    } catch (caught) {
-      // Signed out, this is the API's "Please sign in again."
-      setError(caught instanceof Error ? caught.message : "Saved dishes couldn’t be updated.");
+    } catch {
+      // Our words, never the server's.
+      setError("Saved dishes couldn’t be updated. Try again.");
     } finally {
       setBusy(false);
     }

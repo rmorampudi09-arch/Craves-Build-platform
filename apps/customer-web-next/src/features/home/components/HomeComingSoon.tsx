@@ -157,7 +157,7 @@ export function HomeComingSoon({
             <button
               type="button"
               onClick={() => void inviteCook()}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#D92714] transition-colors hover:bg-[#FDEAE8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full !border-white !bg-white px-4 text-sm font-bold !text-[#D92714] !shadow-none transition-colors hover:!bg-[#FDEAE8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
             >
               <Share2 className="h-4 w-4" aria-hidden="true" />
               Invite a home cook
@@ -165,7 +165,7 @@ export function HomeComingSoon({
             <button
               type="button"
               onClick={onCheckAgain}
-              className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#706864] underline-offset-4 hover:text-[#261A15] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+              className="inline-flex min-h-11 items-center gap-2 !border-transparent !bg-transparent text-sm font-semibold !text-[#706864] !shadow-none underline-offset-4 hover:!text-[#261A15] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Check again

@@ -55,6 +55,8 @@ interface KitchensGridProps {
   limit?: number;
   /** The chefs page draws its own card in a grid; Home's row of cards is the default. */
   renderKitchen?: (kitchen: NearbyKitchen, summary: KitchenDishSummary | undefined, open: () => void) => ReactNode;
+  /** The chefs page: how many kitchens cook within 10 km in all, when more pages are still to load. */
+  totalNearby?: number;
 }
 
 /** The kitchen's dish photos: each fades in over the one before every 4 s, always forward; still for reduced motion. */
@@ -426,7 +428,7 @@ function TopKitchens({ kitchens, searchTerm, state, message, onSelectKitchen, on
 }
 
 /** The chefs page: every nearby chef in a grid of the cards it draws. */
-function ChefsGrid({ kitchens, searchTerm, state, message, onSelectKitchen, onRetry, onManageAddress, dishes, renderKitchen }: KitchensGridProps & Required<Pick<KitchensGridProps, "renderKitchen">>) {
+function ChefsGrid({ kitchens, searchTerm, state, message, onSelectKitchen, onRetry, onManageAddress, dishes, renderKitchen, totalNearby }: KitchensGridProps & Required<Pick<KitchensGridProps, "renderKitchen">>) {
   const summaries = useMemo(() => summarizeKitchenDishes(dishes), [dishes]);
   return (
     <section
@@ -435,19 +437,19 @@ function ChefsGrid({ kitchens, searchTerm, state, message, onSelectKitchen, onRe
     >
       <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
         <div>
+          {/* The app's words (1.31): "Nearby kitchens" and how many cook within 10 km. */}
           <h2
             id="nearby-kitchens-heading"
-            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
+            className="mt-1.5 font-display text-2xl font-black tracking-[-0.035em] text-[#1A1A1A] lg:text-[1.75rem]"
           >
-            Home chefs near you
+            Nearby kitchens
           </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            Browse nearby home chefs through the dishes they are cooking today.
-          </p>
         </div>
         {state === "ready" ? (
-          <span className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]">
-            {kitchens.length} {kitchens.length === 1 ? "chef" : "chefs"}
+          <span className="rounded-full bg-[#F6F7F8] px-3.5 py-2 text-sm font-semibold text-[#6B6B6B]">
+            {searchTerm.trim()
+              ? `${kitchens.length} ${kitchens.length === 1 ? "match" : "matches"}`
+              : `${Math.max(totalNearby ?? 0, kitchens.length)} within 10 km`}
           </span>
         ) : null}
       </div>

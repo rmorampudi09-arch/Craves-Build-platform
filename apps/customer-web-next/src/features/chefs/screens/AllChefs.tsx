@@ -357,6 +357,7 @@ export function AllChefsPage() {
             onManageAddress={openAddressManager}
             dishes={dishes}
             renderKitchen={(kitchen, summary, open) => <KitchenDiscoverCard kitchen={kitchen} summary={summary} onOpen={open} />}
+            totalNearby={more?.total}
           />
         )}
         {state === "ready" && more ? (

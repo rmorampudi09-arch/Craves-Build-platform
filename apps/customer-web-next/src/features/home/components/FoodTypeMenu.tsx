@@ -14,9 +14,9 @@ const OPTIONS: readonly { value: HomeFoodPreference; label: string; short: strin
 
 // The same greens, ambers and reds as the marks on dish cards.
 const TONES: Record<Exclude<HomeFoodPreference, "all">, { mark: string; pill: string; row: string }> = {
-  veg: { mark: "border-[#2E7D32] [--dot:#2E7D32]", pill: "border-[#2E7D32] bg-[#E8F7F1] text-[#166B49]", row: "bg-[#E8F7F1]" },
-  egg: { mark: "border-[#D99A00] [--dot:#D99A00]", pill: "border-[#D98C16] bg-[#FFF4DF] text-[#7A4A00]", row: "bg-[#FFF4DF]" },
-  "non-veg": { mark: "border-[#D92D20] [--dot:#D92D20]", pill: "border-[#C72C21] bg-[#FDEAE8] text-[#C72C21]", row: "bg-[#FDEAE8]" },
+  veg: { mark: "border-[#2E7D32] [--dot:#2E7D32]", pill: "!border-[#2E7D32] !bg-[#E8F7F1] !text-[#166B49]", row: "bg-[#E8F7F1]" },
+  egg: { mark: "border-[#D99A00] [--dot:#D99A00]", pill: "!border-[#D98C16] !bg-[#FFF4DF] !text-[#7A4A00]", row: "bg-[#FFF4DF]" },
+  "non-veg": { mark: "border-[#D92D20] [--dot:#D92D20]", pill: "!border-[#C72C21] !bg-[#FDEAE8] !text-[#C72C21]", row: "bg-[#FDEAE8]" },
 };
 
 /** The square-and-dot mark Indian menus print beside a dish. */
@@ -50,12 +50,12 @@ export function FoodTypeMenu({
       <Menu.Trigger
         aria-label={`Food type: ${current.value === "all" ? "all food" : current.label}`}
         className={cn(
-          "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-[background-color,border-color,scale] duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A] data-[state=open]:border-[#1A1A1A]",
+          "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-[background-color,border-color,scale] duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A] !shadow-none data-[state=open]:!border-[#1A1A1A]",
           chosen
             ? chosen.pill
             : tone === "onRed"
-              ? "border-white bg-white text-[#1A1A1A] hover:bg-[#FFF5F3]"
-              : "border-[#E5E7EB] bg-white text-[#1A1A1A] hover:border-[#D3D7DD]",
+              ? "!border-white !bg-white !text-[#1A1A1A] hover:!bg-[#FFF5F3]"
+              : "!border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!border-[#D3D7DD]",
           className,
         )}
         data-testid="home-food-type-pill"

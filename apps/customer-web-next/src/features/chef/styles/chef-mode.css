@@ -541,8 +541,7 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   scrollbar-width: none;
 }
 .chef-underline-tabs::-webkit-scrollbar { display: none; }
-.chef-panel-theme .chef-underline-tab,
-.chef-underline-tab {
+.chef-underline-tabs .chef-underline-tab {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -562,10 +561,11 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   cursor: pointer;
   transition: color 150ms var(--chef-ease), border-color 150ms var(--chef-ease);
 }
-.chef-underline-tab:hover { color: var(--chef-text); }
-.chef-panel-theme .chef-underline-tab[aria-pressed="true"],
-.chef-underline-tab[aria-pressed="true"] {
-  border-bottom-color: #f62e18;
+/* The global control rule paints every button's border grey with !important (0,2,1); these outrank it. */
+.chef-underline-tabs .chef-underline-tab:not([aria-pressed="true"]) { border-color: transparent !important; }
+.chef-underline-tabs .chef-underline-tab:hover { color: var(--chef-text); }
+.chef-underline-tabs .chef-underline-tab[aria-pressed="true"] {
+  border-bottom-color: #f62e18 !important;
   color: #d92714;
   font-weight: 700;
 }

@@ -16,6 +16,8 @@ import {
 } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/shared/lib/return-navigation";
 import { FoodTypeMenu } from "@/features/home/components/FoodTypeMenu";
+import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { notificationsLabel, UnreadBadge, useCustomerUnreadCount } from "@/shared/components/notifications/unread-badge";
 import type { HomeFoodPreference } from "@/features/home/lib/home-return-state";
 import { cn } from "@/shared/lib/utils";
 import styles from "./BrowseHeader.module.css";
@@ -104,6 +106,10 @@ export function BrowseHeader({
     onOpenLocation();
   };
 
+  // The bell's red count, like the app's; guests have no inbox, so nothing is asked for them.
+  const signedIn = useSyncExternalStore(subscribeSession, () => Boolean(getSession()), () => false);
+  const unread = useCustomerUnreadCount(signedIn);
+
   const red = tone === "red";
   const onRed = useAtPageTop(red) && red;
   useThemeColor(red ? (onRed ? HOME_RED : "#FFFFFF") : null);
@@ -112,12 +118,12 @@ export function BrowseHeader({
   const iconAction = cn(
     "h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 transition-[background-color,color,box-shadow] duration-300 ease-out focus-visible:outline-none focus-visible:ring-2",
     pick(
-      "bg-white/15 text-white hover:bg-white/25 focus-visible:ring-white",
+      "!bg-white/15 !text-white hover:!bg-white/25 focus-visible:ring-white",
       "!bg-[#F1F3F5] !text-[#F62E18] hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:ring-[#1A1A1A]/30",
     ),
   );
   const locationCard = pick(
-    "border-white/25 bg-white/15 text-white hover:bg-white/20",
+    "!border-white/25 !bg-white/15 !text-white !shadow-none hover:!bg-white/20",
     "border-[#E5E7EB] !bg-white !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.06)] hover:border-[#D7DADF] hover:shadow-[0_8px_20px_rgba(26,26,26,0.10)]",
   );
   const foodMenu =
@@ -235,11 +241,12 @@ export function BrowseHeader({
 
           <Link
             to="/notifications"
-            className={"flex shrink-0 " + iconAction}
-            aria-label="Open notifications"
+            className={"relative flex shrink-0 " + iconAction}
+            aria-label={notificationsLabel(unread)}
             title="Notifications"
           >
             <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+            <UnreadBadge count={unread} className={onRed ? "border-[#D92714] bg-white text-[#D92714]" : undefined} />
           </Link>
 
           <Link
@@ -295,7 +302,7 @@ export function BrowseHeader({
               data-craves-location-button="mobile"
               className={cn(
                 "group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border px-2.5 py-2 text-left transition-[scale] duration-(--dur-micro) active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30",
-                red ? "border-transparent bg-transparent px-0 text-white" : "border-[#E5E7EB] !bg-white !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)]",
+                red ? "!border-transparent !bg-transparent px-0 !text-white !shadow-none" : "border-[#E5E7EB] !bg-white !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)]",
               )}
               aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
             >
@@ -325,15 +332,16 @@ export function BrowseHeader({
             <Link
               to="/notifications"
               className={cn(
-                "flex shrink-0",
+                "relative flex shrink-0",
                 red
                   ? "h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   : iconAction,
               )}
-              aria-label="Open notifications"
+              aria-label={notificationsLabel(unread)}
               title="Notifications"
             >
               <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+              <UnreadBadge count={unread} className={red ? "border-[#D92714] bg-white text-[#D92714]" : undefined} />
             </Link>
 
           </div>

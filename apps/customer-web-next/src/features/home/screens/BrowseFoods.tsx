@@ -168,7 +168,7 @@ function BackToTop() {
       <button
         type="button"
         onClick={goUp}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F6F7F8] px-5 text-sm font-bold text-[#1A1A1A] transition-colors hover:bg-[#ECEEF0] active:bg-[#E5E7EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full !border-transparent !bg-[#F6F7F8] px-5 text-sm font-bold !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-[#ECEEF0] active:!bg-[#E5E7EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
       >
         <ArrowUp className="h-4 w-4 text-[#D92714]" aria-hidden="true" />
         Back to top

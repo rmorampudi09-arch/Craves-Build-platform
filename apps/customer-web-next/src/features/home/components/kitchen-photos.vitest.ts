@@ -95,8 +95,10 @@ it("names the section like the app with See all; the chefs page keeps its own ti
   expect(screen.getByRole("heading", { name: "Top kitchens near you" })).toBeTruthy();
   expect(screen.getByRole("link", { name: "See all kitchens near you" }).getAttribute("href")).toBe("/chefs");
   cleanup();
-  grid({ limit: undefined, renderKitchen: (item) => createElement("p", null, `card ${item.kitchenName}`) });
-  expect(screen.getByRole("heading", { name: "Home chefs near you" })).toBeTruthy();
+  grid({ limit: undefined, totalNearby: 37, renderKitchen: (item) => createElement("p", null, `card ${item.kitchenName}`) });
+  expect(screen.getByRole("heading", { name: "Nearby kitchens" })).toBeTruthy();
+  // The app's count: every kitchen within 10 km, not just the page loaded so far.
+  expect(screen.getByText("37 within 10 km")).toBeTruthy();
   expect(screen.getByText("card Ammi's Dastarkhwan")).toBeTruthy();
 });
 

@@ -4,7 +4,8 @@ import { EmptyIllustration, type EmptyIllustrationName } from "./EmptyIllustrati
 
 /** The second button under an empty state: white with a red outline, next to `craves-primary-action`. */
 export const emptyStateSecondaryAction =
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-full border-2 border-[#F62E18] bg-white px-5 text-base font-bold text-[#D92714] transition-colors duration-150 hover:bg-[#FDEAE8] active:bg-[#FBD5D0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]";
+  // Buttons need `!`: the global :where(button) colours are unlayered, so they beat plain utilities.
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-full !border-2 !border-[#F62E18] !bg-white px-5 text-base font-bold !text-[#D92714] !shadow-none transition-colors duration-150 hover:!bg-[#FDEAE8] active:!bg-[#FBD5D0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]";
 
 /**
  * An empty, offline or error screen like the app's (1.35.0): the drawing, a title that says what is

@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
 import { ArrowUp, MapPin, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -52,7 +52,7 @@ import {
   sortDishes,
   type DishView,
 } from "@/features/home/lib/dish-filters";
-import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import {
   deliveryPlaceLabel,
   useCartAddressAvailability,
@@ -810,18 +810,16 @@ function BrowseFoodsPage() {
   };
 
   if (sessionUnavailable) {
+    // The session service didn't answer (the sign-in itself is kept): try again, or sign in afresh (app 1.35.2).
     return (
-      <main className="flex min-h-screen items-center justify-center bg-white px-5 text-[#1A1A1A]">
-        <section className="w-full max-w-md rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_14px_42px_rgba(26,26,26,0.08)]">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#F62E18]">
-            C
-          </div>
-          <h1 className="mt-4 text-xl font-black tracking-[-0.02em]">
-            Reconnecting to Craves
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
-            Your sign-in has not been cleared. We just couldn’t reach the session service for a moment.
-          </p>
+      <main className="flex min-h-screen items-center justify-center bg-white text-[#1A1A1A]">
+        <EmptyState
+          heading="h1"
+          role="alert"
+          illustration="session"
+          title="We couldn't sign you back in"
+          message="Check your connection and try again. You can also sign in again with your phone number."
+        >
           <button
             type="button"
             onClick={() => {
@@ -829,11 +827,15 @@ function BrowseFoodsPage() {
               setDefaultAddressResolved(false);
               setSessionRetryNonce((current) => current + 1);
             }}
-            className="mt-5 min-h-11 rounded-xl !border-transparent !bg-[#F62E18] px-5 text-sm font-bold !text-white shadow-[0_6px_18px_rgba(26,26,26,0.14)] active:!bg-[#C4200F]"
+            className="craves-primary-action"
           >
+            <RefreshCw className="h-5 w-5" aria-hidden="true" />
             Try again
           </button>
-        </section>
+          <Link to="/sign-in" search={{ returnTo: "/home" }} className={emptyStateSecondaryAction}>
+            Go to sign in
+          </Link>
+        </EmptyState>
       </main>
     );
   }

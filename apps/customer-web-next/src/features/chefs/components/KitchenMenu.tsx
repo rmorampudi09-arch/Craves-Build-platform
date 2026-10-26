@@ -75,7 +75,7 @@ export function KitchenMenu({ dishes, orderable = true }: { dishes: Dish[]; orde
             <h3 id={`kitchen-menu-${index}`} className="font-display text-xl font-extrabold text-[#261A15]">{section.label}</h3>
             <span className="text-[0.9375rem] text-[#706864]">{section.dishes.length} {section.dishes.length === 1 ? "dish" : "dishes"}</span>
           </div>
-          <div className="mt-2 grid md:grid-cols-2 md:gap-x-10">
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 md:gap-x-10">
             {section.dishes.map((dish, position) => (
               <KitchenMenuRow key={dish.id} dish={dish} orderable={orderable} priorityImage={index === 0 && position < 2} />
             ))}

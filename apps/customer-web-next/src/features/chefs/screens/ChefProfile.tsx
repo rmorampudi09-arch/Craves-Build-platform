@@ -8,6 +8,7 @@ import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 import type { KitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
 import { loadKitchenMenu, type Dish } from "@/features/dish/api/dishes";
 import { discoverKitchens } from "@/features/chefs/api/kitchens";
+import { loadCart } from "@/features/cart/api/cravesCart";
 import { loadKitchenReviewSummary } from "@/features/dish/api/reviews";
 import {
   loadSelectedAddress,
@@ -73,7 +74,8 @@ function NoDishes({ kitchenId, name }: { kitchenId: string; name: string }) {
         See other home chefs
       </Link>
       {saved ? null : (
-        <button type="button" onClick={() => void toggle()} disabled={busy} className={emptyStateSecondaryAction}>
+        // The shared class needs "!" on a button, where the site's base button colours otherwise win.
+        <button type="button" onClick={() => void toggle()} disabled={busy} className={`${emptyStateSecondaryAction} !border-[#F62E18] !bg-white !text-[#D92714] !shadow-none hover:!bg-[#FDEAE8]`}>
           Save this kitchen
         </button>
       )}
@@ -117,6 +119,8 @@ function ChefProfilePage() {
         return;
       }
 
+      // Opened straight from a link, the cart isn't loaded yet: the menu's steppers show what is in it.
+      void loadCart().catch(() => undefined);
       // Any kitchen opens by its id, as in the app, near or not: the public profile and menu, read
       // without adding them to the nearby dishes Home lists. Delivery is checked beside them.
       const [profile, menu, delivery] = await Promise.allSettled([

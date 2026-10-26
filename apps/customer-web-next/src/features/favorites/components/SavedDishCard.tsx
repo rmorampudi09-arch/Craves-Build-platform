@@ -142,7 +142,7 @@ export function SavedDishCard({
             </p>
           ) : null}
           <p
-            className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${TONE[availability.tone]}`}
+            className={`mt-2 flex w-fit rounded-full px-2.5 py-1 text-xs font-bold ${TONE[availability.tone]}`}
           >
             {availability.title}
           </p>

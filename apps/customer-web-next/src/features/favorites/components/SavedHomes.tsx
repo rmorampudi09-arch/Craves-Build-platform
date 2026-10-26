@@ -73,7 +73,8 @@ function SavedHomeRow({
   const state = favoriteHomeState(card);
   const cooking = state.tone === "positive";
   const alerts = watched !== null && isWatched(entry, watched);
-  const nameClass = "block truncate font-display text-xl font-bold leading-7 text-[#261A15]";
+  // Two lines rather than an early "…": on a phone the bell and heart leave the name little room.
+  const nameClass = "line-clamp-2 font-display text-xl font-bold leading-7 text-[#261A15] [overflow-wrap:anywhere]";
   return (
     // The whole card opens the kitchen (the name's link stretches over it); the bell and heart sit above it as their own buttons.
     <li className="relative flex items-center gap-3 rounded-[20px] border border-[#E3DDD8] bg-white px-4 py-3.5 transition-colors duration-150 hover:border-[#D5CEC8]">
@@ -352,7 +353,7 @@ export function SavedHomes() {
         {notice}
       </p>
       {/* One column on phones (as in the app), two side by side from tablet width. */}
-      <ul className="grid gap-3 md:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {entries.map((entry) => (
           <SavedHomeRow
             key={`${entry.card.requestedType}:${entry.card.requestedId}`}
@@ -378,7 +379,7 @@ export function SavedHomes() {
           Load more saved home chefs
         </button>
       ) : null}
-      <p className="mt-3 px-1 text-[0.9375rem] text-[#706864]">
+      <p className="mt-3 px-1 text-[0.9375rem] text-[#706864] md:text-center">
         Tap the heart on any kitchen to save its home chef here.
       </p>
     </>

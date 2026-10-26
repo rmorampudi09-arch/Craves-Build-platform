@@ -220,7 +220,7 @@ function WishlistPage() {
               <p className="text-xs text-[#6B6B6B]">Order them while they are on today’s menu.</p>
             </div>
           </div>
-          <ul className="grid gap-3 lg:grid-cols-2">{cookingToday.map(card)}</ul>
+          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">{cookingToday.map(card)}</ul>
         </section>
       ) : (
         <div className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-4">
@@ -242,7 +242,7 @@ function WishlistPage() {
             </h2>
             <span className="text-[0.9375rem] font-bold text-[#D92714]">{savedForLater.length}</span>
           </div>
-          <ul className="grid gap-3 lg:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {savedForLater.map((item, index) => card(item, cookingToday.length + index))}
           </ul>
         </section>

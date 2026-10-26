@@ -334,8 +334,7 @@ export function AllChefsPage() {
 
       <main>
         <div className="mx-auto max-w-[88rem] px-4 pt-4 md:px-7 md:pt-5 lg:px-10">
-          <p className="text-xs font-bold uppercase tracking-[0.09em] text-[#D92714]">Home chefs near you</p>
-          <h1 className="mt-1 font-display text-[1.75rem] font-extrabold leading-tight tracking-[-0.02em] text-[#261A15] md:text-4xl">
+          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-[-0.03em] text-[#261A15] md:text-4xl">
             Discover home chefs
           </h1>
           {/* Spice reloads from the address, so the filters wait for it. */}
@@ -372,7 +371,8 @@ export function AllChefsPage() {
               onClick={() => void showMore()}
               disabled={more.loading}
               aria-busy={more.loading}
-              className={`${emptyStateSecondaryAction} disabled:cursor-wait`}
+              // The shared class needs "!" on a button, where the site's base button colours otherwise win.
+              className={`${emptyStateSecondaryAction} !border-[#F62E18] !bg-white !text-[#D92714] !shadow-none hover:!bg-[#FDEAE8] disabled:cursor-wait`}
             >
               {more.loading ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" /> : null}
               {more.total > kitchens.length

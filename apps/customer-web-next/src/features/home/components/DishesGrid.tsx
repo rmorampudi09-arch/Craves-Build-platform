@@ -134,7 +134,7 @@ export function DishesGrid({
   // The food type lives in the pill beside the search; every other narrowing shows in the filter bar.
   const narrowing = activeFilterCount(view) > 0;
   const hasFilters = selectedCategory !== "All" || sort !== "recommended" || narrowing;
-  const heading = selectedCategory === "All" ? "Dishes near you" : selectedCategory;
+  const heading = selectedCategory === "All" ? "Popular near you" : selectedCategory;
   const more = hasMoreRemote ? "+" : "";
   const countLabel = `${dishes.length}${more} ${dishes.length === 1 && !more ? "dish" : "dishes"}`;
   const emptyMessage = narrowing
@@ -158,13 +158,13 @@ export function DishesGrid({
             id="available-dishes-heading"
             // Focus lands here when "Clear filters" (which then disappears) is pressed.
             tabIndex={-1}
-            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
+            className="font-display text-[1.375rem] font-black tracking-[-0.03em] text-[#1A1A1A] md:text-2xl lg:text-[1.75rem]"
           >
             {/* Heading and count change with the list in one frame: no blank fade gap. */}
             {heading}
           </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            Freshly prepared by nearby home kitchens, made with care.
+          <p className="mt-1 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+            Fresh home-cooked dishes from kitchens that deliver to you.
           </p>
         </div>
         {state === "ready" ? (

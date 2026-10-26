@@ -66,7 +66,7 @@ class FleetRiderSecurityTest {
     void profileAndDocumentsNeedASignInAndTheServiceChecksTheRiderRow() throws Exception {
         UUID pending = UUID.randomUUID();
         when(verifier.verify("pending")).thenReturn(new CravesPrincipal(pending, "+919000000000", Set.of("CUSTOMER")));
-        when(service.profile(pending)).thenReturn(new FleetRiderModels.RiderProfile(new FleetRiderModels.Vehicle("Two-wheeler", null),
+        when(service.profile(pending)).thenReturn(new FleetRiderModels.RiderProfile(new FleetRiderModels.Vehicle("Two-wheeler", null, null),
             List.of(), null, null, null));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer pending")).andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicle.label").value("Two-wheeler"));

@@ -10,6 +10,7 @@ import in.craves.integration.payout.bank.BankOnboardingModels;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,6 +29,10 @@ public class FleetSignupService {
     static final Map<String, String> VEHICLE_LABELS = Map.of("PETROL", "Petrol two-wheeler", "ELECTRIC", "Electric two-wheeler",
         "BICYCLE", "Bicycle");
     private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
+    // Ops has relied on the name once it accepted a document carrying it or confirmed a payout account in it.
+    private static final String NAME_CHECKED_SQL = "SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_document WHERE rider_id = ? "
+        + "AND status = 'VERIFIED' AND type IN ('PAN', 'DRIVING_LICENCE', 'BANK_PROOF')) OR EXISTS (SELECT 1 "
+        + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'ACTIVE')";
 
     private final JdbcTemplate jdbc;
     private final FleetRiderService riders;
@@ -39,7 +44,10 @@ public class FleetSignupService {
         this.cipher = cipher;
     }
 
-    /** Creates the PENDING rider for this phone; for someone who already is a rider it only answers /me. */
+    /**
+     * Creates the PENDING rider for this phone. A rider still PENDING sends it again to correct their details (an empty plate
+     * keeps the one on file); for anyone further along it only answers /me.
+     */
     @Transactional
     public RiderMe signUp(CravesPrincipal principal, SignUp input) {
         String phone = principal.phoneNumber();
@@ -60,16 +68,23 @@ public class FleetSignupService {
         String registration = null;
         if (!"BICYCLE".equals(input.vehicleKind())) {
             registration = input.vehicleRegNumber() == null ? "" : input.vehicleRegNumber().replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
-            if (!registration.matches(FleetRules.VEHICLE_REGISTRATION)) {
-                throw FleetApiException.invalid("Enter the number plate as on the RC, like TS09EA1234.");
+            if (!registration.isEmpty() && !registration.matches(FleetRules.VEHICLE_REGISTRATION)) {
+                throw invalidPlate();
             }
         }
         if (!Boolean.TRUE.equals(input.adult())) {
             throw FleetApiException.invalid("Riders must be 18 or older.");
         }
         RiderMe me = riders.me(principal); // links a rider ops already added for this phone
+        if ("PENDING".equals(me.status())) {
+            changeDetails(principal.identityId(), name, input.language(), input.vehicleKind(), label, registration);
+            return riders.me(principal);
+        }
         if (!"NOT_RIDER".equals(me.status())) {
             return me;
+        }
+        if ("".equals(registration)) {
+            throw invalidPlate();
         }
         UUID identity = principal.identityId();
         // ON CONFLICT: a double tap, or the phone already belongs to another account's rider (answered below).
@@ -81,6 +96,49 @@ public class FleetSignupService {
             throw FleetApiException.conflict("PHONE_IN_USE", "This number is already a Craves rider on another account. Call rider support.");
         }
         return me;
+    }
+
+    /**
+     * A PENDING rider correcting their sign-up. The name is locked once ops accepted the PAN card, driving licence or bank
+     * proof, or confirmed a payout account; the vehicle and plate once ops accepted the RC (going online only checks that
+     * some RC is accepted). A new name also sets aside a payout account sent in the old one: ops could never confirm it, so
+     * the rider sends it again.
+     */
+    private void changeDetails(UUID identityId, String name, String language, String kind, String label, String registration) {
+        jdbc.queryForObject("SELECT id FROM fleet_schema.rider WHERE identity_id = ? FOR UPDATE", UUID.class, identityId);
+        FleetRiderService.Rider rider = riders.rider(identityId);
+        String plate = "".equals(registration) ? rider.vehicleRegNumber() : registration;
+        if (registration != null && plate == null) {
+            throw invalidPlate();
+        }
+        boolean renamed = !FleetRules.sameName(name, rider.name());
+        if (renamed && Boolean.TRUE.equals(jdbc.queryForObject(NAME_CHECKED_SQL, Boolean.class, rider.id(), rider.id()))) {
+            throw FleetApiException.unprocessable("NAME_LOCKED",
+                "Ops has already checked your documents or payout account in this name. Call rider support to change it.");
+        }
+        // A rider ops added before sign-up existed has no kind; the document checks treat that as PETROL.
+        String onFile = jdbc.queryForObject("SELECT vehicle_kind FROM fleet_schema.rider WHERE id = ?", String.class, rider.id());
+        boolean vehicleChanged = !kind.equals(onFile == null ? "PETROL" : onFile) || !Objects.equals(plate, rider.vehicleRegNumber());
+        if (vehicleChanged && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_document "
+            + "WHERE rider_id = ? AND type = 'VEHICLE_RC' AND status = 'VERIFIED')", Boolean.class, rider.id()))) {
+            throw FleetApiException.unprocessable("VEHICLE_LOCKED",
+                "Ops has already accepted your RC for this vehicle. Call rider support to change it.");
+        }
+        jdbc.update("UPDATE fleet_schema.rider SET name = ?, language = ?, updated_at = now() WHERE id = ? AND status = 'PENDING'",
+            name, language, rider.id());
+        if (vehicleChanged) {
+            jdbc.update("UPDATE fleet_schema.rider SET vehicle_kind = ?, vehicle_label = ?, vehicle_reg_number = ? WHERE id = ? "
+                + "AND status = 'PENDING'", kind, label, plate, rider.id());
+        }
+        if (renamed) {
+            jdbc.queryForList("SELECT id, holder_name FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'",
+                rider.id()).stream().filter(sent -> !FleetRules.sameName((String) sent.get("holder_name"), name))
+                .forEach(sent -> jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE id = ?", sent.get("id")));
+        }
+    }
+
+    private static FleetApiException invalidPlate() {
+        return FleetApiException.invalid("Enter the number plate as on the RC, like TS09EA1234.");
     }
 
     /**

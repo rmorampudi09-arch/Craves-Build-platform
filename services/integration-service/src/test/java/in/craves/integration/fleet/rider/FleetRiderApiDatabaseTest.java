@@ -22,6 +22,7 @@ import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -398,6 +399,95 @@ class FleetRiderApiDatabaseTest {
         when(verifier.verify("stranger")).thenReturn(new CravesPrincipal(UUID.randomUUID(), phone(), Set.of("CUSTOMER")));
         payoutAccount("stranger", "{\"method\":\"UPI\",\"holderName\":\"Ravi Kumar\",\"upiId\":\"x1@okaxis\"}")
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
+    }
+
+    @Test
+    void aPendingRiderCorrectsTheirSignUpButNotTheNameOnAnAcceptedPanCard() throws Exception {
+        UUID gopi = UUID.randomUUID();
+        when(verifier.verify("gopi")).thenReturn(new CravesPrincipal(gopi, phone(), Set.of("CUSTOMER")));
+        apply("gopi", "{\"name\":\"K Gopi\",\"language\":\"en\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}").andExpect(status().isOk());
+        String upi = "gopi" + ThreadLocalRandom.current().nextInt(1_000_000) + "@axl";
+        payoutAccount("gopi", "{\"method\":\"UPI\",\"holderName\":\"K Gopi\",\"upiId\":\"" + upi + "\"}").andExpect(status().isNoContent());
+
+        // A scooter needs a plate. The new name sets aside the account sent in the old one: ops could never confirm it.
+        String scooter = "{\"name\":\"Kancharla Gopi\",\"language\":\"te\",\"vehicleKind\":\"ELECTRIC\",%s\"adult\":true}";
+        apply("gopi", scooter.formatted("")).andExpect(status().isBadRequest());
+        apply("gopi", scooter.formatted("\"vehicleRegNumber\":\"ts 08 ab 4821\",")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("PENDING")).andExpect(jsonPath("$.name").value("Kancharla Gopi"))
+            .andExpect(jsonPath("$.language").value("te"));
+        mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer gopi")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicle.kind").value("ELECTRIC")).andExpect(jsonPath("$.vehicle.regNumberMasked").value("TS08xx4821"))
+            .andExpect(jsonPath("$.documents.length()").value(5)).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist());
+
+        // An empty plate keeps the one on file.
+        apply("gopi", "{\"name\":\"Kancharla Gopi\",\"language\":\"en\",\"vehicleKind\":\"PETROL\",\"vehicleRegNumber\":\"\",\"adult\":true}")
+            .andExpect(status().isOk());
+        String details = "SELECT count(*) AS riders, max(name) AS name, max(vehicle_kind) AS kind, max(vehicle_reg_number) AS plate, "
+            + "max(language) AS language FROM fleet_schema.rider WHERE identity_id = ?";
+        assertThat(db.queryForMap(details, gopi)).containsEntry("riders", 1L).containsEntry("kind", "PETROL")
+            .containsEntry("plate", "TS08AB4821").containsEntry("language", "en");
+
+        // Once ops accepts the PAN card the name is locked; the same words in another order and everything else still change.
+        UUID rider = db.queryForObject("SELECT id FROM fleet_schema.rider WHERE identity_id = ?", UUID.class, gopi);
+        db.update("INSERT INTO fleet_schema.rider_document (id, rider_id, type, status, blob_name, content_type, size_bytes, reviewed_at) "
+            + "VALUES (?, ?, 'PAN', 'VERIFIED', 'riders/p', 'image/jpeg', 10, now())", UUID.randomUUID(), rider);
+        apply("gopi", "{\"name\":\"Ravi Kumar\",\"language\":\"en\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("NAME_LOCKED"));
+        apply("gopi", "{\"name\":\"Gopi Kancharla\",\"language\":\"hi\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
+            .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Gopi Kancharla"));
+
+        // Past sign-up, details are ops's to change.
+        db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE' WHERE id = ?", rider);
+        apply("gopi", scooter.formatted("\"vehicleRegNumber\":\"TS09EA1234\",")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.name").value("Gopi Kancharla")).andExpect(jsonPath("$.language").value("hi"));
+        assertThat(db.queryForMap(details, gopi)).containsEntry("kind", "BICYCLE").containsEntry("plate", null);
+    }
+
+    @Test
+    void whatOpsAlreadyCheckedStaysLockedWhileTheLanguageAndTheRestStillChange() throws Exception {
+        String signUp = "{\"name\":\"%s\",\"language\":\"%s\",\"vehicleKind\":\"%s\",%s\"adult\":true}";
+
+        // Ops confirmed only the payout account: no new name, but the same words in another order and a language still save.
+        UUID upi = signedUp("upi", signUp.formatted("K Gopi", "en", "BICYCLE", ""));
+        db.update("INSERT INTO fleet_schema.rider_payout_account (id, rider_id, method, encrypted_details, fingerprint, masked_account, "
+            + "holder_name, state, verified_in_person, set_by, set_by_name) VALUES (?, ?, 'UPI', 'k.x', ?, 'go****@axl', 'K Gopi', 'ACTIVE', "
+            + "true, ?, 'Ops')", UUID.randomUUID(), upi, "k." + UUID.randomUUID(), UUID.randomUUID());
+        apply("upi", signUp.formatted("Ravi Kumar", "en", "BICYCLE", "")).andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("NAME_LOCKED"));
+        apply("upi", signUp.formatted("Gopi K", "te", "BICYCLE", "")).andExpect(status().isOk()).andExpect(jsonPath("$.language").value("te"));
+
+        // Ops accepted only the bank proof: no new name either.
+        UUID bank = signedUp("bank", signUp.formatted("Sita Devi", "en", "BICYCLE", ""));
+        verified(bank, "BANK_PROOF");
+        apply("bank", signUp.formatted("Lakshmi Devi", "en", "BICYCLE", "")).andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("NAME_LOCKED"));
+
+        // Ops accepted the RC: no other vehicle or plate. The same plate (typed again or left empty), a new name and a language
+        // still save.
+        UUID rc = signedUp("rc", signUp.formatted("Anil Rao", "en", "PETROL", "\"vehicleRegNumber\":\"TS09EA1234\","));
+        verified(rc, "VEHICLE_RC");
+        for (String other : List.of(signUp.formatted("Anil Rao", "en", "ELECTRIC", ""), signUp.formatted("Anil Rao", "en", "BICYCLE", ""),
+            signUp.formatted("Anil Rao", "en", "PETROL", "\"vehicleRegNumber\":\"TS10AB1234\","))) {
+            apply("rc", other).andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("VEHICLE_LOCKED"));
+        }
+        apply("rc", signUp.formatted("Anil Kumar Rao", "hi", "PETROL", "\"vehicleRegNumber\":\"\",")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.name").value("Anil Kumar Rao")).andExpect(jsonPath("$.language").value("hi"));
+        apply("rc", signUp.formatted("Anil Kumar Rao", "te", "PETROL", "\"vehicleRegNumber\":\"ts 09 ea 1234\",")).andExpect(status().isOk());
+        assertThat(db.queryForMap("SELECT vehicle_kind AS kind, vehicle_reg_number AS plate, language FROM fleet_schema.rider WHERE id = ?",
+            rc)).containsEntry("kind", "PETROL").containsEntry("plate", "TS09EA1234").containsEntry("language", "te");
+    }
+
+    /** Signs up a new PENDING rider; the bearer token is `token`. */
+    UUID signedUp(String token, String body) throws Exception {
+        UUID identity = UUID.randomUUID();
+        when(verifier.verify(token)).thenReturn(new CravesPrincipal(identity, phone(), Set.of("CUSTOMER")));
+        apply(token, body).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
+        return db.queryForObject("SELECT id FROM fleet_schema.rider WHERE identity_id = ?", UUID.class, identity);
+    }
+
+    void verified(UUID rider, String type) {
+        db.update("INSERT INTO fleet_schema.rider_document (id, rider_id, type, status, blob_name, content_type, size_bytes, reviewed_at) "
+            + "VALUES (?, ?, ?, 'VERIFIED', 'riders/v', 'image/jpeg', 10, now())", UUID.randomUUID(), rider, type);
     }
 
     org.springframework.test.web.servlet.ResultActions apply(String token, String body) throws Exception {

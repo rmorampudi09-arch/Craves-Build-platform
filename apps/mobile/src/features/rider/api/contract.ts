@@ -39,7 +39,8 @@ export interface RiderMe {
 }
 
 export interface RiderProfile {
-  vehicle: {label: string; regNumberMasked?: string};
+  /** kind: as the rider signed up; absent for a rider ops added before sign-up existed. */
+  vehicle: {label: string; regNumberMasked?: string; kind?: VehicleKind};
   documents: {
     /** DL, RC, INSURANCE, PUC, PAN or BANK; used to upload a new photo. */
     type?: string;
@@ -59,12 +60,16 @@ export interface RiderProfile {
 
 export type VehicleKind = 'PETROL' | 'ELECTRIC' | 'BICYCLE';
 
-/** POST /apply: anyone signed in with an Indian mobile number becomes a PENDING rider. */
+/**
+ * POST /apply: anyone signed in with an Indian mobile number becomes a PENDING rider. A PENDING rider sends it again to
+ * correct their details: 422 NAME_LOCKED once ops checked a document or payout account in the old name, 422 VEHICLE_LOCKED
+ * for another vehicle or plate once ops accepted the RC.
+ */
 export interface RiderSignUp {
   name: string;
   language: 'en' | 'te' | 'hi';
   vehicleKind: VehicleKind;
-  /** Required unless vehicleKind is BICYCLE. */
+  /** Required unless vehicleKind is BICYCLE; when a PENDING rider corrects their details, empty keeps the plate on file. */
   vehicleRegNumber?: string;
   adult: boolean;
 }

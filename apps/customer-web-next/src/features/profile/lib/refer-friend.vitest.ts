@@ -61,3 +61,18 @@ describe("Refer a friend", () => {
     expect(await screen.findByText("Copying is unavailable on this device.")).toBeTruthy();
   });
 });
+
+describe("what happens after sharing", () => {
+  it("names the app's three steps and says rewards are coming soon", () => {
+    render(createElement(ReferFriend));
+    const next = screen.getByRole("region", { name: "What happens next" });
+    expect([...next.querySelectorAll("li")].map((step) => step.textContent)).toEqual([
+      "1Send your invitationYour contact receives your message.",
+      "2They explore CravesThey browse homemade meals from home chefs.",
+      "3Join and orderThey sign up and order homemade food.",
+    ]);
+    const rewards = screen.getByRole("region", { name: "Referral rewards" });
+    expect(rewards.textContent).toContain("Coming soon");
+    expect(rewards.textContent).toContain("only your invitation message is shared");
+  });
+});

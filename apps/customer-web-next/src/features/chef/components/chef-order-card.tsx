@@ -180,7 +180,7 @@ export function ChefOrderCard({ order, onUpdated }: { order: ChefOrder; onUpdate
         </span>
       </div>
       <h3 id={headingId} className="chef-order-card-title">
-        {format(text.orderNumber, { number: shortOrderNumber(order.id) })}
+        {format(text.orderNumber, { number: shortOrderNumber(order.id) })}{" "}
         <span className="block font-normal text-[#6B6B6B]">{who}</span>
       </h3>
       <ul className="chef-order-items" aria-label={text.foodToCook}>

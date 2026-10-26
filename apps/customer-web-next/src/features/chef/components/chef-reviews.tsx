@@ -144,7 +144,7 @@ export function ChefReviews() {
         <ChefSection>
           <div className="flex items-center gap-5">
             <div className="grid shrink-0 justify-items-center gap-1 text-center">
-              <p className="font-display text-[2.5rem] font-bold leading-none tracking-[-0.03em] text-[#1A1A1A]">{average === null ? "–" : average.toFixed(1)}</p>
+              <p className="font-display text-[2.5rem] font-bold leading-none tracking-[-0.03em] text-[#1A1A1A]">{average === null ? "—" : average.toFixed(1)}</p>
               {average === null ? null : <ChefStars rating={average} className="text-lg" />}
               <p className="text-[0.8125rem] font-semibold text-[#6B6B6B]">{count === 1 ? text.reviewOne : format(text.reviewMany, { count })}</p>
             </div>

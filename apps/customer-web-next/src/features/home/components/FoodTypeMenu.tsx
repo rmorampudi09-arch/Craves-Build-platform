@@ -1,7 +1,7 @@
 "use client";
 
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronDown, UtensilsCrossed } from "lucide-react";
+import { Check, ChevronDown, Utensils } from "lucide-react";
 import type { HomeFoodPreference } from "@/features/home/lib/home-return-state";
 import { cn } from "@/shared/lib/utils";
 
@@ -60,7 +60,7 @@ export function FoodTypeMenu({
         )}
         data-testid="home-food-type-pill"
       >
-        {value === "all" ? <UtensilsCrossed className="h-4 w-4 text-[#D92714]" aria-hidden="true" /> : <FoodTypeMark type={value} />}
+        {value === "all" ? <Utensils className="h-4 w-4 text-[#D92714]" aria-hidden="true" /> : <FoodTypeMark type={value} />}
         <span>{current.short}</span>
         <ChevronDown className="h-4 w-4 opacity-70" aria-hidden="true" />
       </Menu.Trigger>
@@ -81,7 +81,7 @@ export function FoodTypeMenu({
                   option.value === value && (option.value === "all" ? "bg-[#F6F7F8]" : TONES[option.value].row),
                 )}
               >
-                {option.value === "all" ? <UtensilsCrossed className="h-4 w-4 text-[#D92714]" aria-hidden="true" /> : <FoodTypeMark type={option.value} />}
+                {option.value === "all" ? <Utensils className="h-4 w-4 text-[#D92714]" aria-hidden="true" /> : <FoodTypeMark type={option.value} />}
                 <span className="flex-1">{option.label}</span>
                 <Menu.ItemIndicator>
                   <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" />

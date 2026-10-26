@@ -84,7 +84,7 @@ export function HomeComingSoon({
   return (
     <section
       aria-labelledby="coming-soon-title"
-      className="mx-auto grid min-h-[calc(100dvh-9rem)] max-w-[72rem] items-center gap-6 px-4 py-8 md:px-7 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:px-10 lg:py-14"
+      className="mx-auto grid min-h-[calc(100dvh-9rem)] max-w-[72rem] grid-cols-1 items-center gap-6 px-4 py-8 md:px-7 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:px-10 lg:py-14"
       data-testid="home-coming-soon"
     >
       <div className="flex justify-center lg:order-2">

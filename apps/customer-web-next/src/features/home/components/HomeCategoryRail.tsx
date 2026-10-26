@@ -73,16 +73,19 @@ export function HomeCategoryRail({
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel || typeof IntersectionObserver === "undefined") return;
-    // The tallest header is 4.65rem (74 px): 80 px from the top, the big rail is out of sight.
+    // The slim row shows only once it is really stuck, i.e. the big rail has gone above the row's
+    // sticky top (under the header or compact search bar, or off screen), never while both show.
+    // shortcut: the top is re-read when the header shows or hides, not on a breakpoint resize.
+    const top = railTopRef.current ?? 80;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry) setStuck(!entry.isIntersecting && entry.boundingClientRect.top < 80);
+        if (entry) setStuck(!entry.isIntersecting && entry.boundingClientRect.top <= top + 1);
       },
-      { rootMargin: "-80px 0px 0px 0px" },
+      { rootMargin: `-${top}px 0px 0px 0px` },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, []);
+  }, [compact, hidden]);
 
   // The slim row opens on the chosen category, even when it sits far to the right.
   useEffect(() => {

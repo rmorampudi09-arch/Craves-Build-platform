@@ -272,6 +272,11 @@ test("payout history words and India-month groups", () => {
   assert.equal(payoutStatusView("PAID").label, "Paid");
   assert.equal(payoutStatusView("PENDING_APPROVAL").label, "Craves is checking");
   assert.equal(payoutStatusView("RESERVED").label, "Requested");
+  // Money still on its way is amber, as in the app; a paid one is green, one that failed red.
+  assert.deepEqual(
+    ["RESERVED", "SUBMITTING", "PROCESSING", "REVIEW_REQUIRED", "PAID", "FAILED", "CANCELLED"].map((status) => payoutStatusView(status).tone),
+    ["warning", "warning", "warning", "warning", "success", "danger", "muted"],
+  );
   assert.equal(payoutStatusView("toString").label, "Craves is checking");
   assert.deepEqual(payoutStatusView("PAID", "te"), { label: "చెల్లించాం", tone: "success", note: "డబ్బు మీ బ్యాంక్‌కు చేరింది." });
   assert.equal(payoutStatusView("UNKNOWN", "kn").label, "Craves ಪರಿಶೀಲಿಸುತ್ತಿದೆ");

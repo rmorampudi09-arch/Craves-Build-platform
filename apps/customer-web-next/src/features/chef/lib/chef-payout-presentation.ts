@@ -80,10 +80,11 @@ const WORDS = messages({
 
 type StatusKey = "requested" | "sending" | "withBank" | "paid" | "failed" | "returned" | "cancelled";
 // The app's words. Anything new the server adds (and REVIEW_REQUIRED, UNKNOWN) reads as Craves checking, never as a raw code.
+// Money still on its way is amber, as in the app (1.34.5).
 const PAYOUT_STATUS: Record<string, { key: StatusKey; tone: ChefTone }> = {
-  RESERVED: { key: "requested", tone: "active" },
-  SUBMITTING: { key: "sending", tone: "active" },
-  PROCESSING: { key: "withBank", tone: "active" },
+  RESERVED: { key: "requested", tone: "warning" },
+  SUBMITTING: { key: "sending", tone: "warning" },
+  PROCESSING: { key: "withBank", tone: "warning" },
   PAID: { key: "paid", tone: "success" },
   FAILED: { key: "failed", tone: "danger" },
   REVERSED: { key: "returned", tone: "danger" },

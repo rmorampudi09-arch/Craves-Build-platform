@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BadgeIndianRupee, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import {
   ChefOrderHistoryError,
   fetchChefOrderHistoryPage,
@@ -357,7 +357,7 @@ function DateRangeSheet({
 }
 
 /**
- * Sales for a period, on the Money tab: what was earned and delivered against the period before, each day's earnings
+ * Sales for a period, on the Earnings tab: what was earned and delivered against the period before, each day's earnings
  * (a day opens its orders), the best sellers and how orders ended. Days are India days. The ledger hands in its
  * entries; the orders are the latest ones plus older pages, read only as far back as the period before needs.
  */
@@ -546,7 +546,7 @@ export function ChefEarningsInsights({
       ) : failed || ordersFailed ? (
         <ChefSection>
           <ChefEmpty
-            icon={AlertTriangle}
+            illustration="loadError"
             title={failed ? text.earningsFailed : text.ordersFailed}
             text={text.checkConnection}
             action={
@@ -609,7 +609,7 @@ export function ChefEarningsInsights({
           {empty ? (
             <ChefSection>
               <ChefEmpty
-                icon={BadgeIndianRupee}
+                illustration="earnings"
                 title={entries.length === 0 && orders.length === 0 ? text.noSales : words.none}
                 text={text.emptyText}
                 action={

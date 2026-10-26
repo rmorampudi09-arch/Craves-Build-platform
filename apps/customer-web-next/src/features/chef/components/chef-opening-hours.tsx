@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, CalendarDays, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
+import { CalendarDays, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import {
   changeKitchenSchedule,
@@ -14,7 +13,10 @@ import {
   scheduleUpdate,
   useKitchenSchedule,
 } from "@/features/chef/api/chef-kitchen-schedule";
+import { readChefKitchen } from "@/features/chef/api/chef-kitchen";
+import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
 import { ChefSkeletonRow } from "@/features/chef/components/chef-loading";
+import type { ChefKitchen } from "@/features/chef/lib/chef-kitchen-types";
 import { ChefEmpty, ChefFlash, ChefSection } from "@/features/chef/components/chef-ui";
 import { chefErrorText } from "@/features/chef/lib/chef-errors";
 import { SCHEDULE_REASON_MAX } from "@/features/chef/lib/chef-schedule-contract";
@@ -433,6 +435,20 @@ export function ChefOpeningHours() {
   const [flash, setFlash] = useState("");
   const busy = useRef(false);
   const ready = view.state === "ready";
+  // The Taking orders card on top, as in the app: the same switch as on Home. It needs the kitchen, so a
+  // chef without one (or a read that fails) just has the hours.
+  const [kitchen, setKitchen] = useState<ChefKitchen | null>(null);
+  useEffect(() => {
+    let active = true;
+    readChefKitchen().then(
+      (value) => active && setKitchen(value),
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+  const takingOrders = kitchen ? <ChefKitchenSwitch kitchen={kitchen} onChange={setKitchen} /> : null;
 
   // Older links carry #chef-hours; the hours only exist once read.
   useEffect(() => {
@@ -441,42 +457,50 @@ export function ChefOpeningHours() {
 
   if (view.state === "loading") {
     return (
-      <ChefSection title={text.everyWeek} flush labelledBy="chef-hours">
-        <div className="chef-list" aria-busy="true">
-          {DAYS.map(({ day }) => (
-            <ChefSkeletonRow key={day} media="none" trailing="value" />
-          ))}
-        </div>
-      </ChefSection>
+      <div className="chef-stack">
+        {takingOrders}
+        <ChefSection title={text.everyWeek} flush labelledBy="chef-hours">
+          <div className="chef-list" aria-busy="true">
+            {DAYS.map(({ day }) => (
+              <ChefSkeletonRow key={day} media="none" trailing="value" />
+            ))}
+          </div>
+        </ChefSection>
+      </div>
     );
   }
   if (view.state === "soon") {
     return (
-      <ComingSoon
-        title={text.soonTitle}
-        message={text.soonText}
-      />
+      <div className="chef-stack">
+        {takingOrders}
+        <ChefSection>
+          <ChefEmpty illustration="comingSoon" title={text.soonTitle} text={text.soonText} />
+        </ChefSection>
+      </div>
     );
   }
   if (view.state === "error") {
     return (
-      <ChefSection>
-        <ChefEmpty
-          icon={AlertTriangle}
-          title={text.loadFailed}
-          text={view.message}
-          action={
-            <button
-              type="button"
-              onClick={() => void reloadKitchenSchedule()}
-              className="chef-btn is-primary"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              {text.tryAgain}
-            </button>
-          }
-        />
-      </ChefSection>
+      <div className="chef-stack">
+        {takingOrders}
+        <ChefSection>
+          <ChefEmpty
+            illustration="loadError"
+            title={text.loadFailed}
+            text={view.message}
+            action={
+              <button
+                type="button"
+                onClick={() => void reloadKitchenSchedule()}
+                className="chef-btn is-primary"
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                {text.tryAgain}
+              </button>
+            }
+          />
+        </ChefSection>
+      </div>
     );
   }
 
@@ -538,7 +562,8 @@ export function ChefOpeningHours() {
   };
 
   return (
-    <>
+    <div className="chef-stack">
+      {takingOrders}
       <ChefSection
         title={text.everyWeek}
         note={weekHasHours ? undefined : text.noHours}
@@ -663,6 +688,6 @@ export function ChefOpeningHours() {
         ) : null}
       </Sheet>
       <ChefFlash message={flash} onClose={() => setFlash("")} />
-    </>
+    </div>
   );
 }

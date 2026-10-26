@@ -7,7 +7,7 @@ export const metadata = {title: "Balance and payouts | Craves Chef", robots: {in
 export default function ChefFinancePage() {
   return <main className="chef-page is-narrow">
     <ChefAccessBoundary>
-      <ChefPageHeader title="Balance & payouts" description="Take out your money, and see how it is worked out." back={{href: "/chef/earnings", label: "Money"}} />
+      <ChefPageHeader title="Balance & payouts" description="Take out your money, and see how it is worked out." back={{href: "/chef/earnings", label: "Earnings"}} />
       {/* The short email form: a signed-in chef only needs to see it's verified, or fix it. */}
       <div className="chef-stack"><ChefWithdrawalPanel /><EmailVerificationPanel required compact /></div>
     </ChefAccessBoundary>

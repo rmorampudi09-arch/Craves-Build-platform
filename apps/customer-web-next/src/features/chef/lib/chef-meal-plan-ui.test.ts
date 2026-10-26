@@ -68,7 +68,7 @@ test("Daily limits opens from the Menu tab and goes back where it was opened", (
     '{ href: "/chef/menu?view=plans", label: "Menu" }',
     '{ href: "/chef/meal-plans", label: "Meal plans" }',
     '{ href: "/chef/menu", label: "Menu" }',
-    '{ href: "/chef/profile", label: "More" }',
+    '{ href: "/chef/profile", label: "Profile" }',
   ])
     assert.ok(capacity.includes(back), back);
 });

@@ -24,6 +24,7 @@ import { useText } from "@/shared/i18n/language-context";
 import { isFeatureUnavailable } from "@/shared/lib/feature-availability";
 import { NOTICES_READ_EVENT } from "@/shared/lib/notice-events";
 import { sessionFetch } from "@/shared/lib/session-fetch";
+import { EmptyIllustration } from "@/shared/ui/feedback/EmptyIllustration";
 
 const PAGE_SIZE = 50;
 const CATEGORY: Record<
@@ -209,9 +210,10 @@ export default function ChefNotifications() {
     );
   } else if (status === "error") {
     body = (
-      <section className="chef-section chef-section-body">
-        <h2 className="chef-section-title">{text.failedTitle}</h2>
-        <p role="alert" className="mt-1 text-[0.875rem] text-[#6B6B6B]">
+      <section className="chef-section chef-empty">
+        <EmptyIllustration name="loadError" className="chef-empty-drawing" />
+        <h2 className="chef-empty-title">{text.failedTitle}</h2>
+        <p role="alert" className="chef-empty-text">
           {text.checkConnection}
         </p>
         <button
@@ -227,9 +229,7 @@ export default function ChefNotifications() {
   } else if (visible.length === 0) {
     body = (
       <section className="chef-section chef-empty">
-        <span className="chef-empty-icon">
-          <Bell className="h-6 w-6" aria-hidden="true" />
-        </span>
+        <EmptyIllustration name={filter === "all" ? "notifications" : "search"} className="chef-empty-drawing" />
         <h2 className="chef-empty-title">
           {filter === "all" ? text.none : format(text.noneFor, { filter: text[filter] })}
         </h2>

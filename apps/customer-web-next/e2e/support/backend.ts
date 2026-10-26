@@ -232,6 +232,8 @@ export class FakeBackend {
     if (key === "GET /api/chef/application/evidence-status") return ok(this.documents);
     if (key === "GET /api/chef/subscription-capacity") return ok({ chefIdentityId: CHEF_ID, adminSalesFrozen: false, freezeReason: null, slotRules: [], menuItemRules: [], dateOverrides: [], menuItemDateOverrides: [], openIncidentCount: 0 });
     if (key === "POST /api/chef/errors") return ok({}, 200);
+    // The kitchen's public review summary (Profile's Reviews row): no reviews yet.
+    if (method === "GET" && /^\/api\/reviews\/kitchens\/[^/]+\/summary$/.test(path)) return ok({ kitchenId: path.split("/")[4], reviewCount: 0, overallAverage: null });
     return null;
   }
 }

@@ -8,18 +8,21 @@ import { messages, type Language } from "../../../shared/i18n/language.ts";
 const WORDS = messages({
   en: {
     midnight: "Midnight", closed: "Closed", notSet: "Not set", today: "Today", tomorrow: "Tomorrow",
+    openNow: "Open now", closedNow: "Closed", pausedNow: "Paused", pausedByCraves: "Paused by Craves",
     closeAfterOpen: "Each time must close after it opens.", overlap: "The two times overlap.",
     day1: "Monday", day2: "Tuesday", day3: "Wednesday", day4: "Thursday", day5: "Friday", day6: "Saturday", day7: "Sunday",
     short1: "Mon", short2: "Tue", short3: "Wed", short4: "Thu", short5: "Fri", short6: "Sat", short7: "Sun",
   },
   te: {
     midnight: "అర్ధరాత్రి", closed: "మూసి ఉంటుంది", notSet: "సమయం పెట్టలేదు", today: "ఈరోజు", tomorrow: "రేపు",
+    openNow: "ఇప్పుడు తెరిచి ఉంది", closedNow: "మూసి ఉంది", pausedNow: "ఆపి ఉంచారు", pausedByCraves: "Craves ఆపింది",
     closeAfterOpen: "ప్రతి సమయంలో, మూసే సమయం తెరిచే సమయం తర్వాత ఉండాలి.", overlap: "రెండు సమయాలు ఒకదానిపై ఒకటి పడుతున్నాయి.",
     day1: "సోమవారం", day2: "మంగళవారం", day3: "బుధవారం", day4: "గురువారం", day5: "శుక్రవారం", day6: "శనివారం", day7: "ఆదివారం",
     short1: "సోమ", short2: "మంగళ", short3: "బుధ", short4: "గురు", short5: "శుక్ర", short6: "శని", short7: "ఆది",
   },
   kn: {
     midnight: "ಮಧ್ಯರಾತ್ರಿ", closed: "ಮುಚ್ಚಿರುತ್ತದೆ", notSet: "ಸಮಯ ಹಾಕಿಲ್ಲ", today: "ಇಂದು", tomorrow: "ನಾಳೆ",
+    openNow: "ಈಗ ತೆರೆದಿದೆ", closedNow: "ಮುಚ್ಚಿದೆ", pausedNow: "ನಿಲ್ಲಿಸಲಾಗಿದೆ", pausedByCraves: "Craves ನಿಲ್ಲಿಸಿದೆ",
     closeAfterOpen: "ಪ್ರತಿ ಸಮಯದಲ್ಲೂ, ಮುಚ್ಚುವ ಸಮಯ ತೆರೆಯುವ ಸಮಯದ ನಂತರ ಇರಬೇಕು.", overlap: "ಎರಡು ಸಮಯಗಳು ಒಂದರ ಮೇಲೊಂದು ಬರುತ್ತಿವೆ.",
     day1: "ಸೋಮವಾರ", day2: "ಮಂಗಳವಾರ", day3: "ಬುಧವಾರ", day4: "ಗುರುವಾರ", day5: "ಶುಕ್ರವಾರ", day6: "ಶನಿವಾರ", day7: "ಭಾನುವಾರ",
     short1: "ಸೋಮ", short2: "ಮಂಗಳ", short3: "ಬುಧ", short4: "ಗುರು", short5: "ಶುಕ್ರ", short6: "ಶನಿ", short7: "ಭಾನು",
@@ -272,4 +275,19 @@ export function kitchenOpenState(
   if (schedule?.acceptingOrders === false) return state("closed", "not-accepting");
   if (paused) return state("paused");
   return outsideHours ? state("closed", "outside-hours") : state("open");
+}
+
+/** The Opening hours row's line on Profile, as in the app: "Open now · 11:00 AM – 10:00 PM", "Closed", "Paused". */
+export function hoursLine(state: KitchenOpenState, language: Language = "en"): string {
+  const words = WORDS[language];
+  switch (state.status) {
+    case "open":
+      return state.hoursToday ? `${words.openNow} · ${state.hoursToday}` : words.openNow;
+    case "closed":
+      return state.hoursToday ? `${words.closedNow} · ${state.hoursToday}` : words.closedNow;
+    case "paused":
+      return words.pausedNow;
+    default:
+      return words.pausedByCraves;
+  }
 }

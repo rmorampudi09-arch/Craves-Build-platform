@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle,
   ChevronRight,
   Copy,
   FileText,
@@ -41,7 +40,6 @@ import {
 import { format, messages } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import { Sheet } from "@/shared/ui/overlays/overlay";
 
 // The terms themselves stay in English (chef-referral-terms.ts, word for word); the screen around them reads in the chef's language.
@@ -234,13 +232,15 @@ function ChefReferralJoin({
 
   if (step === "soon")
     return (
-      <ComingSoon title={text.joinSoonTitle} message={text.joinSoonText} />
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.joinSoonTitle} text={text.joinSoonText} />
+      </ChefSection>
     );
   if (step === "failed")
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.couldNotLoad}
           text={text.loadFailed}
           action={
@@ -359,7 +359,11 @@ function EarningsSection({
   const text = useText(TEXT);
   const { language } = useLanguage();
   if (earnings.kind === "soon")
-    return <ComingSoon title={text.earningsSoonTitle} message={text.earningsSoonText} />;
+    return (
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.earningsSoonTitle} text={text.earningsSoonText} />
+      </ChefSection>
+    );
   const data = earnings.kind === "ready" ? earnings.data : null;
   const cap = Number(data?.monthlyCapPaise ?? 0);
   const percent =
@@ -387,7 +391,7 @@ function EarningsSection({
         </div>
       ) : !data ? (
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.couldNotLoad}
           text={failureText(earnings, text.loadFailed)}
           action={
@@ -561,12 +565,17 @@ export function ChefReferrals() {
         <ChefSkeleton className="h-24 w-full" />
       </div>
     );
-  if (code.kind === "soon") return <ComingSoon title={text.soonTitle} message={text.soonText} />;
+  if (code.kind === "soon")
+    return (
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.soonTitle} text={text.soonText} />
+      </ChefSection>
+    );
   if (code.kind !== "ready")
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.couldNotLoad}
           text={failureText(code, text.loadFailed)}
           action={

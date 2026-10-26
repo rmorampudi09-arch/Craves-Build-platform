@@ -14,10 +14,10 @@ test("chef workspace navigation and the More hub expose every implemented backen
   for (const route of ["/chef", "/chef/orders", "/chef/menu", "/chef/earnings", "/chef/profile"]) {
     assert.match(navigation, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
-  // The fourth tab is Money: it says what chefs come for.
-  assert.match(navigation, /money: "Money"/);
-  assert.match(navigation, /more: "More"/);
-  // More groups the pages that are not tabs; Money and Meal plans live in their own tabs, Notifications behind the bell.
+  // The fourth and fifth tabs are named as in the app: Earnings and Profile.
+  assert.match(navigation, /earnings: "Earnings"/);
+  assert.match(navigation, /profile: "Profile"/);
+  // Profile groups the pages that are not tabs; Earnings and Meal plans live in their own tabs, Notifications behind the bell.
   for (const route of [
     "/chef/kitchen",
     "/chef/hours",
@@ -39,14 +39,14 @@ test("chef workspace navigation and the More hub expose every implemented backen
   assert.match(more, /Sign out/);
   assert.match(more, /LanguageSheet/);
   assert.doesNotMatch(more, /not available yet/i);
-  // Money opens on the balance and its send button, then leads to every money page; each money page leads back.
+  // Earnings opens on the balance and its Withdraw button, then leads to every money page; each money page leads back.
   assert.match(money, /<ChefWithdrawalPanel compact \/>/);
   assert.match(source("../components/chef-withdrawal-panel.tsx"), /href="\/chef\/finance"/);
   for (const route of ["/chef/earnings/payouts", "/chef/earnings/orders", "/chef/statements", "/chef/bank"]) {
     assert.match(moneyLinks, new RegExp(`href: "${route.replaceAll("/", "\\/")}"`), route);
   }
   for (const page of ["finance", "statements", "bank", "earnings/payouts", "earnings/orders"]) {
-    assert.match(source(`../../../app/chef/${page}/page.tsx`), /back=\{\{\s*href: "\/chef\/earnings", label: "Money"\s*\}\}/, page);
+    assert.match(source(`../../../app/chef/${page}/page.tsx`), /back=\{\{\s*href: "\/chef\/earnings", label: "Earnings"\s*\}\}/, page);
   }
   // Meal plans are a view of the Menu tab.
   assert.match(source("../components/chef-menu-views.tsx"), /"\/chef\/menu\?view=plans"/);
@@ -56,13 +56,13 @@ test("pages that are not tabs keep an obvious way back", () => {
   for (const [page, href] of [["operations", "/chef/profile"], ["hours", "/chef/profile"], ["preferences", "/chef/profile"], ["notifications", "/chef"], ["support", "/chef/profile"]]) {
     assert.match(source(`../../../app/chef/${page}/page.tsx`), new RegExp(`back=\\{\\{\\s*href: "${href.replaceAll("/", "\\/")}"`), page);
   }
-  // Daily limits goes back to where it was opened: a plan card in Meal plans or in Menu, the Menu tab, or More.
+  // Daily limits goes back to where it was opened: a plan card in Meal plans or in Menu, the Menu tab, or Profile.
   const capacity = source("../../../app/chef/capacity/page.tsx");
   for (const href of ["/chef/profile", "/chef/menu?view=plans", "/chef/meal-plans", "/chef/menu"]) assert.ok(capacity.includes(`{ href: "${href}"`), href);
   assert.match(capacity, /back=\{back\}/);
   // Meal plans swap their header for the plan editor, so the list draws it; they belong to the Menu tab.
   assert.match(source("../components/chef-subscription-plan-manager.tsx"), /back=\{\{ href: "\/chef\/menu\?view=plans", label: "Menu" \}\}/);
-  assert.match(source("../components/chef-kitchen-form.tsx"), /PAGE_BACK = \{ href: "\/chef\/profile", label: "More" \}/);
+  assert.match(source("../components/chef-kitchen-form.tsx"), /PAGE_BACK = \{ href: "\/chef\/profile", label: "Profile" \}/);
   assert.match(source("../components/chef-order-details.tsx"), /back=\{\{ href: "\/chef\/orders", label: text\.orders \}\}/);
 });
 

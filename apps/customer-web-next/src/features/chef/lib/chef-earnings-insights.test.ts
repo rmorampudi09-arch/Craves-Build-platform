@@ -17,7 +17,7 @@ import {
   periodText,
   summarizeEarnings,
 } from "./chef-earnings-insights.ts";
-import { groupByMonth, payoutStatusView } from "./chef-payout-presentation.ts";
+import { bankLine, groupByMonth, payoutStatusView, withdrawalRefused } from "./chef-payout-presentation.ts";
 
 const at = (iso: string) => Date.parse(iso);
 // Thu 15 Oct 2026, 10:00 in India.
@@ -272,7 +272,23 @@ test("payout history words and India-month groups", () => {
   assert.equal(payoutStatusView("PAID").label, "Paid");
   assert.equal(payoutStatusView("PENDING_APPROVAL").label, "Craves is checking");
   assert.equal(payoutStatusView("RESERVED").label, "Requested");
+  // Money still on its way is amber, as in the app; a paid one is green, one that failed red.
+  assert.deepEqual(
+    ["RESERVED", "SUBMITTING", "PROCESSING", "REVIEW_REQUIRED", "PAID", "FAILED", "CANCELLED"].map((status) => payoutStatusView(status).tone),
+    ["warning", "warning", "warning", "warning", "success", "danger", "muted"],
+  );
   assert.equal(payoutStatusView("toString").label, "Craves is checking");
+  // The bank by name and last digits, as the app shows it; nothing to show without the digits.
+  assert.equal(bankLine({ bankName: "HDFC Bank", lastFour: "1234" }), "HDFC Bank ••1234");
+  assert.equal(bankLine({ bankName: null, lastFour: "4521" }), "••4521");
+  assert.equal(bankLine({ bankName: "SBI", lastFour: null }), null);
+  assert.equal(bankLine(undefined), null);
+  // Only a clear no frees a new withdrawal; a timeout or a server problem may have sent the money.
+  assert.deepEqual(
+    [400, 401, 403, 404, 409, 422, 429].map(withdrawalRefused),
+    [true, true, true, true, true, true, true],
+  );
+  assert.deepEqual([0, 200, 408, 500, 502, 503, 504].map(withdrawalRefused), [false, false, false, false, false, false, false]);
   assert.deepEqual(payoutStatusView("PAID", "te"), { label: "చెల్లించాం", tone: "success", note: "డబ్బు మీ బ్యాంక్‌కు చేరింది." });
   assert.equal(payoutStatusView("UNKNOWN", "kn").label, "Craves ಪರಿಶೀಲಿಸುತ್ತಿದೆ");
   // Balance & payouts shows the same words as Payout history.

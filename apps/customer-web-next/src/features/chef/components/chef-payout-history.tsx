@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ChevronRight, Landmark } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import {
   ChefEmpty,
   ChefPill,
@@ -135,7 +135,7 @@ export function ChefPayoutHistory() {
     return (
       <section className="chef-section">
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.failedTitle}
           text={state.message}
           action={
@@ -150,7 +150,7 @@ export function ChefPayoutHistory() {
     return (
       <section className="chef-section">
         <ChefEmpty
-          icon={Landmark}
+          illustration="payouts"
           title={text.emptyTitle}
           text={text.emptyText}
           action={

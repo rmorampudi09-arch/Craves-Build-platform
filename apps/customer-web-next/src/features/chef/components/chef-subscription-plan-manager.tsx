@@ -8,7 +8,6 @@ import {
   Clock3,
   Gauge,
   Plus,
-  SearchX,
   UtensilsCrossed,
 } from "lucide-react";
 import {
@@ -56,7 +55,6 @@ import type {
 import { format, messages } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 
 const TEXT = messages({
   en: {
@@ -193,16 +191,15 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
   let body;
   if (comingSoon) {
     body = (
-      <ComingSoon
-        title={text.soonTitle}
-        message={text.soonText}
-      />
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.soonTitle} text={text.soonText} />
+      </ChefSection>
     );
   } else if (loadError && !plans) {
     body = (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.loadTitle}
           text={loadError}
           action={
@@ -223,7 +220,7 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
     body = (
       <ChefSection>
         <ChefEmpty
-          icon={CalendarDays}
+          illustration="chefMealPlans"
           title={text.emptyTitle}
           text={text.emptyText}
           action={
@@ -257,7 +254,7 @@ export function ChefSubscriptionPlanManager({ inMenu = false }: { inMenu?: boole
         {shown.length === 0 ? (
           <ChefSection>
             <ChefEmpty
-              icon={SearchX}
+              illustration="search"
               title={text.noneHere}
               text={text.otherFilter}
               action={

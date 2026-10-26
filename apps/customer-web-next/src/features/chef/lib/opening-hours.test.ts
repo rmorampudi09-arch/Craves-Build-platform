@@ -4,6 +4,7 @@ import {
   dayLabel,
   dayName,
   formatHoursTime,
+  hoursLine,
   kitchenClock,
   kitchenOpenState,
   MIDNIGHT,
@@ -208,4 +209,16 @@ test("no hours at all means open whenever the kitchen is; a day without hours in
     [saturday.closedReason, saturday.opensAt, saturday.hoursToday],
     ["outside-hours", null, null],
   );
+});
+
+test("the Profile row says where the kitchen is now, with today's hours", () => {
+  // 15:30 on a Thursday with 11–2 and 6–10: closed between the two.
+  assert.equal(hoursLine(kitchenOpenState("ACTIVE", schedule, now)), "Closed · 11:00 AM – 2:00 PM, 6:00 PM – 10:00 PM");
+  const noon = new Date("2026-10-15T06:30:00Z");
+  assert.equal(hoursLine(kitchenOpenState("ACTIVE", schedule, noon)), "Open now · 11:00 AM – 2:00 PM, 6:00 PM – 10:00 PM");
+  assert.equal(hoursLine(kitchenOpenState("ACTIVE", null, now)), "Open now");
+  assert.equal(hoursLine(kitchenOpenState("INACTIVE", null, now)), "Closed");
+  assert.equal(hoursLine(kitchenOpenState("ACTIVE", { ...schedule, pausedUntil: "2026-10-15T12:00:00Z" }, now)), "Paused");
+  assert.equal(hoursLine(kitchenOpenState("SUSPENDED", schedule, now), "kn"), "Craves ನಿಲ್ಲಿಸಿದೆ");
+  assert.equal(hoursLine(kitchenOpenState("ACTIVE", null, now), "te"), "ఇప్పుడు తెరిచి ఉంది");
 });

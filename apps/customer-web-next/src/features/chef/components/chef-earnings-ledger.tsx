@@ -5,7 +5,6 @@ import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/f
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  BadgeIndianRupee,
   ChevronDown,
   RefreshCw,
 } from "lucide-react";
@@ -123,7 +122,7 @@ const STATUS_LABEL = messages({
 });
 
 /**
- * The chef's earnings entries. `sales` (the Money tab) shows only the sales for a period; without it, the totals
+ * The chef's earnings entries. `sales` (the Earnings tab) shows only the sales for a period; without it, the totals
  * and the money from each order (/chef/earnings/orders).
  */
 export function ChefEarningsLedger({ sales = false }: { sales?: boolean }) {
@@ -257,19 +256,19 @@ export function ChefEarningsLedger({ sales = false }: { sales?: boolean }) {
           </div>
         ) : error && entries.length === 0 ? (
           <ChefEmpty
-            icon={AlertTriangle}
+            illustration="loadError"
             title={text.failedTitle}
             text={error}
             action={<button type="button" onClick={() => void load()} className="chef-btn is-primary">{text.tryAgain}</button>}
           />
         ) : entries.length === 0 ? (
           <ChefEmpty
-            icon={BadgeIndianRupee}
+            illustration="earnings"
             title={text.emptyTitle}
             text={text.emptyText}
           />
         ) : visibleEntries.length === 0 ? (
-          <ChefEmpty icon={BadgeIndianRupee} title={text.nothing} text={text.nothingText} />
+          <ChefEmpty illustration="search" title={text.nothing} text={text.nothingText} />
         ) : (
           <ul className="chef-list mt-3 border-t border-[#E3E6EA]">
             {visibleEntries.map((entry) => (

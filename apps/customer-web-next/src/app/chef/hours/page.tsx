@@ -12,7 +12,7 @@ export default function ChefHoursPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Opening hours" description="When customers can order from you." back={{ href: "/chef/profile", label: "More" }} />
+        <ChefPageHeader title="Opening hours" description="When customers can order from you." back={{ href: "/chef/profile", label: "Profile" }} />
         <ChefOpeningHours />
       </ChefAccessBoundary>
     </main>

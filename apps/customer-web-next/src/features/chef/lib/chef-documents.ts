@@ -22,6 +22,7 @@ export type VerificationBanner = {
 const WORDS = messages({
   en: {
     AADHAAR: "Aadhaar card", PAN: "PAN card", BANK_STATEMENT: "Bank statement", OTHER_GOVERNMENT_ID: "Other government ID", idProof: "ID proof",
+    AADHAAR_SHORT: "Aadhaar", PAN_SHORT: "PAN", BANK_STATEMENT_SHORT: "Bank statement", otherShort: "ID",
     front: "{proof} · front", back: "{proof} · back", kitchenPhoto: "Kitchen photo", setupPhoto: "Cooking setup photo",
     applicantPhoto: "Applicant photo", fssai: "FSSAI registration",
     approved: "Approved", underReview: "Under review", needsUpdate: "Needs update", accepted: "Accepted",
@@ -33,6 +34,7 @@ const WORDS = messages({
   },
   te: {
     AADHAAR: "ఆధార్ కార్డు", PAN: "PAN కార్డు", BANK_STATEMENT: "బ్యాంక్ స్టేట్‌మెంట్", OTHER_GOVERNMENT_ID: "ఇతర ప్రభుత్వ గుర్తింపు కార్డు", idProof: "గుర్తింపు పత్రం",
+    AADHAAR_SHORT: "ఆధార్", PAN_SHORT: "PAN", BANK_STATEMENT_SHORT: "బ్యాంక్ స్టేట్‌మెంట్", otherShort: "గుర్తింపు కార్డు",
     front: "{proof} · ముందు వైపు", back: "{proof} · వెనుక వైపు", kitchenPhoto: "వంటగది ఫోటో", setupPhoto: "వంట చేసే చోటు ఫోటో",
     applicantPhoto: "మీ ఫోటో", fssai: "FSSAI నమోదు",
     approved: "ఆమోదించబడింది", underReview: "Craves చూస్తోంది", needsUpdate: "మార్చాలి", accepted: "అంగీకరించారు",
@@ -44,6 +46,7 @@ const WORDS = messages({
   },
   kn: {
     AADHAAR: "ಆಧಾರ್ ಕಾರ್ಡ್", PAN: "PAN ಕಾರ್ಡ್", BANK_STATEMENT: "ಬ್ಯಾಂಕ್ ಸ್ಟೇಟ್‌ಮೆಂಟ್", OTHER_GOVERNMENT_ID: "ಇತರ ಸರ್ಕಾರಿ ಗುರುತಿನ ಚೀಟಿ", idProof: "ಗುರುತಿನ ದಾಖಲೆ",
+    AADHAAR_SHORT: "ಆಧಾರ್", PAN_SHORT: "PAN", BANK_STATEMENT_SHORT: "ಬ್ಯಾಂಕ್ ಸ್ಟೇಟ್‌ಮೆಂಟ್", otherShort: "ಗುರುತಿನ ಚೀಟಿ",
     front: "{proof} · ಮುಂಭಾಗ", back: "{proof} · ಹಿಂಭಾಗ", kitchenPhoto: "ಅಡುಗೆಮನೆ ಫೋಟೋ", setupPhoto: "ಅಡುಗೆ ಮಾಡುವ ಜಾಗದ ಫೋಟೋ",
     applicantPhoto: "ನಿಮ್ಮ ಫೋಟೋ", fssai: "FSSAI ನೋಂದಣಿ",
     approved: "ಅನುಮೋದಿಸಲಾಗಿದೆ", underReview: "Craves ಪರಿಶೀಲಿಸುತ್ತಿದೆ", needsUpdate: "ಬದಲಾಯಿಸಬೇಕು", accepted: "ಸ್ವೀಕರಿಸಲಾಗಿದೆ",
@@ -61,12 +64,6 @@ const ORDER = [
   "SELECTED_PROOF_FRONT",
   "SELECTED_PROOF_BACK",
   "FSSAI",
-  "KITCHEN_PHOTO_1",
-  "KITCHEN_PHOTO_2",
-];
-const UPLOAD_TYPES = [
-  "SELECTED_PROOF_FRONT",
-  "SELECTED_PROOF_BACK",
   "KITCHEN_PHOTO_1",
   "KITCHEN_PHOTO_2",
 ];
@@ -161,12 +158,16 @@ export function documentRows(state: OnboardingState, language: Language = "en"):
   return rows.sort((a, b) => a.order - b.order).map(({ row }) => row);
 }
 
-/** The files "Upload another document" takes: ID front and back, and the two kitchen photos. */
-export function uploadChoices(
-  state: OnboardingState,
-  language: Language = "en",
-): { type: string; title: string }[] {
-  return UPLOAD_TYPES.map((type) => ({ type, title: titleOf(type, state.details, WORDS[language]) }));
+/** `FSSAI, Aadhaar`: what the application gave, for the Profile row's second line (app 1.34.5). */
+export function documentsSummary(state: OnboardingState, language: Language = "en"): string {
+  const words = WORDS[language];
+  const proof = state.details?.proofKind;
+  return [
+    state.details?.fssaiNumber.trim() ? "FSSAI" : null,
+    proof === "OTHER_GOVERNMENT_ID" ? words.otherShort : proof ? words[`${proof}_SHORT` as const] : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 /** No application on file (approved before the current one, or never sent): the documents were checked when the chef joined. */

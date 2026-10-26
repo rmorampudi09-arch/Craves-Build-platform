@@ -2,7 +2,7 @@
 // Disposable identities and responses; no production API is called.
 import { createElement } from "react";
 import { usePathname } from "next/navigation";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChefModeGuard, isOpenInChefMode } from "../components/ChefModeGuard";
 import { ChefShell } from "../components/chef-shell";
@@ -28,9 +28,20 @@ vi.mock("next/navigation", () => ({
 
 const chef: CravesIdentity = { id: "61111111-1111-4111-8111-111111111111", phoneNumber: "+910000000002", displayName: "Asha Rao", email: null, emailVerified: false, status: "ACTIVE", roles: ["CUSTOMER", "CHEF"] };
 let me: CravesIdentity | null;
+// The approved application with one document; null for a chef who joined on the old form (no application).
+const APPROVED_ONBOARDING = {
+  enabled: true, legacy: false, version: 3, resumeStep: "waiting", submitted: true, phoneNumber: "+910000000002",
+  supportPhone: "+918367366787", supportEmail: "support@craves.in", requiredDocuments: [],
+  application: { id: null, status: "APPROVED", rejectionReason: null, submittedAt: null, reviewedAt: null, documents: [] },
+  details: { proofKind: "AADHAAR", fssaiNumber: "12345678901234", language: "en" },
+  documents: [{ id: "00000000-0000-4000-8000-00000000d001", documentType: "SELECTED_PROOF_FRONT", originalFileName: "id.jpg", fileSizeBytes: 2048, status: "APPROVED", reviewReason: null, reviewedAt: null }],
+};
+let onboarding: typeof APPROVED_ONBOARDING | null;
+const KITCHEN_ID = "81111111-1111-4111-8111-111111111111";
 
 beforeEach(() => {
   me = chef;
+  onboarding = APPROVED_ONBOARDING;
   launch.soon = false;
   sessionStorage.clear();
   localStorage.clear();
@@ -44,7 +55,9 @@ beforeEach(() => {
     if (url === "/api/auth/refresh") return Response.json({ identity: me });
     if (url === "/api/auth/logout") { me = null; return Response.json({ signedOut: true }); }
     if (url === "/api/chef/application") return Response.json({ firstName: "Asha", lastName: "Rao", status: "APPROVED", documents: [] });
-    if (url === "/api/chef/kitchen") return Response.json({ kitchenName: "Asha's Kitchen" });
+    if (url === "/api/chef/kitchen") return Response.json({ id: KITCHEN_ID, kitchenName: "Asha's Kitchen", displayName: "Asha", areaName: "Madhapur", city: "Hyderabad", status: "ACTIVE" });
+    if (url === `/api/reviews/kitchens/${KITCHEN_ID}/summary`) return Response.json({ kitchenId: KITCHEN_ID, reviewCount: 12, overallAverage: 4.6 });
+    if (url === "/api/chef/onboarding") return onboarding ? Response.json(onboarding) : Response.json({ code: "NOT_FOUND" }, { status: 404 });
     if (url.startsWith("/api/notifications/in-app/page")) return Response.json({ notices: [], nextCursor: null, hasMore: false });
     if (url.startsWith("/api/notifications/in-app")) return Response.json([]);
     return Response.json({}, { status: 404 });
@@ -166,16 +179,22 @@ describe("More hub", () => {
 
   it("lists every chef page that is not a tab, grouped by job, and leaves the tabs' pages to the tabs", async () => {
     render(createElement(ChefMorePage));
-    await screen.findByRole("heading", { name: "Asha Rao" });
+    await screen.findByRole("heading", { name: "Asha's Kitchen" });
+    expect(screen.getByText("Chef Asha · Madhapur, Hyderabad")).toBeTruthy();
+    // The Documents row waits for the application's documents, then says what was checked.
+    expect((await screen.findByText("Verified · FSSAI, Aadhaar")).closest("a")?.getAttribute("href")).toBe("/chef/documents");
+    // Rows say what they hold now: the kitchen's state (no hours to go by here) and the rating customers see.
+    expect((await screen.findByText("Open now")).closest("a")?.getAttribute("href")).toBe("/chef/hours");
+    expect((await screen.findByText("★ 4.6 · 12 reviews")).closest("a")?.getAttribute("href")).toBe("/chef/reviews");
     // One read of the links: a name query per row is too slow for this long list.
     const links = screen.getAllByRole("link").map((link) => [link.querySelector(".chef-row-title")?.textContent, link.getAttribute("href")]);
     for (const [label, href] of [
       ["Kitchen details & photos", "/chef/kitchen"], ["Opening hours", "/chef/hours"], ["Daily limits", "/chef/capacity"],
       ["Can customers find you?", "/chef/operations"], ["Documents", "/chef/documents"], ["Order settings", "/chef/preferences"],
       ["Help & support", "/chef/support"], ["Refer a chef", "/chef/referrals"], ["Login & security", "/chef/security"],
-      ["Your application", "/chef/application/status"],
+      ["Your application", "/chef/application/status"], ["Reviews", "/chef/reviews"],
     ]) expect(links.find(([title]) => title === label)?.[1], label).toBe(href);
-    // Money pages live in the Money tab, Meal plans in Menu and Notifications behind the bell: More doesn't repeat them.
+    // Money pages live in the Earnings tab, Meal plans in Menu and Notifications behind the bell: Profile doesn't repeat them.
     for (const href of ["/chef/earnings", "/chef/finance", "/chef/statements", "/chef/earnings/payouts", "/chef/meal-plans", "/chef/notifications"])
       expect(links.some(([, target]) => target === href), href).toBe(false);
     for (const group of ["My kitchen", "Orders", "Help", "Account"]) expect(screen.getByRole("heading", { name: group })).toBeTruthy();
@@ -183,9 +202,22 @@ describe("More hub", () => {
     expect(screen.queryByText(/not available yet/i)).toBeNull();
   });
 
-  it("switches to the customer app at once: only this tab leaves Chef Mode, the device keeps the kitchen", async () => {
+  it("has no Documents row for a chef who joined on the old form", async () => {
+    onboarding = null;
+    render(createElement(ChefMorePage));
+    await screen.findByRole("heading", { name: "Asha's Kitchen" });
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => url === "/api/chef/onboarding")).toBe(true));
+    expect(screen.queryByRole("link", { name: /^Documents/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /^Reviews/ })).toBeTruthy();
+  });
+
+  it("asks before switching, then switches: only this tab leaves Chef Mode, the device keeps the kitchen", async () => {
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Switch to customer app?" });
+    expect(dialog.textContent).toContain("Your kitchen stays open, but you won’t see new orders while you are in the customer app.");
+    expect(mocks.assign).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Switch" }));
     expect(isChefModeTab(chef.id)).toBe(false);
     expect(isChefModeVerified(chef.id)).toBe(true);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
@@ -196,14 +228,21 @@ describe("More hub", () => {
     launch.soon = true;
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Switch" }));
     expect(isChefModeTab(chef.id)).toBe(true);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?from=chef");
     expect(isOpenInChefMode("/sign-in")).toBe(true);
   });
 
-  it("signs out of Craves and makes this device forget Chef Mode, leaving no chef page behind", async () => {
+  it("asks before signing out, then signs out of Craves and makes this device forget Chef Mode", async () => {
     render(createElement(ChefMorePage));
     fireEvent.click(await screen.findByRole("button", { name: /^Sign out/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Sign out of Craves?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stay signed in" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(getSession()?.id).toBe(chef.id);
+    fireEvent.click(screen.getByRole("button", { name: /^Sign out/ }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Sign out of Craves?" })).getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(mocks.locationReplace).toHaveBeenCalledExactlyOnceWith("/"));
     expect(isChefModeVerified(chef.id)).toBe(false);
     expect(chefDeviceAccount()).toBeNull();

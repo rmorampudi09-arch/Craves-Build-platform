@@ -8,7 +8,6 @@ import {
   ClipboardList,
   FileText,
   Headset,
-  LifeBuoy,
   Phone,
   RefreshCw,
   SendHorizontal,
@@ -51,7 +50,6 @@ import {
   type SupportCase,
   type SupportCaseSummary,
 } from "@/shared/lib/support-cases-contract";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 
 type Load = "loading" | "ready" | "error" | "soon";
 
@@ -261,9 +259,7 @@ export function ChefSupportHub() {
               <ChefSkeleton className="h-12 w-full" />
             </div>
           ) : state === "soon" ? (
-            <div className="px-4 pb-4">
-              <ComingSoon title={text.ticketsSoonTitle} message={text.ticketsSoonText} />
-            </div>
+            <ChefEmpty illustration="comingSoon" title={text.ticketsSoonTitle} text={text.ticketsSoonText} />
           ) : state === "error" ? (
             <div className="px-4 pb-4">
               <p role="alert" className="text-[0.9375rem] text-[#1A1A1A]">
@@ -281,7 +277,7 @@ export function ChefSupportHub() {
           ) : (
             <>
               {tickets.length === 0 ? (
-                <ChefEmpty icon={LifeBuoy} title={text.noTickets} text={text.noTicketsText} />
+                <ChefEmpty illustration="support" title={text.noTickets} text={text.noTicketsText} />
               ) : (
                 <ul className="chef-list">
                   {tickets.map((ticket) => {
@@ -431,7 +427,9 @@ export function ChefSupportTicket({
       <div className="chef-stack" aria-busy={state === "loading"}>
         {notPublished || state === "soon" ? (
           <div className="grid gap-3">
-            <ComingSoon title={text.chatSoonTitle} message={text.chatSoonText} />
+            <ChefSection>
+              <ChefEmpty illustration="comingSoon" title={text.chatSoonTitle} text={text.chatSoonText} />
+            </ChefSection>
             {draft.trim() ? (
               <p className="text-[0.9375rem] text-[#6B6B6B]">{text.stillInBox}</p>
             ) : null}

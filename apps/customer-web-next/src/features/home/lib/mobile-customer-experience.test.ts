@@ -66,10 +66,11 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.doesNotMatch(cravings, /translate-y-\[var\(--craves-mobile-search-offset/);
   assert.doesNotMatch(cravings, /will-change/);
   // One controller drives header, compact bar, rail and tab bar with the same timing.
-  for (const surface of [header, cravings]) {
-    assert.match(surface, /useScrollChrome\(\)/);
-    assert.doesNotMatch(surface, /window\.addEventListener\("scroll"/);
-  }
+  for (const surface of [header, cravings]) assert.match(surface, /useScrollChrome\(\)/);
+  assert.doesNotMatch(cravings, /window\.addEventListener\("scroll"/);
+  // The header's one scroll listener only tells whether the page is at its top (red or white), never hide or show.
+  assert.equal(header.match(/addEventListener\("scroll"/g)?.length, 1);
+  assert.match(header, /function useAtPageTop\(enabled: boolean\)/);
   assert.match(autoHide, /COMPACT_AFTER_PX = 76/);
   assert.match(autoHide, /Math\.abs\(delta\) > window\.innerHeight/);
   assert.match(header, /duration-\(--dur-chrome\) ease-\(--ease-standard\)/);

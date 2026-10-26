@@ -1,14 +1,14 @@
 import { ChefAccessBoundary } from "@/features/chef/components/chef-access-boundary";
 import { ChefOrderAlerts } from "@/features/chef/components/chef-order-alerts";
 import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
-import { ChefPreferences } from "@/features/chef/components/chef-preferences";
+import { ChefEmailPreference, ChefPreferences } from "@/features/chef/components/chef-preferences";
 
 export const metadata = {
   title: "Order settings | Craves Chef",
   robots: { index: false, follow: false },
 };
 
-// Everything about how orders reach the chef in one place: the ring and voice, then how they're answered.
+// Everything about how orders reach the chef in one place: the ring and voice, how they're answered, then email.
 export default function ChefPreferencesPage() {
   return (
     <main className="chef-page is-narrow">
@@ -17,6 +17,7 @@ export default function ChefPreferencesPage() {
         <div className="chef-stack">
           <ChefOrderAlerts />
           <ChefPreferences />
+          <ChefEmailPreference />
         </div>
       </ChefAccessBoundary>
     </main>

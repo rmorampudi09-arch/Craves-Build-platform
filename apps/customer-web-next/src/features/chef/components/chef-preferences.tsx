@@ -7,7 +7,7 @@ import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { isComingSoon } from "@/features/chef/api/chef-kitchen-schedule";
 import { ChefSkeletonRow } from "@/features/chef/components/chef-loading";
-import { ChefEmpty, ChefSection } from "@/features/chef/components/chef-ui";
+import { ChefEmpty, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";
 import {
   CHEF_ERROR_MESSAGES,
   ChefError,
@@ -32,6 +32,8 @@ const TEXT = messages({
     minutes: "{minutes} min", notSet: "Not set", noTimeSet: "Used when a dish has no time set",
     confirmTitle: "Accept new orders automatically?", confirmText: "Orders are accepted with your cooking time while your kitchen is open.",
     notNow: "Not now", turnOn: "Turn on",
+    notifications: "Notifications", email: "Email", emailNote: "Statements and updates", comingSoon: "Coming soon",
+    emailFailed: "We couldn’t load your email setting.",
   },
   te: {
     loadFailed: "మీ ఆర్డర్ సెట్టింగ్స్ లోడ్ చేయలేకపోయాం.", saveFailed: "అది సేవ్ చేయలేకపోయాం. దయచేసి మళ్లీ ప్రయత్నించండి.", orders: "ఆర్డర్లు",
@@ -41,6 +43,8 @@ const TEXT = messages({
     minutes: "{minutes} నిమి", notSet: "పెట్టలేదు", noTimeSet: "వంటకానికి సమయం పెట్టకపోతే ఇది వాడతాం",
     confirmTitle: "కొత్త ఆర్డర్లను ఆటోమేటిక్‌గా ఒప్పుకోవాలా?", confirmText: "మీ వంటగది తెరిచి ఉన్నప్పుడు, మీ వంట సమయంతో ఆర్డర్లు ఒప్పుకుంటాం.",
     notNow: "ఇప్పుడు వద్దు", turnOn: "ఆన్ చేయండి",
+    notifications: "నోటిఫికేషన్లు", email: "ఈమెయిల్", emailNote: "స్టేట్‌మెంట్‌లు, అప్‌డేట్‌లు", comingSoon: "త్వరలో వస్తుంది",
+    emailFailed: "మీ ఈమెయిల్ సెట్టింగ్ లోడ్ చేయలేకపోయాం.",
   },
   kn: {
     loadFailed: "ನಿಮ್ಮ ಆರ್ಡರ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ.", saveFailed: "ಅದನ್ನು ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", orders: "ಆರ್ಡರ್‌ಗಳು",
@@ -50,6 +54,8 @@ const TEXT = messages({
     minutes: "{minutes} ನಿಮಿ", notSet: "ಹಾಕಿಲ್ಲ", noTimeSet: "ಖಾದ್ಯಕ್ಕೆ ಸಮಯ ಹಾಕದಿದ್ದರೆ ಇದನ್ನು ಬಳಸುತ್ತೇವೆ",
     confirmTitle: "ಹೊಸ ಆರ್ಡರ್‌ಗಳನ್ನು ತಾನಾಗಿಯೇ ಒಪ್ಪಿಕೊಳ್ಳಬೇಕೇ?", confirmText: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿರುವಾಗ, ನಿಮ್ಮ ಅಡುಗೆ ಸಮಯದೊಂದಿಗೆ ಆರ್ಡರ್‌ಗಳನ್ನು ಒಪ್ಪಿಕೊಳ್ಳಲಾಗುತ್ತದೆ.",
     notNow: "ಈಗ ಬೇಡ", turnOn: "ಆನ್ ಮಾಡಿ",
+    notifications: "ಅಧಿಸೂಚನೆಗಳು", email: "ಇಮೇಲ್", emailNote: "ಸ್ಟೇಟ್‌ಮೆಂಟ್‌ಗಳು ಮತ್ತು ಅಪ್‌ಡೇಟ್‌ಗಳು", comingSoon: "ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ",
+    emailFailed: "ನಿಮ್ಮ ಇಮೇಲ್ ಸೆಟ್ಟಿಂಗ್ ಲೋಡ್ ಮಾಡಲು ಆಗಲಿಲ್ಲ.",
   },
 });
 
@@ -266,5 +272,116 @@ export function ChefPreferences() {
         }
       />
     </>
+  );
+}
+
+/** Reads the email switch, or saves it when given. */
+async function emailRequest(fallback: string, enabled?: boolean): Promise<boolean> {
+  const response = await sessionFetch(
+    "/api/notifications/preferences/email",
+    enabled === undefined
+      ? { cache: "no-store" }
+      : { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw chefApiError(response, body, fallback);
+  const saved = (body as { enabled?: unknown } | null)?.enabled;
+  if (typeof saved !== "boolean")
+    throw new ChefError(CHEF_ERROR_MESSAGES.UNEXPECTED_RESPONSE, "INVALID_NOTIFICATION_PREFERENCES_RESPONSE", response.status);
+  return saved;
+}
+
+/** Email · Statements and updates (app Preferences → Notifications); Coming soon until the gateway routes it. */
+export function ChefEmailPreference() {
+  const text = useText(TEXT);
+  const words = useRef(text);
+  useEffect(() => {
+    words.current = text;
+  });
+  const [email, setEmail] = useState<"loading" | "soon" | "error" | boolean>("loading");
+  const [attempt, setAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const failed = words.current.emailFailed;
+    emailRequest(failed).then(
+      (enabled) => active && setEmail(enabled),
+      (caught: unknown) => {
+        if (!active) return;
+        setEmail(isComingSoon(caught) ? "soon" : "error");
+        if (!isComingSoon(caught)) setError(chefErrorText(caught, failed));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+
+  /** One save at a time; a failed save leaves the switch as it was and says so. */
+  async function save(enabled: boolean) {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      setEmail(await emailRequest(text.saveFailed, enabled));
+    } catch (caught) {
+      setError(chefErrorText(caught, text.saveFailed));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ChefSection title={text.notifications} labelledBy="chef-notification-settings">
+      {email === "loading" ? (
+        <div aria-busy="true">
+          <ChefSkeletonRow media="none" trailing="toggle" />
+        </div>
+      ) : (
+        <div className="chef-setting-row">
+          <div className="min-w-0 flex-1">
+            <p id="chef-email" className="chef-setting-title">
+              {text.email}
+            </p>
+            <p id="chef-email-note" className="chef-section-note">
+              {text.emailNote}
+            </p>
+          </div>
+          {typeof email === "boolean" ? (
+            <AppleSwitch
+              checked={email}
+              aria-disabled={saving || undefined}
+              onCheckedChange={(on) => void save(on)}
+              size="md"
+              tone="go"
+              aria-labelledby="chef-email"
+              aria-describedby="chef-email-note"
+            />
+          ) : email === "soon" ? (
+            <ChefPill>{text.comingSoon}</ChefPill>
+          ) : (
+            <button
+              type="button"
+              className="chef-btn"
+              onClick={() => {
+                setError("");
+                setEmail("loading");
+                setAttempt((value) => value + 1);
+              }}
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              {text.tryAgain}
+            </button>
+          )}
+        </div>
+      )}
+      {error ? (
+        <p role="alert" className="chef-field-error !text-[0.9375rem]">
+          {error}
+        </p>
+      ) : null}
+    </ChefSection>
   );
 }

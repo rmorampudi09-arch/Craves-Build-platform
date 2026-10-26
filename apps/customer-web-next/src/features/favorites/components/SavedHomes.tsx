@@ -27,7 +27,6 @@ import {
 import type { FavoriteWatch } from "@/shared/lib/favorite-entities-contract";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 // "more": the list stays up while the next pages load.
@@ -286,8 +285,10 @@ export function SavedHomes() {
     return <CustomerSectionSkeleton variant="saved" label="Loading saved home chefs" />;
   if (status === "unavailable") {
     return (
-      <ComingSoon
-        title="Saved home chefs"
+      <EmptyState
+        role="status"
+        illustration="comingSoon"
+        title="Saved home chefs are coming soon"
         message="Saving kitchens and home chefs is coming to the website soon."
       />
     );

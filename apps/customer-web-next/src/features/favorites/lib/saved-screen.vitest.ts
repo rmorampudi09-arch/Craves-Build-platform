@@ -299,8 +299,8 @@ describe("Saved screen", () => {
           : undefined,
       );
       render(createElement(WishlistPage));
-      expect(await screen.findByText("Saved home chefs")).toBeTruthy();
-      expect(screen.getByText("Coming soon")).toBeTruthy();
+      expect(await screen.findByRole("heading", { name: "Saved home chefs are coming soon" })).toBeTruthy();
+      expect(screen.getByTestId("empty-illustration-comingSoon")).toBeTruthy();
     },
   );
 

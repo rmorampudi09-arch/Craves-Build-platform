@@ -435,7 +435,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white pb-20 text-[#261A15]" onClickCapture={rememberScroll}>
+    <div className="min-h-screen bg-white pb-20 text-ink" onClickCapture={rememberScroll}>
       <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
           <Link

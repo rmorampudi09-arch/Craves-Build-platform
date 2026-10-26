@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 // Synthetic owned order; no network or customer mutations.
 import { createElement, type ReactNode } from 'react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import TrackingPage from '../screens/OrderTracking';
 
-const fixture = vi.hoisted(() => ({ id: '11111111-2222-4333-8444-555555555555', navigate: vi.fn() }));
+const fixture = vi.hoisted(() => ({ id: '11111111-2222-4333-8444-555555555555', navigate: vi.fn(), session: vi.fn() }));
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => fixture.navigate,
   Link: ({ children, to }: { children: ReactNode; to: string }) => createElement('a', { href: to }, children),
 }));
-vi.mock('../../auth/api/cravesAuth', () => ({ loadSession: async () => ({ identityId: fixture.id }) }));
+vi.mock('../../auth/api/cravesAuth', () => ({ loadSession: () => fixture.session() }));
 vi.mock('../components/TrackingHeader', () => ({
   TrackingHeader: ({ onBack, backLabel }: { onBack: () => void; backLabel: string }) =>
     createElement('header', null, createElement('button', { type: 'button', onClick: onBack }, backLabel)),
@@ -22,6 +22,7 @@ vi.mock('../components/OrderMap', async (original) => ({
     createElement('div', { 'data-testid': 'order-map', 'data-label': label }, children),
 }));
 
+beforeEach(() => { fixture.session.mockResolvedValue({ identityId: fixture.id }); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const order = (status: string) => ({ id: fixture.id, checkoutId: fixture.id, kitchenId: fixture.id, kitchenName: 'Fixture kitchen',
@@ -53,4 +54,24 @@ it('shows the delivery code while a Craves rider carries the order', async () =>
   expect(await screen.findByRole('heading', { name: 'Delivery code' })).toBeTruthy();
   expect(screen.getByRole('img', { name: '4 7 1 9' }).textContent).toBe('4719');
   expect(screen.getByText('Tell this code to your Craves rider at the door. Craves never asks for it on a call.')).toBeTruthy();
+});
+
+it('keeps a customer whose sign-in could not be checked on the page, with Try again', async () => {
+  fixture.session.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  serve(order('PREPARING'), emptyDelivery);
+  render(createElement(TrackingPage, { orderId: fixture.id }));
+  expect(await screen.findByRole('heading', { name: 'We couldn’t sign you back in' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Go to sign in' }).getAttribute('href')).toBe(`/sign-in?returnTo=${encodeURIComponent(`/orders/${fixture.id}/tracking`)}`);
+  expect(fixture.navigate).not.toHaveBeenCalledWith({ to: '/' });
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByRole('heading', { name: 'Preparing' })).toBeTruthy();
+});
+
+it('draws a failed load in its own words and tries again', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'ORDER_UNAVAILABLE', message: 'pool exhausted' }), { status: 503 })));
+  render(createElement(TrackingPage, { orderId: fixture.id }));
+  expect(await screen.findByRole('heading', { name: 'Tracking didn’t load' })).toBeTruthy();
+  expect(screen.getByTestId('empty-illustration-loadError')).toBeTruthy();
+  expect(screen.queryByText(/pool exhausted/)).toBeNull();
+  expect(screen.getByRole('link', { name: 'My Orders' }).getAttribute('href')).toBe('/orders');
 });

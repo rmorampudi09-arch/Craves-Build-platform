@@ -20,13 +20,13 @@ export function useRowEdges(row: HTMLElement | null) {
     const schedule = () => {
       if (!frame) frame = window.requestAnimationFrame(update);
     };
-    const observer = new ResizeObserver(schedule);
-    observer.observe(row);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    observer?.observe(row);
     update();
     row.addEventListener("scroll", schedule, { passive: true });
     return () => {
       row.removeEventListener("scroll", schedule);
-      observer.disconnect();
+      observer?.disconnect();
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, [row]);

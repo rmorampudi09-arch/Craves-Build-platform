@@ -47,7 +47,6 @@ import {
   type HomeFoodPreference,
 } from "@/features/home/lib/home-return-state";
 import {
-  FOOD_LABELS,
   matchesDishFilters,
   matchesFoodPreference,
   sortDishes,
@@ -725,11 +724,6 @@ function BrowseFoodsPage() {
         : nearbyDishes.filter((dish) => matchesFoodPreference(dish, listFoodPreference)),
     [listFoodPreference, nearbyDishes],
   );
-  const filteredKitchens = useMemo(() => {
-    if (listFoodPreference === "all") return kitchens;
-    const cooking = new Set(dietDishes.map((dish) => dish.kitchenId));
-    return kitchens.filter((kitchen) => cooking.has(kitchen.id));
-  }, [dietDishes, kitchens, listFoodPreference]);
 
   const filteredDishes = useMemo(() => {
     return sortDishes(
@@ -933,14 +927,10 @@ function BrowseFoodsPage() {
         />
 
         <KitchensGrid
-          kitchens={filteredKitchens}
+          kitchens={kitchens}
           searchTerm=""
           state={discoveryState}
-          message={
-            listFoodPreference !== "all" && filteredKitchens.length === 0
-              ? `No kitchen near you is cooking ${FOOD_LABELS[listFoodPreference].toLowerCase()} dishes right now.`
-              : catalogMessage
-          }
+          message={catalogMessage}
           onSelectKitchen={(kitchen) => {
             rememberHomeView();
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } });
@@ -948,7 +938,7 @@ function BrowseFoodsPage() {
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
           dishes={dietDishes}
-          limit={6}
+          limit={8}
         />
 
         <DishesGrid

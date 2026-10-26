@@ -1,65 +1,45 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useReducedMotion } from "framer-motion";
 import {
-  AlertTriangle,
-  ArrowRight,
   ChefHat,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
+  Heart,
   MapPin,
   Pause,
   Play,
   RefreshCw,
-  SearchX,
 } from "lucide-react";
 
-import { formatDistance, type NearbyKitchen } from "@/features/home/lib/discovery-contract";
+import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
+import { scrollRow, useRowEdges } from "@/features/home/lib/row-scroll";
 import styles from "@/features/home/screens/HomeReference.module.css";
 import { KitchenDiscoverCardSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
+import { useFavoriteKitchen } from "@/shared/hooks/use-favorite-kitchen";
+import { safeChefPhotoUrl } from "@/shared/lib/chef-photo";
 import { summarizeKitchenDishes, type KitchenCardDish, type KitchenDishSummary } from "@/shared/lib/kitchen-dish-summary";
-import { FavoriteKitchenHeart } from "@/shared/ui/buttons/FavoriteKitchenHeart";
-import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
-/** How long each photo stays before the next one slides in. */
-const SLIDE_MS = 3200;
+/** Each kitchen photo stays this long before the next one fades in over it (as in the app). */
+const PHOTO_MS = 4_000;
+/** Cards side by side change photos this far apart, so the row never flips at once (as in the app). */
+const PHOTO_STAGGER_MS = 800;
 /** The customer's Pause photos choice, kept for their next visit. */
 const PHOTOS_PAUSED_KEY = "craves.kitchen-photos.paused";
-/** Phones show this many kitchens on Home; wider screens show `limit`. */
-const PHONE_LIMIT = 4;
-const NO_PHOTOS: string[] = [];
-
-const kitchenImagePreloads = new Map<string, Promise<boolean>>();
-
-function preloadKitchenImage(src: string): Promise<boolean> {
-  const existing = kitchenImagePreloads.get(src);
-  if (existing) return existing;
-
-  const pending = new Promise<boolean>((resolve) => {
-    const image = new window.Image();
-    image.decoding = "async";
-    image.src = src;
-
-    const success = () => resolve(true);
-    if (image.complete && image.naturalWidth > 0) {
-      void image.decode().catch(() => undefined).finally(success);
-      return;
-    }
-
-    image.onload = () => {
-      void image.decode().catch(() => undefined).finally(success);
-    };
-    image.onerror = () => {
-      kitchenImagePreloads.delete(src);
-      resolve(false);
-    };
-  });
-
-  kitchenImagePreloads.set(src, pending);
-  return pending;
-}
+const DOTS = 5;
+/** Glass over a photo, dark enough that white text keeps 4.5:1 even over a white plate. */
+const GLASS = "bg-[#1A1A1A]/60 shadow-[0_2px_10px_rgba(26,26,26,0.18)] ring-1 ring-inset ring-white/25 backdrop-blur-md backdrop-saturate-150";
+/** 74% of a phone's width (248–286 px, as in the app), so the next card peeks in; four across from lg. */
+const CARD_WIDTH = "w-[clamp(248px,74vw,286px)] shrink-0 snap-start lg:w-[calc((100%_-_3.75rem)/4)]";
+/** The row runs edge to edge on phones and tablets, and leaves room for focus rings and shadows. */
+const ROW = "-mx-4 flex gap-3 px-4 pb-7 pt-2 md:-mx-7 md:px-7 lg:gap-5";
+const HOME_HEADING = "font-display text-[1.375rem] font-black tracking-[-0.03em] text-[#1A1A1A] md:text-2xl lg:text-[1.75rem]";
+const ICON_BUTTON = "flex h-12 w-12 shrink-0 items-center justify-center rounded-full !p-0 !text-[#1A1A1A] !shadow-none hover:!bg-[#F1F3F5]";
 
 interface KitchensGridProps {
   kitchens: NearbyKitchen[];
@@ -71,182 +51,99 @@ interface KitchensGridProps {
   onManageAddress: () => void;
   /** The nearby dishes already loaded: each card's photos, prep time and starting price come from them. */
   dishes: readonly KitchenCardDish[];
-  /** Home shows the nearest few and links to every chef; the chefs page shows all. */
+  /** Home shows the nearest few in one row and links to every chef; the chefs page shows all. */
   limit?: number;
-  /** The chefs page draws its own card; Home's card is the default. */
+  /** The chefs page draws its own card in a grid; Home's row of cards is the default. */
   renderKitchen?: (kitchen: NearbyKitchen, summary: KitchenDishSummary | undefined, open: () => void) => ReactNode;
 }
 
-function KitchenSkeleton() {
-  return (
-    <div
-      className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white"
-      aria-hidden="true"
-    >
-      <div className={`${skeletonStyles.block} aspect-[16/9]`} />
-      <div className="p-4">
-        <div className={`${skeletonStyles.block} h-5 w-2/3 rounded-full`} />
-        <div className={`${skeletonStyles.block} ${skeletonStyles.soft} mt-3 h-3.5 w-1/2 rounded-full`} />
-        <div className={`${skeletonStyles.block} mt-5 h-10 w-full rounded-[0.8rem]`} />
-      </div>
-    </div>
-  );
-}
-
-function KitchenDishPreview({
-  name,
-  images,
-  priority = false,
-  autoplay = false,
-  order = 0,
-}: {
-  name: string;
-  images: string[];
-  priority?: boolean;
-  autoplay?: boolean;
-  order?: number;
-}) {
+/** The kitchen's dish photos: each fades in over the one before every 4 s, always forward; still for reduced motion. */
+function KitchenPhotos({ images, autoplay, delayMs, priority }: { images: readonly string[]; autoplay: boolean; delayMs: number; priority: boolean }) {
   // A photo that fails to load leaves the slideshow instead of showing a broken image.
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
-  const usable = useMemo(
-    () => Array.from(new Set(images.filter((src) => src && !failed.has(src)))).slice(0, 5),
-    [images, failed],
-  );
-  const count = usable.length;
-  const stripRef = useRef<HTMLDivElement>(null);
-  const firstRef = useRef<HTMLImageElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const photos = useMemo(() => images.filter((src) => !failed.has(src)), [images, failed]);
+  const count = photos.length;
+  const [shown, setShown] = useState({ index: 0, previous: -1 });
+  const current = shown.index < count ? shown.index : 0;
+  const previous = shown.previous < count ? shown.previous : -1;
+  const rootRef = useRef<HTMLDivElement>(null);
   const [onScreen, setOnScreen] = useState(false);
-  // A swipe means the customer is choosing: the slideshow stops for this card (APG carousel).
-  const [swiped, setSwiped] = useState(false);
-  const [firstShown, setFirstShown] = useState(false);
-  const moving = useRef(false);
-  const settle = useRef(0);
-
-  // A cached first photo shows at once; a fresh one fades in when it arrives (like dish cards).
-  useLayoutEffect(() => {
-    const image = firstRef.current;
-    if (image?.complete && image.naturalWidth > 0) setFirstShown(true);
-  }, [usable]);
+  const playing = autoplay && onScreen && count > 1;
+  // Photos load as the slideshow reaches them (the shown one and the next), never all at once.
+  const [loadedUpTo, setLoadedUpTo] = useState(0);
+  const needed = playing ? Math.min(count - 1, current + 1) : current;
+  if (needed > loadedUpTo) setLoadedUpTo(needed);
 
   // Slides run only while most of the card is on screen.
   useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip || count <= 1 || typeof IntersectionObserver === "undefined") return;
+    const root = rootRef.current;
+    if (!root || !autoplay || count < 2 || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(
       ([entry]) => setOnScreen(Boolean(entry && entry.intersectionRatio >= 0.6)),
       { threshold: [0, 0.6] },
     );
-    observer.observe(strip);
+    observer.observe(root);
     return () => observer.disconnect();
-  }, [count]);
+  }, [autoplay, count]);
 
-  // Only the next photo is fetched ahead, so it is ready before it slides in.
   useEffect(() => {
-    if (onScreen && count > 1) void preloadKitchenImage(usable[(activeIndex + 1) % count]);
-  }, [activeIndex, count, onScreen, usable]);
-
-  // The photo moves left and the next one follows; after the last comes the first again.
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip || !autoplay || !onScreen || swiped || count <= 1) return;
+    const root = rootRef.current;
+    if (!root || !playing) return;
     const advance = () => {
-      // Hovering, keyboard focus on the card, or a hidden tab holds the current photo.
-      if (document.hidden || strip.closest("article")?.matches(":hover, :focus-within")) return;
-      const width = strip.clientWidth;
-      if (!width) return;
-      moving.current = true;
-      strip.scrollTo({ left: (Math.round(strip.scrollLeft / width) + 1) * width, behavior: "smooth" });
+      // A hidden tab, a pointer over the card or keyboard focus in it holds the current photo.
+      if (document.hidden || root.closest("li")?.matches(":hover, :focus-within")) return;
+      setShown(({ index }) => ({ index: (index + 1) % count, previous: index % count }));
     };
     let timer = 0;
-    // Cards side by side take turns instead of moving together.
     const start = window.setTimeout(() => {
-      advance();
-      timer = window.setInterval(advance, SLIDE_MS);
-    }, SLIDE_MS + (order % 3) * 900);
+      timer = window.setInterval(advance, PHOTO_MS);
+    }, delayMs);
     return () => {
       window.clearTimeout(start);
       window.clearInterval(timer);
     };
-  }, [autoplay, count, onScreen, order, swiped]);
-
-  useEffect(() => () => window.clearTimeout(settle.current), []);
-
-  const onStripScroll = (event: UIEvent<HTMLDivElement>) => {
-    const strip = event.currentTarget;
-    const width = strip.clientWidth;
-    if (!width) return;
-    setActiveIndex(Math.round(strip.scrollLeft / width) % count);
-    if (!moving.current) setSwiped(true);
-    window.clearTimeout(settle.current);
-    settle.current = window.setTimeout(() => {
-      if (Math.round(strip.scrollLeft / width) >= count) {
-        // Resting on the copy of the first photo: step to the real one (they look the same).
-        moving.current = true;
-        strip.scrollTo({ left: 0, behavior: "instant" });
-      }
-      moving.current = false;
-    }, 140);
-  };
+  }, [count, delayMs, playing]);
 
   if (!count) {
     return (
-      <div className="flex aspect-[16/9] items-center justify-center rounded-t-[1.3rem] bg-[#F1F3F5] text-[#F62E18]">
-        <ChefHat className="h-12 w-12" strokeWidth={1.6} aria-hidden="true" />
+      <div className="flex aspect-[100/63] items-center justify-center rounded-t-[19px] bg-[#F7F5F3] text-[#D92714]">
+        <ChefHat className="h-[34px] w-[34px]" strokeWidth={1.75} aria-hidden="true" />
       </div>
     );
   }
 
-  const slide = "h-full w-full shrink-0 snap-center snap-always object-cover";
+  const firstDot = Math.max(0, Math.min(current - 2, count - DOTS));
   return (
-    <div className="relative aspect-[16/9] overflow-hidden rounded-t-[1.3rem] bg-[#F1F3F5]">
-      {/* A native snap strip: the photo follows the finger and settles on release. */}
-      <div
-        ref={stripRef}
-        onScroll={onStripScroll}
-        className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {usable.map((src, index) => (
+    <div ref={rootRef} className="relative aspect-[100/63] overflow-hidden rounded-t-[19px] bg-[#F7F5F3]">
+      {photos.map((src, index) =>
+        index > loadedUpTo ? null : (
           <img
             key={src}
-            ref={index === 0 ? firstRef : undefined}
             src={src}
-            alt={
-              index === activeIndex
-                ? `${name} dish preview ${index + 1} of ${count}`
-                : ""
-            }
-            aria-hidden={index === activeIndex ? undefined : true}
+            alt=""
             loading={index === 0 && priority ? "eager" : "lazy"}
+            fetchPriority={index === 0 && priority ? "high" : "auto"}
             decoding="async"
-            fetchPriority={priority && index === 0 ? "high" : "auto"}
             draggable={false}
-            onLoad={index === 0 ? () => setFirstShown(true) : undefined}
-            onError={() => setFailed((current) => new Set(current).add(src))}
-            className={
-              index === 0
-                ? `${slide} transition-opacity duration-300 ${firstShown ? "opacity-100" : "opacity-0"}`
-                : slide
-            }
+            onError={() => setFailed((value) => new Set(value).add(src))}
+            // The new photo fades in over the last one, which stays put underneath: no grey dip between photos.
+            className={`absolute inset-0 h-full w-full object-cover ${
+              index === current
+                ? "z-[2] opacity-100 transition-opacity duration-[650ms] ease-[cubic-bezier(0.65,0,0.35,1)] motion-reduce:transition-none"
+                : index === previous
+                  ? "z-[1] opacity-100"
+                  : "opacity-0"
+            }`}
           />
-        ))}
-        {/* After the last photo the first one comes round again from the right. */}
-        {count > 1 ? (
-          <img src={usable[0]} alt="" aria-hidden="true" loading="lazy" decoding="async" draggable={false} className={slide} />
-        ) : null}
-      </div>
-
+        ),
+      )}
       {count > 1 ? (
-        <div
-          className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#1A1A1A]/35 px-2 py-1.5"
-          aria-hidden="true"
-        >
-          {usable.map((src, index) => (
+        // Between the chef's face and the heart's column, as in the app.
+        <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-[74px] right-[88px] z-[3] flex items-center justify-center gap-1.5">
+          {photos.slice(firstDot, firstDot + DOTS).map((src, offset) => (
             <span
               key={src}
-              className={`h-1.5 w-1.5 rounded-full bg-white transition-[opacity,scale] duration-(--dur-component) ease-out ${
-                index === activeIndex ? "scale-125 opacity-100" : "opacity-55"
-              }`}
+              className={`h-1.5 w-1.5 rounded-full shadow-[0_0_2px_rgba(26,26,26,0.55)] ${firstDot + offset === current ? "bg-white" : "bg-white/50"}`}
             />
           ))}
         </div>
@@ -255,21 +152,182 @@ function KitchenDishPreview({
   );
 }
 
-export function KitchensGrid({
-  kitchens,
-  searchTerm,
-  state,
-  message,
-  onSelectKitchen,
-  onRetry,
-  onManageAddress,
-  dishes,
-  limit,
-  renderKitchen,
-}: KitchensGridProps) {
-  const normalizedSearch = searchTerm.trim();
-  const shownKitchens = limit ? kitchens.slice(0, limit) : kitchens;
+/** The chef's picture fills a white circle over the photo's edge; without one, a grey circle with a chef hat. */
+function ChefCircle({ photoUrl }: { photoUrl: string | null }) {
+  const url = safeChefPhotoUrl(photoUrl);
+  // Remember which url failed, so a new url gets its own try.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -bottom-8 left-3 z-[3] flex h-[70px] w-[70px] items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_6px_14px_rgba(38,26,21,0.12)]"
+    >
+      {url && url !== failedUrl ? (
+        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedUrl(url)} className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-16 w-16 items-center justify-center rounded-full border border-[#D5CEC8] bg-[#F7F5F3] text-[#1A1A1A]">
+          <ChefHat className="h-[26px] w-[26px]" strokeWidth={1.75} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Saves the kitchen (the same saved kitchens as every other heart): a white outline, filled red once saved. */
+function KitchenHeart({ kitchenId, name }: { kitchenId: string; name: string }) {
+  const { saved, busy, toggle } = useFavoriteKitchen(kitchenId);
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle()}
+      disabled={busy}
+      aria-pressed={saved}
+      aria-label={saved ? `Remove ${name} from saved` : `Save ${name}`}
+      className="absolute right-3 top-3 z-[4] flex h-12 w-12 items-center justify-center rounded-full !border-0 !bg-transparent !p-0 !text-white !shadow-none disabled:!opacity-100"
+    >
+      <span aria-hidden="true" className={`absolute inset-0 rounded-full ${GLASS}`} />
+      <Heart className={`relative h-6 w-6 ${saved ? "fill-[#F62E18]" : ""}`} strokeWidth={2} aria-hidden="true" />
+    </button>
+  );
+}
+
+function TopKitchenCard({
+  kitchen,
+  summary,
+  order,
+  autoplay,
+  onOpen,
+}: {
+  kitchen: NearbyKitchen;
+  summary: KitchenDishSummary;
+  order: number;
+  autoplay: boolean;
+  onOpen: () => void;
+}) {
+  const name = kitchen.kitchenName;
+  return (
+    // The heart is the card button's sibling, so neither control sits inside the other.
+    <li className={`${CARD_WIDTH} relative`}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${name}`}
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen();
+          }
+        }}
+        className="group flex h-full cursor-pointer flex-col rounded-[20px] border !border-[#E3DDD8] bg-white text-left shadow-[0_6px_14px_rgba(38,26,21,0.08)] transition-[box-shadow,translate] duration-(--dur-component) ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_18px_rgba(38,26,21,0.12)] motion-reduce:transform-none"
+      >
+        <div className="relative">
+          <KitchenPhotos images={summary.imageUrls} autoplay={autoplay} delayMs={order * PHOTO_STAGGER_MS} priority={order < 4} />
+          {summary.preparationTimeLabel ? (
+            <span className={`pointer-events-none absolute left-3 top-3 z-[3] inline-flex min-h-[38px] items-center gap-1.5 rounded-full px-3 text-[0.9375rem] font-semibold text-white ${GLASS}`}>
+              <Clock3 className="h-[18px] w-[18px]" aria-hidden="true" />
+              {summary.preparationTimeLabel}
+            </span>
+          ) : null}
+          <ChefCircle photoUrl={kitchen.chefPhotoUrl} />
+        </div>
+        <div className="flex flex-1 flex-col px-3 pb-3 pt-[38px]">
+          <h3 className="truncate text-[1.0625rem] font-bold leading-6 tracking-normal text-[#1A1A1A]">{name}</h3>
+          <p className="mt-1 line-clamp-2 text-[0.9375rem] leading-[19px] text-[#706864]">
+            {kitchen.description || "Home-cooked meals prepared with care."}
+          </p>
+          <p className="mt-auto pt-2 text-[0.9375rem] font-bold text-[#D92714]">Starts from {summary.startingPriceLabel}</p>
+        </div>
+      </div>
+      <KitchenHeart kitchenId={kitchen.id} name={name} />
+    </li>
+  );
+}
+
+function TopKitchenSkeletons() {
+  return (
+    <div className={`${ROW} overflow-hidden lg:-mx-4 lg:px-4`} aria-hidden="true">
+      {Array.from({ length: 4 }, (_, index) => (
+        <div key={index} className={`${CARD_WIDTH} rounded-[20px] border border-[#E3DDD8] bg-white`}>
+          <div className="relative">
+            <div className={`${skeletonStyles.block} aspect-[100/63] rounded-t-[19px]`} />
+            <span className={`${skeletonStyles.block} absolute -bottom-8 left-3 h-[70px] w-[70px] rounded-full ring-4 ring-white`} />
+          </div>
+          <div className="px-3 pb-3 pt-[38px]">
+            <div className={`${skeletonStyles.block} h-5 w-2/3 rounded-full`} />
+            <div className={`${skeletonStyles.block} ${skeletonStyles.soft} mt-2.5 h-3.5 w-full rounded-full`} />
+            <div className={`${skeletonStyles.block} ${skeletonStyles.soft} mt-2 h-3.5 w-1/2 rounded-full`} />
+            <div className={`${skeletonStyles.block} mt-3 h-4 w-2/5 rounded-full`} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Choose a location, couldn't load, and nothing to show, each with the app's drawing and plain words. */
+function KitchenStates({ state, searchTerm, message, onRetry, onManageAddress }: Pick<KitchensGridProps, "state" | "searchTerm" | "message" | "onRetry" | "onManageAddress">) {
+  if (state === "address-required") {
+    return (
+      <EmptyState compact heading="h3" illustration="location" title="Where should we deliver?" message="Choose an address to see the home kitchens cooking near you.">
+        <button type="button" onClick={onManageAddress} className="craves-primary-action">
+          <MapPin className="h-5 w-5" aria-hidden="true" />
+          Choose location
+        </button>
+      </EmptyState>
+    );
+  }
+  if (state === "error") {
+    return (
+      <EmptyState compact heading="h3" role="alert" illustration="loadError" title="We couldn't load home chefs near you" message="Check your connection and try again.">
+        <button type="button" onClick={onRetry} className="craves-primary-action">
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+          Try again
+        </button>
+      </EmptyState>
+    );
+  }
+  const search = searchTerm.trim();
+  if (search) {
+    return <EmptyState compact heading="h3" illustration="search" title={`No kitchens match “${search}”`} message="Try another chef, kitchen name or area." />;
+  }
+  return (
+    <EmptyState
+      compact
+      heading="h3"
+      illustration="comingSoonArea"
+      title="No home chefs near you yet"
+      message={message || "Home chefs don't cook near this address yet. Try another address."}
+    >
+      <button type="button" onClick={onManageAddress} className="craves-primary-action">
+        <MapPin className="h-5 w-5" aria-hidden="true" />
+        Change address
+      </button>
+      <button type="button" onClick={onRetry} className={emptyStateSecondaryAction}>
+        <RefreshCw className="h-4 w-4" aria-hidden="true" />
+        Check again
+      </button>
+    </EmptyState>
+  );
+}
+
+/** Home's "Top kitchens near you" (app 1.35): one row of the nearest kitchens cooking something you can order now. */
+function TopKitchens({ kitchens, searchTerm, state, message, onSelectKitchen, onRetry, onManageAddress, dishes, limit }: KitchensGridProps) {
   const summaries = useMemo(() => summarizeKitchenDishes(dishes), [dishes]);
+  // Only kitchens with a dish in the nearby feed (already narrowed to the food type), nearest first, as in the app.
+  const cards = useMemo(
+    () =>
+      kitchens
+        .flatMap((kitchen) => {
+          const summary = summaries.get(kitchen.id);
+          return summary ? [{ kitchen, summary }] : [];
+        })
+        .slice(0, limit),
+    [kitchens, limit, summaries],
+  );
+  const [row, setRow] = useState<HTMLUListElement | null>(null);
+  const edges = useRowEdges(row);
   // Moving photos can be paused (WCAG 2.2.2) and never move for reduced motion.
   const reduceMotion = useReducedMotion();
   const [photosPaused, setPhotosPaused] = useState(false);
@@ -289,11 +347,82 @@ export function KitchensGrid({
       // The choice still holds for this visit.
     }
   };
-  const slideshow =
-    !renderKitchen &&
-    !reduceMotion &&
-    shownKitchens.some((kitchen) => (summaries.get(kitchen.id)?.imageUrls.length ?? 0) > 1);
+  const slideshow = !reduceMotion && cards.some(({ summary }) => summary.imageUrls.length > 1);
 
+  // Nothing near you to show here: the dishes below say why, so the row steps aside (as in the app).
+  if (state === "ready" && cards.length === 0) return null;
+
+  return (
+    <section className="mx-auto max-w-[88rem] px-4 pt-4 md:px-7 md:pt-5 lg:px-10 lg:pt-6" aria-labelledby="nearby-kitchens-heading">
+      <div className="flex items-center gap-2">
+        <h2 id="nearby-kitchens-heading" className={`${HOME_HEADING} min-w-0 flex-1`}>
+          Top kitchens near you
+        </h2>
+        {state === "ready" ? (
+          <>
+            {slideshow ? (
+              <button
+                type="button"
+                onClick={togglePhotos}
+                aria-label={photosPaused ? "Play kitchen photos" : "Pause kitchen photos"}
+                className={`${ICON_BUTTON} !border-0 !bg-transparent`}
+              >
+                {photosPaused ? <Play className="h-4 w-4" aria-hidden="true" /> : <Pause className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            ) : null}
+            {edges.left || edges.right ? (
+              <div className="hidden items-center gap-2 md:flex">
+                <button type="button" onClick={() => scrollRow(row, -1, row?.clientWidth)} disabled={!edges.left} aria-label="Show previous kitchens" className={`${ICON_BUTTON} !border !border-[#E5E7EB] !bg-white`}>
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button type="button" onClick={() => scrollRow(row, 1, row?.clientWidth)} disabled={!edges.right} aria-label="Show more kitchens" className={`${ICON_BUTTON} !border !border-[#E5E7EB] !bg-white`}>
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
+            <Link
+              to="/chefs"
+              className="inline-flex min-h-12 shrink-0 items-center gap-0.5 rounded-full pl-3 pr-2 text-[0.9375rem] font-bold text-[#D92714] transition-colors hover:bg-[#FDEAE8]"
+            >
+              See all <span className="sr-only">kitchens near you</span>
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </>
+        ) : null}
+      </div>
+
+      {state === "loading" ? (
+        <>
+          <p className="sr-only" role="status">Loading nearby kitchens</p>
+          <TopKitchenSkeletons />
+        </>
+      ) : state === "ready" ? (
+        <ul
+          ref={setRow}
+          role="list"
+          className={`${ROW} snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:scroll-px-7 lg:-mx-4 lg:px-4 lg:scroll-px-4 [&::-webkit-scrollbar]:hidden`}
+        >
+          {cards.map(({ kitchen, summary }, index) => (
+            <TopKitchenCard
+              key={kitchen.id}
+              kitchen={kitchen}
+              summary={summary}
+              order={index}
+              autoplay={slideshow && !photosPaused}
+              onOpen={() => onSelectKitchen(kitchen)}
+            />
+          ))}
+        </ul>
+      ) : (
+        <KitchenStates state={state} searchTerm={searchTerm} message={message} onRetry={onRetry} onManageAddress={onManageAddress} />
+      )}
+    </section>
+  );
+}
+
+/** The chefs page: every nearby chef in a grid of the cards it draws. */
+function ChefsGrid({ kitchens, searchTerm, state, message, onSelectKitchen, onRetry, onManageAddress, dishes, renderKitchen }: KitchensGridProps & Required<Pick<KitchensGridProps, "renderKitchen">>) {
+  const summaries = useMemo(() => summarizeKitchenDishes(dishes), [dishes]);
   return (
     <section
       className="mx-auto max-w-[88rem] px-4 pb-3 pt-3 md:px-7 md:pb-4 md:pt-4 lg:px-10 lg:pb-5 lg:pt-5"
@@ -305,32 +434,16 @@ export function KitchensGrid({
             id="nearby-kitchens-heading"
             className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
           >
-            {limit ? "Top kitchens near you" : "Home chefs near you"}
+            Home chefs near you
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
             Browse nearby home chefs through the dishes they are cooking today.
           </p>
         </div>
         {state === "ready" ? (
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]">
-              {kitchens.length} {kitchens.length === 1 ? "chef" : "chefs"}
-            </span>
-            {slideshow ? (
-              <button
-                type="button"
-                onClick={togglePhotos}
-                className="inline-flex min-h-[2rem] items-center gap-1.5 rounded-full !border !border-[#E5E7EB] !bg-white px-3 text-xs font-black !text-[#1A1A1A] !shadow-none transition-[scale] duration-(--dur-micro) active:scale-[0.96]"
-              >
-                {photosPaused ? (
-                  <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : (
-                  <Pause className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {photosPaused ? "Play photos" : "Pause photos"}
-              </button>
-            ) : null}
-          </div>
+          <span className="rounded-full bg-[#F1F3F5] px-3.5 py-2 text-xs font-black text-[#6B6B6B]">
+            {kitchens.length} {kitchens.length === 1 ? "chef" : "chefs"}
+          </span>
         ) : null}
       </div>
 
@@ -338,140 +451,26 @@ export function KitchensGrid({
         <div>
           <p className="sr-only" role="status">Loading nearby kitchens</p>
           <div className={styles.kitchenGrid}>
-            {/* As many placeholders as cards will show, so the list doesn't shrink when it loads. */}
-            {Array.from({ length: limit ?? 6 }, (_, index) => (
-              <div key={index} className={limit && index >= PHONE_LIMIT ? "max-sm:hidden" : undefined}>
-                {renderKitchen ? <KitchenDiscoverCardSkeleton /> : <KitchenSkeleton />}
-              </div>
+            {Array.from({ length: 6 }, (_, index) => (
+              <KitchenDiscoverCardSkeleton key={index} />
             ))}
           </div>
         </div>
-      ) : null}
-
-      {state === "address-required" ? (
-        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center md:p-12">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-            <MapPin className="h-6 w-6 fill-current" strokeWidth={1.5} aria-hidden="true" />
-          </span>
-          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Choose your delivery location</h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
-          <button type="button" onClick={onManageAddress} className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(26,26,26,0.14)]">Choose location</button>
-        </div>
-      ) : null}
-
-      {state === "error" ? (
-        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center md:p-12">
-          <AlertTriangle className="mx-auto h-9 w-9 text-[#F62E18]" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">Nearby kitchens could not be loaded</h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">{message}</p>
-          <button type="button" onClick={onRetry} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
-          </button>
-        </div>
-      ) : null}
-
-      {state === "ready" && kitchens.length === 0 ? (
-        <div className="rounded-[2rem] border border-dashed border-[#E5E7EB] bg-[#F1F3F5] p-8 text-center md:p-10">
-          <SearchX className="mx-auto h-9 w-9 text-[#6B6B6B]" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-lg font-black text-[#1A1A1A]">
-            {normalizedSearch ? "No chefs match your search" : "No nearby chefs found"}
-          </h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            {normalizedSearch
-              ? `No nearby chef matches “${normalizedSearch}”. Try another search.`
-              : message || "No active home kitchens are available for this delivery location yet."}
-          </p>
-          {!normalizedSearch ? (
-            <button type="button" onClick={onRetry} className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white">Refresh nearby chefs</button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {state === "ready" && kitchens.length > 0 ? (
+      ) : state === "ready" && kitchens.length > 0 ? (
         <div className={styles.kitchenGrid}>
-          {shownKitchens.map((kitchen, index) => {
-            const summary = summaries.get(kitchen.id);
-            if (renderKitchen) return <Fragment key={kitchen.id}>{renderKitchen(kitchen, summary, () => onSelectKitchen(kitchen))}</Fragment>;
-            const name = kitchen.displayName || kitchen.kitchenName;
-            return (
-              // The heart is the card button's sibling, so neither control sits inside the other.
-              <article
-                key={kitchen.id}
-                className={`${limit && index >= PHONE_LIMIT ? "max-sm:hidden " : ""}group relative rounded-[1.35rem] border border-[#E5E7EB] bg-white text-left text-[#1A1A1A] shadow-[0_7px_22px_rgba(26,26,26,0.065)] transition-[border-color,box-shadow] duration-300 hover:border-[#D7DADF] hover:shadow-[0_14px_32px_rgba(26,26,26,0.10)]`}
-              >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelectKitchen(kitchen)}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onSelectKitchen(kitchen);
-                    }
-                  }}
-                  className="cursor-pointer rounded-[1.35rem]"
-                  aria-label={`Open ${name}`}
-                >
-                  <div className="relative">
-                    <KitchenDishPreview
-                      name={name}
-                      images={summary?.imageUrls ?? NO_PHOTOS}
-                      priority={index < 4}
-                      autoplay={slideshow && !photosPaused}
-                      order={index}
-                    />
-                    {summary?.preparationTimeLabel ? (
-                      <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A]/60 px-2.5 py-1 text-[0.7rem] font-black text-white backdrop-blur-sm">
-                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                        {summary.preparationTimeLabel}
-                      </span>
-                    ) : null}
-                    <ChefFace
-                      photoUrl={kitchen.chefPhotoUrl}
-                      name={name}
-                      size={56}
-                      className="absolute -bottom-7 left-3 z-10 shadow-[0_4px_14px_rgba(26,26,26,0.16)] ring-[3px] ring-white"
-                    />
-                  </div>
-                  <div className="px-3.5 pb-3 pt-8 sm:px-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="min-w-0 truncate font-display text-base font-black tracking-[-0.02em] text-[#1A1A1A] sm:text-[1.05rem]">
-                        {name}
-                      </h3>
-                      <span className="shrink-0 rounded-lg bg-[#F1F3F5] px-2.5 py-1 text-[0.66rem] font-black text-[#1A1A1A]">
-                        {formatDistance(kitchen.distanceMeters)}
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6B6B6B]">
-                      {kitchen.description || "Home-cooked meals prepared with care."}
-                    </p>
-                    {summary ? (
-                      <p className="mt-1.5 text-xs font-black text-[#C4200F]">Starts from {summary.startingPriceLabel}</p>
-                    ) : null}
-                  </div>
-                </div>
-                <FavoriteKitchenHeart kitchenId={kitchen.id} kitchenName={name} className="absolute right-2.5 top-2.5 z-20 !h-9 !w-9" />
-              </article>
-            );
-          })}
+          {kitchens.map((kitchen) => (
+            <Fragment key={kitchen.id}>{renderKitchen(kitchen, summaries.get(kitchen.id), () => onSelectKitchen(kitchen))}</Fragment>
+          ))}
         </div>
-      ) : null}
-
-      {state === "ready" && limit && kitchens.length > PHONE_LIMIT ? (
-        <div className={`mt-4 flex justify-center${kitchens.length > limit ? "" : " sm:hidden"}`}>
-          {/* Phones show four kitchens and wider screens `limit`; every chef is one tap away. */}
-          <Link
-            to="/chefs"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-5 text-sm font-black text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
-          >
-            See all {kitchens.length} home chefs
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
-      ) : null}
+      ) : (
+        <KitchenStates state={state} searchTerm={searchTerm} message={message} onRetry={onRetry} onManageAddress={onManageAddress} />
+      )}
     </section>
   );
+}
+
+export function KitchensGrid(props: KitchensGridProps) {
+  return props.renderKitchen ? <ChefsGrid {...props} renderKitchen={props.renderKitchen} /> : <TopKitchens {...props} />;
 }
 
 export default KitchensGrid;

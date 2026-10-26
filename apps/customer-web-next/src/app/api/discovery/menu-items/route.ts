@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseMenuDiscovery } from "@/features/home/lib/discovery-contract";
+import { parseMenuDiscovery, parseSearchQuery } from "@/features/home/lib/discovery-contract";
 import { publicApiFetch } from "@/shared/lib/public-api";
 import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 
@@ -11,8 +11,11 @@ function numeric(request: NextRequest, name: string, min: number, max: number, f
 
 export async function GET(request: NextRequest) {
   const latitude = numeric(request, "latitude", -90, 90); const longitude = numeric(request, "longitude", -180, 180); const radiusMeters = numeric(request, "radiusMeters", 1, MAX_DISCOVERY_RADIUS_METERS, DEFAULT_DISCOVERY_RADIUS_METERS); const page = numeric(request, "page", 0, 10_000, 0); const size = numeric(request, "size", 1, 50, 20);
-  if (latitude === null || longitude === null || radiusMeters === null || page === null || size === null || !Number.isInteger(radiusMeters) || !Number.isInteger(page) || !Number.isInteger(size)) return NextResponse.json({ error: "INVALID_LOCATION", message: "Valid latitude, longitude and discovery bounds are required." }, { status: 400 });
+  // Search words, as the app sends them: the catalog matches dishes past the pages a customer has loaded.
+  const searchQuery = parseSearchQuery(request.nextUrl.searchParams.get("query"));
+  if (latitude === null || longitude === null || radiusMeters === null || page === null || size === null || searchQuery === null || !Number.isInteger(radiusMeters) || !Number.isInteger(page) || !Number.isInteger(size)) return NextResponse.json({ error: "INVALID_LOCATION", message: "Valid latitude, longitude and discovery bounds are required." }, { status: 400 });
   const query = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: String(page), size: String(size) });
+  if (searchQuery) query.set("query", searchQuery);
   try {
     const upstream = await publicApiFetch(`/discovery/menu-items?${query}`); const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby dishes are unavailable right now." }, { status: upstream.status });

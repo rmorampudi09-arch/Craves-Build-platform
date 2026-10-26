@@ -51,4 +51,7 @@ export function parseMenuDiscovery(value: unknown): NearbyMenuDiscovery | null {
   return latitude !== null && longitude !== null && radiusMeters !== null && page && !menuItems.some((item) => item === null) ? { latitude, longitude, radiusMeters, page, menuItems: menuItems as NearbyMenuItem[] } : null;
 }
 
+/** Search words for the catalog (the app's rule): trimmed, at most 120 characters, no control characters. "" when none; null when not allowed. */
+export function parseSearchQuery(value: string | null): string | null { const query = value?.trim() ?? ""; return Array.from(query).length <= 120 && !/\p{Cc}/u.test(query) ? query : null; }
+
 export function formatDistance(distanceMeters: number): string { return distanceMeters < 1_000 ? `${distanceMeters} m` : `${(distanceMeters / 1_000).toFixed(1)} km`; }

@@ -985,9 +985,11 @@ function BrowseFoodsPage() {
             dishes={searchDishes}
             kitchens={kitchens}
             searchTerm={searchTerm}
-            vegOnly={foodPreference === "veg"}
+            foodPreference={foodPreference}
+            latitude={address?.lat ?? null}
+            longitude={address?.lng ?? null}
             onSearchTermChange={setSearchTerm}
-            onDisableVeg={() => setFoodPreference("all")}
+            onShowAllFood={() => setFoodPreference("all")}
             onClose={closeSearch}
           />
         ) : null}

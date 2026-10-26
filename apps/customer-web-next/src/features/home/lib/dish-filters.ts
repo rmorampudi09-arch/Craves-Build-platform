@@ -45,7 +45,7 @@ export const DISTANCE_LABELS: Record<Exclude<HomeDishFilters["distance"], "any">
   "5": "Within 5 km",
 };
 
-export function matchesFoodPreference(dish: Dish, preference: HomeFoodPreference): boolean {
+export function matchesFoodPreference(dish: Pick<Dish, "foodType" | "veg">, preference: HomeFoodPreference): boolean {
   if (preference === "all") return true;
   const type = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
   return preference === "veg" ? type === "VEG" : preference === "egg" ? type === "EGG" : type === "NON_VEG";

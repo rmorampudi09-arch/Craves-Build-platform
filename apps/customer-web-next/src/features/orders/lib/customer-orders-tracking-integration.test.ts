@@ -6,20 +6,21 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("order history validates and sorts backend orders", () => {
+test("order history validates each page and falls back to the sorted latest list", () => {
   const page = source("../screens/OrderHistory.tsx");
-  assert.match(page, /fetch\("\/api\/orders"/);
+  assert.match(page, /sessionFetch\(`\/api\/orders\/page\?limit=\$\{PAGE_SIZE\}/);
+  assert.match(page, /parseCustomerOrderPage\(/);
+  assert.match(page, /sessionFetch\("\/api\/orders"/);
   assert.match(page, /parseCustomerOrders\(raw\)/);
   assert.match(page, /new Date\(right\.createdAt\)\.getTime\(\)/);
   assert.doesNotMatch(page, /const orders = \[/);
 });
 
-test("each order opens its own order page, active orders first", () => {
+test("each order opens its own order page, with the app's tabs and item line", () => {
   const page = source("../screens/OrderHistory.tsx");
   assert.match(page, /to=\{`\/orders\/\$\{order\.id\}`\}/);
-  assert.match(page, /title: "In progress"[\s\S]{0,200}title: "Past orders"/);
-  // Items read like the order page: "2 × Hyderabadi Chicken Dum Biryani".
-  assert.match(page, /order\.items\.map\(\(item\) => `\$\{item\.quantity\} × \$\{item\.itemName\}`\)/);
+  assert.match(page, /ORDER_TABS\.map/);
+  assert.match(page, /orderItemsLine\(order\.items\)/);
 });
 
 test("tracking validates both order and delivery projections", () => {

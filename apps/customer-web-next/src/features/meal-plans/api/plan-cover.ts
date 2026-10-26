@@ -13,6 +13,8 @@ export type PlanCover = {
   kitchenName: string | null;
   summary: PlanScheduleSummary | null;
   rating: { average: number; count: number } | null;
+  /** The plan's weekly or monthly schedule, for dish names and meal times; null when it didn't load. */
+  schedule: PublicSubscriptionSchedule | null;
 };
 
 const covers = new Map<string, Promise<PlanCover>>();
@@ -56,6 +58,7 @@ async function load(planId: string): Promise<PlanCover> {
     kitchenName: profile?.displayName?.trim() || profile?.kitchenName || null,
     summary,
     rating: stars,
+    schedule,
   };
 }
 

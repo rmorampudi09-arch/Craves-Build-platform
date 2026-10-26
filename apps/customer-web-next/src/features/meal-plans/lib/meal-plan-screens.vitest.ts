@@ -167,6 +167,18 @@ describe("meal plan page", () => {
     await settle();
   });
 
+  it("opens the card's step on arrival, only when the plan allows it", async () => {
+    render(createElement(SubscriptionDetails, { subscriptionId: ID, openAction: "skip" }));
+    const sheet = await screen.findByRole("dialog", { name: "Skip a day’s meals?" });
+    expect((within(sheet).getByLabelText("Day to skip") as HTMLInputElement).value).toBe("2026-10-12");
+    cleanup();
+    current = subscription({ pauseDaysLeft: 0 });
+    render(createElement(SubscriptionDetails, { subscriptionId: ID, openAction: "pause" }));
+    await screen.findByRole("button", { name: "No pause days left this bill" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await settle();
+  });
+
   it("turns Pause off when no pause days are left", async () => {
     current = subscription({ pauseDaysLeft: 0 });
     render(createElement(SubscriptionDetails, { subscriptionId: ID }));
@@ -252,10 +264,27 @@ describe("meal plans list", () => {
     await settle();
   });
 
-  it("shows each running plan's bill length and renewal date", async () => {
+  it("shows each running plan's bill length, renewal date and next meal with its time and dishes", async () => {
     mine = [subscription({ billingPeriod: "FORTNIGHTLY", nextBillingDate: "2026-10-19" })];
     render(createElement(SubscriptionManager));
-    expect(await screen.findByText("14 days · Renews Mon 19 Oct · Next meal Mon 12 Oct")).toBeTruthy();
+    expect(await screen.findByText(/^Mon 12 Oct, 1:00\spm · Dal rice$/u)).toBeTruthy();
+    expect(screen.getByText("Next meal")).toBeTruthy();
+    expect(screen.getByText("14 days · Renews Mon 19 Oct")).toBeTruthy();
+    await settle();
+  });
+
+  it("offers Pause, Skip a meal and Open plan on a running plan's card, and Resume on a paused one", async () => {
+    mine = [subscription()];
+    render(createElement(SubscriptionManager));
+    expect((await screen.findByRole("link", { name: "Pause" })).getAttribute("href")).toBe(`/subscriptions/${ID}?action=pause`);
+    expect(screen.getByRole("link", { name: "Skip a meal" }).getAttribute("href")).toBe(`/subscriptions/${ID}?action=skip`);
+    expect(screen.getByRole("link", { name: "Open plan: Weekly thali" }).getAttribute("href")).toBe(`/subscriptions/${ID}`);
+    expect(screen.queryByRole("link", { name: "Resume" })).toBeNull();
+    cleanup();
+    mine = [subscription({ status: "PAUSED" })];
+    render(createElement(SubscriptionManager));
+    expect((await screen.findByRole("link", { name: "Resume" })).getAttribute("href")).toBe(`/subscriptions/${ID}?action=resume`);
+    expect(screen.queryByRole("link", { name: "Pause" })).toBeNull();
     await settle();
   });
 
@@ -271,6 +300,16 @@ describe("meal plans list", () => {
         DISH_PHOTO,
       ]),
     );
+    await settle();
+  });
+
+  it("draws My plans with no plans like the app and sends the customer to Explore", async () => {
+    render(createElement(SubscriptionManager));
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: "My plans" }));
+    expect(await screen.findByRole("heading", { name: "No meal plans yet" })).toBeTruthy();
+    expect(screen.getByTestId("empty-illustration-mealPlans")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Explore plans" }));
+    expect(screen.getByRole("tab", { name: "Explore plans" }).getAttribute("aria-selected")).toBe("true");
     await settle();
   });
 

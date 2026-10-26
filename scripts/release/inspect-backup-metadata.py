@@ -4,9 +4,9 @@ import json
 import subprocess
 import sys
 
-SUBSCRIPTION = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUBSCRIPTION = '721906c9-4a72-4606-830b-d3e7ace093ff'
 RESOURCE_GROUP = 'rg-craves-prodlow-centralindia'
-SERVER = 'pg-craves-prodlow-l3ing6'
+SERVER = 'pg-craves-prodlow-kmqgfy'
 RESOURCE = (f'/subscriptions/{SUBSCRIPTION}/resourceGroups/{RESOURCE_GROUP}'
             f'/providers/Microsoft.DBforPostgreSQL/flexibleServers/{SERVER}')
 BASE = 'https://management.azure.com' + RESOURCE

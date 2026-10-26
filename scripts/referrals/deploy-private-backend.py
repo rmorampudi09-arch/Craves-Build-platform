@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """First deployment of the isolated private referral engine. Never enables programme flags."""
 import base64, hashlib, json, os, pathlib, secrets, subprocess, tempfile, time, urllib.parse
-RG='rg-craves-prodlow-centralindia'; SUB='4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
-APP='ca-craves-referral-prodlow'; IDENTITY='id-craves-referral-prodlow'; VAULT='kvcravesprodlowl3ing6'
-SERVER='pg-craves-prodlow-l3ing6.postgres.database.azure.com'; DATABASE='craves_referral_db'
-SOURCE='036b3211b2e81465699766f7d8104a4199c67723'; ACR='cravesprodlowacr82121'
+RG='rg-craves-prodlow-centralindia'; SUB='721906c9-4a72-4606-830b-d3e7ace093ff'
+APP='ca-craves-referral-prodlow'; IDENTITY='id-craves-referral-prodlow'; VAULT='kvcravesprodlowkmqgfy'
+SERVER='pg-craves-prodlow-kmqgfy.postgres.database.azure.com'; DATABASE='craves_referral_db'
+SOURCE='036b3211b2e81465699766f7d8104a4199c67723'; ACR='cravesrm09prodlow6bf632'
 OWNER='craves_referral_owner'; RUNTIME='craves_referral_runtime'
 EVIDENCE=pathlib.Path(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'])/'referral-deployment'; EVIDENCE.mkdir(parents=True,exist_ok=True)
 
@@ -41,7 +41,7 @@ baseline=az('containerapp','list','-g',RG); assert all(a['name']!=APP for a in b
 baseline_hash={a['name']:runtime_hash(a) for a in baseline}
 (EVIDENCE/'existing-app-baseline.json').write_text(json.dumps(baseline_hash,indent=2))
 auth=next(a for a in baseline if a['name']=='ca-craves-auth-service-prodlow')
-environment=az('containerapp','env','show','-g',RG,'-n','cae-craves-prodlow-l3ing6')
+environment=az('containerapp','env','show','-g',RG,'-n','cae-craves-prodlow-kmqgfy')
 location=environment['location'].replace(' ','').lower()
 assert location=='centralindia','Unexpected existing environment region'
 vault=az('keyvault','show','-g',RG,'-n',VAULT);assert vault['properties'].get('enableRbacAuthorization') is True,'Per-secret RBAC required'

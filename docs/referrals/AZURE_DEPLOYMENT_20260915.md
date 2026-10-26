@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Azure referral backend deployment — 2026-09-15
 
 Backend artifacts are deployed privately. Referral programme activation and full production acceptance remain pending. No frontend was implemented. Both PRs remain draft and unmerged.

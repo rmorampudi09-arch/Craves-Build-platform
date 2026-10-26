@@ -44,7 +44,7 @@ variables:
   resourceGroup: rg-craves-prodlow-centralindia
   webContainerApp: ca-craves-web-prodlow
   frontDoorProfile: afd-craves-prodlow
-  keyVaultName: kvcravesprodlowl3ing6
+  keyVaultName: kvcravesprodlowkmqgfy
   certificateSecretName: craves-web-tls
 
 steps:
@@ -53,7 +53,7 @@ steps:
   - task: AzureCLI@2
     displayName: Craves production Azure Front Door / CDN
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: scriptPath
       scriptPath: infra/frontdoor/production/run-front-door-production.sh

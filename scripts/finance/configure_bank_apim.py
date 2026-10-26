@@ -148,7 +148,7 @@ def protected_status(target: str) -> None:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--resource-group", default="rg-craves-prodlow-centralindia")
-    p.add_argument("--apim", default="apim-craves-prodlow-l3ing6")
+    p.add_argument("--apim", default="apim-craves-prodlow-kmqgfy")
     p.add_argument("--apply", action="store_true"); p.add_argument("--expected-source-sha", default="")
     p.add_argument("--output", default="bank-apim-plan.json")
     args = p.parse_args(argv)

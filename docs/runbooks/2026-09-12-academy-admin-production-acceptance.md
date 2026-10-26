@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Academy and administrator session release evidence
 
 Historical checkpoint: the interrupted-access status below is superseded by [the September 13 portal repair and authenticated acceptance record](2026-09-13-admin-portal-repair.md). Retain this document for the original migration, gateway, backend and rollback evidence.

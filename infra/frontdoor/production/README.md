@@ -7,9 +7,9 @@ This module turns the existing Craves customer-web Container App into a producti
 - Resource group: `rg-craves-prodlow-centralindia`
 - Customer web origin: `ca-craves-web-prodlow`
 - Front Door profile: `afd-craves-prodlow`
-- Key Vault: `kvcravesprodlowl3ing6`
+- Key Vault: `kvcravesprodlowkmqgfy`
 - Existing rotating SAN certificate secret: `craves-web-tls`
-- Azure DevOps service connection: `Craves-Dev-Service-Connection`
+- Azure DevOps service connection: `Craves-RMORAMPUDI09-Service-Connection`
 
 Spring Boot services, APIM, PostgreSQL/PostGIS, Redis, Firebase, Cashfree, delivery integrations and the customer/chef UI are not changed by this module.
 
@@ -52,7 +52,7 @@ Start with `Detection`. This logs rule matches without blocking customers. Revie
 
 The module uses the existing customer-managed SAN certificate `craves-web-tls` from Key Vault. Front Door gets a system-assigned managed identity and references the versionless Key Vault secret, allowing the existing Craves Let's Encrypt rotation flow to continue supplying newer versions.
 
-The Front Door identity needs this one-time role on `kvcravesprodlowl3ing6`:
+The Front Door identity needs this one-time role on `kvcravesprodlowkmqgfy`:
 
 ```text
 Key Vault Secrets User

@@ -13,10 +13,10 @@ parameters:
     default: ca-craves-order-service-prodlow
   - name: serviceBusNamespace
     type: string
-    default: sb-craves-prodlow-l3ing6
+    default: sb-craves-prodlow-kmqgfy
   - name: serviceBusFullyQualifiedNamespace
     type: string
-    default: sb-craves-prodlow-l3ing6.servicebus.windows.net
+    default: sb-craves-prodlow-kmqgfy.servicebus.windows.net
   - name: topicName
     type: string
     default: craves-domain-events

@@ -24,9 +24,9 @@ This module is deployed as a container image to the existing Craves web Azure Co
 ```text
 Resource group: rg-craves-prodlow-centralindia
 Container App: ca-craves-web-prodlow
-ACR: cravesprodlowacr82121
+ACR: cravesrm09prodlow6bf632
 APIM gateway: https://api.craves.in
-Dashboard URL: https://ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+Dashboard URL: https://ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
 ```
 
 Browser calls use the dashboard same-origin route `/api/v1/*`. Next.js rewrites those requests to APIM. This avoids the browser CORS issue we hit during notification testing.
@@ -75,7 +75,7 @@ apps/api-test-dashboard/Dockerfile
 and pushes the image to:
 
 ```text
-cravesprodlowacr82121.azurecr.io/craves/api-test-dashboard:<BuildId>
+cravesrm09prodlow6bf632.azurecr.io/craves/api-test-dashboard:<BuildId>
 ```
 
 Then it deploys the image to:
@@ -105,7 +105,7 @@ Do not paste private secrets into chat. Firebase Web Config values are public br
 Firebase Authentication must allow the deployed Container App domain:
 
 ```text
-ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
+ca-craves-web-prodlow.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io
 ```
 
 For local testing, also allow:

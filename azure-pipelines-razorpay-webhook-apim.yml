@@ -10,7 +10,7 @@ steps:
   - task: AzureCLI@2
     displayName: Configure and verify Razorpay webhook APIM route
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: scriptPath
       scriptPath: scripts/apim/configure-razorpay-webhook-apim.sh

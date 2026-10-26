@@ -13,7 +13,7 @@ payment_schema.refund_status_outbox
 and publishes them to:
 
 ```text
-Azure Service Bus namespace: sb-craves-prodlow-l3ing6
+Azure Service Bus namespace: sb-craves-prodlow-kmqgfy
 Topic: craves-domain-events
 Application property: eventType = REFUND_STATUS_CHANGED
 ```
@@ -65,7 +65,7 @@ Service Bus is at-least-once. A send may be repeated if the broker accepts the e
 
 ```text
 CRAVES_REFUND_STATUS_PUBLISHER_ENABLED=true
-SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE=sb-craves-prodlow-l3ing6.servicebus.windows.net
+SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE=sb-craves-prodlow-kmqgfy.servicebus.windows.net
 SERVICE_BUS_TOPIC_NAME=craves-domain-events
 ```
 
@@ -116,7 +116,7 @@ Branch: main
 Required pipeline variable:
 
 ```text
-AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
+AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection
 ```
 
 The pipeline fails closed unless all of the following are true:

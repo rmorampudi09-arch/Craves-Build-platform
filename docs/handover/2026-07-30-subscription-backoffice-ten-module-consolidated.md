@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Craves Subscription and Backoffice Ten-Module Consolidated Handover
 
 Date: 2026-07-30  

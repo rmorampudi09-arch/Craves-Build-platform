@@ -29,7 +29,7 @@ parameters:
     default: admin.craves.in
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   artifactDir: $(Build.ArtifactStagingDirectory)/admin-frontdoor
 
 pool:

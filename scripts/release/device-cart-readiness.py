@@ -51,12 +51,12 @@ for name in sorted(env):
     else:
         print(name + ': ' + ('SECRET_REFERENCE' if item.get('secretRef') else 'LITERAL_PRESENT' if item.get('value') else 'EMPTY'))
 
-apis = az('apim', 'api', 'list', '-g', RG, '--service-name', 'apim-craves-prodlow-l3ing6')
+apis = az('apim', 'api', 'list', '-g', RG, '--service-name', 'apim-craves-prodlow-kmqgfy')
 for api in apis:
     if api.get('path', '').strip('/') not in ('api/v1/cart', 'api/v1/catalog'):
         continue
     operations = az('apim', 'api', 'operation', 'list', '-g', RG,
-        '--service-name', 'apim-craves-prodlow-l3ing6', '--api-id', api['name'])
+        '--service-name', 'apim-craves-prodlow-kmqgfy', '--api-id', api['name'])
     print('API ' + json.dumps({'id': api['name'], 'path': api['path'],
         'serviceUrl': api.get('serviceUrl'),
         'operations': [{'id': op['name'], 'method': op.get('method'), 'path': op.get('urlTemplate')} for op in operations]}))
@@ -75,8 +75,8 @@ if parsed.scheme != 'https' or not parsed.hostname.endswith('.vault.azure.net') 
     raise SystemExit('Unexpected Key Vault reference')
 key = az('keyvault', 'secret', 'show', '--id', secret_url)['value']
 catalog_id = '8990a560-5720-4273-be46-5a8e9fba1169'
-origin = 'https://ca-craves-catalog-service-prodlo.happysand-aedc7165.centralindia.azurecontainerapps.io/api/v1/catalog'
-gateway = 'https://apim-craves-prodlow-l3ing6.azure-api.net/api/v1/catalog'
+origin = 'https://ca-craves-catalog-service-prodlo.yellowdesert-9c7110ab.centralindia.azurecontainerapps.io/api/v1/catalog'
+gateway = 'https://apim-craves-prodlow-kmqgfy.azure-api.net/api/v1/catalog'
 if env.get('CRAVES_CATALOG_BASE_URL', {}).get('value') != gateway:
     raise SystemExit('Catalog destination changed; review before probing')
 for label, base in [('GATEWAY', gateway), ('DIRECT', origin)]:

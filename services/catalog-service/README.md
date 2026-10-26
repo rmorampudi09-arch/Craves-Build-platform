@@ -312,7 +312,7 @@ The Catalog deployment pipeline is image-only after the build. It does not read 
 The only Azure DevOps connection variable required by this pipeline is:
 
 ```text
-AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
+AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection
 ```
 
 Do not add `POSTGRES_BUSINESS_DB_PASSWORD` or `CRAVES_JWT_VERIFICATION_PEM_BASE64` merely for this pipeline; the running Container App already owns its secure runtime bindings and the deployment preserves them.

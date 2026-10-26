@@ -29,7 +29,7 @@ Azure environment updates create a revision; see [Microsoft's environment-variab
 
 ## Asynchronous update recovery
 
-Azure run 39117 built and verified source `2ab2e36d30276a039121529656b8c24e6fecdd64` against successful exact-main regression 35131529167. It requested immutable Auth image `cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:58406225368594ac39a606e3fc38d01fc60be53100cef1721c2416b7e2b620e7`. The first immediate settings read after the asynchronous update did not match, so acceptance stopped. This run remains FAILED; it is not a protected-runtime receipt. The update may finish independently of the client checker. Do not repeat a mutation to discover its outcome.
+Azure run 39117 built and verified source `2ab2e36d30276a039121529656b8c24e6fecdd64` against successful exact-main regression 35131529167. It requested immutable Auth image `cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:58406225368594ac39a606e3fc38d01fc60be53100cef1721c2416b7e2b620e7`. The first immediate settings read after the asynchronous update did not match, so acceptance stopped. This run remains FAILED; it is not a protected-runtime receipt. The update may finish independently of the client checker. Do not repeat a mutation to discover its outcome.
 
 The updated checker waits at most 60 observations with five-second intervals. During propagation it tolerates only the exact original desired template, with all unrelated configuration unchanged, until it sees the complete candidate. Partial/unknown settings, another image, unrelated drift or return to old settings after seeing the candidate still stop acceptance. Health verification still requires the desired and actually running revisions to agree.
 

@@ -70,7 +70,7 @@ def main():
     require(isinstance(sources, dict), 'Independent source inventory required')
     group = os.environ.get('RG', '')
     acr = os.environ.get('ACR', '')
-    require(group == 'rg-craves-prodlow-centralindia' and acr == 'cravesprodlowacr82121', 'Unexpected production target')
+    require(group == 'rg-craves-prodlow-centralindia' and acr == 'cravesrm09prodlow6bf632', 'Unexpected production target')
     def read(args):
         return subprocess.check_output(['az', *args, '--only-show-errors'], text=True).strip()
     registry = read(['acr', 'show', '--name', acr, '--query', 'loginServer', '-o', 'tsv'])

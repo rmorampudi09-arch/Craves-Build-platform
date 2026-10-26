@@ -8,7 +8,7 @@ set +x
 }
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 CATALOG_APP="${CATALOG_APP:-ca-craves-catalog-service-prodlo}"
 API_PATH="${API_PATH:-api/v1/discovery}"
 API_ID_DEFAULT="${API_ID_DEFAULT:-craves-catalog-discovery-v1}"

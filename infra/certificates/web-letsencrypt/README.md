@@ -15,8 +15,8 @@ GoDaddy parent zone: craves.in
 
 Azure DevOps service connection
   ├─ Contributor inherited at subscription scope
-  ├─ Key Vault Certificates Officer on kvcravesprodlowl3ing6
-  └─ Key Vault Secrets Officer on kvcravesprodlowl3ing6
+  ├─ Key Vault Certificates Officer on kvcravesprodlowkmqgfy
+  └─ Key Vault Secrets Officer on kvcravesprodlowkmqgfy
 
 Let's Encrypt
   └─ RSA 2048 SAN certificate
@@ -28,7 +28,7 @@ Azure Key Vault
        └─ New version on every successful renewal
 
 Azure Container Apps environment
-  └─ cae-craves-prodlow-l3ing6
+  └─ cae-craves-prodlow-kmqgfy
        ├─ System-assigned managed identity
        ├─ Key Vault Secrets User on the Key Vault
        └─ Versionless Key Vault certificate import
@@ -51,10 +51,10 @@ Keep all of the following in place:
 - GoDaddy delegates `_acme-challenge.www.craves.in` to the four Azure nameservers assigned to that Azure DNS child zone.
 - The existing API delegation `_acme-challenge.api.craves.in` remains unchanged.
 - Azure DNS zones `_acme-challenge.craves.in` and `_acme-challenge.www.craves.in` exist in `rg-craves-prodlow-centralindia`.
-- Key Vault `kvcravesprodlowl3ing6` uses Azure RBAC.
-- Container Apps environment `cae-craves-prodlow-l3ing6` has a system-assigned identity.
+- Key Vault `kvcravesprodlowkmqgfy` uses Azure RBAC.
+- Container Apps environment `cae-craves-prodlow-kmqgfy` has a system-assigned identity.
 - That environment identity has `Key Vault Secrets User` on the Key Vault.
-- Azure DevOps variable `AZURE_SERVICE_CONNECTION` contains `Craves-Dev-Service-Connection`.
+- Azure DevOps variable `AZURE_SERVICE_CONNECTION` contains `Craves-RMORAMPUDI09-Service-Connection`.
 - `ca-craves-web-prodlow` remains healthy at its generated Container Apps hostname.
 
 Do not store a Let's Encrypt private key, PFX password, Azure bearer token or service-principal secret in Azure DevOps variables.
@@ -90,7 +90,7 @@ CUSTOM_DOMAIN_BINDING_REQUIRED=true
 The output must also contain a versionless secret ID:
 
 ```text
-https://kvcravesprodlowl3ing6.vault.azure.net/secrets/craves-web-tls
+https://kvcravesprodlowkmqgfy.vault.azure.net/secrets/craves-web-tls
 ```
 
 ## Security behavior
@@ -130,7 +130,7 @@ shellcheck infra/certificates/web-letsencrypt/renew-web-certificate.sh
 ## Manual intervention required
 
 - Create the Azure DevOps pipeline from the YAML file.
-- Confirm the pipeline variable `AZURE_SERVICE_CONNECTION` resolves to `Craves-Dev-Service-Connection`.
+- Confirm the pipeline variable `AZURE_SERVICE_CONNECTION` resolves to `Craves-RMORAMPUDI09-Service-Connection`.
 - Run the initial issuance with the confirmation parameter enabled.
 - Complete the later custom-domain binding and DNS cutover steps.
 - Keep all three ACME NS delegations permanently unless the related certificate automation is retired.

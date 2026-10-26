@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Public launch closure execution
 
 Authority: owner request of16 September2026 to execute the69-page public-launch fixing plan. All46 findings stay in scope; no item is accepted merely because an image is deployed. The owner's final real payment/delivery/bank journey remains NOT RUN and separate.

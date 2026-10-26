@@ -63,7 +63,7 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   // The slim row shows once it really sticks: the threshold is the row's own sticky top, not a fixed 80 px.
   assert.match(cravings, /rootMargin: `-\$\{top\}px 0px 0px 0px`/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
-  assert.match(cravings, /hidden \? "md:top-0" : "md:top-\[4\.25rem\] lg:top-\[4\.65rem\]"/);
+  assert.match(cravings, /hidden \? "md:top-0" : "md:top-\[5\.25rem\] lg:top-\[5\.65rem\]"/);
   assert.doesNotMatch(cravings, /translate-y-\[var\(--craves-mobile-search-offset/);
   assert.doesNotMatch(cravings, /will-change/);
   // One controller drives header, compact bar, rail and tab bar with the same timing.

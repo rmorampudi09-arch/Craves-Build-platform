@@ -1156,3 +1156,8 @@ html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
 .chef-panel-theme:is(:lang(te), :lang(kn)) .chef-btn { white-space: normal; text-align: center; line-height: 1.35; padding-block: 0.5rem; }
 .chef-panel-theme:is(:lang(te), :lang(kn)) .chef-mobile-nav-link { font-size: 0.6875rem; line-height: 1.2; text-align: center; }
 .chef-panel-theme:is(:lang(te), :lang(kn)) .chef-pill { white-space: normal; line-height: 1.35; }
+
+/* D1 */
+/* Filter pills (Menu, Past orders, Reviews), as the app draws them: soft red when on. The darker red keeps AA on the tint. */
+.chef-panel-theme .chef-chip.is-filter[aria-pressed="true"] { background: #fdeae8; color: var(--chef-accent-text); }
+body .chef-panel-theme .chef-chip.is-filter[aria-pressed="true"] { border-color: #d92714 !important; }

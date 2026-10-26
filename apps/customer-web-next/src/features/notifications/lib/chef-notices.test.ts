@@ -30,7 +30,7 @@ test("each notice falls in the app's category and opens its page", () => {
     [notice("CHEF_ORDER_CANCELLED", "ORDER"), "orders", null],
     [notice("CHEF_PAYOUT_SENT", "PAYOUT"), "money", "/chef/earnings/payouts"],
     [notice("CHEF_SETTLEMENT_READY", "ORDER", ORDER), "money", "/chef/earnings/payouts"],
-    [notice("CHEF_NEW_REVIEW", "ORDER", ORDER), "reviews", null],
+    [notice("CHEF_NEW_REVIEW", "ORDER", ORDER), "reviews", "/chef/reviews"],
     [notice("CHEF_SUBSCRIPTION_STARTED", "SUBSCRIPTION"), "plans", "/chef/meal-plans"],
     [notice("CHEF_APPLICATION_APPROVED", "CHEF_APPLICATION"), "other", "/chef/application/status"],
     [notice("ACCOUNT"), "other", null],

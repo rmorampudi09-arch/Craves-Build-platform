@@ -36,7 +36,13 @@ export type ChefDeliveryAddress = {
   city: string;
   state: string;
   postalCode: string;
+  /** Where the customer pinned the address; absent or null when the order has no pin. */
+  latitude?: number | null;
+  longitude?: number | null;
 };
+
+/** One step in the order's life, oldest first. Only the order's own page (GET /chef/orders/{id}) sends it. */
+export type ChefOrderStatusStep = { status: ChefOrderStatus; at: string };
 
 /** The courier the delivery provider assigned. photoUrl is https only. */
 export type ChefDeliveryPartner = {
@@ -71,6 +77,7 @@ export type ChefOrder = {
   deliveryPartner?: ChefDeliveryPartner | null;
   /** Null until the chef hands the order over; absent when the server has no hand-over yet, so the button stays hidden. */
   chefHandedOverAt?: string | null;
+  statusHistory?: ChefOrderStatusStep[];
 };
 
 const CANONICAL_UUID =
@@ -183,6 +190,10 @@ function parseAddress(value: unknown): ChefDeliveryAddress | null {
   ) {
     return null;
   }
+  // A pin is kept only as a whole and in range; anything else counts as no pin.
+  const latitude = coordinate(raw.latitude, 90);
+  const longitude = coordinate(raw.longitude, 180);
+  const pinned = latitude !== null && longitude !== null;
   return {
     recipientName,
     contactPhoneNumber,
@@ -193,7 +204,23 @@ function parseAddress(value: unknown): ChefDeliveryAddress | null {
     city,
     state,
     postalCode,
+    ...(pinned ? { latitude, longitude } : {}),
   };
+}
+
+function coordinate(value: unknown, limit: number): number | null {
+  const number = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+  return value !== "" && Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+}
+
+function parseStatusHistory(value: unknown): ChefOrderStatusStep[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 50).flatMap((entry) => {
+    const raw = record(entry);
+    const status = raw?.status;
+    const at = instant(raw?.at);
+    return isChefOrderStatus(status) && at ? [{ status, at }] : [];
+  });
 }
 
 function parsePartner(value: unknown): ChefDeliveryPartner | null {
@@ -240,6 +267,7 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     return null;
   }
   const prepTimeMinutes = integer(raw.prepTimeMinutes, 1, 1_440);
+  const statusHistory = parseStatusHistory(raw.statusHistory);
   return {
     id,
     kitchenName: optional(raw.kitchenName, 180),
@@ -261,6 +289,7 @@ export function parseChefOrder(value: unknown): ChefOrder | null {
     customerNote: optional(raw.customerNote, 500),
     deliveryPartner: parsePartner(raw.deliveryPartner),
     ...(raw.chefHandedOverAt === null || instant(raw.chefHandedOverAt) ? { chefHandedOverAt: instant(raw.chefHandedOverAt) } : {}),
+    ...(statusHistory.length ? { statusHistory } : {}),
   };
 }
 

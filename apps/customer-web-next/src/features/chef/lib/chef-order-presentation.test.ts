@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptReadyMinutes, declineConsequence, notPickedUpCase, pickupEtaLabel, prepCountdown, respondCountdown } from "./chef-order-presentation.ts";
+import { acceptReadyMinutes, declineConsequence, notPickedUpCase, pickupEtaLabel, prepCountdown, respondCountdown, shortCustomerName } from "./chef-order-presentation.ts";
 
 const createdAt = "2026-10-10T08:00:00Z";
 const at = (iso: string) => Date.parse(iso);
@@ -65,13 +65,15 @@ test("pickup time reads as minutes to go, then as due now", () => {
 
 test("cooking counts down from acceptance and then counts minutes late", () => {
   const cooking = { status: "PREPARING" as const, prepTimeMinutes: 20, updatedAt: "2026-10-10T08:00:00Z" };
-  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:00:00Z")), { label: "Ready in 20 min", tone: "success", fill: 0 });
-  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:12:01Z")), { label: "Ready in 8 min", tone: "success", fill: 721 / 1200 });
+  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:00:00Z")), { label: "Ready in 20 min", tone: "success", fill: 0, detail: "You promised 1:50 pm" });
+  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:12:01Z")), { label: "Ready in 8 min", tone: "success", fill: 721 / 1200, detail: "You promised 1:50 pm" });
   assert.equal(prepCountdown(cooking, at("2026-10-10T08:19:59Z"))?.label, "Ready in 1 min");
-  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:20:10Z")), { label: "1 min late", tone: "danger", fill: 1 });
+  assert.deepEqual(prepCountdown(cooking, at("2026-10-10T08:20:10Z")), { label: "1 min late", tone: "danger", fill: 1, detail: "You promised 1:50 pm" });
   assert.equal(prepCountdown(cooking, at("2026-10-10T08:25:00Z"))?.label, "5 min late");
   assert.equal(prepCountdown({ ...cooking, prepTimeMinutes: null }, at("2026-10-10T08:00:00Z")), null);
   assert.equal(prepCountdown({ ...cooking, status: "READY_FOR_PICKUP" }, at("2026-10-10T08:00:00Z")), null);
+  // The order page knows when the chef accepted, even if the order changed since.
+  assert.equal(prepCountdown({ ...cooking, updatedAt: "2026-10-10T08:15:00Z", statusHistory: [{ status: "CHEF_ACCEPTED", at: "2026-10-10T08:00:00Z" }] }, at("2026-10-10T08:12:01Z"))?.label, "Ready in 8 min");
 });
 
 test("countdowns, pickup times and decline wording speak the chef's language", () => {
@@ -95,4 +97,12 @@ test("one-tap accept promises the held time, else the slowest dish, else 15 minu
   assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [item("dish-b", "Raita")] }, dishes), 15);
   assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [] }, dishes), 15);
   assert.equal(acceptReadyMinutes({ prepTimeMinutes: null, items: [item("dish-x", "Pot roast")] }, [{ id: "dish-x", itemName: "Pot roast", preparationTimeMinutes: 2_000 }]), 1_440);
+});
+
+test("an order card names the customer by first name and last initial only", () => {
+  assert.equal(shortCustomerName("  Priya   Sharma "), "Priya S.");
+  assert.equal(shortCustomerName("Ravi Kumar reddy"), "Ravi R.");
+  assert.equal(shortCustomerName("Asha"), "Asha");
+  assert.equal(shortCustomerName("  "), null);
+  assert.equal(shortCustomerName(null), null);
 });

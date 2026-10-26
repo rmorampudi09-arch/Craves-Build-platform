@@ -60,7 +60,10 @@ function notificationTimestamp(createdAt: string, group: NotificationGroup) {
 
 /** Where a notice leads: the customer's own order. A kitchen's order belongs to Chef Mode. */
 function noticeLink(notice: CustomerNotification): { to: string; label: string } | null {
-  if ((notice.targetType ?? "").toUpperCase() === "ORDER" && notice.targetId && !isKitchenNotice(notice)) return { to: `/orders/${notice.targetId}`, label: "View order" };
+  const target = (notice.targetType ?? "").toUpperCase();
+  if (target === "ORDER" && notice.targetId && !isKitchenNotice(notice)) return { to: `/orders/${notice.targetId}`, label: "View order" };
+  // "Home chefs now cook near …" after Notify me on Home's coming-soon page.
+  if (target === "KITCHEN" && notice.targetId) return { to: `/kitchen/${notice.targetId}`, label: "See the menu" };
   return null;
 }
 

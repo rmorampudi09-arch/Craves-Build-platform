@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
+import { ArrowUp, MapPin, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import {
   useCallback,
@@ -24,6 +25,7 @@ import {
   HomeCategoryRail,
   type CravingCategory,
 } from "@/features/home/components/HomeCategoryRail";
+import { HomeComingSoon } from "@/features/home/components/HomeComingSoon";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
 import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
@@ -43,11 +45,13 @@ import {
   type HomeFoodPreference,
 } from "@/features/home/lib/home-return-state";
 import {
+  FOOD_LABELS,
   matchesDishFilters,
   matchesFoodPreference,
   sortDishes,
   type DishView,
 } from "@/features/home/lib/dish-filters";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import {
   deliveryPlaceLabel,
   useCartAddressAvailability,
@@ -175,6 +179,31 @@ function forceInstantWindowScroll(top: number): void {
 }
 
 const noSubscribe = () => () => {};
+
+/** Ends Home's long list (app 1.35.1): back up to the address and search, with focus there too. */
+function BackToTop() {
+  const goUp = () => {
+    holdScrollChrome();
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    // The location button that is on screen (the desktop and phone headers each have one).
+    const target = Array.from(document.querySelectorAll<HTMLElement>("[data-craves-location-button]")).find(
+      (button) => button.offsetParent !== null,
+    );
+    target?.focus({ preventScroll: true });
+  };
+  return (
+    <div className="flex justify-center px-4 pb-6 pt-2">
+      <button
+        type="button"
+        onClick={goUp}
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#F6F7F8] px-5 text-sm font-bold text-[#1A1A1A] transition-colors hover:bg-[#ECEEF0] active:bg-[#E5E7EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+      >
+        <ArrowUp className="h-4 w-4 text-[#D92714]" aria-hidden="true" />
+        Back to top
+      </button>
+    </div>
+  );
+}
 
 function BrowseFoodsPage() {
   const navigate = useNavigate();
@@ -730,7 +759,20 @@ function BrowseFoodsPage() {
     }
   }, [nearbyDishes]);
 
-  const filteredKitchens = kitchens;
+  // The food type pill narrows the kitchens too (app 1.34.7): a kitchen with no matching dish
+  // drops out, and the cards' photos and starting price come from matching dishes only.
+  const dietDishes = useMemo(
+    () =>
+      listFoodPreference === "all"
+        ? nearbyDishes
+        : nearbyDishes.filter((dish) => matchesFoodPreference(dish, listFoodPreference)),
+    [listFoodPreference, nearbyDishes],
+  );
+  const filteredKitchens = useMemo(() => {
+    if (listFoodPreference === "all") return kitchens;
+    const cooking = new Set(dietDishes.map((dish) => dish.kitchenId));
+    return kitchens.filter((kitchen) => cooking.has(kitchen.id));
+  }, [dietDishes, kitchens, listFoodPreference]);
 
   const filteredDishes = useMemo(() => {
     const homeKeywords = listCategory ? HOME_CATEGORY_KEYWORDS[listCategory] : null;
@@ -780,6 +822,18 @@ function BrowseFoodsPage() {
         : normalizedLocationType === "OTHER"
           ? "Other"
           : rawLocationType || "Location";
+
+  // No kitchen cooks near this address at all (discovery answered, not failed): Home is only the
+  // coming-soon page, as in the app.
+  const comingSoonAddress =
+    discoveryState === "ready" &&
+    kitchenDiscoveryVerified &&
+    kitchens.length === 0 &&
+    nearbyDishes.length === 0 &&
+    typeof address?.lat === "number" &&
+    typeof address.lng === "number"
+      ? { ...address, lat: address.lat, lng: address.lng }
+      : null;
 
   const searchDishes = useMemo(
     () =>
@@ -857,8 +911,47 @@ function BrowseFoodsPage() {
         onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
         onFoodPreferenceChange={changeFoodPreference}
+        tone="red"
       />
 
+      {comingSoonAddress ? (
+        <main>
+          <HomeComingSoon
+            address={comingSoonAddress}
+            addressTypeLabel={locationTypeLabel}
+            onChangeAddress={openAddressManager}
+            onCheckAgain={() => void refreshDiscovery(address, false, false)}
+          />
+        </main>
+      ) : discoveryState === "address-required" || discoveryState === "error" ? (
+        // One state for the page, as in the app, rather than one per section.
+        <main>
+          {discoveryState === "error" ? (
+            <EmptyState
+              role="alert"
+              illustration="loadError"
+              title="We couldn't load food near you"
+              message="Check your connection and try again."
+            >
+              <button type="button" onClick={() => void refreshDiscovery(address, false, false)} className="craves-primary-action">
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                Try again
+              </button>
+            </EmptyState>
+          ) : (
+            <EmptyState
+              illustration="location"
+              title="Where should we deliver?"
+              message="Choose an address to see the home kitchens cooking near you."
+            >
+              <button type="button" onClick={openAddressManager} className="craves-primary-action">
+                <MapPin className="h-5 w-5" aria-hidden="true" />
+                Choose location
+              </button>
+            </EmptyState>
+          )}
+        </main>
+      ) : (
       <main>
         <CartAddressAvailabilityBanner
           open={cartAvailabilityOpen}
@@ -889,14 +982,18 @@ function BrowseFoodsPage() {
           kitchens={filteredKitchens}
           searchTerm=""
           state={discoveryState}
-          message={catalogMessage}
+          message={
+            listFoodPreference !== "all" && filteredKitchens.length === 0
+              ? `No kitchen near you is cooking ${FOOD_LABELS[listFoodPreference].toLowerCase()} dishes right now.`
+              : catalogMessage
+          }
           onSelectKitchen={(kitchen) => {
             rememberHomeView();
             navigate({ to: "/kitchen/$id", params: { id: kitchen.id } });
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
-          dishes={nearbyDishes}
+          dishes={dietDishes}
           limit={6}
         />
 
@@ -913,8 +1010,7 @@ function BrowseFoodsPage() {
             setHomeCategory(null);
             setDishSort("recommended");
             setDishFilters(DEFAULT_DISH_FILTERS);
-            // Veg is the header switch's choice and stays; Egg or Non-veg came from the filters.
-            setFoodPreference((current) => (current === "veg" ? current : "all"));
+            // The food type stays: it is the pill's choice, shown beside the search.
             revealDishes();
             // The button goes away with the filters: keep keyboard focus on the list it changed.
             window.requestAnimationFrame(() =>
@@ -922,14 +1018,16 @@ function BrowseFoodsPage() {
             );
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
-          onManageAddress={openAddressManager}
           hasMoreRemote={hasMoreDiscoveredDishes()}
           loadingMoreRemote={dishLoadMoreBusy}
           onLoadMore={loadMoreNearbyDishes}
         />
 
         <HomeBottomSections />
+
+        {filteredDishes.length > 8 ? <BackToTop /> : null}
       </main>
+      )}
 
       <CustomerFloatingCart />
 

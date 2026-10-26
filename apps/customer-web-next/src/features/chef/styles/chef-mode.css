@@ -525,6 +525,9 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
 /* The drawing sits on the section's white, like the page it belongs to. */
 .chef-empty-image { height: 9.5rem; width: auto; max-width: 100%; object-fit: contain; }
 @media (min-width: 640px) { .chef-empty-image { height: 11rem; } }
+/* The app's empty-state drawings (EmptyIllustration), 240 × 190. */
+.chef-empty-drawing { width: 12rem; }
+@media (min-width: 640px) { .chef-empty-drawing { width: 14rem; } }
 .chef-empty-title { margin-top: 0.5rem; font-family: var(--font-display-family); font-size: 1.125rem; font-weight: 700; color: var(--chef-text); }
 .chef-empty-text { max-width: 26rem; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.5; }
 .chef-skeleton {

@@ -270,7 +270,7 @@ describe("balance card and money rows", () => {
 
   it.each([
     [bank("NOT_SUBMITTED"), "Not added yet"],
-    [bank("VERIFIED", "1234"), "Account ending 1234"],
+    [bank("VERIFIED", "1234"), "••1234"],
     [null, "Where Craves sends your money"],
   ])("the bank row says where the money goes (%#)", async (account, meta) => {
     serve(false, account);

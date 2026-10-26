@@ -102,6 +102,11 @@ export function payoutStatusView(
   return { label: words[key], tone, note: words[`${key}Note`] };
 }
 
+/** "HDFC Bank ••1234": the account money goes to, as the app names it; null until its last digits are known. */
+export function bankLine(bank: { bankName?: string | null; lastFour: string | null } | null | undefined): string | null {
+  return bank?.lastFour ? [bank.bankName?.trim(), `••${bank.lastFour}`].filter(Boolean).join(" ") : null;
+}
+
 /**
  * A withdrawal answer that is a clear no (a 4xx other than a timeout): no transfer was made for its key, so a new
  * request may start. Anything else (5xx, a timeout, no answer) may have made one: only the same request goes again.

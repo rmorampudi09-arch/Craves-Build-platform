@@ -6,7 +6,7 @@ import { ChefAccountingBreakdown } from "@/features/chef/components/chef-account
 import { useChefBank } from "@/features/chef/components/chef-bank-onboarding-panel";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Info, Landmark, RefreshCw } from "lucide-react";
 import { ChefNotice, ChefPill, ChefSection, dateTime, formatInr } from "@/features/chef/components/chef-ui";
-import { payoutStatusView, withdrawalRefused } from "@/features/chef/lib/chef-payout-presentation";
+import { bankLine, payoutStatusView, withdrawalRefused } from "@/features/chef/lib/chef-payout-presentation";
 import { ChefBalanceSkeleton } from "@/features/chef/components/chef-loading";
 import { format, LANGUAGE_NAMES, messages } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
@@ -247,7 +247,8 @@ export function ChefWithdrawalPanel({ compact = false }: { compact?: boolean }) 
     : null);
   const blocked = !balance || balance.onHold || balance.manualRequestUsedToday || !balance.executionEnabled || !(Number(balance.available) > 0) || bankNotice !== null;
   const bankDetail = bank ? [bank.lastFour ? format(text.accountEnding, {lastFour: bank.lastFour}) : null, bank.accountHolderName].filter(Boolean).join(" · ") : "";
-  const sentTo = bank?.lastFour ? format(text.sentTo, {bank: [bank.bankName, `••${bank.lastFour}`].filter(Boolean).join(" ")}) : text.track;
+  const account = bankLine(bank);
+  const sentTo = account ? format(text.sentTo, {bank: account}) : text.track;
   return <div className="chef-stack">
     <ChefSection title={text.title} labelledBy="chef-balance">
       {!balance ? (

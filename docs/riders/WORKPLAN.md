@@ -364,7 +364,7 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
    - Add "3. Airplane-mode trip test":
      1. accept, then turn airplane mode on;
      2. tap arrived, picked up and arrived at drop, and enter the OTP;
-     3. force stop the app in Settings and reopen it offline (it waits for signal until P2-12);
+     3. force stop the app in Settings and reopen it offline (it opens from what it saved, P2-12);
      4. turn airplane mode off. Every step should reach the server in order within 60 s.
 
      Repeat with a reboot instead of the force stop, and once with the photo route.
@@ -615,14 +615,14 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** a database test on a seeded partition.
 
-### P2-12 Open the trip after a restart without signal
-**Why:** found while writing P1-15. After a force stop or a reboot with no signal, the app can't start: the session check and `GET /rider/me` need the server (`RiderNavigator.tsx`, `useRiderSession.ts`), so it shows "Something went wrong". Steps tapped before the restart are kept and sent once there is signal, but the rider can't tap new ones until then. **Who:** agent. **Blocked by:** nothing.
+### P2-12 Open the trip after a restart without signal (done)
+**Why:** found while writing P1-15. After a force stop or a reboot with no signal, the app couldn't start: the session check and `GET /rider/me` need the server (`RiderNavigator.tsx`, `useRiderSession.ts`), so it showed "Something went wrong". Steps tapped before the restart were kept, but the rider couldn't tap new ones until there was signal. **Who:** agent. **Blocked by:** nothing.
 
-**Do:**
-1. Keep the last `RiderMe` and active trip in AsyncStorage, and seed the query cache from them at start.
-2. In the rider's live session, treat "no signal at start" with a saved session as signed in, and check it again when the signal returns. The customer and chef apps keep today's behaviour.
+**Done:**
+1. `state/riderSnapshot.ts` keeps the last `RiderMe`, Home and the trip in progress, encrypted with `expo-secure-store` because the trip has the customer's contact details. The trip is dropped once it ends, and everything at sign-out. A start without signal seeds the query cache from a snapshot under a day old.
+2. The rider's live session treats a start that failed for lack of signal, with the refresh credential still saved, as signed in. It checks the session again every 10 s and whenever the app comes back to the front; once signed in again it refetches and sends the queued steps. A refused session (expired or revoked) goes to sign-in. The customer and chef apps keep today's behaviour.
 
-**Prove it:** `RiderApp.live.test.tsx`, a start with no network opens the trip on the step its queued steps lead to; `PHONE-TESTS.md` §3 without "Try again".
+**Proved by:** `RiderApp.live.test.tsx` (a restart with no network opens the trip on the step its queued step leads to; the step reaches the server once the signal is back) and `riderSnapshot.test.ts`; `PHONE-TESTS.md` §3 no longer needs "Try again".
 
 ### Phase 2 done when
 - 50 riders online with zero lost steps over a week.

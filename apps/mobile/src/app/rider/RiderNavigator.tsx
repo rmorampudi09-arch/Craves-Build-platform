@@ -3,6 +3,7 @@ import {Alert} from 'react-native';
 import {createNavigationContainerRef, NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useQueryClient} from '@tanstack/react-query';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Icon, TerminalState} from '../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
@@ -13,6 +14,7 @@ import type {ReceivedOffer} from '../../features/rider/domain/offerTiming';
 import {RiderShellContext, type RiderStackParamList, type RiderTabParamList} from '../../features/rider/navigation';
 import {RIDER_APP_VERSION} from '../../features/rider/riderConfig';
 import {useActiveTrip, useRiderHome, useRiderMe} from '../../features/rider/state/riderQueries';
+import {riderSnapshot} from '../../features/rider/state/riderSnapshot';
 import {tripQueue} from '../../features/rider/state/tripQueue';
 import {useStrings} from '../../features/rider/strings/StringsProvider';
 import {AccountStatusScreen} from '../../features/rider/screens/AccountStatusScreen';
@@ -90,6 +92,7 @@ function SignedIn() {
   const me = useRiderMe();
   const home = useRiderHome();
   const trip = useActiveTrip();
+  const queryClient = useQueryClient();
   const language = me.data?.language;
 
   useEffect(() => {
@@ -97,6 +100,9 @@ function SignedIn() {
       adoptServerLanguage(language);
     }
   }, [language, adoptServerLanguage]);
+
+  // What a start without signal opens from (useRiderSession, WORKPLAN P2-12).
+  useEffect(() => riderSnapshot.watch(queryClient), [queryClient]);
 
   const riderId = me.data?.riderId ?? '';
   const blockedMessage = strings.profile.signOutBlocked;

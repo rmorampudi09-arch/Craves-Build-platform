@@ -62,13 +62,13 @@ Checks on every phone:
 
 ## 3. Airplane-mode trip test: zero lost steps (a 4 GB and a 3 GB phone)
 
-The app keeps every trip step on the phone until the server has it, through a force stop and a reboot, and the server counts each step from when it was tapped (app 1.1.0). A restart without signal can't open the trip yet: the app needs the server to start (sign-in check and rider profile), so it shows "Something went wrong" until there is signal. The steps tapped before the restart, the delivery OTP included, are kept and sent then.
+The app keeps every trip step on the phone until the server has it, through a force stop and a reboot, and the server counts each step from when it was tapped (app 1.1.0). A restart without signal opens from what the phone saved last time (the rider, Home and the trip in progress, encrypted on the phone), so the trip carries on; the app checks for signal every 10 s and signs in again by itself.
 
 1. Accept a test offer. Turn **airplane mode on**.
-2. Tap **I've reached the kitchen**, then **Picked up**, then **I've reached the customer**. Each step moves on at once and shows "Saved · will sync".
-3. Enter the customer's OTP and tap **Delivered**. The app shows "Delivery saved" and "We'll check the code when you're back online. You can go."
-4. **Force stop** the app (Settings → Apps → Craves Rider → Force stop) and reopen it, still offline: it shows "Something went wrong" with **Try again**.
-5. Turn **airplane mode off**, tap **Try again** and note the time. Home opens, and the saved steps go to the server at once.
+2. Tap **I've reached the kitchen**, then **Picked up**. Each step moves on at once and shows "Saved · will sync".
+3. **Force stop** the app (Settings → Apps → Craves Rider → Force stop) and reopen it, still offline. Home opens with "You're offline" and "You have a trip in progress"; **Open trip** shows the trip at the customer leg, not at the kitchen.
+4. Tap **I've reached the customer**, enter the customer's OTP and tap **Delivered**. The app shows "Delivery saved" and "We'll check the code when you're back online. You can go."
+5. Turn **airplane mode off** and note the time. Within about 10 s the app is back online by itself and the saved steps go to the server.
 6. Check the trip on the server (read-only):
 
    ```sql
@@ -77,7 +77,9 @@ The app keeps every trip step on the phone until the server has it, through a fo
 
    `ARRIVED_PICKUP`, `PICKED_UP`, `ARRIVED_DROP` and `DELIVERED` are all there, in that order, created within 60 s of step 5; each `age_ms` is about how long before then you tapped it.
 
-Run it three ways on each phone: as above; with a **reboot** instead of the force stop (reboot with airplane mode still on, then reopen the app); and once with the **photo route** (at the customer, tap Call twice and wait until "You can leave at …" has passed, take the photo, then force stop and carry on from step 4; the delivery goes with the photo the app kept).
+Run it three ways on each phone: as above; with a **reboot** instead of the force stop in step 3 (reboot with airplane mode still on, then reopen the app); and once with the **photo route** in step 4 (at the customer, tap Call twice and wait until "You can leave at …" has passed, then take the photo; the delivery goes with the photo the app kept).
+
+A phone that has never been online with this app, or that was offline for more than a day, has nothing saved to open from: it shows "Something went wrong" with **Try again** until there is signal.
 
 **Pass:** every step of every run reaches the server, in order, within 60 s of the signal coming back. **Fail:** write down which step is missing or out of order and what the app showed.
 

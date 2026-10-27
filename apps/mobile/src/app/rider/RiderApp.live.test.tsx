@@ -5,14 +5,16 @@ import {Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {getIdToken, signInWithCustomToken, signInWithPhoneNumber} from '@react-native-firebase/auth';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AxiosError, type InternalAxiosRequestConfig} from 'axios';
-import type {HomeSummary, RiderMe, Terms} from '../../features/rider/api/contract';
+import type {HomeSummary, RiderMe, Terms, Trip} from '../../features/rider/api/contract';
 import {fakeHttp, type FakeReply} from '../../features/rider/api/fakeHttp';
 import {tokenMemory} from '../../core/security/tokenMemory';
 import {authActions} from '../../features/auth/state/authSlice';
 import {appQueryClient} from '../query';
 import {store} from '../store/store';
 import {RiderApp} from './RiderApp';
+import {OFFLINE_RECHECK_MS} from './useRiderSession';
 
 jest.mock('react-native-config', () => ({
   __esModule: true,
@@ -227,6 +229,108 @@ describe('rider app in live mode', () => {
       await start({me: old, home: {...home, online: true, shiftStartedAt: '2026-10-20T10:00:00Z'}});
       expect(has('rider-home')).toBe(true);
       expect(texts()).not.toContain('Update the app to continue');
+    });
+  });
+
+  describe('a restart without signal mid-trip (WORKPLAN P2-12)', () => {
+    const local = new Map<string, string>();
+    const atKitchen: Trip = {
+      tripId: 't1',
+      version: 3,
+      step: 'AT_KITCHEN',
+      orderCode: 'CR-4107',
+      itemsCount: 2,
+      payPaise: 6700,
+      kitchen: {kitchenName: "Lakshmi's Kitchen", area: 'Madhapur', address: 'Plot 41', lat: 17.4483, lng: 78.3915, chefPhone: '+912222222222'},
+      customer: {firstName: 'Anil', area: 'Kondapur', address: 'Flat 302', lat: 17.4615, lng: 78.3657, phone: '+913333333333'},
+      arrivedKitchenAt: '2026-10-20T10:30:00Z',
+      waitFreeSeconds: 480,
+      unreachableWaitSeconds: 480,
+      sealed: true,
+    };
+
+    beforeEach(() => {
+      local.clear();
+      (AsyncStorage.getItem as jest.Mock).mockImplementation(async (key: string) => local.get(key) ?? null);
+      (AsyncStorage.setItem as jest.Mock).mockImplementation(async (key: string, value: string) => {
+        local.set(key, value);
+      });
+      (AsyncStorage.removeItem as jest.Mock).mockImplementation(async (key: string) => {
+        local.delete(key);
+      });
+      secure.set('craves_refresh_session_v1', JSON.stringify({refreshToken: 'refresh-0', expiresAt: '2099-01-01T00:00:00Z'}));
+    });
+
+    afterEach(() => {
+      (AsyncStorage.getItem as jest.Mock).mockImplementation(async () => null);
+      (AsyncStorage.setItem as jest.Mock).mockImplementation(async () => undefined);
+      (AsyncStorage.removeItem as jest.Mock).mockImplementation(async () => undefined);
+    });
+
+    it('opens the trip on the step its queued steps lead to, and sends them when the signal returns', async () => {
+      const server = {me: {...me, acceptedTermsVersion: 'v2'}, home: {...home, online: true}, trip: atKitchen};
+      const online = backend(server);
+      let signal = true;
+      const network = (config: InternalAxiosRequestConfig): FakeReply => {
+        if (!signal) {
+          throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config);
+        }
+        const path = `${config.method} ${config.url}`;
+        if (config.headers.get('Authorization') === 'Bearer access-1' && path === 'get /api/v1/rider/trips/active') {
+          return {status: 200, data: server.trip};
+        }
+        if (config.headers.get('Authorization') === 'Bearer access-1' && path === 'post /api/v1/rider/trips/t1/picked-up') {
+          server.trip = {...server.trip, step: 'PICKED_UP', version: server.trip.version + 1};
+          return {status: 200, data: server.trip};
+        }
+        return online(config);
+      };
+      await start(server, network);
+      await act(async () => press('rider-resume-trip').props.onPress());
+      await settle();
+      expect(has('rider-pickup-check')).toBe(true);
+
+      // No signal at the kitchen: "Picked up" waits in the queue and shows at once.
+      signal = false;
+      await act(async () => press('rider-picked-up').props.onPress());
+      await settle();
+      expect(has('rider-to-customer')).toBe(true);
+
+      // The phone restarts, still without signal: the app opens from what it saved, not on an error.
+      act(() => tree.unmount());
+      store.dispatch(authActions.bootstrapReset());
+      appQueryClient.clear();
+      tokenMemory.clear();
+      const intervals = jest.spyOn(globalThis, 'setInterval');
+      try {
+        await start(server, network);
+        expect(texts()).not.toContain('Something went wrong');
+        expect(has('rider-home')).toBe(true);
+        await act(async () => press('rider-resume-trip').props.onPress());
+        await settle();
+        expect(has('rider-to-customer')).toBe(true);
+        expect(server.trip.step).toBe('AT_KITCHEN');
+
+        // Signal back: the next check signs in again with the saved session and sends the queued step.
+        signal = true;
+        const recheck = intervals.mock.calls.find(([, ms]) => ms === OFFLINE_RECHECK_MS)?.[0] as (() => void) | undefined;
+        expect(recheck).toBeDefined();
+        await act(async () => recheck?.());
+        await settle();
+        expect(server.trip.step).toBe('PICKED_UP');
+        expect(urls()).toContain('post /api/v1/auth/refresh');
+        expect(has('rider-to-customer')).toBe(true);
+      } finally {
+        intervals.mockRestore();
+      }
+    });
+
+    it('still shows the error with Try again when nothing was saved', async () => {
+      await start({me, home}, config => {
+        throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config);
+      });
+      expect(texts()).toContain('Something went wrong. Try again.');
+      expect(has('rider-home')).toBe(false);
     });
   });
 });

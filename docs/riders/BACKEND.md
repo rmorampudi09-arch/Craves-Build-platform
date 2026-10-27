@@ -337,7 +337,7 @@ Location is collected only while the rider is online, and kept only as long as b
 
 Never stored: a full Aadhaar number (there is no Aadhaar document type), or location while the rider is offline (the app never asks for background location).
 
-Database connections: every service sets its Hikari pool explicitly so that pool × max replicas, summed over the eight apps on the shared server, stays within 45 (`scripts/release/check-db-connection-budget.py`, 43 today; integration-service 4 × 2, order-service 3 × 3). integration-service's other jobs keep one thread per job on their own watched pools.
+Database connections: every service sets its Hikari pool explicitly so that pool × max replicas, summed over the eight apps on the shared server, stays within 45 (`scripts/release/check-db-connection-budget.py`, 43 today; integration-service 8 × 1 (blueprint E3), order-service 3 × 3). integration-service's other jobs keep one thread per job on their own watched pools.
 
 ## Money
 

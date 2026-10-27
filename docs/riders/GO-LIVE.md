@@ -7,7 +7,7 @@ Until step 6, customers, chefs, Borzo and Pidge see no change: every rider flag 
 ## 0. Before you start (once)
 
 - [ ] **Make the repository private** (PLAN P0.1). It now holds payout, KYC and dispatch code.
-- [ ] **Decide the integration-service pool.** Today it is 4 connections. The recommendation is 8, with the Container App's maximum replicas at 1, because referral checkouts open a second transaction. Live settings such as `REFERRAL_DB_POOL_SIZE` override the repo.
+- [x] **Decide the integration-service pool.** Decided (blueprint E3): 8 connections, with the Container App's maximum replicas at 1, because referral checkouts open a second transaction. The repo defaults say so (P1-16). Live settings override the repo, so on `ca-craves-integration-service-pr` set `SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE=8` if it is set, and max replicas to 1 (`az containerapp update --max-replicas 1`).
 - [ ] **Have the business inputs ready:**
   - the rate card numbers;
   - the pilot zone: which kitchens and riders;

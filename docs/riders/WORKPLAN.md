@@ -363,11 +363,11 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
    - Add the cancel-notification step (P1-12).
    - Add "3. Airplane-mode trip test":
      1. accept, then turn airplane mode on;
-     2. tap arrived and picked up;
-     3. force stop the app in Settings, reopen it offline, tap arrived at drop and enter the OTP;
+     2. tap arrived, picked up and arrived at drop, and enter the OTP;
+     3. force stop the app in Settings and reopen it offline (it waits for signal until P2-12);
      4. turn airplane mode off. Every step should reach the server in order within 60 s.
 
-     Repeat with a reboot after pickup, and once with the photo route.
+     Repeat with a reboot instead of the force stop, and once with the photo route.
 4. **`PERF.md`.** Add "Each screen renders ≤ 100 ms": a Perfetto trace from the tap's input event to the first frame of the next screen, over 10 navigations.
 
 **Prove it:** a new `FleetPilotHealthDatabaseTest` runs every query in the file on fixtures, and checks the offer-to-ring p95 on 20 seeded offers.
@@ -614,6 +614,15 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 **Do:** After 7 days, keep one fix per 10 s per trip.
 
 **Prove it:** a database test on a seeded partition.
+
+### P2-12 Open the trip after a restart without signal
+**Why:** found while writing P1-15. After a force stop or a reboot with no signal, the app can't start: the session check and `GET /rider/me` need the server (`RiderNavigator.tsx`, `useRiderSession.ts`), so it shows "Something went wrong". Steps tapped before the restart are kept and sent once there is signal, but the rider can't tap new ones until then. **Who:** agent. **Blocked by:** nothing.
+
+**Do:**
+1. Keep the last `RiderMe` and active trip in AsyncStorage, and seed the query cache from them at start.
+2. In the rider's live session, treat "no signal at start" with a saved session as signed in, and check it again when the signal returns. The customer and chef apps keep today's behaviour.
+
+**Prove it:** `RiderApp.live.test.tsx`, a start with no network opens the trip on the step its queued steps lead to; `PHONE-TESTS.md` §3 without "Try again".
 
 ### Phase 2 done when
 - 50 riders online with zero lost steps over a week.

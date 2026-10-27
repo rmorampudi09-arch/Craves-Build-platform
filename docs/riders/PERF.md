@@ -84,6 +84,26 @@ Turn on TalkBack (Settings → Accessibility → TalkBack). Use swipe right to m
 
 **Pass:** every box ticked on both phones. Note anything read wrongly or skipped.
 
+## 6. Each screen renders within 100 ms
+
+From the tap that opens a screen to the first frame that draws it, on the 4 GB phone (the mid-range one). Perfetto puts the tap's input event and the frames on one timeline.
+
+1. Save this as `screens.cfg`:
+
+   ```
+   buffers { size_kb: 65536 fill_policy: RING_BUFFER }
+   data_sources { config { name: "android.surfaceflinger.frametimeline" } }
+   data_sources { config { name: "linux.ftrace" ftrace_config { atrace_categories: "input" atrace_categories: "gfx" atrace_categories: "view" atrace_apps: "com.cravesapp.rider" } } }
+   duration_ms: 60000
+   ```
+
+2. Open the app on Home, start the trace: `cat screens.cfg | adb shell perfetto --txt -c - -o /data/misc/perfetto-traces/screens.pftrace`
+3. Within 60 s make these 10 taps, about 3 s apart: Earnings tab; a trip row (Trip pay); Back; Profile tab; Help; Back; Home tab; Go online (selfie screen); Close; and, on a test trip, the next trip step (**I've reached the kitchen** opens At the kitchen). Run the trip steps (Picked up, I've reached the customer, Customer not answering?) in a second trace if 60 s isn't enough.
+4. `adb pull /data/misc/perfetto-traces/screens.pftrace` and open it at https://ui.perfetto.dev.
+5. For each tap, find the app's `deliverInputEvent` slice for the finger lifting (the screen opens on release) on the main thread. Then find the first frame that draws the new screen: the first long `Choreographer#doFrame` after it, and that frame in "Actual Timeline". **Render time** is from the start of the input slice to the end of that frame.
+
+**Pass:** each of the 10 under 100 ms. For any that aren't, write down the screen and the longest slices in that frame.
+
 ## Results
 
 Build: versionCode ______ · commit ______ · date ______ · tested by ______
@@ -101,6 +121,7 @@ Build: versionCode ______ · commit ______ · date ______ · tested by ______
 | Earnings, janky frames, worst of 3 runs (200+ rows) | < 5% | | | |
 | Font scale 1.3: screens with problems | none | | | |
 | TalkBack: boxes not ticked | none | | | |
+| Screen render, worst of 10 taps (4 GB phone) | < 100 ms | | (not needed) | |
 
 Offer timings, one row per offer:
 
@@ -116,5 +137,20 @@ Offer timings, one row per offer:
 | 8 | | | | | |
 | 9 | | | | | |
 | 10 | | | | | |
+
+Screen renders, one row per tap (4 GB phone):
+
+| # | Tap | Opens | Render time (ms) |
+|---|---|---|---|
+| 1 | Earnings tab | Earnings | |
+| 2 | A trip row | Trip pay | |
+| 3 | Back | Earnings | |
+| 4 | Profile tab | Profile | |
+| 5 | Help | Help | |
+| 6 | Back | Profile | |
+| 7 | Home tab | Home | |
+| 8 | Go online | Selfie | |
+| 9 | Close | Home | |
+| 10 | I've reached the kitchen | At the kitchen | |
 
 Keep the Perfetto traces, the gfxinfo output and the screen recordings with the results.

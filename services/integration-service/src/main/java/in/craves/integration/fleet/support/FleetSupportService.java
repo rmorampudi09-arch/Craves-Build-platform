@@ -2,6 +2,9 @@ package in.craves.integration.fleet.support;
 
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetRules;
+import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
+import in.craves.integration.fleet.admin.FleetAdminService;
+import in.craves.integration.fleet.admin.FleetAdminService.Done;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.support.FleetSupportModels.Fix;
 import in.craves.integration.fleet.support.FleetSupportModels.Issue;
@@ -30,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Riders' problem reports and SOS (rider-v1 /support/issues, /sos; admin-fleet-v1 /support-issues, /sos-events). An issue
  * records acknowledge-by (+24 h) and fix-by (+72 h); one raised on a trip before its pay is withdrawable holds that pay
- * until it is fixed or 7 days pass (FleetEarnings). An SOS is stored first, then the ops lead is alerted at once.
+ * until it is fixed or 7 days pass (FleetEarnings). Ops acknowledge and fix issues from the console, audited. An SOS is
+ * stored first, then the ops lead is alerted at once.
  */
 @Service
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -42,10 +46,12 @@ public class FleetSupportService {
 
     private final JdbcTemplate jdbc;
     private final RiderPushClient alerts;
+    private final FleetAdminService admin;
 
-    public FleetSupportService(JdbcTemplate jdbc, RiderPushClient alerts) {
+    public FleetSupportService(JdbcTemplate jdbc, RiderPushClient alerts, FleetAdminService admin) {
         this.jdbc = jdbc;
         this.alerts = alerts;
+        this.admin = admin;
     }
 
     /** A problem with a trip or a payout of this rider (404 for anyone else's), or anything else. */
@@ -136,6 +142,45 @@ public class FleetSupportService {
             + "WHERE s.state = ? ORDER BY s.created_at, s.id LIMIT 500", (row, n) -> issue(row), state));
     }
 
+    /** Support has seen an open issue and is on it: within 24 hours of the report (acknowledgeBy). 409 ISSUE_NOT_OPEN. */
+    @Transactional
+    public Object acknowledge(Admin by, UUID key, UUID issueId) {
+        return admin.once(by, key, "SUPPORT_ISSUE_ACKNOWLEDGED", issueId.toString(), () -> {
+            UUID rider = jdbc.queryForList("UPDATE fleet_schema.support_issue SET state = 'ACKNOWLEDGED', acknowledged_at = now(), "
+                    + "acknowledged_by_name = ? WHERE id = ? AND state = 'OPEN' RETURNING rider_id", UUID.class, by.name(), issueId)
+                .stream().findFirst().orElseThrow(() -> refused(issueId, "ISSUE_NOT_OPEN", "This issue was acknowledged already."));
+            Issue issue = issue(issueId);
+            return new Done(issue, rider, issueId.toString(), "Acknowledged the rider's " + issue.category() + " issue.");
+        });
+    }
+
+    /**
+     * Fixed, with what was done (support tells the rider): a trip's pay held by this issue is released by the
+     * next balance read (FleetEarnings.RELEASED). An open issue is acknowledged at the same time. 409 ISSUE_ALREADY_FIXED.
+     */
+    @Transactional
+    public Object fix(Admin by, UUID key, UUID issueId, String resolution) {
+        String text = FleetAdminService.reason(resolution);
+        return admin.once(by, key, "SUPPORT_ISSUE_FIXED", issueId + "\n" + text, () -> {
+            UUID rider = jdbc.queryForList("UPDATE fleet_schema.support_issue SET state = 'FIXED', fixed_at = now(), fixed_by_name = ?, "
+                    + "resolution = ?, acknowledged_at = COALESCE(acknowledged_at, now()), acknowledged_by_name = COALESCE(acknowledged_by_name, ?) "
+                    + "WHERE id = ? AND state <> 'FIXED' RETURNING rider_id", UUID.class, by.name(), text, by.name(), issueId)
+                .stream().findFirst().orElseThrow(() -> refused(issueId, "ISSUE_ALREADY_FIXED", "This issue was fixed already."));
+            Issue issue = issue(issueId);
+            return new Done(issue, rider, issueId.toString(), "Fixed the rider's " + issue.category() + " issue: " + text);
+        });
+    }
+
+    private Issue issue(UUID issueId) {
+        return jdbc.queryForObject("SELECT s.*, r.name FROM fleet_schema.support_issue s JOIN fleet_schema.rider r ON r.id = s.rider_id "
+            + "WHERE s.id = ?", (row, n) -> issue(row), issueId);
+    }
+
+    private FleetApiException refused(UUID issueId, String code, String message) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.support_issue WHERE id = ?)", Boolean.class,
+            issueId)) ? FleetApiException.conflict(code, message) : FleetApiException.notFound("ISSUE_NOT_FOUND", "No such issue.");
+    }
+
     /** The last 7 days, newest first. */
     @Transactional(readOnly = true)
     public SosPage sosEvents() {
@@ -143,7 +188,7 @@ public class FleetSupportService {
             + "WHERE e.created_at > now() - interval '7 days' ORDER BY e.created_at DESC, e.id DESC LIMIT 500", (row, n) -> new SosEvent(
             row.getObject("id", UUID.class), row.getObject("rider_id", UUID.class), row.getString("name"), FleetRules.maskPhone(row.getString("phone")),
             row.getTimestamp("created_at").toInstant(), (Double) row.getObject("lat"), (Double) row.getObject("lng"),
-            row.getObject("trip_id", UUID.class))));
+            row.getObject("trip_id", UUID.class), row.getTimestamp("alerted_at") == null ? null : row.getTimestamp("alerted_at").toInstant())));
     }
 
     private UUID ownTrip(UUID riderId, String tripId) {
@@ -168,9 +213,12 @@ public class FleetSupportService {
     }
 
     private static Issue issue(ResultSet row) throws SQLException {
+        Timestamp acknowledged = row.getTimestamp("acknowledged_at");
+        Timestamp fixed = row.getTimestamp("fixed_at");
         return new Issue(row.getObject("id", UUID.class), row.getObject("rider_id", UUID.class), row.getString("name"),
             row.getObject("trip_id", UUID.class), row.getString("category"), row.getString("note") == null ? "" : row.getString("note"),
             row.getString("state"), row.getTimestamp("created_at").toInstant(), row.getTimestamp("acknowledge_by").toInstant(),
-            row.getTimestamp("fix_by").toInstant());
+            row.getTimestamp("fix_by").toInstant(), acknowledged == null ? null : acknowledged.toInstant(), row.getString("acknowledged_by_name"),
+            fixed == null ? null : fixed.toInstant(), row.getString("fixed_by_name"), row.getString("resolution"));
     }
 }

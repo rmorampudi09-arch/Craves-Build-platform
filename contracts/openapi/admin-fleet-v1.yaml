@@ -1,7 +1,7 @@
-# Admin fleet API: the ops console for Craves riders (apps/customer-web-next /admin/riders,
-# /admin/fleet-trips, /admin/fleet-payouts and /admin/fleet-slots). Implemented by integration-service, package
-# in.craves.integration.fleet (schema fleet_schema). The web BFF under /api/admin/fleet only forwards
-# these paths; this service is the authority for roles, validation and the audit trail.
+# Admin fleet API: the ops console for Craves riders (apps/customer-web-next /admin/riders, /admin/fleet-trips,
+# /admin/fleet-slots, /admin/fleet-setup, /admin/fleet-health, /admin/fleet-support and /admin/fleet-payouts).
+# Implemented by integration-service, package in.craves.integration.fleet (schema fleet_schema). The web BFF under
+# /api/admin/fleet only forwards these paths; this service is the authority for roles, validation and the audit trail.
 openapi: 3.0.3
 info:
   title: Craves Admin Fleet API
@@ -641,6 +641,88 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: "PAYOUT_NOT_PENDING or BATCH_NOT_SENT.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/payout-batches/{batchId}/payouts/{payoutId}/reverse:
+    post:
+      operationId: reversePayout
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        The bank returned a PAID payout. It reads FAILED to the rider with the bank's reason and keeps its UTR; the money is
+        back in the rider's balance; the journal fully reverses the paid one; the rider's payouts pause until ops checks
+        the account.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }, { $ref: '#/components/parameters/PayoutId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200':
+          description: The payout, FAILED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Payout' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "PAYOUT_NOT_PAID.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '503': { description: "LEDGER_POSTING_OFF.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/payout-batches/{batchId}/cancel:
+    post:
+      operationId: cancelPayoutBatch
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        Withdraws a file never sent to the bank (CREATED or APPROVED). A weekly file's payouts and this week's debt
+        recoveries go, so the next weekly file pays and recovers them; a daily file's withdrawals wait for the next daily
+        file. No journal changes. notUploaded must be true: the admin checked the file was not uploaded.
+      parameters: [{ $ref: '#/components/parameters/BatchId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, notUploaded]
+              properties:
+                reason: { $ref: '#/components/schemas/Reason' }
+                notUploaded: { type: boolean, enum: [true] }
+      responses:
+        '200':
+          description: The file that is gone, as it was.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancelledBatch' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "BATCH_ALREADY_SENT.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/trips/{tripId}/pay-adjustments:
+    post:
+      operationId: adjustTripPay
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        A signed correction to one pay component of a credited trip, as its next revision, with the reason the rider sees.
+        Negative: debt, recovered only from future pay at the weekly cap. Positive: pay like any other, pending 24 hours,
+        with TDS withheld. At most 1,000,000 paise either way.
+      parameters: [{ $ref: '#/components/parameters/TripId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [component, amountPaise, reason]
+              properties:
+                component: { type: string, pattern: '^[a-z][a-z0-9-]{1,31}$', description: 'A pay component other than tds, such as drop-km.' }
+                amountPaise: { type: integer, format: int64, minimum: -1000000, maximum: 1000000, not: { enum: [0] } }
+                reason: { $ref: '#/components/schemas/Reason' }
+      responses:
+        '201':
+          description: The adjustment, as the rider now sees it on the trip.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayAdjustment' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "TRIP_NOT_CREDITED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/holds:
     get:
       operationId: listHolds
@@ -737,6 +819,49 @@ paths:
                 properties:
                   issues: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/SupportIssue' } }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/support-issues/{issueId}/acknowledge:
+    post:
+      operationId: acknowledgeRiderSupportIssue
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN]
+      description: Support has seen an OPEN issue and is on it (within its acknowledge-by time).
+      parameters: [{ $ref: '#/components/parameters/IssueId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '200':
+          description: The issue, ACKNOWLEDGED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupportIssue' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "ISSUE_NOT_OPEN.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/support-issues/{issueId}/fix:
+    post:
+      operationId: fixRiderSupportIssue
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN]
+      description: >-
+        Fixed, with what was done (support tells the rider; the app does not show it). Pay this issue held is released at
+        once. An OPEN issue is acknowledged at the same time.
+      parameters: [{ $ref: '#/components/parameters/IssueId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [resolution]
+              properties:
+                resolution: { $ref: '#/components/schemas/Reason' }
+      responses:
+        '200':
+          description: The issue, FIXED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupportIssue' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "ISSUE_ALREADY_FIXED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/sos-events:
     get:
       operationId: listSosEvents
@@ -805,19 +930,21 @@ paths:
     post:
       operationId: cancelSlot
       x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
-      description: Cancels a BOOKED slot; the rider no longer has its guarantee.
+      description: >-
+        Cancels a BOOKED slot that has not started; the rider no longer has its guarantee. A slot that has started ends now
+        instead and stays BOOKED until the settlement job settles it: the rider keeps the guarantee for the time worked.
       parameters: [{ $ref: '#/components/parameters/SlotId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { $ref: '#/components/requestBodies/Reason' }
       responses:
         '200':
-          description: CANCELLED slot.
+          description: The slot, CANCELLED, or BOOKED with its end moved to now.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Slot' }
         '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: "SLOT_NOT_BOOKED (already cancelled or completed).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "SLOT_NOT_BOOKED (already cancelled, ended early or completed).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/banner:
     get:
       operationId: getZoneBanner
@@ -1022,6 +1149,7 @@ components:
     BatchId: { name: batchId, in: path, required: true, schema: { type: string, format: uuid } }
     PayoutId: { name: payoutId, in: path, required: true, schema: { type: string, format: uuid } }
     SlotId: { name: slotId, in: path, required: true, schema: { type: string, format: uuid } }
+    IssueId: { name: issueId, in: path, required: true, schema: { type: string, format: uuid } }
     ChefId: { name: chefId, in: path, required: true, description: The chef's identity id., schema: { type: string, format: uuid } }
     Version: { name: version, in: path, required: true, schema: { type: string, maxLength: 40, pattern: '^[0-9]{4}-[0-9]{2}-v[0-9]+$' } }
   requestBodies:
@@ -1284,6 +1412,26 @@ components:
         riderName: { type: string, maxLength: 120, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PayAdjustment:
+      type: object
+      required: [tripId, orderCode, riderId, component, revision, amountPaise, reason]
+      properties:
+        tripId: { type: string, format: uuid }
+        orderCode: { type: string, pattern: '^#[0-9A-F]{8}$' }
+        riderId: { type: string, format: uuid }
+        component: { type: string, maxLength: 32 }
+        revision: { type: integer, minimum: 2 }
+        amountPaise: { type: integer, format: int64 }
+        reason: { type: string, maxLength: 1000 }
+    CancelledBatch:
+      type: object
+      required: [batchId, kind, payoutDate, payoutCount, totalPaise]
+      properties:
+        batchId: { type: string, format: uuid }
+        kind: { type: string, enum: [WEEKLY, DAILY_WITHDRAWAL] }
+        payoutDate: { type: string, format: date }
+        payoutCount: { type: integer, minimum: 0 }
+        totalPaise: { type: integer, format: int64, minimum: 0 }
     CodeCheck:
       type: object
       description: A delivery code typed offline that order-service refused; the trip waits at the drop.
@@ -1402,6 +1550,11 @@ components:
         createdAt: { type: string, format: date-time }
         acknowledgeBy: { type: string, format: date-time }
         fixBy: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time, nullable: true }
+        acknowledgedBy: { type: string, maxLength: 120, nullable: true }
+        fixedAt: { type: string, format: date-time, nullable: true }
+        fixedBy: { type: string, maxLength: 120, nullable: true }
+        resolution: { type: string, maxLength: 1000, nullable: true, description: What was done. Support tells the rider; the app does not show it. }
     SosEvent:
       type: object
       required: [sosId, riderId, riderName, phoneMasked, at, lat, lng, tripId]
@@ -1414,6 +1567,7 @@ components:
         lat: { type: number, nullable: true }
         lng: { type: number, nullable: true }
         tripId: { type: string, format: uuid, nullable: true }
+        alertedAt: { type: string, format: date-time, nullable: true, description: When the ops alert email was accepted; null when it was not sent. }
     SlotInput:
       type: object
       additionalProperties: false

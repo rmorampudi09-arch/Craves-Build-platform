@@ -10,7 +10,7 @@ Nothing here changes what production does until a person turns it on: every flag
 2. **notification-service**: V8 (the device's `app`), `/internal/v1/push/realtime` and `/internal/v1/ops-alerts`.
 3. **user-chef-service**: V20 (road-distance cache) and `/internal/v1/maps/road-distance`.
 4. **auth-service**: V20 (the RIDER role) and `/internal/v1/roles/rider/grant` and `/revoke`.
-5. **integration-service**: V152 to V166 and the fleet package, all flags off.
+5. **integration-service**: V152 to V167 and the fleet package, all flags off.
 6. **APIM** (`scripts/apim/configure-rider-fleet-apim.sh`), once integration-service answers: the gateway probes every route.
 
 The first four only add code that nothing calls until integration-service does. Each service's controllers are in its `live-runtime-lock.txt`.
@@ -72,7 +72,7 @@ Agents never change the mode.
 
 ## Tables
 
-Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V165.
+Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V167.
 
 | Table | Created by | Holds |
 |---|---|---|
@@ -97,7 +97,7 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 | `fleet_schema.rider_earning` | integration V152; V156 adds `slot_id`, `label`, `reason` | Pay lines, unique key `fleet-trip-pay/{tripId}/{component}/{revision}` (a slot: `fleet-slot-pay/{slotId}/slot-top-up/1`), net = gross − withheld. |
 | `fleet_schema.rider_payout_instruction` | integration V152; V157 adds `batch_id` | Weekly payouts and daily withdrawals with UTRs; a payout is in one file only. |
 | `fleet_schema.rider_withdrawal_day` | integration V152; V157 adds `idem_key` | One withdrawal per rider per IST day. |
-| `fleet_schema.support_issue` | integration V152; V158 indexes it by trip | Problems riders report, with acknowledge-by and fix-by times. |
+| `fleet_schema.support_issue` | integration V152; V158 indexes it by trip; V167 adds `acknowledged_by_name`, `fixed_by_name`, `resolution` | Problems riders report, with acknowledge-by and fix-by times, who acknowledged and fixed each, and what was done. |
 | `fleet_schema.sos_event` | integration V152 | SOS presses with the last fix and when ops was alerted. |
 | `fleet_schema.admin_audit` | integration V152 | Append-only trail of every ops action; mutations also keep their Idempotency-Key and first response. |
 | `fleet_schema.rider_slot_settlement` | integration V154 | One per finished slot: in-zone seconds, guarantee, trip pay in the slot, top-up, `credited_at`. |
@@ -162,7 +162,7 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 | `GET /banner`, `PUT /banner`, `DELETE /banner` | The zone banner: `{tone: info or warning, text (1 to 160), until}`. PUT shows it from now until `until` and ends any earlier one; DELETE ends it; GET answers it or 204. |
 | `GET /audit` | The trail, newest first, optionally for one rider. |
 | `GET /exports/rider-joins-exits?date=` | CSV of joins and exits on one IST date, for the government portal. |
-| `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots: 409 `SLOT_OVERLAP`, `SLOT_NOT_BOOKED`; 422 `GUARANTEE_OUT_OF_RANGE` (outside the current rate card's declared range), `SLOT_END_NOT_AFTER_START`. |
+| `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots: 409 `SLOT_OVERLAP`, `SLOT_NOT_BOOKED`; 422 `GUARANTEE_OUT_OF_RANGE` (outside the current rate card's declared range), `SLOT_END_NOT_AFTER_START`. Cancel: a slot that has not started is `CANCELLED`; one that has started ends now instead (BUILD decision 9), so it settles like any ended slot and the guarantee covers the time worked. The reason and who stay on it either way. |
 | `GET /trips` | Orders not yet delivered, failed or cancelled, oldest first, with the courier they have now. |
 | `GET /dispatch-queue` | Orders in the ops queue, oldest first, with each earlier stage's outcome: `CRITICAL` after 5 minutes or when a booking may exist (an uncertain create: check that company first), `INFO` when a courier took it after all, else `WARNING`. Ops clears an item by giving it to a rider or cancelling it. |
 | `GET /pilot-health` | Every named query of `fleet/pilot_health.sql` (`PILOT-HEALTH.md`) in file order: `{name, description, columns, rows, truncated, error}`. Each runs in its own read-only transaction with a 15 s statement limit and at most 200 rows; a failing query answers its error (logged `FLEET_PILOT_HEALTH_QUERY_FAILED`) and the others still run. Operations, support and audit admins. |
@@ -173,8 +173,12 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 | `GET /payout-batches/{id}/file` | The bank's CSV (`payoutId,holderName,accountOrUpiId,ifsc,amountRupees`) with full account numbers, decrypted only here; formula-like cells get a leading apostrophe; `no-store`; every download is audited without numbers. |
 | `POST /payout-batches/{id}/approve`, `/mark-sent` | The second approver (403 `SAME_APPROVER` for the maker; 409 `BATCH_NOT_CREATED`); sent only after approval (409 `BATCH_NOT_APPROVED`). |
 | `POST /payout-batches/{id}/payouts/{payoutId}/utr`, `/fail` | `{utr}` (12 to 22 letters and digits): PAID and posted to the journal; 409 `UTR_IN_USE`, `PAYOUT_NOT_PENDING`, `BATCH_NOT_SENT`; 503 `LEDGER_POSTING_OFF`. `{reason}`: FAILED, the money back in the balance, the rider's payouts paused. The file closes once no payout is pending. |
+| `POST /payout-batches/{id}/cancel` | A file never sent to the bank (`CREATED` or `APPROVED`) is withdrawn, for a mistake found before upload: `{reason, notUploaded: true}`. WEEKLY: its payouts and this week's recoveries go, so the next weekly file pays and recovers them; DAILY_WITHDRAWAL: the withdrawals stay requested and go in the next daily file. Nothing reached a bank, so no journal changes; the file's totals stay in the audit trail. 409 `BATCH_ALREADY_SENT`. |
+| `POST /payout-batches/{id}/payouts/{payoutId}/reverse` | The bank returned a PAID payout: `{reason}`. It reads FAILED with "Returned by the bank: …" and keeps its UTR, the money is back in the balance, the account pauses, and the journal `fleet-payout/{payoutId}/reversed` fully reverses the paid one (BANK back to `RIDER_PAYABLE`). 409 `PAYOUT_NOT_PAID`; 503 `LEDGER_POSTING_OFF`. |
+| `POST /trips/{id}/pay-adjustments` | `{component, amountPaise, reason}`: a signed correction to one pay line of a credited trip, the line's next revision, with the reason the rider sees ("Earnings ledger" step 5). Never `tds`, at most ₹10,000 either way. 404 `TRIP_NOT_FOUND`; 409 `TRIP_NOT_CREDITED`. Payments admins. |
 | `GET /holds?state=ACTIVE\|RELEASED`, `POST /holds`, `POST /holds/{holdId}/release` | Pay holds: `POST {tripId, reason, releaseOn}`; 409 `HOLD_EXISTS` (one per trip, ever), `EARNING_ALREADY_PAID`; 422 `RELEASE_DATE_OUT_OF_RANGE`; release: 409 `HOLD_NOT_ACTIVE`. |
-| `GET /support-issues?state=OPEN\|ACKNOWLEDGED\|FIXED`, `GET /sos-events` | Issues oldest first; SOS presses of the last 7 days, newest first, with the last fix and the masked phone. |
+| `GET /support-issues?state=OPEN\|ACKNOWLEDGED\|FIXED`, `GET /sos-events` | Issues oldest first, with who acknowledged and fixed each and what was done; SOS presses of the last 7 days, newest first, with the last fix, the masked phone and `alertedAt` (null: the alert email did not go). Operations, support and audit admins. |
+| `POST /support-issues/{issueId}/acknowledge`, `/fix` | Support has the issue (OPEN only; 409 `ISSUE_NOT_OPEN`), then fixed it with `{resolution}`, what was done (an OPEN issue is acknowledged at the same time; 409 `ISSUE_ALREADY_FIXED`). 404 `ISSUE_NOT_FOUND`. Operations, support and platform admins; audited. Fixing releases pay the issue held. |
 | `GET /setup` | Test mode, the dispatch policy and rate card in force (null when none), the latest 20 versions of each, and the pilot riders and kitchens. Operations, support and audit admins. |
 | `POST /rate-cards`, `POST /rate-cards/{version}/publish` | A DRAFT named `YYYY-MM-vN` (IST month): the 11 values, `effectiveFrom`, `summaryOfChanges` (`en` required, `te` and `hi` optional), `fullTextUrl`, and `ranges` only while none is published (422 `RANGES_LOCKED` after). Publish: 404 `VERSION_NOT_FOUND`, 409 `VERSION_ALREADY_PUBLISHED`, `START_TAKEN`, 422 `VERSION_REFUSED` (notice or ranges). |
 | `POST /dispatch-policies` | `{mode, the 7 values, effectiveFrom?}`: created and published at once (see "Flags and settings"); `off` without `effectiveFrom` is the emergency stop. 409 `START_TAKEN`; 422 `VERSION_REFUSED`, `NOTICE_TOO_SHORT`, `DETOUR_NEEDS_NOTICE`, `RATE_CARD_REQUIRED`. |
@@ -360,7 +364,7 @@ Database connections: every service sets its Hikari pool explicitly so that pool
 2. Each pay line becomes a `rider_earning` row with key `fleet-trip-pay/{tripId}/{component}/{revision}` (revision 1) and one balanced journal in the immutable ledger with the same `business_event_key`: debit `DELIVERY_EXPENSE`, credit the pooled `RIDER_PAYABLE`, lines tagged `delivery_attempt_id` = trip and `provider_id` = `craves_fleet`. The unique key (in both tables) makes a second credit impossible, and every trip's journal lines net to zero. A slot top-up is its own component, `slot-top-up`.
 3. A row is pending until `withdrawable_at`, 24 h after the delivery. It counts towards the balance only once past that, with no active hold on its trip and no open support issue raised on the trip before then (an issue blocks that trip's pay until it is FIXED or 7 days pass).
 4. A held trip (photo delivery, failed delivery, rider lost before pickup) gets a hold at credit with its own reason, released at 00:00 IST 7 days after the trip at the latest. Ops can place one hold per trip and release it early. Holds touch that trip only.
-5. Adjustments are later revisions of a component (2 and up) with the reason the rider sees (`FleetEarnings.adjustTrip`, service code only: `admin-fleet-v1` has no adjustment endpoint). A negative one is debt (debit `RIDER_PAYABLE`, credit `DELIVERY_EXPENSE`), recovered only from future pay.
+5. Adjustments are later revisions of a component (2 and up) with the reason the rider sees: payments admins make them on the console's Rider payouts page (`POST /trips/{id}/pay-adjustments`, `FleetEarnings.adjustTrip`), for a trip whose pay is credited. A positive one is pay like any other: pending 24 hours, with TDS withheld when TDS is on. A negative one is debt (debit `RIDER_PAYABLE`, credit `DELIVERY_EXPENSE`), recovered only from future pay at the weekly cap.
 6. TDS (off by default): each credit withholds `rate × the rider's gross this financial year (from 1 April IST) − TDS already withheld this year`, nothing while the year's gross is at or under the threshold, at most the credit itself. It is its own row (`component` `tds`) and journal: debit `RIDER_PAYABLE`, credit `RIDER_TDS_PAYABLE`.
 
 Postings for one ₹67 trip on the draft rate card (drop 4.2 km, pickup 1.8 km):
@@ -383,7 +387,9 @@ A photo delivery posts the same journals; only the hold differs.
 - **Daily withdrawal.** One a day per rider (IST), free, up to the withdrawable balance. It is a payout (`DAILY_WITHDRAWAL`, date = tomorrow) at once, so the balance drops at once; the DAILY_WITHDRAWAL file for a date takes every request for that date or before not yet in a file.
 - **Never twice.** A payout belongs to one file. A sent payout stays processing until ops marks its UTR or a final failure; nothing re-sends it.
 - **Failure.** FAILED with the bank's reason: the money stays in the balance, and the account is paused (`features` false, `PAYOUTS_PAUSED`, left out of files) until ops sets a new account in person or confirms one the rider sends.
-- **Ledger.** Only a UTR posts: `fleet-payout/{payoutId}/paid`, debit `RIDER_PAYABLE`, credit `BANK`, evidence `utr/{UTR}`. So `RIDER_PAYABLE` = all rider pay − paid payouts.
+- **Cancel before upload.** A file never sent (CREATED or APPROVED) can be cancelled with a reason once the admin confirms it was not uploaded. A weekly file's payouts and this week's recoveries are deleted, so the next weekly file pays and recovers the same money; a daily file's withdrawals leave the file and wait for the next one. Its date can then be made again.
+- **Bank reversal.** A payout the bank returns after its UTR is recorded as a reversal: FAILED with "Returned by the bank: …", its UTR kept for the statement, the money back in the balance and the account paused, as for a failure.
+- **Ledger.** Only a UTR posts: `fleet-payout/{payoutId}/paid`, debit `RIDER_PAYABLE`, credit `BANK`, evidence `utr/{UTR}`. A reversal posts `fleet-payout/{payoutId}/reversed` with `reversal_of` the paid journal and its lines inverted, evidence `utr/{UTR}/reversed`. So `RIDER_PAYABLE` = all rider pay − payouts that reached a bank and stayed there.
 
 ### Payout runbook for ops
 
@@ -393,13 +399,14 @@ Weekly: on Monday, approved by 13:00, sent by 15:00 IST. Daily withdrawals: ever
 2. **Download** the bank file (audited). Check the total and the count against the console.
 3. **Second approver.** Another payments admin (the checker) checks the file total against the console, the count against riders with a balance, any payout above twice the rider's usual week, any payout account changed in the last 7 days, and any payout that already has a UTR; then approves. The maker cannot approve (403 `SAME_APPROVER`).
 4. **Bank upload.** Upload the approved file once to the bank's IMPS bulk upload (use the bank's own two-user approval if it has one), then **mark sent**. Never upload a file twice, and never re-send a payout the bank still shows as processing (up to T+3 working days).
-5. **Mark UTRs.** Enter each confirmed payout's UTR within 2 hours; the rider sees it. For a final failure (account closed, invalid), mark it failed with the bank's reason: the money stays in the rider's balance and their payouts pause; set a new account with the rider in person, and the next file includes them.
+5. **Mark UTRs.** Enter each confirmed payout's UTR within 2 hours; the rider sees it. For a final failure (account closed, invalid), mark it failed with the bank's reason: the money stays in the rider's balance and their payouts pause; set a new account with the rider in person, and the next file includes them. If the bank returns a payout after its UTR, record the bank reversal on that row with the bank's reason: the same pause follows.
+   - A mistake found before upload (a wrong date, an account that changed): **cancel the file** with the reason and the not-uploaded check, fix the cause, and make it again. Never cancel a file that might have reached the bank; once it is sent, mark each payout instead.
 6. **Reconcile** daily: every UTR on the bank statement matches a payout with the same amount; the file total equals its PAID payouts plus those still pending; `RIDER_PAYABLE` debits for `RIDER_PAYOUT_PAID` equal the PAID payouts; no file stays SENT with pending payouts past T+3 working days without a call to the bank.
 
 ### Support and SOS
 
-- A rider reports a problem on a trip, a payout or nothing (`MISSING_PAY`, `WRONG_DISTANCE`, `PAYOUT_NOT_RECEIVED`, `WRONG_DEDUCTION`, `APP_PROBLEM`, `OTHER`). Support acknowledges within 24 hours and fixes within 72. `admin-fleet-v1` has no endpoint to acknowledge or fix an issue yet; until it does, set `state` by SQL (`ACKNOWLEDGED` with `acknowledged_at`, `FIXED` with `fixed_at`). An open issue stops holding the trip's pay after 7 days anyway.
-- SOS: `FleetSupportService.sos` stores the press (`sos_event`) first, then calls `/internal/v1/ops-alerts` (kind `SOS`): "SOS from rider <name>", the full phone, `https://maps.google.com/?q=<lat>,<lng>` with the fix time, and the trip's order code. Set `CRAVES_OPS_ALERT_EMAILS` to the ops lead. `alerted_at` is set when notification-service accepted it; otherwise the alert is a `CRAVES_ALERT alert=SOS` log line with the same data.
+- A rider reports a problem on a trip, a payout or nothing (`MISSING_PAY`, `WRONG_DISTANCE`, `PAYOUT_NOT_RECEIVED`, `WRONG_DEDUCTION`, `APP_PROBLEM`, `OTHER`). Support acknowledges within 24 hours and fixes within 72, on the console's Rider support page: Acknowledge, then Mark fixed with what was done, both audited with who did it. Support tells the rider by phone or WhatsApp; the app does not show the resolution. Fixing releases pay the issue held; an open issue stops holding the trip's pay after 7 days anyway. To correct the pay itself, adjust the trip ("Earnings ledger" step 5).
+- SOS: `FleetSupportService.sos` stores the press (`sos_event`) first, then calls `/internal/v1/ops-alerts` (kind `SOS`): "SOS from rider <name>", the full phone, `https://maps.google.com/?q=<lat>,<lng>` with the fix time, and the trip's order code. Set `CRAVES_OPS_ALERT_EMAILS` to the ops lead. `alerted_at` is set when notification-service accepted it; otherwise the alert is a `CRAVES_ALERT alert=SOS` log line with the same data, and the console's Rider support page marks the press "Email not sent".
 
 ## Gateway
 

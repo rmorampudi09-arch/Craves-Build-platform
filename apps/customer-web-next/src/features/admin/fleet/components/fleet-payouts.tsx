@@ -6,9 +6,9 @@ import { formatAdminTimestamp } from "@/features/admin/shell/lib/admin-navigatio
 import { readableFleetValue } from "@/features/admin/fleet/lib/fleet-common";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import {
-  addDays, batchesSchema, createBatchSchema, createHoldSchema, formatPaise, holdSchema, holdsSchema, istDay, paiseToRupees,
-  payoutBatchSchema, payoutSchema, releaseOnProblem, toCsv, utrSchema,
-  type Hold, type Payout, type PayoutBatch, type PayoutBatchSummary,
+  addDays, adjustmentRequest, batchesSchema, cancelBatchSchema, cancelledBatchSchema, createBatchSchema, createHoldSchema, formatPaise,
+  holdSchema, holdsSchema, istDay, PAY_COMPONENTS, payAdjustmentSchema, paiseToRupees, payoutBatchSchema, payoutSchema, releaseOnProblem,
+  toCsv, utrSchema, type AdjustmentForm, type Hold, type PayComponent, type Payout, type PayoutBatch, type PayoutBatchSummary,
 } from "@/features/admin/fleet/lib/payout-contract";
 import { ActionMessage, fieldClass, labelClass, ReasonAction, useFleetAction } from "./fleet-action";
 
@@ -26,6 +26,7 @@ export function FleetPayouts() {
   const [batches, setBatches] = useState<PayoutBatchSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [message, setMessage] = useState("Loading payout batches…");
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -40,9 +41,10 @@ export function FleetPayouts() {
   useEffect(() => { void load(); }, [load]);
 
   return <div className="space-y-6">
-    <CreateBatch onCreated={async batch => { await load(); setSelected(batch.batchId); }} />
+    <CreateBatch onCreated={async batch => { setNotice(""); await load(); setSelected(batch.batchId); }} />
     <section className="cr-panel" aria-labelledby="fleet-batches-title">
       <h2 id="fleet-batches-title" className="text-lg font-bold">Payout batches</h2>
+      {notice && <p className="cr-feedback" role="status">{notice}</p>}
       {message && <p className="cr-empty" role="status">{message}</p>}
       {batches.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
         <thead><tr><th scope="col">Pay date</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Total</th><th scope="col">Payouts</th><th scope="col">Created by</th><th scope="col">Approved by</th><th scope="col"><span className="cr-sr-only">Open</span></th></tr></thead>
@@ -53,8 +55,10 @@ export function FleetPayouts() {
         </tr>)}</tbody>
       </table></div>}
     </section>
-    {selected && <BatchDetail key={selected} batchId={selected} onChanged={load} />}
+    {selected && <BatchDetail key={selected} batchId={selected} onChanged={load}
+      onCancelled={async text => { setSelected(null); setNotice(text); await load(); }} />}
     <Holds />
+    <AdjustPay />
   </div>;
 }
 
@@ -85,7 +89,7 @@ function CreateBatch({ onCreated }: { onCreated: (batch: PayoutBatch) => Promise
   </form>;
 }
 
-function BatchDetail({ batchId, onChanged }: { batchId: string; onChanged: () => Promise<void> }) {
+function BatchDetail({ batchId, onChanged, onCancelled }: { batchId: string; onChanged: () => Promise<void>; onCancelled: (notice: string) => Promise<void> }) {
   const [batch, setBatch] = useState<PayoutBatch | null>(null);
   const [message, setMessage] = useState("Loading the batch…");
   const action = useFleetAction();
@@ -123,6 +127,7 @@ function BatchDetail({ batchId, onChanged }: { batchId: string; onChanged: () =>
         onClick={() => void step("approve", `Approve ${formatPaise(batch.totalPaise)} to ${batch.payoutCount} riders as the second approver?`, "Batch approved. Upload the file to the bank, then mark it sent.")}>Approve as second approver</button>}
       {batch.status === "APPROVED" && <button type="button" className="cr-button cr-primary" disabled={action.busy}
         onClick={() => void step("mark-sent", "Mark this batch sent? Do this only after the approved file is uploaded to the bank.", "Batch marked sent. Add each UTR as the bank confirms it.")}>Mark sent to the bank</button>}
+      {(batch.status === "CREATED" || batch.status === "APPROVED") && <CancelBatch batch={batch} onCancelled={onCancelled} />}
     </div>
     {batch.status === "CREATED" && batch.createdByMe && <p className="cr-alert">You created this batch, so a different payments admin must approve it.</p>}
     <ActionMessage state={action.state} />
@@ -148,12 +153,18 @@ function PayoutRow({ batchId, payout, canMark, onDone }: { batchId: string; payo
   async function fail(reason: string) {
     if (await action.run("POST", `${base}/fail`, payoutSchema, { reason }, "Marked failed. The money stays in the rider's balance for the next batch.")) await onDone();
   }
+  async function reverse(reason: string) {
+    if (await action.run("POST", `${base}/reverse`, payoutSchema, { reason },
+      "Reversal recorded. The money is back in the rider's balance; their payouts pause until ops sets the payout account again with them.")) await onDone();
+  }
 
   return <tr>
     <td><Link className="underline" href={`/admin/riders/${payout.riderId}`}>{payout.riderName}</Link></td>
     <td>{formatPaise(payout.amountPaise)}</td><td>{payout.maskedAccount}</td>
     <td><span className="cr-status" data-tone={payout.status === "FAILED" ? "danger" : undefined}>{readableFleetValue(payout.status)}</span></td>
-    <td>{payout.utr ?? payout.failureReason ?? "—"}{payout.markedBy ? <span className="cr-muted"> · {payout.markedBy}</span> : null}</td>
+    <td>{payout.status === "FAILED" ? payout.failureReason ?? "—" : payout.utr ?? "—"}
+      {payout.status === "FAILED" && payout.utr ? <span className="cr-muted"> · UTR {payout.utr}</span> : null}
+      {payout.markedBy ? <span className="cr-muted"> · {payout.markedBy}</span> : null}</td>
     <td>{payout.status === "PENDING" && canMark ? <div className="space-y-2">
       <form className="flex flex-wrap gap-2" onSubmit={event => void saveUtr(event)}>
         <label className="cr-sr-only" htmlFor={`utr-${payout.payoutId}`}>UTR for {payout.riderName}</label>
@@ -161,9 +172,84 @@ function PayoutRow({ batchId, payout, canMark, onDone }: { batchId: string; payo
         <button type="submit" className="cr-button" disabled={action.busy}>Save UTR</button>
       </form>
       <ReasonAction label="Mark failed" action={action} onSubmit={reason => void fail(reason)} />
-    </div> : payout.status === "PENDING" ? <span className="cr-muted">After the batch is sent</span> : null}
+    </div> : payout.status === "PENDING" ? <span className="cr-muted">After the batch is sent</span>
+      : payout.status === "PAID" ? <ReasonAction label="Record bank reversal" action={action} onSubmit={reason => void reverse(reason)} /> : null}
       <ActionMessage state={action.state} /></td>
   </tr>;
+}
+
+/** Only a file never uploaded to the bank: the admin says why and confirms it was not uploaded. */
+function CancelBatch({ batch, onCancelled }: { batch: PayoutBatch; onCancelled: (notice: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [notUploaded, setNotUploaded] = useState(false);
+  const action = useFleetAction();
+  const weekly = batch.kind === "WEEKLY";
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const parsed = cancelBatchSchema.safeParse({ reason, notUploaded });
+    if (!parsed.success) return action.refuse(parsed.error.issues[0]?.message ?? "Check the details.");
+    const cancelled = await action.run("POST", `payout-batches/${batch.batchId}/cancel`, cancelledBatchSchema, parsed.data, "");
+    if (cancelled) await onCancelled(`Cancelled the ${batch.payoutDate} ${KIND_LABELS[batch.kind]} file: ${cancelled.payoutCount} payout${cancelled.payoutCount === 1 ? "" : "s"}, ${formatPaise(cancelled.totalPaise)}. `
+      + (weekly ? "Make the file again once the mistake is fixed." : "The withdrawals go in the next daily file."));
+  }
+
+  if (!open) return <button type="button" className="cr-button" disabled={action.busy} onClick={() => setOpen(true)}>Cancel this payout file</button>;
+  return <form className="w-full space-y-2 rounded-xl border border-slate-200 p-3" onSubmit={event => void submit(event)}>
+    <p className="text-sm">Cancel only a file that was never uploaded to the bank. {weekly
+      ? "Its payouts go back to the riders' balances and this week's debt recoveries are undone, so the next weekly file pays them."
+      : "The riders' withdrawals stay requested and go in the next daily file."}</p>
+    <label className={labelClass}>Why cancel it<textarea className={fieldClass} value={reason} maxLength={1000} rows={2} onChange={event => setReason(event.target.value)} /></label>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={notUploaded} onChange={event => setNotUploaded(event.target.checked)} />I checked: this file was not uploaded to the bank.</label>
+    <span className="cr-actions">
+      <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Cancel the file</button>
+      <button type="button" className="cr-button" disabled={action.busy} onClick={() => setOpen(false)}>Back</button>
+    </span>
+    <ActionMessage state={action.state} />
+  </form>;
+}
+
+const NEW_ADJUSTMENT: AdjustmentForm = { tripId: "", component: "drop-km", direction: "TAKE_BACK", rupees: "", reason: "" };
+
+/** A signed correction to one pay line of a trip whose pay is credited; the rider sees it with the reason. */
+function AdjustPay() {
+  const [form, setForm] = useState<AdjustmentForm>(NEW_ADJUSTMENT);
+  const [notice, setNotice] = useState("");
+  const action = useFleetAction();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setNotice("");
+    const request = adjustmentRequest(form);
+    if (typeof request === "string") return action.refuse(request);
+    const amount = request.body.amountPaise;
+    const change = amount < 0 ? `take back ${formatPaise(-amount)}` : `pay ${formatPaise(amount)} more`;
+    if (!window.confirm(`${PAY_COMPONENTS[request.body.component]}: ${change} on this trip? The rider sees it with your reason.`)) return;
+    const adjusted = await action.run("POST", `trips/${request.tripId}/pay-adjustments`, payAdjustmentSchema, request.body, "");
+    if (adjusted) {
+      setForm(NEW_ADJUSTMENT);
+      setNotice(`Adjusted ${PAY_COMPONENTS[request.body.component]} on ${adjusted.orderCode} by ${formatPaise(adjusted.amountPaise)}. `
+        + (adjusted.amountPaise < 0 ? "The rider owes it: it comes out of future pay, at most the weekly recovery cap a week, never from their bank."
+          : "It is withdrawable after 24 hours, less TDS when TDS is on."));
+    }
+  }
+
+  return <form noValidate className="cr-panel grid gap-3 sm:grid-cols-2" aria-labelledby="fleet-adjust-title" onSubmit={event => void submit(event)}>
+    <h2 id="fleet-adjust-title" className="text-lg font-bold sm:col-span-2">Adjust a trip&apos;s pay</h2>
+    <p className="cr-muted sm:col-span-2">Correct one pay line of a trip whose pay is credited, such as a wrong drop distance. The rider sees the change and your reason on the trip. Pay taken back comes out of future pay only, at most the weekly recovery cap a week. The trip ID is on the rider&apos;s recent offers and on the support issue.</p>
+    <label className={labelClass}>Trip ID<input className={fieldClass} value={form.tripId} maxLength={36} autoComplete="off" onChange={event => setForm({ ...form, tripId: event.target.value })} /></label>
+    <label className={labelClass}>Pay line<select className={fieldClass} value={form.component} onChange={event => setForm({ ...form, component: event.target.value as PayComponent })}>
+      {Object.entries(PAY_COMPONENTS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+    </select></label>
+    <label className={labelClass}>Change<select className={fieldClass} value={form.direction} onChange={event => setForm({ ...form, direction: event.target.value as AdjustmentForm["direction"] })}>
+      <option value="TAKE_BACK">Take back (the rider was overpaid)</option><option value="PAY">Pay more (the rider was underpaid)</option>
+    </select></label>
+    <label className={labelClass}>Amount, ₹<input className={fieldClass} value={form.rupees} inputMode="decimal" maxLength={9} autoComplete="off" onChange={event => setForm({ ...form, rupees: event.target.value })} /></label>
+    <label className={`${labelClass} sm:col-span-2`}>Reason (the rider sees it)<input className={fieldClass} value={form.reason} maxLength={1000} onChange={event => setForm({ ...form, reason: event.target.value })} /></label>
+    <span className="sm:col-span-2"><button type="submit" className="cr-button cr-primary" disabled={action.busy}>Adjust pay</button><ActionMessage state={action.state} /></span>
+    {notice && <p className="cr-feedback sm:col-span-2" role="status">{notice}</p>}
+  </form>;
 }
 
 function Holds() {

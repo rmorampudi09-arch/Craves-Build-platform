@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,17 +109,26 @@ public class FleetSlotService {
         });
     }
 
+    /**
+     * A slot that has not started is cancelled. One that has started ends now instead (BUILD decision 9), so the rider
+     * keeps the guarantee for the time worked: settleDue settles it like any ended slot. The reason and who stay on it.
+     */
     @Transactional
     public Object cancel(Admin by, UUID key, UUID slotId, String reason) {
         String text = FleetAdminService.reason(reason);
         return admin.once(by, key, "SLOT_CANCELLED", slotId + "\n" + text, () -> {
-            UUID rider = jdbc.queryForList("UPDATE fleet_schema.rider_slot SET status = 'CANCELLED', cancelled_reason = ?, cancelled_by = ?, "
-                + "cancelled_at = now() WHERE id = ? AND status = 'BOOKED' RETURNING rider_id", UUID.class, text, by.id(), slotId)
+            Map<String, Object> slot = jdbc.queryForList("""
+                UPDATE fleet_schema.rider_slot SET cancelled_reason = ?, cancelled_by = ?, cancelled_at = now(),
+                  status = CASE WHEN starts_at <= now() THEN 'BOOKED' ELSE 'CANCELLED' END,
+                  ends_at = CASE WHEN starts_at <= now() THEN LEAST(ends_at, GREATEST(now(), starts_at + INTERVAL '1 second')) ELSE ends_at END
+                WHERE id = ? AND status = 'BOOKED' AND cancelled_at IS NULL RETURNING rider_id, status""", text, by.id(), slotId)
                 .stream().findFirst().orElseThrow(() -> jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_slot WHERE id = ?)",
                     Boolean.class, slotId)
-                    ? FleetApiException.conflict("SLOT_NOT_BOOKED", "This slot is already cancelled or completed.")
+                    ? FleetApiException.conflict("SLOT_NOT_BOOKED", "This slot is already cancelled, ended or completed.")
                     : FleetApiException.notFound("SLOT_NOT_FOUND", "No such slot."));
-            return new Done(read(slotId), rider, slotId.toString(), "Cancelled the slot: " + text);
+            boolean started = "BOOKED".equals(slot.get("status"));
+            return new Done(read(slotId), (UUID) slot.get("rider_id"), slotId.toString(), (started
+                ? "Ended the slot early; the guarantee covers the time worked: " : "Cancelled the slot: ") + text);
         });
     }
 

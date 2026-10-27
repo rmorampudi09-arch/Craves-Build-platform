@@ -15,7 +15,9 @@ import in.craves.integration.config.WebSecurityConfiguration;
 import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.admin.FleetAdminModels.FileContent;
+import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.BatchPage;
+import in.craves.integration.fleet.money.FleetMoneyModels.CancelBatchInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.HoldPage;
 import in.craves.integration.fleet.money.FleetMoneyModels.Payout;
 import in.craves.integration.fleet.money.FleetMoneyModels.PayoutBatch;
@@ -96,6 +98,10 @@ class FleetMoneyAdminSecurityTest {
     static final String BATCHES = "/api/v1/admin/fleet/payout-batches";
     static final UUID BATCH = UUID.fromString("77777777-7777-4777-8777-777777777777");
 
+    static final String TRIPS = "/api/v1/admin/fleet/trips/";
+    static final String CANCEL = "{\"reason\":\"Made for the wrong Monday\",\"notUploaded\":true}";
+    static final String ADJUST = "{\"component\":\"drop-km\",\"amountPaise\":-1200,\"reason\":\"The drop was 2.9 km, not 4.2 km\"}";
+
     static PayoutBatch batch(List<Payout> payouts) {
         return new PayoutBatch(BATCH, "WEEKLY", LocalDate.parse("2026-10-26"), "CREATED", 6700, 1, "Admin +91 98xxxxx210", false,
             Instant.parse("2026-10-26T04:00:00Z"), null, null, null, payouts);
@@ -132,8 +138,15 @@ class FleetMoneyAdminSecurityTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"utr\":\"HDFCN52026102612345\"}")).andExpect(status().isForbidden());
             mvc.perform(as(post(BATCHES + "/" + BATCH + "/payouts/" + UUID.randomUUID() + "/fail"), role).header("Idempotency-Key", key)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Account closed\"}")).andExpect(status().isForbidden());
+            mvc.perform(as(post(BATCHES + "/" + BATCH + "/payouts/" + UUID.randomUUID() + "/reverse"), role).header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"IMPS returned\"}")).andExpect(status().isForbidden());
+            mvc.perform(as(post(BATCHES + "/" + BATCH + "/cancel"), role).header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
+                .content(CANCEL)).andExpect(status().isForbidden());
+            mvc.perform(as(post(TRIPS + UUID.randomUUID() + "/pay-adjustments"), role).header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON).content(ADJUST)).andExpect(status().isForbidden());
         }
         verifyNoInteractions(payouts);
+        verifyNoInteractions(earnings);
 
         when(payouts.createBatch(any(), any(), any())).thenReturn(batch(List.of()));
         mvc.perform(as(post(BATCHES), "PAYMENTS_ADMIN").header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
@@ -148,5 +161,27 @@ class FleetMoneyAdminSecurityTest {
             .andExpect(header().string("Cache-Control", "no-store")).andExpect(header().string("Content-Type", "text/csv; charset=UTF-8"))
             .andExpect(header().string("Content-Disposition", "attachment; filename=\"rider-payouts-" + BATCH + ".csv\""))
             .andExpect(content().string("payoutId,holderName,accountOrUpiId,ifsc,amountRupees\r\n"));
+    }
+
+    @Test
+    void paymentsAdminsCancelAnUnsentFileRecordABankReversalAndAdjustATripsPay() throws Exception {
+        UUID payout = UUID.randomUUID();
+        UUID trip = UUID.randomUUID();
+        when(payouts.cancelBatch(any(), any(), eq(BATCH), eq(new CancelBatchInput("Made for the wrong Monday", true))))
+            .thenReturn(Map.of("payoutCount", 1));
+        when(payouts.reverse(any(), any(), eq(BATCH), eq(payout), eq("IMPS returned"))).thenReturn(Map.of("state", "FAILED"));
+        when(earnings.adjustTrip(any(), any(), eq(trip), eq(new AdjustmentInput("drop-km", -1200L, "The drop was 2.9 km, not 4.2 km"))))
+            .thenReturn(Map.of("revision", 2));
+        for (String role : List.of("PLATFORM_ADMIN", "PAYMENTS_ADMIN")) {
+            mvc.perform(as(post(BATCHES + "/" + BATCH + "/cancel"), role).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(CANCEL)).andExpect(status().isOk()).andExpect(jsonPath("$.payoutCount").value(1));
+            mvc.perform(as(post(BATCHES + "/" + BATCH + "/payouts/" + payout + "/reverse"), role)
+                .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"IMPS returned\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FAILED"));
+            mvc.perform(as(post(TRIPS + trip + "/pay-adjustments"), role).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(ADJUST)).andExpect(status().isCreated()).andExpect(jsonPath("$.revision").value(2));
+        }
+        mvc.perform(as(post(BATCHES + "/" + BATCH + "/cancel"), "PAYMENTS_ADMIN").contentType(MediaType.APPLICATION_JSON).content(CANCEL))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
     }
 }

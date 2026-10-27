@@ -116,7 +116,9 @@ describe("rider detail", () => {
     expect(screen.getByText("75 s · 1 over 60 s")).toBeTruthy();
     expect(screen.getByText("Battery 54% · battery saver on · offers can't ring")).toBeTruthy();
     const offers = screen.getByRole("heading", { name: "Recent offers" }).closest("section") as HTMLElement;
-    for (const text of ["#0A1B2C3D", "Expired", "No token", "9.0 s, by the location call"]) expect(within(offers).getByText(text)).toBeTruthy();
+    for (const text of ["#0A1B2C3D", "Expired", "No token", "9.0 s, by the location call", "88888888-8888-4888-8888-888888888888"]) {
+      expect(within(offers).getByText(text)).toBeTruthy();
+    }
   });
 
   it("leaves the phone health and offers out for an older server", async () => {

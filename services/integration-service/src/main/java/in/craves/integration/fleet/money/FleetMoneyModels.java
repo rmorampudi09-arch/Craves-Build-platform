@@ -68,4 +68,20 @@ public final class FleetMoneyModels {
 
     public record UtrInput(String utr) {
     }
+
+    /** A signed correction to one pay component of a credited trip, with the reason the rider sees. */
+    public record AdjustmentInput(String component, Long amountPaise, String reason) {
+    }
+
+    /** admin-fleet-v1 PayAdjustment: the row the rider now sees on the trip, as revision 2 or later of its component. */
+    public record Adjustment(UUID tripId, String orderCode, UUID riderId, String component, int revision, long amountPaise, String reason) {
+    }
+
+    /** notUploaded: the admin checked that the file never reached the bank. */
+    public record CancelBatchInput(String reason, Boolean notUploaded) {
+    }
+
+    /** admin-fleet-v1 CancelledBatch: the unsent file that is gone, as it was. */
+    public record CancelledBatch(UUID batchId, String kind, LocalDate payoutDate, int payoutCount, long totalPaise) {
+    }
 }

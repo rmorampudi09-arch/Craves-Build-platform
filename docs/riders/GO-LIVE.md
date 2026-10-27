@@ -25,7 +25,7 @@ From `main` at the merged commit, run each pipeline by hand in this order. Befor
 2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
 3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
 4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V159 and the fleet package. All flags stay off, so no fleet bean or job starts.
+5. `azure-pipelines-integration-service.yml`: V152 to V167 and the fleet package. All flags stay off, so no fleet bean or job starts.
 
 ## 2. Gateway
 
@@ -38,7 +38,7 @@ Run `azure-pipelines-admin-dashboard.yml` by hand on `main` with:
 - `expectedReleaseSha` set to the merged commit;
 - `regressionRunId` set to that commit's green "Exact-SHA complete regression evidence" run.
 
-The console then has Riders, Rider trips, Rider slots & banner, Rider payouts and **Rider pilot setup**. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
+The console then has Riders, Fleet trips & dispatch, Rider slots & banner, **Rider pilot setup**, Rider pilot health, Rider support and Rider payouts. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
 
 ## 4. Wire the runtime (`azure-pipelines-rider-fleet-runtime.yml`)
 
@@ -101,6 +101,7 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
 2. Run the GitHub workflow "Craves Rider APK" by hand on `main`. `api_mode` is `live` by default, and a live run anywhere but `main` stops.
 3. Install `craves-rider-live-<sha>.apk` from the run's artifact, or share it through Firebase App Distribution or Play internal testing (`RELEASE.md`).
 4. Run the phone tests in `PHONE-TESTS.md` before the first live order.
+5. Drill SOS and support once with a pilot rider: press SOS in the app, check the ops lead gets the email with the full phone and a map link, and that the console's Rider support page shows the press as emailed. Then report a problem from the app, and acknowledge and fix it on the same page.
 
 A mock APK, from a pull request or a manual run with `mock`, shows "Demo data" on every screen and never talks to Craves.
 

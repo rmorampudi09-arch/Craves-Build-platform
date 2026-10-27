@@ -60,6 +60,12 @@ export function fleetError(status: number, body: unknown): { code: string; messa
   return { code, message: message || (DEFAULT_MESSAGES[status] ?? "The fleet service is unavailable. Try again shortly.") };
 }
 
+/** Rupees as typed ("80", "80.5", "80.50") to integer paise, without floating point; null if it isn't an amount. */
+export function rupeesToPaise(text: string): number | null {
+  const match = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(text.trim());
+  return match ? Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0")) : null;
+}
+
 export function readableFleetValue(value: string): string {
   return value.toLowerCase().replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase());
 }

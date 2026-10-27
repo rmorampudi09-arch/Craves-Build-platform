@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { addDays, createBatchSchema, formatPaise, holdsSchema, istDay, paiseToRupees, payoutBatchSchema, releaseOnProblem, toCsv, utrSchema } from "./payout-contract";
+import {
+  addDays, adjustmentRequest, cancelBatchSchema, cancelledBatchSchema, createBatchSchema, formatPaise, holdsSchema, istDay, paiseToRupees,
+  payAdjustmentSchema, payoutBatchSchema, releaseOnProblem, toCsv, utrSchema, type AdjustmentForm,
+} from "./payout-contract";
 
 const BATCH = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const at = "2026-10-20T06:30:00Z";
@@ -56,6 +59,36 @@ describe("payout rules", () => {
     expect(releaseOnProblem("2026-10-29", now)).toBe("Pick a release date from today to 2026-10-28: a hold never lasts more than 7 days.");
     expect(releaseOnProblem("2026-10-20", now)).not.toBeNull();
     expect(addDays("2026-12-28", 7)).toBe("2027-01-04");
+  });
+});
+
+describe("corrections", () => {
+  const TRIP = "77777777-7777-4777-8777-777777777777";
+  const form: AdjustmentForm = { tripId: ` ${TRIP} `, component: "drop-km", direction: "TAKE_BACK", rupees: "12.5", reason: "The drop was 2.9 km, not 4.2 km" };
+
+  it("turns the adjust-pay form into a signed amount in paise for one pay line", () => {
+    expect(adjustmentRequest(form)).toEqual({ tripId: TRIP, body: { component: "drop-km", amountPaise: -1250, reason: "The drop was 2.9 km, not 4.2 km" } });
+    expect(adjustmentRequest({ ...form, direction: "PAY", rupees: "40" })).toMatchObject({ body: { amountPaise: 4000 } });
+    expect(adjustmentRequest({ ...form, tripId: "trip-1" })).toBe("Paste the trip ID: it is on the rider's recent offers and on the support issue.");
+    for (const rupees of ["", "0", "0.00", "-12", "12.505", "₹12"]) expect(adjustmentRequest({ ...form, rupees })).toBe("Enter the amount in rupees, like 12 or 12.50.");
+    expect(adjustmentRequest({ ...form, rupees: "10000.01" })).toBe("At most ₹10,000 either way.");
+    expect(adjustmentRequest({ ...form, rupees: "10000" })).toMatchObject({ body: { amountPaise: -1_000_000 } });
+    expect(adjustmentRequest({ ...form, reason: " x " })).toBe("Write a reason of at least 3 characters.");
+    expect(typeof adjustmentRequest({ ...form, component: "tds" as AdjustmentForm["component"] })).toBe("string");
+  });
+
+  it("reads the adjustment and the cancelled file the server returns", () => {
+    const adjustment = { tripId: TRIP, orderCode: "#0BDE0107", riderId: TRIP, component: "drop-km", revision: 2, amountPaise: -1250, reason: "Shorter drop" };
+    expect(payAdjustmentSchema.parse(adjustment)).toEqual(adjustment);
+    expect(payAdjustmentSchema.safeParse({ ...adjustment, revision: 1 }).success).toBe(false);
+    expect(cancelledBatchSchema.parse({ batchId: BATCH, kind: "WEEKLY", payoutDate: "2026-10-19", payoutCount: 2, totalPaise: 13100 }).payoutCount).toBe(2);
+  });
+
+  it("cancels a file only with a reason and the not-uploaded check", () => {
+    expect(cancelBatchSchema.safeParse({ reason: "Wrong Monday", notUploaded: true }).success).toBe(true);
+    expect(cancelBatchSchema.safeParse({ reason: "Wrong Monday", notUploaded: false }).error?.issues[0]?.message)
+      .toBe("Tick the box once you have checked this file was not uploaded to the bank.");
+    expect(cancelBatchSchema.safeParse({ reason: "", notUploaded: true }).success).toBe(false);
   });
 });
 

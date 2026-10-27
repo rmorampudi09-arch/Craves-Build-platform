@@ -15,6 +15,7 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetRoleClient;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.money.FleetEarnings;
@@ -43,13 +44,16 @@ class FleetSupportDatabaseTest {
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final RiderPushClient alerts = mock(RiderPushClient.class);
+    final Admin lead = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx210");
+    FleetAdminService admin;
     FleetSupportService support;
     UUID ravi;
     UUID trip;
 
     @BeforeEach
     void setUp() {
-        support = new FleetSupportService(fleet.db, alerts);
+        admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class), mock(BankDataCipher.class));
+        support = new FleetSupportService(fleet.db, alerts, admin);
         ravi = fleet.rider("Ravi Kumar", "+919876543210");
         trip = fleet.trip(UUID.randomUUID());
         fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'PICKED_UP' WHERE id = ?", ravi, trip);
@@ -83,8 +87,6 @@ class FleetSupportDatabaseTest {
 
     @Test
     void anOpenIssueOnATripHoldsItsPayUntilFixedOrSevenDays() {
-        FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
-            mock(BankDataCipher.class));
         LedgerPostingService ledger = new LedgerPostingService(fleet.db, json, true);
         FleetEarnings earnings = new FleetEarnings(fleet.db, json, ledger, admin, fleet.transactions, Runnable::run, false, "", 0, 0, true);
         FleetPayouts payouts = new FleetPayouts(fleet.db, ledger, admin, earnings, mock(BankDataCipher.class), FleetDatabase.properties(true),
@@ -101,8 +103,48 @@ class FleetSupportDatabaseTest {
         assertThat(payouts.payouts(ravi).withdrawablePaise()).as("after 7 days the pay is released anyway").isEqualTo(4000);
         fleet.db.update("UPDATE fleet_schema.support_issue SET created_at = now() - interval '2 hours' WHERE trip_id = ?", trip);
         assertThat(payouts.payouts(ravi).withdrawablePaise()).isZero();
-        fleet.db.update("UPDATE fleet_schema.support_issue SET state = 'FIXED', fixed_at = now() WHERE trip_id = ?", trip);
-        assertThat(payouts.payouts(ravi).withdrawablePaise()).as("fixed").isEqualTo(4000);
+        UUID issue = fleet.db.queryForObject("SELECT id FROM fleet_schema.support_issue WHERE trip_id = ?", UUID.class, trip);
+        support.fix(lead, UUID.randomUUID(), issue, "Checked the route: the drop was 4.2 km");
+        assertThat(payouts.payouts(ravi).withdrawablePaise()).as("fixed in the console").isEqualTo(4000);
+    }
+
+    @Test
+    void opsAcknowledgeThenFixAnIssueOnceWithWhoDidItAndWhatWasDone() {
+        support.report(ravi, new IssueInput("MISSING_PAY", trip.toString(), null, "This trip is not in my earnings"));
+        UUID issue = fleet.db.queryForObject("SELECT id FROM fleet_schema.support_issue", UUID.class);
+        UUID key = UUID.randomUUID();
+
+        Issue acknowledged = (Issue) support.acknowledge(lead, key, issue);
+        assertThat(acknowledged.state()).isEqualTo("ACKNOWLEDGED");
+        assertThat(acknowledged.acknowledgedBy()).isEqualTo(lead.name());
+        assertThat(acknowledged.acknowledgedAt()).isNotNull();
+        assertThat(acknowledged.fixedAt()).isNull();
+        assertThat(json.valueToTree(support.acknowledge(lead, key, issue)).get("state").asText()).as("the same key").isEqualTo("ACKNOWLEDGED");
+        refused(() -> support.acknowledge(lead, UUID.randomUUID(), issue), 409, "ISSUE_NOT_OPEN");
+        refused(() -> support.acknowledge(lead, UUID.randomUUID(), UUID.randomUUID()), 404, "ISSUE_NOT_FOUND");
+        refused(() -> support.fix(lead, UUID.randomUUID(), issue, "ok"), 400, "VALIDATION_FAILED");
+        assertThat(support.issues("ACKNOWLEDGED").issues()).extracting(Issue::issueId).containsExactly(issue);
+
+        Admin other = new Admin(UUID.randomUUID(), "Admin +91 97xxxxx111");
+        Issue fixed = (Issue) support.fix(other, UUID.randomUUID(), issue, "Credited the missing ₹67; it shows in today's earnings");
+        assertThat(fixed.state()).isEqualTo("FIXED");
+        assertThat(fixed.fixedBy()).isEqualTo(other.name());
+        assertThat(fixed.fixedAt()).isNotNull();
+        assertThat(fixed.acknowledgedBy()).as("kept").isEqualTo(lead.name());
+        assertThat(fixed.acknowledgedAt()).isEqualTo(acknowledged.acknowledgedAt());
+        assertThat(fixed.resolution()).isEqualTo("Credited the missing ₹67; it shows in today's earnings");
+        refused(() -> support.fix(other, UUID.randomUUID(), issue, "Again"), 409, "ISSUE_ALREADY_FIXED");
+        refused(() -> support.fix(other, UUID.randomUUID(), UUID.randomUUID(), "Missing"), 404, "ISSUE_NOT_FOUND");
+        assertThat(support.issues("FIXED").issues()).extracting(Issue::issueId).containsExactly(issue);
+        assertThat(fleet.db.queryForList("SELECT action FROM fleet_schema.admin_audit WHERE target_id = ? ORDER BY at", String.class,
+            issue.toString())).containsExactly("SUPPORT_ISSUE_ACKNOWLEDGED", "SUPPORT_ISSUE_FIXED");
+
+        // Fixed straight from OPEN: acknowledged by the same admin at the same moment.
+        support.report(ravi, new IssueInput("APP_PROBLEM", null, null, null));
+        UUID second = support.issues("OPEN").issues().get(0).issueId();
+        Issue direct = (Issue) support.fix(other, UUID.randomUUID(), second, "Reinstalled the app with them on a call");
+        assertThat(direct.acknowledgedBy()).isEqualTo(other.name());
+        assertThat(direct.acknowledgedAt()).isEqualTo(direct.fixedAt());
     }
 
     @Test
@@ -153,7 +195,9 @@ class FleetSupportDatabaseTest {
         assertThat(events).extracting(SosEvent::riderName).containsExactly("Sita Devi", "Ravi Kumar");
         assertThat(events.get(0).phoneMasked()).isEqualTo("+91 98xxxxx211");
         assertThat(events.get(0).lat()).isNull();
+        assertThat(events.get(0).alertedAt()).as("the ops lead was emailed").isNotNull();
         assertThat(events.get(1).lat()).isEqualTo(17.44);
+        assertThat(events.get(1).alertedAt()).as("the alert failed: the console shows it").isNull();
     }
 
     static void refused(Runnable call, int status, String code) {

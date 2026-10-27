@@ -9,6 +9,8 @@ import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetAdminService.Cursor;
 import in.craves.integration.fleet.admin.FleetAdminService.Done;
+import in.craves.integration.fleet.money.FleetMoneyModels.Adjustment;
+import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.EarningsPage;
 import in.craves.integration.fleet.money.FleetMoneyModels.Hold;
 import in.craves.integration.fleet.money.FleetMoneyModels.HoldInput;
@@ -72,6 +74,8 @@ public class FleetEarnings {
     static final Duration PENDING = Duration.ofHours(24);
     static final int MAX_HOLD_DAYS = 7;
     static final int PAGE = 20;
+    /** A correction is at most ₹10,000 either way: a bigger one is a mistake to look into, not a typo to post. */
+    static final long MAX_ADJUSTMENT_PAISE = 1_000_000;
     static final String AUTOMATIC = "Craves (automatic)";
     static final String DISPUTE_REASON = "You reported a problem with this trip. Its pay waits until support fixes it, for up to 7 days.";
     private static final String PROVIDER = "craves_fleet";
@@ -231,33 +235,40 @@ public class FleetEarnings {
     }
 
     /**
-     * A signed correction to one pay component of a credited trip, as its next revision (2 or later) with the reason the
-     * rider sees. A negative amount is debt, recovered only from future pay at the weekly cap. admin-fleet-v1 has no
-     * adjustment endpoint yet, so this is service code only, audited like every ops action.
+     * A signed correction to one pay component of a credited trip (admin-fleet-v1 POST /trips/{tripId}/pay-adjustments), as
+     * its next revision (2 or later) with the reason the rider sees. A negative amount is debt, recovered only from future
+     * pay at the weekly cap; a positive one is pay like any other, pending 24 hours, with TDS withheld. At most
+     * MAX_ADJUSTMENT_PAISE either way. Audited and idempotent; 409 TRIP_NOT_CREDITED before the trip's pay is credited.
      */
     @Transactional
-    public void adjustTrip(Admin by, UUID tripId, String component, long amountPaise, String reason) {
-        String text = FleetAdminService.reason(reason);
-        if (component == null || !component.matches("^[a-z][a-z0-9-]{1,31}$") || "tds".equals(component) || amountPaise == 0) {
-            throw FleetApiException.invalid("Choose a pay component other than tds and a non-zero amount.");
+    public Object adjustTrip(Admin by, UUID key, UUID tripId, AdjustmentInput input) {
+        String text = FleetAdminService.reason(input == null ? null : input.reason());
+        String component = input.component();
+        long amountPaise = input.amountPaise() == null ? 0 : input.amountPaise();
+        if (component == null || !component.matches("^[a-z][a-z0-9-]{1,31}$") || "tds".equals(component) || amountPaise == 0
+            || Math.abs(amountPaise) > MAX_ADJUSTMENT_PAISE) {
+            throw FleetApiException.invalid("Choose a pay component other than tds and an amount other than zero, at most ₹10,000 either way.");
         }
-        List<Map<String, Object>> found = jdbc.queryForList("SELECT rider_id, chef_sub_order_id, rate_card_version, order_code "
-            + "FROM fleet_schema.trip WHERE id = ? AND pay_credited_at IS NOT NULL FOR UPDATE", tripId);
-        if (found.isEmpty()) {
-            throw FleetApiException.notFound("TRIP_NOT_FOUND", "No credited trip with this id.");
-        }
-        UUID rider = (UUID) found.get(0).get("rider_id");
-        lockRider(rider);
-        Source source = new Source(tripId, null, (UUID) found.get(0).get("chef_sub_order_id"), (String) found.get(0).get("rate_card_version"));
-        Instant now = Instant.now();
-        Instant withdrawable = amountPaise > 0 ? now.plus(PENDING) : now;
-        earn(rider, source, component, nextRevision(tripId, component, 2), amountPaise, cut("Adjustment: " + text, 160), text,
-            withdrawable, now, by);
-        if (amountPaise > 0) {
-            withhold(rider, source, nextRevision(tripId, "tds", 1), amountPaise, withdrawable, now, by);
-        }
-        admin.audit(by, "PAY_ADJUSTED", rider, tripId.toString(), "Adjusted " + component + " of trip " + found.get(0).get("order_code")
-            + " by " + amountPaise + " paise: " + text);
+        return admin.once(by, key, "PAY_ADJUSTED", tripId + "\n" + component + "\n" + amountPaise + "\n" + text, () -> {
+            Map<String, Object> trip = jdbc.queryForList("SELECT rider_id, chef_sub_order_id, rate_card_version, order_code, pay_credited_at "
+                    + "FROM fleet_schema.trip WHERE id = ? AND rider_id IS NOT NULL FOR UPDATE", tripId).stream().findFirst()
+                .orElseThrow(() -> FleetApiException.notFound("TRIP_NOT_FOUND", "No rider trip with this id."));
+            if (trip.get("pay_credited_at") == null) {
+                throw FleetApiException.conflict("TRIP_NOT_CREDITED", "This trip's pay isn't credited yet. Adjust it once it is, or hold it.");
+            }
+            UUID rider = (UUID) trip.get("rider_id");
+            lockRider(rider);
+            Source source = new Source(tripId, null, (UUID) trip.get("chef_sub_order_id"), (String) trip.get("rate_card_version"));
+            Instant now = Instant.now();
+            Instant withdrawable = amountPaise > 0 ? now.plus(PENDING) : now;
+            int revision = nextRevision(tripId, component, 2);
+            earn(rider, source, component, revision, amountPaise, cut("Adjustment: " + text, 160), text, withdrawable, now, by);
+            if (amountPaise > 0) {
+                withhold(rider, source, nextRevision(tripId, "tds", 1), amountPaise, withdrawable, now, by);
+            }
+            return new Done(new Adjustment(tripId, (String) trip.get("order_code"), rider, component, revision, amountPaise, text), rider,
+                tripId.toString(), "Adjusted " + component + " of trip " + trip.get("order_code") + " by " + amountPaise + " paise: " + text);
+        });
     }
 
     // ---- Holds (admin-fleet-v1 /holds) ----

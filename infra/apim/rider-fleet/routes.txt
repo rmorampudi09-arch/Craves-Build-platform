@@ -59,11 +59,16 @@ route|admin|fleet-post-payout-batches-batchId-approve|POST|/payout-batches/{batc
 route|admin|fleet-post-payout-batches-batchId-mark-sent|POST|/payout-batches/{batchId}/mark-sent|admin
 route|admin|fleet-post-payout-batches-batchId-payouts-payoutId-utr|POST|/payout-batches/{batchId}/payouts/{payoutId}/utr|admin
 route|admin|fleet-post-payout-batches-batchId-payouts-payoutId-fail|POST|/payout-batches/{batchId}/payouts/{payoutId}/fail|admin
+route|admin|fleet-post-payout-batches-batchId-payouts-payoutId-reverse|POST|/payout-batches/{batchId}/payouts/{payoutId}/reverse|admin
+route|admin|fleet-post-payout-batches-batchId-cancel|POST|/payout-batches/{batchId}/cancel|admin
+route|admin|fleet-post-trips-tripId-pay-adjustments|POST|/trips/{tripId}/pay-adjustments|admin
 route|admin|fleet-get-holds|GET|/holds|admin
 route|admin|fleet-post-holds|POST|/holds|admin
 route|admin|fleet-post-holds-holdId-release|POST|/holds/{holdId}/release|admin
 route|admin|fleet-get-exports-rider-joins-exits|GET|/exports/rider-joins-exits|admin
 route|admin|fleet-get-support-issues|GET|/support-issues|admin
+route|admin|fleet-post-support-issues-issueId-acknowledge|POST|/support-issues/{issueId}/acknowledge|admin
+route|admin|fleet-post-support-issues-issueId-fix|POST|/support-issues/{issueId}/fix|admin
 route|admin|fleet-get-sos-events|GET|/sos-events|admin
 route|admin|fleet-get-slots|GET|/slots|admin
 route|admin|fleet-post-slots|POST|/slots|admin

@@ -131,6 +131,72 @@ describe("payout batches", () => {
   });
 });
 
+describe("corrections", () => {
+  it("cancels an unsent file only after the not-uploaded check, then closes it", async () => {
+    answer = (method, path) => method === "POST" && path.endsWith("/cancel")
+      ? json({ batchId: BATCH, kind: "WEEKLY", payoutDate: "2026-10-19", payoutCount: 1, totalPaise: 12345678 }) : lists(path);
+    const section = await openBatch();
+    fireEvent.click(button("Cancel this payout file", section));
+    fireEvent.change(within(section).getByLabelText("Why cancel it"), { target: { value: "Made for the wrong Monday" } });
+    fireEvent.click(button("Cancel the file", section));
+    expect(within(section).getByRole("alert").textContent).toBe("Tick the box once you have checked this file was not uploaded to the bank.");
+    expect(posts()).toHaveLength(0);
+
+    fireEvent.click(within(section).getByLabelText("I checked: this file was not uploaded to the bank."));
+    fireEvent.click(button("Cancel the file", section));
+    expect(await screen.findByText("Cancelled the 2026-10-19 Weekly (Monday) file: 1 payout, ₹1,23,456.78. Make the file again once the mistake is fixed.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Weekly (Monday) · 2026-10-19" })).toBeNull();
+    expect(posts()[0]).toMatchObject({ path: `payout-batches/${BATCH}/cancel`, body: { reason: "Made for the wrong Monday", notUploaded: true } });
+  });
+
+  it("offers no cancel once the file is sent", async () => {
+    current = batch({ status: "SENT" });
+    const section = await openBatch();
+    expect(within(section).queryByRole("button", { name: "Cancel this payout file" })).toBeNull();
+  });
+
+  it("records the bank's reversal of a paid payout", async () => {
+    const paid = { ...payout, status: "PAID", utr: "429312345678", markedBy: "Asha", markedAt: at };
+    current = batch({ status: "CLOSED", payouts: [paid] });
+    answer = (method, path) => {
+      if (method === "POST" && path.endsWith("/reverse")) {
+        current = batch({ status: "CLOSED", payouts: [{ ...paid, status: "FAILED", failureReason: "Returned by the bank: Account closed" }] });
+        return json(current.payouts[0]);
+      }
+      return lists(path);
+    };
+    const section = await openBatch();
+    const row = within(section).getByText("Ravi Kumar").closest("tr") as HTMLElement;
+    fireEvent.click(button("Record bank reversal", row));
+    fireEvent.change(within(row).getByLabelText(/Reason for/), { target: { value: "Account closed" } });
+    fireEvent.click(button("Record bank reversal", row));
+    expect(await within(row).findByText("Reversal recorded. The money is back in the rider's balance; their payouts pause until ops sets the payout account again with them.")).toBeTruthy();
+    expect(await within(row).findByText(/Returned by the bank: Account closed/)).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Record bank reversal" })).toBeNull();
+    expect(posts()[0]).toMatchObject({ path: `payout-batches/${BATCH}/payouts/${PAYOUT}/reverse`, body: { reason: "Account closed" } });
+  });
+
+  it("takes back a wrong drop distance with the reason the rider sees", async () => {
+    answer = (method, path) => method === "POST"
+      ? json({ tripId: TRIP, orderCode: "#0BDE0107", riderId: RIDER, component: "drop-km", revision: 2, amountPaise: -1250, reason: "The drop was 2.9 km, not 4.2 km" }, 201)
+      : lists(path);
+    render(createElement(FleetPayouts));
+    const form = (await screen.findByRole("heading", { name: "Adjust a trip's pay" })).closest("form") as HTMLElement;
+    fireEvent.change(within(form).getByLabelText("Trip ID"), { target: { value: TRIP } });
+    fireEvent.change(within(form).getByLabelText("Amount, ₹"), { target: { value: "12.50" } });
+    fireEvent.click(button("Adjust pay", form));
+    expect(within(form).getByRole("alert").textContent).toBe("Write a reason of at least 3 characters.");
+    expect(posts()).toHaveLength(0);
+
+    fireEvent.change(within(form).getByLabelText("Reason (the rider sees it)"), { target: { value: "The drop was 2.9 km, not 4.2 km" } });
+    fireEvent.click(button("Adjust pay", form));
+    expect(window.confirm).toHaveBeenCalledWith("Drop distance: take back ₹12.50 on this trip? The rider sees it with your reason.");
+    expect(await within(form).findByText(/^Adjusted Drop distance on #0BDE0107 by -₹12.50\. The rider owes it/)).toBeTruthy();
+    expect(posts()[0]).toMatchObject({ path: `trips/${TRIP}/pay-adjustments`, body: { component: "drop-km", amountPaise: -1250, reason: "The drop was 2.9 km, not 4.2 km" } });
+    expect((within(form).getByLabelText("Trip ID") as HTMLInputElement).value).toBe("");
+  });
+});
+
 describe("pay holds", () => {
   it("places a hold with a reason and a release date at most 7 days away", async () => {
     answer = (method, path) => method === "POST" ? json({ ...hold, holdId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }, 201) : lists(path);

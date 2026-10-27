@@ -19,14 +19,22 @@ public final class FleetSupportModels {
     public record SosInput(String tripId, Fix fix) {
     }
 
+    /** acknowledgedAt, fixedAt, who did each and the resolution: null until then (admin-fleet-v1, optional). */
     public record Issue(UUID issueId, UUID riderId, String riderName, UUID tripId, String category, String text, String state,
-                        Instant createdAt, Instant acknowledgeBy, Instant fixBy) {
+                        Instant createdAt, Instant acknowledgeBy, Instant fixBy, Instant acknowledgedAt, String acknowledgedBy,
+                        Instant fixedAt, String fixedBy, String resolution) {
+    }
+
+    /** What ops did about the issue; support tells the rider. */
+    public record FixInput(String resolution) {
     }
 
     public record IssuePage(List<Issue> issues) {
     }
 
-    public record SosEvent(UUID sosId, UUID riderId, String riderName, String phoneMasked, Instant at, Double lat, Double lng, UUID tripId) {
+    /** alertedAt: when the ops alert email was accepted; null when it was not sent (admin-fleet-v1, optional). */
+    public record SosEvent(UUID sosId, UUID riderId, String riderName, String phoneMasked, Instant at, Double lat, Double lng, UUID tripId,
+                           Instant alertedAt) {
     }
 
     public record SosPage(List<SosEvent> events) {

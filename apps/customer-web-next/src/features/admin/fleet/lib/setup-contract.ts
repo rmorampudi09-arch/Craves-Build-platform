@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { id, instant, personName, VERSION, type FleetRoute } from "./fleet-common";
+import { id, instant, personName, rupeesToPaise, VERSION, type FleetRoute } from "./fleet-common";
 import { riderStatusSchema } from "./rider-contract";
-import { istInstant, rupeesToPaise } from "./slot-contract";
+import { istInstant } from "./slot-contract";
 
 // Rider pilot setup: rate card, dispatch policy and the test-mode allow-lists. Money is paise, distances metres.
 export const DISPATCH_MODES = ["off", "shadow", "live"] as const;

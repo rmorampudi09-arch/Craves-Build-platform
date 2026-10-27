@@ -15,6 +15,8 @@ import in.craves.integration.fleet.FleetRoleClient;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminService;
+import in.craves.integration.fleet.money.FleetMoneyModels.Adjustment;
+import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.EarningsPage;
 import in.craves.integration.fleet.money.FleetMoneyModels.Hold;
 import in.craves.integration.fleet.money.FleetMoneyModels.HoldInput;
@@ -240,7 +242,12 @@ class FleetEarningsDatabaseTest {
     @Test
     void anAdjustmentIsTheNextRevisionWithItsReasonAndCanTakePayBack() {
         UUID trip = deliveredTrip(false);
-        tx(() -> earnings.adjustTrip(ops, trip, "drop-km", -500, "The drop was 3.6 km, not 4.2 km"));
+        UUID key = UUID.randomUUID();
+        AdjustmentInput input = new AdjustmentInput("drop-km", -500L, "The drop was 3.6 km, not 4.2 km");
+        Adjustment adjustment = (Adjustment) tx(() -> earnings.adjustTrip(ops, key, trip, input));
+        assertThat(adjustment.revision()).isEqualTo(2);
+        assertThat(adjustment.amountPaise()).isEqualTo(-500);
+        assertThat(adjustment.riderId()).isEqualTo(rider);
         assertThat(fleet.db.queryForMap("SELECT business_key, net_paise, reason FROM fleet_schema.rider_earning WHERE trip_id = ? "
             + "AND revision = 2", trip)).containsEntry("business_key", "fleet-trip-pay/" + trip + "/drop-km/2")
             .containsEntry("net_paise", -500L).containsEntry("reason", "The drop was 3.6 km, not 4.2 km");
@@ -253,10 +260,23 @@ class FleetEarningsDatabaseTest {
         assertThat(fleet.db.queryForMap("SELECT event_type, actor_type FROM payment_schema.ledger_transaction WHERE business_event_key = ?",
             "fleet-trip-pay/" + trip + "/drop-km/2")).containsEntry("event_type", "RIDER_PAY_ADJUSTED").containsEntry("actor_type", "HUMAN");
         assertThat(count("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'PAY_ADJUSTED'")).isEqualTo(1);
+        // The same key again is the first answer, never a second correction.
+        JsonNode replay = json.valueToTree(tx(() -> earnings.adjustTrip(ops, key, trip, input)));
+        assertThat(replay.get("revision").asInt()).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM fleet_schema.rider_earning WHERE trip_id = ? AND component = 'drop-km'", trip)).isEqualTo(2);
 
-        refused(() -> tx(() -> earnings.adjustTrip(ops, trip, "tds", 100, "Wrong tax")), 400, "VALIDATION_FAILED");
-        refused(() -> tx(() -> earnings.adjustTrip(ops, trip, "base", 0, "Nothing")), 400, "VALIDATION_FAILED");
-        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), "base", 100, "Missing base")), 404, "TRIP_NOT_FOUND");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), trip, new AdjustmentInput("tds", 100L, "Wrong tax"))), 400,
+            "VALIDATION_FAILED");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), trip, new AdjustmentInput("base", 0L, "Nothing"))), 400,
+            "VALIDATION_FAILED");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), trip, new AdjustmentInput("base", 1_000_001L, "A typo"))), 400,
+            "VALIDATION_FAILED");
+        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), UUID.randomUUID(), new AdjustmentInput("base", 100L,
+            "Missing base"))), 404, "TRIP_NOT_FOUND");
+        UUID waiting = deliveredTrip(false);
+        fleet.db.update("UPDATE fleet_schema.trip SET pay_credited_at = NULL WHERE id = ?", waiting);
+        refused(() -> tx(() -> earnings.adjustTrip(ops, UUID.randomUUID(), waiting, new AdjustmentInput("base", 100L, "Missed base"))),
+            409, "TRIP_NOT_CREDITED");
     }
 
     @Test

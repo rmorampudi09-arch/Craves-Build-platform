@@ -1,5 +1,7 @@
 # Interactive Ola maps (web live, APK ready) — 2026-10-10
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 ## TL;DR
 
 | Question | Answer |

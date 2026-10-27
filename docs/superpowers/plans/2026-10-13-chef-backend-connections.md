@@ -1,5 +1,7 @@
 # Chef Backend Connections Implementation Plan
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the redesigned chef app every server capability it shows: publish the existing chef routes on the mobile gateway and add the missing fields and endpoints.

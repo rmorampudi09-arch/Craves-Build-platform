@@ -1,5 +1,7 @@
 # Chef referral programme — live activation (12 Oct 2026)
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #20 `Craves-Referral-Chef` named below is turned off on purpose: do not run, re-enable or recreate it. Use #24 `Craves-Referral-Chef-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 Owner decision (Raviteja, 12 Oct 2026): switch on the **chef** referral programme now, backend only; the frontend follows later. Policy approval references record the owner's decision; no external legal or CA review yet. The owner approves alone: the release automation drafts the policy and the owner's admin identity approves it, so the database's maker≠approver rule still holds.
 
 ## What was already live (inspection, pipeline 20 run 371)

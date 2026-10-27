@@ -1,5 +1,7 @@
 # Chef app backend release runbook (2026-10-13)
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 Branch `feat/chef-app-backend` (base `1ddfd1c1f`; its commits are `origin/main..feat/chef-app-backend`, listed by `git log --oneline 1ddfd1c1f..feat/chef-app-backend`). Backs the chef mobile app 1.31.0. Written without access to Azure: no command below has been run against production. You run every command in Azure Cloud Shell (Bash, no storage). Every command is a single line; paste one line at a time and press Enter separately (Cloud Shell drops newlines in multi-line paste).
 
 ## What ships

@@ -84,6 +84,20 @@ jobs:
             exit 1
           fi
 
+      - name: Rider version in step (build.gradle and riderConfig.ts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Native code (versionName, sent with a refreshed FCM token) and JS (RIDER_APP_VERSION, compared with
+          # minAppVersion) must report the same version to the server.
+          native=$(awk '/^[[:space:]]*rider[[:space:]]*[{]/ {rider = 1} rider && /^[[:space:]]*versionName[[:space:]]+"/ {gsub(/"/, "", $2); print $2; exit}' android/app/build.gradle)
+          js=$(sed -nE "s/^export const RIDER_APP_VERSION = '([^']+)';$/\1/p" src/features/rider/riderConfig.ts)
+          if [[ -z "$native" || "$native" != "$js" ]]; then
+            echo "ERROR: the rider versionName in android/app/build.gradle ('$native') and RIDER_APP_VERSION in src/features/rider/riderConfig.ts ('$js') must match." >&2
+            exit 1
+          fi
+          echo "Rider version: $native"
+
       - name: API mode
         id: mode
         shell: bash

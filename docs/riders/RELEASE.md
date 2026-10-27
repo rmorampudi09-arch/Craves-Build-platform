@@ -9,7 +9,8 @@ The "Craves Rider APK" workflow runs on pull requests that touch `apps/mobile/**
 - **Signed release APK**, `assembleRiderRelease`.
 - **ARM only:** `arm64-v8a` and `armeabi-v7a`. No x86 code; rider phones are ARM.
 - **R8 on**, for this build only: the workflow passes `-PcravesRiderMinify=true`. The customer build never passes it and is unchanged. Keep rules are in `android/app/proguard-rules.pro`. R8 runs in compatibility mode (`-Pandroid.enableR8.fullMode=false`) until a clean phone pass on an R8 build.
-- **versionCode = the workflow run number** (`-PcravesVersionCode`), so every build installs over the last one and Play accepts every upload. versionName stays `1.0`.
+- **versionCode = the workflow run number** (`-PcravesVersionCode`), so every build installs over the last one and Play accepts every upload.
+- **versionName** is set in the rider flavor (`1.1.0`, the customer app keeps `1.0`) and must equal `RIDER_APP_VERSION` in `src/features/rider/riderConfig.ts`: the app sends it to the server, which compares it with `minAppVersion`, and a step fails the build when the two differ. For a release, raise both in one commit; once the APK is on the phones, pin `minAppVersion` to it (`GO-LIVE.md`, stage wire). Riders below it are blocked only between shifts.
 - A check step fails the build unless the APK is signed, its versionCode is the run number, its native code is ARM only, and R8 wrote a mapping.
 - The artifact **craves-rider-apk** (kept 14 days) holds `craves-rider-<mode>-<sha>.apk` and `craves-rider-<mode>-<sha>-mapping.txt`. On a pull request, a comment gives the file name, the versionCode and the mode.
 

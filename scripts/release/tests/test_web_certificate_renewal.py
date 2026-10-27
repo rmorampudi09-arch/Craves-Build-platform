@@ -32,7 +32,7 @@ FAKE_AZ = textwrap.dedent(f'''\
     if a[:2] == ['account', 'set']: pass
     elif a[:2] == ['account', 'show']: out('{SUB}' if q == 'id' else 'tenant-1')
     elif a[:2] == ['account', 'get-access-token']: out('h.{PAYLOAD}.sig')
-    elif a[:4] == ['network', 'dns', 'zone', 'list']: out({{'id': '{ZONE_ID}', 'nameServers': {AZURE_NS!r}}})
+    elif a[:4] == ['network', 'dns', 'zone', 'list']: out({{'id': '{ZONE_ID}', 'resourceGroup': '{RG}', 'nameServers': {AZURE_NS!r}}})
     elif a[:2] == ['keyvault', 'show']: out({{'id': '{KV_ID}', 'properties': {{'enableRbacAuthorization': True, 'accessPolicies': []}}}})
     elif a[0] == 'rest': out({{'properties': {{'parameters': {{'type': 'CustomerCertificate',
         'secretSource': {{'id': '{KV_ID}/secrets/craves-web-tls'}}, 'useLatestVersion': s.get('latest', True),
@@ -125,6 +125,25 @@ class WebCertificateRenewal(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--role 'Key Vault Certificates Officer'", out)
         self.assertNotIn('git ', calls)
+
+    def test_dns_hook_writes_both_challenge_names(self):
+        hook = ROOT / 'infra/certificates/web-letsencrypt/dns_cravesaz.sh'
+        script = (f'. "{hook}"\n'
+                  'dns_cravesaz_add _acme-challenge.craves.in tok1 && dns_cravesaz_add _acme-challenge.www.craves.in tok2 && '
+                  'dns_cravesaz_rm _acme-challenge.www.craves.in tok2 && echo HOOK-OK\n'
+                  'dns_cravesaz_add _acme-challenge.example.com tok3 || echo OUTSIDE-REFUSED\n')
+        fake_az = self.dir / 'bin' / 'az'
+        fake_az.write_text('#!/usr/bin/env bash\necho "az $*" >> "$FAKE_LOG"\n')
+        env = {**os.environ, 'PATH': f"{self.dir / 'bin'}:{os.environ['PATH']}", 'FAKE_LOG': str(self.log),
+               'CRAVES_DNS_ZONE': 'craves.in', 'CRAVES_DNS_RESOURCE_GROUP': RG}
+        result = subprocess.run(['sh', '-c', script], env=env, capture_output=True, text=True, timeout=30)
+        calls = self.log.read_text().splitlines()
+        self.assertIn('HOOK-OK', result.stdout, result.stderr)
+        self.assertIn('OUTSIDE-REFUSED', result.stdout)
+        self.assertEqual(len(calls), 3)
+        self.assertIn(f'txt add-record --resource-group {RG} --zone-name craves.in --record-set-name _acme-challenge --value tok1', calls[0])
+        self.assertIn('--record-set-name _acme-challenge.www --value tok2', calls[1])
+        self.assertIn('txt remove-record', calls[2])
 
     def test_pipeline_targets_front_door_not_container_apps(self):
         pipeline = (ROOT / 'azure-pipelines-web-letsencrypt-certificate.yml').read_text()

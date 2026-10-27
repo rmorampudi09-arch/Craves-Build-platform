@@ -59,6 +59,8 @@ steps:
       fi
       bash -n infra/certificates/web-letsencrypt/renew-web-certificate.sh
       shellcheck infra/certificates/web-letsencrypt/renew-web-certificate.sh
+      sh -n infra/certificates/web-letsencrypt/dns_cravesaz.sh
+      shellcheck -s sh infra/certificates/web-letsencrypt/dns_cravesaz.sh
     displayName: Validate certificate script
 
   - task: AzureCLI@2

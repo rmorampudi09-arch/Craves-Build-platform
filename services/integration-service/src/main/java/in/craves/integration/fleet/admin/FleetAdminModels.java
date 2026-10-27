@@ -31,10 +31,13 @@ public final class FleetAdminModels {
                               boolean pendingDevice, Instant createdAt, String kycName, String language, String vehicleNumberMasked) {
     }
 
-    /** submittedPayoutAccount: what the rider typed in the app, never paid until ops confirms it. */
+    /**
+     * submittedPayoutAccount: what the rider typed in the app, never paid until ops confirms it. recentOffers: the last 20
+     * offers made to the rider, newest first, with how each reached the phone.
+     */
     public record RiderDetail(RiderHeader rider, List<RiderDocument> documents, List<RiderDevice> devices,
                               PayoutAccount payoutAccount, PayoutAccount submittedPayoutAccount, List<Shift> shifts,
-                              List<StatusEvent> statusEvents) {
+                              List<StatusEvent> statusEvents, List<RiderOffer> recentOffers) {
     }
 
     public record RiderDocument(UUID documentId, String type, String status, LocalDate expiresOn, String reason,
@@ -48,8 +51,27 @@ public final class FleetAdminModels {
     public record PayoutAccount(String method, String maskedAccount, String ifsc, String holderName, String setBy, Instant setAt) {
     }
 
+    /**
+     * A shift and how the phone kept it (app 1.1.0; empty before): its last /locations call, the longest gap between two
+     * calls and how many gaps passed 60 s (BACKEND.md "Location ingest"), and the phone's latest health report.
+     */
     public record Shift(UUID shiftId, Instant startedAt, Instant endedAt, String selfieState, String selfieReason,
-                        String selfieReviewedBy, int inZoneSeconds) {
+                        String selfieReviewedBy, int inZoneSeconds, Instant lastSeenAt, int maxSilenceSeconds, int silencesOver60s,
+                        PhoneHealth phone) {
+    }
+
+    /**
+     * The phone's latest report on a shift, about once a minute: battery, charging, power saver, whether an offer can ring,
+     * battery used per unplugged hour (once 30 unplugged minutes have passed), why the app last died, and the trip steps
+     * waiting to sync.
+     */
+    public record PhoneHealth(Integer batteryPct, Boolean charging, Boolean powerSave, Boolean canRing, Double batteryPerHourPct,
+                              String lastExitReason, Integer queuePending, Integer queueOldestAgeS) {
+    }
+
+    /** An offer made to the rider, with what the push did and when and how the phone first had it (BACKEND.md "Offer receipts"). */
+    public record RiderOffer(UUID offerId, UUID tripId, String orderCode, String state, Instant offeredAt, Instant pushedAt,
+                             String pushResult, Instant rangAt, String rangChannel) {
     }
 
     public record StatusEvent(UUID eventId, String kind, String reason, String evidenceSummary, Instant deadline, Instant reviewBy,

@@ -322,7 +322,7 @@ All additions are optional, so installed APKs keep working; the server ships fir
 
 | Number | How it's computed | Where it lives | Who sees it | Target |
 |---|---|---|---|---|
-| Offer-to-ring | `rang_at − offered_at`, by channel and model | `trip_offer` (P1-09) | Gopi daily; console later | p95 ≤ 5 s, p99 ≤ 12 s |
+| Offer-to-ring | `rang_at − offered_at`, by channel and model | `trip_offer` (P1-09) | Gopi daily, in the console (P3-04) | p95 ≤ 5 s, p99 ≤ 12 s |
 | FCM health | `deliveredNoDelay`, `priorityLowered` | FCM Data API [S7] | Gopi weekly | `priorityLowered` ≈ 0 |
 | Service survival | per shift: last seen, longest silence, silences over 60 s; last exit reason (`ApplicationExitInfo`, no SDK) | `rider_shift` (P1-01, P1-10) | ops, Gopi | 4 h, no silence over 60 s |
 | Queue age, lost actions | `ageMs` on each step; queue size and oldest age in health; refusals by code | `trip_event`, `rider_shift.health` | Gopi | p95 sync within 60 s of signal; 0 lost |
@@ -330,7 +330,7 @@ All additions are optional, so installed APKs keep working; the server ships fir
 | Crash-free sessions | exit reasons CRASH and ANR per shift; Play vitals once on Play | `rider_shift`, Play Console | Gopi | ≥ 99.5% [proposed] |
 | Dispatch fallback rate | fleet-stage outcomes: ACCEPTED vs NO_ACCEPT, RIDERS_BUSY, NO_RIDERS, COST_GUARD | `trip_stage` (exists) | ops, Gopi | check any zone over 50% with riders online |
 
-Queries go in `scripts/riders/pilot_health.sql` with a runbook, `docs/riders/PILOT-HEALTH.md` (P1-15). No new monitoring service.
+Queries go in `services/integration-service/src/main/resources/fleet/pilot_health.sql` (first `scripts/riders/pilot_health.sql`) with a runbook, `docs/riders/PILOT-HEALTH.md` (P1-15); the console's Rider pilot health page runs them (P3-04). No new monitoring service.
 
 ## D. Phased roadmap
 

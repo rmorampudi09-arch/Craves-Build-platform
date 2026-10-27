@@ -347,7 +347,7 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 **Why:** A5. **Who:** agent. **Blocked by:** P1-01, P1-09, P1-10.
 
 **Do:**
-1. **New `scripts/riders/pilot_health.sql`**, with one named query each for:
+1. **New `scripts/riders/pilot_health.sql`** (since P3-04 `services/integration-service/src/main/resources/fleet/pilot_health.sql`, so the server can run it), with one named query each for:
    - offer-to-ring p50, p95 and p99 by channel and phone model (last 7 days);
    - which channel arrived first;
    - push results;
@@ -551,7 +551,7 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 ### P2-06 Ops tools
 **Who:** agent, one PR per tool. Each needs a console page in `apps/customer-web-next` and an admin endpoint.
-- **(a)** Shift health on the rider page: last seen, silences, battery per hour, exit reason.
+- **(a)** Shift health on the rider page: last seen, silences, battery per hour, exit reason. **Done:** the rider page's shifts show when the phone last called (flagged after 180 s on an open shift), the longest silence and how many passed 60 s, and the phone's last report (battery, charging, battery saver, can ring, battery per unplugged hour, last exit reason, queued steps); a Recent offers table shows the last 20 offers with the push result and how soon, and by which channel, the phone rang (blueprint C6). Proved by `FleetRiderHealthDatabaseTest` and the console vitests (`riders.vitest.ts`, `rider-health.vitest.ts`).
 - **(b)** Pay adjustments with a reason.
 - **(c)** Acknowledge and resolve support issues.
 - **(d)** Cancel a payout file that hasn't been sent.
@@ -649,10 +649,10 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **P3-03 APK size alert.** In `rider-apk.yml`, compare the APK size with the last `main` build and warn when it grows more than 5% (DoorDash practice, R8 E5).
 
-**P3-04 Pilot health page.** Add read-only admin endpoints over the P1-15 queries, and a console page in `apps/customer-web-next`. It replaces running the SQL by hand.
+**P3-04 Pilot health page (done).** `GET /api/v1/admin/fleet/pilot-health` (`FleetPilotHealth`, trip readers) runs every named query of `services/integration-service/src/main/resources/fleet/pilot_health.sql`, each in its own read-only transaction with a 15 s limit and at most 200 rows, and reports a failing query without stopping the others. The console's Riders & fleet → Rider pilot health page shows each as a table with its description. Proved by `FleetPilotHealthDatabaseTest` (read-only, a writing query refused), `FleetPilotHealthTest`, `FleetOpsSecurityTest` and `health.vitest.ts`.
 
 **P3-05 Baseline profile.** Only for Play installs; side-loaded APKs don't use it (R8). Build it after the move to Play, and measure cold start before and after.
 
-**P3-06 Batching and road-ETA ranking.** Only if the triggers in blueprint C7 fire. Add the two trigger queries to `pilot_health.sql` first, then design.
+**P3-06 Batching and road-ETA ranking.** Only if the triggers in blueprint C7 fire. The trigger queries are in `pilot_health.sql` (`batching_candidates`, `rider_busy_share`, `pickup_detour`; done); design only when they fire.
 
 **Phase 3 done when:** the battery target is met on both phones, cold start is ≤ 2 s, the size alert is live, and the health page replaces the manual queries.

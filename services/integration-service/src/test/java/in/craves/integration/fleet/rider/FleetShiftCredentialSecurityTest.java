@@ -11,6 +11,7 @@ import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetOpsController;
+import in.craves.integration.fleet.admin.FleetPilotHealth;
 import in.craves.integration.fleet.admin.FleetSlotController;
 import in.craves.integration.fleet.admin.FleetSlotService;
 import in.craves.integration.fleet.admin.RiderJoinsExitsExport;
@@ -71,6 +72,7 @@ class FleetShiftCredentialSecurityTest {
     @MockBean FleetPayouts payouts;
     @MockBean FleetSupportService support;
     @MockBean FleetOpsService ops;
+    @MockBean FleetPilotHealth health;
     @MockBean JwtVerifier verifier;
 
     @Test

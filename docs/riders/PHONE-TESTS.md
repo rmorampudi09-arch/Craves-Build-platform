@@ -2,7 +2,7 @@
 
 A person runs these on real phones. Use a **live** build (`CRAVES_RIDER_API_MODE=live`, real `RIDER_GOOGLE_SERVICES_JSON`) against the backend in test mode, with an allow-listed rider whose phone is approved. Write the results in the tables at the end.
 
-The server records what these tests measure: when each offer rang and by which channel, each shift's silences and battery, and each step's sync delay. Read them with the read-only queries in `PILOT-HEALTH.md` (`scripts/riders/pilot_health.sql`) instead of a stopwatch. They need app 1.1.0 or later.
+The server records what these tests measure: when each offer rang and by which channel, each shift's silences and battery, and each step's sync delay. Read them in the console (Rider pilot health, and the rider's own page) or with the read-only queries in `PILOT-HEALTH.md` instead of a stopwatch. They need app 1.1.0 or later.
 
 ## Before each phone
 

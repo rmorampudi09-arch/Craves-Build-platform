@@ -1,8 +1,10 @@
 -- Craves Rider pilot health (docs/riders/PILOT-HEALTH.md). Read-only: every query only reads fleet_schema.
--- Run it on a read-only connection to the integration database, the whole file or one query at a time:
---   psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1 -f scripts/riders/pilot_health.sql
--- Each query starts with a "-- name:" line. FleetPilotHealthDatabaseTest runs every one on test data, so a query that
--- stops matching the schema fails the build. Windows are the last 7 days; times are seconds unless named otherwise.
+-- The ops console's Pilot health page runs these (FleetPilotHealth, GET /api/v1/admin/fleet/pilot-health). By hand, on
+-- a read-only connection to the integration database, the whole file or one query at a time:
+--   psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1 -f services/integration-service/src/main/resources/fleet/pilot_health.sql
+-- Each query starts with a "-- name:" line, then its comment lines (the console shows them as its description).
+-- FleetPilotHealthDatabaseTest runs every one on test data, so a query that stops matching the schema fails the build.
+-- Health windows are the last 7 days, trigger windows 14; times are seconds unless named otherwise.
 
 -- name: offer_to_ring
 -- From the server creating an offer to the phone ringing (its first arrival, by either channel), by channel and phone

@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue, /positions). Trips and the queue are read by
- * support and audit too; positions, reassign and cancel are for operations.
+ * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue, /positions, /pilot-health). Trips, the queue and
+ * pilot health are read by support and audit too; positions, reassign and cancel are for operations.
  */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
@@ -29,9 +29,18 @@ public class FleetOpsController {
     private static final String KEY = "Idempotency-Key";
 
     private final FleetOpsService ops;
+    private final FleetPilotHealth health;
 
-    public FleetOpsController(FleetOpsService ops) {
+    public FleetOpsController(FleetOpsService ops, FleetPilotHealth health) {
         this.ops = ops;
+        this.health = health;
+    }
+
+    /** The pilot-health queries (PILOT-HEALTH.md), read-only with a time limit: for everyone who reads trips. */
+    @GetMapping("/pilot-health")
+    public ResponseEntity<Object> pilotHealth(@AuthenticationPrincipal CravesPrincipal principal) {
+        FleetAdminController.admin(principal, READERS);
+        return json(health.report());
     }
 
     @GetMapping("/trips")

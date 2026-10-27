@@ -7,8 +7,9 @@ import { TRIP_ROUTES } from "./trip-contract";
 import { PAYOUT_ROUTES } from "./payout-contract";
 import { SLOT_ROUTES } from "./slot-contract";
 import { SETUP_ROUTES } from "./setup-contract";
+import { HEALTH_ROUTES } from "./health-contract";
 
-export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES, ...SLOT_ROUTES, ...SETUP_ROUTES];
+export const FLEET_ROUTES: readonly FleetRoute[] = [...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES, ...SLOT_ROUTES, ...SETUP_ROUTES, ...HEALTH_ROUTES];
 
 const NO_STORE = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
 

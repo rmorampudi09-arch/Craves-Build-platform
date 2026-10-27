@@ -413,11 +413,26 @@ paths:
                 properties:
                   items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/DispatchQueueItem' } }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/pilot-health:
+    get:
+      operationId: getPilotHealth
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: >-
+        The pilot-health queries (docs/riders/PILOT-HEALTH.md): offer-to-ring, survival, sync delay, battery, fleet-stage
+        outcomes and the triggers for later work, each run read-only with a time limit. Rider and shift ids only, no names
+        or phones.
+      responses:
+        '200':
+          description: Every named query, in file order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PilotHealthReport' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/v1/admin/fleet/positions:
     get:
       operationId: listRiderPositions
       x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
-      description: Latest fix per rider seen in the last 12 hours.
+      description: The latest fix of each rider on shift or on a trip now (location only while working, blueprint E6).
       responses:
         '200':
           description: Positions.
@@ -1026,6 +1041,24 @@ components:
           description: An account the rider sent from the app, not paid until confirmed (POST .../payout-account/confirm).
         shifts: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/Shift' } }
         statusEvents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/StatusEvent' } }
+        recentOffers:
+          type: array
+          maxItems: 20
+          description: The last 20 offers made to the rider, newest first, with how each reached the phone.
+          items: { $ref: '#/components/schemas/RiderOffer' }
+    RiderOffer:
+      type: object
+      required: [offerId, tripId, orderCode, state, offeredAt, pushedAt, pushResult, rangAt, rangChannel]
+      properties:
+        offerId: { type: string, format: uuid }
+        tripId: { type: string, format: uuid }
+        orderCode: { type: string, maxLength: 9 }
+        state: { type: string, enum: [ACTIVE, ACCEPTED, DECLINED, EXPIRED, LOST, WITHDRAWN] }
+        offeredAt: { type: string, format: date-time }
+        pushedAt: { type: string, format: date-time, nullable: true, description: When the push was handed to notification-service. }
+        pushResult: { type: string, maxLength: 40, nullable: true, description: 'SENT, NO_TOKEN, ERROR, or notification-service''s code.' }
+        rangAt: { type: string, format: date-time, nullable: true, description: When the phone first had the offer (app 1.1.0). }
+        rangChannel: { type: string, enum: [fcm, locations], nullable: true }
     RiderDocument:
       type: object
       required: [documentId, type, status, expiresOn, reason, reviewedBy, reviewedAt, uploadedAt]
@@ -1098,6 +1131,46 @@ components:
         selfieReason: { type: string, maxLength: 1000, nullable: true }
         selfieReviewedBy: { type: string, maxLength: 120, nullable: true }
         inZoneSeconds: { type: integer, minimum: 0 }
+        lastSeenAt: { type: string, format: date-time, nullable: true, description: The shift's last /locations call (app 1.1.0 servers on). }
+        maxSilenceSeconds: { type: integer, minimum: 0, description: The longest gap between two /locations calls so far. }
+        silencesOver60s: { type: integer, minimum: 0 }
+        phone: { allOf: [{ $ref: '#/components/schemas/PhoneHealth' }], nullable: true }
+    PhoneHealth:
+      type: object
+      description: The phone's latest report on the shift (app 1.1.0), about once a minute.
+      required: [batteryPct, charging, powerSave, canRing, batteryPerHourPct, lastExitReason, queuePending, queueOldestAgeS]
+      properties:
+        batteryPct: { type: integer, minimum: 0, maximum: 100, nullable: true }
+        charging: { type: boolean, nullable: true }
+        powerSave: { type: boolean, nullable: true }
+        canRing: { type: boolean, nullable: true, description: Notifications on and the offers channel still high; dispatch skips false. }
+        batteryPerHourPct: { type: number, nullable: true, description: Battery used per unplugged hour, once 30 unplugged minutes have passed. }
+        lastExitReason: { type: string, maxLength: 200, nullable: true, description: 'Why the app''s process last ended (Android 11 and later).' }
+        queuePending: { type: integer, minimum: 0, nullable: true, description: Trip steps waiting to sync. }
+        queueOldestAgeS: { type: integer, minimum: 0, nullable: true }
+    PilotHealthReport:
+      type: object
+      required: [generatedAt, results]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        results: { type: array, maxItems: 40, items: { $ref: '#/components/schemas/PilotHealthResult' } }
+    PilotHealthResult:
+      type: object
+      description: One named query of pilot_health.sql (docs/riders/PILOT-HEALTH.md), at most 200 rows.
+      required: [name, description, columns, rows, truncated, error]
+      properties:
+        name: { type: string, pattern: '^[a-z0-9_]{1,60}$' }
+        description: { type: string, maxLength: 2000 }
+        columns: { type: array, maxItems: 40, items: { type: string, maxLength: 60 } }
+        rows:
+          type: array
+          maxItems: 200
+          items:
+            type: array
+            maxItems: 40
+            items: { nullable: true, description: 'A string of at most 500 characters, a number or a boolean; times as ISO-8601, days as YYYY-MM-DD.' }
+        truncated: { type: boolean, description: True when the query had more than 200 rows. }
+        error: { type: string, nullable: true, maxLength: 500, description: 'Why the query gave no rows (it failed or ran past 15 s); null when it ran. The other queries still run.' }
     SelfieReview:
       type: object
       required: [shiftId, riderId, riderName, startedAt, state, reason, reviewedBy, reviewedAt]

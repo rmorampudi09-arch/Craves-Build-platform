@@ -1,19 +1,24 @@
 # Craves Rider: pilot health
 
-How to tell, from the database, whether the rider pilot is healthy: offers ring fast, phones stay online, steps sync, and the fleet stage takes orders. The queries are in `scripts/riders/pilot_health.sql`, one per row of the table below. `FleetPilotHealthDatabaseTest` runs each of them on test data in CI, so they keep matching the schema.
+How to tell, from the database, whether the rider pilot is healthy: offers ring fast, phones stay online, steps sync, and the fleet stage takes orders. The queries are in `services/integration-service/src/main/resources/fleet/pilot_health.sql`, one per row of the tables below. `FleetPilotHealthDatabaseTest` runs each of them on test data in CI, so they keep matching the schema.
 
 ## Running the queries
 
-Use a **read-only** login to the integration database, never a write login on production. Asking Postgres for read-only transactions as well means a mistake can't change anything:
+**In the console:** Riders & fleet → **Rider pilot health** (operations, support and audit admins). The server runs every query each time the page loads or you press **Run again**: each in its own read-only transaction, at most 15 seconds and 200 rows each, and a query that fails shows its error without stopping the others (`FleetPilotHealth`, `GET /api/v1/admin/fleet/pilot-health`). Each table carries the query's own description, with its target or trigger.
+
+For one rider, the rider's page shows the same signals per shift (when the phone last called, the longest silence, its last battery and ring report) and their last 20 offers (push result, and how soon and by which channel the phone rang).
+
+**With psql**, for more than 200 rows or a query of your own: use a **read-only** login to the integration database, never a write login on production. Asking Postgres for read-only transactions as well means a mistake can't change anything:
 
 ```bash
 export FLEET_READONLY_URL='postgresql://<read-only user>@<host>:5432/<integration db>?sslmode=require&options=-c%20default_transaction_read_only%3Don'
-psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1 -f scripts/riders/pilot_health.sql            # every query
-awk '/^-- name: offer_to_ring$/{f=1; next} /^-- name: /{f=0} f' scripts/riders/pilot_health.sql \
+SQL=services/integration-service/src/main/resources/fleet/pilot_health.sql
+psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1 -f "$SQL"                                     # every query
+awk '/^-- name: offer_to_ring$/{f=1; next} /^-- name: /{f=0} f' "$SQL" \
   | psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1                                          # one query
 ```
 
-The health queries look at the last 7 days, the trigger queries at the last 14. During the first week of live dispatch, run the whole file once a day and keep the output with the day's notes. The data comes from app 1.1.0 (`RELEASE.md`): offer receipts, phone health and tap ages are empty for older apps.
+The health queries look at the last 7 days, the trigger queries at the last 14. During the first week of live dispatch, open Rider pilot health once a day and note what stands out with the day's notes. The data comes from app 1.1.0 (`RELEASE.md`): offer receipts, phone health and tap ages are empty for older apps.
 
 ## The queries
 

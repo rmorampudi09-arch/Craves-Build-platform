@@ -13,10 +13,12 @@ import in.craves.integration.fleet.admin.FleetAdminModels.FileContent;
 import in.craves.integration.fleet.admin.FleetAdminModels.NewRider;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccount;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccountInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.PhoneHealth;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDetail;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDevice;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDocument;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderHeader;
+import in.craves.integration.fleet.admin.FleetAdminModels.RiderOffer;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderPage;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderSummary;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderVehicle;
@@ -181,14 +183,46 @@ public class FleetAdminService {
         PayoutAccount submitted = jdbc.query("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
             + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'", (row, n) -> payoutAccount(row), riderId)
             .stream().findFirst().orElse(null);
-        List<Shift> shifts = jdbc.query("SELECT id, started_at, ended_at, selfie_state, selfie_reason, selfie_reviewed_by_name, "
-            + "in_zone_seconds FROM fleet_schema.rider_shift WHERE rider_id = ? ORDER BY started_at DESC LIMIT 20",
-            (row, n) -> new Shift(row.getObject("id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
-                row.getString("selfie_state"), row.getString("selfie_reason"), row.getString("selfie_reviewed_by_name"),
-                row.getInt("in_zone_seconds")), riderId);
+        List<Shift> shifts = jdbc.query(SHIFT + "WHERE rider_id = ? ORDER BY started_at DESC LIMIT 20", (row, n) -> shift(row), riderId);
         List<StatusEvent> events = jdbc.query(EVENT + "WHERE rider_id = ? ORDER BY created_at DESC LIMIT 100",
             (row, n) -> statusEvent(row), riderId);
-        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events);
+        List<RiderOffer> offers = jdbc.query("""
+            SELECT o.id, o.trip_id, t.order_code, o.state, o.offered_at, o.pushed_at, o.push_result, o.rang_at, o.rang_channel
+            FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
+            WHERE o.rider_id = ? ORDER BY o.offered_at DESC, o.id LIMIT 20""",
+            (row, n) -> new RiderOffer(row.getObject("id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("order_code"),
+                row.getString("state"), instant(row, "offered_at"), instant(row, "pushed_at"), row.getString("push_result"),
+                instant(row, "rang_at"), row.getString("rang_channel")), riderId);
+        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events, offers);
+    }
+
+    /**
+     * A shift with its heartbeat and the phone's latest health (stored by FleetLocationService from typed values). Battery
+     * per hour counts only unplugged time, from 30 minutes on, as pilot_health.sql's battery_per_hour does.
+     */
+    private static final String SHIFT = """
+        SELECT id, started_at, ended_at, selfie_state, selfie_reason, selfie_reviewed_by_name, in_zone_seconds, last_seen_at,
+               max_silence_seconds, silences_over_60s, can_ring, health IS NOT NULL AS has_health,
+               (health ->> 'batteryPct')::numeric::int AS battery_pct, (health ->> 'charging')::boolean AS charging,
+               (health ->> 'powerSave')::boolean AS power_save, health ->> 'lastExitReason' AS last_exit_reason,
+               (health ->> 'queuePending')::numeric::int AS queue_pending,
+               (health ->> 'queueOldestAgeS')::numeric::int AS queue_oldest_age_s,
+               CASE WHEN (health ->> 'unpluggedMin')::numeric >= 30
+                    THEN round((health ->> 'drainPct')::numeric * 60 / (health ->> 'unpluggedMin')::numeric, 1) END AS battery_per_hour
+        FROM fleet_schema.rider_shift
+        """;
+
+    private static Shift shift(ResultSet row) throws SQLException {
+        Boolean canRing = (Boolean) row.getObject("can_ring");
+        java.math.BigDecimal perHour = row.getBigDecimal("battery_per_hour");
+        PhoneHealth phone = !row.getBoolean("has_health") && canRing == null ? null : new PhoneHealth(
+            (Integer) row.getObject("battery_pct"), (Boolean) row.getObject("charging"), (Boolean) row.getObject("power_save"), canRing,
+            perHour == null ? null : perHour.doubleValue(), row.getString("last_exit_reason"), (Integer) row.getObject("queue_pending"),
+            (Integer) row.getObject("queue_oldest_age_s"));
+        return new Shift(row.getObject("id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
+            row.getString("selfie_state"), row.getString("selfie_reason"), row.getString("selfie_reviewed_by_name"),
+            row.getInt("in_zone_seconds"), instant(row, "last_seen_at"), row.getInt("max_silence_seconds"),
+            row.getInt("silences_over_60s"), phone);
     }
 
     @Transactional

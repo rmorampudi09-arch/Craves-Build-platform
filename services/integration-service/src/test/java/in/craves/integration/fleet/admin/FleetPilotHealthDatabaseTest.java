@@ -1,4 +1,4 @@
-package in.craves.integration.fleet.dispatch;
+package in.craves.integration.fleet.admin;
 
 import static in.craves.integration.fleet.dispatch.FleetDispatchFixtures.KITCHEN_LAT;
 import static in.craves.integration.fleet.dispatch.FleetDispatchFixtures.KITCHEN_LNG;
@@ -7,9 +7,9 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.within;
 
 import in.craves.integration.fleet.FleetDatabase;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import in.craves.integration.fleet.admin.FleetPilotHealth.NamedQuery;
+import in.craves.integration.fleet.admin.FleetPilotHealth.Result;
+import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +17,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-/** scripts/riders/pilot_health.sql (docs/riders/PILOT-HEALTH.md): every named query runs on fleet data, and the numbers add up. */
+/** resource fleet/pilot_health.sql (docs/riders/PILOT-HEALTH.md): every named query runs on fleet data, and the numbers add up. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class FleetPilotHealthDatabaseTest {
     static final String OFFER = "INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, state, pay_paise, rate_card_version, "
@@ -27,7 +27,49 @@ class FleetPilotHealthDatabaseTest {
     final FleetDatabase fleet = new FleetDatabase();
 
     @Test
-    void everyQueryRunsAndOfferToRingIsTimedFromTheOfferToItsFirstArrival() throws IOException {
+    void theConsoleReportRunsEveryQueryReadOnlyAsPlainValues() {
+        UUID rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        UUID trip = fleet.trip(UUID.randomUUID());
+        fleet.db.update(OFFER.formatted("now() - INTERVAL '1 hour' + INTERVAL '3 seconds'"), UUID.randomUUID(), trip, rider, "SENT", "fcm");
+
+        FleetPilotHealth.Report report = new FleetPilotHealth(fleet.db, fleet.transactions).report();
+        assertThat(report.results()).extracting(Result::name).containsExactlyElementsOf(queries().keySet());
+        assertThat(report.results()).allSatisfy(result -> assertThat(result.error()).as(result.name()).isNull());
+        Result ring = report.results().get(0);
+        assertThat(ring.description()).startsWith("From the server creating an offer to the phone ringing");
+        assertThat(ring.columns()).containsExactly("channel", "model", "offers", "rang", "p50_s", "p95_s", "p99_s");
+        assertThat(ring.rows().get(0)).containsExactly("all", "all", 1L, 1L, new java.math.BigDecimal("3.0"),
+            new java.math.BigDecimal("3.0"), new java.math.BigDecimal("3.0"));
+        Result byDay = report.results().get(1);
+        assertThat((String) byDay.rows().get(0).get(0)).as("a day, not a timestamp").matches("\\d{4}-\\d{2}-\\d{2}");
+        Result survival = report.results().stream().filter(result -> result.name().equals("shift_survival")).findFirst().orElseThrow();
+        List<Object> shift = survival.rows().get(0);
+        assertThat((String) shift.get(survival.columns().indexOf("shift_id"))).as("a UUID as text").hasSize(36);
+        assertThat((String) shift.get(survival.columns().indexOf("started_at"))).as("an ISO instant").endsWith("Z");
+        assertThat(shift.get(survival.columns().indexOf("open"))).isEqualTo(true);
+    }
+
+    @Test
+    void aQueryThatFailsOrWritesIsReportedAndTheOthersStillRun() {
+        FleetPilotHealth health = new FleetPilotHealth(fleet.db, fleet.transactions) {
+            @Override
+            List<NamedQuery> queries() {
+                return List.of(new NamedQuery("missing_table", "", "SELECT * FROM fleet_schema.no_such_table"),
+                    new NamedQuery("writes", "", "CREATE TABLE fleet_schema.pilot_health_must_not_exist (id int)"),
+                    new NamedQuery("fine", "", "SELECT 1 AS one"));
+            }
+        };
+        List<Result> results = health.report().results();
+        assertThat(results.get(0).error()).contains("failed or took longer than 15s");
+        assertThat(results.get(0).rows()).isEmpty();
+        assertThat(results.get(1).error()).as("the transaction is read-only").isNotNull();
+        assertThat(fleet.db.queryForObject("SELECT to_regclass('fleet_schema.pilot_health_must_not_exist') IS NULL", Boolean.class)).isTrue();
+        assertThat(results.get(2).rows()).containsExactly(List.of(1));
+        assertThat(results.get(2).error()).isNull();
+    }
+
+    @Test
+    void everyQueryRunsAndOfferToRingIsTimedFromTheOfferToItsFirstArrival() {
         UUID rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         fleet.db.update("UPDATE fleet_schema.rider_shift SET device_id = (SELECT id FROM fleet_schema.rider_device WHERE rider_id = ?), "
             + "started_at = now() - INTERVAL '2 hours', max_silence_seconds = 75, silences_over_60s = 1, "
@@ -131,36 +173,10 @@ class FleetPilotHealthDatabaseTest {
         return ((Number) row.get(column)).doubleValue();
     }
 
-    /** The file's queries by their "-- name:" line, in file order; the header above the first one is skipped. */
-    static Map<String, String> queries() throws IOException {
+    /** The file in the build, through the console's own parser: name to SQL, in file order. */
+    static Map<String, String> queries() {
         Map<String, String> queries = new LinkedHashMap<>();
-        String name = null;
-        StringBuilder sql = new StringBuilder();
-        for (String line : Files.readAllLines(sqlFile())) {
-            if (line.startsWith("-- name: ")) {
-                if (name != null) {
-                    queries.put(name, sql.toString().strip().replaceAll(";$", ""));
-                }
-                name = line.substring("-- name: ".length()).strip();
-                sql.setLength(0);
-            } else if (name != null) {
-                sql.append(line).append('\n');
-            }
-        }
-        if (name != null) {
-            queries.put(name, sql.toString().strip().replaceAll(";$", ""));
-        }
+        FleetPilotHealth.parse(FleetPilotHealth.read()).forEach(query -> queries.put(query.name(), query.sql()));
         return queries;
-    }
-
-    /** Maven runs tests in the service's folder; the script lives at the repo root. */
-    private static Path sqlFile() {
-        for (Path dir = Path.of("").toAbsolutePath(); dir != null; dir = dir.getParent()) {
-            Path file = dir.resolve("scripts/riders/pilot_health.sql");
-            if (Files.isRegularFile(file)) {
-                return file;
-            }
-        }
-        throw new IllegalStateException("scripts/riders/pilot_health.sql not found above " + Path.of("").toAbsolutePath());
     }
 }

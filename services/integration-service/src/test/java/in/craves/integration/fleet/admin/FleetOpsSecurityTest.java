@@ -45,6 +45,7 @@ class FleetOpsSecurityTest {
     static final String TRIPS = "/api/v1/admin/fleet/trips";
     @Autowired MockMvc mvc;
     @MockBean FleetOpsService ops;
+    @MockBean FleetPilotHealth health;
     @MockBean JwtVerifier verifier;
     final UUID trip = UUID.randomUUID();
 
@@ -76,6 +77,21 @@ class FleetOpsSecurityTest {
         }
         for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "RIDER")) {
             mvc.perform(as(get("/api/v1/admin/fleet/dispatch-queue"), role)).andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void pilotHealthIsForTripReadersOnly() throws Exception {
+        when(health.report()).thenReturn(new FleetPilotHealth.Report(Instant.parse("2026-10-20T06:00:00Z"), List.of(
+            new FleetPilotHealth.Result("offer_to_ring", "Seconds from offer to ring.", List.of("channel", "p95_s"),
+                List.of(List.of("all", 4.2)), false, null))));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/pilot-health"), role)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.results[0].name").value("offer_to_ring"))
+                .andExpect(jsonPath("$.results[0].rows[0][1]").value(4.2));
+        }
+        for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "ADMIN", "RIDER")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/pilot-health"), role)).andExpect(status().isForbidden());
         }
     }
 

@@ -71,7 +71,7 @@ Agents never change the mode.
 
 ## Tables
 
-Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V159.
+Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V165.
 
 | Table | Created by | Holds |
 |---|---|---|
@@ -86,11 +86,11 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 | `fleet_schema.test_mode_rider`, `test_mode_kitchen` | integration V152 | Test-mode allow-lists: the pilot riders and kitchens, set from the console. |
 | `fleet_schema.rider_slot` | integration V152; V154 adds the guarantee and status, V153 `in_zone_seconds` | Ops-assigned slots with zone, rest point and hourly guarantee. |
 | `fleet_schema.ops_banner` | integration V152 | Messages on every rider's Home, such as a rain warning. |
-| `fleet_schema.rider_shift` | integration V152 | Shifts: hashed shift credential (12 h at most), bound phone, selfie and its review, in-zone seconds. One open shift per rider. |
+| `fleet_schema.rider_shift` | integration V152; V161 adds `last_seen_at`, `max_silence_seconds`, `silences_over_60s`; V163 `health`, `can_ring`; V164 `last_nudge_at` | Shifts: hashed shift credential (12 h at most), bound phone, selfie and its review, in-zone seconds, the heartbeat and the phone's last health report. One open shift per rider. |
 | `fleet_schema.rider_position_latest` | integration V152 | One latest fix per rider, with its mock flag. |
 | `fleet_schema.trip_track` | integration V152 | On-trip fixes, partitioned by IST day (see Jobs). |
 | `fleet_schema.trip` | integration V152; V154 adds final pay, V155 `accepted_at`, V156 `pay_credited_at` | One per chef sub-order (unique): order code, kitchen, drop, distances, locked pay, state, final pay lines and hold. |
-| `fleet_schema.trip_offer` | integration V152 | Offers with locked pay, rate card and distances; one `ACTIVE` per rider, one `ACCEPTED` per trip. |
+| `fleet_schema.trip_offer` | integration V152; V162 adds `pushed_at`, `push_result`, `rang_at`, `rang_channel`; V165 indexes it by rider and time | Offers with locked pay, rate card and distances, and how the push went and when the phone rang; one `ACTIVE` per rider, one `ACCEPTED` per trip. |
 | `fleet_schema.trip_event` | integration V152 | Trip steps and OTP attempts, unique per trip and idempotency key. |
 | `fleet_schema.trip_stage` | integration V152 | The dispatch chain (`CRAVES_FLEET`, `BORZO`, `PIDGE`, `OPS_QUEUE`) with deadlines and outcomes; one `OPEN` stage per trip. |
 | `fleet_schema.rider_earning` | integration V152; V156 adds `slot_id`, `label`, `reason` | Pay lines, unique key `fleet-trip-pay/{tripId}/{component}/{revision}` (a slot: `fleet-slot-pay/{slotId}/slot-top-up/1`), net = gross − withheld. |
@@ -149,7 +149,7 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 
 | Route | Does |
 |---|---|
-| `GET /riders`, `POST /riders`, `GET /riders/{id}` | List (newest first, search by name or last phone digits), create a PENDING rider, detail. |
+| `GET /riders`, `POST /riders`, `GET /riders/{id}` | List (newest first, search by name or last phone digits), create a PENDING rider, detail. The detail's last 20 shifts carry the heartbeat (`lastSeenAt`, `maxSilenceSeconds`, `silencesOver60s`) and `phone`, the last health report (battery, charging, battery saver, can ring, battery per unplugged hour from 30 unplugged minutes, last exit reason, queued steps); `recentOffers` are the last 20 offers with `pushResult`, `rangAt` and `rangChannel`. |
 | `GET /riders/{id}/documents/{documentId}/content` | The file, audited as a read. |
 | `POST .../documents/{documentId}/approve`, `/reject` | Review by hand; a rejection carries the reason the rider sees. Approve takes `{expiresOn}`, required for DL, RC, insurance and PUC (422 `EXPIRY_REQUIRED`); `/shift/start` needs all four verified and unexpired. |
 | `PUT /riders/{id}/vehicle` | `{label, regNumber}` (an Indian or BH-series plate) → `{label, regNumberMasked}`. |
@@ -164,6 +164,7 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 | `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots: 409 `SLOT_OVERLAP`, `SLOT_NOT_BOOKED`; 422 `GUARANTEE_OUT_OF_RANGE` (outside the current rate card's declared range), `SLOT_END_NOT_AFTER_START`. |
 | `GET /trips` | Orders not yet delivered, failed or cancelled, oldest first, with the courier they have now. |
 | `GET /dispatch-queue` | Orders in the ops queue, oldest first, with each earlier stage's outcome: `CRITICAL` after 5 minutes or when a booking may exist (an uncertain create: check that company first), `INFO` when a courier took it after all, else `WARNING`. Ops clears an item by giving it to a rider or cancelling it. |
+| `GET /pilot-health` | Every named query of `fleet/pilot_health.sql` (`PILOT-HEALTH.md`) in file order: `{name, description, columns, rows, truncated, error}`. Each runs in its own read-only transaction with a 15 s statement limit and at most 200 rows; a failing query answers its error (logged `FLEET_PILOT_HEALTH_QUERY_FAILED`) and the others still run. Operations, support and audit admins. |
 | `GET /positions` | The latest fix of each rider on shift or on a trip now (see "Data retention"): position, age, on shift, trip, mock flag. Operations roles only. |
 | `POST /trips/{id}/reassign`, `/cancel` | See "Ops reassign and cancel". 409 `TRIP_NOT_REASSIGNABLE`, `RIDER_NOT_AVAILABLE`, `RATE_CARD_REQUIRED`, `TRIP_ALREADY_FINISHED`, `TRIP_NOT_CANCELLABLE`. |
 | `GET /payout-batches`, `POST /payout-batches`, `GET /payout-batches/{id}` | Payout files: reads for payments and audit admins, changes for payments admins. `POST {kind: WEEKLY or DAILY_WITHDRAWAL, payoutDate}` (today or earlier, IST): 409 `BATCH_EXISTS`, 422 `NOTHING_TO_PAY`, `NOT_A_MONDAY`, `PAYOUT_DATE_IN_FUTURE`. |

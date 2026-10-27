@@ -48,6 +48,7 @@ route|admin|fleet-post-trips-tripId-reassign|POST|/trips/{tripId}/reassign|admin
 route|admin|fleet-post-trips-tripId-cancel|POST|/trips/{tripId}/cancel|admin
 route|admin|fleet-get-dispatch-queue|GET|/dispatch-queue|admin
 route|admin|fleet-get-positions|GET|/positions|admin
+route|admin|fleet-get-pilot-health|GET|/pilot-health|admin
 route|admin|fleet-get-payout-batches|GET|/payout-batches|admin
 route|admin|fleet-post-payout-batches|POST|/payout-batches|admin
 route|admin|fleet-get-payout-batches-batchId|GET|/payout-batches/{batchId}|admin

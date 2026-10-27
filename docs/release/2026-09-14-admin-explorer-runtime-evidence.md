@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Admin explorer release evidence — 14 September 2026
 
 Status: all three backend deployments succeeded. Activation and admin promotion are blocked by an incompatible APIM throttling policy. Explorer remains disabled; the prior admin image is healthy.

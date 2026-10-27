@@ -6,7 +6,7 @@ import {useReducedMotionPreference} from '../../../design/reducedMotion';
 
 /**
  * The rider button (docs/riders/SCREENS.md 0.10): 56 dp, radius 14, no shadow.
- * - variant: primary (red fill), outline (white, grey line, dark label) or ghost (red text link).
+ * - variant: primary (red fill), outline (white, grey line, dark label), ghost (red text link) or neutral (grey text link).
  * - size: "tall" is the 64 dp Accept, "compact" the 48 dp in-card button.
  * - disabled shows the locked look (muted fill, grey label); pass leftIcon="lock-outline" when it unlocks later.
  * It ignores repeat taps until its async action settles, so a double tap never sends a trip step twice.
@@ -25,7 +25,7 @@ export function BottomAction({
   label: string;
   onPress: () => Promise<unknown> | void;
   disabled?: boolean;
-  variant?: 'primary' | 'outline' | 'ghost';
+  variant?: 'primary' | 'outline' | 'ghost' | 'neutral';
   size?: 'tall' | 'compact';
   leftIcon?: IconName;
   accessibilityHint?: string;
@@ -35,7 +35,7 @@ export function BottomAction({
   const [busy, setBusy] = useState(false);
   const reduceMotion = useReducedMotionPreference();
   const blocked = Boolean(disabled) || busy;
-  const color = disabled
+  const color = disabled || variant === 'neutral'
     ? colors.textSecondary
     : variant === 'primary'
       ? colors.white
@@ -65,7 +65,7 @@ export function BottomAction({
         styles.base,
         styles[variant],
         size && styles[size],
-        disabled && variant !== 'ghost' && styles.locked,
+        disabled && variant !== 'ghost' && variant !== 'neutral' && styles.locked,
         pressed && styles.pressed,
         pressed && !reduceMotion && styles.pressedMotion,
         style,
@@ -95,6 +95,7 @@ const styles = StyleSheet.create({
   primary: {backgroundColor: colors.flameRedAccessible},
   outline: {backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.borderStrong},
   ghost: {minHeight: touchTarget.minimum, paddingHorizontal: spacing.xs},
+  neutral: {minHeight: touchTarget.minimum, paddingHorizontal: spacing.xs},
   tall: {minHeight: 64},
   compact: {minHeight: touchTarget.minimum},
   locked: {backgroundColor: colors.muted, borderWidth: 0},

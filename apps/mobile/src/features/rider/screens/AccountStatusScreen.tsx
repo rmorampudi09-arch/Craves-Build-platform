@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {Icon, SectionSkeleton, type IconName} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
-import type {RiderProfile} from '../api/contract';
+import type {RiderMe, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -18,7 +18,7 @@ import {useRiderShell} from '../navigation';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
-import {JoinForm, PayoutAccountCard} from './SignUpForms';
+import {DetailsCard, JoinForm, PayoutAccountCard} from './SignUpForms';
 
 type RiderDocument = RiderProfile['documents'][number];
 
@@ -94,6 +94,7 @@ function Documents() {
         const fix = doc.status === 'REJECTED' || doc.status === 'EXPIRED' || doc.status === 'MISSING';
         const reason = doc.reason ?? (doc.status === 'EXPIRED' ? a.expiredReason : undefined);
         const label = doc.status === 'VERIFIED' && doc.type === 'BANK' ? a.nameMatches : a.docStatus[doc.status];
+        const hint = fix && doc.type ? a.docHints[doc.type] : undefined;
         return (
           <View key={doc.type ?? doc.label} style={[styles.document, index > 0 && styles.divider]}>
             <View style={styles.documentRow}>
@@ -101,6 +102,7 @@ function Documents() {
               <StatusBadge status={doc.status} label={label} />
             </View>
             {fix && reason ? <Text style={styles.body}>{reason}</Text> : null}
+            {hint ? <Text style={styles.secondary}>{hint}</Text> : null}
             {fix && doc.type ? (
               <BottomAction
                 label={doc.status === 'MISSING' ? a.upload : a.uploadAgain}
@@ -121,10 +123,18 @@ function Documents() {
   );
 }
 
-/** The payout account card once the profile has loaded (Documents shows the loading and error states). */
-function PayoutAccount({kycName}: {kycName: string}) {
+/** The details and payout account cards once the profile has loaded (Documents shows the loading and error states). */
+function DetailsAndPayout({me}: {me: RiderMe}) {
   const profile = useProfile();
-  return profile.data ? <PayoutAccountCard profile={profile.data} kycName={kycName} /> : null;
+  if (!profile.data) {
+    return null;
+  }
+  return (
+    <>
+      <DetailsCard me={me} profile={profile.data} />
+      <PayoutAccountCard key={me.name} profile={profile.data} kycName={me.name} />
+    </>
+  );
 }
 
 /**
@@ -161,6 +171,7 @@ export function AccountStatusScreen() {
     <RiderScreen
       header={<RiderHeader title={block === 'PENDING' ? a.header : a.headerBlocked} inactive={Boolean(block)} />}
       testID="rider-account-status"
+      keyboardHidesFooter
       footer={
         <>
           <BottomAction
@@ -190,7 +201,7 @@ export function AccountStatusScreen() {
       {block === 'PENDING' ? (
         <>
           <Documents />
-          <PayoutAccount kycName={me.data.name} />
+          <DetailsAndPayout me={me.data} />
           <IconCard icon="clock-outline" title={a.backgroundTitle} body={a.backgroundBody} />
           <IconCard icon="moped" title={a.trainingTitle} body={a.trainingBody} />
         </>

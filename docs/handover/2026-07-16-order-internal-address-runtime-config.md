@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Craves Order Internal Address Runtime Configuration Hotfix
 
 Date: 2026-07-16  

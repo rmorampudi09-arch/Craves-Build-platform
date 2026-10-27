@@ -21,14 +21,14 @@ parameters:
     default: support@craves.in
 
 variables:
-  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  subscriptionId: 721906c9-4a72-4606-830b-d3e7ace093ff
   resourceGroup: rg-craves-prodlow-centralindia
   dnsZoneName: _acme-challenge.api.craves.in
-  keyVaultName: kvcravesprodlowl3ing6
+  keyVaultName: kvcravesprodlowkmqgfy
   keyVaultCertificateName: craves-api-tls
-  apimName: apim-craves-prodlow-l3ing6
+  apimName: apim-craves-prodlow-kmqgfy
   apimHostname: api.craves.in
-  apimDefaultHostname: apim-craves-prodlow-l3ing6.azure-api.net
+  apimDefaultHostname: apim-craves-prodlow-kmqgfy.azure-api.net
   acmeShVersion: 3.1.4
   renewBeforeDays: 30
   dnsPropagationSeconds: 60

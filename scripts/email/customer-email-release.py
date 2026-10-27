@@ -11,7 +11,7 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location('safe', Path(__file__).parents[1] / 'apim/device-safe-cart-routes.py')
 safe = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(safe)
-REGISTRY = 'cravesprodlowacr82121.azurecr.io/craves/'
+REGISTRY = 'cravesrm09prodlow6bf632.azurecr.io/craves/'
 APPS = {'notification-service':'ca-craves-notification-service-p',
         'auth-service':'ca-craves-auth-service-prodlow', 'user-chef-service':'ca-craves-user-chef-service-prod'}
 PREVIOUS = {

@@ -1,19 +1,24 @@
+# Renews the craves.in / www.craves.in certificate that Front Door serves (Key Vault craves-web-tls).
+# Scheduled runs renew only when fewer than 35 days remain. See infra/certificates/web-letsencrypt/README.md.
 trigger: none
 pr: none
 
 schedules:
   - cron: "0 3 * * 0"
-    displayName: Weekly customer web TLS certificate renewal check
+    displayName: Weekly craves.in certificate renewal check (Sunday 08:30 IST)
     branches:
       include:
         - main
     always: true
 
 parameters:
-  - name: confirmProductionCertificateOperation
-    type: boolean
-    default: false
+  - name: operation
+    displayName: "check = read only; staging-test = full DNS-01 with Let's Encrypt staging, no import; renew = renew if fewer than 35 days remain"
+    type: string
+    default: check
+    values: [check, staging-test, renew]
   - name: forceIssue
+    displayName: Renew now even if more than 35 days remain (renew only; Let's Encrypt rate limits apply)
     type: boolean
     default: false
   - name: letsEncryptContactEmail
@@ -21,21 +26,18 @@ parameters:
     default: support@craves.in
 
 variables:
-  subscriptionId: 4f897b61-9b52-44b4-8cf1-bdac281cc1aa
+  subscriptionId: 721906c9-4a72-4606-830b-d3e7ace093ff
   resourceGroup: rg-craves-prodlow-centralindia
-  apexDnsZoneName: _acme-challenge.craves.in
-  wwwDnsZoneName: _acme-challenge.www.craves.in
-  parentDnsServer: ns51.domaincontrol.com
-  keyVaultName: kvcravesprodlowl3ing6
+  dnsZoneName: craves.in
+  keyVaultName: kvcravesprodlowkmqgfy
   keyVaultCertificateName: craves-web-tls
-  containerAppEnvironmentName: cae-craves-prodlow-l3ing6
-  containerAppName: ca-craves-web-prodlow
+  frontDoorProfile: afd-craves-prodlow
+  frontDoorSecretName: craves-web-tls
   apexHostname: craves.in
   wwwHostname: www.craves.in
-  containerAppDefaultHostname: ca-craves-web-prodlow.happysand-aedc7165.centralindia.azurecontainerapps.io
-  containerAppCertificateApiVersion: 2024-02-02-preview
   acmeShVersion: 3.1.4
-  renewBeforeDays: 30
+  # More than the health check's 30-day alarm, so Front Door has switched before it would fire.
+  renewBeforeDays: 35
   dnsPropagationSeconds: 90
 
 pool:
@@ -48,64 +50,56 @@ steps:
 
   - bash: |
       set -euo pipefail
-
       packages=()
       command -v dig >/dev/null 2>&1 || packages+=(dnsutils)
       command -v shellcheck >/dev/null 2>&1 || packages+=(shellcheck)
-
       if [[ ${#packages[@]} -gt 0 ]]; then
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends "${packages[@]}"
       fi
-
       bash -n infra/certificates/web-letsencrypt/renew-web-certificate.sh
-      bash -n infra/certificates/web-letsencrypt/run-web-certificate.sh
       shellcheck infra/certificates/web-letsencrypt/renew-web-certificate.sh
-      shellcheck infra/certificates/web-letsencrypt/run-web-certificate.sh
-    displayName: Validate customer web certificate automation
+    displayName: Validate certificate script
 
   - task: AzureCLI@2
-    displayName: Issue, recover or synchronize customer web certificate
+    displayName: Check or renew the craves.in certificate
     inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       addSpnToEnvironment: false
       inlineScript: |
         set -Eeuo pipefail
         set +x
-
-        confirmation='${{ parameters.confirmProductionCertificateOperation }}'
+        operation='${{ parameters.operation }}'
         force_issue='${{ parameters.forceIssue }}'
-        build_reason='$(Build.Reason)'
-
-        if [[ "${build_reason,,}" != 'schedule' && "${confirmation,,}" != 'true' ]]; then
-          echo 'ERROR: Manual runs require confirmProductionCertificateOperation=true.' >&2
+        # A scheduled run always renews when due, never forces.
+        if [[ '$(Build.Reason)' == 'Schedule' ]]; then
+          operation=renew
+          force_issue=false
+        fi
+        if [[ "${force_issue,,}" == true && "$operation" != renew ]]; then
+          echo 'ERROR: forceIssue applies to operation=renew only.' >&2
           exit 2
         fi
-
-        if [[ "${build_reason,,}" == 'schedule' && "${force_issue,,}" == 'true' ]]; then
-          echo 'ERROR: Scheduled runs cannot force certificate issuance.' >&2
-          exit 2
-        fi
-
+        case "$operation" in
+          check) export CHECK_ONLY=true ACME_SERVER=letsencrypt ;;
+          staging-test) export CHECK_ONLY=false ACME_SERVER=letsencrypt_test ;;
+          renew) export CHECK_ONLY=false ACME_SERVER=letsencrypt ;;
+          *) echo "ERROR: unknown operation ${operation}" >&2; exit 2 ;;
+        esac
         export SUBSCRIPTION_ID='$(subscriptionId)'
         export RESOURCE_GROUP='$(resourceGroup)'
-        export APEX_DNS_ZONE_NAME='$(apexDnsZoneName)'
-        export WWW_DNS_ZONE_NAME='$(wwwDnsZoneName)'
-        export PARENT_DNS_SERVER='$(parentDnsServer)'
+        export DNS_ZONE_NAME='$(dnsZoneName)'
         export KEY_VAULT_NAME='$(keyVaultName)'
         export KEY_VAULT_CERTIFICATE_NAME='$(keyVaultCertificateName)'
-        export CONTAINER_APP_ENVIRONMENT_NAME='$(containerAppEnvironmentName)'
-        export CONTAINER_APP_NAME='$(containerAppName)'
+        export FRONT_DOOR_PROFILE='$(frontDoorProfile)'
+        export FRONT_DOOR_SECRET_NAME='$(frontDoorSecretName)'
         export APEX_HOSTNAME='$(apexHostname)'
         export WWW_HOSTNAME='$(wwwHostname)'
-        export CONTAINER_APP_DEFAULT_HOSTNAME='$(containerAppDefaultHostname)'
-        export CONTAINER_APP_CERTIFICATE_API_VERSION='$(containerAppCertificateApiVersion)'
         export LETSENCRYPT_CONTACT_EMAIL='${{ parameters.letsEncryptContactEmail }}'
         export ACME_SH_VERSION='$(acmeShVersion)'
         export RENEW_BEFORE_DAYS='$(renewBeforeDays)'
         export DNS_PROPAGATION_SECONDS='$(dnsPropagationSeconds)'
         export FORCE_ISSUE="$force_issue"
-
-        bash infra/certificates/web-letsencrypt/run-web-certificate.sh
+        bash infra/certificates/web-letsencrypt/renew-web-certificate.sh

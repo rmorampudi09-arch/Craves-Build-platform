@@ -9,7 +9,7 @@ parameters:
   - name: acrName
     displayName: Azure Container Registry name
     type: string
-    default: cravesprodlowacr82121
+    default: cravesrm09prodlow6bf632
   - name: containerAppName
     displayName: Auth Service Container App name
     type: string
@@ -33,7 +33,7 @@ parameters:
   - name: academyExpectedCurrentImage
     displayName: Expected current Auth image; refuse an unexpectedly newer baseline
     type: string
-    default: cravesprodlowacr82121.azurecr.io/craves/auth-service@sha256:ffdeb9a3fabc532a4b0bcd6baeff36b5b11188a036d7e353f5a7317150606070
+    default: cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:ffdeb9a3fabc532a4b0bcd6baeff36b5b11188a036d7e353f5a7317150606070
 
 variables:
   modulePath: services/auth-service
@@ -55,7 +55,7 @@ steps:
         python3 scripts/academy/release-guard.py source --baseline "$ACADEMY_BASELINE_SOURCE"
         test "$ACADEMY_EXPECTED_SOURCE" = "$(git rev-parse HEAD)"
         test "$TARGET_RG" = rg-craves-prodlow-centralindia
-        test "$TARGET_ACR" = cravesprodlowacr82121
+        test "$TARGET_ACR" = cravesrm09prodlow6bf632
         test "$TARGET_APP" = ca-craves-auth-service-prodlow
       displayName: Verify Academy source, exact commit and fixed target
       env:

@@ -33,6 +33,7 @@ export function DevPanelScreen({navigation}: RiderScreenProps<'DevPanel'>) {
       <Button label="Give / clear a 7-day notice" variant="outline" onPress={act(c.giveNotice)} />
       <Button label="Suspend me" variant="outline" onPress={act(() => c.setStatus('SUSPENDED'))} />
       <Button label="Make me active" variant="outline" onPress={act(() => c.setStatus('ACTIVE'))} />
+      <Button label="Ops accepts my sign-up documents and account" variant="outline" onPress={act(c.acceptSignUp)} />
       <Button label="Publish new terms" variant="outline" onPress={act(c.publishNewTerms)} />
       <Button label="Turn withdrawals on / off" variant="outline" onPress={act(c.toggleWithdraw)} />
       <Button label="Reset the demo" variant="ghost" onPress={act(c.reset)} />

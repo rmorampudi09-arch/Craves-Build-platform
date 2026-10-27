@@ -1,5 +1,7 @@
 # Chef app backend release runbook (2026-10-13)
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 Branch `feat/chef-app-backend` (base `1ddfd1c1f`; its commits are `origin/main..feat/chef-app-backend`, listed by `git log --oneline 1ddfd1c1f..feat/chef-app-backend`). Backs the chef mobile app 1.31.0. Written without access to Azure: no command below has been run against production. You run every command in Azure Cloud Shell (Bash, no storage). Every command is a single line; paste one line at a time and press Enter separately (Cloud Shell drops newlines in multi-line paste).
 
 ## What ships
@@ -28,7 +30,7 @@ Release order and why: merge to main, then catalog, notification, subscription, 
 | `<KITCHEN_ID>` | any live kitchen id, for the optional public read check |
 | `<REGRESSION_RUN_ID>` | only for the Azure DevOps route: a successful `launch-regression-ci.yml` run id for `<MERGED_SHA>` |
 
-Fixed production values (verified in earlier sessions; do not change): subscription `721906c9-4a72-4606-830b-d3e7ace093ff`, resource group `rg-craves-prodlow-centralindia`, registry `cravesrm09prodlow6bf632` (not `cravesprodlowacr82121`), APIM `apim-craves-prodlow-kmqgfy` (not `l3ing6`), public host `api.craves.in`, Postgres `pg-craves-prodlow-kmqgfy`, Key Vault `kvcravesprodlowkmqgfy` secret `pg-pass` (read only; never reset it, that causes an outage).
+Fixed production values (verified in earlier sessions; do not change): subscription `721906c9-4a72-4606-830b-d3e7ace093ff`, resource group `rg-craves-prodlow-centralindia`, registry `cravesrm09prodlow6bf632`, APIM `apim-craves-prodlow-kmqgfy`, public host `api.craves.in`, Postgres `pg-craves-prodlow-kmqgfy`, Key Vault `kvcravesprodlowkmqgfy` secret `pg-pass` (read only; never reset it, that causes an outage).
 
 Set the shell variables once per Cloud Shell session (re-run this if the session times out). Replace only `<MERGED_SHA>` and `<PG_HOST>`:
 
@@ -422,7 +424,7 @@ cd ~/c8 && grep -c COVERED scripts/apim/configure-chef-app-routes-apim.sh
 ```
 **If any wildcard or shorter-path owner shows up in the listings for any of the six prefixes, do NOT let a longer-path API be created: STOP and send the three listings to Claude, even if the script has the fix.** If the count is 0 and any such owner exists, do not run the script at all.
 
-(b) If `api/v1/kitchens/me`, `api/v1/chef/orders` or `api/v1/notifications` is missing: **do not run `configure-chef-kitchen-profile-apim.sh` or `configure-chef-order-read-apim.sh` to fill the gap.** They have no dry run and no confirm flag: they create the API if absent and immediately write operations and policies to the gateway (and can overwrite the policy of an operation that already exists), and they default to the deleted `apim-craves-prodlow-l3ing6`. No script in the repo publishes `api/v1/notifications`. STOP and send the listings to Claude.
+(b) If `api/v1/kitchens/me`, `api/v1/chef/orders` or `api/v1/notifications` is missing: **do not run `configure-chef-kitchen-profile-apim.sh` or `configure-chef-order-read-apim.sh` to fill the gap.** They have no dry run and no confirm flag: they create the API if absent and immediately write operations and policies to the gateway (and can overwrite the policy of an operation that already exists), and they default to the production APIM. No script in the repo publishes `api/v1/notifications`. STOP and send the listings to Claude.
 
 (c) The script does not publish these older routes (older scripts own them): kitchen `GET/PUT /kitchens/me`, menu items, per-dish availability, image upload, chef order list/get/accept/reject/ready-for-pickup, chef subscription plans, notification `GET /in-app` and `PATCH /in-app/{id}/read`. The app needs them, so check they are live (expect 401; a 404 means not published, then stop and report, do not publish them blindly):
 

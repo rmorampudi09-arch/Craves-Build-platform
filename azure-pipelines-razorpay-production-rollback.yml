@@ -2,7 +2,7 @@ trigger: none
 pr: none
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   resourceGroup: rg-craves-prodlow-centralindia
   containerApp: ca-craves-integration-service-pr
 

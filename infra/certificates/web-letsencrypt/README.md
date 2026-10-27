@@ -1,149 +1,59 @@
-# Craves Customer Web Let's Encrypt Certificate Automation
+# craves.in / www.craves.in certificate renewal
 
-This module issues and renews one RSA 2048 SAN certificate for `craves.in` and `www.craves.in`, validates ownership through two delegated Azure DNS child zones, imports each certificate version into Azure Key Vault as `craves-web-tls`, and imports the versionless Key Vault secret reference into the Craves Container Apps environment.
+`craves.in` and `www.craves.in` are served by Azure Front Door (`afd-craves-prodlow`) with a customer certificate: Front Door secret `craves-web-tls` points at Key Vault certificate `kvcravesprodlowkmqgfy/craves-web-tls` with **useLatestVersion** on. This module renews that Let's Encrypt certificate (RSA 2048, both names) and imports it as a new Key Vault version; Front Door picks the new version up by itself within 72 hours. `api.craves.in` and `admin.craves.in` use Front Door managed certificates and need nothing here.
 
-It does not change the public `@` or `www` traffic records and does not bind the custom domains. Those remain separate controlled cutover steps.
-
-## Architecture
-
-```text
-GoDaddy parent zone: craves.in
-  ├─ _acme-challenge.craves.in NS delegation
-  │    └─ Azure DNS zone: _acme-challenge.craves.in
-  └─ _acme-challenge.www.craves.in NS delegation
-       └─ Azure DNS zone: _acme-challenge.www.craves.in
-
-Azure DevOps service connection
-  ├─ Contributor inherited at subscription scope
-  ├─ Key Vault Certificates Officer on kvcravesprodlowl3ing6
-  └─ Key Vault Secrets Officer on kvcravesprodlowl3ing6
-
-Let's Encrypt
-  └─ RSA 2048 SAN certificate
-       ├─ craves.in
-       └─ www.craves.in
-
-Azure Key Vault
-  └─ Certificate: craves-web-tls
-       └─ New version on every successful renewal
-
-Azure Container Apps environment
-  └─ cae-craves-prodlow-l3ing6
-       ├─ System-assigned managed identity
-       ├─ Key Vault Secrets User on the Key Vault
-       └─ Versionless Key Vault certificate import
-```
+Ownership is proven with DNS-01 TXT records in the Azure DNS zone `craves.in` (the public, authoritative zone). No container app, DNS traffic record or Front Door setting is changed.
 
 ## Files
 
 ```text
-azure-pipelines-web-letsencrypt-certificate.yml
-infra/certificates/web-letsencrypt/
-├── README.md
-└── renew-web-certificate.sh
+azure-pipelines-web-letsencrypt-certificate.yml      Azure DevOps pipeline (weekly schedule + manual runs)
+infra/certificates/web-letsencrypt/renew-web-certificate.sh
+scripts/release/tests/test_web_certificate_renewal.py   offline tests (fake az/dig), run in CI
 ```
 
-## Existing prerequisites
+## What the script checks before it touches anything
 
-Keep all of the following in place:
+1. The Azure context is subscription `721906c9-4a72-4606-830b-d3e7ace093ff`.
+2. The Azure DNS zone `craves.in` exists and the public nameservers for `craves.in` are exactly its Azure nameservers (otherwise Let's Encrypt would not see the TXT records). CAA records, if any, must allow `letsencrypt.org`.
+3. Front Door secret `craves-web-tls` is a CustomerCertificate, points at this Key Vault certificate without a version, and has useLatestVersion on (otherwise a renewal would never reach the site).
+4. The pipeline's identity can write the DNS zone (Owner, Contributor or DNS Zone Contributor) and import into the Key Vault (Key Vault Certificates Officer or Administrator; the vault uses Azure RBAC). If not, the run fails and prints the exact `az role assignment create ...` command for a subscription Owner to run once in Cloud Shell.
+5. The current certificate covers both names; it is renewed only when fewer than 35 days remain (the health check pipeline alarms at 30 days, so Front Door has switched before that).
 
-- GoDaddy delegates `_acme-challenge.craves.in` to the four Azure nameservers assigned to that Azure DNS child zone.
-- GoDaddy delegates `_acme-challenge.www.craves.in` to the four Azure nameservers assigned to that Azure DNS child zone.
-- The existing API delegation `_acme-challenge.api.craves.in` remains unchanged.
-- Azure DNS zones `_acme-challenge.craves.in` and `_acme-challenge.www.craves.in` exist in `rg-craves-prodlow-centralindia`.
-- Key Vault `kvcravesprodlowl3ing6` uses Azure RBAC.
-- Container Apps environment `cae-craves-prodlow-l3ing6` has a system-assigned identity.
-- That environment identity has `Key Vault Secrets User` on the Key Vault.
-- Azure DevOps variable `AZURE_SERVICE_CONNECTION` contains `Craves-Dev-Service-Connection`.
-- `ca-craves-web-prodlow` remains healthy at its generated Container Apps hostname.
+## Operations
 
-Do not store a Let's Encrypt private key, PFX password, Azure bearer token or service-principal secret in Azure DevOps variables.
+| Operation | What it does | Changes |
+|---|---|---|
+| `check` (manual default) | Runs checks 1-5 and prints the expiry in Key Vault and in Front Door | nothing |
+| `staging-test` | Full DNS-01 issuance against Let's Encrypt **staging**; the untrusted certificate is checked, never imported | temporary `_acme-challenge` TXT records only |
+| `renew` (schedule) | Issues and imports a new version when fewer than 35 days remain; `forceIssue` renews now | new Key Vault version |
 
-## Pipeline creation
+The schedule is Sunday 03:00 UTC (08:30 IST) and always runs `renew` without force. Let's Encrypt limits duplicate certificates to 5 a week: don't loop `forceIssue`.
 
-Create an Azure DevOps YAML pipeline from:
+## One-time setup
 
-```text
-/azure-pipelines-web-letsencrypt-certificate.yml
-```
+1. Create the Azure DevOps pipeline in `rmorampudi09 / Craves`: New pipeline → GitHub → `rmorampudi09-arch/Craves-Build-platform` → Existing Azure Pipelines YAML → `/azure-pipelines-web-letsencrypt-certificate.yml` → Save (don't run yet). Name it `Craves-Web-Certificate`.
+2. Run it with `operation=check`. If it prints `MISSING_PERMISSION=...`, a subscription Owner runs that command in Cloud Shell, then rerun `check`.
+3. Run it with `operation=staging-test` once. `STAGING_TEST=passed` proves DNS-01 works end to end.
+4. Leave the schedule on. The first real renewal happens on the first Sunday within 35 days of expiry.
 
-The weekly schedule is Sunday 03:00 UTC / Sunday 08:30 IST. Scheduled runs exit without contacting Let's Encrypt when the current certificate remains valid for more than 30 days.
+## After a renewal
 
-## Initial issuance
+- The run ends with `CERTIFICATE_CHANGED=true`, the new expiry and SHA-256 fingerprint.
+- Within 72 hours Front Door serves it; `Craves-Production-Health-Check` (every 6 hours) checks that craves.in and www.craves.in have more than 30 days left.
+- If Front Door still shows the old certificate after 72 hours, check the secret in the Azure portal (Front Door → Secrets → craves-web-tls) and that Front Door's identity still has Key Vault Secrets User on the vault.
 
-Queue the pipeline manually with:
+## Security
 
-```text
-confirmProductionCertificateOperation: true
-forceIssue: false
-letsEncryptContactEmail: support@craves.in
-```
+- `acme.sh` is pinned to 3.1.4 and verified after download.
+- The ACME account, private key and certificate exist only in a temporary agent directory that is deleted at the end; nothing is published as an artifact.
+- DNS-01 uses a short-lived Azure Resource Manager token from the pipeline's sign-in; no secret is stored in Azure DevOps.
+- The PFX has a random password, is deleted right after import, and the imported fingerprint must equal the issued one.
 
-The first successful run should finish with:
-
-```text
-CERTIFICATE_CHANGED=true
-CERTIFICATE_NAME=craves-web-tls
-CUSTOM_DOMAIN_BINDING_REQUIRED=true
-```
-
-The output must also contain a versionless secret ID:
-
-```text
-https://kvcravesprodlowl3ing6.vault.azure.net/secrets/craves-web-tls
-```
-
-## Security behavior
-
-- The pipeline uses pinned `acme.sh` version `3.1.4`.
-- The ACME account, private key and certificate files exist only in a permission-restricted temporary agent directory.
-- A short-lived Azure Resource Manager bearer token is used for Azure DNS challenge updates.
-- The PFX is protected by a randomly generated password and deleted immediately after Key Vault import.
-- The imported certificate fingerprint is compared to the issued certificate fingerprint.
-- No PFX or private-key artifact is published.
-
-## Container Apps import
-
-After Key Vault import, the pipeline imports the certificate into the Container Apps environment with the versionless Key Vault secret URL and the environment system-assigned identity.
-
-Container Apps can automatically apply a newer Key Vault certificate version after rotation. Microsoft notes that applying a rotated version can take up to 12 hours.
-
-## Custom-domain cutover remains separate
-
-This module intentionally does not:
-
-- Add `craves.in` or `www.craves.in` as Container App hostnames.
-- Bind the certificate to either hostname.
-- Replace the current apex A records.
-- Replace the current `www` CNAME.
-- Remove the old Static Web App or its custom domains.
-
-After certificate issuance, add and bind both custom domains, validate them against the Container App, then change DNS only after a successful pre-cutover check.
-
-## Local validation
+## Local check
 
 ```bash
 bash -n infra/certificates/web-letsencrypt/renew-web-certificate.sh
 shellcheck infra/certificates/web-letsencrypt/renew-web-certificate.sh
+python3 -m unittest discover -s scripts/release/tests -p 'test_web_certificate_renewal.py' -v
 ```
-
-## Manual intervention required
-
-- Create the Azure DevOps pipeline from the YAML file.
-- Confirm the pipeline variable `AZURE_SERVICE_CONNECTION` resolves to `Craves-Dev-Service-Connection`.
-- Run the initial issuance with the confirmation parameter enabled.
-- Complete the later custom-domain binding and DNS cutover steps.
-- Keep all three ACME NS delegations permanently unless the related certificate automation is retired.
-
-## Rollback
-
-Certificate issuance and import do not move customer traffic. If this pipeline fails, keep the existing `@` and `www` records unchanged and investigate without deleting the current customer website or API records.
-
-After the future customer-domain cutover, rollback consists of restoring the previous apex A records and `www` CNAME while retaining the new Key Vault certificate and ACME delegation for investigation.
-
-## Operational risks
-
-- Let's Encrypt rate limits apply. Do not repeatedly enable `forceIssue`.
-- The Container Apps Key Vault certificate import command currently uses preview Key Vault-reference parameters in the Azure CLI extension.
-- Container Apps certificate rotation is not instantaneous; retain a 30-day renewal window.
-- Key Vault public access is currently enabled. Treat network hardening as a separate controlled change so certificate retrieval is not accidentally blocked.

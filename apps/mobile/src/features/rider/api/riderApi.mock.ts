@@ -17,9 +17,17 @@ import type {
   TripAction,
   TripEarning,
   TripStep,
+  VehicleKind,
 } from './contract';
 
 const DEMO_PHONE = '+910000000000';
+const VEHICLE_LABELS: Record<VehicleKind, string> = {
+  PETROL: 'Petrol two-wheeler',
+  ELECTRIC: 'Electric two-wheeler',
+  BICYCLE: 'Bicycle',
+};
+/** The words of a name in any order or case, like the server's FleetRules.sameName. */
+const nameWords = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
 export const DEMO_OTP = '1234';
 const MAX_OTP_TRIES = 5;
 const PAGE_SIZE = 20;
@@ -219,7 +227,12 @@ export function createMockRiderApi(options: MockOptions = {}) {
 
   const state = {
     uploaded: new Set<string>(),
+    /** Sign-up documents ops accepted, and the payout account ops confirmed (a PENDING rider's). */
+    checked: new Set<string>(),
+    payoutConfirmed: null as string | null,
     payoutSubmitted: null as string | null,
+    /** What the rider signed up with; null shows the demo rider's own scooter. */
+    vehicle: null as { kind: VehicleKind; plate?: string } | null,
     me: freshMe(),
     online: false,
     shiftStartedAt: 0,
@@ -469,15 +482,25 @@ export function createMockRiderApi(options: MockOptions = {}) {
     getProfile: () =>
       respond(
         (): RiderProfile => ({
-          vehicle: {
-            label: 'Honda Activa 6G (petrol)',
-            regNumberMasked: 'TS 09 •• ••12',
-          },
+          vehicle: state.vehicle
+            ? {
+                label: VEHICLE_LABELS[state.vehicle.kind],
+                regNumberMasked: state.vehicle.plate && `${state.vehicle.plate.slice(0, 4)}xx${state.vehicle.plate.slice(-4)}`,
+                kind: state.vehicle.kind,
+              }
+            : {
+                label: 'Honda Activa 6G (petrol)',
+                regNumberMasked: 'TS 09 •• ••12',
+              },
           documents: state.me.status === 'PENDING'
             ? SIGN_UP_DOCUMENTS.map(([type, label]) => ({
                 type,
                 label,
-                status: state.uploaded.has(type) ? ('PENDING' as const) : ('MISSING' as const),
+                status: state.checked.has(type)
+                  ? ('VERIFIED' as const)
+                  : state.uploaded.has(type)
+                    ? ('PENDING' as const)
+                    : ('MISSING' as const),
               }))
             : (
             [
@@ -512,7 +535,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
               ? { ...doc, status: 'PENDING' as const, expiresOn: undefined }
               : doc,
           ),
-          payoutAccountMasked: state.me.status === 'PENDING' ? undefined : 'UPI ••••@okhdfc',
+          payoutAccountMasked: state.me.status === 'PENDING' ? state.payoutConfirmed ?? undefined : 'UPI ••••@okhdfc',
           payoutAccountSubmitted: state.payoutSubmitted ?? undefined,
           insurance: {
             label: 'Group accident cover, ₹10 lakh, 24×7',
@@ -644,15 +667,38 @@ export function createMockRiderApi(options: MockOptions = {}) {
       }),
     signUp: input =>
       respond(() => {
-        if (state.me.status === 'NOT_RIDER') {
+        if (state.me.status === 'NOT_RIDER' || state.me.status === 'PENDING') {
+          // A PENDING rider corrects their details; an empty plate keeps the one on file.
+          const plate = input.vehicleKind === 'BICYCLE' ? undefined : input.vehicleRegNumber || state.vehicle?.plate;
+          if (input.vehicleKind !== 'BICYCLE' && !plate) {
+            throw apiError('VALIDATION_FAILED', 'Enter the number plate as on the RC, like TS09EA1234.', 400);
+          }
+          if (state.me.status === 'PENDING') {
+            // Like the server: what ops already checked stays as it is.
+            const renamed = nameWords(input.name) !== nameWords(state.me.name);
+            if (renamed && (['PAN', 'DL', 'BANK'].some(type => state.checked.has(type)) || state.payoutConfirmed)) {
+              throw apiError(
+                'NAME_LOCKED',
+                'Ops has already checked your documents or payout account in this name. Call rider support to change it.',
+                422,
+              );
+            }
+            const vehicleChanged = input.vehicleKind !== (state.vehicle?.kind ?? 'PETROL') || plate !== state.vehicle?.plate;
+            if (vehicleChanged && state.checked.has('RC')) {
+              throw apiError('VEHICLE_LOCKED', 'Ops has already accepted your RC for this vehicle. Call rider support to change it.', 422);
+            }
+            if (renamed) {
+              state.payoutSubmitted = null; // sent in the old name, so ops could never confirm it
+            }
+          }
           state.me = {...state.me, name: input.name.trim(), language: input.language, status: 'PENDING'};
+          state.vehicle = {kind: input.vehicleKind, plate};
         }
         return {...state.me};
       }),
     submitPayoutAccount: input =>
       respond(() => {
-        const words = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
-        if (words(input.holderName) !== words(state.me.name)) {
+        if (nameWords(input.holderName) !== nameWords(state.me.name)) {
           throw apiError('HOLDER_NAME_MISMATCH', 'The account must be in your name, as on your documents.', 422);
         }
         state.payoutSubmitted =
@@ -822,6 +868,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
     failNextDeviceCheck() {
       state.deviceNotBound = true;
     },
+    /** Ops accepts every sign-up document sent so far and confirms the payout account sent. */
+    acceptSignUp() {
+      state.uploaded.forEach(type => state.checked.add(type));
+      if (state.payoutSubmitted) {
+        state.payoutConfirmed = state.payoutSubmitted;
+        state.payoutSubmitted = null;
+      }
+    },
     setStatus(status: RiderStatus) {
       state.me = {
         ...state.me,
@@ -889,7 +943,11 @@ export function createMockRiderApi(options: MockOptions = {}) {
         loseNextRace: false,
         deviceNotBound: false,
         stopReason: null,
+        payoutSubmitted: null,
+        payoutConfirmed: null,
+        vehicle: null,
       });
+      state.checked.clear();
       state.seen.clear();
       state.uploaded.clear();
     },

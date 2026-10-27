@@ -14,7 +14,7 @@ GoDaddy parent zone: craves.in
 
 Azure DevOps service connection
   ├─ DNS Zone Contributor on the delegated Azure DNS zone
-  └─ Key Vault Certificates Officer on kvcravesprodlowl3ing6
+  └─ Key Vault Certificates Officer on kvcravesprodlowkmqgfy
 
 Let's Encrypt
   └─ RSA 2048 certificate for api.craves.in
@@ -44,12 +44,12 @@ The following production prerequisites must remain in place:
 - GoDaddy CNAME `api` points to `api.craves.in`.
 - GoDaddy delegates `_acme-challenge.api.craves.in` to the four Azure DNS nameservers assigned to the child zone.
 - Azure DNS zone `_acme-challenge.api.craves.in` exists in `rg-craves-prodlow-centralindia`.
-- Key Vault `kvcravesprodlowl3ing6` uses Azure RBAC.
-- APIM `apim-craves-prodlow-l3ing6` has a system-assigned managed identity.
+- Key Vault `kvcravesprodlowkmqgfy` uses Azure RBAC.
+- APIM `apim-craves-prodlow-kmqgfy` has a system-assigned managed identity.
 - APIM managed identity has `Key Vault Secrets User` on the Key Vault.
 - Azure DevOps service principal has `DNS Zone Contributor` on the delegated DNS zone.
 - Azure DevOps service principal has `Key Vault Certificates Officer` on the Key Vault.
-- Azure DevOps variable `AZURE_SERVICE_CONNECTION` contains `Craves-Dev-Service-Connection`.
+- Azure DevOps variable `AZURE_SERVICE_CONNECTION` contains `Craves-RMORAMPUDI09-Service-Connection`.
 
 Do not store a Let's Encrypt private key, PFX password, Azure access token, or Azure service-principal secret in Azure DevOps variables.
 
@@ -94,12 +94,12 @@ APIM_BINDING_REQUIRED=true
 After the initial certificate exists in Key Vault:
 
 1. Open Azure Portal.
-2. Open API Management service `apim-craves-prodlow-l3ing6`.
+2. Open API Management service `apim-craves-prodlow-kmqgfy`.
 3. Open **Custom domains**.
 4. Add endpoint type **Gateway**.
 5. Set hostname to `api.craves.in`.
 6. Select **Key Vault** as the certificate source.
-7. Select Key Vault `kvcravesprodlowl3ing6`.
+7. Select Key Vault `kvcravesprodlowkmqgfy`.
 8. Select certificate `craves-api-tls`.
 9. Select the APIM system-assigned managed identity as the client identity.
 10. Keep client-certificate negotiation off.
@@ -108,7 +108,7 @@ After the initial certificate exists in Key Vault:
 Use the versionless Key Vault secret reference:
 
 ```text
-https://kvcravesprodlowl3ing6.vault.azure.net/secrets/craves-api-tls
+https://kvcravesprodlowkmqgfy.vault.azure.net/secrets/craves-api-tls
 ```
 
 A versionless reference is required so APIM can synchronize newer Key Vault certificate versions after scheduled renewal.

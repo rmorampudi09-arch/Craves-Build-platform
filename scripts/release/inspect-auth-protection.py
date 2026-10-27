@@ -4,7 +4,7 @@ import json
 import re
 import subprocess
 
-SUB = '4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUB = '721906c9-4a72-4606-830b-d3e7ace093ff'
 RG = 'rg-craves-prodlow-centralindia'
 APP = 'ca-craves-auth-service-prodlow'
 PREFIX = 'CRAVES_AUTH_RATE_LIMIT_'
@@ -71,7 +71,7 @@ def template(value):
     settings = {name: setting(indexed.get(name), spec) for name, spec in SETTINGS.items()}
     image = container.get('image', '')
     require(isinstance(image, str) and re.fullmatch(
-        r'cravesprodlowacr82121\.azurecr\.io/craves/auth-service(?::[A-Za-z0-9_.-]+|@sha256:[a-f0-9]{64})', image),
+        r'cravesrm09prodlow6bf632\.azurecr\.io/craves/auth-service(?::[A-Za-z0-9_.-]+|@sha256:[a-f0-9]{64})', image),
         'Auth image reference not in expected registry/repository')
     return {'image': image, 'sourceProvenanceVerified': False,
             'settings': settings, 'possibleOverrideNames': sorted(OVERRIDES & indexed.keys()),

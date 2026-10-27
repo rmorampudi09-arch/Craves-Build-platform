@@ -154,9 +154,9 @@ public class FleetRiderService {
                 return new Latest(type, new ProfileDocument(DOCUMENT_CODES.get(type), DOCUMENT_LABELS.get(type), status,
                     row.getObject("expires_on", LocalDate.class), "REJECTED".equals(status) ? row.getString("reason") : null));
             }, rider.id()));
+        String kind = jdbc.queryForObject("SELECT vehicle_kind FROM fleet_schema.rider WHERE id = ?", String.class, rider.id());
         if ("PENDING".equals(rider.status())) {
             // A rider still signing up sees every document they must send, sent or not (MISSING), like the chef checklist.
-            String kind = jdbc.queryForObject("SELECT vehicle_kind FROM fleet_schema.rider WHERE id = ?", String.class, rider.id());
             Set<String> have = sent.stream().map(Latest::type).collect(Collectors.toSet());
             REQUIRED_DOCUMENTS.get(kind == null ? "PETROL" : kind).stream().filter(type -> !have.contains(type))
                 .forEach(type -> sent.add(new Latest(type, new ProfileDocument(DOCUMENT_CODES.get(type), DOCUMENT_LABELS.get(type),
@@ -171,8 +171,8 @@ public class FleetRiderService {
         Insurance insurance = StringUtils.hasText(properties.insuranceLabel())
             ? new Insurance(properties.insuranceLabel(), properties.supportPhone() == null ? "" : properties.supportPhone(), null) : null;
         return new RiderProfile(new Vehicle(rider.vehicleLabel(),
-            rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber())), documents, payoutAccount, insurance,
-            submitted);
+            rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber()), kind), documents, payoutAccount,
+            insurance, submitted);
     }
 
     /**

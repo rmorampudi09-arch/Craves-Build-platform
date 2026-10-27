@@ -3,7 +3,7 @@ pr: none
 pool:
   vmImage: ubuntu-latest
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
 steps:
   - checkout: self
     fetchDepth: 0

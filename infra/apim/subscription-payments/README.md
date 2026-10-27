@@ -33,7 +33,7 @@ Guarded apply:
 
 `azure-pipelines-subscription-payments-apim.yml`
 
-Set runtime parameter `confirmApimWrite=true` and pipeline variable `AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection`.
+Set runtime parameter `confirmApimWrite=true` and pipeline variable `AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection`.
 
 Read-only status:
 

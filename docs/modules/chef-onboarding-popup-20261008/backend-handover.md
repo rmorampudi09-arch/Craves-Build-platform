@@ -1,5 +1,7 @@
 # Chef onboarding backend and release contract
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 Updated 8 October 2026 for initial Chef onboarding while RazorpayX is pending. This file describes implemented source. Production completion must be established by the exact release receipts; a merged change or successful frontend build alone does not prove deployment.
 
 ## Implemented frontend-to-backend coverage

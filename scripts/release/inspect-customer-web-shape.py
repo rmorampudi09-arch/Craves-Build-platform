@@ -42,7 +42,7 @@ def az(*args):
 
 
 def main():
-    runtime.require(az('account', 'show')['id'] == '4f897b61-9b52-44b4-8cf1-bdac281cc1aa', 'Wrong subscription')
+    runtime.require(az('account', 'show')['id'] == '721906c9-4a72-4606-830b-d3e7ace093ff', 'Wrong subscription')
     app = az('containerapp', 'show', '-g', RG, '-n', APP)
     revisions = az('containerapp', 'revision', 'list', '-g', RG, '-n', APP)
     active = [r for r in revisions if r['properties'].get('active')]

@@ -1,24 +1,47 @@
 // Small flat building blocks for rider screens: white surfaces, 1 px borders, no shadows.
-import React, {PropsWithChildren, ReactNode} from 'react';
-import {ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle} from 'react-native';
+import React, {PropsWithChildren, ReactNode, useEffect, useState} from 'react';
+import {Keyboard, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {borderWidth, colors, elevation, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {formatRupees} from '../domain/format';
 
-/** Header on top, scrolling content, and an optional footer pinned where the thumb rests. */
+/** True while the soft keyboard is up; always false unless `enabled`. */
+function useKeyboardShown(enabled: boolean) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+    const show = Keyboard.addListener('keyboardDidShow', () => setShown(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setShown(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [enabled]);
+  return shown;
+}
+
+/**
+ * Header on top, scrolling content, and an optional footer pinned where the thumb rests.
+ * `keyboardHidesFooter` drops the footer while the keyboard is up, so a form's fields and button keep the room; never
+ * set it where the footer holds the step the rider is typing for.
+ */
 export function RiderScreen({
   header,
   footer,
+  keyboardHidesFooter = false,
   children,
   testID,
-}: PropsWithChildren<{header?: ReactNode; footer?: ReactNode; testID?: string}>) {
+}: PropsWithChildren<{header?: ReactNode; footer?: ReactNode; keyboardHidesFooter?: boolean; testID?: string}>) {
+  const keyboardShown = useKeyboardShown(keyboardHidesFooter);
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID={testID}>
       {header}
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
-      {footer ? <View style={styles.footer}>{footer}</View> : null}
+      {footer && !keyboardShown ? <View style={styles.footer}>{footer}</View> : null}
     </SafeAreaView>
   );
 }

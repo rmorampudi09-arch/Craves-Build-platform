@@ -76,7 +76,7 @@ The canonical main-based maintenance pipeline is now Azure definition 119, `azur
 
 The previous production acceptance, including successful run 38899, is recorded in `docs/runbooks/2026-09-13-admin-portal-repair.md`. That deployment restored authenticated access but exposed the older fixed-24-hour frontend. This history correction connects the current UI to the already-present history API. Auth session renewal and operation permissions are preserved.
 
-The established Azure DevOps service connection remains `Craves-Dev-Service-Connection`. No secret value belongs in source control or chat.
+The established Azure DevOps service connection remains `Craves-RMORAMPUDI09-Service-Connection`. No secret value belongs in source control or chat.
 
 ## Backend code paths
 

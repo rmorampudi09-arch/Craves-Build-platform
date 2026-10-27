@@ -31,8 +31,9 @@ public final class FleetRiderModels {
                                @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted) {
     }
 
+    /** kind: PETROL, ELECTRIC or BICYCLE as the rider signed up; absent for a rider ops added before sign-up existed. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Vehicle(String label, String regNumberMasked) {
+    public record Vehicle(String label, String regNumberMasked, String kind) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

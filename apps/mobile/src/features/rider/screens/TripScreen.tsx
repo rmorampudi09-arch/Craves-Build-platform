@@ -35,7 +35,9 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   // When the rider tapped Call at the door; the customer-not-answering steps show each time.
   const [callTimes, setCallTimes] = useState<number[]>([]);
   const [photoDelivery, setPhotoDelivery] = useState(false);
-  const queued = usePendingEntries(riderId, trip?.tripId);
+  // Steps whose first try is over and still wait: the screen shows where they lead. A step on its first try shows when
+  // the server answers (its button is busy), so a delivery code is never "saved" while it is being checked.
+  const queued = usePendingEntries(riderId, trip?.tripId).filter(e => e.deferred);
   const pending = queued.length;
 
   useEffect(() => {
@@ -44,9 +46,15 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     }
   }, [active.data]);
 
-  // A wrong or locked OTP shows by the boxes, also when the queue replays a code sent while offline.
+  // A wrong or locked OTP shows by the boxes, also when the queue replays a code sent while offline. A replayed step
+  // that went through brings the server's trip before it leaves the queue, so the step on screen never goes back.
   const tripId = trip?.tripId;
   useEffect(() => {
+    const offSent = tripQueue.onSent((entry, sent) => {
+      if (entry.tripId === tripId) {
+        setTrip(sent);
+      }
+    });
     const off = tripQueue.onRejected((entry, info) => {
       if (entry.tripId !== tripId || entry.action !== 'delivered') {
         return;
@@ -58,6 +66,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
       }
     });
     return () => {
+      offSent();
       off();
     };
   }, [tripId]);

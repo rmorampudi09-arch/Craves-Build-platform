@@ -256,6 +256,42 @@ describe('rider offline queue', () => {
     });
   });
 
+  it('counts what it loads at start as deferred: it outlived its tap', async () => {
+    const storage = memoryStorage();
+    const stored = {id: '1-1', riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k1', createdAt: 1, attempts: 0, nextAttemptAt: 0};
+    storage.data.set(STORAGE_KEY, JSON.stringify([stored]));
+    const {queue} = setup(async () => trip, undefined, storage);
+    expect(await queue.entries('r1')).toEqual([{...stored, deferred: true}]);
+  });
+
+  it('announces a sent step before it leaves the queue, so the screen never shows the old step between', async () => {
+    const {queue, storage} = setup(async () => trip);
+    const queuedWhenAnnounced: string[] = [];
+    queue.onSent(() => queuedWhenAnnounced.push(storage.data.get(STORAGE_KEY) ?? ''));
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k1'});
+    expect(queuedWhenAnnounced[0]).toContain('"k1"');
+    expect(JSON.parse(storage.data.get(STORAGE_KEY)!)).toEqual([]);
+  });
+
+  it("tries the tapped trip's waiting steps at once, and other trips' after their backoff", async () => {
+    let online = false;
+    const sent: string[] = [];
+    const send = jest.fn(async (entry: QueueEntry) => {
+      sent.push(entry.key);
+      if (!online) {
+        throw new HttpError();
+      }
+      return trip;
+    });
+    const {queue} = setup(send);
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k1'});
+    online = true;
+    await queue.enqueue({riderId: 'r1', tripId: 't2', action: 'arrived-pickup', key: 'k2'});
+    expect(sent).toEqual(['k1', 'k2']);
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'arrived-drop', key: 'k3'});
+    expect(sent).toEqual(['k1', 'k2', 'k1', 'k3']);
+  });
+
   it('answers reads from memory, so a screen opened during an upload sees the queue at once', async () => {
     let finish: (sent: Trip) => void = () => undefined;
     const send = jest.fn(() => new Promise<Trip>(resolve => (finish = resolve)));

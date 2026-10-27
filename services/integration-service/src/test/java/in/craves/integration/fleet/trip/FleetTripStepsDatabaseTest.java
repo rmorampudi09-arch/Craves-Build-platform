@@ -291,6 +291,7 @@ class FleetTripStepsDatabaseTest {
     /** Reached the door with no signal and no usable fix, both steps synced later: the wait still runs between the two taps. */
     @Test
     void theDoorWaitRunsBetweenTheArrivalAndPhotoTapsEvenWithoutAFixAtTheDoor() {
+        fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '40 minutes' WHERE id = ?", tripId);
         trips.step(identity, tripId, "arrived-pickup", "k1");
         trips.step(identity, tripId, "picked-up", "k2");
         trips.step(identity, tripId, "arrived-drop", "k3", new Tap(15 * 60_000L, null));
@@ -300,6 +301,21 @@ class FleetTripStepsDatabaseTest {
         refused(() -> trips.failed(identity, tripId, "CUSTOMER_UNREACHABLE", null, "f1", new Tap(11 * 60_000L, null)), 422, "WAIT_NOT_OVER");
         assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p2", new Tap(5 * 60_000L, null)).step())
             .as("10 minutes after the arrival tap, though both reached the server just now").isEqualTo("DELIVERED");
+        assertThat(fleet.db.queryForObject("SELECT (detail ->> 'doorWaitFrom')::timestamptz < now() - INTERVAL '14 minutes' "
+            + "FROM fleet_schema.trip_event WHERE trip_id = ? AND kind = 'DELIVERED'", Boolean.class, tripId))
+            .as("the delivery keeps when the wait started, for ops' check").isTrue();
+    }
+
+    /** A phone can't put the arrival before the trip existed: the wait never starts before the accept (the server's time). */
+    @Test
+    void anArrivalTappedBeforeTheAcceptCountsFromTheAccept() {
+        trips.step(identity, tripId, "arrived-pickup", "k1");
+        trips.step(identity, tripId, "picked-up", "k2");
+        trips.step(identity, tripId, "arrived-drop", "k3", new Tap(12 * 3_600_000L, null));
+        MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);
+        refused(() -> trips.deliveredByPhoto(identity, tripId, 2, photo, "p1"), 422, "WAIT_NOT_OVER");
+        fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '10 minutes 1 second' WHERE id = ?", tripId);
+        assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p2").step()).isEqualTo("DELIVERED");
     }
 
     /** An arrival's earlier time needs evidence; a step's age is capped at 30 minutes and never goes before the step before. */

@@ -22,7 +22,7 @@ GROUP BY ROLLUP (o.rang_channel, d.model)
 ORDER BY GROUPING(o.rang_channel) DESC, GROUPING(d.model) DESC, channel, model;
 
 -- name: offer_to_ring_by_day
--- The same, all offers, per day (IST): the stop rule is p95 over 8 s for a day (PILOT-HEALTH.md).
+-- The same, all offers, per day (IST): the stop rule is p95 over 8 s for a day (PILOT-HEALTH.md). The oldest day is partial.
 SELECT (o.offered_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist,
        count(*) AS offers,
        count(o.rang_at) AS rang,

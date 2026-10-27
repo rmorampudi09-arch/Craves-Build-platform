@@ -17,8 +17,9 @@ import {TripScreen} from './TripScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
 // Offline, the queue keeps what the screen sends; the screen shows the step those entries lead to (P1-06).
-const mockPending = {offline: false, entries: [] as {action: string; tripId: string}[], listeners: new Set<() => void>()};
-function mockSetEntries(entries: {action: string; tripId: string}[]) {
+const mockPending = {offline: false, entries: [] as MockEntry[], listeners: new Set<() => void>()};
+type MockEntry = {action: string; tripId: string; deferred?: boolean; body?: unknown};
+function mockSetEntries(entries: MockEntry[]) {
   mockPending.entries = entries;
   mockPending.listeners.forEach(listener => listener());
 }
@@ -50,9 +51,10 @@ jest.mock('../state/tripQueue', () => {
   };
   return {
     tripQueue: {
-      enqueue: jest.fn(async (entry: {action: string; tripId: string}) => {
+      // Offline, the entry stays once its first try is over (deferred): the screen shows where it leads.
+      enqueue: jest.fn(async (entry: MockEntry) => {
         if (mockPending.offline) {
-          mockSetEntries([...mockPending.entries, entry]);
+          mockSetEntries([...mockPending.entries, {...entry, deferred: true}]);
         }
         return {kind: 'queued'};
       }),
@@ -239,9 +241,10 @@ describe('Trip: to the kitchen (step 1)', () => {
   });
 
   it('opens on the step the queued steps lead to, after a restart while offline (blueprint A3)', async () => {
+    // What the queue loads at start counts as deferred: it outlived its tap.
     mockSetEntries([
-      {action: 'arrived-pickup', tripId: 't1'},
-      {action: 'picked-up', tripId: 't1'},
+      {action: 'arrived-pickup', tripId: 't1', deferred: true},
+      {action: 'picked-up', tripId: 't1', deferred: true},
     ]);
     await render(trip);
     expect(has('rider-reached-customer')).toBe(true);
@@ -456,6 +459,27 @@ describe('Trip: deliver with the OTP (step 4)', () => {
       mockRejected.forEach(listener => listener({tripId: 't1', action: 'delivered'}, {code: 'OTP_INVALID', message: 'x', attemptsLeft: 2}));
     });
     expect(allText()).toContain('Wrong code. 2 tries left.');
+  });
+
+  it('keeps the code boxes while the server checks the OTP, and never says "saved" for it', async () => {
+    await render(atDrop);
+    let answer: (outcome: unknown) => void = () => undefined;
+    (tripQueue.enqueue as jest.Mock).mockImplementationOnce((entry: MockEntry) => {
+      mockSetEntries([...mockPending.entries, entry]); // queued, on its first try
+      return new Promise(resolve => (answer = resolve));
+    });
+    await typeOtp('4719');
+    act(() => {
+      byId('rider-delivered').props.onPress();
+    });
+    expect(has('rider-deliver')).toBe(true);
+    expect(allText()).not.toContain('Delivery saved');
+    expect(allText()).not.toContain('Saved · will sync');
+    await act(async () => {
+      mockSetEntries([]);
+      answer({kind: 'sent', trip: {...atDrop, step: 'DELIVERED', version: 5}});
+    });
+    expect(allText()).toContain('Trip complete');
   });
 
   it('says the delivery is saved and the rider can go when the OTP waits offline (P1-05)', async () => {

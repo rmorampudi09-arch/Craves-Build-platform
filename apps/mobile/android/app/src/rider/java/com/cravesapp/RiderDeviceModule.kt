@@ -138,8 +138,8 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
     try {
       // A failed or partial write leaves no file behind: JS then queues the camera's own photo.
       check(FileOutputStream(file).use { upright.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }) { "JPEG not written" }
-    } catch (error: Exception) {
-      file.delete()
+    } catch (error: Throwable) {
+      file.delete() // out of memory too: no partial file stays behind
       throw error
     } finally {
       if (upright !== decoded) upright.recycle()

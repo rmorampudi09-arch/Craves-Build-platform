@@ -246,6 +246,9 @@ public class FleetDispatchJobs {
      * One silent rider's trip ends (pay per its state, held) and the next stage opens. Null if it changed meanwhile. The trip
      * is locked first and the silence judged after, in its own statement: when the lock waits for a step, Postgres re-checks
      * only the trip row, so a silence test in the locking query would keep the old state's 90 s window at the kitchen.
+     * shortcut: a /locations call committing in the same few milliseconds isn't waited for. Locking the rider's shift here
+     * would deadlock with /locations, which holds the shift and then key-locks the trip (rider_position_latest's foreign
+     * key); lock the shift before the trip if that ever matters.
      */
     private Map<String, Object> handBack(UUID tripId) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
@@ -253,11 +256,14 @@ public class FleetDispatchJobs {
             WHERE t.id = ? AND t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP')
               AND t.accepted_at < now() - make_interval(secs => %d)
             FOR UPDATE OF t""".formatted(WATCHDOG_SECONDS), tripId);
-        if (rows.isEmpty() || !Boolean.TRUE.equals(jdbc.queryForObject("SELECT %s FROM fleet_schema.trip t WHERE t.id = ?"
-            .formatted(SILENT_SINCE.formatted(HANDBACK_WINDOW)), Boolean.class, tripId))) {
+        if (rows.isEmpty()) {
             return null;
         }
         Map<String, Object> trip = rows.get(0);
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT %s FROM fleet_schema.trip t WHERE t.id = ?"
+            .formatted(SILENT_SINCE.formatted(HANDBACK_WINDOW)), Boolean.class, tripId))) {
+            return null;
+        }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
             + "updated_at = now() WHERE id = ?", RIDER_LOST, tripId);
         jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, detail) VALUES (?, ?, 'WATCHDOG_HANDED_BACK', 'SYSTEM', "

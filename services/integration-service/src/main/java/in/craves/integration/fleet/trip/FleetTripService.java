@@ -361,11 +361,12 @@ public class FleetTripService {
         }
         byte[] bytes = photoBytes(photo);
         requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
+        Map<String, Object> detail = new java.util.HashMap<>(Map.of("method", "PHOTO", "callsMade", callsMade == null ? 0 : callsMade));
         if (!otpLocked(tripId)) {
             if (callsMade == null || callsMade < 2) {
                 throw FleetApiException.unprocessable("CALLS_REQUIRED", "Call the customer twice before leaving the order.");
             }
-            requireUnreachableWaitOver(tripId, trip, tap);
+            detail.put("doorWaitFrom", requireUnreachableWaitOver(tripId, trip, tap).toString());
         }
         String blob = "riders/" + rider.id() + "/trips/" + tripId + "/delivery-" + UUID.randomUUID()
             + ("image/png".equals(photo.getContentType()) ? ".png" : ".jpg");
@@ -375,8 +376,8 @@ public class FleetTripService {
             Locked now = lock(tripId, rider);
             if (!"DELIVERED".equals(now.state())) {
                 requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
-                deliver(tripId, rider.id(), key, withTap(Map.of("method", "PHOTO", "photoBlob", blob, "callsMade", callsMade == null ? 0 : callsMade),
-                    tap), tap.fix(), true, PHOTO_HOLD);
+                detail.put("photoBlob", blob);
+                deliver(tripId, rider.id(), key, withTap(detail, tap), tap.fix(), true, PHOTO_HOLD);
             }
         });
         return view(tripId);
@@ -406,13 +407,13 @@ public class FleetTripService {
             requireState(trip, "PICKED_UP", "You can only mark a trip failed after pickup.");
         }
         boolean unreachable = "CUSTOMER_UNREACHABLE".equals(reason);
+        Map<String, Object> detail = new java.util.HashMap<>();
         if (unreachable) {
             requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
-            requireUnreachableWaitOver(tripId, trip, tap);
+            detail.put("doorWaitFrom", requireUnreachableWaitOver(tripId, trip, tap).toString());
         }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'FAILED', cancel_reason = ?, finished_at = now(), version = version + 1, "
             + "updated_at = now() WHERE id = ?", reason, tripId);
-        Map<String, Object> detail = new java.util.HashMap<>();
         detail.put("reason", reason);
         if (note != null && !note.isBlank()) {
             detail.put("note", note.length() > 500 ? note.substring(0, 500) : note);
@@ -542,21 +543,29 @@ public class FleetTripService {
      * The unreachable wait must be over at this tap (the photo, or failed CUSTOMER_UNREACHABLE). It runs from the "I've
      * reached the customer" tap to this one, both timed from the phone's tap ages (app 1.1.0), so a door with no signal
      * still counts its wait when both steps sync later. The arrival's location evidence and the 30-minute cap decide
-     * arrived_drop_at, not this: a rider indoors without GPS must not lose a delivery they waited for. Photo and failed
-     * deliveries are held for ops either way. Without ages (older apps): arrived_drop_at to now, as before.
+     * arrived_drop_at, not this: a rider indoors without GPS must not lose a delivery they waited for. A tapped arrival
+     * never counts from before the accept (the server's own time). Photo and failed deliveries are held for ops either way, and
+     * the event keeps doorWaitFrom for that check. Without ages (older apps): arrived_drop_at to now, as before. Returns
+     * when the wait started.
      */
-    private void requireUnreachableWaitOver(UUID tripId, Locked trip, Tap tap) {
+    private Instant requireUnreachableWaitOver(UUID tripId, Locked trip, Tap tap) {
         Instant tapped = tap.ageMs() == null ? trip.now() : trip.now().minusMillis(Math.max(0, Math.min(MAX_DOOR_TAP_AGE_MS, tap.ageMs())));
-        if (!Boolean.TRUE.equals(jdbc.queryForObject("""
-            SELECT COALESCE((SELECT e.created_at - make_interval(secs => LEAST(GREATEST((e.detail ->> 'ageMs')::float8, 0), ?) / 1000.0)
-                             FROM fleet_schema.trip_event e
-                             WHERE e.trip_id = t.id AND e.kind = 'ARRIVED_DROP' AND (e.detail ->> 'ageMs') IS NOT NULL
-                             ORDER BY e.created_at LIMIT 1), t.arrived_drop_at)
-                   + make_interval(mins => rc.unreachable_wait_minutes) <= ?
-            FROM fleet_schema.trip t JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version WHERE t.id = ?""", Boolean.class,
-            (double) MAX_DOOR_TAP_AGE_MS, Timestamp.from(tapped), tripId))) {
+        Map<String, Object> wait = jdbc.queryForMap("""
+            SELECT CASE WHEN a.tapped IS NULL THEN t.arrived_drop_at ELSE GREATEST(a.tapped, t.accepted_at) END AS since,
+                   rc.unreachable_wait_minutes AS minutes
+            FROM fleet_schema.trip t
+            JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version
+            LEFT JOIN LATERAL (SELECT e.created_at - make_interval(secs => LEAST(GREATEST((e.detail ->> 'ageMs')::float8, 0), ?) / 1000.0)
+                                 AS tapped
+                               FROM fleet_schema.trip_event e
+                               WHERE e.trip_id = t.id AND e.kind = 'ARRIVED_DROP' AND (e.detail ->> 'ageMs') IS NOT NULL
+                               ORDER BY e.created_at LIMIT 1) a ON true
+            WHERE t.id = ?""", (double) MAX_DOOR_TAP_AGE_MS, tripId);
+        Instant since = ((Timestamp) wait.get("since")).toInstant();
+        if (since.plus(Duration.ofMinutes(((Number) wait.get("minutes")).longValue())).isAfter(tapped)) {
             throw FleetApiException.unprocessable("WAIT_NOT_OVER", "Wait at the door until the timer ends, then try again.");
         }
+        return since;
     }
 
     /** Metres from the kitchen by the rider's latest fix, if it is real (not mock) and under 2 minutes old; else null. */

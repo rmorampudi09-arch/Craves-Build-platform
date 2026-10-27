@@ -17,7 +17,7 @@ import {EarningsScreen} from './EarningsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
 // With count > 0 the phone is offline: the queue keeps what the screen sends, and the screen shows where it leads.
-const mockPending = {count: 0, entries: [] as {action: string; tripId: string}[], listeners: new Set<() => void>()};
+const mockPending = {count: 0, entries: [] as {action: string; tripId: string; deferred?: boolean}[], listeners: new Set<() => void>()};
 const mockRefusals: {list: {tripId: string; code: string; message: string}[]} = {list: []};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
@@ -39,14 +39,17 @@ jest.mock('../api/riderApi', () => {
 });
 jest.mock('../state/tripQueue', () => ({
   tripQueue: {
+    // Offline, the queue keeps the entry once its first try is over (deferred), and the screen shows where it leads.
     enqueue: jest.fn(async (entry: {action: string; tripId: string}) => {
       if (mockPending.count > 0) {
-        mockPending.entries = [...mockPending.entries, entry];
+        mockPending.entries = [...mockPending.entries, {...entry, deferred: true}];
         mockPending.listeners.forEach(listener => listener());
       }
       return {kind: 'queued'};
     }),
     dismissRefusal: jest.fn(async () => undefined),
+    onSent: () => () => undefined,
+    onRejected: () => () => undefined,
   },
   useRefusals: () => mockRefusals.list,
   usePendingActions: () => mockPending.count,
@@ -245,7 +248,6 @@ describe('Offer', () => {
 describe('Trip', () => {
   const props = {route: {key: 'Trip', name: 'Trip' as const, params: undefined}, navigation: mockNavigation as never};
   // TripScreen listens for refused OTPs; trip.test.tsx covers the screen in full.
-  beforeEach(() => Object.assign(tripQueue, {onRejected: () => () => undefined}));
   const otpInput = () => tree.root.findAll(node => node.props.testID === 'rider-otp-input' && node.props.keyboardType)[0];
 
   it('takes the customer OTP before Delivered and sends it through the queue', async () => {

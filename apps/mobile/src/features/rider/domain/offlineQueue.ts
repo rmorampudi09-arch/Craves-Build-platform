@@ -133,7 +133,8 @@ export function createOfflineQueue(deps: QueueDeps) {
   /** The queue, read from storage once; after that, memory. */
   async function load(): Promise<QueueEntry[]> {
     loaded ??= (async () => {
-      entries = await read<QueueEntry>(STORAGE_KEY);
+      // Anything stored at start outlived its tap (the app restarted), so the screen shows it and an OTP says so.
+      entries = (await read<QueueEntry>(STORAGE_KEY)).map(e => ({...e, deferred: true}));
       await sweepOtps();
     })();
     await loaded;
@@ -224,8 +225,11 @@ export function createOfflineQueue(deps: QueueDeps) {
     changeListeners.forEach(listener => listener());
   }
 
-  /** skipBackoff: an upload just reached the server, so entries waiting out a backoff go too. */
-  async function flushFor(riderId: string, skipBackoff = false): Promise<Map<string, QueueOutcome>> {
+  /**
+   * skipBackoff: entries waiting out a backoff go too, every trip's (true: an upload just reached the server) or one trip's
+   * (its id: the rider just tapped a step of it).
+   */
+  async function flushFor(riderId: string, skipBackoff: boolean | string = false): Promise<Map<string, QueueOutcome>> {
     const results = new Map<string, QueueOutcome>();
     const heldTrips = new Set<string>();
     for (const entry of [...(await load())]) {
@@ -236,13 +240,15 @@ export function createOfflineQueue(deps: QueueDeps) {
       if (!(await load()).some(e => e.id === entry.id)) {
         continue;
       }
-      if (!skipBackoff && entry.nextAttemptAt > now()) {
+      if (skipBackoff !== true && skipBackoff !== entry.tripId && entry.nextAttemptAt > now()) {
         heldTrips.add(entry.tripId);
         results.set(entry.id, {kind: 'queued'});
         continue;
       }
       try {
         const trip = await deps.send(await ready(entry));
+        // The screen takes the server's trip before the entry leaves the queue, so it never shows the old step between.
+        sentListeners.forEach(listener => listener(entry, trip));
         await save((await load()).filter(e => e.id !== entry.id));
         await letGo(entry);
         // A later step of the trip went through, so an earlier refusal of it no longer needs the rider.
@@ -251,7 +257,6 @@ export function createOfflineQueue(deps: QueueDeps) {
           await saveRefusals(refusals.filter(r => r.tripId !== entry.tripId));
         }
         results.set(entry.id, {kind: 'sent', trip});
-        sentListeners.forEach(listener => listener(entry, trip));
       } catch (error) {
         heldTrips.add(entry.tripId);
         if (deps.isRetriable(error)) {
@@ -307,9 +312,9 @@ export function createOfflineQueue(deps: QueueDeps) {
           }
           await save([...list, entry]);
         }
-        // The rider just tapped: try now, even what waits out a backoff, so a code typed as the signal returns is
-        // checked at the door rather than queued behind an older step.
-        const results = await flushFor(input.riderId, true);
+        // The rider just tapped: try this trip now, even a step waiting out a backoff, so a code typed as the signal
+        // returns is checked at the door rather than queued behind an older step.
+        const results = await flushFor(input.riderId, input.tripId);
         const outcome = results.get(entry.id) ?? {kind: 'queued'};
         if (outcome.kind === 'queued' && !entry.deferred) {
           const id = entry.id;

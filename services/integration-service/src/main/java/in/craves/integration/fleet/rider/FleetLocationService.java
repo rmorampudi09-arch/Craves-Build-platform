@@ -84,16 +84,17 @@ public class FleetLocationService {
         WHERE %s
         FOR UPDATE OF s""";
     /**
-     * The latest position, kept only when newer. Its trip_id is the trip in progress; a trip that just ended (or went to
-     * another rider) stays for 2 minutes on the same shift, so every call until then reports its end and one lost response
-     * can't hide it from the phone (P1-12). Only /locations reads it.
+     * The latest position, kept only when newer. Its trip_id is the trip in progress; a trip that ended (or went to another
+     * rider) stays, on the same shift, while it changed within the last 2 minutes or after the phone's previous position.
+     * So its end is reported on at least two calls, even after a dead zone, and one lost response can't hide it from the
+     * phone (P1-12). Only /locations reads it.
      */
     private static final String UPSERT = """
         INSERT INTO fleet_schema.rider_position_latest AS p (rider_id, shift_id, trip_id, lat, lng, accuracy_m, mock, recorded_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (rider_id) DO UPDATE SET shift_id = excluded.shift_id,
           trip_id = COALESCE(excluded.trip_id, (SELECT e.id FROM fleet_schema.trip e WHERE e.id = p.trip_id
-            AND p.shift_id = excluded.shift_id AND GREATEST(e.updated_at, e.finished_at) > now() - INTERVAL '2 minutes')),
+            AND p.shift_id = excluded.shift_id AND GREATEST(e.updated_at, e.finished_at) > LEAST(p.received_at, now() - INTERVAL '2 minutes'))),
           lat = excluded.lat,
           lng = excluded.lng, accuracy_m = excluded.accuracy_m, mock = excluded.mock, recorded_at = excluded.recorded_at, received_at = now()
         WHERE p.recorded_at < excluded.recorded_at OR p.shift_id IS DISTINCT FROM excluded.shift_id""";

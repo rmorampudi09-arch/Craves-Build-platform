@@ -178,6 +178,17 @@ class FleetLocationApiDatabaseTest {
         locations(rider, List.of(fix(t.plusSeconds(12), false))).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED"));
         locations(rider, List.of()).andExpect(jsonPath("$.activeTrip").doesNotExist());
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE trip_id = ?", Integer.class, trip)).isEqualTo(2);
+
+        // Cancelled 3 minutes ago, during a 5-minute dead zone: the first two calls back still report it.
+        UUID next = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'ASSIGNED', rider_id = ? WHERE id = ?", rider.id(), next);
+        locations(rider, List.of(fix(t.plusSeconds(15), false))).andExpect(jsonPath("$.activeTrip.tripId").value(next.toString()));
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', version = 2, finished_at = now() - INTERVAL '3 minutes', "
+            + "updated_at = now() - INTERVAL '3 minutes' WHERE id = ?", next);
+        fleet.db.update("UPDATE fleet_schema.rider_position_latest SET received_at = now() - INTERVAL '5 minutes' WHERE rider_id = ?", rider.id());
+        locations(rider, List.of(fix(t.plusSeconds(18), false))).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED"));
+        locations(rider, List.of(fix(t.plusSeconds(21), false))).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED"));
+        locations(rider, List.of()).andExpect(jsonPath("$.activeTrip").doesNotExist());
     }
 
     @Test

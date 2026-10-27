@@ -307,6 +307,19 @@ class FleetLocationApiDatabaseTest {
             .as("another rider's offer").isTrue();
     }
 
+    /** A phone clock 10 minutes fast (blueprint A6): with ageMs the database clock times the fix; without it, it is dropped as before. */
+    @Test
+    void ageMsTimesTheFixByTheDatabaseClockNotThePhones() throws Exception {
+        OnShift rider = onShift();
+        Instant fast = Instant.now().plusSeconds(600).truncatedTo(ChronoUnit.MILLIS);
+        locations(rider, List.of(fix(fast, false))).andExpect(status().isOk());
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.rider_position_latest WHERE rider_id = ?", Integer.class,
+            rider.id())).isZero();
+        locations(rider, List.of(fix(fast, false).replace("}", ",\"ageMs\":2000}"))).andExpect(status().isOk());
+        assertThat(fleet.db.queryForObject("SELECT EXTRACT(EPOCH FROM now() - recorded_at)::float8 FROM fleet_schema.rider_position_latest "
+            + "WHERE rider_id = ?", Double.class, rider.id())).isBetween(1.5, 15.0);
+    }
+
     /** The budget in docs/riders/BACKEND.md: at most 5 statements per call, on a trip, in a slot, with an offer open. */
     @Test
     void twoHundredCallsStayWithinFiveStatementsEach() throws Exception {

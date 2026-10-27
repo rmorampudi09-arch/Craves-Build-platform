@@ -97,8 +97,15 @@ public final class FleetRiderModels {
         }
     }
 
-    /** One phone fix; mock is Android's mock-location flag, stored with the fix and never used for pay. */
-    public record RiderFix(Double lat, Double lng, Double accuracyM, Instant at, Boolean mock) {
+    /**
+     * One phone fix; mock is Android's mock-location flag, stored with the fix and never used for pay. ageMs (app 1.1.0)
+     * is how old the fix was when sent, by the phone's monotonic clock: with it the server times the fix by its own clock
+     * and at, the phone's wall-clock stamp, is not trusted.
+     */
+    public record RiderFix(Double lat, Double lng, Double accuracyM, Instant at, Boolean mock, Long ageMs) {
+        public RiderFix(Double lat, Double lng, Double accuracyM, Instant at, Boolean mock) {
+            this(lat, lng, accuracyM, at, mock, null);
+        }
     }
 
     /** offerReceipts is optional (rider app 1.1.0 and later); APKs that don't send it keep working. */

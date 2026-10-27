@@ -18,7 +18,7 @@ JS side: `src/features/rider/native/riderOnlineService.ts` uses the module in li
 
 - `POST {apiBaseUrl}/api/v1/rider/locations`
 - Header `X-Craves-Shift-Credential: <shiftCredential>`. Native code sends no JWT.
-- Body `{"fixes": [{"lat", "lng", "accuracyM", "at", "mock"}]}`, at most 5 fixes, `at` in ISO-8601 UTC (`2026-10-20T10:15:30.123Z`). An empty `fixes` array is sent when there is no fix yet: the call is also the heartbeat and the second offer channel.
+- Body `{"fixes": [{"lat", "lng", "accuracyM", "at", "mock", "ageMs"}]}`, at most 5 fixes, `at` in ISO-8601 UTC (`2026-10-20T10:15:30.123Z`). `ageMs` (app 1.1.0) is `SystemClock.elapsedRealtime()` minus the fix's `elapsedRealtimeNanos`, worked out when the call is built: the server times the fix as its clock minus `ageMs`, so the phone's wall clock doesn't matter. An empty `fixes` array is sent when there is no fix yet: the call is also the heartbeat and the second offer channel.
 - `mock` is `Location.isMock()` on Android 12+ and `isFromMockProvider()` before.
 - `offerReceipts` (app 1.1.0): every offer's first arrival, from either channel, as `{offerId, channel, ageMs}` with `ageMs` from `SystemClock.elapsedRealtime()` worked out when the call is built. At most 10 are kept; they are forgotten after a 2xx, so a failed call sends them again. The server keeps the first arrival of each of the rider's own offers (`trip_offer.rang_at`, `rang_channel`).
 - Response `LocationBatchResponse` `{offers: Offer[], activeTrip?: {tripId, step, version}, stop?: boolean, stopReason?: string}`:

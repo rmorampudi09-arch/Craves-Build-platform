@@ -9,6 +9,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -46,7 +47,9 @@ class RiderOnlineService : Service() {
   /** JS only hands the shift credential over from /shift/start; it is kept only in this app's private preferences. */
   class Shift(val credential: String, val expiresAtMs: Long, val apiBaseUrl: String)
 
-  class Fix(val lat: Double, val lng: Double, val accuracyM: Float, val atMs: Long, val mock: Boolean) {
+  /** elapsedMs is the fix's SystemClock.elapsedRealtime time: the server times the fix from its age, not from atMs. */
+  class Fix(val lat: Double, val lng: Double, val accuracyM: Float, val atMs: Long, val mock: Boolean, val elapsedMs: Long) {
+    /** ageMs is worked out when the call is built, by the monotonic clock, so a wrong phone clock doesn't matter (blueprint A6). */
     fun toJson(): JSONObject =
       JSONObject()
         .put("lat", lat)
@@ -54,6 +57,7 @@ class RiderOnlineService : Service() {
         .put("accuracyM", accuracyM.toDouble())
         .put("at", iso(atMs))
         .put("mock", mock)
+        .put("ageMs", (SystemClock.elapsedRealtime() - elapsedMs).coerceAtLeast(0L))
 
     fun toMap(): WritableMap =
       Arguments.createMap().apply {
@@ -142,7 +146,7 @@ class RiderOnlineService : Service() {
 
   private fun add(location: Location) {
     val mock = if (Build.VERSION.SDK_INT >= 31) location.isMock else @Suppress("DEPRECATION") location.isFromMockProvider
-    val fix = Fix(location.latitude, location.longitude, location.accuracy, location.time, mock)
+    val fix = Fix(location.latitude, location.longitude, location.accuracy, location.time, mock, location.elapsedRealtimeNanos / 1_000_000)
     fixes.addLast(fix)
     while (fixes.size > MAX_FIXES) fixes.removeFirst()
     lastFix = fix

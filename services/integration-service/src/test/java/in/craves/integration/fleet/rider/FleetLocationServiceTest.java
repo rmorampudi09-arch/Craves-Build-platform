@@ -31,6 +31,17 @@ class FleetLocationServiceTest {
             .as("clipped to the slot").isEqualTo(10);
     }
 
+    /** Blueprint A6: with ageMs the database clock times the fix, capped at an hour; without it the phone's stamp stays. */
+    @Test
+    void ageMsTimesAFixByTheServerClockAndIsCappedAtAnHour() {
+        assertThat(FleetLocationService.timed(new RiderFix(17.44, 78.39, 8.0, T.plusSeconds(600), false, 2000L), T).at())
+            .as("a phone clock 10 minutes fast").isEqualTo(T.minusMillis(2000));
+        assertThat(FleetLocationService.timed(new RiderFix(17.44, 78.39, 8.0, null, false, 99_999_999L), T).at()).isEqualTo(T.minusSeconds(3600));
+        assertThat(FleetLocationService.timed(new RiderFix(17.44, 78.39, 8.0, T.minusSeconds(9), false, -5L), T).at()).isEqualTo(T);
+        assertThat(FleetLocationService.timed(fix(10, false), T)).as("no ageMs: the phone's stamp").isEqualTo(fix(10, false));
+        assertThat(FleetLocationService.timed(null, T)).isNull();
+    }
+
     @Test
     void onlySaneFixesFromTheShiftAndNotFromTheFutureAreUsed() {
         Instant start = T.minusSeconds(3600);

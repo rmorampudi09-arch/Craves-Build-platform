@@ -422,6 +422,7 @@ components:
         accuracyM: {type: number}
         at: {type: string, format: date-time}
         mock: {type: boolean, description: 'Android reported a mock location; logged, never used for pay decisions'}
+        ageMs: {type: integer, minimum: 0, maximum: 3600000, description: 'Optional (app 1.1.0). How old the fix was when sent, by the phone''s monotonic clock. When present the server times the fix as its own clock minus ageMs and ignores at.'}
     LocationBatch:
       type: object
       required: [fixes]

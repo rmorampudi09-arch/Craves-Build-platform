@@ -244,6 +244,8 @@ export interface RiderFix {
   at: string;
   /** Android reported a mock location; the server logs it and never uses it for pay decisions. */
   mock?: boolean;
+  /** How old the fix was when sent, by the monotonic clock (0 to 3,600,000); the server then times it by its own clock. */
+  ageMs?: number;
 }
 
 /** An offer's first arrival on the phone (sent by the native service on /locations, app 1.1.0). */

@@ -60,6 +60,8 @@ public class FleetLocationService {
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
     /** On-trip fixes are kept this many days (blueprint E6). */
     static final int TRACK_DAYS_KEPT = 90;
+    /** A fix's ageMs is capped at an hour: older is no use to dispatch or the track. */
+    static final long MAX_FIX_AGE_MS = 3_600_000;
     static final int MAX_RECEIPTS = 10;
     static final long MAX_RECEIPT_AGE_MS = 3_600_000;
     private static final Set<String> RECEIPT_CHANNELS = Set.of("fcm", "locations");
@@ -145,7 +147,7 @@ public class FleetLocationService {
         boolean sameShift = shift.shiftId().equals(shift.lastShiftId());
         Instant after = sameShift ? shift.lastAt() : null;
         // Resent fixes (a lost response) are at or before the stored one, so nothing is counted or tracked twice.
-        List<RiderFix> fresh = batch.fixes().stream().filter(fix -> usable(fix, shift.startedAt(), shift.now()))
+        List<RiderFix> fresh = batch.fixes().stream().map(fix -> timed(fix, shift.now())).filter(fix -> usable(fix, shift.startedAt(), shift.now()))
             .map(fix -> new RiderFix(fix.lat(), fix.lng(), fix.accuracyM(), fix.at().truncatedTo(ChronoUnit.MICROS), Boolean.TRUE.equals(fix.mock())))
             .filter(fix -> after == null || fix.at().isAfter(after)).sorted(Comparator.comparing(RiderFix::at)).toList();
         long seconds = 0;
@@ -274,6 +276,18 @@ public class FleetLocationService {
             return "Your shift was stopped on this phone. Go online again from your approved phone.";
         }
         return shift.expired() ? "Your shift ended after 12 hours. Go online again to keep riding." : null;
+    }
+
+    /**
+     * The fix timed by the database clock when the phone says how old it is (ageMs, app 1.1.0, at most an hour), so a
+     * phone clock that is wrong no longer matters (blueprint A6); without ageMs, the phone's own stamp as before.
+     */
+    static RiderFix timed(RiderFix fix, Instant now) {
+        if (fix == null || fix.ageMs() == null) {
+            return fix;
+        }
+        long ageMs = Math.max(0, Math.min(MAX_FIX_AGE_MS, fix.ageMs()));
+        return new RiderFix(fix.lat(), fix.lng(), fix.accuracyM(), now.minusMillis(ageMs), fix.mock(), fix.ageMs());
     }
 
     /** A fix with sane values, taken during the shift and not stamped in the future. */

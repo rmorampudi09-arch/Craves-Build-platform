@@ -278,7 +278,7 @@ public class FleetDispatcher implements FleetStage {
               drop_address, drop_landmark, drop_lat, drop_lng, drop_distance_m, rate_card_version, chef_ready_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     (SELECT ready_at FROM fleet_schema.chef_ready WHERE chef_sub_order_id = ?))
-            ON CONFLICT (chef_sub_order_id) DO NOTHING""",
+            ON CONFLICT (chef_sub_order_id) WHERE replaced_at IS NULL DO NOTHING""",
             tripId, command.chefSubOrderId(), command.orderId(), plan.chefId(), orderCode(command.chefSubOrderId()), itemsCount(request),
             text(kitchen.contactName(), 160, "Kitchen"), text(kitchen.area() != null ? kitchen.area() : command.area(), 160, ""),
             text(kitchen.address(), 500, ""), text(kitchen.landmark(), 200, null), kitchen.latitude().doubleValue(),
@@ -366,8 +366,10 @@ public class FleetDispatcher implements FleetStage {
                 "The order's Craves rider trip has no delivery job: it was cancelled before a rider took it, so no courier is booked"));
     }
 
+    /** The order's current trip: one ops gave to another rider (V166) is replaced by the new rider's. */
     private Optional<TripState> trip(UUID chefSubOrderId) {
-        return jdbc.query("SELECT id, chef_sub_order_id, state, provider FROM fleet_schema.trip WHERE chef_sub_order_id = ?",
+        return jdbc.query("SELECT id, chef_sub_order_id, state, provider FROM fleet_schema.trip WHERE chef_sub_order_id = ? "
+            + "AND replaced_at IS NULL",
             (row, n) -> new TripState(row.getObject("id", UUID.class), row.getObject("chef_sub_order_id", UUID.class),
                 row.getString("state"), row.getString("provider")), chefSubOrderId).stream().findFirst();
     }

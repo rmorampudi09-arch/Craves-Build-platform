@@ -556,8 +556,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 - **(c)** Acknowledge and resolve support issues.
 - **(d)** Cancel a payout file that hasn't been sent.
 - **(e)** Record a bank reversal after a payout.
-- **(f)** Give a held trip to another rider.
-- **(g)** The offline-OTP check queue (E4).
+- **(f)** Give a held trip to another rider. **Done:** before pickup, behind `CRAVES_FLEET_RIDER_HANDOVER_ENABLED` (off; on once order-service from the same release is live and the contract migration has dropped the old one-trip-per-order constraint, in its own later PR, because older images need it). The first trip ends as a release and is replaced (V166); the order carries on in a new trip for the second rider, and the delivery job follows it with a Craves-rider-to-Craves-rider handoff that order-service now accepts. Proved by `FleetOpsDatabaseTest`, `FleetSchemaDatabaseTest`, and order-service's `DeliveryStatusHandoffTest` and `DeliveryStatusEventValidatorTest`.
+- **(g)** The offline-OTP check queue (E4). **Done:** "Delivery codes to check" on the console's Trips page (`GET /code-checks`); ops records what the customer said (`POST /trips/{id}/code-check`): delivered with full pay, or failed with the pay held. Proved by `FleetOpsDatabaseTest`, `FleetOpsSecurityTest` and `trips.vitest.ts`.
 
 **Prove it:** for each, an admin database test, `FleetAdminSecurityTest` roles, and a console vitest.
 

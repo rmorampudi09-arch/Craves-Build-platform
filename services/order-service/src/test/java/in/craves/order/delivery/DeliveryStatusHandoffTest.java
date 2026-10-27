@@ -483,6 +483,29 @@ class DeliveryStatusHandoffTest {
     }
 
     @Test
+    void opsGiveAHeldRiderTripToAnotherRiderAndTheChefSeesTheNewRiderOnly() throws Exception {
+        String first = UUID.randomUUID().toString();
+        String second = UUID.randomUUID().toString();
+        project("craves_fleet", first, "AT_PICKUP", BORZO_OBSERVED_AT);
+
+        var result = service.accept(riderToRider(first, second), "{}");
+
+        assertThat(result.applied()).isTrue();
+        verify(jdbc).update(contains("SET delivery_partner_name = NULL"), eq(chefSubOrderId));
+        verify(jdbc).update(contains("SET delivery_job_id = ?"),
+            eq(deliveryJobId), eq("craves_fleet"), eq(second), eq("COURIER_ASSIGNED"),
+            eq(null), eq(Timestamp.from(PIDGE_OBSERVED_AT)), any(UUID.class), eq(chefSubOrderId));
+        verify(jdbc).update(contains("delivery_partner_name = COALESCE"),
+            eq("Sita R."), eq("+919800000002"), eq(null), eq(null), eq(chefSubOrderId));
+
+        // After pickup the food is with the first rider: only a cancel ends it, never a second rider.
+        project("craves_fleet", first, "PICKED_UP", BORZO_OBSERVED_AT);
+        assertThatThrownBy(() -> service.accept(riderToRider(first, second), "{}"))
+            .isInstanceOf(DeliveryStatusNonRetryableException.class)
+            .hasMessageContaining("Craves rider before pickup");
+    }
+
+    @Test
     void buffersARiderHandoffUntilTheRidersOwnProjectionArrives() throws Exception {
         String trip = UUID.randomUUID().toString();
         ResultSet missing = row(null, null, null, null);
@@ -511,6 +534,11 @@ class DeliveryStatusHandoffTest {
         verify(jdbc).update(contains("SET delivery_job_id = ?"),
             eq(deliveryJobId), eq("borzo"), eq("borzo-order-9"), eq("SEARCHING"),
             eq(null), eq(Timestamp.from(PIDGE_OBSERVED_AT)), eq(event.eventId()), eq(chefSubOrderId));
+    }
+
+    private EventEnvelope<DeliveryStatusChangedData> riderToRider(String fromTripId, String toTripId) {
+        return envelope(new DeliveryStatusChangedData(deliveryJobId, checkoutId, chefSubOrderId, "craves_fleet", toTripId,
+            "COURIER_ASSIGNED", null, PIDGE_OBSERVED_AT, "craves_fleet", fromTripId, null, "Sita R.", "+919800000002", null, null));
     }
 
     private EventEnvelope<DeliveryStatusChangedData> riderHandoff(String tripId, String courier, Instant observedAt) {

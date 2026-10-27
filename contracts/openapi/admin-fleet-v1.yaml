@@ -354,7 +354,9 @@ paths:
       description: >-
         Hands the trip to one on-shift idle fleet rider or to Borzo or Pidge (exactly one of riderId and provider).
         The current courier is released first, in the same transaction, so the trip always has exactly one courier.
-        The released rider's pay for the trip so far is kept.
+        The released rider's pay for the trip so far is kept. A rider's trip before pickup goes to another rider only
+        with craves.fleet.rider-handover-enabled: the order then carries on in a new trip (a trip is one rider's pay
+        record), which is the answer; the first trip is replaced and refused as TRIP_CHANGED afterwards.
       parameters: [{ $ref: '#/components/parameters/TripId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -377,7 +379,7 @@ paths:
         '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: "TRIP_NOT_REASSIGNABLE, RIDER_NOT_AVAILABLE, or RATE_CARD_REQUIRED (to a rider: no published rate card has started, so there is nothing to pay them with).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "TRIP_NOT_REASSIGNABLE, RIDER_NOT_AVAILABLE, TRIP_CHANGED, or RATE_CARD_REQUIRED (to a rider: no published rate card has started, so there is nothing to pay them with).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/trips/{tripId}/cancel:
     post:
       operationId: cancelTrip
@@ -413,6 +415,53 @@ paths:
                 properties:
                   items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/DispatchQueueItem' } }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/code-checks:
+    get:
+      operationId: listCodeChecks
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: >-
+        Delivery codes typed offline that order-service refused (decision E4), oldest first. The rider was told they
+        could go, so the trip waits at the drop, and the rider gets no new offers, until ops has called the customer.
+      responses:
+        '200':
+          description: Checks waiting.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/CodeCheck' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/trips/{tripId}/code-check:
+    post:
+      operationId: checkCode
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        What the customer told ops about a refused code typed offline. DELIVERED: they have the food; the trip is
+        delivered with full pay, not held. NOT_DELIVERED: they don't; the trip fails with the same pay held while ops
+        checks with the rider. Either reaches the order.
+      parameters: [{ $ref: '#/components/parameters/TripId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [outcome, reason]
+              properties:
+                outcome: { type: string, enum: [DELIVERED, NOT_DELIVERED] }
+                reason: { $ref: '#/components/schemas/Reason' }
+      responses:
+        '200':
+          description: The trip after the check.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trip' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: "NO_CODE_CHECK: no such trip waiting at the drop with a refused offline code; it ended or the right code arrived.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/pilot-health:
     get:
       operationId: getPilotHealth
@@ -1235,6 +1284,19 @@ components:
         riderName: { type: string, maxLength: 120, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    CodeCheck:
+      type: object
+      description: A delivery code typed offline that order-service refused; the trip waits at the drop.
+      required: [tripId, orderCode, kitchenName, dropArea, riderId, riderName, alertedAt, wrongCodes]
+      properties:
+        tripId: { type: string, format: uuid }
+        orderCode: { type: string, pattern: '^#[0-9A-F]{8}$' }
+        kitchenName: { type: string, maxLength: 160 }
+        dropArea: { type: string, maxLength: 160 }
+        riderId: { type: string, format: uuid }
+        riderName: { type: string, maxLength: 120 }
+        alertedAt: { type: string, format: date-time, description: When ops was alerted (FLEET_OFFLINE_OTP_INVALID). }
+        wrongCodes: { type: integer, minimum: 0, description: Codes the server refused for this trip. }
     DispatchQueueItem:
       type: object
       required: [tripId, orderCode, kitchenName, dropArea, queuedAt, alertLevel, alertMessage, attempts]

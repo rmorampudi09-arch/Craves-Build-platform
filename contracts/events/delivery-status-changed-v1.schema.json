@@ -75,7 +75,7 @@
         },
         "observedAt": { "type": "string", "format": "date-time" },
         "handoffFromProviderId": {
-          "description": "Set with handoffFromProviderDeliveryId when Pidge took over an unassigned Borzo delivery, or Borzo or Pidge took over a Craves rider's order before pickup (craves_fleet, the trip id).",
+          "description": "Set with handoffFromProviderDeliveryId when Pidge took over an unassigned Borzo delivery, or Borzo, Pidge or another Craves rider (on a new trip id) took over a Craves rider's order before pickup (craves_fleet, the trip id).",
           "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 80

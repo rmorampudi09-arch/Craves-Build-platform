@@ -93,6 +93,7 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
 5. **Live.** Choose `live` and confirm. A published rate card must be in force.
    - Offers ring on the pilot riders' phones.
    - An order no rider accepts within the fleet stage goes to Borzo, then Pidge, then the ops queue, exactly as before.
+6. **Moving a rider's trip to another rider (optional).** Ops can give a trip before pickup to another rider only once order-service from the same release is live and the contract migration's PR (the one that drops `trip_chef_sub_order_id_key`) is merged and deployed. Then set `CRAVES_FLEET_RIDER_HANDOVER_ENABLED=true` on integration-service (an app setting, like the flags in step 5). Until then, Reassign offers Borzo, Pidge or cancel for a rider's trip, as before.
 
 ## 7. The rider APK
 

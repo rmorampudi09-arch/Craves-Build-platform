@@ -124,7 +124,7 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
 
     {detail.recentOffers && <section className="cr-panel">
       <h2 className="text-lg font-bold">Recent offers</h2>
-      <p className="cr-muted">The last 20 offers, newest first: what the push did and how soon the phone rang. Most should ring by push within 5 seconds.</p>
+      <p className="cr-muted">The last 20 offers, newest first: what the push did and how soon the phone rang. Most should ring by push within 5 seconds; a trip ops gave the rider by hand is accepted at once and never pushed.</p>
       {detail.recentOffers.length === 0 ? <p className="cr-empty">No offers yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
         <thead><tr><th scope="col">Offered</th><th scope="col">Order</th><th scope="col">Outcome</th><th scope="col">Push</th><th scope="col">Rang</th></tr></thead>
         <tbody>{detail.recentOffers.map(offer => <tr key={offer.offerId}>

@@ -33,6 +33,7 @@ import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.dispatch.FleetOpsService.Attempt;
+import in.craves.integration.fleet.dispatch.FleetOpsService.CodeCheckInput;
 import in.craves.integration.fleet.dispatch.FleetOpsService.OpsTrip;
 import in.craves.integration.fleet.dispatch.FleetOpsService.Position;
 import in.craves.integration.fleet.dispatch.FleetOpsService.QueueItem;
@@ -65,6 +66,8 @@ class FleetOpsDatabaseTest {
     FleetDispatcher dispatcher;
     FleetTripService trips;
     FleetOpsService service;
+    /** The same, with craves.fleet.rider-handover-enabled on. */
+    FleetOpsService handover;
     DeliveryCommandMessage command;
     UUID near;
     UUID other;
@@ -83,7 +86,8 @@ class FleetOpsDatabaseTest {
             mock(RiderPushClient.class));
         FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
             mock(BankDataCipher.class));
-        service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin);
+        service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, false);
+        handover = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, true);
         FleetDispatchFixtures.policy(fleet.db, "live");
         near = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         other = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.01, KITCHEN_LNG, 5, false);
@@ -219,6 +223,144 @@ class FleetOpsDatabaseTest {
     }
 
     @Test
+    void aHeldTripGoesToAnotherRiderOnANewTripAndTheFirstRiderIsPaidForTheTripSoFar() throws Exception {
+        UUID first = accept(other);
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'AT_PICKUP', arrived_kitchen_at = now() WHERE id = ?", first);
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(near, null, "Too early")), 409, "TRIP_NOT_REASSIGNABLE");
+        contractMigration();
+        events.clear();
+        UUID key = UUID.randomUUID();
+        OpsTrip moved = (OpsTrip) handover.reassign(ops, key, first, new ReassignInput(near, null, "Ravi's bike broke down"));
+
+        UUID second = moved.tripId();
+        assertThat(second).isNotEqualTo(first);
+        assertThat(moved.state()).isEqualTo("ASSIGNED");
+        assertThat(moved.riderId()).isEqualTo(near);
+        // The first trip stays the first rider's pay record: released at the kitchen, paid, not held, and replaced.
+        Map<String, Object> old = fleet.db.queryForMap("SELECT state, cancel_reason, pay_held, replaced_at FROM fleet_schema.trip WHERE id = ?", first);
+        assertThat(old.get("state")).isEqualTo("CANCELLED");
+        assertThat(old.get("cancel_reason")).isEqualTo(FleetOpsService.HANDED_TO_RIDER);
+        assertThat(old.get("pay_held")).isEqualTo(false);
+        assertThat(old.get("replaced_at")).isNotNull();
+        assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, paid -> {
+            assertThat(paid.riderId()).isEqualTo(other);
+            assertThat(paid.held()).isFalse();
+            assertThat(paid.lines()).extracting("component").contains("cancellation", "pickup-km");
+        });
+        // The order carries on in the new trip, with the second rider's own locked pay and accepted offer.
+        Map<String, Object> next = fleet.db.queryForMap("SELECT chef_sub_order_id, replaces, pay_paise, accepted_at FROM fleet_schema.trip "
+            + "WHERE id = ?", second);
+        assertThat(next.get("chef_sub_order_id")).isEqualTo(chefSubOrderId);
+        assertThat(next.get("replaces")).isEqualTo(first);
+        assertThat((Long) next.get("pay_paise")).isPositive();
+        assertThat(next.get("accepted_at")).isNotNull();
+        assertThat(fleet.db.queryForList("SELECT rider_id || ':' || state FROM fleet_schema.trip_offer WHERE trip_id = ?", String.class, second))
+            .containsExactly(near + ":ACCEPTED");
+        assertThat(stages(second)).containsExactly("CRAVES_FLEET:CLOSED:OPS_ASSIGNED");
+        assertThat(service.trips().trips()).extracting(OpsTrip::tripId).containsExactly(second);
+        // The delivery job follows the new trip, and the order hears of a rider-to-rider handoff with the new rider's card.
+        assertThat(fleet.db.queryForObject("SELECT provider_delivery_id FROM delivery_schema.delivery_job WHERE chef_sub_order_id = ?",
+            String.class, chefSubOrderId)).isEqualTo(second.toString());
+        JsonNode handoff = json.readTree(fleet.db.queryForObject("SELECT (payload -> 'data')::text FROM delivery_schema.delivery_outbox "
+            + "WHERE payload -> 'data' ->> 'handoffFromProviderId' = 'craves_fleet'", String.class));
+        assertThat(handoff.get("status").asText()).isEqualTo("COURIER_ASSIGNED");
+        assertThat(handoff.get("providerId").asText()).isEqualTo("craves_fleet");
+        assertThat(handoff.get("providerDeliveryId").asText()).isEqualTo(second.toString());
+        assertThat(handoff.get("handoffFromProviderDeliveryId").asText()).isEqualTo(first.toString());
+        assertThat(handoff.get("courierName").asText()).isEqualTo("Ravi K.");
+        // Each rider's app: the first has no trip and their late step is refused; the second rider's steps reach the order.
+        assertThat(trips.active(identity(other))).isEmpty();
+        assertThat(trips.active(identity(near))).hasValueSatisfying(trip -> assertThat(trip.tripId()).isEqualTo(second.toString()));
+        refused(() -> trips.step(identity(other), first, "picked-up", "late-step"), 409, "TRIP_NOT_ACTIVE");
+        trips.step(identity(near), second, "arrived-pickup", "second-arrived");
+        ArgumentCaptor<TrackingSnapshot> published = ArgumentCaptor.forClass(TrackingSnapshot.class);
+        verify(statusUpdates).processTracking(any(), published.capture());
+        assertThat(published.getValue().delivery().providerDeliveryId()).isEqualTo(second.toString());
+        assertThat(published.getValue().delivery().status()).isEqualTo(DeliveryStatus.AT_PICKUP);
+        // The same key again is the first answer; the replaced trip can't be moved or cancelled any more.
+        assertThat(json.valueToTree(handover.reassign(ops, key, first, new ReassignInput(near, null, "Ravi's bike broke down")))
+            .get("tripId").asText()).isEqualTo(second.toString());
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(null, "PIDGE", "Again")), 409, "TRIP_CHANGED");
+        refused(() -> handover.cancel(ops, UUID.randomUUID(), first, "Again"), 409, "TRIP_CHANGED");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip WHERE chef_sub_order_id = ?", Integer.class, chefSubOrderId))
+            .isEqualTo(2);
+    }
+
+    @Test
+    void aHeldTripStaysWithItsRiderWhenTheOtherRiderCannotTakeItOrTheFoodIsPickedUp() {
+        contractMigration();
+        UUID first = accept(near);
+        FleetDispatchFixtures.seen(fleet.db, other, 50);
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(other, null, "Swap riders")), 409, "RIDER_NOT_AVAILABLE");
+        FleetDispatchFixtures.seen(fleet.db, other, 5);
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(near, null, "Same rider")), 409, "RIDER_NOT_AVAILABLE");
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'PICKED_UP', picked_up_at = now() WHERE id = ?", first);
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(other, null, "Swap riders")), 409, "TRIP_NOT_REASSIGNABLE");
+
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip WHERE chef_sub_order_id = ?", Integer.class, chefSubOrderId))
+            .as("nothing changed").isOne();
+        assertThat(fleet.db.queryForObject("SELECT rider_id FROM fleet_schema.trip WHERE id = ?", UUID.class, first)).isEqualTo(near);
+        assertThat(fleet.db.queryForObject("SELECT provider_delivery_id FROM delivery_schema.delivery_job WHERE chef_sub_order_id = ?",
+            String.class, chefSubOrderId)).isEqualTo(first.toString());
+        assertThat(events.stream().filter(FleetTripPayFinalized.class::isInstance)).isEmpty();
+    }
+
+    @Test
+    void aRefusedCodeTypedOfflineWaitsForOpsWhoRecordThatTheCustomerHasTheFood() {
+        UUID tripId = refusedOfflineCode(false);
+        refused(() -> service.checkCode(ops, UUID.randomUUID(), tripId, new CodeCheckInput("DELIVERED", "Customer has the food")), 409,
+            "NO_CODE_CHECK");
+        assertThat(service.codeChecks().items()).as("a code typed at the door is the rider's to retry").isEmpty();
+        alerted(tripId);
+        assertThat(service.codeChecks().items()).singleElement().satisfies(check -> {
+            assertThat(check.tripId()).isEqualTo(tripId);
+            assertThat(check.orderCode()).isEqualTo("#0BDE0101");
+            assertThat(check.riderId()).isEqualTo(near);
+            assertThat(check.riderName()).isEqualTo("Ravi Kumar");
+            assertThat(check.wrongCodes()).isOne();
+        });
+        events.clear();
+
+        OpsTrip trip = (OpsTrip) service.checkCode(ops, UUID.randomUUID(), tripId, new CodeCheckInput("DELIVERED", "Customer has the food"));
+
+        assertThat(trip.state()).isEqualTo("DELIVERED");
+        assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, paid -> {
+            assertThat(paid.riderId()).isEqualTo(near);
+            assertThat(paid.held()).isFalse();
+            assertThat(paid.lines()).extracting("component").contains("base", "drop-km");
+        });
+        ArgumentCaptor<TrackingSnapshot> published = ArgumentCaptor.forClass(TrackingSnapshot.class);
+        verify(statusUpdates).processTracking(any(), published.capture());
+        assertThat(published.getValue().delivery().status()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(service.codeChecks().items()).isEmpty();
+        assertThat(trips.active(identity(near))).as("the rider can take orders again").isEmpty();
+        refused(() -> service.checkCode(ops, UUID.randomUUID(), tripId, new CodeCheckInput("NOT_DELIVERED", "Changed my mind")), 409,
+            "NO_CODE_CHECK");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'OFFLINE_CODE_CHECKED' AND rider_id = ?",
+            Integer.class, near)).isOne();
+    }
+
+    @Test
+    void aCustomerWithoutTheFoodFailsTheTripAndHoldsThePayWhileOpsChecksWithTheRider() {
+        UUID tripId = refusedOfflineCode(true);
+        refused(() -> service.checkCode(ops, UUID.randomUUID(), tripId, new CodeCheckInput("MAYBE", "Customer unsure")), 400, "VALIDATION_FAILED");
+        refused(() -> service.checkCode(ops, UUID.randomUUID(), tripId, new CodeCheckInput("DELIVERED", " ")), 400, "VALIDATION_FAILED");
+        events.clear();
+
+        OpsTrip trip = (OpsTrip) service.checkCode(ops, UUID.randomUUID(), tripId, new CodeCheckInput("NOT_DELIVERED", "Customer got nothing"));
+
+        assertThat(trip.state()).isEqualTo("FAILED");
+        Map<String, Object> row = fleet.db.queryForMap("SELECT cancel_reason, pay_held, hold_reason FROM fleet_schema.trip WHERE id = ?", tripId);
+        assertThat(row.get("cancel_reason")).isEqualTo(FleetTripService.NOT_RECEIVED);
+        assertThat(row.get("pay_held")).isEqualTo(true);
+        assertThat(row.get("hold_reason")).isEqualTo(FleetTripService.NOT_RECEIVED_HOLD);
+        assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, paid -> assertThat(paid.held()).isTrue());
+        ArgumentCaptor<TrackingSnapshot> published = ArgumentCaptor.forClass(TrackingSnapshot.class);
+        verify(statusUpdates).processTracking(any(), published.capture());
+        assertThat(published.getValue().delivery().status()).isEqualTo(DeliveryStatus.FAILED);
+    }
+
+    @Test
     void aQueuedOrderGoesToARiderOnlyWhenNoBookingIsInProgress() {
         UUID tripId = tripId();
         fleet.db.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'NO_ACCEPT', closed_at = now() WHERE trip_id = ?", tripId);
@@ -346,6 +488,29 @@ class FleetOpsDatabaseTest {
         fleet.db.update("UPDATE fleet_schema.trip SET provider = 'OPS_QUEUE' WHERE id = ? AND rider_id IS NULL", tripId);
         fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, opened_at, deadline_at) VALUES (?, ?, ?, 'OPS_QUEUE', "
             + "now() - make_interval(mins => ?) - make_interval(secs => ?), now() + INTERVAL '1 day')", UUID.randomUUID(), tripId, seq, minutesAgo, seq);
+    }
+
+    /** What the contract migration after V166 does once no older image can run: one trip per order is no longer a constraint. */
+    private void contractMigration() {
+        fleet.db.execute("ALTER TABLE fleet_schema.trip DROP CONSTRAINT IF EXISTS trip_chef_sub_order_id_key");
+    }
+
+    /** near's trip at the drop with one code order-service refused; alerted: it was typed offline (alertIfTypedOffline). */
+    private UUID refusedOfflineCode(boolean alerted) {
+        UUID tripId = accept(near);
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'AT_DROP', picked_up_at = now() - INTERVAL '20 minutes', "
+            + "arrived_drop_at = now() - INTERVAL '2 minutes' WHERE id = ?", tripId);
+        fleet.db.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, idempotency_key, detail) "
+            + "VALUES (?, ?, 'OTP_INVALID', 'RIDER', ?, 'otp-1', '{\"attemptsLeft\": 4}')", UUID.randomUUID(), tripId, near);
+        if (alerted) {
+            alerted(tripId);
+        }
+        return tripId;
+    }
+
+    private void alerted(UUID tripId) {
+        fleet.db.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key) "
+            + "VALUES (?, ?, 'OFFLINE_OTP_ALERTED', 'SYSTEM', 'offline-otp-alert')", UUID.randomUUID(), tripId);
     }
 
     private UUID accept(UUID rider) {

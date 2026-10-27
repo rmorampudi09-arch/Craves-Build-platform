@@ -2,6 +2,7 @@ package in.craves.integration.fleet.admin;
 
 import in.craves.integration.fleet.admin.FleetAdminModels.ReasonInput;
 import in.craves.integration.fleet.dispatch.FleetOpsService;
+import in.craves.integration.fleet.dispatch.FleetOpsService.CodeCheckInput;
 import in.craves.integration.fleet.dispatch.FleetOpsService.ReassignInput;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.UUID;
@@ -17,8 +18,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue, /positions, /pilot-health). Trips, the queue and
- * pilot health are read by support and audit too; positions, reassign and cancel are for operations.
+ * The ops console's live view (admin-fleet-v1 /trips, /dispatch-queue, /positions, /pilot-health, /code-checks). Trips,
+ * the queue, pilot health and the code checks are read by support and audit too; positions, reassign, cancel and a code
+ * check's outcome are for operations.
  */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
@@ -72,6 +74,19 @@ public class FleetOpsController {
     public ResponseEntity<Object> cancel(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
                                          @PathVariable UUID tripId, @RequestBody ReasonInput body) {
         return json(ops.cancel(FleetAdminController.admin(principal, OPERATORS), key, tripId, body.reason()));
+    }
+
+    /** Refused delivery codes typed offline, waiting for ops to call the customer (decision E4). */
+    @GetMapping("/code-checks")
+    public ResponseEntity<Object> codeChecks(@AuthenticationPrincipal CravesPrincipal principal) {
+        FleetAdminController.admin(principal, READERS);
+        return json(ops.codeChecks());
+    }
+
+    @PostMapping("/trips/{tripId}/code-check")
+    public ResponseEntity<Object> checkCode(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                            @PathVariable UUID tripId, @RequestBody CodeCheckInput body) {
+        return json(ops.checkCode(FleetAdminController.admin(principal, OPERATORS), key, tripId, body));
     }
 
     private static ResponseEntity<Object> json(Object body) {

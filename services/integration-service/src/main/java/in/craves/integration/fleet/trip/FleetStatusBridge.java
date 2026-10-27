@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -87,6 +88,46 @@ public class FleetStatusBridge {
             UUID.randomUUID(), DeliveryCommandModels.DELIVERY_STATUS_CHANGED, "1.0", Instant.now(), trip.orderId(), null,
             "integration-service", "delivery-job/" + job, data)));
         commands.findByChefSubOrderId(trip.chefSubOrderId()).ifPresent(command -> commands.markCompleted(command.id()));
+        return true;
+    }
+
+    /**
+     * Ops gave a rider's trip before pickup to another rider on a new trip (FleetOpsService), in that transaction: the
+     * order's delivery job follows the new trip, and its COURIER_ASSIGNED event names the first trip as the handoff source
+     * (order-service accepts a Craves rider to Craves rider handoff before pickup) and carries the new rider's card. False
+     * if the job no longer belongs to the first trip.
+     */
+    public boolean handedOver(UUID fromTripId, UUID toTripId) {
+        Snapshot trip = trip(toTripId);
+        List<Map<String, Object>> jobs = jdbc.queryForList("SELECT id, last_status_observed_at FROM delivery_schema.delivery_job "
+            + "WHERE chef_sub_order_id = ? AND provider_id = 'craves_fleet' AND provider_delivery_id = ? FOR UPDATE",
+            trip.chefSubOrderId(), fromTripId.toString());
+        if (jobs.isEmpty()) {
+            return false;
+        }
+        UUID job = (UUID) jobs.get(0).get("id");
+        // After the job's last observation, so order-service never takes the handoff for a stale report.
+        Instant at = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        if (jobs.get(0).get("last_status_observed_at") instanceof Timestamp last && !at.isAfter(last.toInstant())) {
+            at = last.toInstant().plus(1, ChronoUnit.MILLIS);
+        }
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_job
+            SET provider_delivery_id = ?, status = 'COURIER_ASSIGNED', provider_status = 'ASSIGNED', booked_at = now(),
+                quote_snapshot = jsonb_build_object('handoffFromProviderId', 'craves_fleet', 'handoffFromProviderDeliveryId', CAST(? AS text),
+                    'previousRouting', quote_snapshot),
+                last_status_observed_at = ?, last_status_source = 'RECONCILIATION', next_tracking_at = now(),
+                tracking_attempt_count = 0, tracking_processing_started_at = NULL, updated_at = now()
+            WHERE id = ?""", toTripId.toString(), fromTripId.toString(), Timestamp.from(at), job);
+        jdbc.update("UPDATE fleet_schema.trip SET delivery_job_id = ? WHERE id = ?", job, toTripId);
+        Courier courier = courier(trip);
+        Instant pickupEta = at.plus((long) Math.ceil((trip.pickupDistanceM() == null ? 0 : trip.pickupDistanceM()) / 333.0), ChronoUnit.MINUTES);
+        DeliveryStatusChangedData data = new DeliveryStatusChangedData(job, trip.orderId(), trip.chefSubOrderId(), PROVIDER_ID,
+            toTripId.toString(), DeliveryStatus.COURIER_ASSIGNED.name(), null, at, PROVIDER_ID, fromTripId.toString(), null, courier.name(),
+            courier.phone(), courier.photoUrl(), pickupEta);
+        outbox.enqueue(DeliveryCommandModels.DELIVERY_STATUS_CHANGED, job, trip.orderId(), json.valueToTree(new EventEnvelope<>(
+            UUID.randomUUID(), DeliveryCommandModels.DELIVERY_STATUS_CHANGED, "1.0", Instant.now(), trip.orderId(), null,
+            "integration-service", "delivery-job/" + job, data)));
         return true;
     }
 

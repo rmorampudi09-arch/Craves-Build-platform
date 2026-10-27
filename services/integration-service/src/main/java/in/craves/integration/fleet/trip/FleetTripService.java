@@ -71,6 +71,8 @@ public class FleetTripService {
     // is the signal; switch to an order-cancelled event if order-service ever cancels without a refund (meal-plan orders).
     public static final String ORDER_REFUNDED = "EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = t.chef_sub_order_id)";
     static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
+    public static final String NOT_RECEIVED = "The customer told Craves ops they didn't get the food.";
+    public static final String NOT_RECEIVED_HOLD = "The customer says they didn't get the food. Ops checks with you before this pay is released.";
     /** OTP_LOCKED reason for an order order-service has no delivery code for (accepted before codes existed). */
     static final String NO_CODE = "NO_CODE";
     /** Step: the state it needs, the state it leaves the trip in. */
@@ -422,6 +424,19 @@ public class FleetTripService {
         pay.finalizePay(tripId, unreachable ? Ending.CUSTOMER_UNREACHABLE : Ending.FAILED_AFTER_PICKUP, true, FAILED_HOLD);
         bridge.publish(tripId);
         return view(tripId);
+    }
+
+    /**
+     * Ops called the customer about a delivery code typed offline that was refused (decision E4), in the caller's
+     * transaction, which holds the trip at the drop: they have the food (DELIVERED, full pay, not held) or they don't
+     * (FAILED, the same pay held while ops checks with the rider). Either reaches the order.
+     */
+    public void checkedByOps(UUID tripId, boolean delivered) {
+        jdbc.update("UPDATE fleet_schema.trip SET state = ?, cancel_reason = ?, finished_at = now(), version = version + 1, updated_at = now() "
+            + "WHERE id = ?", delivered ? "DELIVERED" : "FAILED", delivered ? null : NOT_RECEIVED, tripId);
+        event(tripId, delivered ? "DELIVERED" : "FAILED", null, null, Map.of("method", "OPS_CHECKED"));
+        pay.finalizePay(tripId, Ending.DELIVERED, !delivered, delivered ? null : NOT_RECEIVED_HOLD);
+        bridge.publish(tripId);
     }
 
     private void deliver(UUID tripId, UUID riderId, String key, Map<String, ?> detail, RiderFix fix, boolean held, String holdReason) {

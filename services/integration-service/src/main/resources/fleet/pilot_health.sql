@@ -129,6 +129,7 @@ ORDER BY day_ist DESC, orders DESC, outcome;
 -- Two orders per trip (blueprint C7): orders, over every provider, with another order from the same kitchen ready
 -- within 10 minutes and a drop within 2 km, per day (IST). Worth designing when this is 15% or more for two weeks in
 -- one zone while rider_busy_share is over 60%. A trip's ready time is the chef's "ready" tap, else when it was created.
+-- An order ops gave to another rider counts once, by its current trip.
 SELECT (t.created_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist,
        count(*) AS orders,
        count(*) FILTER (WHERE p.paired) AS with_pair,
@@ -138,14 +139,14 @@ CROSS JOIN LATERAL (
     SELECT EXISTS (
         SELECT 1
         FROM fleet_schema.trip o
-        WHERE o.chef_id = t.chef_id AND o.id <> t.id
+        WHERE o.chef_id = t.chef_id AND o.id <> t.id AND o.replaced_at IS NULL
           AND o.created_at BETWEEN t.created_at - INTERVAL '2 hours' AND t.created_at + INTERVAL '2 hours'
           AND abs(extract(epoch FROM COALESCE(o.chef_ready_at, o.created_at) - COALESCE(t.chef_ready_at, t.created_at))) <= 600
           AND 12742000 * asin(LEAST(1, sqrt(power(sin(radians(o.drop_lat - t.drop_lat) / 2), 2)
               + cos(radians(t.drop_lat)) * cos(radians(o.drop_lat)) * power(sin(radians(o.drop_lng - t.drop_lng) / 2), 2)))) <= 2000
     ) AS paired
 ) p
-WHERE t.created_at > now() - INTERVAL '14 days'
+WHERE t.created_at > now() - INTERVAL '14 days' AND t.replaced_at IS NULL
 GROUP BY 1
 ORDER BY day_ist DESC;
 

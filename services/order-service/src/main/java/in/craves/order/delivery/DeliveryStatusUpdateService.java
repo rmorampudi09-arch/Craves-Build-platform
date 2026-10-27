@@ -45,7 +45,7 @@ public class DeliveryStatusUpdateService {
     private static final Set<String> STALE_BORZO_HANDOFF_STATUSES = Set.of(
         "PENDING", "SEARCHING", "DELAYED"
     );
-    // A Craves rider's order can go to Borzo or Pidge only before the rider picked it up.
+    // A Craves rider's order can go to Borzo, Pidge or another Craves rider only before the rider picked it up.
     private static final Set<String> RIDER_BEFORE_PICKUP_STATUSES = Set.of(
         "COURIER_ASSIGNED", "COURIER_TO_PICKUP", "AT_PICKUP"
     );

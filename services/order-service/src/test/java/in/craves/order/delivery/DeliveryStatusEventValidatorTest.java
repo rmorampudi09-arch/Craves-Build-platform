@@ -100,6 +100,23 @@ class DeliveryStatusEventValidatorTest {
     }
 
     @Test
+    void opsGiveACravesRiderOrderToAnotherRiderOnlyOnANewTripAndNeverAsAContinuation() {
+        EventEnvelope<DeliveryStatusChangedData> ordinary = event("COURIER_ASSIGNED", null);
+        DeliveryStatusChangedData data = ordinary.data();
+        assertThatCode(() -> validator.validate(withData(ordinary, new DeliveryStatusChangedData(data.deliveryJobId(), data.orderId(),
+            data.chefSubOrderId(), "craves_fleet", "trip-2", "COURIER_ASSIGNED", null, data.observedAt(), "craves_fleet", "trip-1"))))
+            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> validator.validate(withData(ordinary, new DeliveryStatusChangedData(data.deliveryJobId(), data.orderId(),
+            data.chefSubOrderId(), "craves_fleet", "trip-1", "COURIER_ASSIGNED", null, data.observedAt(), "craves_fleet", "trip-1"))))
+            .isInstanceOf(DeliveryStatusEventValidator.DeliveryStatusValidationException.class)
+            .hasMessageContaining("new provider delivery identifier");
+        assertThatThrownBy(() -> validator.validate(withData(ordinary, new DeliveryStatusChangedData(data.deliveryJobId(), data.orderId(),
+            data.chefSubOrderId(), "craves_fleet", "trip-2", "COURIER_ASSIGNED", null, data.observedAt(), "craves_fleet", "trip-1", true))))
+            .isInstanceOf(DeliveryStatusEventValidator.DeliveryStatusValidationException.class)
+            .hasMessageContaining("handoff is supported");
+    }
+
+    @Test
     void continuationRequiresPriorBorzoIdentity() {
         EventEnvelope<DeliveryStatusChangedData> ordinary = event("SEARCHING", null);
         DeliveryStatusChangedData data = ordinary.data();

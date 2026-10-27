@@ -179,6 +179,25 @@ class FleetSchemaDatabaseTest {
             .isInstanceOf(DuplicateKeyException.class);
     }
 
+    /**
+     * V166 (expand): one current trip per order and a trip replaced once are indexes. The old one-trip-per-order constraint
+     * stays until the contract migration, which only then lets ops give an order to another rider.
+     */
+    @Test
+    void oneCurrentTripPerChefSubOrderAndATripIsReplacedOnce() {
+        UUID subOrder = UUID.randomUUID();
+        UUID first = fleet.trip(subOrder);
+        db.update("UPDATE fleet_schema.trip SET replaced_at = now() WHERE id = ?", first);
+        assertThatThrownBy(() -> fleet.trip(subOrder)).as("the old constraint still holds").isInstanceOf(DuplicateKeyException.class);
+        db.execute("ALTER TABLE fleet_schema.trip DROP CONSTRAINT trip_chef_sub_order_id_key"); // the contract migration
+        UUID second = fleet.trip(subOrder);
+        db.update("UPDATE fleet_schema.trip SET replaces = ? WHERE id = ?", first, second);
+        assertThatThrownBy(() -> fleet.trip(subOrder)).as("one current trip").isInstanceOf(DuplicateKeyException.class);
+        UUID elsewhere = fleet.trip(UUID.randomUUID());
+        assertThatThrownBy(() -> db.update("UPDATE fleet_schema.trip SET replaces = ? WHERE id = ?", first, elsewhere))
+            .isInstanceOf(DuplicateKeyException.class);
+    }
+
     @Test
     void earningKeyIsUniqueAndFollowsTheTripComponentRevisionPattern() {
         UUID trip = fleet.trip(UUID.randomUUID());

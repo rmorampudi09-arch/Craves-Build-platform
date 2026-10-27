@@ -316,21 +316,39 @@ public class FleetDispatcher implements FleetStage {
         return new Opened(List.copyOf(offers), deadline);
     }
 
-    /** Rings one offer on the rider's bound phone; the app also gets it on its next /locations call. */
+    /**
+     * Rings one offer on the rider's bound phone; the app also gets it on its next /locations call. The push's outcome is
+     * stored on the offer (pushed_at, push_result: NO_TOKEN, SENT, notification-service's code, ERROR) for the receipts
+     * queries in PILOT-HEALTH.md.
+     */
     private void ring(RingingOffer offer) {
+        String result = "ERROR";
         try {
             String token = jdbc.queryForList("SELECT fcm_token FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND' "
                 + "AND fcm_token IS NOT NULL", String.class, offer.riderId()).stream().findFirst().orElse(null);
             if (token == null) {
+                result = "NO_TOKEN";
                 return;
             }
             long secondsLeft = Math.max(0, Duration.between(Instant.now(), offer.offer().expiresAt()).getSeconds());
-            String result = push.offer(token, UUID.fromString(offer.offer().offerId()), json.writeValueAsString(offer.offer()),
+            result = push.offer(token, UUID.fromString(offer.offer().offerId()), json.writeValueAsString(offer.offer()),
                 "New order: " + FleetRiderService.rupees(offer.offer().payPaise()),
                 offer.offer().kitchenArea() + " to " + offer.offer().customerLocality(), (int) Math.min(600, secondsLeft));
             LOGGER.info("FLEET_OFFER_PUSH offer={} rider={} result={}", offer.offer().offerId(), offer.riderId(), result);
         } catch (RuntimeException | JsonProcessingException exception) {
             LOGGER.warn("FLEET_OFFER_PUSH offer={} failed: {}", offer.offer().offerId(), exception.getClass().getSimpleName());
+        } finally {
+            recordPush(offer, result);
+        }
+    }
+
+    private void recordPush(RingingOffer offer, String result) {
+        try {
+            String stored = result == null ? "ERROR" : result.length() <= 40 ? result : result.substring(0, 40);
+            jdbc.update("UPDATE fleet_schema.trip_offer SET pushed_at = now(), push_result = ? WHERE id = ?", stored,
+                UUID.fromString(offer.offer().offerId()));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("FLEET_OFFER_PUSH offer={} result not stored: {}", offer.offer().offerId(), exception.getClass().getSimpleName());
         }
     }
 

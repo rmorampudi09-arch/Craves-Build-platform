@@ -1,11 +1,13 @@
 package in.craves.integration.fleet.rider;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.rider.FleetRiderModels.ActiveTrip;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatchResponse;
+import in.craves.integration.fleet.rider.FleetRiderModels.OfferReceipt;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
 import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
@@ -23,7 +25,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +60,9 @@ public class FleetLocationService {
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
     /** On-trip fixes are kept this many days (blueprint E6). */
     static final int TRACK_DAYS_KEPT = 90;
+    static final int MAX_RECEIPTS = 10;
+    static final long MAX_RECEIPT_AGE_MS = 3_600_000;
+    private static final Set<String> RECEIPT_CHANNELS = Set.of("fcm", "locations");
     private static final String CONTEXT = """
         SELECT s.id AS shift_id, s.started_at, s.ended_at, s.credential_revoked_at, s.credential_expires_at <= now() AS expired,
                r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
@@ -80,9 +88,16 @@ public class FleetLocationService {
      * The shift row on every call: the heartbeat (dispatch and the watchdog read last_seen_at), the longest gap between
      * calls and the gaps over 60 s (the first gap counts from started_at), and the in-zone seconds of the shift and its
      * slot. The slot's settle the guarantee; a slot that settled meanwhile is COMPLETED and keeps its settled seconds.
+     * The same statement records the offer receipts: the first arrival of each of this rider's offers, never earlier than
+     * the offer itself.
      */
     private static final String HEARTBEAT = """
-        WITH slot AS (UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED')
+        WITH slot AS (UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED'),
+        receipt AS (
+          UPDATE fleet_schema.trip_offer o
+          SET rang_at = GREATEST(o.offered_at, now() - make_interval(secs => r.age_ms / 1000.0)), rang_channel = r.channel
+          FROM jsonb_to_recordset(CAST(? AS jsonb)) AS r(offer_id uuid, channel text, age_ms bigint)
+          WHERE o.id = r.offer_id AND o.rider_id = ? AND o.rang_at IS NULL)
         UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ?, last_seen_at = now(),
           max_silence_seconds = GREATEST(max_silence_seconds, EXTRACT(EPOCH FROM now() - COALESCE(last_seen_at, started_at))::integer),
           silences_over_60s = silences_over_60s
@@ -147,7 +162,8 @@ public class FleetLocationService {
             }
             seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
         }
-        jdbc.update(HEARTBEAT, seconds, seconds > 0 ? shift.slotId() : null, seconds, shift.shiftId());
+        jdbc.update(HEARTBEAT, seconds, seconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(), seconds,
+            shift.shiftId());
         List<Offer> offers = jdbc.query(OFFERS, (row, n) -> FleetTripModels.offer(row, json), shift.riderId());
         return new LocationBatchResponse(offers, activeTrip(shift), null, null);
     }
@@ -215,6 +231,35 @@ public class FleetLocationService {
             }
             return null;
         });
+    }
+
+    /**
+     * The call's offer receipts as JSON rows for jsonb_to_recordset: the first 10, valid ids and channels only, each offer
+     * once, ages clamped to 0 to 1 hour. They are telemetry, so a bad one is dropped, never a reason to refuse the call.
+     */
+    String receipts(List<OfferReceipt> receipts) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Set<UUID> seen = new HashSet<>();
+        for (OfferReceipt receipt : receipts == null ? List.<OfferReceipt>of() : receipts.subList(0, Math.min(MAX_RECEIPTS, receipts.size()))) {
+            if (receipt == null || !RECEIPT_CHANNELS.contains(receipt.channel()) || receipt.offerId() == null) {
+                continue;
+            }
+            UUID offerId;
+            try {
+                offerId = UUID.fromString(receipt.offerId());
+            } catch (IllegalArgumentException notAnId) {
+                continue;
+            }
+            if (seen.add(offerId)) {
+                long ageMs = receipt.ageMs() == null ? 0 : Math.max(0, Math.min(MAX_RECEIPT_AGE_MS, receipt.ageMs()));
+                rows.add(Map.of("offer_id", offerId.toString(), "channel", receipt.channel(), "age_ms", ageMs));
+            }
+        }
+        try {
+            return json.writeValueAsString(rows);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Offer receipts could not be written", exception);
+        }
     }
 
     /** Why the phone must stop, or null. Each stop also closes the shift. */

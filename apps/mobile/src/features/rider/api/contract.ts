@@ -246,6 +246,19 @@ export interface RiderFix {
   mock?: boolean;
 }
 
+/** An offer's first arrival on the phone (sent by the native service on /locations, app 1.1.0). */
+export interface OfferReceipt {
+  offerId: string;
+  channel: 'fcm' | 'locations';
+  /** How long before the call it arrived, by the monotonic clock: 0 to 3,600,000. */
+  ageMs: number;
+}
+
+export interface LocationBatch {
+  fixes: RiderFix[];
+  offerReceipts?: OfferReceipt[];
+}
+
 export interface LocationBatchResponse {
   offers: Offer[];
   activeTrip?: {tripId: string; step: TripStep; version: number};

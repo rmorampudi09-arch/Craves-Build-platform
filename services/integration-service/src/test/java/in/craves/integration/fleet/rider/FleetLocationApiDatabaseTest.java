@@ -277,6 +277,36 @@ class FleetLocationApiDatabaseTest {
         assertThat((Integer) after.get("max_silence_seconds")).isBetween(70, 80);
     }
 
+    /**
+     * Offer receipts (blueprint A5): the first arrival of each of the rider's own offers is stored once, inside the call's
+     * statement budget; another rider's offer, a bad id and an unknown channel are ignored, never a refused call.
+     */
+    @Test
+    void offerReceiptsAreStoredOnceForTheRidersOwnOffers() throws Exception {
+        OnShift rider = onShift();
+        OnShift other = onShift();
+        UUID trip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'PICKED_UP', rider_id = ? WHERE id = ?", rider.id(), trip);
+        UUID mine = offer(rider.id(), fleet.trip(UUID.randomUUID()), "now() + INTERVAL '30 seconds'");
+        UUID theirs = offer(other.id(), fleet.trip(UUID.randomUUID()), "now() + INTERVAL '30 seconds'");
+        Instant t = Instant.now().minusSeconds(20).truncatedTo(ChronoUnit.MILLIS);
+        STATEMENTS.set(0);
+        locations(rider, List.of(fix(t, false)), List.of(receipt(mine, "fcm", 2000), receipt(theirs, "fcm", 2000),
+            "{\"offerId\":\"not-an-id\",\"channel\":\"fcm\",\"ageMs\":5}", receipt(UUID.randomUUID(), "sms", 1)))
+            .andExpect(status().isOk());
+        assertThat(STATEMENTS.get()).as("receipts ride in the shift statement").isLessThanOrEqualTo(5);
+        Map<String, Object> rang = fleet.db.queryForMap("SELECT rang_channel, EXTRACT(EPOCH FROM now() - rang_at) AS ago "
+            + "FROM fleet_schema.trip_offer WHERE id = ?", mine);
+        assertThat(rang.get("rang_channel")).isEqualTo("fcm");
+        assertThat(((Number) rang.get("ago")).doubleValue()).isBetween(1.5, 15.0);
+
+        locations(rider, List.of(), List.of(receipt(mine, "locations", 0))).andExpect(status().isOk());
+        assertThat(fleet.db.queryForObject("SELECT rang_channel FROM fleet_schema.trip_offer WHERE id = ?", String.class, mine))
+            .as("the first arrival wins").isEqualTo("fcm");
+        assertThat(fleet.db.queryForObject("SELECT rang_at IS NULL FROM fleet_schema.trip_offer WHERE id = ?", Boolean.class, theirs))
+            .as("another rider's offer").isTrue();
+    }
+
     /** The budget in docs/riders/BACKEND.md: at most 5 statements per call, on a trip, in a slot, with an offer open. */
     @Test
     void twoHundredCallsStayWithinFiveStatementsEach() throws Exception {
@@ -310,6 +340,15 @@ class FleetLocationApiDatabaseTest {
     ResultActions locations(OnShift rider, List<String> fixes) throws Exception {
         return mvc.perform(post(LOCATIONS).header(FleetShiftService.SHIFT_CREDENTIAL, rider.credential()).contentType(MediaType.APPLICATION_JSON)
             .content("{\"fixes\":[" + String.join(",", fixes) + "]}"));
+    }
+
+    ResultActions locations(OnShift rider, List<String> fixes, List<String> receipts) throws Exception {
+        return mvc.perform(post(LOCATIONS).header(FleetShiftService.SHIFT_CREDENTIAL, rider.credential()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"fixes\":[" + String.join(",", fixes) + "],\"offerReceipts\":[" + String.join(",", receipts) + "]}"));
+    }
+
+    static String receipt(UUID offerId, String channel, long ageMs) {
+        return "{\"offerId\":\"" + offerId + "\",\"channel\":\"" + channel + "\",\"ageMs\":" + ageMs + "}";
     }
 
     void stop(OnShift rider, String reason) throws Exception {

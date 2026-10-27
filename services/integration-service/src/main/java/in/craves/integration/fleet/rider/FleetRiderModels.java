@@ -101,7 +101,18 @@ public final class FleetRiderModels {
     public record RiderFix(Double lat, Double lng, Double accuracyM, Instant at, Boolean mock) {
     }
 
-    public record LocationBatch(List<RiderFix> fixes) {
+    /** offerReceipts is optional (rider app 1.1.0 and later); APKs that don't send it keep working. */
+    public record LocationBatch(List<RiderFix> fixes, List<OfferReceipt> offerReceipts) {
+        public LocationBatch(List<RiderFix> fixes) {
+            this(fixes, null);
+        }
+    }
+
+    /**
+     * When an offer first reached the phone (blueprint A5): its id, the channel it came by (fcm or locations), and how
+     * long before this call, by the phone's monotonic clock.
+     */
+    public record OfferReceipt(String offerId, String channel, Long ageMs) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

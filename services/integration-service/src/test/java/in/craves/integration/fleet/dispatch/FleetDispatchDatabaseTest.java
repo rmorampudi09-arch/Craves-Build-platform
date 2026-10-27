@@ -171,6 +171,27 @@ class FleetDispatchDatabaseTest {
             .containsExactly(calling);
     }
 
+    /** Push results are stored on each offer (blueprint A5): SENT, or NO_TOKEN for a phone without a push token. */
+    @Test
+    void eachOffersPushResultIsStored() throws Exception {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID ringing = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID tokenless = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.002, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_device SET fcm_token = NULL WHERE rider_id = ?", tokenless);
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        Map<UUID, String> results = new java.util.HashMap<>();
+        for (long until = System.currentTimeMillis() + 5000; results.size() < 2 && System.currentTimeMillis() < until; Thread.sleep(50)) {
+            results.clear();
+            for (Map<String, Object> row : fleet.db.queryForList("SELECT rider_id, push_result FROM fleet_schema.trip_offer WHERE pushed_at IS NOT NULL")) {
+                results.put((UUID) row.get("rider_id"), (String) row.get("push_result"));
+            }
+        }
+        assertThat(results).containsEntry(ringing, "SENT").containsEntry(tokenless, "NO_TOKEN");
+    }
+
     @Test
     void aRiderWhoGoesOfflineWhileTheQuotesComeBackGetsNoOfferAndAShiftPastItsTwelveHoursIsNotOffered() {
         FleetDispatchFixtures.policy(fleet.db, "live");

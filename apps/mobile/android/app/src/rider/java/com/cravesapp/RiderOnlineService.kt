@@ -176,8 +176,11 @@ class RiderOnlineService : Service() {
     }
     val sent = fixes.toList()
     val sentAtMs = System.currentTimeMillis()
+    val receipts = RiderOffers.pendingReceipts()
     try {
-      val body = JSONObject().put("fixes", JSONArray(sent.map { it.toJson() })).toString()
+      val body = JSONObject().put("fixes", JSONArray(sent.map { it.toJson() }))
+        .apply { if (receipts.length() > 0) put("offerReceipts", receipts) }
+        .toString()
       val request =
         Request.Builder()
           .url("${current.apiBaseUrl}/api/v1/rider/locations")
@@ -193,6 +196,7 @@ class RiderOnlineService : Service() {
           !response.isSuccessful -> status("ERROR", RETRY_MESSAGE)
           else -> {
             fixes.clear()
+            RiderOffers.receiptsSent((0 until receipts.length()).map { receipts.getJSONObject(it).getString("offerId") })
             if (!handle(JSONObject(response.body?.string() ?: "{}"), sentAtMs)) return
           }
         }

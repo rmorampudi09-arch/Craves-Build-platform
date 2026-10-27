@@ -106,7 +106,7 @@ paths:
         unknown credential; 403 FORBIDDEN for a JWT without the RIDER role. A shift that ended, was revoked or ran 12 h
         answers 200 {offers: [], stop: true, stopReason}.
       security: [{bearer: []}, {shiftCredential: []}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [fixes], properties: {fixes: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/RiderFix'}}}}}}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/LocationBatch'}}}}
       responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/LocationBatchResponse'}}}}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
   /offers/{offerId}/accept:
     post:
@@ -422,6 +422,23 @@ components:
         accuracyM: {type: number}
         at: {type: string, format: date-time}
         mock: {type: boolean, description: 'Android reported a mock location; logged, never used for pay decisions'}
+    LocationBatch:
+      type: object
+      required: [fixes]
+      properties:
+        fixes: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/RiderFix'}}
+        offerReceipts:
+          type: array
+          maxItems: 10
+          description: Optional (app 1.1.0). Offers that reached the phone since the last successful call; the server keeps the first arrival of each of the rider's own offers and ignores the rest, and never refuses the call over them.
+          items: {$ref: '#/components/schemas/OfferReceipt'}
+    OfferReceipt:
+      type: object
+      required: [offerId, channel, ageMs]
+      properties:
+        offerId: {type: string}
+        channel: {type: string, enum: [fcm, locations], description: 'How the offer first reached the phone'}
+        ageMs: {type: integer, minimum: 0, maximum: 3600000, description: 'How long before this call it arrived, by the phone''s monotonic clock'}
     LocationBatchResponse:
       type: object
       required: [offers]

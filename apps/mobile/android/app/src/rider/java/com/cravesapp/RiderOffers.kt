@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -15,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -41,6 +43,9 @@ object RiderOffers {
   /** offerId to when and through which channel it first arrived, for dedupe across channels. */
   private val seen = HashMap<String, Pair<Long, String>>()
   private var pending: Received? = null
+  private const val MAX_RECEIPTS = 10
+  /** First arrivals the server hasn't been told about (offer receipts, blueprint A5): offerId to channel and elapsedRealtime. */
+  private val receipts = LinkedHashMap<String, Pair<String, Long>>()
 
   class Received(val json: String, val offerId: String, val receivedAtMs: Long, val channel: String, val deadlineMs: Long) {
     fun toMap(): WritableMap =
@@ -92,6 +97,8 @@ object RiderOffers {
         return false
       }
       seen[offer.offerId] = now to channel
+      receipts[offer.offerId] = channel to SystemClock.elapsedRealtime()
+      while (receipts.size > MAX_RECEIPTS) receipts.remove(receipts.keys.first())
     }
     Log.i(TAG, "offer ${offer.offerId} first via $channel")
     ring(context, offer, title ?: DEFAULT_TITLE, body ?: DEFAULT_BODY)
@@ -116,6 +123,24 @@ object RiderOffers {
     val gone = synchronized(this) { seen.filter { (id, first) -> first.first < requestSentAtMs && id !in openOfferIds }.keys }
     val manager = NotificationManagerCompat.from(context)
     gone.forEach { manager.cancel(it, OFFER_NOTIFICATION_ID) }
+  }
+
+  /**
+   * The receipts for the next /locations call: offerId, channel and ageMs, how long ago the offer arrived by the
+   * monotonic clock, worked out now so the phone's wall clock plays no part.
+   */
+  fun pendingReceipts(): JSONArray {
+    val now = SystemClock.elapsedRealtime()
+    return synchronized(this) {
+      JSONArray(receipts.map { (offerId, arrival) ->
+        JSONObject().put("offerId", offerId).put("channel", arrival.first).put("ageMs", now - arrival.second)
+      })
+    }
+  }
+
+  /** Forgets the receipts a successful /locations call carried; any that arrived meanwhile stay for the next call. */
+  fun receiptsSent(offerIds: Collection<String>) {
+    synchronized(this) { offerIds.forEach { receipts.remove(it) } }
   }
 
   fun testRing(context: Context) {

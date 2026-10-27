@@ -51,6 +51,8 @@ The app always posts a visible notification on channel `rider_offers` (high impo
 
 `type=GO_ONLINE` (app 1.1.0) comes when the shift is open but the phone stopped calling: unless the service is running again, the app posts "You're offline" / "Tap to go back online and get orders." on channel `rider_trip` (default importance); the tap opens the app and Home resumes the saved shift.
 
+When a location call reports the rider's trip as `CANCELLED` (ops, the customer or the watchdog ended it), the service posts "Trip cancelled" / "Open Craves Rider to see what's next." on `rider_trip`, once per change, so the rider knows with the screen off; the tap opens the app (app 1.1.0).
+
 `onNewToken` emits `riderFcmToken` for JS and, when a shift is saved, also sends `POST /api/v1/rider/devices` itself with the shift credential (`installationId` ANDROID_ID, the token, `BuildConfig.VERSION_NAME`, `Build.MODEL`), so a token that changes while JS isn't running still reaches the server.
 
 ### API base URL

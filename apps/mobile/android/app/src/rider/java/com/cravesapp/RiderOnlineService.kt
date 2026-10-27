@@ -266,6 +266,8 @@ class RiderOnlineService : Service() {
           putInt("version", trip.optInt("version"))
         }
       }
+      // Ops, the customer or the watchdog ended it: say so with the screen off too (blueprint A7). Once per change.
+      if (step == "CANCELLED") RiderOffers.notice(this, CANCELLED_TAG, CANCELLED_TITLE, CANCELLED_BODY)
     }
     tripSignature = signature
     val nowOnTrip = trip != null && step !in ENDED_STEPS
@@ -403,6 +405,10 @@ class RiderOnlineService : Service() {
     private const val PERMISSION_MESSAGE = "Allow location to go online."
     private const val RETRY_MESSAGE = "No internet. Retrying."
     private const val RING_OFF_MESSAGE = "Turn on notifications to get orders."
+    // shortcut: English only, like the offer texts; move to strings.xml with te/hi (P2-08).
+    private const val CANCELLED_TAG = "trip-cancelled"
+    private const val CANCELLED_TITLE = "Trip cancelled"
+    private const val CANCELLED_BODY = "Open Craves Rider to see what's next."
 
     private val http =
       OkHttpClient.Builder()

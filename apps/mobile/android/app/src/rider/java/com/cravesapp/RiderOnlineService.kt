@@ -1,11 +1,14 @@
 package com.cravesapp
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.app.Notification
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -82,6 +85,15 @@ class RiderOnlineService : Service() {
   private val fixes = ArrayDeque<Fix>()
   private var onTrip = false
   private var tripSignature = ""
+  // Phone health (blueprint A5), also only on the executor thread. shortcut: drain and unplugged time restart with the
+  // service, not the shift; keep them in the shift's preferences if a restart mid-shift turns out to matter.
+  private var healthSentAtMs = 0L
+  private var exitReason: String? = null
+  private var sampledAtMs = 0L
+  private var sampledPct = -1
+  private var sampledCharging = true
+  private var drainPct = 0.0
+  private var unpluggedMs = 0L
 
   private val callback =
     object : LocationCallback() {
@@ -120,6 +132,7 @@ class RiderOnlineService : Service() {
       running = true
       holdWakeLock(saved)
       executor.execute {
+        exitReason = lastExitReason()
         requestLocations()
         tick()
       }
@@ -183,9 +196,11 @@ class RiderOnlineService : Service() {
     val sent = fixes.toList()
     val sentAtMs = System.currentTimeMillis()
     val receipts = RiderOffers.pendingReceipts()
+    val health = if (SystemClock.elapsedRealtime() - healthSentAtMs >= HEALTH_EVERY_MS) health() else null
     try {
       val body = JSONObject().put("fixes", JSONArray(sent.map { it.toJson() }))
         .apply { if (receipts.length() > 0) put("offerReceipts", receipts) }
+        .apply { if (health != null) put("health", health) }
         .toString()
       val request =
         Request.Builder()
@@ -203,6 +218,10 @@ class RiderOnlineService : Service() {
           else -> {
             fixes.clear()
             RiderOffers.receiptsSent((0 until receipts.length()).map { receipts.getJSONObject(it).getString("offerId") })
+            if (health != null) {
+              healthSentAtMs = SystemClock.elapsedRealtime()
+              if (health.has("lastExitReason")) exitReason = null
+            }
             if (!handle(JSONObject(response.body?.string() ?: "{}"), sentAtMs)) return
           }
         }
@@ -255,6 +274,69 @@ class RiderOnlineService : Service() {
     return true
   }
 
+  /**
+   * The phone's health for the server (blueprint A5, A9), sent with an upload about once a minute: battery, charging,
+   * power saver, whether an offer can ring, battery used and minutes spent unplugged since the service started, the
+   * trip actions JS has waiting, and once why the app's last process ended.
+   */
+  private fun health(): JSONObject {
+    val now = SystemClock.elapsedRealtime()
+    val battery = getSystemService(BatteryManager::class.java)
+    val pct = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+    val charging = battery?.isCharging ?: false
+    if (sampledAtMs != 0L && !charging && !sampledCharging) {
+      unpluggedMs += now - sampledAtMs
+      if (pct in 0..100 && sampledPct in 0..100 && sampledPct > pct) drainPct += sampledPct - pct
+    }
+    sampledAtMs = now
+    sampledPct = pct
+    sampledCharging = charging
+    val health =
+      JSONObject()
+        .put("charging", charging)
+        .put("powerSave", (getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode)
+        .put("canRing", RiderOffers.canRing(this))
+        .put("drainPct", drainPct)
+        .put("unpluggedMin", unpluggedMs / 60_000)
+    if (pct in 0..100) health.put("batteryPct", pct)
+    queueStats?.let { (pending, oldestAtMs) ->
+      health.put("queuePending", pending)
+      if (pending > 0 && oldestAtMs > 0) health.put("queueOldestAgeS", ((System.currentTimeMillis() - oldestAtMs) / 1000).coerceAtLeast(0))
+    }
+    exitReason?.let { health.put("lastExitReason", it) }
+    return health
+  }
+
+  /** Why the app's last process ended (Android 11 and later), e.g. "LOW_MEMORY at 2026-10-27T09:12:03.000Z"; null before. */
+  private fun lastExitReason(): String? {
+    if (Build.VERSION.SDK_INT < 30) return null
+    return try {
+      val info = getSystemService(ActivityManager::class.java)?.getHistoricalProcessExitReasons(packageName, 0, 1)?.firstOrNull()
+        ?: return null
+      val reason =
+        when (info.reason) {
+          ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+          ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+          ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+          ApplicationExitInfo.REASON_CRASH -> "CRASH"
+          ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+          ApplicationExitInfo.REASON_ANR -> "ANR"
+          ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+          ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+          ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+          ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+          ApplicationExitInfo.REASON_USER_STOPPED -> "USER_STOPPED"
+          ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "DEPENDENCY_DIED"
+          ApplicationExitInfo.REASON_OTHER -> "OTHER"
+          else -> "REASON_${info.reason}"
+        }
+      "$reason at ${iso(info.timestamp)}"
+    } catch (error: Exception) {
+      Log.w(TAG, "no exit reason", error)
+      null
+    }
+  }
+
   private fun status(state: String, message: String?) {
     // A call cut short by Go offline must not report ERROR after onDestroy's OFFLINE.
     if (destroyed) return
@@ -304,6 +386,7 @@ class RiderOnlineService : Service() {
     private const val TRIP_UPLOAD_MS = 15_000L
     private const val IDLE_FIX_MS = 10_000L
     private const val TRIP_FIX_MS = 3_000L
+    private const val HEALTH_EVERY_MS = 60_000L
     private const val MAX_SHIFT_MS = 12 * 60 * 60_000L
     private val ENDED_STEPS = setOf("DELIVERED", "FAILED", "CANCELLED")
     private val JSON = "application/json; charset=utf-8".toMediaType()
@@ -326,6 +409,9 @@ class RiderOnlineService : Service() {
 
     @Volatile var lastFix: Fix? = null
       private set
+
+    /** From JS (RiderOnlineModule.setQueueStats): trip actions waiting to sync, and the oldest one's Date.now(). */
+    @Volatile var queueStats: Pair<Int, Long>? = null
 
     /** Saves the credential (or keeps the saved one when null) and starts the service; call it from the foreground. */
     fun start(context: Context, credential: String?, expiresAtMs: Long, apiBaseUrl: String): Boolean {

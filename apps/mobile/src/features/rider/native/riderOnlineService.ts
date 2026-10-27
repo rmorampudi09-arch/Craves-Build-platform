@@ -33,6 +33,8 @@ export interface RiderOnlineService {
   onFcmToken(cb: (token: string) => void): () => void;
   /** The offer whose notification opened the app, or one that rang while JS wasn't running. */
   pendingOffer(): Promise<ReceivedOffer | null>;
+  /** Trip actions waiting to sync and the oldest one's Date.now(), for the native health report (blueprint A5). */
+  setQueueStats(pending: number, oldestAt: number): void;
 }
 
 const UPLOAD_EVERY_MS = 10_000;
@@ -124,6 +126,7 @@ function createJsOnlineService() {
     fcmToken: async () => 'mock-fcm-token',
     onFcmToken: (_cb: (token: string) => void) => () => undefined,
     pendingOffer: async (): Promise<ReceivedOffer | null> => null,
+    setQueueStats: (_pending: number, _oldestAt: number) => undefined,
     /** Dev panel: poll now instead of waiting up to 10 seconds. */
     pollNow: poll,
     isRunning: () => timer !== null,
@@ -139,6 +142,7 @@ interface NativeRiderOnline {
   lastFix(): Promise<RiderFix | null>;
   getFcmToken(): Promise<string>;
   getPendingOffer(): Promise<NativeOffer | null>;
+  setQueueStats?(pending: number, oldestAtMs: number): void;
 }
 
 /** A riderOffer event: the Offer JSON exactly as FCM or /locations delivered it, and which came first. */
@@ -226,6 +230,7 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       // The newer of the two; RiderRuntime drops it if it has expired.
       return tapped && held ? (held.receivedAtMs > tapped.receivedAtMs ? held : tapped) : tapped ?? held;
     },
+    setQueueStats: (pending: number, oldestAt: number) => native.setQueueStats?.(pending, oldestAt),
     /** The dev panel exists only in mock builds, which use the JS loop. */
     pollNow: async () => undefined,
   };

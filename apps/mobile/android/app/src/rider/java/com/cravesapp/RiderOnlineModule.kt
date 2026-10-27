@@ -67,6 +67,12 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(null)
   }
 
+  /** The trip actions JS has waiting to sync, for the phone's health report; oldestAtMs is the oldest one's Date.now(). */
+  @ReactMethod
+  fun setQueueStats(pending: Double, oldestAtMs: Double) {
+    RiderOnlineService.queueStats = pending.toInt() to oldestAtMs.toLong()
+  }
+
   @ReactMethod
   fun lastFix(promise: Promise) {
     promise.resolve(RiderOnlineService.lastFix?.toMap())

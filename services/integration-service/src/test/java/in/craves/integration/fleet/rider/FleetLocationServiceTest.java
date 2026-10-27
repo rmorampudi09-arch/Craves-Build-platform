@@ -43,6 +43,16 @@ class FleetLocationServiceTest {
     }
 
     @Test
+    void healthLeavesOutWhatThePhoneDidNotSendAndKeepsTheExitReasonToOneShortLine() {
+        FleetLocationService service = new FleetLocationService(null, new com.fasterxml.jackson.databind.ObjectMapper());
+        assertThat(service.health(null)).isNull();
+        assertThat(service.health(new FleetRiderModels.DeviceHealth(81, null, null, true, null, null, null, null, null)))
+            .isEqualTo("{\"batteryPct\":81,\"canRing\":true}");
+        assertThat(FleetLocationService.oneLine("CRASH\nat line 2\u0000")).isEqualTo("CRASH at line 2");
+        assertThat(FleetLocationService.oneLine("x".repeat(500))).hasSize(200);
+    }
+
+    @Test
     void onlySaneFixesFromTheShiftAndNotFromTheFutureAreUsed() {
         Instant start = T.minusSeconds(3600);
         assertThat(FleetLocationService.usable(fix(0, false), start, T)).isTrue();

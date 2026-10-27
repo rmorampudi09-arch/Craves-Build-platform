@@ -4,6 +4,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {DeliverBody} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {createOfflineQueue} from '../domain/offlineQueue';
+import {riderOnlineService} from '../native/riderOnlineService';
 
 /** The one queue every trip action goes through, kept in AsyncStorage so it survives restarts. */
 export const tripQueue = createOfflineQueue({
@@ -30,6 +31,16 @@ export const tripQueue = createOfflineQueue({
   // Never store the customer's OTP on the phone: a restart forgets an unsent one and the rider asks for it again.
   memoryOnly: entry => (entry.body as DeliverBody | undefined)?.method === 'OTP',
 });
+
+/** Tells the native service how many trip actions wait to sync, and since when, for the phone's health report. */
+function reportQueueStats() {
+  tripQueue
+    .stats()
+    .then(({pending, oldestAt}) => riderOnlineService.setQueueStats(pending, oldestAt ?? 0))
+    .catch(() => undefined);
+}
+tripQueue.subscribe(reportQueueStats);
+reportQueueStats();
 
 /** Count of this rider's actions still waiting to sync; drives "Saved · will sync" and the sign-out block. */
 export function usePendingActions(riderId: string | undefined, tripId?: string): number {

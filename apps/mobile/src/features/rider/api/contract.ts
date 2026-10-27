@@ -256,9 +256,26 @@ export interface OfferReceipt {
   ageMs: number;
 }
 
+/** The phone's health, sent by the native service about once a minute (app 1.1.0). Every field is optional. */
+export interface DeviceHealth {
+  batteryPct?: number;
+  charging?: boolean;
+  powerSave?: boolean;
+  /** Notifications on and the offers channel still at high importance; false keeps offers away. */
+  canRing?: boolean;
+  /** Battery used and minutes spent unplugged since the service started. */
+  drainPct?: number;
+  unpluggedMin?: number;
+  /** Why the app's last process ended (Android 11+), sent once after a start. */
+  lastExitReason?: string;
+  queuePending?: number;
+  queueOldestAgeS?: number;
+}
+
 export interface LocationBatch {
   fixes: RiderFix[];
   offerReceipts?: OfferReceipt[];
+  health?: DeviceHealth;
 }
 
 export interface LocationBatchResponse {

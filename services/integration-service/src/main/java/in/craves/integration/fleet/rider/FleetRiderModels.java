@@ -108,11 +108,22 @@ public final class FleetRiderModels {
         }
     }
 
-    /** offerReceipts is optional (rider app 1.1.0 and later); APKs that don't send it keep working. */
-    public record LocationBatch(List<RiderFix> fixes, List<OfferReceipt> offerReceipts) {
+    /** offerReceipts and health are optional (rider app 1.1.0 and later); APKs that don't send them keep working. */
+    public record LocationBatch(List<RiderFix> fixes, List<OfferReceipt> offerReceipts, DeviceHealth health) {
         public LocationBatch(List<RiderFix> fixes) {
-            this(fixes, null);
+            this(fixes, null, null);
         }
+    }
+
+    /**
+     * The phone's health, sent about once a minute (blueprint A5, A9): battery, charging, power saver; canRing, whether an
+     * offer can ring (notifications on and the offers channel still high); battery drained and minutes unplugged since
+     * the service started; why the app last died (sent once after a start); trip actions waiting to sync and the age of
+     * the oldest. Every field is optional.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record DeviceHealth(Integer batteryPct, Boolean charging, Boolean powerSave, Boolean canRing, Double drainPct,
+                               Integer unpluggedMin, String lastExitReason, Integer queuePending, Integer queueOldestAgeS) {
     }
 
     /**

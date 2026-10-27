@@ -320,6 +320,24 @@ class FleetLocationApiDatabaseTest {
             + "WHERE rider_id = ?", Double.class, rider.id())).isBetween(1.5, 15.0);
     }
 
+    /** Phone health (blueprint A5, A9): each key keeps its latest value, can_ring is stored, and a call without health changes nothing. */
+    @Test
+    void phoneHealthIsStoredKeyByKeyAndACallWithoutItChangesNothing() throws Exception {
+        OnShift rider = onShift();
+        body(rider, "{\"fixes\":[],\"health\":{\"batteryPct\":81,\"charging\":false,\"canRing\":false,"
+            + "\"lastExitReason\":\"LOW_MEMORY at 2026-10-27T09:12:03Z\"}}").andExpect(status().isOk());
+        body(rider, "{\"fixes\":[],\"health\":{\"batteryPct\":80,\"canRing\":true,\"queuePending\":2}}").andExpect(status().isOk());
+        String read = "SELECT health ->> 'batteryPct' AS battery, health ->> 'charging' AS charging, health ->> 'lastExitReason' AS exit, "
+            + "health ->> 'queuePending' AS pending, can_ring FROM fleet_schema.rider_shift WHERE id = ?";
+        Map<String, Object> shift = fleet.db.queryForMap(read, rider.shift());
+        assertThat(shift).containsEntry("battery", "80").containsEntry("charging", "false").containsEntry("exit", "LOW_MEMORY at 2026-10-27T09:12:03Z")
+            .containsEntry("pending", "2").containsEntry("can_ring", true);
+        STATEMENTS.set(0);
+        locations(rider, List.of()).andExpect(status().isOk());
+        assertThat(STATEMENTS.get()).isEqualTo(3);
+        assertThat(fleet.db.queryForMap(read, rider.shift())).isEqualTo(shift);
+    }
+
     /** The budget in docs/riders/BACKEND.md: at most 5 statements per call, on a trip, in a slot, with an offer open. */
     @Test
     void twoHundredCallsStayWithinFiveStatementsEach() throws Exception {
@@ -353,6 +371,11 @@ class FleetLocationApiDatabaseTest {
     ResultActions locations(OnShift rider, List<String> fixes) throws Exception {
         return mvc.perform(post(LOCATIONS).header(FleetShiftService.SHIFT_CREDENTIAL, rider.credential()).contentType(MediaType.APPLICATION_JSON)
             .content("{\"fixes\":[" + String.join(",", fixes) + "]}"));
+    }
+
+    ResultActions body(OnShift rider, String body) throws Exception {
+        return mvc.perform(post(LOCATIONS).header(FleetShiftService.SHIFT_CREDENTIAL, rider.credential()).contentType(MediaType.APPLICATION_JSON)
+            .content(body));
     }
 
     ResultActions locations(OnShift rider, List<String> fixes, List<String> receipts) throws Exception {

@@ -143,6 +143,15 @@ object RiderOffers {
     synchronized(this) { offerIds.forEach { receipts.remove(it) } }
   }
 
+  /** Whether an offer can ring now: the app's notifications are on and the offers channel is still at high importance. */
+  fun canRing(context: Context): Boolean {
+    val manager = NotificationManagerCompat.from(context)
+    if (!manager.areNotificationsEnabled()) return false
+    if (Build.VERSION.SDK_INT < 26) return true
+    val channel = manager.getNotificationChannelCompat(OFFERS_CHANNEL) ?: return false
+    return channel.importance >= NotificationManagerCompat.IMPORTANCE_HIGH
+  }
+
   fun testRing(context: Context) {
     post(context, TEST_TAG, "Test ring", "This is how an order offer rings.", 15_000L, openAppIntent(context, null))
   }

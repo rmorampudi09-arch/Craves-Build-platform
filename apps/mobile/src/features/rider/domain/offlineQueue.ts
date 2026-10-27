@@ -163,6 +163,13 @@ export function createOfflineQueue(deps: QueueDeps) {
         ).length,
       );
     },
+    /** Every rider's entries waiting, and the oldest one's createdAt (null when none): the phone's health report. */
+    stats(): Promise<{pending: number; oldestAt: number | null}> {
+      return serial(async () => {
+        const list = await load();
+        return {pending: list.length, oldestAt: list.length ? Math.min(...list.map(e => e.createdAt)) : null};
+      });
+    },
     subscribe(listener: () => void): () => void {
       changeListeners.add(listener);
       return () => changeListeners.delete(listener);

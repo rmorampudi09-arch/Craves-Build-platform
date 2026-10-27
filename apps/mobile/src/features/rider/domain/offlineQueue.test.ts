@@ -34,6 +34,27 @@ function setup(send: (entry: QueueEntry) => Promise<Trip>) {
 const trip = {tripId: 't1', step: 'AT_KITCHEN'} as Trip;
 
 describe('rider offline queue', () => {
+  it('reports how many actions wait and since when, for the phone health report', async () => {
+    const {queue, advance} = setup(async () => {
+      throw new HttpError();
+    });
+    expect(await queue.stats()).toEqual({pending: 0, oldestAt: null});
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'arrived-pickup', key: 'k1'});
+    advance(5_000);
+    await queue.enqueue({riderId: 'r2', tripId: 't2', action: 'picked-up', key: 'k2'});
+    expect(await queue.stats()).toEqual({pending: 2, oldestAt: 1_000});
+  });
+
+  it('keeps when and where the rider tapped on the entry', async () => {
+    const send = jest.fn(async () => {
+      throw new HttpError();
+    });
+    const {queue, storage} = setup(send);
+    const fix = {lat: 17.44, lng: 78.39, accuracyM: 8, at: '2026-10-27T09:00:00Z', ageMs: 1_500};
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'arrived-drop', key: 'k1', occurredAt: 900, fix});
+    expect(JSON.parse(storage.data.get(STORAGE_KEY) ?? '[]')[0]).toMatchObject({occurredAt: 900, fix});
+  });
+
   it('sends at once when online', async () => {
     const send = jest.fn(async () => trip);
     const {queue} = setup(send);

@@ -444,6 +444,20 @@ components:
           maxItems: 10
           description: Optional (app 1.1.0). Offers that reached the phone since the last successful call; the server keeps the first arrival of each of the rider's own offers and ignores the rest, and never refuses the call over them.
           items: {$ref: '#/components/schemas/OfferReceipt'}
+        health: {$ref: '#/components/schemas/DeviceHealth'}
+    DeviceHealth:
+      type: object
+      description: Optional (app 1.1.0), about once a minute. Each key keeps its latest value on the shift; canRing false keeps offers away until it is true again.
+      properties:
+        batteryPct: {type: integer, minimum: 0, maximum: 100}
+        charging: {type: boolean}
+        powerSave: {type: boolean}
+        canRing: {type: boolean, description: 'Notifications on and the offers channel still at high importance'}
+        drainPct: {type: number, description: 'Battery used while unplugged since the service started'}
+        unpluggedMin: {type: integer}
+        lastExitReason: {type: string, maxLength: 200, description: 'Why the app''s last process ended (Android 11+), sent once after a start'}
+        queuePending: {type: integer, description: 'Trip actions waiting to sync'}
+        queueOldestAgeS: {type: integer}
     OfferReceipt:
       type: object
       required: [offerId, channel, ageMs]

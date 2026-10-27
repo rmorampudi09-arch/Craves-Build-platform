@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.rider.FleetRiderModels.ActiveTrip;
+import in.craves.integration.fleet.rider.FleetRiderModels.DeviceHealth;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatchResponse;
 import in.craves.integration.fleet.rider.FleetRiderModels.OfferReceipt;
@@ -60,6 +61,8 @@ public class FleetLocationService {
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
     /** On-trip fixes are kept this many days (blueprint E6). */
     static final int TRACK_DAYS_KEPT = 90;
+    /** Phone health on a shift is kept this many days (blueprint E6). */
+    static final int HEALTH_DAYS_KEPT = 90;
     /** A fix's ageMs is capped at an hour: older is no use to dispatch or the track. */
     static final long MAX_FIX_AGE_MS = 3_600_000;
     static final int MAX_RECEIPTS = 10;
@@ -91,7 +94,7 @@ public class FleetLocationService {
      * calls and the gaps over 60 s (the first gap counts from started_at), and the in-zone seconds of the shift and its
      * slot. The slot's settle the guarantee; a slot that settled meanwhile is COMPLETED and keeps its settled seconds.
      * The same statement records the offer receipts: the first arrival of each of this rider's offers, never earlier than
-     * the offer itself.
+     * the offer itself; and the phone's health, each key keeping its latest value, with can_ring for dispatch.
      */
     private static final String HEARTBEAT = """
         WITH slot AS (UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED'),
@@ -103,7 +106,9 @@ public class FleetLocationService {
         UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ?, last_seen_at = now(),
           max_silence_seconds = GREATEST(max_silence_seconds, EXTRACT(EPOCH FROM now() - COALESCE(last_seen_at, started_at))::integer),
           silences_over_60s = silences_over_60s
-            + CASE WHEN now() - COALESCE(last_seen_at, started_at) > INTERVAL '60 seconds' THEN 1 ELSE 0 END
+            + CASE WHEN now() - COALESCE(last_seen_at, started_at) > INTERVAL '60 seconds' THEN 1 ELSE 0 END,
+          health = CASE WHEN CAST(? AS jsonb) IS NULL THEN health ELSE COALESCE(health, '{}'::jsonb) || CAST(? AS jsonb) END,
+          can_ring = COALESCE(?, can_ring)
         WHERE id = ?""";
     private static final String OFFERS = "SELECT " + FleetTripModels.OFFER_COLUMNS + """
 
@@ -164,8 +169,12 @@ public class FleetLocationService {
             }
             seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
         }
+        String health = health(batch.health());
         jdbc.update(HEARTBEAT, seconds, seconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(), seconds,
-            shift.shiftId());
+            health, health, batch.health() == null ? null : batch.health().canRing(), shift.shiftId());
+        if (batch.health() != null && batch.health().lastExitReason() != null) {
+            LOGGER.info("FLEET_APP_EXIT rider={} reason={}", shift.riderId(), oneLine(batch.health().lastExitReason()));
+        }
         List<Offer> offers = jdbc.query(OFFERS, (row, n) -> FleetTripModels.offer(row, json), shift.riderId());
         return new LocationBatchResponse(offers, activeTrip(shift), null, null);
     }
@@ -188,6 +197,17 @@ public class FleetLocationService {
             }
         }
         dropOldTrackDays(today);
+        forgetOldHealth();
+    }
+
+    /** Retention (BACKEND.md "Data retention", blueprint E6): a shift's phone health is kept 90 days. */
+    void forgetOldHealth() {
+        try {
+            jdbc.update("UPDATE fleet_schema.rider_shift SET health = NULL WHERE health IS NOT NULL AND started_at < now() - make_interval(days => ?)",
+                HEALTH_DAYS_KEPT);
+        } catch (DataAccessException exception) {
+            LOGGER.error("CRAVES_ALERT alert=SHIFT_HEALTH_RETENTION_FAILED reason={}", exception.getMostSpecificCause().getMessage());
+        }
     }
 
     /**
@@ -262,6 +282,27 @@ public class FleetLocationService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Offer receipts could not be written", exception);
         }
+    }
+
+    /** The phone's health as JSON for the shift row, without the fields it left out; the exit reason kept short. */
+    String health(DeviceHealth health) {
+        if (health == null) {
+            return null;
+        }
+        DeviceHealth kept = health.lastExitReason() == null ? health : new DeviceHealth(health.batteryPct(), health.charging(),
+            health.powerSave(), health.canRing(), health.drainPct(), health.unpluggedMin(), oneLine(health.lastExitReason()),
+            health.queuePending(), health.queueOldestAgeS());
+        try {
+            return json.writeValueAsString(kept);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Phone health could not be written", exception);
+        }
+    }
+
+    /** At most 200 printable characters on one line, for the log and the health column. */
+    static String oneLine(String text) {
+        String flat = text.replaceAll("[^\\x20-\\x7E]", " ").trim();
+        return flat.length() <= 200 ? flat : flat.substring(0, 200);
     }
 
     /** Why the phone must stop, or null. Each stop also closes the shift. */

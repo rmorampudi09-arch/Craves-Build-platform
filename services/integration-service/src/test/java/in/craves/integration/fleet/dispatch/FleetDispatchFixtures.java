@@ -33,14 +33,18 @@ public final class FleetDispatchFixtures {
             mode);
     }
 
-    /** An ACTIVE rider with a bound phone, on an open shift, whose last real fix arrived secondsAgo. Returns the rider id. */
+    /**
+     * An ACTIVE rider with a bound phone, on an open shift, whose last /locations call and last fix were both secondsAgo.
+     * Returns the rider id.
+     */
     public static UUID riderOnShift(FleetDatabase fleet, String phone, double lat, double lng, int secondsAgo, boolean mock) {
         UUID rider = fleet.rider("Ravi Kumar", phone);
         fleet.db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE', identity_id = ? WHERE id = ?", UUID.randomUUID(), rider);
         fleet.db.update("INSERT INTO fleet_schema.rider_device (id, rider_id, fcm_token, app_version, model, state) "
             + "VALUES (?, ?, ?, '1.0.0', 'Redmi Note 12', 'BOUND')", UUID.randomUUID(), rider, "fcm-" + phone);
-        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at) "
-            + "VALUES (?, ?, ?, now() + INTERVAL '8 hours')", UUID.randomUUID(), rider, phone.substring(1).repeat(6).substring(0, 64));
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, last_seen_at) "
+            + "VALUES (?, ?, ?, now() + INTERVAL '8 hours', now() - make_interval(secs => ?))", UUID.randomUUID(), rider,
+            phone.substring(1).repeat(6).substring(0, 64), secondsAgo);
         fix(fleet.db, rider, lat, lng, secondsAgo, mock);
         fleet.db.update("INSERT INTO fleet_schema.test_mode_rider (rider_id) VALUES (?)", rider);
         return rider;
@@ -51,6 +55,12 @@ public final class FleetDispatchFixtures {
             + "VALUES (?, ?, ?, 8, ?, now() - make_interval(secs => ?), now() - make_interval(secs => ?)) "
             + "ON CONFLICT (rider_id) DO UPDATE SET lat = EXCLUDED.lat, lng = EXCLUDED.lng, mock = EXCLUDED.mock, "
             + "recorded_at = EXCLUDED.recorded_at, received_at = EXCLUDED.received_at", rider, lat, lng, mock, secondsAgo, secondsAgo);
+    }
+
+    /** The rider's open shift last called /locations secondsAgo (the heartbeat), whatever its fixes say. */
+    public static void seen(JdbcTemplate db, UUID rider, int secondsAgo) {
+        db.update("UPDATE fleet_schema.rider_shift SET last_seen_at = now() - make_interval(secs => ?) WHERE rider_id = ? AND ended_at IS NULL",
+            secondsAgo, rider);
     }
 
     /** The chef behind a sub-order (from the checkout's finance quote), allow-listed for test mode. Returns the chef id. */

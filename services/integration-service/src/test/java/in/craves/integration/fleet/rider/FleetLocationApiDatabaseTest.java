@@ -259,6 +259,24 @@ class FleetLocationApiDatabaseTest {
             .andExpect(jsonPath("$.stopReason").value("You're offline. Go online to get orders."));
     }
 
+    /** Every call is the shift's heartbeat, with or without a new fix; a gap over 60 s between calls is counted (BLUEPRINT A1, A5). */
+    @Test
+    void everyCallIsAHeartbeatAndGapsOverAMinuteAreCounted() throws Exception {
+        OnShift rider = onShift();
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - INTERVAL '10 seconds' WHERE id = ?", rider.shift());
+        STATEMENTS.set(0);
+        locations(rider, List.of()).andExpect(status().isOk());
+        assertThat(STATEMENTS.get()).as("the read, the shift update and the offers").isEqualTo(3);
+        assertThat(heartbeat(rider)).containsEntry("seen", true).containsEntry("silences_over_60s", 0);
+
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET last_seen_at = now() - INTERVAL '70 seconds' WHERE id = ?", rider.shift());
+        locations(rider, List.of()).andExpect(status().isOk());
+        locations(rider, List.of()).andExpect(status().isOk());
+        Map<String, Object> after = heartbeat(rider);
+        assertThat(after).containsEntry("seen", true).containsEntry("silences_over_60s", 1);
+        assertThat((Integer) after.get("max_silence_seconds")).isBetween(70, 80);
+    }
+
     /** The budget in docs/riders/BACKEND.md: at most 5 statements per call, on a trip, in a slot, with an offer open. */
     @Test
     void twoHundredCallsStayWithinFiveStatementsEach() throws Exception {
@@ -312,6 +330,11 @@ class FleetLocationApiDatabaseTest {
 
     int slotSeconds(UUID slot) {
         return fleet.db.queryForObject("SELECT in_zone_seconds FROM fleet_schema.rider_slot WHERE id = ?", Integer.class, slot);
+    }
+
+    Map<String, Object> heartbeat(OnShift rider) {
+        return fleet.db.queryForMap("SELECT last_seen_at > now() - INTERVAL '5 seconds' AS seen, max_silence_seconds, silences_over_60s "
+            + "FROM fleet_schema.rider_shift WHERE id = ?", rider.shift());
     }
 
     int inZone(OnShift rider) {

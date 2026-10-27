@@ -35,8 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * POST /locations: the native service's fix upload, heartbeat and second offer channel. Each call runs at most five
  * statements (docs/riders/BACKEND.md, "Location ingest"): one read of the shift, rider, position, trip and current
- * slot that locks the shift row; then, only for fixes newer than the stored one, the position upsert, one trip_track
- * insert while on a trip and one in-zone update; then the offers read. A stop runs the read and one shift update.
+ * slot that locks the shift row; then, only for fixes newer than the stored one, the position upsert and one trip_track
+ * insert while on a trip; then, on every call, the shift update (heartbeat, survival counters, in-zone seconds); then
+ * the offers read. A stop runs the read and one shift update.
  */
 @Service
 @ConditionalOnProperty(name = {"craves.fleet.enabled", "craves.fleet.rider-api-enabled", "craves.fleet.location-ingest-enabled"},
@@ -70,6 +71,18 @@ public class FleetLocationService {
         ON CONFLICT (rider_id) DO UPDATE SET shift_id = excluded.shift_id, trip_id = excluded.trip_id, lat = excluded.lat,
           lng = excluded.lng, accuracy_m = excluded.accuracy_m, mock = excluded.mock, recorded_at = excluded.recorded_at, received_at = now()
         WHERE p.recorded_at < excluded.recorded_at OR p.shift_id IS DISTINCT FROM excluded.shift_id""";
+    /**
+     * The shift row on every call: the heartbeat (dispatch and the watchdog read last_seen_at), the longest gap between
+     * calls and the gaps over 60 s (the first gap counts from started_at), and the in-zone seconds of the shift and its
+     * slot. The slot's settle the guarantee; a slot that settled meanwhile is COMPLETED and keeps its settled seconds.
+     */
+    private static final String HEARTBEAT = """
+        WITH slot AS (UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED')
+        UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ?, last_seen_at = now(),
+          max_silence_seconds = GREATEST(max_silence_seconds, EXTRACT(EPOCH FROM now() - COALESCE(last_seen_at, started_at))::integer),
+          silences_over_60s = silences_over_60s
+            + CASE WHEN now() - COALESCE(last_seen_at, started_at) > INTERVAL '60 seconds' THEN 1 ELSE 0 END
+        WHERE id = ?""";
     private static final String OFFERS = "SELECT " + FleetTripModels.OFFER_COLUMNS + """
 
         FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
@@ -115,6 +128,7 @@ public class FleetLocationService {
         List<RiderFix> fresh = batch.fixes().stream().filter(fix -> usable(fix, shift.startedAt(), shift.now()))
             .map(fix -> new RiderFix(fix.lat(), fix.lng(), fix.accuracyM(), fix.at().truncatedTo(ChronoUnit.MICROS), Boolean.TRUE.equals(fix.mock())))
             .filter(fix -> after == null || fix.at().isAfter(after)).sorted(Comparator.comparing(RiderFix::at)).toList();
+        long seconds = 0;
         if (!fresh.isEmpty()) {
             RiderFix newest = fresh.get(fresh.size() - 1);
             jdbc.update(UPSERT, shift.riderId(), shift.shiftId(), shift.tripId(), newest.lat(), newest.lng(), newest.accuracyM(), newest.mock(),
@@ -126,16 +140,9 @@ public class FleetLocationService {
                 jdbc.update("INSERT INTO fleet_schema.trip_track (trip_id, rider_id, recorded_at, lat, lng, accuracy_m, mock) VALUES "
                     + String.join(", ", Collections.nCopies(fresh.size(), "(?, ?, ?, ?, ?, ?, ?)")), args.toArray());
             }
-            long seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
-            if (seconds > 0) {
-                // One statement: the shift's counter (the console's shift list) and the slot's, which settles the guarantee.
-                // A slot that settled meanwhile is COMPLETED and keeps its settled seconds.
-                jdbc.update("""
-                    WITH shift AS (UPDATE fleet_schema.rider_shift SET in_zone_seconds = in_zone_seconds + ? WHERE id = ?)
-                    UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED'""",
-                    seconds, shift.shiftId(), seconds, shift.slotId());
-            }
+            seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
         }
+        jdbc.update(HEARTBEAT, seconds, seconds > 0 ? shift.slotId() : null, seconds, shift.shiftId());
         List<Offer> offers = jdbc.query(OFFERS, (row, n) -> FleetTripModels.offer(row, json), shift.riderId());
         return new LocationBatchResponse(offers, activeTrip(shift), null, null);
     }

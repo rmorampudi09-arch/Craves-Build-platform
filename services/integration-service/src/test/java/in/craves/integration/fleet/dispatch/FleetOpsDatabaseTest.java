@@ -156,7 +156,10 @@ class FleetOpsDatabaseTest {
     @Test
     void aRiderWhoCannotTakeItIsRefusedAndNothingChanges() {
         UUID tripId = tripId();
-        FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 120, false);
+        FleetDispatchFixtures.seen(fleet.db, other, 50);
+        refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");
+        FleetDispatchFixtures.seen(fleet.db, other, 5);
+        FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 200, false);
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");
         FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 5, true);
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");

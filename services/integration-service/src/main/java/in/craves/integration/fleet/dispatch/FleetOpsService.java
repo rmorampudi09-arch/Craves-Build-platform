@@ -249,10 +249,11 @@ public class FleetOpsService {
             SELECT p.lat, p.lng FROM fleet_schema.rider r
             JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL
             JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
-            WHERE r.id = ? AND r.status = 'ACTIVE' AND NOT p.mock AND p.received_at > now() - make_interval(secs => ?)
+            WHERE r.id = ? AND r.status = 'ACTIVE' AND\s""" + FleetDispatcher.HEARD_FROM + """
+
               AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = r.id AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
               AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())
-            FOR UPDATE OF r""", riderId, FleetDispatcher.SEEN_WITHIN_SECONDS).stream().findFirst().orElse(null);
+            FOR UPDATE OF r""", riderId).stream().findFirst().orElse(null);
         if (rider == null || !testMode.riderAllowed(riderId) || !testMode.kitchenAllowed((UUID) locked.get("chef_id"))) {
             throw FleetApiException.conflict("RIDER_NOT_AVAILABLE",
                 "This rider can't take it now: they must be active, online, free and sending their location.");

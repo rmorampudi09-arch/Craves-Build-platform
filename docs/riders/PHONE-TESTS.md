@@ -16,7 +16,7 @@ A person runs these on real phones. Use a **live** build (`CRAVES_RIDER_API_MODE
 2. Lock the screen. Leave the phone still for 30 minutes.
 3. Unlock, **swipe Craves Rider away** from recent apps, lock again.
 4. Turn **battery saver on**. Leave the phone for the rest of the 4 hours, screen off, moving it now and then (a short walk or ride).
-5. During the 4 hours, ops checks every 30 minutes on the ops console that the rider was **seen in the last 45 s** (or the backend's `rider_position_latest.updated_at`).
+5. During the 4 hours, ops checks every 30 minutes on the ops console that the rider was **seen in the last 45 s** (or the backend's `rider_shift.last_seen_at`, which every location call sets, with or without a new fix).
 6. At 4 hours: the "You're online" notification is still there, and the backend has fixes with no gap longer than 60 s.
 7. Tap **Go offline**. The notification goes away and uploads stop.
 

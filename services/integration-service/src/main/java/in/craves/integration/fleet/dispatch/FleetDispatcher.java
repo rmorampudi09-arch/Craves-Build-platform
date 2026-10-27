@@ -56,6 +56,13 @@ public class FleetDispatcher implements FleetStage {
     private static final long TICK_MS = 5_000;
     static final int OFFERS_AT_ONCE = 3;
     static final int SEEN_WITHIN_SECONDS = 45;
+    static final int FIX_WITHIN_SECONDS = 180;
+    /**
+     * A phone dispatch can reach, on the shift row s and the position row p (BACKEND.md "Dispatch chain"): the shift's last
+     * /locations call within 45 s, with or without new fixes, and a real (non-mock) fix under 3 minutes old for the distance.
+     */
+    static final String HEARD_FROM = "s.last_seen_at > now() - make_interval(secs => " + SEEN_WITHIN_SECONDS + ") AND NOT p.mock "
+        + "AND p.recorded_at > now() - make_interval(secs => " + FIX_WITHIN_SECONDS + ")";
     static final int BORZO_WINDOW_SECONDS = 120; // DeliveryProviderRouter's Borzo selection window
     // The delivery command looks again at least this often while riders decide (and at the stage deadline).
     static final Duration CHECK_EVERY = Duration.ofSeconds(10);
@@ -233,8 +240,8 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /**
-     * Eligible riders, nearest first: ACTIVE, on an open shift, idle (no active trip or open offer), a real (non-mock) fix
-     * received in the last 45 s, inside the policy radius. Declines play no part.
+     * Eligible riders, nearest first: ACTIVE, on an open shift, idle (no active trip or open offer), heard from (HEARD_FROM:
+     * a call in the last 45 s and a real fix under 3 minutes old), inside the policy radius. Declines play no part.
      */
     private List<Candidate> nearbyRiders(double lat, double lng, int radiusM) {
         double dLat = radiusM / 111_320.0;
@@ -244,14 +251,15 @@ public class FleetDispatcher implements FleetStage {
                 JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
                   AND s.credential_expires_at > now()
                 JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
-                WHERE r.status = 'ACTIVE' AND NOT p.mock AND p.received_at > now() - make_interval(secs => ?)
+                WHERE r.status = 'ACTIVE' AND\s""" + HEARD_FROM + """
+
                   AND p.lat BETWEEN ? AND ? AND p.lng BETWEEN ? AND ?
                   AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = r.id
                                   AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
                   AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())""",
                 (row, n) -> new Candidate(row.getObject("id", UUID.class),
                     RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng"))),
-                SEEN_WITHIN_SECONDS, lat - dLat, lat + dLat, lng - dLng, lng + dLng)
+                lat - dLat, lat + dLat, lng - dLng, lng + dLng)
             .stream().filter(rider -> rider.straightLineM() <= radiusM).sorted(Comparator.comparingDouble(Candidate::straightLineM)).toList();
     }
 

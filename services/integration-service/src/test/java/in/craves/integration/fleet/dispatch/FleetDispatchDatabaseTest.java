@@ -151,6 +151,26 @@ class FleetDispatchDatabaseTest {
             offers.stream().map(offer -> (UUID) offer.get("rider_id")).toList());
     }
 
+    /**
+     * Online is the heartbeat, not the fix (BLUEPRINT A1): a phone that called 5 s ago with a 2-minute-old fix is offered the
+     * order; one whose last call was 46 s ago is not, however fresh its fix; nor is one whose newest fix is over 3 minutes old.
+     */
+    @Test
+    void theHeartbeatDecidesWhoIsOnlineAndTheFixMustBeUnderThreeMinutesOld() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID calling = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 120, false);
+        FleetDispatchFixtures.seen(fleet.db, calling, 5);
+        UUID quiet = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.seen(fleet.db, quiet, 46);
+        UUID oldFix = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 190, false);
+        FleetDispatchFixtures.seen(fleet.db, oldFix, 5);
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE state = 'ACTIVE'", UUID.class))
+            .containsExactly(calling);
+    }
+
     @Test
     void aRiderWhoGoesOfflineWhileTheQuotesComeBackGetsNoOfferAndAShiftPastItsTwelveHoursIsNotOffered() {
         FleetDispatchFixtures.policy(fleet.db, "live");

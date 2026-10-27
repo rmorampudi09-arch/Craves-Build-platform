@@ -8,7 +8,14 @@ import {createOfflineQueue} from '../domain/offlineQueue';
 /** The one queue every trip action goes through, kept in AsyncStorage so it survives restarts. */
 export const tripQueue = createOfflineQueue({
   storage: AsyncStorage,
-  send: entry => riderApi.tripAction(entry.tripId, entry.action, entry.body, entry.key),
+  send: entry =>
+    riderApi.tripAction(
+      entry.tripId,
+      entry.action,
+      entry.body,
+      entry.key,
+      entry.occurredAt === undefined ? undefined : {occurredAt: entry.occurredAt, fix: entry.fix},
+    ),
   // A 401 means the session needs renewing, not that the server refused the step: keep it.
   isRetriable: error =>
     !(error instanceof AppApiError) ||

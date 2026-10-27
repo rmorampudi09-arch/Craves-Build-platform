@@ -163,17 +163,25 @@ function parseOffer(event: NativeOffer): ReceivedOffer | null {
 /** Live mode: the Kotlin foreground service uploads and rings; JS only listens. The credential never touches JS storage. */
 function createNativeOnlineService(native: NativeRiderOnline) {
   let fix: RiderFix | undefined;
+  // Date.now() when fix arrived: native's ageMs is the fix's age then, so lastFix() adds the time since.
+  let fixArrivedAt = 0;
+  const keep = (next: RiderFix | null | undefined) => {
+    if (next) {
+      fix = next;
+      fixArrivedAt = Date.now();
+    }
+  };
   const on = <T>(event: string, cb: (payload: T) => void) => {
     const subscription = DeviceEventEmitter.addListener(event, cb);
     return () => subscription.remove();
   };
-  on<RiderOnlineStatus>('riderStatus', status => {
-    fix = status.lastFix ?? fix;
-  });
+  on<RiderOnlineStatus>('riderStatus', status => keep(status.lastFix));
   native
     .lastFix()
     .then(saved => {
-      fix = fix ?? saved ?? undefined;
+      if (!fix) {
+        keep(saved);
+      }
     })
     .catch(() => undefined);
   // Native counts an offer as delivered once JS runs, but with the activity gone (swiped away while online) nothing
@@ -191,7 +199,8 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       native.start(shift?.shiftCredential ?? null, shift ? Date.parse(shift.expiresAt) : 0, getRuntimeConfig().apiBaseUrl),
     stop: () => native.stop(),
     testRing: () => native.testRing(),
-    lastFix: () => fix,
+    lastFix: () =>
+      fix && fix.ageMs !== undefined ? {...fix, ageMs: fix.ageMs + Math.max(0, Date.now() - fixArrivedAt)} : fix,
     onOffer(cb: (offer: Offer, receivedAtMs: number) => void) {
       listening += 1;
       const off = on<NativeOffer>('riderOffer', event => {

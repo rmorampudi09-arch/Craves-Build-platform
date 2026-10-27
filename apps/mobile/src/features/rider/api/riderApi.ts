@@ -22,6 +22,15 @@ import {riderApiMode} from '../riderConfig';
 import {liveRiderApi} from './riderApi.live';
 import {mockRider} from './riderApi.mock';
 
+/**
+ * A queued step's tap (blueprint A4): Date.now() when the rider tapped, and the phone's fix at that moment, whose
+ * ageMs (when the native service gave one) is its age at the tap.
+ */
+export interface QueuedTap {
+  occurredAt: number;
+  fix?: RiderFix;
+}
+
 /** Every call the rider app makes, under /api/v1/rider. Mock and live builds implement the same interface. */
 export interface RiderApi {
   getMe(): Promise<RiderMe>;
@@ -48,7 +57,8 @@ export interface RiderApi {
   declineOffer(offerId: string, key: string): Promise<void>;
   /** null when no trip is in progress (HTTP 204). */
   getActiveTrip(): Promise<Trip | null>;
-  tripAction(tripId: string, action: TripAction, body: unknown, key: string): Promise<Trip>;
+  /** tap: when the rider tapped and the fix then, for a step the queue sends later (live builds send it as ageMs and fix). */
+  tripAction(tripId: string, action: TripAction, body: unknown, key: string, tap?: QueuedTap): Promise<Trip>;
   getEarnings(range: EarningsRange, cursor?: string): Promise<EarningsPage>;
   getTripEarning(tripId: string): Promise<TripEarning>;
   getPayouts(): Promise<PayoutsPage>;

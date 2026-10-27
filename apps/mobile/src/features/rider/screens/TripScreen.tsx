@@ -9,6 +9,7 @@ import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {RiderScreen, Title} from '../components/ui';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
+import {riderOnlineService} from '../native/riderOnlineService';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
 import {tripQueue, usePendingActions} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
@@ -107,6 +108,9 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
       action,
       key: idempotencyKey(action, trip.tripId, riderId, attempt),
       body,
+      // When and where the rider tapped: the server counts the step from then, even if it syncs much later.
+      occurredAt: Date.now(),
+      fix: riderOnlineService.lastFix(),
     });
     if (outcome.kind === 'sent') {
       queryClient.setQueryData(riderKeys.activeTrip, outcome.trip);

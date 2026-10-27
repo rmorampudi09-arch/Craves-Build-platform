@@ -59,6 +59,7 @@ class RiderOnlineService : Service() {
         .put("mock", mock)
         .put("ageMs", (SystemClock.elapsedRealtime() - elapsedMs).coerceAtLeast(0L))
 
+    /** ageMs is the fix's age now; JS adds the time since, so a trip step can say how old its fix was (blueprint A4). */
     fun toMap(): WritableMap =
       Arguments.createMap().apply {
         putDouble("lat", lat)
@@ -66,6 +67,7 @@ class RiderOnlineService : Service() {
         putDouble("accuracyM", accuracyM.toDouble())
         putString("at", iso(atMs))
         putBoolean("mock", mock)
+        putDouble("ageMs", (SystemClock.elapsedRealtime() - elapsedMs).coerceAtLeast(0L).toDouble())
       }
   }
 

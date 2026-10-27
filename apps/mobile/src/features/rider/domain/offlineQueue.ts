@@ -1,4 +1,4 @@
-import type {Trip, TripAction} from '../api/contract';
+import type {RiderFix, Trip, TripAction} from '../api/contract';
 
 /** One trip action waiting to reach the server. Stored as JSON under STORAGE_KEY. */
 export interface QueueEntry {
@@ -9,12 +9,15 @@ export interface QueueEntry {
   /** Idempotency-Key header; the same key is never queued twice. */
   key: string;
   body?: unknown;
+  /** Date.now() when the rider tapped, and the phone's fix then (blueprint A4); entries saved before 1.1.0 have neither. */
+  occurredAt?: number;
+  fix?: RiderFix;
   createdAt: number;
   attempts: number;
   nextAttemptAt: number;
 }
 
-export type NewQueueEntry = Pick<QueueEntry, 'riderId' | 'tripId' | 'action' | 'key' | 'body'>;
+export type NewQueueEntry = Pick<QueueEntry, 'riderId' | 'tripId' | 'action' | 'key' | 'body' | 'occurredAt' | 'fix'>;
 
 export type QueueOutcome =
   | {kind: 'sent'; trip: Trip}

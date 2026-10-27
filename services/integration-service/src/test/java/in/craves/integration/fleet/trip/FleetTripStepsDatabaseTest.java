@@ -32,7 +32,10 @@ import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
 import in.craves.integration.fleet.dispatch.FleetDispatcher;
+import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
+import in.craves.integration.fleet.trip.FleetTripService.Tap;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalLong;
@@ -241,6 +244,53 @@ class FleetTripStepsDatabaseTest {
         assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, event -> assertThat(event.held()).isTrue());
     }
 
+    /**
+     * Blueprint A2, A4: a trip done in airplane mode syncs at once when the signal returns. Each step counts from its tap,
+     * and the arrival at the drop, backed by a fix at the door, starts the door wait then: the photo isn't WAIT_NOT_OVER.
+     */
+    @Test
+    void stepsTappedOfflineCountFromTheTapAndTheDoorWaitFromAnArrivalBackedByAFixAtTheDoor() {
+        fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '40 minutes' WHERE id = ?", tripId);
+        trips.step(identity, tripId, "arrived-pickup", "k1", tap(25, KITCHEN_LAT + 0.001, KITCHEN_LNG, false));
+        trips.step(identity, tripId, "picked-up", "k2", new Tap(20 * 60_000L, null));
+        trips.step(identity, tripId, "arrived-drop", "k3", tap(11, 17.4601, 78.3601, false));
+        assertThat(minutesAgo("arrived_kitchen_at")).isBetween(24.9, 25.2);
+        assertThat(minutesAgo("picked_up_at")).isBetween(19.9, 20.2);
+        assertThat(minutesAgo("arrived_drop_at")).as("the 10-minute door wait is over").isBetween(10.9, 11.2);
+
+        Trip delivered = trips.deliveredByPhoto(identity, tripId, 2, new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG), "p1");
+
+        assertThat(delivered.step()).isEqualTo("DELIVERED");
+        assertThat(fleet.db.queryForMap("SELECT lat, lng, mock, (detail ->> 'ageMs')::bigint AS age_ms FROM fleet_schema.trip_event "
+            + "WHERE trip_id = ? AND idempotency_key = 'k3'", tripId)).containsEntry("lat", 17.4601).containsEntry("lng", 78.3601)
+            .containsEntry("mock", false).containsEntry("age_ms", 11 * 60_000L);
+    }
+
+    /** An arrival's earlier time needs evidence; a step's age is capped at 30 minutes and never goes before the step before. */
+    @Test
+    void anEarlierArrivalNeedsARealFixAtThePlaceAndATapAgeIsCapped() {
+        fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '3 hours' WHERE id = ?", tripId);
+        trips.step(identity, tripId, "arrived-pickup", "k1", tap(120, KITCHEN_LAT + 0.001, KITCHEN_LNG, false));
+        assertThat(minutesAgo("arrived_kitchen_at")).as("2 hours ago is capped at 30 minutes").isBetween(29.9, 30.2);
+        trips.step(identity, tripId, "picked-up", "k2", new Tap(45 * 60_000L, null));
+        assertThat(minutesAgo("picked_up_at")).as("never before the arrival").isBetween(29.9, 30.2);
+        trips.step(identity, tripId, "arrived-drop", "k3", tap(9, 17.46, 78.36, true));
+        assertThat(minutesAgo("arrived_drop_at")).as("a mock fix proves nothing: now").isLessThan(0.2);
+    }
+
+    @Test
+    void anEarlierArrivalWithoutAFixAtTheKitchenCountsFromNow() {
+        fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '1 hour' WHERE id = ?", tripId);
+        trips.step(identity, tripId, "arrived-pickup", "k1", tap(5, KITCHEN_LAT + 0.02, KITCHEN_LNG, false));
+        assertThat(minutesAgo("arrived_kitchen_at")).as("the tap's fix was 2.2 km away: now, by the latest position").isLessThan(0.2);
+    }
+
+    @Test
+    void theKitchenZoneIsJudgedByTheTapsOwnFixTakenAtTheTap() {
+        Trip trip = trips.step(identity, tripId, "arrived-pickup", "k1", tap(0, KITCHEN_LAT + 0.02, KITCHEN_LNG, false));
+        assertThat(trip.arrivedKitchenAt()).as("the tap's fix is 2.2 km away, whatever the last position says").isNull();
+    }
+
     @Test
     void anotherRidersTripIsNotFound() {
         UUID other = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
@@ -253,6 +303,17 @@ class FleetTripStepsDatabaseTest {
         trips.step(identity, tripId, "arrived-pickup", "k1");
         trips.step(identity, tripId, "picked-up", "k2");
         trips.step(identity, tripId, "arrived-drop", "k3");
+    }
+
+    /** A step tapped minutesAgo with the phone's fix then (taken 3 s before the tap). */
+    private static Tap tap(int minutesAgo, double lat, double lng, boolean mock) {
+        long ageMs = minutesAgo * 60_000L;
+        return new Tap(ageMs, new RiderFix(lat, lng, 9.0, Instant.now(), mock, ageMs + 3000));
+    }
+
+    private double minutesAgo(String column) {
+        return fleet.db.queryForObject("SELECT EXTRACT(EPOCH FROM now() - " + column + ")::float8 / 60 FROM fleet_schema.trip WHERE id = ?",
+            Double.class, tripId);
     }
 
     private static void refused(Runnable call, int status, String code) {

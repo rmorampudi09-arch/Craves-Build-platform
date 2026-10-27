@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import {AppApiError} from '../../../core/http/apiError';
 import {tokenMemory} from '../../../core/security/tokenMemory';
 import {fakeHttp, type FakeReply} from './fakeHttp';
-import {liveRiderApi} from './riderApi.live';
+import {liveRiderApi, stepTap} from './riderApi.live';
 
 /** Records parts like React Native's FormData does; Node's FormData turns the {uri, name, type} file parts into text. */
 class PartsForm {
@@ -132,6 +132,29 @@ describe('live rider API: every path in rider-v1.yaml', () => {
     ]);
   });
 
+  it('sends when and where each queued step was tapped: ageMs and the fix aged to now (blueprint A4)', async () => {
+    reply = () => ({status: 200, data: trip});
+    const tap = {occurredAt: Date.now() - 60_000, fix: {...fix, ageMs: 2_000}};
+    await liveRiderApi.tripAction('t1', 'arrived-drop', undefined, 'k1', tap);
+    await liveRiderApi.tripAction('t1', 'failed', {reason: 'CUSTOMER_UNREACHABLE'}, 'k2', tap);
+    await liveRiderApi.tripAction('t1', 'delivered', {method: 'OTP', otp: '4821'}, 'k3', tap);
+    for (const call of calls) {
+      const body = JSON.parse(call.data);
+      expect(body.ageMs).toBeGreaterThanOrEqual(60_000);
+      expect(body.ageMs).toBeLessThan(65_000);
+      expect(body.fix).toEqual({...fix, ageMs: 2_000 + body.ageMs});
+    }
+    expect(JSON.parse(calls[1].data).reason).toBe('CUSTOMER_UNREACHABLE');
+    expect(JSON.parse(calls[2].data)).toMatchObject({method: 'OTP', otp: '4821'});
+  });
+
+  it('ages a fix without ageMs from its own stamp, and drops one whose stamp is unreadable', () => {
+    const occurredAt = Date.parse(fix.at) + 5_000;
+    expect(stepTap({occurredAt, fix}, occurredAt + 1_000)).toEqual({ageMs: 1_000, fix: {...fix, ageMs: 6_000}});
+    expect(stepTap({occurredAt, fix: {...fix, at: 'later'}}, occurredAt)).toEqual({ageMs: 0});
+    expect(stepTap(undefined)).toEqual({});
+  });
+
   describe('photo delivery', () => {
     const realFetch = globalThis.fetch;
     afterEach(() => {
@@ -153,6 +176,16 @@ describe('live rider API: every path in rider-v1.yaml', () => {
         ['callsMade', '2'],
         ['fix', JSON.stringify(fix)],
       ]);
+    });
+
+    it('carries the tap as ageMs and the fix parts', async () => {
+      globalThis.fetch = jest.fn(async () => ({}) as Response);
+      reply = () => ({status: 200, data: {...trip, step: 'DELIVERED'}});
+      const body = {method: 'PHOTO', photoUri: 'file:///door.jpg', callsMade: 2} as const;
+      await liveRiderApi.tripAction('t1', 'delivered', body, 'k', {occurredAt: Date.now() - 30_000, fix: {...fix, ageMs: 1_000}});
+      const sent = Object.fromEntries(parts(calls[0]));
+      expect(Number(sent.ageMs)).toBeGreaterThanOrEqual(30_000);
+      expect(JSON.parse(sent.fix as string)).toEqual({...fix, ageMs: 1_000 + Number(sent.ageMs)});
     });
 
     it('still sends the delivery when the camera file is gone before an offline replay', async () => {

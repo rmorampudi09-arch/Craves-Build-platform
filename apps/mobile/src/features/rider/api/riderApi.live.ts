@@ -1,7 +1,7 @@
 import {apiClient} from '../../../core/http/apiClient';
 import {AppApiError} from '../../../core/http/apiError';
-import type {RiderApi} from './riderApi';
-import type {DeliverBody} from './contract';
+import type {QueuedTap, RiderApi} from './riderApi';
+import type {DeliverBody, StepTap} from './contract';
 
 const BASE = '/api/v1/rider';
 const keyed = (key: string) => ({headers: {'Idempotency-Key': key}});
@@ -28,6 +28,22 @@ function lockAtZero(error: unknown): never {
     throw new AppApiError('OTP_LOCKED', error.message, 423, error.correlationId);
   }
   throw error;
+}
+
+/**
+ * The tap as sent (blueprint A4): how long ago it was, and its fix aged to now. Both ages come from the phone's own
+ * clocks read close together, so a wrong wall clock doesn't matter. A fix without ageMs (the mock loop's) is aged from
+ * its own stamp.
+ */
+export function stepTap(tap: QueuedTap | undefined, now = Date.now()): StepTap {
+  if (!tap) {
+    return {};
+  }
+  const sinceTap = Math.max(0, Math.round(now - tap.occurredAt));
+  const atTap = tap.fix ? tap.fix.ageMs ?? tap.occurredAt - Date.parse(tap.fix.at) : NaN;
+  return tap.fix && Number.isFinite(atTap)
+    ? {ageMs: sinceTap, fix: {...tap.fix, ageMs: Math.max(0, Math.round(atTap)) + sinceTap}}
+    : {ageMs: sinceTap};
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -83,8 +99,9 @@ export const liveRiderApi: RiderApi = {
     const response = await apiClient.get(`${BASE}/trips/active`);
     return response.status === 204 ? null : response.data;
   },
-  async tripAction(tripId, action, body, key) {
+  async tripAction(tripId, action, body, key, tap) {
     const url = `${BASE}/trips/${tripId}/${action}`;
+    const sent = stepTap(tap);
     const deliver = body as DeliverBody | undefined;
     if (action === 'delivered' && deliver?.method === 'PHOTO') {
       const form = new FormData();
@@ -94,12 +111,17 @@ export const liveRiderApi: RiderApi = {
       }
       form.append('method', 'PHOTO');
       form.append('callsMade', String(deliver.callsMade));
-      if (deliver.fix) {
-        form.append('fix', JSON.stringify(deliver.fix));
+      const fix = sent.fix ?? deliver.fix;
+      if (fix) {
+        form.append('fix', JSON.stringify(fix));
+      }
+      if (sent.ageMs !== undefined) {
+        form.append('ageMs', String(sent.ageMs));
       }
       return (await apiClient.post(url, form, {...multipart, headers: {...multipart.headers, 'Idempotency-Key': key}})).data;
     }
-    return (await apiClient.post(url, body, keyed(key)).catch(lockAtZero)).data;
+    const json = tap ? {...(body as object | undefined), ...sent} : body;
+    return (await apiClient.post(url, json, keyed(key)).catch(lockAtZero)).data;
   },
   getEarnings: (range, cursor) =>
     get(`/earnings?range=${range}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),

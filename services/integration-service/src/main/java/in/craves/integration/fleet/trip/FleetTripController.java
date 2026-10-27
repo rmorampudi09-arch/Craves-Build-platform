@@ -1,7 +1,11 @@
 package in.craves.integration.fleet.trip;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
+import in.craves.integration.fleet.trip.FleetTripService.Tap;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -30,9 +34,11 @@ public class FleetTripController {
     private static final String KEY = "Idempotency-Key";
 
     private final FleetTripService trips;
+    private final ObjectMapper json;
 
-    public FleetTripController(FleetTripService trips) {
+    public FleetTripController(FleetTripService trips, ObjectMapper json) {
         this.trips = trips;
+        this.json = json;
     }
 
     /** 200 Trip; 409 OFFER_TAKEN when another rider got it; 410 OFFER_EXPIRED. */
@@ -59,8 +65,9 @@ public class FleetTripController {
     }
 
     /**
-     * One trip step: arrived-pickup, food-not-ready, picked-up and arrived-drop take no body; delivered takes
-     * {method: OTP, otp}; failed takes {reason, note}. 409 when the step is out of order or the trip has ended.
+     * One trip step: arrived-pickup, food-not-ready, picked-up and arrived-drop take no body, or only {ageMs, fix};
+     * delivered takes {method: OTP, otp}; failed takes {reason, note}. Every body may carry ageMs and fix (app 1.1.0):
+     * when and where the rider tapped. 409 when the step is out of order or the trip has ended.
      */
     @PostMapping("/trips/{tripId}/{action}")
     public ResponseEntity<Trip> step(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID tripId,
@@ -68,16 +75,17 @@ public class FleetTripController {
                                      @RequestBody(required = false) StepBody body) {
         UUID identity = identity(principal);
         String idempotencyKey = key(key);
+        Tap tap = body == null ? Tap.NONE : new Tap(body.ageMs(), body.fix());
         return noStore(switch (action) {
             case "delivered" -> {
                 if (body == null || !"OTP".equals(body.method())) {
                     throw FleetApiException.invalid("Send the customer's OTP, or the photo once the customer can't be reached.");
                 }
-                yield trips.deliveredByOtp(identity, tripId, body.otp(), idempotencyKey);
+                yield trips.deliveredByOtp(identity, tripId, body.otp(), idempotencyKey, tap);
             }
             case "failed" -> trips.failed(identity, tripId, body == null ? null : body.reason(), body == null ? null : body.note(),
-                idempotencyKey);
-            default -> trips.step(identity, tripId, action, idempotencyKey);
+                idempotencyKey, tap);
+            default -> trips.step(identity, tripId, action, idempotencyKey, tap);
         });
     }
 
@@ -86,15 +94,44 @@ public class FleetTripController {
     public ResponseEntity<Trip> deliveredByPhoto(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID tripId,
                                                  @RequestHeader(KEY) String key, @RequestParam("method") String method,
                                                  @RequestParam(value = "callsMade", required = false) Integer callsMade,
-                                                 @RequestPart(value = "photo", required = false) MultipartFile photo) {
+                                                 @RequestPart(value = "photo", required = false) MultipartFile photo,
+                                                 @RequestParam(value = "ageMs", required = false) String ageMs,
+                                                 @RequestParam(value = "fix", required = false) String fix) {
         if (!"PHOTO".equals(method)) {
             throw FleetApiException.invalid("Send method PHOTO with the photo.");
         }
-        return noStore(trips.deliveredByPhoto(identity(principal), tripId, callsMade, photo, key(key)));
+        return noStore(trips.deliveredByPhoto(identity(principal), tripId, callsMade, photo, key(key), new Tap(ageMs(ageMs), fix(fix))));
     }
 
-    /** The JSON bodies of a step (rider-v1): delivered {method, otp, fix} or failed {reason, note}. */
-    public record StepBody(String method, String otp, String reason, String note) {
+    /**
+     * The JSON bodies of a step (rider-v1): delivered {method, otp}, failed {reason, note}; any step may add ageMs and fix,
+     * when and where the rider tapped (app 1.1.0).
+     */
+    public record StepBody(String method, String otp, String reason, String note, Long ageMs, RiderFix fix) {
+        public StepBody(String method, String otp, String reason, String note) {
+            this(method, otp, reason, note, null, null);
+        }
+    }
+
+    /** The photo form's ageMs; a value that isn't a whole number counts as none, never a refused delivery. */
+    private static Long ageMs(String ageMs) {
+        try {
+            return ageMs == null || ageMs.isBlank() ? null : Long.valueOf(ageMs.trim());
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
+    }
+
+    /** The photo form's fix field (RiderFix JSON); one that doesn't parse is evidence of nothing, never a refused delivery. */
+    private RiderFix fix(String fix) {
+        if (fix == null || fix.isBlank() || fix.length() > 2000) {
+            return null;
+        }
+        try {
+            return json.readValue(fix, RiderFix.class);
+        } catch (JsonProcessingException notAFix) {
+            return null;
+        }
     }
 
     static UUID identity(CravesPrincipal principal) {

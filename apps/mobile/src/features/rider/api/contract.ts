@@ -276,6 +276,15 @@ export type TripAction =
   | 'delivered'
   | 'failed';
 
+/**
+ * When and where the rider tapped a step (app 1.1.0), sent with every step: ageMs is how long before the request, and
+ * fix the phone's fix then, with its own ageMs. The server counts the step from the tap.
+ */
+export interface StepTap {
+  ageMs?: number;
+  fix?: RiderFix;
+}
+
 /** OTP first; the photo is only for the unreachable-customer flow. */
 export type DeliverBody =
   | {method: 'OTP'; otp: string; fix?: RiderFix}

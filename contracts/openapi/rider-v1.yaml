@@ -131,7 +131,7 @@ paths:
   /trips/{tripId}/{action}:
     post:
       summary: |
-        One trip step. arrived-pickup, food-not-ready, picked-up and arrived-drop take no body.
+        One trip step. arrived-pickup, food-not-ready, picked-up and arrived-drop take no body, or only the tap.
         delivered takes the customer's OTP (JSON) or, only after two logged calls and the wait timer,
         a photo (multipart; pay held until ops checks it). failed takes a reason. 4xx means the server's
         state wins: the app drops its queued steps for this trip and shows the message.
@@ -146,6 +146,10 @@ paths:
         running) or PHOTO_REQUIRED (no JPEG or PNG, or over 10 MB); once the OTP is locked the photo needs neither calls
         nor the wait. failed: CUSTOMER_UNREACHABLE needs the drop and the wait (422 WAIT_NOT_OVER). 400 VALIDATION_FAILED
         (unknown step, an OTP that is not 4 digits, an unknown failure reason) or IDEMPOTENCY_KEY_REQUIRED.
+        The tap (app 1.1.0, all optional): ageMs, how long before this request the rider tapped, and fix, the phone's fix
+        then with its own ageMs. The step counts from the tap (at most 30 minutes back, never before the previous step);
+        an earlier arrival at the kitchen or the drop counts only with a real fix there accurate to 100 m. The photo's
+        unreachable wait is measured to the tap.
       parameters:
         - {$ref: '#/components/parameters/TripId'}
         - {name: action, in: path, required: true, schema: {type: string, enum: [arrived-pickup, food-not-ready, picked-up, arrived-drop, delivered, failed]}}
@@ -155,10 +159,11 @@ paths:
           application/json:
             schema:
               oneOf:
-                - {type: object, required: [method, otp], properties: {method: {type: string, enum: [OTP]}, otp: {type: string, pattern: '^[0-9]{4}$'}, fix: {$ref: '#/components/schemas/RiderFix'}}}
-                - {type: object, required: [reason], properties: {reason: {type: string, enum: [CUSTOMER_UNREACHABLE, WRONG_ADDRESS, CUSTOMER_REFUSED, UNSAFE]}, note: {type: string, maxLength: 500}}}
+                - {type: object, required: [method, otp], properties: {method: {type: string, enum: [OTP]}, otp: {type: string, pattern: '^[0-9]{4}$'}, ageMs: {type: integer, minimum: 0}, fix: {$ref: '#/components/schemas/RiderFix'}}}
+                - {type: object, required: [reason], properties: {reason: {type: string, enum: [CUSTOMER_UNREACHABLE, WRONG_ADDRESS, CUSTOMER_REFUSED, UNSAFE]}, note: {type: string, maxLength: 500}, ageMs: {type: integer, minimum: 0}, fix: {$ref: '#/components/schemas/RiderFix'}}}
+                - {$ref: '#/components/schemas/StepTap'}
           multipart/form-data:
-            schema: {type: object, required: [method, callsMade], properties: {method: {type: string, enum: [PHOTO]}, callsMade: {type: integer, minimum: 2}, photo: {type: string, format: binary}, fix: {type: string, description: RiderFix as JSON}}}
+            schema: {type: object, required: [method, callsMade], properties: {method: {type: string, enum: [PHOTO]}, callsMade: {type: integer, minimum: 2}, photo: {type: string, format: binary}, ageMs: {type: integer, minimum: 0, description: 'When the photo was taken, ms before this request'}, fix: {type: string, description: RiderFix as JSON}}}
       responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /earnings:
     get:
@@ -423,6 +428,12 @@ components:
         at: {type: string, format: date-time}
         mock: {type: boolean, description: 'Android reported a mock location; logged, never used for pay decisions'}
         ageMs: {type: integer, minimum: 0, maximum: 3600000, description: 'Optional (app 1.1.0). How old the fix was when sent, by the phone''s monotonic clock. When present the server times the fix as its own clock minus ageMs and ignores at.'}
+    StepTap:
+      type: object
+      description: When and where the rider tapped a step (app 1.1.0); the body of a step that takes no other input.
+      properties:
+        ageMs: {type: integer, minimum: 0, description: 'How long before this request the rider tapped, by the phone''s clock'}
+        fix: {$ref: '#/components/schemas/RiderFix'}
     LocationBatch:
       type: object
       required: [fixes]

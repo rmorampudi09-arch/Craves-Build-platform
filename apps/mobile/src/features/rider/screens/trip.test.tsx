@@ -7,6 +7,8 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {HomeSummary, RiderMe, Trip} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {riderDevice} from '../native/riderDevice';
+import {CountdownBar} from '../components/CountdownBar';
+import {formatClock} from '../domain/format';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
@@ -528,15 +530,20 @@ describe('Trip: customer not answering', () => {
       jest.advanceTimersByTime(2 * 60_000);
     });
     await press('rider-call-2');
-    expect(tree.root.findByProps({testID: 'rider-door-wait-left'}).props.children).toBe('8:00');
+    // A time, not a countdown: the 8-minute wait from the second call (decision E5).
+    const leaveAt = `You can leave at ${formatClock(NOW + 2 * 60_000 + 8 * 60_000)}`;
+    expect(tree.root.findByProps({testID: 'rider-leave-at'}).props.children).toBe(leaveAt);
+    expect(tree.root.findAllByType(CountdownBar)).toHaveLength(0);
     expect(byId('rider-leave-photo').props.disabled).toBe(true);
     await act(async () => {
       jest.advanceTimersByTime(5 * 60_000 + 42_000);
     });
-    expect(tree.root.findByProps({testID: 'rider-door-wait-left'}).props.children).toBe('2:18');
+    expect(tree.root.findByProps({testID: 'rider-leave-at'}).props.children).toBe(leaveAt);
+    expect(byId('rider-leave-photo').props.disabled).toBe(true);
     await act(async () => {
       jest.advanceTimersByTime(2 * 60_000 + 18_000);
     });
+    expect(has('rider-leave-at')).toBe(false);
     expect(byId('rider-leave-photo').props.disabled).toBe(false);
     expect(allText()).toContain('You can leave the order now');
     // The queue gets the copy kept in the app's files, not the camera's cache file (P1-07).

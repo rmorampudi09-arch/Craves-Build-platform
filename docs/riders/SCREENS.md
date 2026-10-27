@@ -146,7 +146,6 @@ Used on 09–12, not on 13.
 | offer countdown | 8 | `colors.flameRedAccessible` | remaining time (shrinks) | 08 |
 | setup progress | 8 | `colors.success` | done / total | 04 |
 | free-wait timer | 6 | `colors.textPrimary` | elapsed (grows) | 10 |
-| door-wait timer | 6 | `colors.textPrimary` | elapsed (grows) | 13 |
 
 - **Language chips (03, 20):**
   - Height 40 visual. Give a hitSlop so the target is 48, or use `Chip`'s minHeight 48.
@@ -457,8 +456,7 @@ No header, no SOS, no tab bar. Full-screen card that rings; 40 s total, shown at
    2. Done — "Call again" / "7:43 pm, no answer"
    3. Current circle "3":
       - "Wait at the door" / "Stay near the drop point".
-      - Right: "2:18" 24/700 tabular countdown.
-      - Below the row: door-wait bar (elapsed), full content width.
+      - Below the row: "You can leave at 7:53 pm" 15/700 (the second call plus the unreachable wait). Built as a time, not the designed "2:18" countdown and bar: no clock runs at the door (decision E5, P1-17).
    4. Locked circle "4" — "Leave the order with a photo" / "Unlocks when the timer ends"
 3. **Neutral banner** (y 458–574), camera-outline: "The photo must show the food and the door or house number. Use the flash at night. Anil gets it straight away, with a button to say it didn't arrive."
 4. **locked** button "Take a photo and leave the order" (y 592–646). The enabled state after the timer is not designed; it is presumably **primary**.

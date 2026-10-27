@@ -308,7 +308,7 @@ export const en = {
     waitAtDoor: 'Wait at the door',
     stayNear: 'Stay near the drop point',
     afterSecondCall: 'Starts after the second call',
-    waitLeftA11y: (minutes: number) => `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} left`,
+    leaveAt: (time: string) => `You can leave at ${time}`,
     unlocksAfterTimer: 'Unlocks when the timer ends',
     photoNow: 'You can leave the order now',
     photoRules: (name: string) =>

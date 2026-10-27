@@ -164,7 +164,7 @@ Scoped admin roles per `admin-fleet-v1.yaml`; the legacy ADMIN role gets nothing
 | `GET /slots?from&to&riderId`, `POST /slots`, `POST /slots/{id}/cancel` | Ops-assigned slots: 409 `SLOT_OVERLAP`, `SLOT_NOT_BOOKED`; 422 `GUARANTEE_OUT_OF_RANGE` (outside the current rate card's declared range), `SLOT_END_NOT_AFTER_START`. |
 | `GET /trips` | Orders not yet delivered, failed or cancelled, oldest first, with the courier they have now. |
 | `GET /dispatch-queue` | Orders in the ops queue, oldest first, with each earlier stage's outcome: `CRITICAL` after 5 minutes or when a booking may exist (an uncertain create: check that company first), `INFO` when a courier took it after all, else `WARNING`. Ops clears an item by giving it to a rider or cancelling it. |
-| `GET /positions` | Each rider's latest fix of the last 12 hours: position, age, on shift, trip, mock flag. Operations roles only. |
+| `GET /positions` | The latest fix of each rider on shift or on a trip now (see "Data retention"): position, age, on shift, trip, mock flag. Operations roles only. |
 | `POST /trips/{id}/reassign`, `/cancel` | See "Ops reassign and cancel". 409 `TRIP_NOT_REASSIGNABLE`, `RIDER_NOT_AVAILABLE`, `RATE_CARD_REQUIRED`, `TRIP_ALREADY_FINISHED`, `TRIP_NOT_CANCELLABLE`. |
 | `GET /payout-batches`, `POST /payout-batches`, `GET /payout-batches/{id}` | Payout files: reads for payments and audit admins, changes for payments admins. `POST {kind: WEEKLY or DAILY_WITHDRAWAL, payoutDate}` (today or earlier, IST): 409 `BATCH_EXISTS`, 422 `NOTHING_TO_PAY`, `NOT_A_MONDAY`, `PAYOUT_DATE_IN_FUTURE`. |
 | `GET /payout-batches/{id}/file` | The bank's CSV (`payoutId,holderName,accountOrUpiId,ifsc,amountRupees`) with full account numbers, decrypted only here; formula-like cells get a leading apostrophe; `no-store`; every download is audited without numbers. |
@@ -309,8 +309,8 @@ Fleet jobs run on their own pool, `fleetScheduler` (`FleetConfiguration`, fleet 
 |---|---|---|
 | `RiderJoinsExitsExport.writeYesterday` | 00:20 IST | Yesterday's joins and exits CSV to `riders/exports/rider-joins-exits-YYYY-MM-DD.csv`. JOINED is a move to ACTIVE from PENDING (or a rejoin); EXITED is a deactivation. |
 | `FleetSlotService.settleDue` | every 60 s | Settles finished slots. |
-| `FleetDispatchJobs.tick` | every 5 s | Offer expiry, stage deadlines, the watchdog, the ops queue, cancelled orders. |
-| `FleetLocationService.createTrackDays` | 1 min after start, then every 6 h (location ingest flag) | Creates the next 7 days of `trip_track` partitions, never today; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED`. |
+| `FleetDispatchJobs.tick` | every 5 s | Offer expiry, stage deadlines, the watchdog, the ops queue, cancelled orders, forgetting off-shift positions. |
+| `FleetLocationService.createTrackDays` | 1 min after start, then every 6 h (location ingest flag) | Creates the next 7 days of `trip_track` partitions, never today; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED`. Then drops day partitions older than 90 days and deletes older rows in `trip_track_default`; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_RETENTION_FAILED`. A drop waits at most 3 s for its lock. |
 | `FleetEarnings.tick` | every 60 s | Credits finished trips and slot top-ups still waiting, releases holds that are due. |
 
 A trip's credit after its delivery commits is also handed to this pool (`FleetEarnings.onTripPayFinalized`), so the rider's request never waits for a second database connection; if the pool refuses it, the money job credits it.
@@ -323,6 +323,19 @@ CREATE TABLE IF NOT EXISTS fleet_schema.trip_track_20261028 PARTITION OF fleet_s
 ```
 
 If fixes for that day already landed in `trip_track_default`, the statement fails: move those rows out of the default partition first.
+
+### Data retention
+
+Location is collected only while the rider is online, and kept only as long as below (blueprint E6, Gopi's defaults; the rider privacy notice text is the lawyer's, and DPDP duties apply from 13 May 2027).
+
+| Data | Kept | How |
+|---|---|---|
+| Latest position (`rider_position_latest`) | While the rider is on an open, unexpired shift or on a trip, then 15 minutes after the last fix | `FleetDispatchJobs.forgetOffShiftPositions`, every 5 s. Ops `GET /positions` lists only riders on shift or on a trip. |
+| On-trip fixes (`trip_track`) | 90 days | `FleetLocationService.createTrackDays` drops the IST day partitions and deletes `trip_track_default` rows past 90 days. |
+| Delivery photos (`riders/<riderId>/trips/<tripId>/delivery-…`) | 90 days | Not automated yet: P2-09 adds the delete job. |
+| Shift selfies (`riders/<riderId>/selfies/…`) | 30 days | Not automated yet: P2-09 adds the delete job. |
+
+Never stored: a full Aadhaar number (there is no Aadhaar document type), or location while the rider is offline (the app never asks for background location).
 
 Database connections: every service sets its Hikari pool explicitly so that pool × max replicas, summed over the eight apps on the shared server, stays within 45 (`scripts/release/check-db-connection-budget.py`, 43 today; integration-service 4 × 2, order-service 3 × 3). integration-service's other jobs keep one thread per job on their own watched pools.
 

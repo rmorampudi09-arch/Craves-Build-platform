@@ -299,17 +299,19 @@ class FleetOpsDatabaseTest {
         assertThat(items).allSatisfy(item -> assertThat(item.alertMessage().length()).isLessThanOrEqualTo(300));
     }
 
+    /** Location only while working (blueprint E6): ops sees riders on shift or on a trip, and nobody else. */
     @Test
-    void positionsAreEachRidersLatestFixFromTheLastTwelveHoursWithShiftTripAndMockFlags() {
+    void positionsAreOnlyOfRidersOnShiftOrOnATripWithTheirTripAndMockFlags() {
         UUID tripId = accept(near);
         FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 30, true);
-        fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now() WHERE rider_id = ?", other);
-        UUID yesterday = fleet.rider("Old Fix", "+919800000003");
+        UUID wentHome = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now() WHERE rider_id = ?", wentHome);
+        UUID yesterday = fleet.rider("Old Fix", "+919800000004");
         FleetDispatchFixtures.fix(fleet.db, yesterday, KITCHEN_LAT, KITCHEN_LNG, 13 * 3600, false);
 
         List<Position> positions = service.positions().positions();
 
-        assertThat(positions).extracting(Position::riderId).containsExactlyInAnyOrder(near, other);
+        assertThat(positions).as("off shift and off a trip: not shown").extracting(Position::riderId).containsExactlyInAnyOrder(near, other);
         Position onTrip = positions.stream().filter(p -> p.riderId().equals(near)).findFirst().orElseThrow();
         assertThat(onTrip.onShift()).isTrue();
         assertThat(onTrip.onTrip()).isTrue();
@@ -317,12 +319,12 @@ class FleetOpsDatabaseTest {
         assertThat(onTrip.mock()).isFalse();
         assertThat(onTrip.riderName()).isEqualTo("Ravi Kumar");
         assertThat(onTrip.lat()).isEqualTo(KITCHEN_LAT);
-        Position off = positions.stream().filter(p -> p.riderId().equals(other)).findFirst().orElseThrow();
-        assertThat(off.onShift()).isFalse();
-        assertThat(off.onTrip()).isFalse();
-        assertThat(off.tripId()).isNull();
-        assertThat(off.mock()).isTrue();
-        assertThat(off.ageSeconds()).isBetween(30L, 90L);
+        Position waiting = positions.stream().filter(p -> p.riderId().equals(other)).findFirst().orElseThrow();
+        assertThat(waiting.onShift()).isTrue();
+        assertThat(waiting.onTrip()).isFalse();
+        assertThat(waiting.tripId()).isNull();
+        assertThat(waiting.mock()).isTrue();
+        assertThat(waiting.ageSeconds()).isBetween(30L, 90L);
         assertThat(Position.class.getRecordComponents()).extracting(java.lang.reflect.RecordComponent::getName)
             .as("the rider's own fix only, never the customer's").containsExactly("riderId", "riderName", "lat", "lng", "recordedAt",
                 "ageSeconds", "onShift", "onTrip", "tripId", "mock");

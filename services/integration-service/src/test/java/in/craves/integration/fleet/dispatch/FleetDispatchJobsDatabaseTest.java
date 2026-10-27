@@ -166,6 +166,23 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(state(kept)).isEqualTo("ASSIGNED");
     }
 
+    /** Retention (blueprint E6): a position goes 15 minutes after the shift ends, and never while the rider is on a trip. */
+    @Test
+    void offShiftPositionsAreForgottenAfterFifteenMinutesButNotDuringATrip() {
+        UUID delivering = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        acceptedTrip(UUID.randomUUID(), "PICKED_UP", delivering);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now() WHERE rider_id IN (?, ?)", rider, delivering);
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 14 * 60, false);
+        FleetDispatchFixtures.fix(fleet.db, delivering, KITCHEN_LAT, KITCHEN_LNG, 20 * 60, false);
+        UUID waiting = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 20 * 60, false);
+
+        assertThat(jobs.forgetOffShiftPositions()).as("14 minutes after the last fix: kept").isZero();
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 16 * 60, false);
+        assertThat(jobs.forgetOffShiftPositions()).isEqualTo(1);
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.rider_position_latest", UUID.class))
+            .containsExactlyInAnyOrder(delivering, waiting);
+    }
+
     @Test
     void theHandedBackOrderIsBookedWithTheNextCourierAndTheJobNamesCravesFleetAsTheSource() {
         UUID chefSubOrderId = UUID.randomUUID();

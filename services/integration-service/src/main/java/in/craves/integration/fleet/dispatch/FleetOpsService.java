@@ -141,19 +141,21 @@ public class FleetOpsService {
     }
 
     /**
-     * Each rider's latest fix received in the last 12 hours: where, how old, on shift, on a trip (which), and whether the
-     * phone said it was a mock location. Riders only; nothing about customers.
+     * The latest fix of each rider who is on shift or on a trip now (blueprint E6: location only while working): where,
+     * how old, on shift, on a trip (which), and whether the phone said it was a mock location. Riders only; nothing about
+     * customers.
      */
     public PositionList positions() {
         return new PositionList(jdbc.query("""
-            SELECT p.rider_id, r.name, p.lat, p.lng, p.recorded_at, p.mock,
-                   GREATEST(0, EXTRACT(EPOCH FROM now() - p.recorded_at))::bigint AS age_seconds,
-                   EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = p.rider_id AND s.ended_at IS NULL) AS on_shift,
-                   (SELECT t.id FROM fleet_schema.trip t WHERE t.rider_id = p.rider_id AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
-                     LIMIT 1) AS trip_id
-            FROM fleet_schema.rider_position_latest p JOIN fleet_schema.rider r ON r.id = p.rider_id
-            WHERE p.received_at > now() - INTERVAL '12 hours'
-            ORDER BY r.name, p.rider_id LIMIT 1000""", (row, n) -> {
+            SELECT * FROM (
+              SELECT p.rider_id, r.name, p.lat, p.lng, p.recorded_at, p.mock,
+                     GREATEST(0, EXTRACT(EPOCH FROM now() - p.recorded_at))::bigint AS age_seconds,
+                     EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = p.rider_id AND s.ended_at IS NULL) AS on_shift,
+                     (SELECT t.id FROM fleet_schema.trip t WHERE t.rider_id = p.rider_id AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
+                       LIMIT 1) AS trip_id
+              FROM fleet_schema.rider_position_latest p JOIN fleet_schema.rider r ON r.id = p.rider_id) working
+            WHERE on_shift OR trip_id IS NOT NULL
+            ORDER BY name, rider_id LIMIT 1000""", (row, n) -> {
             UUID tripId = row.getObject("trip_id", UUID.class);
             return new Position(row.getObject("rider_id", UUID.class), row.getString("name"), row.getDouble("lat"), row.getDouble("lng"),
                 row.getTimestamp("recorded_at").toInstant(), row.getLong("age_seconds"), row.getBoolean("on_shift"), tripId != null, tripId,

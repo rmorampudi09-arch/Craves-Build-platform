@@ -3,6 +3,11 @@ package in.craves.integration.fleet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.fleet.rider.FleetLocationService;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -212,6 +217,30 @@ class FleetSchemaDatabaseTest {
         assertThat(db.queryForList("SELECT tableoid::regclass::text FROM fleet_schema.trip_track ORDER BY recorded_at", String.class))
             .containsExactly("fleet_schema.trip_track_default", "fleet_schema.trip_track_"
                 + db.queryForObject("SELECT to_char(now() AT TIME ZONE 'Asia/Kolkata', 'YYYYMMDD')", String.class));
+    }
+
+    /** Retention (blueprint E6): on-trip fixes are kept 90 days; older day partitions and default-partition rows go. */
+    @Test
+    void trackDaysOlderThanNinetyDaysAreDropped() {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+        String old = trackDay(today.minusDays(91));
+        String kept = trackDay(today.minusDays(89));
+        db.update("INSERT INTO fleet_schema.trip_track (trip_id, rider_id, recorded_at, lat, lng, accuracy_m, mock) VALUES "
+            + "(?, ?, now() - INTERVAL '200 days', 17.4, 78.3, 5, false), (?, ?, now() - INTERVAL '10 days', 17.4, 78.3, 5, false)",
+            UUID.randomUUID(), ravi, UUID.randomUUID(), ravi);
+
+        new FleetLocationService(db, new ObjectMapper()).createTrackDays();
+
+        assertThat(db.queryForList("SELECT relname::text FROM pg_class WHERE relname IN (?, ?)", String.class, old, kept)).containsExactly(kept);
+        assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track_default", Integer.class)).as("the 10-day-old row")
+            .isEqualTo(1);
+    }
+
+    private String trackDay(LocalDate day) {
+        String name = "trip_track_" + day.format(DateTimeFormatter.BASIC_ISO_DATE);
+        db.execute("CREATE TABLE fleet_schema." + name + " PARTITION OF fleet_schema.trip_track FOR VALUES FROM ('" + day
+            + " 00:00+05:30') TO ('" + day.plusDays(1) + " 00:00+05:30')");
+        return name;
     }
 
     private void device(UUID rider, String state) {

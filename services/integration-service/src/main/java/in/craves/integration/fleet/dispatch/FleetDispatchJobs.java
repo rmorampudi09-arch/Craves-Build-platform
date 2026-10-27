@@ -48,6 +48,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   on the way to the kitchen whose phone stopped calling for 90 s loses the trip (pickup-leg pay, held for ops), ops is
  *   alerted and the order goes to the next stage; CANCELLED is never published for it. At the kitchen the rider may
  *   already hold the food, so 90 s silent only alerts ops (once per trip) and the trip goes back at 300 s silent;
+ * - positions of riders no longer on shift or on a trip are forgotten after 15 minutes (forgetOffShiftPositions);
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
  *   ops alert; a queued order closes there too once a courier is assigned after all. A watchdog order is booked with Borzo or Pidge here, through the router, and its delivery job is handed
  *   over with handoffFromProviderId craves_fleet.
@@ -107,6 +108,20 @@ public class FleetDispatchJobs {
         cancelledOrders();
         watchdog();
         courierStages();
+        forgetOffShiftPositions();
+    }
+
+    /**
+     * Retention (BACKEND.md "Data retention", blueprint E6): a rider's latest position is kept only while they are on an
+     * open, unexpired shift or on a trip, and is deleted 15 minutes after its last fix once neither holds.
+     */
+    int forgetOffShiftPositions() {
+        return jdbc.update("""
+            DELETE FROM fleet_schema.rider_position_latest p WHERE p.received_at < now() - INTERVAL '15 minutes'
+              AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = p.rider_id AND s.ended_at IS NULL
+                              AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now())
+              AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = p.rider_id
+                              AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))""");
     }
 
     /**

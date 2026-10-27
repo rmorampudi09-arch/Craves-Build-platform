@@ -11,12 +11,14 @@ import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -50,6 +53,8 @@ public class FleetLocationService {
     /** Fixes stamped further ahead of the database clock are dropped. */
     static final Duration CLOCK_AHEAD = Duration.ofMinutes(5);
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+    /** On-trip fixes are kept this many days (blueprint E6). */
+    static final int TRACK_DAYS_KEPT = 90;
     private static final String CONTEXT = """
         SELECT s.id AS shift_id, s.started_at, s.ended_at, s.credential_revoked_at, s.credential_expires_at <= now() AS expired,
                r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
@@ -149,7 +154,8 @@ public class FleetLocationService {
 
     /**
      * Creates the trip_track partitions for the next 7 IST days, a minute after start-up and every 6 hours. Never today:
-     * fixes may already sit in trip_track_default for it, and the partition would then be refused.
+     * fixes may already sit in trip_track_default for it, and the partition would then be refused. Then drops the days
+     * past retention (dropOldTrackDays).
      */
     @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT6H", scheduler = FleetConfiguration.FLEET_SCHEDULER)
     public void createTrackDays() {
@@ -163,6 +169,52 @@ public class FleetLocationService {
                 LOGGER.error("CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED day={} reason={}", day, exception.getMostSpecificCause().getMessage());
             }
         }
+        dropOldTrackDays(today);
+    }
+
+    /**
+     * Retention (BACKEND.md "Data retention", blueprint E6): on-trip fixes are kept 90 days. Day partitions that ended
+     * before then are dropped, and older rows that landed in trip_track_default are deleted.
+     */
+    void dropOldTrackDays(LocalDate today) {
+        LocalDate oldestKept = today.minusDays(TRACK_DAYS_KEPT);
+        try {
+            List<String> days = jdbc.queryForList("""
+                SELECT c.relname FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid JOIN pg_class p ON p.oid = i.inhparent
+                JOIN pg_namespace n ON n.oid = p.relnamespace
+                WHERE n.nspname = 'fleet_schema' AND p.relname = 'trip_track' AND c.relname ~ '^trip_track_[0-9]{8}$'""", String.class);
+            for (String name : days) {
+                LocalDate day = LocalDate.parse(name.substring("trip_track_".length()), DateTimeFormatter.BASIC_ISO_DATE);
+                if (day.isBefore(oldestKept)) {
+                    dropPartition(name);
+                    LOGGER.info("FLEET_TRACK_DAY_DROPPED day={}", day);
+                }
+            }
+            jdbc.update("DELETE FROM fleet_schema.trip_track_default WHERE recorded_at < ?", Timestamp.from(oldestKept.atStartOfDay(IST).toInstant()));
+        } catch (DataAccessException | DateTimeParseException exception) {
+            LOGGER.error("CRAVES_ALERT alert=TRIP_TRACK_RETENTION_FAILED reason={}", exception instanceof DataAccessException data
+                ? data.getMostSpecificCause().getMessage() : exception.getMessage());
+        }
+    }
+
+    /** name comes from the catalog and matches trip_track_ and 8 digits. */
+    private void dropPartition(String name) {
+        jdbc.execute((ConnectionCallback<Void>) connection -> {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (Statement statement = connection.createStatement()) {
+                // The drop locks trip_track itself: give up rather than hold riders' track inserts behind it.
+                statement.execute("SET LOCAL lock_timeout = '3s'");
+                statement.execute("DROP TABLE IF EXISTS fleet_schema." + name);
+                connection.commit();
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+            return null;
+        });
     }
 
     /** Why the phone must stop, or null. Each stop also closes the shift. */

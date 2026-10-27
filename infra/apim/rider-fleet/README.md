@@ -16,11 +16,12 @@ Gateway path = backend path; operation policies set the backend with base-url
 | Policy | Used by | What it does |
 |---|---|---|
 | `json-policy.xml` | rider JSON routes | Bearer header required (401), shift credential header dropped, 64 KB body cap, at most 4 calls in flight per rider, 30 s backend timeout |
-| `upload-policy.xml` | `POST /shift/start`, `/documents`, `/trips/{tripId}/{action}` | As JSON, without the body cap (multipart photos up to 10 MB are checked by the backend), 2 uploads in flight per rider, 60 s |
+| `upload-policy.xml` | `POST /shift/start`, `/documents` | As JSON, without the body cap (multipart photos up to 10 MB are checked by the backend), 2 uploads in flight per rider, 60 s |
+| `trip-policy.xml` | `POST /trips/{tripId}/{action}` | Bearer header **or** `X-Craves-Shift-Credential` (P2-01: the phone's native outbox; the backend accepts the credential only once `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on, and only for that rider's own trip), credential passed through, JSON or a multipart photo without a body cap (the backend checks 10 MB), 2 calls in flight per rider (shared with uploads) or per shift, 60 s |
 | `location-policy.xml` | `POST /locations`, `/devices` | Bearer header **or** `X-Craves-Shift-Credential` (the phone's online service sends only the credential; a 401 there ends the rider's shift), credential passed through, 16 KB cap, 2 calls in flight per shift, 20 s |
 | `admin-policy.xml` | every admin fleet route | The existing admin protections (`admin-operational-investigations`): Bearer header, correlation id, `no-store`, `nosniff`, `X-Frame-Options: DENY`; shift credential dropped |
 
-Nothing is cached: every response is `no-store`, and no policy has `cache-lookup`. The backend stays authoritative for the JWT, roles, ownership and the shift credential (valid only on `/locations` and `/devices`).
+Nothing is cached: every response is `no-store`, and no policy has `cache-lookup`. The backend stays authoritative for the JWT, roles, ownership and the shift credential (valid only on `/locations` and `/devices`, and on trip steps once switched on).
 
 **Rate limits.** The Consumption gateway does not support `rate-limit-by-key`, and `rate-limit` needs a subscription key these routes do not use (see `docs/admin/explorer/README.md`). So the gateway bounds calls in flight per caller with `limit-concurrency` (key: the token's subject, or the first 12 characters of the shift credential, never the whole secret). The phone sends one location batch every 10–20 s, one call at a time, so 2 in flight leaves room for a retry; anything over the limit gets 429 and the phone retries on its next tick.
 

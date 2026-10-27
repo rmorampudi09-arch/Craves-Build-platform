@@ -28,7 +28,8 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Going online and offline. A shift hands out an opaque shift credential (32 random bytes, base64url) that the native
  * location service sends instead of a JWT. Only its SHA-256 is stored; it ends with the shift's 12 hours, at
- * /shift/end, or when ops approves another phone, and it works only on POST /locations and POST /devices.
+ * /shift/end, or when ops approves another phone, and it works only on POST /locations and POST /devices, and on trip
+ * steps once craves.fleet.trip-shift-credential-enabled is on (tripIdentity).
  */
 @Service
 @ConditionalOnProperty(name = {"craves.fleet.enabled", "craves.fleet.rider-api-enabled"}, havingValue = "true")
@@ -168,6 +169,28 @@ public class FleetShiftService {
             String.class, deviceId(riderId, device.installationId()), riderId, device.fcmToken(), device.appVersion(), device.model().trim(),
             riderId);
         return "BOUND".equals(state);
+    }
+
+    /**
+     * The identity of the rider whose live shift this credential is, for a step on tripId from the phone's native outbox
+     * (P2-01, craves.fleet.trip-shift-credential-enabled): only that rider's trip in progress, or one that ended during this
+     * shift, so a retried step still gets its first answer. A deactivated rider's credential moves nothing, as their JWT
+     * has lost the RIDER role. 401 SHIFT_CREDENTIAL_INVALID; 404 TRIP_NOT_FOUND for any other trip.
+     */
+    @Transactional(readOnly = true)
+    public UUID tripIdentity(String credential, UUID tripId) {
+        Map<String, Object> shift = jdbc.queryForList("SELECT r.identity_id, s.started_at FROM fleet_schema.rider_shift s "
+                + "JOIN fleet_schema.rider r ON r.id = s.rider_id WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL "
+                + "AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now() AND r.status <> 'DEACTIVATED' "
+                + "AND r.identity_id IS NOT NULL", hash(credential))
+            .stream().findFirst().orElseThrow(FleetShiftService::credentialInvalid);
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip t JOIN fleet_schema.rider r "
+            + "ON r.id = t.rider_id WHERE t.id = ? AND r.identity_id = ? AND t.provider = 'CRAVES_FLEET' "
+            + "AND (t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP') OR t.finished_at >= ?))", Boolean.class, tripId,
+            shift.get("identity_id"), shift.get("started_at")))) {
+            throw FleetApiException.notFound("TRIP_NOT_FOUND", "This trip is not yours.");
+        }
+        return (UUID) shift.get("identity_id");
     }
 
     static FleetApiException credentialInvalid() {

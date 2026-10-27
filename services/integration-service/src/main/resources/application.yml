@@ -36,6 +36,9 @@ craves:
     # Ops may give a rider's trip before pickup to another rider (a new trip). Switch on only once order-service from the
     # same release is live: an older one refuses the rider-to-rider handoff, and the order would keep the first rider.
     rider-handover-enabled: ${CRAVES_FLEET_RIDER_HANDOVER_ENABLED:false}
+    # Trip steps may come from the phone's native outbox with the shift credential instead of a JWT (P2-01): only the
+    # rider's trip in progress or one that ended during the shift. Keep false until the security review signs it off.
+    trip-shift-credential-enabled: ${CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED:false}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

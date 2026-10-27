@@ -3,15 +3,19 @@ package in.craves.integration.fleet.trip;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.rider.FleetRiderController;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
 import in.craves.integration.fleet.trip.FleetTripService.Tap;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,7 +29,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Offers and trips of the rider API (contracts/openapi/rider-v1.yaml). WebSecurityConfiguration requires the RIDER role;
- * off unless CRAVES_FLEET_RIDER_API_ENABLED. Every POST carries an Idempotency-Key.
+ * off unless CRAVES_FLEET_RIDER_API_ENABLED. Every POST carries an Idempotency-Key. With
+ * craves.fleet.trip-shift-credential-enabled (P2-01, off by default) a trip step may come from the phone's native outbox
+ * with the shift credential instead of a JWT: WebSecurityConfiguration then lets POST /trips/{tripId}/{action} through and
+ * this controller requires the credential (its rider's own trip, FleetShiftService.tripIdentity) or a RIDER JWT.
  */
 @RestController
 @RequestMapping("/api/v1/rider")
@@ -35,10 +42,15 @@ public class FleetTripController {
 
     private final FleetTripService trips;
     private final ObjectMapper json;
+    private final FleetShiftService shifts;
+    private final boolean credentialSteps;
 
-    public FleetTripController(FleetTripService trips, ObjectMapper json) {
+    public FleetTripController(FleetTripService trips, ObjectMapper json, FleetShiftService shifts,
+                               @Value("${craves.fleet.trip-shift-credential-enabled:false}") boolean credentialSteps) {
         this.trips = trips;
         this.json = json;
+        this.shifts = shifts;
+        this.credentialSteps = credentialSteps;
     }
 
     /** 200 Trip; 409 OFFER_TAKEN when another rider got it; 410 OFFER_EXPIRED. */
@@ -72,8 +84,9 @@ public class FleetTripController {
     @PostMapping("/trips/{tripId}/{action}")
     public ResponseEntity<Trip> step(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID tripId,
                                      @PathVariable String action, @RequestHeader(KEY) String key,
+                                     @RequestHeader(name = FleetShiftService.SHIFT_CREDENTIAL, required = false) String credential,
                                      @RequestBody(required = false) StepBody body) {
-        UUID identity = identity(principal);
+        UUID identity = stepIdentity(principal, credential, tripId);
         String idempotencyKey = key(key);
         Tap tap = body == null ? Tap.NONE : new Tap(body.ageMs(), body.fix(), Boolean.TRUE.equals(body.capturedOffline()));
         return noStore(switch (action) {
@@ -92,7 +105,9 @@ public class FleetTripController {
     /** delivered with method PHOTO (multipart): after two calls and the wait, or once the OTP is locked; pay held for ops. */
     @PostMapping(path = "/trips/{tripId}/delivered", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Trip> deliveredByPhoto(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID tripId,
-                                                 @RequestHeader(KEY) String key, @RequestParam("method") String method,
+                                                 @RequestHeader(KEY) String key,
+                                                 @RequestHeader(name = FleetShiftService.SHIFT_CREDENTIAL, required = false) String credential,
+                                                 @RequestParam("method") String method,
                                                  @RequestParam(value = "callsMade", required = false) Integer callsMade,
                                                  @RequestPart(value = "photo", required = false) MultipartFile photo,
                                                  @RequestParam(value = "ageMs", required = false) String ageMs,
@@ -100,7 +115,16 @@ public class FleetTripController {
         if (!"PHOTO".equals(method)) {
             throw FleetApiException.invalid("Send method PHOTO with the photo.");
         }
-        return noStore(trips.deliveredByPhoto(identity(principal), tripId, callsMade, photo, key(key), new Tap(ageMs(ageMs), fix(fix))));
+        return noStore(trips.deliveredByPhoto(stepIdentity(principal, credential, tripId), tripId, callsMade, photo, key(key),
+            new Tap(ageMs(ageMs), fix(fix))));
+    }
+
+    /** The shift credential's rider for this trip when credential steps are on and it was sent, else the RIDER JWT's identity. */
+    private UUID stepIdentity(CravesPrincipal principal, String credential, UUID tripId) {
+        if (credentialSteps && StringUtils.hasText(credential)) {
+            return shifts.tripIdentity(credential, tripId);
+        }
+        return credentialSteps ? FleetRiderController.riderIdentity(principal) : identity(principal);
     }
 
     /**

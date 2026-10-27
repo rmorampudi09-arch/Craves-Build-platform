@@ -20,6 +20,7 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.trip.FleetTripModels.Customer;
 import in.craves.integration.fleet.trip.FleetTripModels.Kitchen;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
 import in.craves.integration.fleet.trip.FleetTripService.Tap;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
@@ -51,6 +52,7 @@ class FleetTripControllerTest {
     static final UUID OFFER = UUID.fromString("44444444-4444-4444-8444-444444444444");
     @Autowired MockMvc mvc;
     @MockBean FleetTripService trips;
+    @MockBean FleetShiftService shifts;
     @MockBean JwtVerifier verifier;
     final UUID identity = UUID.randomUUID();
 
@@ -67,6 +69,18 @@ class FleetTripControllerTest {
             mvc.perform(request.header("Authorization", "Bearer customer").header("Idempotency-Key", "k1")).andExpect(status().isForbidden());
         }
         verifyNoInteractions(trips);
+    }
+
+    @Test
+    void withCredentialStepsOffTheShiftCredentialIsIgnored() throws Exception {
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/picked-up").header(FleetShiftService.SHIFT_CREDENTIAL, "live-credential")
+            .header("Idempotency-Key", "k1")).andExpect(status().is4xxClientError());
+        verifyNoInteractions(trips);
+        when(trips.step(identity, TRIP, "picked-up", "k2", Tap.NONE)).thenReturn(trip());
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/picked-up").header("Authorization", "Bearer rider")
+            .header(FleetShiftService.SHIFT_CREDENTIAL, "live-credential").header("Idempotency-Key", "k2")).andExpect(status().isOk());
+        verify(trips).step(identity, TRIP, "picked-up", "k2", Tap.NONE);
+        verifyNoInteractions(shifts);
     }
 
     @Test

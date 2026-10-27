@@ -115,7 +115,7 @@ public class FleetRiderController {
     }
 
     /** The signed-in identity holding the RIDER role, for the routes Spring Security lets through for the shift credential. */
-    static UUID riderIdentity(CravesPrincipal principal) {
+    public static UUID riderIdentity(CravesPrincipal principal) {
         UUID identity = identity(principal);
         if (!principal.hasRole("RIDER")) {
             throw FleetApiException.forbidden();

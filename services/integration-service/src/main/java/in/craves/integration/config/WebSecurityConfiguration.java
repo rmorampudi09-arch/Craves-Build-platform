@@ -11,6 +11,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 @Configuration
 public class WebSecurityConfiguration {
@@ -20,6 +22,10 @@ public class WebSecurityConfiguration {
         CravesJwtAuthenticationFilter jwtFilter,
         Environment environment
     ) throws Exception {
+        // P2-01, off by default: trip steps may come from the phone's native outbox with the shift credential instead of a
+        // JWT. FleetTripController then requires that credential (its rider's own trip) or a RIDER JWT itself.
+        RequestMatcher credentialTripSteps = environment.getProperty("craves.fleet.trip-shift-credential-enabled", Boolean.class, false)
+            ? AntPathRequestMatcher.antMatcher(HttpMethod.POST, "/api/v1/rider/trips/*/*") : request -> false;
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
@@ -34,9 +40,11 @@ public class WebSecurityConfiguration {
                     "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
-                // The native location service sends a shift credential instead of a JWT, on these two routes only: their
-                // controllers require that credential or a RIDER JWT. The credential authenticates nothing else.
+                // The native location service sends a shift credential instead of a JWT, on these two routes (and, with the
+                // P2-01 flag, on trip steps): their controllers require that credential or a RIDER JWT. The credential
+                // authenticates nothing else.
                 .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations", "/api/v1/rider/devices").permitAll()
+                .requestMatchers(credentialTripSteps).permitAll()
                 // Any signed-in user may ask whether they are a rider, and sign up (apply). A PENDING rider (no RIDER role
                 // until ops activates them) may read their profile and send documents and a payout account: the services
                 // require their rider row. Every other rider route needs RIDER.

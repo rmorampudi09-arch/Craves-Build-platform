@@ -481,6 +481,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** the security test, the APIM tests, and a database test showing a credential can't move another rider's trip.
 
+**Done (agent part), behind `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED`, off:** `FleetTripController` takes the credential on both step handlers (JSON and the photo) only while the setting is on, through `FleetShiftService.tripIdentity`: the rider of a live shift who isn't deactivated, and only their trip in progress or one that ended during this shift (so a retried step gets its first answer); anything else is 404 `TRIP_NOT_FOUND`, an ended shift 401. `WebSecurityConfiguration` opens `POST /trips/*/*` without a JWT only while it is on; without the credential the controller still requires a RIDER JWT. Gateway: the `trip` policy (`trip-policy.xml`) for `rider-post-trips-tripId-action`; the configure and status scripts accept the credential on it. Contract: the operation's security lists the credential. Proved by `FleetTripCredentialDatabaseTest`, `FleetTripCredentialControllerTest`, `FleetTripCredentialSecurityTest` (the walk with the setting on: only `/locations`, `/devices` and the trip steps answer), `FleetShiftCredentialSecurityTest` (setting off: still only two), and `test_rider_fleet_apim.py`. **Still open (people):** the security review; then, after the merge, run `scripts/apim/configure-rider-fleet-apim.sh` with `CONFIRM_APIM_WRITE=true` (or the configure pipeline) and the status script; switch the setting on only when an app with the native outbox (P2-02) ships.
+
 ### P2-02a Native outbox in the Kotlin service
 **Who:** agent. **Blocked by:** P2-01.
 

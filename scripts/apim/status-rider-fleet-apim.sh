@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only check of configure-rider-fleet-apim.sh on the mobile gateway: both APIs own their paths without a subscription
 # key, each has exactly the operations in infra/apim/rider-fleet/routes.txt, every policy routes to integration-service with
-# the Bearer guard and no-store, the shift credential is dropped everywhere except /locations and /devices, and every
+# the Bearer guard and no-store, the shift credential is dropped everywhere except /locations, /devices and trip steps, and every
 # route answers 401 to an unauthenticated probe. Writes nothing and sends no authenticated request.
 #
 #   bash scripts/apim/status-rider-fleet-apim.sh   (az login first)
@@ -54,8 +54,9 @@ for ROUTE in "${ROUTES[@]}"; do
     problem "$METHOD $TARGET: policy lacks this backend, the Bearer guard or no-store"
   [[ "$POLICY" != *'backend-id='* && "$POLICY" != *cache-lookup* ]] || problem "$METHOD $TARGET: policy uses backend-id or caching"
   DROPS=false; [[ "$POLICY" == *'name="X-Craves-Shift-Credential" exists-action="delete"'* ]] && DROPS=true
-  [[ ( "$KIND" == location && "$DROPS" == false ) || ( "$KIND" != location && "$DROPS" == true ) ]] ||
-    problem "$METHOD $TARGET: the shift credential must pass only on /locations and /devices"
+  PASSES=false; [[ "$KIND" == location || "$KIND" == trip ]] && PASSES=true
+  [[ "$PASSES" != "$DROPS" ]] ||
+    problem "$METHOD $TARGET: the shift credential must pass only on /locations, /devices and trip steps"
   BODY_ARGS=(); [[ "$METHOD" == POST || "$METHOD" == PUT || "$METHOD" == PATCH ]] && BODY_ARGS=(-H 'Content-Type: application/json' --data '{}')
   STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 -X "$METHOD" ${BODY_ARGS[@]+"${BODY_ARGS[@]}"} \
     "$PUBLIC_HOST$(sed -E 's/\{[^}]*\}/probe/g' <<<"$TARGET")" || true)

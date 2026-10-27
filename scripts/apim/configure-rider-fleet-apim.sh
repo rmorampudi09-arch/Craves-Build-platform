@@ -34,7 +34,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 mapfile -t APIS < <(sed -n 's/^api|//p' "$POLICY_DIR/routes.txt")
 mapfile -t ROUTES < <(sed -n 's/^route|//p' "$POLICY_DIR/routes.txt")
 (( ${#APIS[@]} == 2 && ${#ROUTES[@]} > 0 )) || fail 'routes.txt must list the two APIs and their routes'
-for KIND in json upload location admin; do [[ -f "$POLICY_DIR/$KIND-policy.xml" ]] || fail "Policy template $KIND-policy.xml is missing"; done
+for KIND in json upload location trip admin; do [[ -f "$POLICY_DIR/$KIND-policy.xml" ]] || fail "Policy template $KIND-policy.xml is missing"; done
 
 api_field() { local ROW f; for ROW in "${APIS[@]}"; do IFS='|' read -r -a f <<<"$ROW"; [[ "${f[0]}" == "$1" ]] && { echo "${f[$2]}"; return; }; done; fail "unknown api key $1"; }
 normalise() { sed -E 's/\{[^}]*\}/{}/g' <<<"$1"; }
@@ -151,11 +151,11 @@ for I in "${!ROUTES[@]}"; do
   jq -Rs '{properties:{format:"rawxml",value:.}}' "$TEMP_DIR/policy.xml" >"$TEMP_DIR/policy.json"
   az rest --method put --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --body @"$TEMP_DIR/policy.json" -o none --only-show-errors
   KEEP[$KEY]+=" $OP "
-  # Read-back: this backend, the Bearer check and no-store; outside /locations and /devices the shift credential is dropped.
+  # Read-back: this backend, the Bearer check and no-store; outside /locations, /devices and trip steps the shift credential is dropped.
   POLICY=$(az rest --method get --url "$MGMT/operations/$OP/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv --only-show-errors)
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *Bearer* && "$POLICY" == *no-store* && "$POLICY" == *nosniff* ]] ||
     fail "Policy read-back failed for $METHOD /$(api_field "$KEY" 1)$TEMPLATE on $API."
-  if [[ "$KIND" == location ]]; then
+  if [[ "$KIND" == location || "$KIND" == trip ]]; then
     [[ "$POLICY" != *'name="X-Craves-Shift-Credential" exists-action="delete"'* ]] || fail "The shift credential is dropped on $METHOD $TEMPLATE."
   else
     [[ "$POLICY" == *'name="X-Craves-Shift-Credential" exists-action="delete"'* ]] || fail "The shift credential is not dropped on $METHOD $TEMPLATE."

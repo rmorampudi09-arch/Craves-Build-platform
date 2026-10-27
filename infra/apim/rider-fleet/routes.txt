@@ -3,7 +3,8 @@
 api|rider|api/v1/rider|craves-rider-v1|Craves Rider API
 api|admin|api/v1/admin/fleet|craves-admin-fleet-v1|Craves Admin Fleet API
 # route|api key|operation id|method|url template (relative to the API path)|policy file <kind>-policy.xml
-# json: Bearer, 64 KB. upload: Bearer, multipart. location: Bearer or the shift credential, 16 KB. admin: the admin protections.
+# json: Bearer, 64 KB. upload: Bearer, multipart. location: Bearer or the shift credential, 16 KB. trip: Bearer or the shift
+# credential, JSON or multipart (P2-01; the backend takes the credential only once switched on). admin: the admin protections.
 # Kept equal to contracts/openapi/rider-v1.yaml and admin-fleet-v1.yaml by scripts/apim/tests/test_rider_fleet_apim.py.
 route|rider|rider-get-me|GET|/me|json
 route|rider|rider-post-apply|POST|/apply|json
@@ -20,7 +21,7 @@ route|rider|rider-post-locations|POST|/locations|location
 route|rider|rider-post-offers-offerId-accept|POST|/offers/{offerId}/accept|json
 route|rider|rider-post-offers-offerId-decline|POST|/offers/{offerId}/decline|json
 route|rider|rider-get-trips-active|GET|/trips/active|json
-route|rider|rider-post-trips-tripId-action|POST|/trips/{tripId}/{action}|upload
+route|rider|rider-post-trips-tripId-action|POST|/trips/{tripId}/{action}|trip
 route|rider|rider-get-earnings|GET|/earnings|json
 route|rider|rider-get-earnings-trips-tripId|GET|/earnings/trips/{tripId}|json
 route|rider|rider-get-payouts|GET|/payouts|json

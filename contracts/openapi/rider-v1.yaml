@@ -151,6 +151,11 @@ paths:
         an earlier arrival at the kitchen or the drop counts only with a real fix there accurate to 100 m. The photo's
         unreachable wait is measured to the tap. An OTP sent with capturedOffline (typed without signal; the app told
         the rider they could go) that is refused also alerts ops, once per trip (FLEET_OFFLINE_OTP_INVALID).
+        The shift credential instead of a Bearer token (the phone's native outbox, P2-01): only once
+        CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED is on, and only for the credential's rider's trip in progress or one
+        that ended during that shift (404 TRIP_NOT_FOUND otherwise); 401 SHIFT_CREDENTIAL_INVALID once the shift ended.
+        While the setting is off the credential is ignored and the Bearer token is required.
+      security: [{bearer: []}, {shiftCredential: []}]
       parameters:
         - {$ref: '#/components/parameters/TripId'}
         - {name: action, in: path, required: true, schema: {type: string, enum: [arrived-pickup, food-not-ready, picked-up, arrived-drop, delivered, failed]}}
@@ -166,7 +171,7 @@ paths:
                 - {$ref: '#/components/schemas/StepTap'}
           multipart/form-data:
             schema: {type: object, required: [method, callsMade], properties: {method: {type: string, enum: [PHOTO]}, callsMade: {type: integer, minimum: 2}, photo: {type: string, format: binary}, ageMs: {type: integer, minimum: 0, description: 'When the photo was taken, ms before this request'}, fix: {type: string, description: RiderFix as JSON}}}
-      responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /earnings:
     get:
       summary: Per-trip pay for today or this week (Monday to Sunday), paged
@@ -208,7 +213,7 @@ paths:
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer, bearerFormat: JWT}
-    shiftCredential: {type: apiKey, in: header, name: X-Craves-Shift-Credential, description: 'ShiftStart.shiftCredential, sent by the native online service; valid only for /locations and /devices, until /shift/end or 12 h'}
+    shiftCredential: {type: apiKey, in: header, name: X-Craves-Shift-Credential, description: 'ShiftStart.shiftCredential, sent by the native online service; valid only for /locations, /devices and (once switched on) trip steps, until /shift/end or 12 h'}
   parameters:
     OfferId: {name: offerId, in: path, required: true, schema: {type: string}}
     TripId: {name: tripId, in: path, required: true, schema: {type: string}}
@@ -410,7 +415,7 @@ components:
       type: object
       required: [shiftCredential, expiresAt]
       properties:
-        shiftCredential: {type: string, description: 'Opaque; valid only for /locations and /devices; revoked at /shift/end or after 12 h. The app keeps it in the native service only.'}
+        shiftCredential: {type: string, description: 'Opaque; valid only for /locations, /devices and (once switched on) trip steps; revoked at /shift/end or after 12 h. The app keeps it in the native service only.'}
         expiresAt: {type: string, format: date-time}
     DeviceRegistration:
       type: object

@@ -44,8 +44,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * are no trips and nothing to do):
  * - offers expire on the server after their 40 s;
  * - a cancelled order's trip ends (cancelledOrders);
- * - the watchdog: a rider who accepted but whose locations stopped for 90 s before pickup loses the trip (pickup-leg pay,
- *   held for ops), ops is alerted and the order goes to the next stage; CANCELLED is never published for it;
+ * - the watchdog, on the heartbeat (rider_shift.last_seen_at: every /locations call, with or without a new fix): a rider
+ *   on the way to the kitchen whose phone stopped calling for 90 s loses the trip (pickup-leg pay, held for ops), ops is
+ *   alerted and the order goes to the next stage; CANCELLED is never published for it. At the kitchen the rider may
+ *   already hold the food, so 90 s silent only alerts ops (once per trip) and the trip goes back at 300 s silent;
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
  *   ops alert; a queued order closes there too once a courier is assigned after all. A watchdog order is booked with Borzo or Pidge here, through the router, and its delivery job is handed
  *   over with handoffFromProviderId craves_fleet.
@@ -55,6 +57,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class FleetDispatchJobs {
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetDispatchJobs.class);
     static final int WATCHDOG_SECONDS = 90;
+    /** At the kitchen the rider may hold the food (blueprint E2): ops is alerted at WATCHDOG_SECONDS, the trip goes back at this. */
+    static final int KITCHEN_HANDBACK_SECONDS = 300;
+    /** Silent long enough to lose the trip in its state: 90 s on the way to the kitchen, 300 s at it. */
+    private static final String HANDBACK_WINDOW = "make_interval(secs => CASE WHEN t.state = 'AT_PICKUP' THEN " + KITCHEN_HANDBACK_SECONDS
+        + " ELSE " + WATCHDOG_SECONDS + " END)";
+    /** No call from any of the trip's rider's shifts since the given time. */
+    private static final String SILENT_SINCE = "NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = t.rider_id "
+        + "AND s.last_seen_at >= now() - %s)";
     static final int OPS_QUEUE_SECONDS = 24 * 3600; // nominal: ops closes a queued order by hand
     static final String RIDER_LOST = "Your location stopped before pickup, so the order went to another courier.";
     static final String RIDER_LOST_HOLD = "Your location stopped before pickup. Ops checks this trip before paying it.";
@@ -123,26 +133,55 @@ public class FleetDispatchJobs {
         return jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE state = 'ACTIVE' AND expires_at <= now()");
     }
 
-    /** Hands back every accepted trip whose rider sent no location for 90 s before pickup. */
+    /**
+     * Hands back every accepted trip whose rider's phone stopped calling before pickup: 90 s on the way to the kitchen,
+     * 300 s at it. A rider silent for 90 s at the kitchen is reported to ops once and keeps the trip meanwhile.
+     */
     int watchdog() {
-        List<UUID> silent = jdbc.queryForList("""
-            SELECT t.id FROM fleet_schema.trip t LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = t.rider_id
-            WHERE t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND t.accepted_at < now() - make_interval(secs => ?)
-              AND (p.received_at IS NULL OR p.received_at < now() - make_interval(secs => ?))
-            ORDER BY t.accepted_at LIMIT 20""", UUID.class, WATCHDOG_SECONDS, WATCHDOG_SECONDS);
+        List<Map<String, Object>> silent = jdbc.queryForList("""
+            SELECT t.id, t.state, t.order_code, t.rider_id, %s AS hand_back FROM fleet_schema.trip t
+            WHERE t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND t.accepted_at < now() - make_interval(secs => %d)
+              AND %s
+              AND (%s OR NOT EXISTS (SELECT 1 FROM fleet_schema.trip_event e WHERE e.trip_id = t.id AND e.kind = 'WATCHDOG_ALERTED'))
+            ORDER BY t.accepted_at LIMIT 20""".formatted(SILENT_SINCE.formatted(HANDBACK_WINDOW), WATCHDOG_SECONDS,
+            SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")"), SILENT_SINCE.formatted(HANDBACK_WINDOW)));
         int handedBack = 0;
-        for (UUID tripId : silent) {
+        for (Map<String, Object> trip : silent) {
+            UUID tripId = (UUID) trip.get("id");
+            Map<String, String> data = Map.of("tripId", tripId.toString(), "orderCode", String.valueOf(trip.get("order_code")),
+                "riderId", String.valueOf(trip.get("rider_id")));
+            if (!Boolean.TRUE.equals(trip.get("hand_back"))) {
+                if (Boolean.TRUE.equals(transaction.execute(status -> alertedAtKitchen(tripId)))) {
+                    alerts.opsAlert("FLEET_RIDER_SILENT_AT_KITCHEN", "Rider app silent at the kitchen, order " + trip.get("order_code"),
+                        "The rider reached the kitchen but their app has sent nothing for 90 seconds. They may have the food. Call the "
+                            + "rider. The order goes to the next courier only if the app stays silent for 5 minutes.", data);
+                }
+                continue;
+            }
             Map<String, Object> lost = transaction.execute(status -> handBack(tripId));
             if (lost != null) {
                 handedBack++;
                 alerts.opsAlert("FLEET_RIDER_LOST", "Rider location stopped before pickup, order " + lost.get("order_code"),
-                    "The rider's app sent no location for 90 seconds after accepting. The order goes to the next courier; the rider's pay "
-                        + "for this trip is held for your check. Call the rider.",
-                    Map.of("tripId", tripId.toString(), "orderCode", String.valueOf(lost.get("order_code")),
-                        "riderId", String.valueOf(lost.get("rider_id"))));
+                    ("AT_PICKUP".equals(lost.get("state")) ? "The rider's app sent nothing for 5 minutes at the kitchen."
+                        : "The rider's app sent nothing for 90 seconds after accepting.")
+                        + " The order goes to the next courier; the rider's pay for this trip is held for your check. Call the rider.",
+                    data);
             }
         }
         return handedBack;
+    }
+
+    /**
+     * Records the one kitchen alert of a trip still at the kitchen and silent; false if it changed or was alerted already.
+     * The event's fixed idempotency key makes it once per trip even with two replicas ticking.
+     */
+    private boolean alertedAtKitchen(UUID tripId) {
+        return jdbc.update("""
+            INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key, trip_version)
+            SELECT ?, t.id, 'WATCHDOG_ALERTED', 'SYSTEM', 'watchdog-kitchen-alert', t.version FROM fleet_schema.trip t
+            WHERE t.id = ? AND t.state = 'AT_PICKUP' AND %s
+            ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING"""
+            .formatted(SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")")), UUID.randomUUID(), tripId) == 1;
     }
 
     /** One silent rider's trip ends (pay per its state, held) and the next stage opens. Null if it changed meanwhile. */
@@ -150,10 +189,8 @@ public class FleetDispatchJobs {
         List<Map<String, Object>> rows = jdbc.queryForList("""
             SELECT t.state, t.order_code, t.rider_id FROM fleet_schema.trip t
             WHERE t.id = ? AND t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP')
-              AND t.accepted_at < now() - make_interval(secs => ?)
-              AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_position_latest p WHERE p.rider_id = t.rider_id
-                              AND p.received_at >= now() - make_interval(secs => ?))
-            FOR UPDATE OF t""", tripId, WATCHDOG_SECONDS, WATCHDOG_SECONDS);
+              AND t.accepted_at < now() - make_interval(secs => %d) AND %s
+            FOR UPDATE OF t""".formatted(WATCHDOG_SECONDS, SILENT_SINCE.formatted(HANDBACK_WINDOW)), tripId);
         if (rows.isEmpty()) {
             return null;
         }

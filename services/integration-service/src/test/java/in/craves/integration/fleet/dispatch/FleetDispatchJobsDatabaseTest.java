@@ -60,6 +60,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 /** The dispatch chain's clock (PLAN F8a, F8b): watchdog, Borzo, Pidge and the ops queue, against a real database. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class FleetDispatchJobsDatabaseTest {
+    /** Long enough at the kitchen for the watchdog to hand the trip back (KITCHEN_HANDBACK_SECONDS). */
+    static final int KITCHEN_SILENT = 301;
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final RiderPushClient alerts = mock(RiderPushClient.class);
@@ -102,7 +104,7 @@ class FleetDispatchJobsDatabaseTest {
         UUID chefSubOrderId = UUID.randomUUID();
         UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");
         UUID job = FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, UUID.randomUUID(), trip, "COURIER_ASSIGNED");
-        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        FleetDispatchFixtures.seen(fleet.db, rider, 100);
         UUID talking = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         UUID other = fleet.trip(UUID.randomUUID());
         fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'ASSIGNED', accepted_at = now() - INTERVAL '5 minutes', "
@@ -128,13 +130,49 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(jobs.watchdog()).isZero();
     }
 
+    /**
+     * The watchdog reads the heartbeat (blueprint A1, E2): on the way to the kitchen a trip goes back at 90 s silent; at the
+     * kitchen, where the rider may hold the food, ops is alerted once at 90 s and the trip goes back only at 300 s; and a
+     * phone that keeps calling without a new fix keeps its trip.
+     */
+    @Test
+    void theWatchdogNeverTakesTheFoodFromARiderWhosePhoneIsStillCalling() {
+        when(router.borzoTimedPolicyReady()).thenReturn(false);
+        UUID toKitchen = acceptedTrip(UUID.randomUUID(), "ASSIGNED");
+        FleetDispatchFixtures.seen(fleet.db, rider, 91);
+        assertThat(jobs.watchdog()).isEqualTo(1);
+        assertThat(state(toKitchen)).isEqualTo("CANCELLED");
+
+        UUID cook = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        UUID atKitchen = acceptedTrip(UUID.randomUUID(), "AT_PICKUP", cook);
+        FleetDispatchFixtures.seen(fleet.db, cook, 120);
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(state(atKitchen)).isEqualTo("AT_PICKUP");
+        verify(alerts, times(1)).opsAlert(eq("FLEET_RIDER_SILENT_AT_KITCHEN"), anyString(), anyString(), anyMap());
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_event WHERE trip_id = ? AND kind = 'WATCHDOG_ALERTED'",
+            Integer.class, atKitchen)).isEqualTo(1);
+        FleetDispatchFixtures.seen(fleet.db, cook, KITCHEN_SILENT);
+        assertThat(jobs.watchdog()).isEqualTo(1);
+        assertThat(state(atKitchen)).isEqualTo("CANCELLED");
+        verify(alerts, times(1)).opsAlert(eq("FLEET_RIDER_SILENT_AT_KITCHEN"), anyString(), anyString(), anyMap());
+
+        // Calling every few seconds with no new fix for 5 minutes (a phone parked indoors): the trip stays.
+        UUID parked = FleetDispatchFixtures.riderOnShift(fleet, "+919800000004", KITCHEN_LAT, KITCHEN_LNG, 300, false);
+        FleetDispatchFixtures.seen(fleet.db, parked, 5);
+        UUID kept = acceptedTrip(UUID.randomUUID(), "ASSIGNED", parked);
+        fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '6 minutes' WHERE id = ?", kept);
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(state(kept)).isEqualTo("ASSIGNED");
+    }
+
     @Test
     void theHandedBackOrderIsBookedWithTheNextCourierAndTheJobNamesCravesFleetAsTheSource() {
         UUID chefSubOrderId = UUID.randomUUID();
         UUID checkout = UUID.randomUUID();
         UUID trip = acceptedTrip(chefSubOrderId, "AT_PICKUP");
         UUID job = FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, checkout, trip, "AT_PICKUP");
-        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        FleetDispatchFixtures.seen(fleet.db, rider, KITCHEN_SILENT);
         DeliveryCommandMessage message = FleetDispatchFixtures.command(chefSubOrderId);
         when(commands.findByChefSubOrderId(chefSubOrderId)).thenReturn(Optional.of(new CommandRecord(message.commandId(), chefSubOrderId,
             checkout, "COMPLETED", 1, message, null, null, null, null, null, 0, 0, null, null)));
@@ -172,7 +210,7 @@ class FleetDispatchJobsDatabaseTest {
         UUID chefSubOrderId = UUID.randomUUID();
         UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");
         UUID job = FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, UUID.randomUUID(), trip, "COURIER_ASSIGNED");
-        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        FleetDispatchFixtures.seen(fleet.db, rider, 100);
         DeliveryCommandMessage message = FleetDispatchFixtures.command(chefSubOrderId);
         when(commands.findByChefSubOrderId(chefSubOrderId)).thenReturn(Optional.of(new CommandRecord(message.commandId(), chefSubOrderId,
             message.orderId(), "COMPLETED", 1, message, null, null, null, null, null, 0, 0, null, null)));
@@ -215,7 +253,7 @@ class FleetDispatchJobsDatabaseTest {
         UUID chefSubOrderId = UUID.randomUUID();
         UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");
         FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, UUID.randomUUID(), trip, "COURIER_ASSIGNED");
-        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        FleetDispatchFixtures.seen(fleet.db, rider, 100);
         when(router.borzoTimedPolicyReady()).thenReturn(false);
         jobs.watchdog();
         fleet.refundRequested(chefSubOrderId);
@@ -231,7 +269,7 @@ class FleetDispatchJobsDatabaseTest {
         UUID chefSubOrderId = UUID.randomUUID();
         UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");
         FleetDispatchFixtures.fleetJob(fleet.db, chefSubOrderId, UUID.randomUUID(), trip, "COURIER_ASSIGNED");
-        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT, KITCHEN_LNG, 100, false);
+        FleetDispatchFixtures.seen(fleet.db, rider, 100);
         DeliveryCommandMessage message = FleetDispatchFixtures.command(chefSubOrderId);
         when(commands.findByChefSubOrderId(chefSubOrderId)).thenReturn(Optional.of(new CommandRecord(message.commandId(), chefSubOrderId,
             message.orderId(), "COMPLETED", 1, message, null, null, null, null, null, 0, 0, null, null)));
@@ -317,9 +355,17 @@ class FleetDispatchJobsDatabaseTest {
     }
 
     private UUID acceptedTrip(UUID chefSubOrderId, String state) {
+        return acceptedTrip(chefSubOrderId, state, rider);
+    }
+
+    private String state(UUID trip) {
+        return fleet.db.queryForObject("SELECT state FROM fleet_schema.trip WHERE id = ?", String.class, trip);
+    }
+
+    private UUID acceptedTrip(UUID chefSubOrderId, String state, UUID riderId) {
         UUID trip = fleet.trip(chefSubOrderId);
         fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = ?, accepted_at = now() - INTERVAL '2 minutes', "
-            + "rate_card_version = '2026-10-v1', pickup_distance_m = 1800, drop_distance_m = 3500 WHERE id = ?", rider, state, trip);
+            + "rate_card_version = '2026-10-v1', pickup_distance_m = 1800, drop_distance_m = 3500 WHERE id = ?", riderId, state, trip);
         fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, state, outcome, opened_at, deadline_at, closed_at) "
             + "VALUES (?, ?, 1, 'CRAVES_FLEET', 'CLOSED', 'ACCEPTED', now() - INTERVAL '3 minutes', now() - INTERVAL '2 minutes', "
             + "now() - INTERVAL '2 minutes')", UUID.randomUUID(), trip);

@@ -9,3 +9,9 @@ ALTER TABLE fleet_schema.rider_shift ADD COLUMN IF NOT EXISTS max_silence_second
     CHECK (max_silence_seconds >= 0);
 ALTER TABLE fleet_schema.rider_shift ADD COLUMN IF NOT EXISTS silences_over_60s INTEGER NOT NULL DEFAULT 0
     CHECK (silences_over_60s >= 0);
+
+-- Shifts open at deploy start from their latest fix's arrival, so the watchdog and dispatch don't see them as silent
+-- before their next call reaches the new code.
+UPDATE fleet_schema.rider_shift s SET last_seen_at = p.received_at
+FROM fleet_schema.rider_position_latest p
+WHERE s.ended_at IS NULL AND s.last_seen_at IS NULL AND p.rider_id = s.rider_id AND p.shift_id = s.id;

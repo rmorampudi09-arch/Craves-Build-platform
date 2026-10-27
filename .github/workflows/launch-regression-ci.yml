@@ -66,6 +66,7 @@ jobs:
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_gateway_inventory.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_activation.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_no_retired_azure_names.py' -v
+          python3 -m unittest discover -s scripts/release/tests -p 'test_web_certificate_renewal.py' -v
           python3 -m unittest discover -s scripts/apim/tests -p 'test_*.py' -v
             python3 scripts/release/tests/test-customer-web-runtime.py
             python3 scripts/release/tests/test_web_runtime_shape.py

@@ -50,6 +50,7 @@ Every pipeline you may run builds from GitHub `main`. All are manual (no trigger
 | 22 | `Craves-Production-Health-Check` | `azure-pipelines-production-stabilization.yml` | read-only health check, every 6 hours |
 | 23 | `Craves-Chef-Onboarding-Release` | `azure-pipelines-chef-onboarding-release.yml` | chef onboarding release: backend, apim, web (also redeploys admin), catalog, media |
 | 24 | `Craves-Referral-Chef-Release` | `azure-pipelines-referral-chef.yml` | chef referral programme: inspect, test, release, activate, verify |
+| (create once) | `Craves-Web-Certificate` | `azure-pipelines-web-letsencrypt-certificate.yml` | craves.in/www certificate: weekly renewal check, renews when fewer than 35 days remain (`infra/certificates/web-letsencrypt/README.md`) |
 
 Pipeline 18 (`azure-pipelines.yml`) fails on purpose: `AZURE_SERVICE_CONNECTION` stays unset because it can deploy `infra/main.bicep`.
 

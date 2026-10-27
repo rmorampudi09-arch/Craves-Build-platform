@@ -16,6 +16,7 @@ export function TripEnd({
   trip,
   step,
   syncing,
+  otpWaiting = false,
   photoDelivery,
   onReport,
   onBack,
@@ -23,6 +24,8 @@ export function TripEnd({
   trip: Trip;
   step: Extract<TripStep, 'DELIVERED' | 'FAILED' | 'CANCELLED'>;
   syncing: boolean;
+  /** The customer's OTP is saved and not yet checked by the server: "Delivery saved", not "Trip complete" (P1-05). */
+  otpWaiting?: boolean;
   photoDelivery: boolean;
   onReport: () => void;
   onBack: () => Promise<unknown> | void;
@@ -47,10 +50,10 @@ export function TripEnd({
           <Icon name={delivered ? 'check' : 'close'} size={iconSize.xl} color={delivered ? colors.white : colors.textPrimary} surface={false} />
         </View>
         <Text accessibilityRole="header" style={[text.name, text.center]}>
-          {delivered ? t.completeTitle : step === 'FAILED' ? t.failedTitle : t.cancelledTitle}
+          {delivered ? (otpWaiting ? t.deliverySavedTitle : t.completeTitle) : step === 'FAILED' ? t.failedTitle : t.cancelledTitle}
         </Text>
         <Text style={[text.body, text.secondary, text.center]}>
-          {delivered ? t.deliveredTo(trip.orderCode, trip.customer.firstName, formatClock(endedAt)) : reason}
+          {!delivered ? reason : otpWaiting ? t.deliverySavedBody : t.deliveredTo(trip.orderCode, trip.customer.firstName, formatClock(endedAt))}
         </Text>
         <SyncNote show={syncing} />
       </View>

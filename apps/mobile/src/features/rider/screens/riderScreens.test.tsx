@@ -193,6 +193,14 @@ describe('Home', () => {
     expect(tripQueue.dismissRefusal).toHaveBeenCalledWith('t7');
   });
 
+  it("keeps a code typed offline that didn't match as a notice to call support (P1-05)", async () => {
+    mockRefusals.list = [{tripId: 't7', code: 'OTP_INVALID', message: 'Wrong code. 4 tries left.'}];
+    await render(<HomeScreen />, [[riderKeys.home, home], [riderKeys.me, me], [riderKeys.activeTrip, null]]);
+    expect(allText()).toContain("A trip step didn't go through | Order code didn't match. Call support.");
+    expect(allText()).not.toContain('tries left');
+    expect(byId('rider-refusal-call')).toBeTruthy();
+  });
+
   it('offers to resume a trip in progress', async () => {
     await render(<HomeScreen />, [[riderKeys.home, {...home, online: true}], [riderKeys.me, me], [riderKeys.activeTrip, trip]]);
     expect(allText()).toContain('Trip · step 4 of 4');
@@ -251,8 +259,8 @@ describe('Trip', () => {
     expect(tripQueue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({action: 'delivered', body: expect.objectContaining({method: 'OTP', otp: '1234'})}),
     );
-    // Offline: the step moves on at once and shows it will sync.
-    expect(allText()).toContain('Trip complete');
+    // Offline: the step moves on at once and says the code is checked once back online.
+    expect(allText()).toContain('Delivery saved');
   });
 
   it('keeps the photo fallback locked until two calls and the wait', async () => {

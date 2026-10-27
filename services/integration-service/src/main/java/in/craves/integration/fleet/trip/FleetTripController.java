@@ -66,8 +66,8 @@ public class FleetTripController {
 
     /**
      * One trip step: arrived-pickup, food-not-ready, picked-up and arrived-drop take no body, or only {ageMs, fix};
-     * delivered takes {method: OTP, otp}; failed takes {reason, note}. Every body may carry ageMs and fix (app 1.1.0):
-     * when and where the rider tapped. 409 when the step is out of order or the trip has ended.
+     * delivered takes {method: OTP, otp, capturedOffline?}; failed takes {reason, note}. Every body may carry ageMs and
+     * fix (app 1.1.0): when and where the rider tapped. 409 when the step is out of order or the trip has ended.
      */
     @PostMapping("/trips/{tripId}/{action}")
     public ResponseEntity<Trip> step(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID tripId,
@@ -75,7 +75,7 @@ public class FleetTripController {
                                      @RequestBody(required = false) StepBody body) {
         UUID identity = identity(principal);
         String idempotencyKey = key(key);
-        Tap tap = body == null ? Tap.NONE : new Tap(body.ageMs(), body.fix());
+        Tap tap = body == null ? Tap.NONE : new Tap(body.ageMs(), body.fix(), Boolean.TRUE.equals(body.capturedOffline()));
         return noStore(switch (action) {
             case "delivered" -> {
                 if (body == null || !"OTP".equals(body.method())) {
@@ -104,12 +104,13 @@ public class FleetTripController {
     }
 
     /**
-     * The JSON bodies of a step (rider-v1): delivered {method, otp}, failed {reason, note}; any step may add ageMs and fix,
-     * when and where the rider tapped (app 1.1.0).
+     * The JSON bodies of a step (rider-v1): delivered {method, otp, capturedOffline}, failed {reason, note}; any step may add
+     * ageMs and fix, when and where the rider tapped (app 1.1.0). capturedOffline: the code was typed without signal and the
+     * app told the rider to go, so a refusal alerts ops.
      */
-    public record StepBody(String method, String otp, String reason, String note, Long ageMs, RiderFix fix) {
+    public record StepBody(String method, String otp, String reason, String note, Long ageMs, RiderFix fix, Boolean capturedOffline) {
         public StepBody(String method, String otp, String reason, String note) {
-            this(method, otp, reason, note, null, null);
+            this(method, otp, reason, note, null, null, null);
         }
     }
 

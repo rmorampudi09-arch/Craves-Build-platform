@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ import in.craves.integration.fleet.trip.FleetTripService.Tap;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,6 +57,7 @@ class FleetTripStepsDatabaseTest {
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final DeliveryCodeClient codes = mock(DeliveryCodeClient.class);
     final FleetStorage storage = mock(FleetStorage.class);
+    final RiderPushClient alerts = mock(RiderPushClient.class);
     final DeliveryStatusUpdateService statusUpdates = mock(DeliveryStatusUpdateService.class);
     final List<Object> events = new ArrayList<>();
     final AtomicInteger wrongCodes = new AtomicInteger();
@@ -73,7 +76,7 @@ class FleetTripStepsDatabaseTest {
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json),
             new DeliveryCommandRepository(fleet.db, json), statusUpdates, json);
         trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, events::add), bridge, json, codes, storage,
-            fleet.transactions);
+            fleet.transactions, alerts);
         FleetDispatchFixtures.policy(fleet.db, "live");
         rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         identity = fleet.db.queryForObject("SELECT identity_id FROM fleet_schema.rider WHERE id = ?", UUID.class, rider);
@@ -182,6 +185,23 @@ class FleetTripStepsDatabaseTest {
             assertThat(event.held()).isTrue();
             assertThat(event.holdReason()).isEqualTo(FleetTripService.PHOTO_HOLD);
         });
+    }
+
+    @Test
+    void aCodeTypedOfflineThatIsRefusedAlertsOpsOncePerTrip() {
+        toDrop();
+        Tap offline = new Tap(90_000L, null, true);
+        String offlineAlerts = "SELECT count(*) FROM fleet_schema.trip_event WHERE trip_id = ? AND kind = 'OFFLINE_OTP_ALERTED'";
+        refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "rider-delivered-1"), 422, "OTP_INVALID");
+        assertThat(fleet.db.queryForObject(offlineAlerts, Integer.class, tripId)).as("typed at the door: the rider sees it").isZero();
+
+        refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "rider-delivered-2", offline), 422, "OTP_INVALID");
+        refused(() -> trips.deliveredByOtp(identity, tripId, "2222", "rider-delivered-3", offline), 422, "OTP_INVALID");
+        assertThat(fleet.db.queryForObject(offlineAlerts, Integer.class, tripId)).as("once per trip").isEqualTo(1);
+        verify(alerts, timeout(2000)).opsAlert(eq("FLEET_OFFLINE_OTP_INVALID"), eq("Delivery code typed offline didn't match, order #0BDE0101"),
+            anyString(), eq(Map.of("tripId", tripId.toString(), "orderCode", "#0BDE0101", "riderId", rider.toString())));
+
+        assertThat(trips.deliveredByOtp(identity, tripId, "4821", "rider-delivered-4", offline).step()).isEqualTo("DELIVERED");
     }
 
     @Test

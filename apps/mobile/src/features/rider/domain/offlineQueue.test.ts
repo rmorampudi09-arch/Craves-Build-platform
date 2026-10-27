@@ -1,5 +1,5 @@
 import type {Trip} from '../api/contract';
-import {createOfflineQueue, QueueDeps, QueueEntry, REFUSALS_KEY, STORAGE_KEY} from './offlineQueue';
+import {createOfflineQueue, OTP_KEPT_MS, QueueDeps, QueueEntry, REFUSALS_KEY, STORAGE_KEY} from './offlineQueue';
 
 class HttpError extends Error {
   constructor(readonly status?: number) {
@@ -14,6 +14,20 @@ function memoryStorage() {
     getItem: async (key: string) => data.get(key) ?? null,
     setItem: async (key: string, value: string) => {
       data.set(key, value);
+    },
+  };
+}
+
+function memorySecret() {
+  const data = new Map<string, string>();
+  return {
+    data,
+    save: async (id: string, value: string) => {
+      data.set(id, value);
+    },
+    load: async (id: string) => data.get(id) ?? null,
+    remove: async (id: string) => {
+      data.delete(id);
     },
   };
 }
@@ -141,6 +155,89 @@ describe('rider offline queue', () => {
     refuse = false;
     await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'failed', key: 'k3'});
     expect(await queue.refusals('r1')).toEqual([]);
+  });
+
+  describe("the customer's delivery OTP (P1-05)", () => {
+    const otpStep = (key: string) => ({
+      riderId: 'r1',
+      tripId: 't1',
+      action: 'delivered' as const,
+      key,
+      body: {method: 'OTP', otp: '4831', fix: {lat: 17.46, lng: 78.36, accuracyM: 9, at: '2026-10-27T09:00:00Z'}},
+    });
+
+    it('survives a restart in the secret store, never in storage, goes as captured offline and is let go once sent', async () => {
+      let online = false;
+      const send = jest.fn(async (_entry: QueueEntry) => {
+        if (!online) {
+          throw new HttpError();
+        }
+        return trip;
+      });
+      const secret = memorySecret();
+      const {queue, storage} = setup(send, {secret});
+      expect((await queue.enqueue(otpStep('k1'))).kind).toBe('queued');
+      const stored = storage.data.get(STORAGE_KEY)!;
+      expect(stored).not.toContain('4831');
+      const [entry] = JSON.parse(stored);
+      expect(entry.body).toEqual({method: 'OTP', otpRef: entry.id, fix: otpStep('k1').body.fix});
+      expect(entry.deferred).toBe(true);
+      expect(secret.data.get(entry.id)).toBe('4831');
+
+      online = true;
+      const restarted = setup(send, {secret}, storage);
+      restarted.advance(120_000);
+      await restarted.queue.flush('r1');
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({body: {method: 'OTP', otp: '4831', fix: otpStep('k1').body.fix, capturedOffline: true}}),
+      );
+      expect(secret.data.size).toBe(0);
+      expect(await restarted.queue.pending('r1')).toBe(0);
+    });
+
+    it('goes without capturedOffline when sent at the tap, and is let go when the server refuses it', async () => {
+      let answer: 'ok' | 'offline' | 'wrong' = 'ok';
+      const send = jest.fn(async (_entry: QueueEntry) => {
+        if (answer === 'ok') {
+          return trip;
+        }
+        throw new HttpError(answer === 'offline' ? undefined : 422);
+      });
+      const secret = memorySecret();
+      const {queue, advance} = setup(send, {secret});
+      await queue.enqueue(otpStep('k1'));
+      expect(send.mock.calls[0][0].body).toEqual(otpStep('k1').body);
+      expect(secret.data.size).toBe(0);
+
+      answer = 'offline';
+      await queue.enqueue(otpStep('k2'));
+      expect(secret.data.size).toBe(1);
+      answer = 'wrong';
+      advance(120_000);
+      const results = await queue.flush('r1');
+      expect([...results.values()][0]).toMatchObject({kind: 'rejected'});
+      expect(secret.data.size).toBe(0);
+    });
+
+    it('is let go after 24 hours: the step then goes without it and the server refuses it', async () => {
+      let online = false;
+      const send = jest.fn(async (_entry: QueueEntry) => {
+        if (!online) {
+          throw new HttpError();
+        }
+        return trip;
+      });
+      const secret = memorySecret();
+      const {queue, storage} = setup(send, {secret});
+      await queue.enqueue(otpStep('k1'));
+      online = true;
+      const restarted = setup(send, {secret}, storage);
+      restarted.advance(OTP_KEPT_MS + 1);
+      expect(await restarted.queue.pending('r1')).toBe(1);
+      expect(secret.data.size).toBe(0);
+      await restarted.queue.flush('r1');
+      expect(send.mock.calls.at(-1)?.[0].body).toEqual({method: 'OTP', fix: otpStep('k1').body.fix, capturedOffline: true});
+    });
   });
 
   it('never queues the same idempotency key twice', async () => {

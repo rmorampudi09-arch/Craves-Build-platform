@@ -15,6 +15,8 @@ export interface QueueEntry {
   createdAt: number;
   attempts: number;
   nextAttemptAt: number;
+  /** Not sent at the tap, so the rider was told it will sync and may have left: an OTP then goes with capturedOffline. */
+  deferred?: boolean;
 }
 
 export type NewQueueEntry = Pick<QueueEntry, 'riderId' | 'tripId' | 'action' | 'key' | 'body' | 'occurredAt' | 'fix'>;
@@ -39,6 +41,13 @@ export interface Refusal extends RejectInfo {
   at: number;
 }
 
+/** An encrypted store for the customer's delivery OTP while its step waits, by entry id (decision E1). */
+export interface SecretStore {
+  save(id: string, value: string): Promise<void>;
+  load(id: string): Promise<string | null>;
+  remove(id: string): Promise<void>;
+}
+
 export interface QueueStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
@@ -50,8 +59,11 @@ export interface QueueDeps {
   /** True for network failures and 5xx: keep the entry and retry with backoff. */
   isRetriable: (error: unknown) => boolean;
   describe: (error: unknown) => RejectInfo;
-  /** Entries it matches (the customer's delivery OTP) stay in memory and are never written to storage. */
-  memoryOnly?: (entry: QueueEntry) => boolean;
+  /**
+   * Where the customer's delivery OTP waits, so it survives a restart. Storage never holds it, only
+   * {method: 'OTP', otpRef: <entry id>, ...}; without a secret store an unsent OTP lives in memory only.
+   */
+  secret?: SecretStore;
   /** Refusals the rider must see later (default: all); the others only reach onRejected. */
   keepRefusal?: (entry: QueueEntry, info: RejectInfo) => boolean;
   now?: () => number;
@@ -60,8 +72,29 @@ export interface QueueDeps {
 export const STORAGE_KEY = 'rider.queue.v1';
 export const REFUSALS_KEY = 'rider.queue.refusals.v1';
 const MAX_REFUSALS = 5;
+/** The longest the customer's OTP waits on the phone (decision E1). */
+export const OTP_KEPT_MS = 24 * 60 * 60_000;
 const BASE_DELAY_MS = 2_000;
 const MAX_DELAY_MS = 60_000;
+
+type OtpBody = {method: 'OTP'; otp?: string; otpRef?: string; capturedOffline?: boolean};
+
+/** An OTP delivery's body: in memory it has the otp, as stored only the otpRef. */
+function otpBody(entry: QueueEntry): OtpBody | undefined {
+  const body = entry.body as OtpBody | undefined;
+  return body?.method === 'OTP' ? body : undefined;
+}
+
+/** What storage holds: never the customer's OTP, only the id it waits under. */
+function forStorage(entry: QueueEntry): QueueEntry {
+  const body = otpBody(entry);
+  if (body?.otp === undefined) {
+    return entry;
+  }
+  const stored: OtpBody = {...body, otpRef: entry.id};
+  delete stored.otp;
+  return {...entry, body: stored};
+}
 
 export function createOfflineQueue(deps: QueueDeps) {
   const now = deps.now ?? Date.now;
@@ -90,8 +123,37 @@ export function createOfflineQueue(deps: QueueDeps) {
   }
 
   async function load(): Promise<QueueEntry[]> {
-    entries ??= await read<QueueEntry>(STORAGE_KEY);
+    if (!entries) {
+      entries = await read<QueueEntry>(STORAGE_KEY);
+      // An OTP waits at most 24 h: then the step goes without it and the server's refusal shows (E1).
+      await Promise.all(entries.filter(e => now() - e.createdAt > OTP_KEPT_MS).map(forgetOtp));
+    }
     return entries;
+  }
+
+  /** The OTP leaves the secret store once the server has answered for its step. */
+  async function forgetOtp(entry: QueueEntry): Promise<void> {
+    if (otpBody(entry)) {
+      await deps.secret?.remove(entry.id).catch(() => undefined);
+    }
+  }
+
+  /** The entry as the server gets it: the OTP back from its store, and capturedOffline once it outlived the tap. */
+  async function ready(entry: QueueEntry): Promise<QueueEntry> {
+    const body = otpBody(entry);
+    if (!body) {
+      return entry;
+    }
+    const sent: OtpBody = {...body};
+    delete sent.otpRef;
+    if (sent.otp === undefined && body.otpRef) {
+      // shortcut: a code the store lost (or let go after 24 h) is sent without it; the server's 400 shows as a refusal.
+      sent.otp = (await deps.secret?.load(body.otpRef).catch(() => null)) ?? undefined;
+    }
+    if (entry.deferred) {
+      sent.capturedOffline = true;
+    }
+    return {...entry, body: sent};
   }
 
   async function loadRefusals(): Promise<Refusal[]> {
@@ -108,8 +170,7 @@ export function createOfflineQueue(deps: QueueDeps) {
 
   async function save(list: QueueEntry[]): Promise<void> {
     entries = list;
-    const {memoryOnly} = deps;
-    await deps.storage.setItem(STORAGE_KEY, JSON.stringify(memoryOnly ? list.filter(e => !memoryOnly(e)) : list));
+    await deps.storage.setItem(STORAGE_KEY, JSON.stringify(list.map(forStorage)));
     changeListeners.forEach(listener => listener());
   }
 
@@ -131,8 +192,9 @@ export function createOfflineQueue(deps: QueueDeps) {
         continue;
       }
       try {
-        const trip = await deps.send(entry);
+        const trip = await deps.send(await ready(entry));
         await save((await load()).filter(e => e.id !== entry.id));
+        await forgetOtp(entry);
         // A later step of the trip went through, so an earlier refusal of it no longer needs the rider.
         const refusals = await loadRefusals();
         if (refusals.some(r => r.tripId === entry.tripId)) {
@@ -157,6 +219,7 @@ export function createOfflineQueue(deps: QueueDeps) {
           const list = await load();
           const dropped = list.filter(e => e.tripId === entry.tripId && e.riderId === riderId);
           await save(list.filter(e => !dropped.includes(e)));
+          await Promise.all(dropped.map(forgetOtp));
           dropped.forEach(e => results.set(e.id, {kind: 'rejected', ...info}));
           if (deps.keepRefusal?.(entry, info) ?? true) {
             const refusal: Refusal = {...info, riderId, tripId: entry.tripId, action: entry.action, at: now()};
@@ -185,10 +248,20 @@ export function createOfflineQueue(deps: QueueDeps) {
             attempts: 0,
             nextAttemptAt: 0,
           };
+          const otp = otpBody(entry)?.otp;
+          if (otp !== undefined) {
+            // Kept before the entry is stored, so no stored entry points at a code that isn't there.
+            await deps.secret?.save(entry.id, otp).catch(() => undefined);
+          }
           await save([...list, entry]);
         }
         const results = await flushFor(input.riderId);
-        return results.get(entry.id) ?? {kind: 'queued'};
+        const outcome = results.get(entry.id) ?? {kind: 'queued'};
+        if (outcome.kind === 'queued' && !entry.deferred) {
+          const id = entry.id;
+          await save((await load()).map(e => (e.id === id ? {...e, deferred: true} : e)));
+        }
+        return outcome;
       });
     },
     /** Sends what waits; {now: true} (the phone just reached the server) also sends entries waiting out a backoff. */

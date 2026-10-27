@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
+import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
@@ -82,9 +83,10 @@ public class FleetTripService {
     private final DeliveryCodeClient codes;
     private final FleetStorage storage;
     private final TransactionTemplate transaction;
+    private final RiderPushClient alerts;
 
     public FleetTripService(JdbcTemplate jdbc, FleetTripPay pay, FleetStatusBridge bridge, ObjectMapper json, DeliveryCodeClient codes,
-                            FleetStorage storage, PlatformTransactionManager transactions) {
+                            FleetStorage storage, PlatformTransactionManager transactions, RiderPushClient alerts) {
         this.jdbc = jdbc;
         this.pay = pay;
         this.bridge = bridge;
@@ -92,6 +94,7 @@ public class FleetTripService {
         this.codes = codes;
         this.storage = storage;
         this.transaction = new TransactionTemplate(transactions);
+        this.alerts = alerts;
     }
 
     /**
@@ -261,6 +264,8 @@ public class FleetTripService {
      * Wrong: 422 OTP_INVALID with attemptsLeft (4 to 1). The fifth wrong code and every code after it: 423 OTP_LOCKED, and
      * the photo route opens; so it does at once for an order accepted before delivery codes existed (order-service 404),
      * whose customer has no code. A repeated Idempotency-Key gets the first answer without asking order-service again.
+     * A code the app sent with capturedOffline (typed without signal, the rider told to go) that is refused alerts ops once
+     * per trip (FLEET_OFFLINE_OTP_INVALID, decision E4).
      */
     public Trip deliveredByOtp(UUID identityId, UUID tripId, String otp, String key) {
         return deliveredByOtp(identityId, tripId, otp, key, Tap.NONE);
@@ -284,6 +289,7 @@ public class FleetTripService {
         Optional<String> lockedFor = jdbc.queryForList("SELECT COALESCE(detail ->> 'reason', '') FROM fleet_schema.trip_event WHERE trip_id = ? "
             + "AND kind = 'OTP_LOCKED' LIMIT 1", String.class, tripId).stream().findFirst();
         if (lockedFor.isPresent()) {
+            alertIfTypedOffline(tap, tripId, rider.id());
             throw otpLockedError(lockedFor.get());
         }
         DeliveryCodeClient.Result result = codes.verify(trip.chefSubOrderId(), otp);
@@ -307,9 +313,29 @@ public class FleetTripService {
             return Optional.of(lockedNow ? otpLockedError(reason) : otpInvalid(result.attemptsLeft()));
         });
         if (refusal.isPresent()) {
+            alertIfTypedOffline(tap, tripId, rider.id());
             throw refusal.get(); // after the attempt is stored, so a retried key gets the same answer
         }
         return view(tripId);
+    }
+
+    /**
+     * A code typed offline was refused: the rider has left the door, so ops sorts it out with the customer and the rider. The
+     * event's fixed key makes it once per trip; the alert goes on its own thread, so the rider's queue never waits for it.
+     */
+    private void alertIfTypedOffline(Tap tap, UUID tripId, UUID riderId) {
+        if (!tap.capturedOffline() || jdbc.update("""
+            INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key, trip_version)
+            SELECT ?, id, 'OFFLINE_OTP_ALERTED', 'SYSTEM', 'offline-otp-alert', version FROM fleet_schema.trip WHERE id = ?
+            ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING""", UUID.randomUUID(), tripId) != 1) {
+            return;
+        }
+        String orderCode = jdbc.queryForObject("SELECT order_code FROM fleet_schema.trip WHERE id = ?", String.class, tripId);
+        Map<String, String> data = Map.of("tripId", tripId.toString(), "orderCode", String.valueOf(orderCode), "riderId", riderId.toString());
+        Thread.ofVirtual().name("fleet-offline-otp-alert").start(() -> alerts.opsAlert("FLEET_OFFLINE_OTP_INVALID",
+            "Delivery code typed offline didn't match, order " + orderCode,
+            "The rider typed the customer's code without signal and was told they could leave. The code didn't match. Call the "
+                + "customer to check they have the food, then the rider.", data));
     }
 
     /**
@@ -638,10 +664,15 @@ public class FleetTripService {
 
     /**
      * When and where the rider tapped a step (app 1.1.0, blueprint A4): ageMs, how long before the request, by the phone's
-     * own clock between two readings; fix, the phone's fix then (its own ageMs times it). NONE for older apps.
+     * own clock between two readings; fix, the phone's fix then (its own ageMs times it); capturedOffline, the app sent it
+     * after the tap, having told the rider it would sync (only a delivery code uses it). NONE for older apps.
      */
-    public record Tap(Long ageMs, RiderFix fix) {
+    public record Tap(Long ageMs, RiderFix fix, boolean capturedOffline) {
         public static final Tap NONE = new Tap(null, null);
+
+        public Tap(Long ageMs, RiderFix fix) {
+            this(ageMs, fix, false);
+        }
     }
 
     /** previousAt is the trip's latest step time so far; now is the database clock of the step's transaction. */

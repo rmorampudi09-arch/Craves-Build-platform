@@ -304,7 +304,8 @@ export interface StepTap {
 
 /** OTP first; the photo is only for the unreachable-customer flow. */
 export type DeliverBody =
-  | {method: 'OTP'; otp: string; fix?: RiderFix}
+  // capturedOffline (app 1.1.0): the queue sent it after the tap, so the rider may have left the door (P1-05).
+  | {method: 'OTP'; otp: string; fix?: RiderFix; capturedOffline?: boolean}
   | {method: 'PHOTO'; photoUri?: string; callsMade: number; fix?: RiderFix};
 
 export type FailReason = 'CUSTOMER_UNREACHABLE' | 'WRONG_ADDRESS' | 'CUSTOMER_REFUSED' | 'UNSAFE';

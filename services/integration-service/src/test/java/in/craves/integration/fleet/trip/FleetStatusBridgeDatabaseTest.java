@@ -71,7 +71,7 @@ class FleetStatusBridgeDatabaseTest {
         DeliveryCodeClient codes = mock(DeliveryCodeClient.class);
         when(codes.verify(any(), anyString())).thenReturn(new DeliveryCodeClient.Result(Outcome.VERIFIED, 0));
         trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, event -> { }), bridge, json, codes,
-            mock(FleetStorage.class), fleet.transactions);
+            mock(FleetStorage.class), fleet.transactions, mock(RiderPushClient.class));
         FleetDispatchFixtures.policy(fleet.db, "live");
         rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         fleet.db.update("UPDATE fleet_schema.rider SET name = 'Ravi Kumar Reddy' WHERE id = ?", rider);

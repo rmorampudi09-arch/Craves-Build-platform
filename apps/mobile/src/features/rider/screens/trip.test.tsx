@@ -455,13 +455,14 @@ describe('Trip: deliver with the OTP (step 4)', () => {
     expect(allText()).toContain('Wrong code. 2 tries left.');
   });
 
-  it('completes at once and says it will sync when offline', async () => {
+  it('says the delivery is saved and the rider can go when the OTP waits offline (P1-05)', async () => {
     await render(atDrop);
     mockPending.offline = true;
     await typeOtp('4719');
     await press('rider-delivered');
-    expect(allText()).toContain('Trip complete');
+    expect(allText()).toContain("Delivery saved | We'll check the code when you're back online. You can go.");
     expect(allText()).toContain('Saved · will sync');
+    expect(allText()).not.toContain('Trip complete');
   });
 
   it('calls the customer from the door', async () => {
@@ -667,7 +668,7 @@ describe('Trip: complete, failed and cancelled', () => {
     await act(async () => tree.root.findByType(TextInput).props.onChangeText('4719'));
     await press('rider-delivered');
     const text = allText();
-    expect(text).toContain('Trip complete');
+    expect(text).toContain('Delivery saved');
     expect(text).toContain('Saved · will sync');
     expect(text).toContain('Pay details appear once this syncs.');
     expect(text).not.toContain('Credited now');

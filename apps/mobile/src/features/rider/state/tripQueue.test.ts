@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import {AppApiError} from '../../../core/http/apiError';
 import {riderApi} from '../api/riderApi';
 import {STORAGE_KEY} from '../domain/offlineQueue';
@@ -26,7 +27,7 @@ describe('tripQueue: what the live server says decides whether a step is kept', 
     expect(await tripQueue.pending(riderId)).toBe(1);
   });
 
-  it("keeps an unsent delivery OTP in memory only, never in the phone's storage", async () => {
+  it("keeps an unsent delivery OTP in the Keystore under rider.otp.<entry id>, never in the phone's storage", async () => {
     // Offline: picked-up waits to retry, and the OTP waits behind it.
     tripAction.mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'No internet', undefined, undefined, true));
     await tripQueue.enqueue(step('rOtp'));
@@ -37,6 +38,9 @@ describe('tripQueue: what the live server says decides whether a step is kept', 
       .map(([, value]) => value as string);
     expect(writes.at(-1)).toContain('rider-picked-up-t1-rOtp');
     expect(writes.join('\n')).not.toContain('4831');
+    const otpEntry = JSON.parse(writes.at(-1)!).find((e: {action: string}) => e.action === 'delivered');
+    expect(otpEntry.body).toEqual({method: 'OTP', otpRef: otpEntry.id});
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(`rider.otp.${otpEntry.id}`, '4831');
   });
 
   it('drops the step when the server refuses it, with its code and tries left', async () => {

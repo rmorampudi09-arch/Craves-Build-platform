@@ -83,7 +83,7 @@ class FleetDispatchJobsDatabaseTest {
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands,
             mock(DeliveryStatusUpdateService.class), json);
         FleetTripService trips = new FleetTripService(fleet.db, tripPay, bridge, json, mock(DeliveryCodeClient.class), mock(FleetStorage.class),
-            fleet.transactions);
+            fleet.transactions, mock(RiderPushClient.class));
         jobs = new FleetDispatchJobs(fleet.db, fleet.transactions, dispatcher, tripPay, trips, alerts, router, commands, assignments,
             handoffs, new DeliveryOutboxRepository(fleet.db, json), json);
         FleetDispatchFixtures.policy(fleet.db, "live");

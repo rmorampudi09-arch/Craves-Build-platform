@@ -68,7 +68,7 @@ class FleetOfferDatabaseTest {
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json),
             new DeliveryCommandRepository(fleet.db, json), mock(DeliveryStatusUpdateService.class), json);
         trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, event -> { }), bridge, json,
-            mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions);
+            mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions, mock(RiderPushClient.class));
         transaction = new TransactionTemplate(fleet.transactions);
         FleetDispatchFixtures.policy(fleet.db, "live");
         first = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);

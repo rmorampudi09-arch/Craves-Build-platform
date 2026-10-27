@@ -168,6 +168,11 @@ class FleetTripControllerTest {
                 .param("method", "PHOTO").param("callsMade", "2").param("ageMs", "soon").param("fix", "not json")
                 .header("Authorization", "Bearer rider").header("Idempotency-Key", "p3"))
             .andExpect(status().isOk());
+        // A code the app typed offline says so (P1-05).
+        when(trips.deliveredByOtp(identity, TRIP, "4821", "d9", new Tap(90000L, null, true))).thenReturn(trip());
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/delivered").header("Authorization", "Bearer rider").header("Idempotency-Key", "d9")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"OTP\",\"otp\":\"4821\",\"ageMs\":90000,\"capturedOffline\":true}"))
+            .andExpect(status().isOk());
     }
 
     static Trip trip() {

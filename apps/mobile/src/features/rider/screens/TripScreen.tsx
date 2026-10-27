@@ -132,6 +132,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
         trip={trip}
         step={step}
         syncing={pending > 0}
+        otpWaiting={queued.some(e => e.action === 'delivered' && (e.body as DeliverBody | undefined)?.method === 'OTP')}
         photoDelivery={photoDelivery}
         onReport={() => navigation.navigate('TripDetail', {tripId: trip.tripId})}
         onBack={backToWaiting}

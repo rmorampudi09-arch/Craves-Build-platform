@@ -1,6 +1,7 @@
 import React from 'react';
 import {Linking, StyleSheet} from 'react-native';
 import {spacing} from '../../../design/tokens';
+import type {Refusal} from '../domain/offlineQueue';
 import {useRiderShell} from '../navigation';
 import {useRiderMe} from '../state/riderQueries';
 import {tripQueue, useRefusals} from '../state/tripQueue';
@@ -18,11 +19,14 @@ export function RefusalNotices({tripId}: {tripId?: string}) {
   const {riderId} = useRiderShell();
   const supportPhone = useRiderMe().data?.supportPhone;
   const refusals = useRefusals(riderId, tripId);
+  // Only an OTP typed offline is kept refused (tripQueue keepRefusal): the rider has left the door, so support sorts it out.
+  const message = (refusal: Refusal) =>
+    refusal.code === 'OTP_INVALID' || refusal.code === 'OTP_LOCKED' ? strings.trip.offlineOtpRefused : refusal.message;
   return (
     <>
       {refusals.map(refusal => (
         <Card key={refusal.tripId} style={styles.card}>
-          <Banner tone="warning" inset title={strings.trip.stepRefused} text={refusal.message} testID="rider-refusal" />
+          <Banner tone="warning" inset title={strings.trip.stepRefused} text={message(refusal)} testID="rider-refusal" />
           {supportPhone ? (
             <BottomAction
               label={strings.common.callSupport}

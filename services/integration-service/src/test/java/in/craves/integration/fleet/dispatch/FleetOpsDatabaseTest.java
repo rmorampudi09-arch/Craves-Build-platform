@@ -79,7 +79,8 @@ class FleetOpsDatabaseTest {
         DeliveryCommandRepository commands = new DeliveryCommandRepository(fleet.db, json);
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands, statusUpdates, json);
         FleetTripPay pay = new FleetTripPay(fleet.db, policies, json, events::add);
-        trips = new FleetTripService(fleet.db, pay, bridge, json, mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions);
+        trips = new FleetTripService(fleet.db, pay, bridge, json, mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions,
+            mock(RiderPushClient.class));
         FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
             mock(BankDataCipher.class));
         service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin);

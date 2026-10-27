@@ -1,10 +1,17 @@
 import {useEffect, useState} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import {AppApiError} from '../../../core/http/apiError';
-import type {DeliverBody} from '../api/contract';
 import {riderApi} from '../api/riderApi';
-import {createOfflineQueue, type QueueEntry, type Refusal} from '../domain/offlineQueue';
+import {createOfflineQueue, type QueueEntry, type Refusal, type SecretStore} from '../domain/offlineQueue';
 import {riderOnlineService} from '../native/riderOnlineService';
+
+/** The customer's OTP while its delivery step waits: Keystore-encrypted, like the refresh token (decision E1). */
+const otpStore: SecretStore = {
+  save: (id, otp) => SecureStore.setItemAsync(`rider.otp.${id}`, otp),
+  load: id => SecureStore.getItemAsync(`rider.otp.${id}`),
+  remove: id => SecureStore.deleteItemAsync(`rider.otp.${id}`),
+};
 
 /** The one queue every trip action goes through, kept in AsyncStorage so it survives restarts. */
 export const tripQueue = createOfflineQueue({
@@ -28,10 +35,11 @@ export const tripQueue = createOfflineQueue({
     error instanceof AppApiError
       ? {code: error.code, message: error.message, attemptsLeft: error.attemptsLeft}
       : {code: 'UNKNOWN', message: 'Something went wrong. Try again.'},
-  // Never store the customer's OTP on the phone: a restart forgets an unsent one and the rider asks for it again.
-  memoryOnly: entry => (entry.body as DeliverBody | undefined)?.method === 'OTP',
-  // The trip screen shows a wrong or locked OTP by the code boxes; every other refusal waits on screen for the rider.
-  keepRefusal: (_entry, info) => info.code !== 'OTP_INVALID' && info.code !== 'OTP_LOCKED',
+  // AsyncStorage never holds the customer's OTP: it waits in the Keystore, at most 24 h, until the server answers.
+  secret: otpStore,
+  // The trip screen shows a wrong or locked OTP by the code boxes, unless the rider typed it offline and was told to go:
+  // that one, like every other refusal, waits on screen for the rider.
+  keepRefusal: (entry, info) => entry.deferred === true || (info.code !== 'OTP_INVALID' && info.code !== 'OTP_LOCKED'),
 });
 
 /** Tells the native service how many trip actions wait to sync, and since when, for the phone's health report. */

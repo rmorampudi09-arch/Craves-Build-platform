@@ -149,7 +149,8 @@ paths:
         The tap (app 1.1.0, all optional): ageMs, how long before this request the rider tapped, and fix, the phone's fix
         then with its own ageMs. The step counts from the tap (at most 30 minutes back, never before the previous step);
         an earlier arrival at the kitchen or the drop counts only with a real fix there accurate to 100 m. The photo's
-        unreachable wait is measured to the tap.
+        unreachable wait is measured to the tap. An OTP sent with capturedOffline (typed without signal; the app told
+        the rider they could go) that is refused also alerts ops, once per trip (FLEET_OFFLINE_OTP_INVALID).
       parameters:
         - {$ref: '#/components/parameters/TripId'}
         - {name: action, in: path, required: true, schema: {type: string, enum: [arrived-pickup, food-not-ready, picked-up, arrived-drop, delivered, failed]}}
@@ -159,7 +160,7 @@ paths:
           application/json:
             schema:
               oneOf:
-                - {type: object, required: [method, otp], properties: {method: {type: string, enum: [OTP]}, otp: {type: string, pattern: '^[0-9]{4}$'}, ageMs: {type: integer, minimum: 0}, fix: {$ref: '#/components/schemas/RiderFix'}}}
+                - {type: object, required: [method, otp], properties: {method: {type: string, enum: [OTP]}, otp: {type: string, pattern: '^[0-9]{4}$'}, ageMs: {type: integer, minimum: 0}, fix: {$ref: '#/components/schemas/RiderFix'}, capturedOffline: {type: boolean, description: 'App 1.1.0: typed without signal, the rider told they could go; a refusal alerts ops once per trip'}}}
                 - {type: object, required: [reason], properties: {reason: {type: string, enum: [CUSTOMER_UNREACHABLE, WRONG_ADDRESS, CUSTOMER_REFUSED, UNSAFE]}, note: {type: string, maxLength: 500}, ageMs: {type: integer, minimum: 0}, fix: {$ref: '#/components/schemas/RiderFix'}}}
                 - {$ref: '#/components/schemas/StepTap'}
           multipart/form-data:

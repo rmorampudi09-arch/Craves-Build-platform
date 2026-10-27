@@ -37,7 +37,7 @@ cleanup() {
   if [[ -n "${WORK_DIR:-}" && -d "${WORK_DIR:-}" ]]; then
     rm -rf "$WORK_DIR"
   fi
-  unset AZUREDNS_BEARERTOKEN PFX_PASSWORD || true
+  unset PFX_PASSWORD || true
   exit "$exit_code"
 }
 
@@ -228,14 +228,12 @@ ACME_REPORTED_VERSION="${ACME_REPORTED_VERSION#v}"
 [[ "$ACME_REPORTED_VERSION" == "$ACME_SH_VERSION" ]] || \
   fail "Downloaded acme.sh version ${ACME_REPORTED_VERSION} does not match ${ACME_SH_VERSION}."
 
-log "Obtaining a short-lived Azure Resource Manager token for the DNS-01 TXT records in ${DNS_ZONE_NAME}."
-export AZUREDNS_SUBSCRIPTIONID="$SUBSCRIPTION_ID"
-export AZUREDNS_TENANTID="$TENANT_ID"
-export AZUREDNS_MANAGEDIDENTITY="false"
-AZUREDNS_BEARERTOKEN="$(az account get-access-token --resource https://management.azure.com/ \
-  --query accessToken --output tsv --only-show-errors)"
-export AZUREDNS_BEARERTOKEN
-[[ -n "$AZUREDNS_BEARERTOKEN" ]] || fail "Azure DNS bearer token could not be obtained."
+log "Installing the DNS-01 hook that writes TXT records in ${DNS_ZONE_NAME} with this pipeline's az sign-in."
+cp "$(dirname "${BASH_SOURCE[0]}")/dns_cravesaz.sh" "$ACME_SOURCE_DIR/dnsapi/dns_cravesaz.sh"
+export CRAVES_DNS_ZONE="$DNS_ZONE_NAME"
+CRAVES_DNS_RESOURCE_GROUP="$(json_get "d['resourceGroup']" <<<"$ZONE_JSON")"
+export CRAVES_DNS_RESOURCE_GROUP
+[[ -n "$CRAVES_DNS_RESOURCE_GROUP" ]] || fail "Resource group of DNS zone ${DNS_ZONE_NAME} could not be resolved."
 
 acme() {
   "$ACME_SH" --home "$ACME_HOME" --config-home "$ACME_HOME" --cert-home "$ACME_CERT_HOME" --server "$ACME_SERVER" "$@"
@@ -245,7 +243,7 @@ log "Registering an ephemeral ACME account on ${ACME_SERVER}."
 acme --register-account --accountemail "$LETSENCRYPT_CONTACT_EMAIL"
 
 log "Requesting the SAN certificate through Azure DNS DNS-01 validation."
-acme --issue --dns dns_azure --domain "$APEX_HOSTNAME" --domain "$WWW_HOSTNAME" \
+acme --issue --dns dns_cravesaz --domain "$APEX_HOSTNAME" --domain "$WWW_HOSTNAME" \
   --keylength 2048 --dnssleep "$DNS_PROPAGATION_SECONDS"
 
 acme --install-cert --domain "$APEX_HOSTNAME" \

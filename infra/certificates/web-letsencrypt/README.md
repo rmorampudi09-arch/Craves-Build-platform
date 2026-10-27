@@ -9,6 +9,7 @@ Ownership is proven with DNS-01 TXT records in the Azure DNS zone `craves.in` (t
 ```text
 azure-pipelines-web-letsencrypt-certificate.yml      Azure DevOps pipeline (weekly schedule + manual runs)
 infra/certificates/web-letsencrypt/renew-web-certificate.sh
+infra/certificates/web-letsencrypt/dns_cravesaz.sh      acme.sh DNS-01 hook: TXT records via the pipeline's az sign-in
 scripts/release/tests/test_web_certificate_renewal.py   offline tests (fake az/dig), run in CI
 ```
 
@@ -47,7 +48,7 @@ The schedule is Sunday 03:00 UTC (08:30 IST) and always runs `renew` without for
 
 - `acme.sh` is pinned to 3.1.4 and verified after download.
 - The ACME account, private key and certificate exist only in a temporary agent directory that is deleted at the end; nothing is published as an artifact.
-- DNS-01 uses a short-lived Azure Resource Manager token from the pipeline's sign-in; no secret is stored in Azure DevOps.
+- DNS-01 TXT records are written by `dns_cravesaz.sh` with `az network dns record-set txt add-record/remove-record`, using the pipeline's existing az sign-in; no secret is stored in Azure DevOps. (acme.sh's own `dns_azure` plugin was dropped: its zone lookup failed on `_acme-challenge.www.craves.in` in run 400.)
 - The PFX has a random password, is deleted right after import, and the imported fingerprint must equal the issued one.
 
 ## Local check

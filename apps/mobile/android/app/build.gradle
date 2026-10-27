@@ -184,4 +184,6 @@ dependencies {
     // The Firebase BOM @react-native-firebase/app uses, so both resolve one set of Firebase libraries.
     riderImplementation(platform("com.google.firebase:firebase-bom:${rnfbAndroidSdk.firebase}"))
     riderImplementation("com.google.firebase:firebase-messaging")
+    // Tests only, never in the APK: the native trip outbox's rules (src/testRider, RiderOutboxCoreTest).
+    testRiderImplementation("junit:junit:4.13.2")
 }

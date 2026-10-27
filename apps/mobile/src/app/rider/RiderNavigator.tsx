@@ -171,7 +171,9 @@ function SignedIn() {
           </>
         ) : null}
       </Stack.Navigator>
-      {gate.kind === 'ready' ? <RiderRuntime riderId={riderId} openOffer={openOffer} /> : null}
+      {gate.kind === 'ready' ? (
+        <RiderRuntime riderId={riderId} nativeOutbox={me.data.features?.nativeTripOutbox === true} openOffer={openOffer} />
+      ) : null}
     </RiderShellContext.Provider>
   );
 }

@@ -19,12 +19,25 @@ const model = Platform.OS === 'android' ? Platform.constants.Model : Platform.OS
 
 /**
  * Listens while the rider is signed in: registers the phone for offer pushes, rings offers (including the one whose
- * notification opened the app), refreshes trips and replays queued trip steps.
+ * notification opened the app), refreshes trips and replays queued trip steps. nativeOutbox: the server's
+ * features.nativeTripOutbox (P2-02b), which sends trip steps through the phone's native outbox.
  */
-export function RiderRuntime({riderId, openOffer}: {riderId: string; openOffer: (offer: ReceivedOffer) => void}) {
+export function RiderRuntime({
+  riderId,
+  nativeOutbox = false,
+  openOffer,
+}: {
+  riderId: string;
+  nativeOutbox?: boolean;
+  openOffer: (offer: ReceivedOffer) => void;
+}) {
   const queryClient = useQueryClient();
   const shown = useRef<ReceivedOffer | null>(null);
   const device = useStrings().strings.device;
+
+  useEffect(() => {
+    tripQueue.setNativeOutbox(nativeOutbox).catch(() => undefined);
+  }, [nativeOutbox]);
 
   useEffect(() => {
     const register = async (fcmToken: string | null) => {

@@ -65,6 +65,7 @@ jest.mock('../state/tripQueue', () => {
       onSent: () => () => undefined,
       flush: jest.fn(async () => new Map()),
       dismissRefusal: jest.fn(async () => undefined),
+      setNativeOutbox: jest.fn(async () => undefined),
     },
     useRefusals: (_riderId: string, tripId?: string) => mockRefusals.list.filter(r => tripId === undefined || r.tripId === tripId),
     usePendingEntries: () => useSyncExternalStore(subscribe, () => mockPending.entries),

@@ -22,12 +22,18 @@ async function fileExists(uri: string): Promise<boolean> {
   }
 }
 
-/** The server answers 423 once no tries are left; a 422 with attemptsLeft 0 means the same, so the rider never sees "0 tries left". */
+/**
+ * The server answers 423 once no tries are left; a 422 with attemptsLeft 0 means the same, so the rider never sees "0 tries
+ * left". Also for the native trip outbox's answers (tripQueue).
+ */
+export function lockedAtZero(error: AppApiError): AppApiError {
+  return error.code === 'OTP_INVALID' && error.attemptsLeft === 0
+    ? new AppApiError('OTP_LOCKED', error.message, 423, error.correlationId)
+    : error;
+}
+
 function lockAtZero(error: unknown): never {
-  if (error instanceof AppApiError && error.code === 'OTP_INVALID' && error.attemptsLeft === 0) {
-    throw new AppApiError('OTP_LOCKED', error.message, 423, error.correlationId);
-  }
-  throw error;
+  throw error instanceof AppApiError ? lockedAtZero(error) : error;
 }
 
 /**

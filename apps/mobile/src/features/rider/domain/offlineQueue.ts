@@ -361,6 +361,36 @@ export function createOfflineQueue(deps: QueueDeps) {
       sentListeners.add(listener);
       return () => sentListeners.delete(listener);
     },
+    /**
+     * Hands every rider's entries (each OTP back from the secret store, in its body) and refusals to move(), then empties
+     * the queue once move() resolved: the move to the native outbox (P2-02b). Nothing is sent or let go in between, and a
+     * failed move() keeps everything here. Kept delivery photos stay where they are: the new owner sends and deletes them.
+     */
+    moveAll(move: (entries: QueueEntry[], refusals: Refusal[]) => Promise<void>): Promise<void> {
+      return serial(async () => {
+        const list = await load();
+        const refusals = await loadRefusals();
+        if (list.length === 0 && refusals.length === 0) {
+          return;
+        }
+        const withOtps = await Promise.all(
+          list.map(async entry => {
+            const body = otpBody(entry);
+            if (!body || body.otp !== undefined || !body.otpRef) {
+              return entry;
+            }
+            const otp = await deps.secret?.load(body.otpRef).catch(() => null);
+            return otp ? {...entry, body: {...body, otp}} : entry;
+          }),
+        );
+        await move(withOtps, refusals);
+        await save([]);
+        await saveRefusals([]);
+        for (const entry of list) {
+          await forgetOtp(entry);
+        }
+      });
+    },
   };
 }
 

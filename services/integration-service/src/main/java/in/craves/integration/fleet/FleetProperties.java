@@ -9,7 +9,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * storageEndpoint and storageContainer are the same settings user-chef-service uses for KYC documents.
  * supportPhone is the rider support line shown in the terms and the app; supportWhatsappUrl the riders' group.
  * minAppVersion blocks going online (never a running shift) unless a rider has an override. insuranceLabel describes
- * the group accident cover on the rider's profile; claims go to the support line.
+ * the group accident cover on the rider's profile; claims go to the support line. tripShiftCredentialEnabled (P2-01, off)
+ * lets trip steps carry the shift credential, and tells the app to send them from its native outbox (features).
  */
 @ConfigurationProperties("craves.fleet")
 public record FleetProperties(
@@ -25,6 +26,7 @@ public record FleetProperties(
     String supportPhone,
     String supportWhatsappUrl,
     @DefaultValue("1.0.0") String minAppVersion,
-    String insuranceLabel
+    String insuranceLabel,
+    boolean tripShiftCredentialEnabled
 ) {
 }

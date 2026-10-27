@@ -35,7 +35,7 @@ public final class FleetDatabase {
     /** Fleet on, with the given test mode and nothing configured outside this service. */
     public static FleetProperties properties(boolean testMode) {
         return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents", "+914012345678",
-            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7");
+            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false);
     }
 
     public UUID rider(String name, String phone) {

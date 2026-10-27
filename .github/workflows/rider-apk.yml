@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE|WAKE_LOCK' android/app/src/main/AndroidManifest.xml; then
+          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE|WAKE_LOCK|RECEIVE_BOOT_COMPLETED' android/app/src/main/AndroidManifest.xml; then
             echo 'ERROR: rider-only permissions belong in android/app/src/rider/AndroidManifest.xml' >&2
             exit 1
           fi
@@ -202,7 +202,7 @@ jobs:
             echo "CRAVES_ANDROID_KEY_PASSWORD=$password"
           } >> "$GITHUB_ENV"
 
-      - name: Build the rider APK (ARM phones only, R8 on)
+      - name: Build the rider APK (ARM phones only, R8 on) and run the native unit tests
         shell: bash
         env:
           RUN_NUMBER: ${{ github.run_number }}
@@ -211,7 +211,8 @@ jobs:
           cd android
           # cravesRiderMinify and cravesVersionCode are read only by android/app/build.gradle for this build.
           # R8 compatibility mode (not full mode) for the first R8 builds; switch after a clean phone pass.
-          ./gradlew assembleRiderRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+          # testRiderReleaseUnitTest: the trip outbox's rules (src/testRider), on the JVM; a failure stops the APK.
+          ./gradlew assembleRiderRelease testRiderReleaseUnitTest -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
             -PcravesRiderMinify=true -PcravesVersionCode="$RUN_NUMBER" -Pandroid.enableR8.fullMode=false \
             --no-daemon --stacktrace 2>&1 | tee ../rider-build.log
 

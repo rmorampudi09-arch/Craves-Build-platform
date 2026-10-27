@@ -35,7 +35,8 @@ export interface RiderMe {
   supportPhone: string;
   /** The riders' WhatsApp group, opened from Help. */
   supportWhatsappUrl?: string;
-  features: {payoutsEnabled: boolean; withdrawEnabled: boolean};
+  /** nativeTripOutbox (P2-02): trip steps go through the phone's native outbox, which sends them after a kill or reboot. */
+  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean};
 }
 
 export interface RiderProfile {

@@ -382,6 +382,41 @@ describe('rider offline queue', () => {
     expect(release.mock.calls.map(([e]) => e.key)).toEqual(['k1', 'k2', 'k3']);
   });
 
+  it('moves everything to the native outbox with each OTP, then empties, and keeps it all when the move fails (P2-02b)', async () => {
+    const secret = memorySecret();
+    const release = jest.fn(async () => undefined);
+    const send = jest.fn(async () => {
+      throw new HttpError();
+    });
+    const {queue, storage} = setup(send, {secret, release});
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k1'});
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'delivered', key: 'k2', body: {method: 'OTP', otp: '4831'}});
+    storage.data.set(REFUSALS_KEY, JSON.stringify([{riderId: 'r2', tripId: 't9', action: 'failed', code: 'C', message: 'm', at: 5}]));
+    // After a restart the code is only in the secret store; the move puts it back in the body for the outbox to seal.
+    const restarted = setup(send, {secret, release}, storage);
+
+    await expect(restarted.queue.moveAll(async () => Promise.reject(new Error('disk full')))).rejects.toThrow('disk full');
+    expect(await restarted.queue.pending('r1')).toBe(2);
+    expect(secret.data.size).toBe(1);
+
+    const moved: unknown[] = [];
+    await restarted.queue.moveAll(async (entries, refusals) => {
+      moved.push(entries, refusals);
+    });
+    const [entries, refusals] = moved as [QueueEntry[], unknown[]];
+    expect(entries.map(e => [e.key, e.deferred])).toEqual([['k1', true], ['k2', true]]);
+    expect(entries[1].body).toEqual({method: 'OTP', otpRef: entries[1].id, otp: '4831'});
+    expect(refusals).toEqual([expect.objectContaining({tripId: 't9'})]);
+    expect(await restarted.queue.pending('r1')).toBe(0);
+    expect(await restarted.queue.refusals('r2')).toEqual([]);
+    expect(JSON.parse(storage.data.get(STORAGE_KEY)!)).toEqual([]);
+    expect(JSON.parse(storage.data.get(OTP_REFS_KEY)!)).toEqual([]);
+    expect(secret.data.size).toBe(0);
+    // The kept photos are the outbox's now: nothing was let go, nothing sent during the move.
+    expect(release).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   it('reports pending actions so sign-out can be blocked', async () => {
     const {queue} = setup(async () => {
       throw new HttpError(503);

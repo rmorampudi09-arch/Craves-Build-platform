@@ -17,7 +17,8 @@ public final class FleetRiderModels {
                           String language, String minAppVersion, String supportPhone, String supportWhatsappUrl, Features features) {
     }
 
-    public record Features(boolean payoutsEnabled, boolean withdrawEnabled) {
+    /** nativeTripOutbox (P2-02): the app sends trip steps from its native outbox, as trip steps take the shift credential. */
+    public record Features(boolean payoutsEnabled, boolean withdrawEnabled, boolean nativeTripOutbox) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

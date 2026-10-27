@@ -338,6 +338,7 @@ class FleetEarningsDatabaseTest {
         RiderMe before = riders.me(principal);
         assertThat(before.features().payoutsEnabled()).isFalse();
         assertThat(before.features().withdrawEnabled()).isFalse();
+        assertThat(before.features().nativeTripOutbox()).as("trip steps don't take the shift credential").isFalse();
         payoutAccount(rider);
         assertThat(riders.me(principal).features().payoutsEnabled()).isTrue();
         assertThat(riders.me(principal).features().withdrawEnabled()).isTrue();

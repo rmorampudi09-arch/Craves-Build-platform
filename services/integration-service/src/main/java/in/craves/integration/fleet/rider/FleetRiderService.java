@@ -68,7 +68,7 @@ public class FleetRiderService {
         "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF"),
         "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
         "BICYCLE", List.of("PAN", "BANK_PROOF"));
-    private static final Features NO_FEATURES = new Features(false, false);
+    private static final Features NO_FEATURES = new Features(false, false, false);
 
     private final JdbcTemplate jdbc;
     private final FleetPolicyStore policies;
@@ -135,11 +135,14 @@ public class FleetRiderService {
             rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, features(rider.id()));
     }
 
-    /** Payouts and withdrawals show once the rider has a payout account ops set or confirmed (ACTIVE), and no failed payout paused it. */
+    /**
+     * Payouts and withdrawals show once the rider has a payout account ops set or confirmed (ACTIVE), and no failed payout
+     * paused it. The native outbox is on exactly when trip steps take the shift credential (P2-01).
+     */
     private Features features(UUID riderId) {
         boolean verified = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
             + "WHERE rider_id = ? AND state = 'ACTIVE' AND payouts_paused_at IS NULL)", Boolean.class, riderId));
-        return new Features(verified, verified);
+        return new Features(verified, verified, properties.tripShiftCredentialEnabled());
     }
 
     /** Any rider ops added, before activation too (no RIDER role yet), so they can see what ops is still checking. */

@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
@@ -106,6 +108,15 @@ class RiderOnlineService : Service() {
       }
     }
 
+  private var networkWatched = false
+  /** A new network sends the outbox's waiting trip steps at once, not at the next upload (P2-02a). */
+  private val network =
+    object : ConnectivityManager.NetworkCallback() {
+      override fun onAvailable(network: Network) {
+        RiderOutbox.flushInBackground(this@RiderOnlineService)
+      }
+    }
+
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onCreate() {
@@ -137,6 +148,7 @@ class RiderOnlineService : Service() {
       // Back online, from the notice or from the launcher: "You're offline" no longer holds.
       RiderOffers.cancelNotice(this, RiderMessagingService.GO_ONLINE_TAG)
       holdWakeLock(saved)
+      watchNetwork()
       executor.execute {
         exitReason = lastExitReason()
         requestLocations()
@@ -153,6 +165,13 @@ class RiderOnlineService : Service() {
       fused.removeLocationUpdates(callback)
     }
     executor.shutdownNow()
+    if (networkWatched) {
+      try {
+        getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(network)
+      } catch (error: Exception) {
+        Log.w(TAG, "network callback already gone", error)
+      }
+    }
     wakeLock?.takeIf { it.isHeld }?.release()
     val message = stopMessage
     RiderEvents.emit("riderStatus") {
@@ -229,6 +248,8 @@ class RiderOnlineService : Service() {
               if (health.has("lastExitReason")) exitReason = null
             }
             if (!handle(JSONObject(response.body?.string() ?: "{}"), sentAtMs)) return
+            // The upload reached the server: the outbox's waiting trip steps go now, on its own thread (P2-02a).
+            RiderOutbox.flushInBackground(this)
           }
         }
       }
@@ -308,7 +329,12 @@ class RiderOnlineService : Service() {
         .put("drainPct", drainPct)
         .put("unpluggedMin", unpluggedMs / 60_000)
     if (pct in 0..100) health.put("batteryPct", pct)
-    queueStats?.let { (pending, oldestAtMs) ->
+    // Steps waiting in JS's queue (as JS last reported) and in the native outbox (P2-02).
+    val reported = queueStats
+    val (outboxPending, outboxOldestAtMs) = RiderOutbox.stats(this)
+    if (reported != null || outboxPending > 0) {
+      val pending = (reported?.first ?: 0) + outboxPending
+      val oldestAtMs = listOfNotNull(reported?.second, outboxOldestAtMs).filter { it > 0 }.minOrNull() ?: 0L
       health.put("queuePending", pending)
       if (pending > 0 && oldestAtMs > 0) health.put("queueOldestAgeS", ((System.currentTimeMillis() - oldestAtMs) / 1000).coerceAtLeast(0))
     }
@@ -366,6 +392,16 @@ class RiderOnlineService : Service() {
     stopMessage = message
     shift = null
     stopSelf()
+  }
+
+  private fun watchNetwork() {
+    try {
+      getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(network)
+      networkWatched = true
+    } catch (error: Exception) {
+      // The steps still go after the next upload.
+      Log.w(TAG, "no network callback", error)
+    }
   }
 
   /** Without it the upload timer stalls while the screen is off; held until the credential expires at most. */

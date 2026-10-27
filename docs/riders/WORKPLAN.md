@@ -502,6 +502,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** the CI APK build, plus PHONE-TESTS §3 with the app swiped away: every step arrives.
 
+**Done (agent part):** `RiderOutbox.kt` keeps `filesDir/rider/outbox.json` through `AtomicFile` (blueprint C2's schema in the JS queue's field names, plus `elapsedMs`, `boot` and `otpSealed`), seals the OTP with a Keystore AES-GCM key (24 h, E1), leaves photos in `rider-photos` until answered, and sends in order per trip with each step's key, exactly as `liveRiderApi.tripAction` does: with the app's token while JS runs, else the shift credential, after every successful `/locations`, on `NetworkCallback.onAvailable` (default network, while the service runs) and from the job; backoff 2 s doubling to 60 s. The rules (`RiderOutboxCore.kt`: verdicts, backoff, the tap's age, one pass in order per trip) are pure Kotlin and proved by `RiderOutboxCoreTest` (`./gradlew testRiderReleaseUnitTest`, run by the APK workflow). Module: `outboxEnqueue` (saved, then a pass, in one go, so no other pass sends the step between), `outboxFlush`, `outboxState` (the plan's `pending`, from memory), `outboxDefer`, `outboxImport`, `outboxDismissRefusal`; event `riderOutboxChanged` for passes native ran itself. The health report adds the outbox to `queuePending`. Server gate: `GET /me` `features.nativeTripOutbox` mirrors `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED`. **Still open (people):** PHONE-TESTS §3's native-outbox runs (swiped away; reboot, app not opened).
+
 ### P2-02b The app uses the native outbox
 **Who:** agent. **Blocked by:** P2-02a.
 
@@ -510,6 +512,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 2. On first start, move the existing `rider.queue.v2` entries, and their secure-store OTPs, into native, then delete them.
 
 **Prove it:** Jest with a fake native module (move, then send), and the airplane test.
+
+**Done (agent part):** live builds go native once `GET /me` says `features.nativeTripOutbox` (`RiderRuntime` calls `tripQueue.setNativeOutbox`); mock builds and older servers keep the JS queue. `tripQueue` is now a facade over both queues with the same interface: a trip's steps stay in the queue that holds them, so their order never splits, and steps left in the outbox after the switch goes off still go, with the app's token. The move (`offlineQueue.moveAll`) hands over every rider's entries with each OTP back from the secure store, and their refusals, then empties the JS queue (the key is `rider.queue.v1`, not the plan's v2); a failed move keeps everything in JS. Refusals read the same in both queues (`appApiErrorFromStatus`, `lockedAtZero`). Proved by `nativeTripQueue.test.ts`, `tripQueue.native.test.ts` (move, then send), `offlineQueue.test.ts` and `RiderRuntime.test.tsx`. **Still open (people):** the airplane test (PHONE-TESTS §3) with the setting on.
 
 ### P2-02c Send after a kill or a reboot
 **Who:** agent. **Blocked by:** P2-02a.
@@ -520,6 +524,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 3. On Android 14+, upload photos with a user-initiated data-transfer job (`RUN_USER_INITIATED_JOBS`). Schedule it while the photo screen is open.
 
 **Prove it:** PHONE-TESTS §3 with a force stop, then a reboot. Steps arrive after the reboot without the app being opened, on phones whose OEM allows jobs. Record any that don't.
+
+**Done (agent part), steps 1 and 2:** `RiderOutboxJob` is persisted, needs any network, backs off from 30 s and is scheduled whenever a step waits; it sends with the shift credential, so it works after a reboot while the shift lasts. `RECEIVE_BOOT_COMPLETED` and `ACCESS_NETWORK_STATE` are in the rider manifest only (the APK workflow now also keeps `RECEIVE_BOOT_COMPLETED` out of `src/main`). A force stop cancels the job (Android): steps then go when the app opens, so §3 run 6 records what a force stop does on each phone. **Not done, step 3:** the Android 14 user-initiated photo job; it must start while the app is visible, carries its own notification and adds a permission declaration, and the regular job, the service and the app already send photo steps. Add it only if §3 shows photo steps waiting after a kill on Android 14+.
 
 ### P2-03 Unsent fixes kept on disk
 **Who:** agent.

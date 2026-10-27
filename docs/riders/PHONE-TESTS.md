@@ -79,6 +79,11 @@ The app keeps every trip step on the phone until the server has it, through a fo
 
 Run it three ways on each phone: as above; with a **reboot** instead of the force stop in step 3 (reboot with airplane mode still on, then reopen the app); and once with the **photo route** in step 4 (at the customer, tap Call twice and wait until "You can leave at …" has passed, then take the photo; the delivery goes with the photo the app kept).
 
+**With the native outbox** (once the server's `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on, the app keeps trip steps in the phone's native outbox, P2-02), run two more on each phone, online with a shift started:
+
+- **Swiped away:** steps 1 and 2, then swipe the app away from recent apps (not Force stop; "You're online" stays in the notifications). Turn airplane mode off and don't open the app. The steps reach the server within 60 s: the online service sends them after its next upload.
+- **Reboot, app not opened:** steps 1 and 2, then reboot with airplane mode still on. After the reboot turn airplane mode off and don't open the app. The steps reach the server within 5 minutes, sent by the outbox's job, on phones whose maker lets jobs run; write down any phone where they wait for the app. Then try a **Force stop** instead of the reboot: Android cancels the job, so those steps go when the app opens; write down what each phone does.
+
 A phone that has never been online with this app, or that was offline for more than a day, has nothing saved to open from: it shows "Something went wrong" with **Try again** until there is signal.
 
 **Pass:** every step of every run reaches the server, in order, within 60 s of the signal coming back. **Fail:** write down which step is missing or out of order and what the app showed.
@@ -112,5 +117,9 @@ A phone that has never been online with this app, or that was offline for more t
 | 3 GB phone | | | force stop | | | |
 | 3 GB phone | | | reboot | | | |
 | 3 GB phone | | | photo | | | |
+| 4 GB phone | | | native outbox: swiped away | | | |
+| 4 GB phone | | | native outbox: reboot, app not opened | | | |
+| 3 GB phone | | | native outbox: swiped away | | | |
+| 3 GB phone | | | native outbox: reboot, app not opened | | | |
 
 Keep each phone's logcat file and the query output with the results.

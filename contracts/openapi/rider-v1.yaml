@@ -265,7 +265,7 @@ components:
         minAppVersion: {type: string, description: 'Blocks going online between shifts only, never mid-shift'}
         supportPhone: {type: string}
         supportWhatsappUrl: {type: string, description: The riders' WhatsApp group}
-        features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}}}
+        features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}, nativeTripOutbox: {type: boolean, description: 'P2-02: send trip steps from the native outbox (trip steps take the shift credential); absent or false: the JS queue'}}}
     RiderProfile:
       type: object
       required: [vehicle, documents]

@@ -99,12 +99,7 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
   /** Deletes a photo keepPhoto made, once its delivery was sent or refused. Any other file is left alone. */
   @ReactMethod
   fun deletePhoto(uri: String, promise: Promise) {
-    try {
-      val file = File(Uri.parse(uri).path ?: "").canonicalFile
-      promise.resolve(file.parentFile == File(reactContext.filesDir, PHOTO_DIR).canonicalFile && file.delete())
-    } catch (error: Exception) {
-      promise.resolve(false)
-    }
+    promise.resolve(deleteKeptPhoto(reactContext, uri))
   }
 
   // shortcut: a photo kept just before the app died, never queued, stays in rider-photos; sweep old files if that shows up.
@@ -161,6 +156,15 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
     }
 
   companion object {
+    /** Deletes a photo keepPhoto made (in filesDir/rider-photos), for JS and the native outbox; any other file is left alone. */
+    fun deleteKeptPhoto(context: Context, uri: String): Boolean =
+      try {
+        val file = File(Uri.parse(uri).path ?: "").canonicalFile
+        file.parentFile == File(context.filesDir, PHOTO_DIR).canonicalFile && file.delete()
+      } catch (error: Exception) {
+        false
+      }
+
     private const val PHOTO_DIR = "rider-photos"
     private const val MAX_PHOTO_EDGE = 1600
     private const val JPEG_QUALITY = 80

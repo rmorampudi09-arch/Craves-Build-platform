@@ -1,4 +1,4 @@
-# Craves Rider: native online service and offer ringing
+# Craves Rider: native online service, offer ringing and the trip-step outbox
 
 Kotlin in `apps/mobile/android/app/src/rider/java/com/cravesapp`, rider flavor only. The customer app (`com.cravesapp`) gets none of it.
 
@@ -9,6 +9,7 @@ Kotlin in `apps/mobile/android/app/src/rider/java/com/cravesapp`, rider flavor o
 | `RiderMessagingService.kt` | FCM data messages (`type=OFFER`) and token changes |
 | `RiderOnlineModule.kt`, `RiderOnlinePackage.kt` | The `CravesRiderOnline` native module, registered in the rider `FlavorPackages` |
 | `RiderEvents.kt` | Sends events to JS through `RCTDeviceEventEmitter` when JS is running |
+| `RiderOutbox.kt`, `RiderOutboxCore.kt`, `RiderOutboxJob.kt` | The trip-step outbox (P2-02): the file, the sends, the rules (JVM-tested) and the persisted job |
 
 JS side: `src/features/rider/native/riderOnlineService.ts` uses the module in live builds (`CRAVES_RIDER_API_MODE=live`) when `NativeModules.CravesRiderOnline` exists. Mock builds, Jest and the customer app use the JS loop against the mock server.
 
@@ -20,7 +21,7 @@ JS side: `src/features/rider/native/riderOnlineService.ts` uses the module in li
 - Header `X-Craves-Shift-Credential: <shiftCredential>`. Native code sends no JWT.
 - Body `{"fixes": [{"lat", "lng", "accuracyM", "at", "mock", "ageMs"}]}`, at most 5 fixes, `at` in ISO-8601 UTC (`2026-10-20T10:15:30.123Z`). `ageMs` (app 1.1.0) is `SystemClock.elapsedRealtime()` minus the fix's `elapsedRealtimeNanos`, worked out when the call is built: the server times the fix as its clock minus `ageMs`, so the phone's wall clock doesn't matter. An empty `fixes` array is sent when there is no fix yet: the call is also the heartbeat and the second offer channel.
 - `mock` is `Location.isMock()` on Android 12+ and `isFromMockProvider()` before.
-- `health` (app 1.1.0), at most once a minute, until a 2xx takes it: `batteryPct` and `charging` (`BatteryManager`), `powerSave`, `canRing` (notifications on and the `rider_offers` channel still at high importance), `drainPct` and `unpluggedMin` (counted only while unplugged, since the service started), `queuePending` and `queueOldestAgeS` (from JS, `setQueueStats`), and `lastExitReason` once after each start (`ActivityManager.getHistoricalProcessExitReasons`, Android 11+, e.g. `LOW_MEMORY at 2026-10-27T09:12:03.000Z`).
+- `health` (app 1.1.0), at most once a minute, until a 2xx takes it: `batteryPct` and `charging` (`BatteryManager`), `powerSave`, `canRing` (notifications on and the `rider_offers` channel still at high importance), `drainPct` and `unpluggedMin` (counted only while unplugged, since the service started), `queuePending` and `queueOldestAgeS` (the JS queue's from `setQueueStats`, plus the native outbox's), and `lastExitReason` once after each start (`ActivityManager.getHistoricalProcessExitReasons`, Android 11+, e.g. `LOW_MEMORY at 2026-10-27T09:12:03.000Z`).
 - `offerReceipts` (app 1.1.0): every offer's first arrival, from either channel, as `{offerId, channel, ageMs}` with `ageMs` from `SystemClock.elapsedRealtime()` worked out when the call is built. At most 10 are kept; they are forgotten after a 2xx, so a failed call sends them again. The server keeps the first arrival of each of the rider's own offers (`trip_offer.rang_at`, `rang_channel`).
 - Response `LocationBatchResponse` `{offers: Offer[], activeTrip?: {tripId, step, version}, stop?: boolean, stopReason?: string}`:
   - every offer goes through the offer dedupe (channel `locations`); offers the server no longer lists stop ringing;
@@ -70,6 +71,12 @@ When a location call reports the rider's trip as `CANCELLED` (ops, the customer 
 | `setQueueStats(pending: number, oldestAtMs: number)` | The trip actions JS has waiting and the oldest one's `Date.now()`, for the health report (`tripQueue` calls it on every queue change) |
 | `getFcmToken()` | The FCM token from `FirebaseMessaging.getToken()`, which keeps the current token itself. Rejects `FCM_TOKEN` in demo builds with the placeholder Firebase config |
 | `getPendingOffer()` | The offer whose notification opened the app, or one that arrived while JS wasn't running; null once expired. Read once. JS's `pendingOffer()` also returns a `riderOffer` that came while no screen listened (the activity swiped away while online) |
+| `outboxEnqueue(entryJson, optionsJson)` | Saves a trip step (`{riderId, tripId, action, key, body, occurredAt, fix}`; a key already queued is that step) and runs a pass in the same go; resolves `{entryId, results, needsAuth}` JSON. Options: `{riderId, accessToken (fresh, or null for the shift credential), apiBaseUrl}` |
+| `outboxFlush(optionsJson)` | A pass: options as above plus `now` (no backoff) and `tripId` (that trip's steps skip their backoff); resolves `{results, needsAuth}` |
+| `outboxImport(json)` | `{entries, refusals}` from the JS queue (P2-02b), the OTP in each body; sealed and saved as deferred |
+| `outboxState()` | `{entries, refusals}` from memory, never a sealed code and never waiting for a send |
+| `outboxDefer(entryId)` | The step is still waiting once the tap is over: it now counts as captured offline |
+| `outboxDismissRefusal(tripId)` | The rider dismissed a refusal notice |
 
 | Event | Payload |
 |---|---|
@@ -77,12 +84,25 @@ When a location call reports the rider's trip as `CANCELLED` (ops, the customer 
 | `riderTripChanged` | `{tripId, step, version}` |
 | `riderStatus` | `{state: "ONLINE" \| "OFFLINE" \| "ERROR", connected, lastFix?, message?}` after every upload and when the service stops. While offers can't ring (notifications off, or the `rider_offers` channel turned down) a successful upload reports `ERROR` "Turn on notifications to get orders." with `connected: true`; the server sends that phone no offers (`can_ring`), and Home's notifications warning shows (device state `notificationsEnabled` is the same check) |
 | `riderFcmToken` | `{token}` |
+| `riderOutboxChanged` | `{answer}`: a pass the outbox ran by itself (after an upload, on a new network, from the job), as `{results, needsAuth}` JSON. JS tells the trip screen about sent and refused steps, then reads the list again |
 
 JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken, appVersion, model}` from `RiderRuntime` once the gate is ready and on every token change. A 409 `DEVICE_NOT_BOUND` shows "This phone isn't approved".
 
 `installationId` is `Settings.Secure.ANDROID_ID`, from `CravesRiderDevice.getInstallationId()` (null if the phone has none; JS then registers nothing and sends no header). The server binds the first one; `POST /shift/start` sends it again as `X-Craves-Installation-Id`, and Go online shows the server's message on 409 `DEVICE_NOT_BOUND`. ANDROID_ID depends on the signing key: a build signed with another key looks like a new phone, so keep one rider signing key (see RELEASE.md).
 
 The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the camera's photo into `filesDir/rider-photos/<uuid>.jpg`, upright (EXIF rotation applied), the long edge at most 1600 px, JPEG quality 80, and resolves its `file://` URI; the queue sends that copy and `deletePhoto(uri)` removes it once the server has answered (sent or refused). `deletePhoto` only deletes inside `rider-photos`. If the copy can't be made or fully written, `keepPhoto` leaves no file and fails, and the camera's own photo is queued instead. A missing copy is never sent: the step becomes a refusal "Take the photo again" on screen.
+
+## Trip-step outbox (P2-02)
+
+**When.** Live rider builds use it once the server sets `features.nativeTripOutbox` on `GET /me`, which it does exactly while `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on (trip steps take the shift credential, P2-01). Until then, and in mock builds, trip steps go through the JS queue (`tripQueue`, AsyncStorage). When it turns on, the JS queue moves in once (`moveAll`, then `outboxImport`), each OTP back from the secure store into its body, its refusals with it; a failed move keeps the JS queue, which goes on sending. A trip with steps in one queue keeps using that queue, so its steps stay in order; when the switch goes off, steps still in the outbox go with the app's token.
+
+**Storage.** `filesDir/rider/outbox.json` through the platform `AtomicFile` (new file, then rename): `{"v":2,"entries":[...],"refusals":[...]}`. An entry is the JS queue's `QueueEntry` plus `elapsedMs` and `boot` (`SystemClock.elapsedRealtime` and `Settings.Global.BOOT_COUNT` at the tap, -1 for moved steps) and `otpSealed`. The customer's OTP never goes in the file: it is sealed with an AES-GCM key in the Android Keystore (alias `craves_rider_outbox`, Base64 of the 12-byte IV and the ciphertext) and let go after 24 hours (decision E1); if the Keystore can't seal it, it waits in memory only, as in the JS queue. The delivery photo stays in `filesDir/rider-photos` until the server answers, then goes. An unreadable file is renamed aside (`outbox.json.unreadable-<ms>`), never written over. At most 5 refusals, newest first, one per trip.
+
+**Sends.** One thread sends, one step at a time, in order per trip, with the step's own `Idempotency-Key`, exactly as `liveRiderApi.tripAction` does (JSON, or multipart for a photo delivery; `ageMs` and the fix aged by the monotonic clock within the same boot, else by the wall clock). Passes run: when JS enqueues or flushes (with the app's fresh token, else the shift credential), after every upload that reached the server, on a new default network (`registerDefaultNetworkCallback`, while the service runs), and from `RiderOutboxJob`. Answers (`RiderOutboxCore.verdict`): a 2xx sends; no answer, 408, 429 or 5xx retries after 2 s doubling to 60 s; 401 stops the pass and counts nothing (JS renews its token and passes once more); 403 or 404 to the shift credential holds that trip for the app's token (the credential moves only this shift's trips); any other answer drops that rider's trip queue and keeps the refusal (not a wrong or locked code at the door, unless the step was deferred). A fault building a step never drops it: it waits, and the health report shows it waiting. Reads (`outboxState`) and dismissing a notice never wait behind a send; a tap waits behind a photo upload in progress, as in the JS queue.
+
+**The job.** `RiderOutboxJob` is persisted (`RECEIVE_BOOT_COMPLETED`), needs any network, backs off from 30 s, and is scheduled whenever a step waits; it sends with the shift credential, so after a reboot steps go without the app being opened while the shift lasts. Without a saved shift it ends and the steps wait for the app. A force stop cancels it (Android); the steps then go when the app opens.
+
+**Not done: the Android 14 user-initiated photo job** (`RUN_USER_INITIATED_JOBS`, WORKPLAN P2-02c step 3). It must be started while the app is visible and carry its own notification, and it adds a permission declaration. A photo delivery goes from the regular job, the service's passes and the app; add the user-initiated job only if PHONE-TESTS §3 shows photo steps waiting after a kill on Android 14+.
 
 ## Rules the code keeps
 
@@ -95,18 +115,19 @@ The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the ca
 
 ## Permissions (rider manifest only)
 
-`POST_NOTIFICATIONS`, `VIBRATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `WAKE_LOCK`, plus the services `.RiderOnlineService` (`foregroundServiceType="location"`, not exported) and `.RiderMessagingService` (`MESSAGING_EVENT`, not exported). `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` and `INTERNET` come from `src/main`. No `ACCESS_BACKGROUND_LOCATION`, no `USE_FULL_SCREEN_INTENT`.
+`POST_NOTIFICATIONS`, `VIBRATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` (the persisted outbox job) and `ACCESS_NETWORK_STATE` (a job waiting for a network on Android 14+, and the network callback), plus the services `.RiderOnlineService` (`foregroundServiceType="location"`, not exported), `.RiderOutboxJob` (`BIND_JOB_SERVICE`, not exported) and `.RiderMessagingService` (`MESSAGING_EVENT`, not exported). `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` and `INTERNET` come from `src/main`. No `ACCESS_BACKGROUND_LOCATION`, no `USE_FULL_SCREEN_INTENT`.
 
 The rider APK workflow fails if any rider-only permission appears in `src/main/AndroidManifest.xml`.
 
 ## Dependencies (rider only)
 
-In `android/app/build.gradle`: `riderImplementation` `com.google.android.gms:play-services-location:21.3.0`, and `com.google.firebase:firebase-messaging` on the Firebase BOM that `@react-native-firebase/app` uses (`sdkVersions.android.firebase` in its package.json). The google-services plugin reads `android/app/src/rider/google-services.json` for rider variants; the APK workflow writes that file.
+In `android/app/build.gradle`: `riderImplementation` `com.google.android.gms:play-services-location:21.3.0`, and `com.google.firebase:firebase-messaging` on the Firebase BOM that `@react-native-firebase/app` uses (`sdkVersions.android.firebase` in its package.json). The google-services plugin reads `android/app/src/rider/google-services.json` for rider variants; the APK workflow writes that file. Tests only: `testRiderImplementation` `junit:junit:4.13.2` for `src/testRider` (never in the APK).
 
 ## How to test
 
 - **Type check:** `/home/claude/tools/ktcheck apps/mobile/android/app/src/rider/java/com/cravesapp <okhttp stub>` in the agent workspace (stubs for play-services, Firebase and OkHttp; it checks no resources, manifest or Gradle). CI builds the real APK.
-- **JS:** `npx jest src/features/rider/native src/features/rider/components` (both service paths, registration, 409, pending offer).
+- **JS:** `npx jest src/features/rider/native src/features/rider/components` (both service paths, registration, 409, pending offer); the outbox from JS: `npx jest src/features/rider/state src/features/rider/domain`.
+- **The outbox's rules on the JVM:** `./gradlew testRiderReleaseUnitTest` (`src/testRider/.../RiderOutboxCoreTest.kt`); the APK workflow runs it with the build.
 - **On a phone** (live build): see `docs/riders/PHONE-TESTS.md`. Useful commands:
   - `adb logcat -s CravesRiderOffer CravesRiderOnline`
   - `adb shell dumpsys deviceidle force-idle` (Doze), `adb shell dumpsys battery unplug`, `adb shell am set-inactive com.cravesapp.rider true`

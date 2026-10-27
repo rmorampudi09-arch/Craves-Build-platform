@@ -17,7 +17,12 @@ const mockStatusListeners: ((status: {state: string; connected?: boolean}) => vo
 
 jest.mock('../api/riderApi', () => ({riderApi: {registerDevice: jest.fn(async () => undefined)}}));
 jest.mock('../state/tripQueue', () => ({
-  tripQueue: {flush: jest.fn(async () => undefined), onSent: () => () => undefined, onRejected: () => () => undefined},
+  tripQueue: {
+    flush: jest.fn(async () => undefined),
+    onSent: () => () => undefined,
+    onRejected: () => () => undefined,
+    setNativeOutbox: jest.fn(async () => undefined),
+  },
 }));
 jest.mock('../native/riderDevice', () => ({riderDevice: {installationId: jest.fn(async () => 'android-id-1')}}));
 jest.mock('../native/riderOnlineService', () => ({
@@ -55,13 +60,13 @@ const registerDevice = riderApi.registerDevice as jest.Mock;
 const installationId = riderDevice.installationId as jest.Mock;
 const pendingOffer = riderOnlineService.pendingOffer as jest.Mock;
 
-async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn()) {
+async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn(), nativeOutbox?: boolean) {
   const client = new QueryClient();
   let tree: renderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = renderer.create(
       <QueryClientProvider client={client}>
-        <RiderRuntime riderId="r1" openOffer={openOffer} />
+        <RiderRuntime riderId="r1" nativeOutbox={nativeOutbox} openOffer={openOffer} />
       </QueryClientProvider>,
     );
   });
@@ -131,6 +136,18 @@ describe('RiderRuntime pending offer', () => {
     const openOffer = jest.fn();
     const tree = await mount(openOffer);
     expect(openOffer).not.toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+});
+
+describe('RiderRuntime native outbox (P2-02b)', () => {
+  it("switches trip steps to the phone's native outbox only when the server says so", async () => {
+    const setNativeOutbox = tripQueue.setNativeOutbox as jest.Mock;
+    let tree = await mount();
+    expect(setNativeOutbox).toHaveBeenLastCalledWith(false);
+    act(() => tree.unmount());
+    tree = await mount(jest.fn(), true);
+    expect(setNativeOutbox).toHaveBeenLastCalledWith(true);
     act(() => tree.unmount());
   });
 });

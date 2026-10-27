@@ -1,7 +1,7 @@
 import axios, {type AxiosError} from 'axios';
 import {isRetriableFailure} from './requestPolicy';
 
-interface BackendErrorPayload {
+export interface BackendErrorPayload {
   code?: unknown;
   message?: unknown;
   details?: unknown;
@@ -126,6 +126,25 @@ function publicHttpMessage(status: number, backendMessage?: string): string {
   return 'We could not complete that request.';
 }
 
+function attemptsLeftFrom(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+/** The error for a server answer that reached the app another way (the rider's native trip outbox): same code and words. */
+export function appApiErrorFromStatus(status: number, data: BackendErrorPayload = {}): AppApiError {
+  return new AppApiError(
+    normalizedBackendCode(data.code, status),
+    publicHttpMessage(status, safeBackendMessage(data.message)),
+    status,
+    undefined,
+    isRetriableFailure(status),
+    false,
+    safeBackendDetails(data.details),
+    undefined,
+    attemptsLeftFrom(data.attemptsLeft),
+  );
+}
+
 export function toAppApiError(error: unknown): AppApiError {
   if (error instanceof AppApiError) {
     return error;
@@ -160,7 +179,6 @@ export function toAppApiError(error: unknown): AppApiError {
     const code = normalizedBackendCode(error.response?.data?.code, status);
     const backendMessage = safeBackendMessage(error.response?.data?.message);
     const details = safeBackendDetails(error.response?.data?.details);
-    const attemptsLeft = error.response?.data?.attemptsLeft;
     const message = status
       ? publicHttpMessage(status, backendMessage)
       : 'We could not reach Craves. Check your connection and try again.';
@@ -174,7 +192,7 @@ export function toAppApiError(error: unknown): AppApiError {
       false,
       details,
       retryAfterSecondsFrom(error),
-      typeof attemptsLeft === 'number' && Number.isInteger(attemptsLeft) && attemptsLeft >= 0 ? attemptsLeft : undefined,
+      attemptsLeftFrom(error.response?.data?.attemptsLeft),
     );
   }
 

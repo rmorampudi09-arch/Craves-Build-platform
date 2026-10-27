@@ -6,7 +6,7 @@ umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RG="${RG:-rg-craves-prodlow-centralindia}"
 ACR="${ACR:-cravesrm09prodlow6bf632}"
-ADMIN_APP="${ADMIN_APP:-ca-craves-admin-web-prodlow}"
+ADMIN_APP="${ADMIN_APP:-ca-craves-admin-r92-ffe80e7c}"
 APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 fail(){ echo "ERROR: $* Existing admin image preserved." >&2; exit 1; }
 [[ "${EXPECTED_RELEASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'Exact reviewed source SHA is required.'

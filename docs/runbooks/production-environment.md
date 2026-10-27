@@ -2,7 +2,7 @@
 
 This is the one place that says which Azure subscription, resources and pipelines are production. If anything else in the repo disagrees, this page wins and the other file is wrong. `scripts/release/tests/test_no_retired_azure_names.py` fails CI if a retired name below comes back.
 
-Checked against live Azure on 26 Oct 2026 (read only).
+Checked against live Azure on 26 and 27 Oct 2026 (read only).
 
 ## Current
 
@@ -29,9 +29,11 @@ Checked against live Azure on 26 Oct 2026 (read only).
 | GitHub repo | `rmorampudi09-arch/Craves-Build-platform` |
 | Azure DevOps | org `rmorampudi09`, project `Craves`, service connection `Craves-RMORAMPUDI09-Service-Connection` |
 
-Container apps (all in `cae-craves-prodlow-kmqgfy`, images from `cravesrm09prodlow6bf632`): `ca-craves-auth-service-prodlow`, `ca-craves-user-chef-service-prod`, `ca-craves-catalog-service-prodlo`, `ca-craves-order-service-prodlow`, `ca-craves-subscription-service-p`, `ca-craves-integration-service-pr`, `ca-craves-notification-service-p`, `ca-craves-referral-prodlow`, `ca-craves-delivery-intel-prodlow`, `ca-craves-web-prodlow`, `ca-craves-admin-web-prodlow`. The names are shortened where Azure limits required it; `config/production/azure-resource-inventory.json` holds the same values for scripts.
+Container apps (all in `cae-craves-prodlow-kmqgfy`, images from `cravesrm09prodlow6bf632`): `ca-craves-auth-service-prodlow`, `ca-craves-user-chef-service-prod`, `ca-craves-catalog-service-prodlo`, `ca-craves-order-service-prodlow`, `ca-craves-subscription-service-p`, `ca-craves-integration-service-pr`, `ca-craves-notification-service-p`, `ca-craves-referral-prodlow`, `ca-craves-delivery-intel-prodlow`, `ca-craves-web-prodlow` (behind `craves.in` and `www`), `ca-craves-admin-r92-ffe80e7c` (the admin portal, behind `admin.craves.in`). `ca-craves-referral-member-read` is internal only: part of the chef referral programme, with no traffic until its screens ship. The names are shortened where Azure limits required it; `config/production/azure-resource-inventory.json` holds the same values for scripts.
 
-Leftovers to review (not production traffic): `ca-craves-admin-r92-ffe80e7c`, `ca-craves-referral-member-read`, and the manual job `cj-craves-referral-check-39033`, whose image registry `cravesramacr721906` no longer exists.
+Each image tag is the GitHub commit it was built from. For an image pinned by digest, find its tag with `az acr manifest list-metadata -r cravesrm09prodlow6bf632 -n <repository>`. On 27 Oct 2026 every app behind Front Door or APIM ran a commit on `main`.
+
+Leftovers (no traffic, not behind Front Door; do not deploy to them): `ca-craves-admin-web-prodlow`, an admin copy built on 30 Sep from the unmerged branch `fix/admin-operations-production-20260930`; and the manual job `cj-craves-referral-check-39033`, whose image registry `cravesramacr721906` no longer exists.
 
 ## Retired: never use
 

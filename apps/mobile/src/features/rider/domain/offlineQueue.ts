@@ -64,6 +64,8 @@ export interface QueueDeps {
    * {method: 'OTP', otpRef: <entry id>, ...}; without a secret store an unsent OTP lives in memory only.
    */
   secret?: SecretStore;
+  /** Lets go of what an entry holds outside the queue (the kept delivery photo) once the server answered for it. */
+  release?: (entry: QueueEntry) => Promise<void>;
   /** Refusals the rider must see later (default: all); the others only reach onRejected. */
   keepRefusal?: (entry: QueueEntry, info: RejectInfo) => boolean;
   now?: () => number;
@@ -131,11 +133,16 @@ export function createOfflineQueue(deps: QueueDeps) {
     return entries;
   }
 
-  /** The OTP leaves the secret store once the server has answered for its step. */
   async function forgetOtp(entry: QueueEntry): Promise<void> {
     if (otpBody(entry)) {
       await deps.secret?.remove(entry.id).catch(() => undefined);
     }
+  }
+
+  /** Once the server has answered for an entry (sent or refused), its OTP and photo go. */
+  async function letGo(entry: QueueEntry): Promise<void> {
+    await forgetOtp(entry);
+    await deps.release?.(entry).catch(() => undefined);
   }
 
   /** The entry as the server gets it: the OTP back from its store, and capturedOffline once it outlived the tap. */
@@ -194,7 +201,7 @@ export function createOfflineQueue(deps: QueueDeps) {
       try {
         const trip = await deps.send(await ready(entry));
         await save((await load()).filter(e => e.id !== entry.id));
-        await forgetOtp(entry);
+        await letGo(entry);
         // A later step of the trip went through, so an earlier refusal of it no longer needs the rider.
         const refusals = await loadRefusals();
         if (refusals.some(r => r.tripId === entry.tripId)) {
@@ -219,7 +226,7 @@ export function createOfflineQueue(deps: QueueDeps) {
           const list = await load();
           const dropped = list.filter(e => e.tripId === entry.tripId && e.riderId === riderId);
           await save(list.filter(e => !dropped.includes(e)));
-          await Promise.all(dropped.map(forgetOtp));
+          await Promise.all(dropped.map(letGo));
           dropped.forEach(e => results.set(e.id, {kind: 'rejected', ...info}));
           if (deps.keepRefusal?.(entry, info) ?? true) {
             const refusal: Refusal = {...info, riderId, tripId: entry.tripId, action: entry.action, at: now()};

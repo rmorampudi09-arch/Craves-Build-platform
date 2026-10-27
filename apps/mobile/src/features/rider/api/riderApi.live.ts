@@ -104,11 +104,12 @@ export const liveRiderApi: RiderApi = {
     const sent = stepTap(tap);
     const deliver = body as DeliverBody | undefined;
     if (action === 'delivered' && deliver?.method === 'PHOTO') {
-      const form = new FormData();
-      // A photo deleted before an offline replay is skipped; ops reviews the delivery either way.
-      if (deliver.photoUri && (await fileExists(deliver.photoUri))) {
-        form.append('photo', imagePart(deliver.photoUri, 'delivery.jpg'));
+      // Never a delivery without its photo: a refusal the queue keeps on screen asks the rider for another (P1-07).
+      if (!deliver.photoUri || !(await fileExists(deliver.photoUri))) {
+        throw new AppApiError('PHOTO_MISSING', 'The delivery photo is gone from this phone. Take the photo again.', 422);
       }
+      const form = new FormData();
+      form.append('photo', imagePart(deliver.photoUri, 'delivery.jpg'));
       form.append('method', 'PHOTO');
       form.append('callsMade', String(deliver.callsMade));
       const fix = sent.fix ?? deliver.fix;

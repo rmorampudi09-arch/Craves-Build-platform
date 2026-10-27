@@ -180,6 +180,8 @@ class FleetTripStepsDatabaseTest {
         Trip delivered = trips.deliveredByPhoto(identity, tripId, 0, new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG), "photo-1");
 
         assertThat(delivered.step()).as("allowed after the OTP lock, without the wait").isEqualTo("DELIVERED");
+        assertThat(trips.deliveredByPhoto(identity, tripId, 0, null, "photo-1").step())
+            .as("a retry whose answer was lost gets the trip, even without the photo (P1-07)").isEqualTo("DELIVERED");
         verify(storage).upload(startsWith("riders/" + rider + "/trips/" + tripId + "/delivery-"), eq(JPEG), eq("image/jpeg"), anyBoolean());
         assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, event -> {
             assertThat(event.held()).isTrue();

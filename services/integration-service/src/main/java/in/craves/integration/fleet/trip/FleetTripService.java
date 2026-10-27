@@ -348,7 +348,6 @@ public class FleetTripService {
 
     /** As above; the unreachable wait is measured to when the photo was taken (the tap), not to when it reached us. */
     public Trip deliveredByPhoto(UUID identityId, UUID tripId, Integer callsMade, MultipartFile photo, String key, Tap tap) {
-        byte[] bytes = photoBytes(photo);
         Rider rider = rider(identityId);
         Locked trip = transaction.execute(status -> {
             Locked locked = lock(tripId, rider);
@@ -356,8 +355,9 @@ public class FleetTripService {
             return locked;
         });
         if ("DELIVERED".equals(trip.state())) {
-            return view(tripId);
+            return view(tripId); // a retry whose answer was lost gets the trip, with or without the photo it no longer has
         }
+        byte[] bytes = photoBytes(photo);
         requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
         if (!otpLocked(tripId)) {
             if (callsMade == null || callsMade < 2) {

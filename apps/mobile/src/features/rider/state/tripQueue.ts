@@ -2,8 +2,10 @@ import {useEffect, useState} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import {AppApiError} from '../../../core/http/apiError';
+import type {DeliverBody} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {createOfflineQueue, type QueueEntry, type Refusal, type SecretStore} from '../domain/offlineQueue';
+import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 
 /** The customer's OTP while its delivery step waits: Keystore-encrypted, like the refresh token (decision E1). */
@@ -37,6 +39,13 @@ export const tripQueue = createOfflineQueue({
       : {code: 'UNKNOWN', message: 'Something went wrong. Try again.'},
   // AsyncStorage never holds the customer's OTP: it waits in the Keystore, at most 24 h, until the server answers.
   secret: otpStore,
+  // The kept delivery photo goes once the server has answered for its step (P1-07).
+  release: async entry => {
+    const body = entry.body as DeliverBody | undefined;
+    if (body?.method === 'PHOTO' && body.photoUri) {
+      await riderDevice.deletePhoto(body.photoUri);
+    }
+  },
   // The trip screen shows a wrong or locked OTP by the code boxes, unless the rider typed it offline and was told to go:
   // that one, like every other refusal, waits on screen for the rider.
   keepRefusal: (entry, info) => entry.deferred === true || (info.code !== 'OTP_INVALID' && info.code !== 'OTP_LOCKED'),

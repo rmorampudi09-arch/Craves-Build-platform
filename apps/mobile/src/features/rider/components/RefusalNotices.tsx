@@ -21,7 +21,11 @@ export function RefusalNotices({tripId}: {tripId?: string}) {
   const refusals = useRefusals(riderId, tripId);
   // Only an OTP typed offline is kept refused (tripQueue keepRefusal): the rider has left the door, so support sorts it out.
   const message = (refusal: Refusal) =>
-    refusal.code === 'OTP_INVALID' || refusal.code === 'OTP_LOCKED' ? strings.trip.offlineOtpRefused : refusal.message;
+    refusal.code === 'OTP_INVALID' || refusal.code === 'OTP_LOCKED'
+      ? strings.trip.offlineOtpRefused
+      : refusal.code === 'PHOTO_MISSING'
+        ? strings.trip.photoMissing
+        : refusal.message;
   return (
     <>
       {refusals.map(refusal => (

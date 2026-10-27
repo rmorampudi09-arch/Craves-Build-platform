@@ -6,6 +6,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import type {HomeSummary, RiderMe, Trip} from '../api/contract';
 import {riderApi} from '../api/riderApi';
+import {riderDevice} from '../native/riderDevice';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
@@ -538,13 +539,17 @@ describe('Trip: customer not answering', () => {
     });
     expect(byId('rider-leave-photo').props.disabled).toBe(false);
     expect(allText()).toContain('You can leave the order now');
+    // The queue gets the copy kept in the app's files, not the camera's cache file (P1-07).
+    const keep = jest.spyOn(riderDevice, 'keepPhoto').mockResolvedValue('file:///files/rider-photos/kept.jpg');
     await press('rider-leave-photo');
+    expect(keep).toHaveBeenCalledWith('file:///photo.jpg');
     expect(tripQueue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'delivered',
-        body: expect.objectContaining({method: 'PHOTO', photoUri: 'file:///photo.jpg', callsMade: 2}),
+        body: expect.objectContaining({method: 'PHOTO', photoUri: 'file:///files/rider-photos/kept.jpg', callsMade: 2}),
       }),
     );
+    keep.mockRestore();
   });
 
   it('counts a call made from the OTP screen as the first call', async () => {

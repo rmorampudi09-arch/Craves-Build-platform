@@ -292,6 +292,29 @@ describe('rider offline queue', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
+  it('releases what an entry holds (the kept photo) once the server answered: sent, or refused with the steps behind it', async () => {
+    let answer: 'ok' | 'offline' | 'refuse' = 'ok';
+    const send = jest.fn(async () => {
+      if (answer === 'ok') {
+        return trip;
+      }
+      throw new HttpError(answer === 'offline' ? undefined : 409);
+    });
+    const release = jest.fn(async (_entry: QueueEntry) => undefined);
+    const {queue, advance} = setup(send, {release});
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'delivered', key: 'k1', body: {method: 'PHOTO', photoUri: 'a'}});
+    expect(release.mock.calls.map(([e]) => e.key)).toEqual(['k1']);
+
+    answer = 'offline';
+    await queue.enqueue({riderId: 'r1', tripId: 't2', action: 'arrived-drop', key: 'k2'});
+    await queue.enqueue({riderId: 'r1', tripId: 't2', action: 'delivered', key: 'k3', body: {method: 'PHOTO', photoUri: 'b'}});
+    expect(release).toHaveBeenCalledTimes(1); // still waiting: the photo stays
+    answer = 'refuse';
+    advance(120_000);
+    await queue.flush('r1');
+    expect(release.mock.calls.map(([e]) => e.key)).toEqual(['k1', 'k2', 'k3']);
+  });
+
   it('reports pending actions so sign-out can be blocked', async () => {
     const {queue} = setup(async () => {
       throw new HttpError(503);

@@ -80,6 +80,8 @@ JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken,
 
 `installationId` is `Settings.Secure.ANDROID_ID`, from `CravesRiderDevice.getInstallationId()` (null if the phone has none; JS then registers nothing and sends no header). The server binds the first one; `POST /shift/start` sends it again as `X-Craves-Installation-Id`, and Go online shows the server's message on 409 `DEVICE_NOT_BOUND`. ANDROID_ID depends on the signing key: a build signed with another key looks like a new phone, so keep one rider signing key (see RELEASE.md).
 
+The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the camera's photo into `filesDir/rider-photos/<uuid>.jpg`, upright (EXIF rotation applied), the long edge at most 1600 px, JPEG quality 80, and resolves its `file://` URI; the queue sends that copy and `deletePhoto(uri)` removes it once the server has answered (sent or refused). `deletePhoto` only deletes inside `rider-photos`. A missing copy is never sent: the step becomes a refusal "Take the photo again" on screen.
+
 ## Rules the code keeps
 
 - **JS never stores the shift credential.** JS hands it from `POST /shift/start` straight to `start()`; it lives only in the app's private `SharedPreferences` (`craves_rider_shift`; `allowBackup` is off), so a sticky restart can resume. It is cleared on `stop()`, a 401/403, a stop code and expiry.

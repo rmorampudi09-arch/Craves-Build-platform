@@ -10,6 +10,7 @@ import {CountdownBar} from '../../components/CountdownBar';
 import {RefusalNotices} from '../../components/RefusalNotices';
 import {Card, RiderScreen} from '../../components/ui';
 import {formatClock, formatTimer} from '../../domain/format';
+import {riderDevice} from '../../native/riderDevice';
 import {riderOnlineService} from '../../native/riderOnlineService';
 import {useStrings} from '../../strings/StringsProvider';
 import {call, SyncNote, text, TripHeader, type StepProps} from './parts';
@@ -71,9 +72,11 @@ export function NotAnswering({
         return;
       }
       onPhotoSent();
+      const taken = shot.assets[0]?.uri;
       await run('delivered', {
         method: 'PHOTO',
-        photoUri: shot.assets[0]?.uri,
+        // Kept in the app's files until the server has it: the camera's cache may be cleared before an offline replay.
+        photoUri: taken && (await riderDevice.keepPhoto(taken)),
         callsMade: callTimes.length,
         fix: riderOnlineService.lastFix(),
       });

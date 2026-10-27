@@ -188,16 +188,17 @@ describe('live rider API: every path in rider-v1.yaml', () => {
       expect(JSON.parse(sent.fix as string)).toEqual({...fix, ageMs: 1_000 + Number(sent.ageMs)});
     });
 
-    it('still sends the delivery when the camera file is gone before an offline replay', async () => {
+    it('never sends a delivery without its photo: a missing file is a refusal that asks for another (P1-07)', async () => {
       globalThis.fetch = jest.fn(async () => {
         throw new TypeError('Network request failed');
       });
       reply = () => ({status: 200, data: trip});
-      await liveRiderApi.tripAction('t1', 'delivered', {method: 'PHOTO', photoUri: 'file:///gone.jpg', callsMade: 2}, 'k');
-      expect(parts(calls[0])).toEqual([
-        ['method', 'PHOTO'],
-        ['callsMade', '2'],
-      ]);
+      const sent = liveRiderApi.tripAction('t1', 'delivered', {method: 'PHOTO', photoUri: 'file:///gone.jpg', callsMade: 2}, 'k');
+      await expect(sent).rejects.toMatchObject({code: 'PHOTO_MISSING', status: 422, retriable: false});
+      await expect(
+        liveRiderApi.tripAction('t1', 'delivered', {method: 'PHOTO', callsMade: 2}, 'k2'),
+      ).rejects.toMatchObject({code: 'PHOTO_MISSING'});
+      expect(calls).toHaveLength(0);
     });
   });
 

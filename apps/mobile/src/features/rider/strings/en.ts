@@ -334,6 +334,7 @@ export const en = {
     deliverySavedTitle: 'Delivery saved',
     deliverySavedBody: "We'll check the code when you're back online. You can go.",
     offlineOtpRefused: "Order code didn't match. Call support.",
+    photoMissing: 'The delivery photo is gone from this phone. Take the photo again.',
     deliveredTo: (code: string, name: string, time: string) => `${code} delivered to ${name} at ${time}`,
     youEarned: 'You earned',
     linesPending: 'Pay details appear once this syncs.',

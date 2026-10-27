@@ -9,9 +9,11 @@ import type {ReceivedOffer} from '../domain/offerTiming';
 import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
+import {tripQueue} from '../state/tripQueue';
 import {RiderRuntime} from './RiderRuntime';
 
 const mockTokenListeners: ((token: string) => void)[] = [];
+const mockStatusListeners: ((status: {state: string; connected?: boolean}) => void)[] = [];
 
 jest.mock('../api/riderApi', () => ({riderApi: {registerDevice: jest.fn(async () => undefined)}}));
 jest.mock('../state/tripQueue', () => ({
@@ -28,7 +30,10 @@ jest.mock('../native/riderOnlineService', () => ({
     pendingOffer: jest.fn(async () => null),
     onOffer: () => () => undefined,
     onTripChanged: () => () => undefined,
-    onStatus: () => () => undefined,
+    onStatus: (cb: (status: {state: string; connected?: boolean}) => void) => {
+      mockStatusListeners.push(cb);
+      return () => undefined;
+    },
   },
 }));
 
@@ -66,6 +71,7 @@ async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn()) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockTokenListeners.length = 0;
+  mockStatusListeners.length = 0;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -126,5 +132,28 @@ describe('RiderRuntime pending offer', () => {
     const tree = await mount(openOffer);
     expect(openOffer).not.toHaveBeenCalled();
     act(() => tree.unmount());
+  });
+});
+
+describe('RiderRuntime queue', () => {
+  const status = (state: string, connected?: boolean) => act(() => mockStatusListeners.forEach(cb => cb({state, connected})));
+  const flushedNow = () => (tripQueue.flush as jest.Mock).mock.calls.filter(([, options]) => options?.now).length;
+
+  it('sends the queue, backoff or not, when an upload reaches the server, at most every 5 s (P1-08)', async () => {
+    jest.useFakeTimers();
+    const tree = await mount();
+    expect(tripQueue.flush).toHaveBeenCalledWith('r1'); // on start, respecting backoff
+    status('ERROR'); // no signal: nothing
+    expect(flushedNow()).toBe(0);
+    status('ONLINE');
+    expect(tripQueue.flush).toHaveBeenLastCalledWith('r1', {now: true});
+    status('ONLINE');
+    status('ERROR', true); // connected, only offers can't ring
+    expect(flushedNow()).toBe(1);
+    act(() => jest.advanceTimersByTime(5_000));
+    status('ERROR', true);
+    expect(flushedNow()).toBe(2);
+    act(() => tree.unmount());
+    jest.useRealTimers();
   });
 });

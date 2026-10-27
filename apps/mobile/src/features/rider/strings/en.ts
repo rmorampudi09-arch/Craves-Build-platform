@@ -9,6 +9,7 @@ export const en = {
     demoData: 'Demo data',
     savedWillSync: 'Saved · will sync',
     callSupport: 'Call support',
+    dismiss: 'Dismiss',
     cancel: 'Cancel',
     error: 'Something went wrong. Try again.',
     sos: 'SOS',
@@ -342,6 +343,7 @@ export const en = {
     cancelledTitle: 'Trip cancelled',
     failedTitle: 'Delivery not completed',
     ended: 'This trip has ended.',
+    stepRefused: "A trip step didn't go through",
     loadFailed: "Couldn't load your trip. Check your connection and try again.",
   },
   earnings: {

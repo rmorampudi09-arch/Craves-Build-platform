@@ -7,6 +7,7 @@ import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} 
 import {Banner} from '../../components/Banner';
 import {BottomAction} from '../../components/BottomAction';
 import {CountdownBar} from '../../components/CountdownBar';
+import {RefusalNotices} from '../../components/RefusalNotices';
 import {Card, RiderScreen} from '../../components/ui';
 import {formatClock, formatTimer} from '../../domain/format';
 import {riderOnlineService} from '../../native/riderOnlineService';
@@ -96,6 +97,7 @@ export function NotAnswering({
         otpLocked ? undefined : <BottomAction label={t.cameOut(name)} variant="outline" onPress={onBack} testID="rider-came-out" />
       }>
       <SyncNote show={syncing} />
+      <RefusalNotices tripId={trip.tripId} />
       <Banner tone="success" text={t.paidEitherWay} />
       <Card style={styles.steps}>
         <StepRow

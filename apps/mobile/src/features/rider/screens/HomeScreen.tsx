@@ -9,6 +9,7 @@ import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {RefusalNotices} from '../components/RefusalNotices';
 import {RiderHeader} from '../components/RiderHeader';
 import {Card, Money, RiderScreen} from '../components/ui';
 import {formatClock, formatRupees} from '../domain/format';
@@ -176,6 +177,7 @@ export function HomeScreen() {
           <BottomAction label={strings.common.retry} variant="ghost" size="compact" onPress={refresh} testID="rider-home-retry" />
         </View>
       ) : null}
+      <RefusalNotices />
       {tripInProgress ? (
         <Card>
           <Text style={styles.strong}>{h.resumeTitle}</Text>

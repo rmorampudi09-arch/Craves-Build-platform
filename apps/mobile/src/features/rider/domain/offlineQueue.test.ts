@@ -1,5 +1,5 @@
 import type {Trip} from '../api/contract';
-import {createOfflineQueue, QueueEntry, STORAGE_KEY} from './offlineQueue';
+import {createOfflineQueue, QueueDeps, QueueEntry, REFUSALS_KEY, STORAGE_KEY} from './offlineQueue';
 
 class HttpError extends Error {
   constructor(readonly status?: number) {
@@ -18,15 +18,15 @@ function memoryStorage() {
   };
 }
 
-function setup(send: (entry: QueueEntry) => Promise<Trip>) {
+function setup(send: (entry: QueueEntry) => Promise<Trip>, extra?: Partial<QueueDeps>, storage = memoryStorage()) {
   let clock = 1_000;
-  const storage = memoryStorage();
   const queue = createOfflineQueue({
     storage,
     send,
     isRetriable: error => !(error instanceof HttpError) || !error.status || error.status >= 500,
     describe: error => ({code: 'REFUSED', message: (error as Error).message}),
     now: () => clock,
+    ...extra,
   });
   return {queue, storage, advance: (ms: number) => (clock += ms)};
 }
@@ -86,6 +86,61 @@ describe('rider offline queue', () => {
     await queue.flush('r1');
     expect(sent).toEqual(['arrived-pickup', 'picked-up']);
     expect(await queue.pending('r1')).toBe(0);
+  });
+
+  it('sends an entry still waiting out its backoff when flushed now, as the phone just reached the server', async () => {
+    let online = false;
+    const send = jest.fn(async () => {
+      if (!online) {
+        throw new HttpError();
+      }
+      return trip;
+    });
+    const {queue} = setup(send);
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k1'});
+    online = true;
+    await queue.flush('r1');
+    expect(send).toHaveBeenCalledTimes(1); // the 2 s backoff hasn't run out
+    await queue.flush('r1', {now: true});
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(await queue.pending('r1')).toBe(0);
+  });
+
+  it("keeps the trip's last refusal across restarts until the rider dismisses it", async () => {
+    const refuse = async () => {
+      throw new HttpError(409);
+    };
+    const {queue, storage} = setup(refuse);
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'arrived-pickup', key: 'k1'});
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k2'});
+    const kept = [{riderId: 'r1', tripId: 't1', action: 'picked-up', code: 'REFUSED', message: 'HTTP 409', at: 1_000}];
+    expect(JSON.parse(storage.data.get(REFUSALS_KEY)!)).toEqual(kept);
+
+    const restarted = setup(refuse, undefined, storage).queue;
+    expect(await restarted.refusals('r1')).toEqual(kept);
+    expect(await restarted.refusals('r1', 'other')).toEqual([]);
+    expect(await restarted.refusals('r2')).toEqual([]);
+    await restarted.dismissRefusal('t1');
+    expect(await restarted.refusals('r1')).toEqual([]);
+    expect(JSON.parse(storage.data.get(REFUSALS_KEY)!)).toEqual([]);
+  });
+
+  it('forgets a refusal once a later step of that trip goes through, and keeps none the app says to skip', async () => {
+    let refuse = true;
+    const send = jest.fn(async () => {
+      if (refuse) {
+        throw new HttpError(422);
+      }
+      return trip;
+    });
+    const {queue} = setup(send, {keepRefusal: entry => entry.action !== 'delivered'});
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'delivered', key: 'k1'});
+    expect(await queue.refusals('r1')).toEqual([]);
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'failed', key: 'k2'});
+    expect(await queue.refusals('r1')).toHaveLength(1);
+    refuse = false;
+    await queue.enqueue({riderId: 'r1', tripId: 't1', action: 'failed', key: 'k3'});
+    expect(await queue.refusals('r1')).toEqual([]);
   });
 
   it('never queues the same idempotency key twice', async () => {

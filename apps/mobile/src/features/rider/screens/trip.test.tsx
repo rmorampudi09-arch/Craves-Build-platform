@@ -38,6 +38,7 @@ jest.mock('../api/riderApi', () => {
 });
 type RejectListener = (entry: unknown, info: unknown) => void;
 const mockRejected = new Set<RejectListener>();
+const mockRefusals: {list: {tripId: string; code: string; message: string}[]} = {list: []};
 jest.mock('../state/tripQueue', () => {
   const {useSyncExternalStore} = require('react');
   const subscribe = (listener: () => void) => {
@@ -58,7 +59,9 @@ jest.mock('../state/tripQueue', () => {
       }),
       onSent: () => () => undefined,
       flush: jest.fn(async () => new Map()),
+      dismissRefusal: jest.fn(async () => undefined),
     },
+    useRefusals: (_riderId: string, tripId?: string) => mockRefusals.list.filter(r => tripId === undefined || r.tripId === tripId),
     usePendingEntries: () => useSyncExternalStore(subscribe, () => mockPending.entries),
     usePendingActions: () => useSyncExternalStore(subscribe, () => mockPending.entries.length),
   };
@@ -164,6 +167,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPending.offline = false;
   mockPending.entries = [];
+  mockRefusals.list = [];
   mockFix.value = null;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
@@ -239,6 +243,20 @@ describe('Trip: to the kitchen (step 1)', () => {
     await render(trip);
     expect(has('rider-reached-customer')).toBe(true);
     expect(allText()).toContain('Saved · will sync');
+  });
+
+  it("keeps this trip's refused step on screen with the server's reason until dismissed (P1-08)", async () => {
+    mockRefusals.list = [
+      {tripId: 't1', code: 'STEP_CONFLICT', message: 'Ops moved this trip on. Check the step below.'},
+      {tripId: 't9', code: 'TRIP_NOT_ACTIVE', message: 'Another trip ended.'},
+    ];
+    await render(trip);
+    expect(allText()).toContain("A trip step didn't go through | Ops moved this trip on. Check the step below.");
+    expect(allText()).not.toContain('Another trip ended.');
+    await press('rider-refusal-call');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+911111111111');
+    await press('rider-refusal-dismiss');
+    expect(tripQueue.dismissRefusal).toHaveBeenCalledWith('t1');
   });
 
   it('moves to the kitchen step at once and says it will sync when offline', async () => {
@@ -454,7 +472,7 @@ describe('Trip: deliver with the OTP (step 4)', () => {
 });
 
 describe('RiderRuntime', () => {
-  it('leaves wrong and locked OTPs to the trip screen and alerts other refusals', async () => {
+  it('never alerts a refusal: the trip refreshes and the screens keep the notice (P1-08)', async () => {
     await act(async () => {
       tree = renderer.create(
         <QueryClientProvider client={new QueryClient()}>
@@ -466,7 +484,7 @@ describe('RiderRuntime', () => {
     act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'OTP_LOCKED', message: 'Locked'})));
     expect(Alert.alert).not.toHaveBeenCalled();
     act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'TRIP_NOT_ACTIVE', message: 'Ended'})));
-    expect(Alert.alert).toHaveBeenCalledWith('Ended');
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
 
@@ -678,6 +696,14 @@ describe('Trip: complete, failed and cancelled', () => {
     expect(text).toContain('Wrong address');
     expect(text).toContain('₹67');
     expect(text).toContain('Ops checks what happened before this pay is released.');
+  });
+
+  it('shows a cancelled trip with the step the server refused while offline', async () => {
+    mockRefusals.list = [{tripId: 't1', code: 'TRIP_NOT_ACTIVE', message: 'This trip has ended. Check Home for your next order.'}];
+    await render({...trip, step: 'CANCELLED'});
+    expect(allText()).toContain('Trip cancelled');
+    expect(allText()).toContain("A trip step didn't go through | This trip has ended. Check Home for your next order.");
+    expect(has('rider-refusal-dismiss')).toBe(true);
   });
 
   it('shows a cancelled trip with the reason and no made-up total', async () => {

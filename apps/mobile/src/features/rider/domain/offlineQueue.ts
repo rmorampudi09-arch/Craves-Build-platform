@@ -31,6 +31,14 @@ export interface RejectInfo {
   attemptsLeft?: number;
 }
 
+/** The server's last refusal of a trip's step, kept under REFUSALS_KEY until the rider dismisses it (blueprint A3). */
+export interface Refusal extends RejectInfo {
+  riderId: string;
+  tripId: string;
+  action: TripAction;
+  at: number;
+}
+
 export interface QueueStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
@@ -44,16 +52,21 @@ export interface QueueDeps {
   describe: (error: unknown) => RejectInfo;
   /** Entries it matches (the customer's delivery OTP) stay in memory and are never written to storage. */
   memoryOnly?: (entry: QueueEntry) => boolean;
+  /** Refusals the rider must see later (default: all); the others only reach onRejected. */
+  keepRefusal?: (entry: QueueEntry, info: RejectInfo) => boolean;
   now?: () => number;
 }
 
 export const STORAGE_KEY = 'rider.queue.v1';
+export const REFUSALS_KEY = 'rider.queue.refusals.v1';
+const MAX_REFUSALS = 5;
 const BASE_DELAY_MS = 2_000;
 const MAX_DELAY_MS = 60_000;
 
 export function createOfflineQueue(deps: QueueDeps) {
   const now = deps.now ?? Date.now;
   let entries: QueueEntry[] | null = null;
+  let refused: Refusal[] | null = null;
   let chain: Promise<unknown> = Promise.resolve();
   let counter = 0;
   const changeListeners = new Set<() => void>();
@@ -67,16 +80,30 @@ export function createOfflineQueue(deps: QueueDeps) {
     return next;
   }
 
-  async function load(): Promise<QueueEntry[]> {
-    if (!entries) {
-      try {
-        const parsed = JSON.parse((await deps.storage.getItem(STORAGE_KEY)) ?? '[]');
-        entries = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        entries = [];
-      }
+  async function read<T>(key: string): Promise<T[]> {
+    try {
+      const parsed = JSON.parse((await deps.storage.getItem(key)) ?? '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
     }
-    return entries as QueueEntry[];
+  }
+
+  async function load(): Promise<QueueEntry[]> {
+    entries ??= await read<QueueEntry>(STORAGE_KEY);
+    return entries;
+  }
+
+  async function loadRefusals(): Promise<Refusal[]> {
+    refused ??= await read<Refusal>(REFUSALS_KEY);
+    return refused;
+  }
+
+  async function saveRefusals(list: Refusal[]): Promise<void> {
+    refused = list;
+    // shortcut: a failed write keeps the refusals in memory only, until the app restarts; nothing better to do with it.
+    await deps.storage.setItem(REFUSALS_KEY, JSON.stringify(list)).catch(() => undefined);
+    changeListeners.forEach(listener => listener());
   }
 
   async function save(list: QueueEntry[]): Promise<void> {
@@ -86,7 +113,8 @@ export function createOfflineQueue(deps: QueueDeps) {
     changeListeners.forEach(listener => listener());
   }
 
-  async function flushFor(riderId: string): Promise<Map<string, QueueOutcome>> {
+  /** skipBackoff: an upload just reached the server, so entries waiting out a backoff go too. */
+  async function flushFor(riderId: string, skipBackoff = false): Promise<Map<string, QueueOutcome>> {
     const results = new Map<string, QueueOutcome>();
     const heldTrips = new Set<string>();
     for (const entry of [...(await load())]) {
@@ -97,7 +125,7 @@ export function createOfflineQueue(deps: QueueDeps) {
       if (!(await load()).some(e => e.id === entry.id)) {
         continue;
       }
-      if (entry.nextAttemptAt > now()) {
+      if (!skipBackoff && entry.nextAttemptAt > now()) {
         heldTrips.add(entry.tripId);
         results.set(entry.id, {kind: 'queued'});
         continue;
@@ -105,6 +133,11 @@ export function createOfflineQueue(deps: QueueDeps) {
       try {
         const trip = await deps.send(entry);
         await save((await load()).filter(e => e.id !== entry.id));
+        // A later step of the trip went through, so an earlier refusal of it no longer needs the rider.
+        const refusals = await loadRefusals();
+        if (refusals.some(r => r.tripId === entry.tripId)) {
+          await saveRefusals(refusals.filter(r => r.tripId !== entry.tripId));
+        }
         results.set(entry.id, {kind: 'sent', trip});
         sentListeners.forEach(listener => listener(entry, trip));
       } catch (error) {
@@ -125,6 +158,11 @@ export function createOfflineQueue(deps: QueueDeps) {
           const dropped = list.filter(e => e.tripId === entry.tripId && e.riderId === riderId);
           await save(list.filter(e => !dropped.includes(e)));
           dropped.forEach(e => results.set(e.id, {kind: 'rejected', ...info}));
+          if (deps.keepRefusal?.(entry, info) ?? true) {
+            const refusal: Refusal = {...info, riderId, tripId: entry.tripId, action: entry.action, at: now()};
+            const others = (await loadRefusals()).filter(r => r.tripId !== entry.tripId);
+            await saveRefusals([refusal, ...others].slice(0, MAX_REFUSALS));
+          }
           rejectListeners.forEach(listener => listener(entry, info));
         }
       }
@@ -153,8 +191,9 @@ export function createOfflineQueue(deps: QueueDeps) {
         return results.get(entry.id) ?? {kind: 'queued'};
       });
     },
-    flush(riderId: string): Promise<Map<string, QueueOutcome>> {
-      return serial(() => flushFor(riderId));
+    /** Sends what waits; {now: true} (the phone just reached the server) also sends entries waiting out a backoff. */
+    flush(riderId: string, options?: {now?: boolean}): Promise<Map<string, QueueOutcome>> {
+      return serial(() => flushFor(riderId, options?.now));
     },
     /** This rider's entries waiting to send, oldest first, optionally for one trip (copies). */
     entries(riderId: string, tripId?: string): Promise<QueueEntry[]> {
@@ -170,6 +209,15 @@ export function createOfflineQueue(deps: QueueDeps) {
           e => e.riderId === riderId && (tripId === undefined || e.tripId === tripId),
         ).length,
       );
+    },
+    /** The server's refusals this rider hasn't dismissed, newest first, optionally for one trip (P1-08). */
+    refusals(riderId: string, tripId?: string): Promise<Refusal[]> {
+      return serial(async () =>
+        (await loadRefusals()).filter(r => r.riderId === riderId && (tripId === undefined || r.tripId === tripId)),
+      );
+    },
+    dismissRefusal(tripId: string): Promise<void> {
+      return serial(async () => saveRefusals((await loadRefusals()).filter(r => r.tripId !== tripId)));
     },
     /** Every rider's entries waiting, and the oldest one's createdAt (null when none): the phone's health report. */
     stats(): Promise<{pending: number; oldestAt: number | null}> {

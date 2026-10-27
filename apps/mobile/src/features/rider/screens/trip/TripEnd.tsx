@@ -5,6 +5,7 @@ import {Icon} from '../../../../shared/components';
 import {colors, iconSize, radius, spacing} from '../../../../design/tokens';
 import type {Trip, TripStep} from '../../api/contract';
 import {BottomAction} from '../../components/BottomAction';
+import {RefusalNotices} from '../../components/RefusalNotices';
 import {Card, Label, Money, RateRow, RiderScreen} from '../../components/ui';
 import {formatClock, formatRupees} from '../../domain/format';
 import {useRiderHome} from '../../state/riderQueries';
@@ -53,6 +54,7 @@ export function TripEnd({
         </Text>
         <SyncNote show={syncing} />
       </View>
+      <RefusalNotices tripId={trip.tripId} />
       {step !== 'CANCELLED' || lines.length > 0 ? (
         <Card>
           <Label>{t.youEarned}</Label>

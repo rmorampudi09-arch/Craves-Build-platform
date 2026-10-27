@@ -13,6 +13,8 @@ import {tripQueue} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
 
 const FLUSH_EVERY_MS = 15_000;
+// An upload that worked sends the queue at once, backoff or not, at most this often (blueprint A2).
+const SIGNAL_FLUSH_GAP_MS = 5_000;
 const model = Platform.OS === 'android' ? Platform.constants.Model : Platform.OS;
 
 /**
@@ -58,11 +60,21 @@ export function RiderRuntime({riderId, openOffer}: {riderId: string; openOffer: 
     const flush = () => {
       tripQueue.flush(riderId).catch(() => undefined);
     };
+    let signalFlushAt = -Infinity;
+    const flushOnSignal = () => {
+      if (Date.now() - signalFlushAt >= SIGNAL_FLUSH_GAP_MS) {
+        signalFlushAt = Date.now();
+        tripQueue.flush(riderId, {now: true}).catch(() => undefined);
+      }
+    };
     riderOnlineService.pendingOffer().then(pending => pending && show(pending.offer, pending.receivedAtMs));
     const offs = [
       riderOnlineService.onOffer(show),
       riderOnlineService.onTripChanged(refreshTrip),
       riderOnlineService.onStatus(status => {
+        if (status.state === 'ONLINE' || status.connected) {
+          flushOnSignal();
+        }
         if (status.state === 'OFFLINE' && status.message) {
           refreshTrip();
           Alert.alert(status.message);
@@ -72,13 +84,8 @@ export function RiderRuntime({riderId, openOffer}: {riderId: string; openOffer: 
         queryClient.setQueryData(riderKeys.activeTrip, trip);
         queryClient.invalidateQueries({queryKey: riderKeys.home});
       }),
-      tripQueue.onRejected((_entry, info) => {
-        refreshTrip();
-        // The trip screen shows a wrong or locked OTP by the code boxes.
-        if (info.code !== 'OTP_INVALID' && info.code !== 'OTP_LOCKED') {
-          Alert.alert(info.message);
-        }
-      }),
+      // The refusal itself stays on the trip and Home screens until the rider dismisses it (RefusalNotices).
+      tripQueue.onRejected(refreshTrip),
     ];
     const timer = setInterval(flush, FLUSH_EVERY_MS);
     const appState = AppState.addEventListener('change', state => state === 'active' && flush());

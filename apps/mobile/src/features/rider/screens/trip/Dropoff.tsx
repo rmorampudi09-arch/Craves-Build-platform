@@ -7,6 +7,7 @@ import {DEMO_OTP} from '../../api/riderApi.mock';
 import {Banner} from '../../components/Banner';
 import {BottomAction} from '../../components/BottomAction';
 import {CodeBoxes} from '../../components/CodeBoxes';
+import {RefusalNotices} from '../../components/RefusalNotices';
 import {RiderScreen} from '../../components/ui';
 import {distanceMeters, formatKm} from '../../domain/format';
 import {riderOnlineService} from '../../native/riderOnlineService';
@@ -32,6 +33,7 @@ export function ToCustomer({trip, run, syncing}: StepProps) {
         <BottomAction label={t.reachedCustomer} onPress={() => run('arrived-drop')} testID="rider-reached-customer" />
       }>
       <SyncNote show={syncing} />
+      <RefusalNotices tripId={trip.tripId} />
       <PlaceCard label={t.deliverTo} name={trip.customer.firstName} place={trip.customer} />
       <TwoUp
         left={
@@ -100,6 +102,7 @@ export function Deliver({
         )
       }>
       <SyncNote show={syncing} />
+      <RefusalNotices tripId={trip.tripId} />
       <View style={styles.who}>
         <View style={styles.whoText}>
           <Text accessibilityRole="header" style={text.heading}>

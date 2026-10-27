@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, Text} from 'react-native';
+import {Alert, Linking, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -18,6 +18,7 @@ import {EarningsScreen} from './EarningsScreen';
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
 // With count > 0 the phone is offline: the queue keeps what the screen sends, and the screen shows where it leads.
 const mockPending = {count: 0, entries: [] as {action: string; tripId: string}[], listeners: new Set<() => void>()};
+const mockRefusals: {list: {tripId: string; code: string; message: string}[]} = {list: []};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/native', () => ({
@@ -45,7 +46,9 @@ jest.mock('../state/tripQueue', () => ({
       }
       return {kind: 'queued'};
     }),
+    dismissRefusal: jest.fn(async () => undefined),
   },
+  useRefusals: () => mockRefusals.list,
   usePendingActions: () => mockPending.count,
   usePendingEntries: () =>
     require('react').useSyncExternalStore((listener: () => void) => {
@@ -142,6 +145,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPending.count = 0;
   mockPending.entries = [];
+  mockRefusals.list = [];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -175,6 +179,18 @@ describe('Home', () => {
     ]);
     expect(allText()).toContain('Online · waiting for orders');
     expect(byId('rider-go-offline')).toBeTruthy();
+  });
+
+  it("keeps a step the server refused, with its message, until the rider dismisses it (P1-08)", async () => {
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    mockRefusals.list = [{tripId: 't7', code: 'TRIP_NOT_ACTIVE', message: 'This trip has ended. Check Home for your next order.'}];
+    await render(<HomeScreen />, [[riderKeys.home, home], [riderKeys.me, me], [riderKeys.activeTrip, null]]);
+    expect(allText()).toContain("A trip step didn't go through | This trip has ended. Check Home for your next order.");
+    expect(Alert.alert).not.toHaveBeenCalled();
+    await act(async () => byId('rider-refusal-call').props.onPress());
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+910000000000');
+    await act(async () => byId('rider-refusal-dismiss').props.onPress());
+    expect(tripQueue.dismissRefusal).toHaveBeenCalledWith('t7');
   });
 
   it('offers to resume a trip in progress', async () => {

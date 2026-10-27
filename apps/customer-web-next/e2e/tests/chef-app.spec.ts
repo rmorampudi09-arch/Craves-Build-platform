@@ -48,8 +48,8 @@ test("every tab opens its page and marks itself current", async ({ page, backend
   for (const [tab, url, heading] of [
     ["Orders", /\/chef\/orders$/, "Orders"],
     ["Menu", /\/chef\/menu$/, "Menu"],
-    ["Money", /\/chef\/earnings$/, "Money"],
-    ["More", /\/chef\/profile$/, "More"],
+    ["Earnings", /\/chef\/earnings$/, "Earnings"],
+    ["Profile", /\/chef\/profile$/, "Profile"],
     ["Home", /\/chef$/, /^Good (morning|afternoon|evening)/],
   ] as const) {
     await nav(page).getByRole("link", { name: tab }).click();
@@ -128,7 +128,7 @@ test("a new chef with no bank account is asked to add one, not told payouts are 
   await openApprovedChef(page, backend, "/chef/finance");
   await expect(page.getByRole("heading", { level: 1, name: "Balance & payouts" })).toBeVisible();
   // The heading renders before the balance; wait for it, or the count below passes on a page that hasn't loaded.
-  await expect(page.getByRole("region", { name: "Money you can take out" }).getByRole("button", { name: /^Send ₹/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Money you can take out" }).getByRole("button", { name: /^Withdraw ₹/ })).toBeVisible();
   await expect(page.getByText(/payouts are on hold/i)).toHaveCount(0);
   await expect(page.getByText("Add your bank account to get paid.").first()).toBeVisible();
 });

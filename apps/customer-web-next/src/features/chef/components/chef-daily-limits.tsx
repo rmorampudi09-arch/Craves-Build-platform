@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  AlertTriangle,
   CalendarDays,
   ChevronRight,
   Lock,
@@ -50,7 +49,6 @@ import type { ChefMealSchedule } from "@/features/chef/lib/chef-subscription-pla
 import { format, messages } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
-import { ComingSoon } from "@/shared/ui/feedback/ComingSoon";
 import { Sheet } from "@/shared/ui/overlays/overlay";
 
 const TEXT = messages({
@@ -454,16 +452,15 @@ export function ChefDailyLimits({ planId }: { planId: string | null }) {
 
   if (unpublished)
     return (
-      <ComingSoon
-        title={text.soonTitle}
-        message={text.soonText}
-      />
+      <ChefSection>
+        <ChefEmpty illustration="comingSoon" title={text.soonTitle} text={text.soonText} />
+      </ChefSection>
     );
   if (loadError) {
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.loadTitle}
           text={loadError}
           action={

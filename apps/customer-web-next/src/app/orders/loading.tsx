@@ -4,12 +4,11 @@ import { CustomerRouteSkeleton } from "@/shared/components/loading/CustomerPageS
 export default function Loading() {
   return (
     <CustomerRouteSkeleton
-      title="Your orders"
+      title="My Orders"
       backHref="/profile"
       backLabel="Back to profile"
       variant="orders"
       label="Loading your orders"
-      width="max-w-4xl"
     />
   );
 }

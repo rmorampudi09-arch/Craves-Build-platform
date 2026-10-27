@@ -261,7 +261,7 @@ describe("Dish options", { timeout: 20_000 }, () => {
       fireEvent.click(await screen.findByRole("button", { name: "మీ మొదటి వంటకం జోడించండి" }));
       fireEvent.change(screen.getByLabelText("వంటకం పేరు"), { target: { value: "Pappu" } });
       fireEvent.click(screen.getByRole("button", { name: /^రకం/ }));
-      fireEvent.click(await screen.findByRole("button", { name: "భోజనం" }));
+      fireEvent.click(await screen.findByRole("button", { name: "అన్నం" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       fireEvent.click(screen.getByRole("radio", { name: "వెజ్" }));
       fireEvent.change(screen.getByLabelText("ధర"), { target: { value: "120" } });
@@ -271,8 +271,8 @@ describe("Dish options", { timeout: 20_000 }, () => {
       const created = JSON.parse(
         String(fetcher.mock.calls.find(([, options]) => options?.method === "POST")![1]!.body),
       );
-      expect(created.category).toBe("Meals");
-      expect(await screen.findByRole("heading", { name: /^భోజనం/ })).toBeTruthy();
+      expect(created.category).toBe("Rice");
+      expect(await screen.findByRole("heading", { name: /^అన్నం/ })).toBeTruthy();
     });
   });
 });

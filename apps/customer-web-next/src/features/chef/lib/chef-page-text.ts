@@ -12,6 +12,9 @@ const PAGE_TEXT: Record<string, { te: string; kn: string }> = {
   Menu: { te: "మెనూ", kn: "ಮೆನು" },
   Money: { te: "డబ్బు", kn: "ಹಣ" },
   More: { te: "మరిన్ని", kn: "ಇನ್ನಷ್ಟು" },
+  // The fourth and fifth tabs, named as in the app.
+  Earnings: { te: "సంపాదన", kn: "ಗಳಿಕೆ" },
+  Profile: { te: "ప్రొఫైల్", kn: "ಪ್ರೊಫೈಲ್" },
   "Meal plans": { te: "మీల్ ప్లాన్‌లు", kn: "ಮೀಲ್ ಪ್ಲಾನ್‌ಗಳು" },
   // Titles.
   "Bank account": { te: "బ్యాంక్ ఖాతా", kn: "ಬ್ಯಾಂಕ್ ಖಾತೆ" },

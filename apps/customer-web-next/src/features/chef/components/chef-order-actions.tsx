@@ -186,24 +186,27 @@ function useNow(active: boolean): number {
   return now;
 }
 
-/** "Respond in 4:32" and the like, with a bar. A timer role, so screen readers don't read every tick. */
+/** "Respond in 4:32" and the like, with a bar, and "You promised 12:40 pm" under it. A timer role, so screen readers don't read every tick. */
 function CountdownLine({ countdown }: { countdown: Countdown }) {
   const color = TONE_COLOR[countdown.tone];
   return (
-    <div className="mb-3 flex items-center gap-2 text-sm font-bold" style={{ color }}>
-      {countdown.tone === "danger" ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Clock3 className="h-4 w-4 shrink-0" aria-hidden="true" />}
-      <span role="timer" className="shrink-0">{countdown.label}</span>
-      {countdown.fill !== null ? (
-        <span className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-full bg-[#F1F3F5]" aria-hidden="true">
-          <span className="block h-full rounded-full" style={{ width: `${Math.round(countdown.fill * 100)}%`, background: color }} />
-        </span>
-      ) : null}
+    <div className="mb-3">
+      <div className="flex items-center gap-2 text-sm font-bold" style={{ color }}>
+        {countdown.tone === "danger" ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Clock3 className="h-4 w-4 shrink-0" aria-hidden="true" />}
+        <span role="timer" className="shrink-0">{countdown.label}</span>
+        {countdown.fill !== null ? (
+          <span className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-full bg-[#F1F3F5]" aria-hidden="true">
+            <span className="block h-full rounded-full" style={{ width: `${Math.round(countdown.fill * 100)}%`, background: color }} />
+          </span>
+        ) : null}
+      </div>
+      {countdown.detail ? <p className="mt-1 pl-6 text-[0.8125rem] font-semibold" style={{ color }}>{countdown.detail}</p> : null}
     </div>
   );
 }
 
 /** One reason from a short list, as tiles: the chef reads `labels`, the answer is the English reason. */
-function ReasonTiles<K extends string>({ name, reasons, labels, value, onChange }: { name: string; reasons: Record<K, string>; labels: Record<K, string>; value: string; onChange(reason: string): void }) {
+export function ReasonTiles<K extends string>({ name, reasons, labels, value, onChange }: { name: string; reasons: Record<K, string>; labels: Record<K, string>; value: string; onChange(reason: string): void }) {
   const legend = useText(TEXT).reason;
   return (
     <fieldset className="grid gap-2">

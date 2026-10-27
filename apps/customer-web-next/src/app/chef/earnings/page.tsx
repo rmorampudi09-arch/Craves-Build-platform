@@ -5,7 +5,7 @@ import { ChefPageHeader } from "@/features/chef/components/chef-page-header";
 import { ChefWithdrawalPanel } from "@/features/chef/components/chef-withdrawal-panel";
 
 export const metadata = {
-  title: "Money | Craves Chef",
+  title: "Earnings | Craves Chef",
   robots: { index: false, follow: false },
 };
 
@@ -14,7 +14,7 @@ export default function ChefEarningsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Money" description="What you earned and what you can take out." />
+        <ChefPageHeader title="Earnings" description="What you earned and what you can take out." />
         <div className="chef-stack">
           <ChefWithdrawalPanel compact />
           <ChefEarningsLedger sales />

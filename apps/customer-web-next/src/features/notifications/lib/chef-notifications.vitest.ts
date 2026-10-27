@@ -66,7 +66,7 @@ describe("Chef notifications", () => {
     const order = (await screen.findByText("New order received")).closest("a")!;
     expect(order.getAttribute("href")).toBe(`/chef/orders/${ORDER}`);
     expect(screen.getByText("Payout sent").closest("a")!.getAttribute("href")).toBe("/chef/earnings/payouts");
-    expect(screen.getByText("New review").closest("a")).toBeNull();
+    expect(screen.getByText("New review").closest("a")!.getAttribute("href")).toBe("/chef/reviews");
     expect(screen.queryByText("Chef accepted your order")).toBeNull();
     expect(screen.getByText("Earlier")).toBeTruthy();
     fireEvent.click(order);

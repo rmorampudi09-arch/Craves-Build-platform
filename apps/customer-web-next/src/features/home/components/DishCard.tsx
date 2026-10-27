@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { memo, useEffect, useRef, useState } from "react";
+import { FaPepperHot } from "react-icons/fa";
 import {
   ChefHat,
   Clock3,
@@ -26,6 +27,7 @@ import {
 } from "@/features/favorites/api/customerFavorites";
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
+import { menuCategoryLabel } from "@/features/home/lib/dishCategories";
 import type { Dish } from "@/features/dish/api/dishes";
 
 function distanceLabel(distanceMeters?: number): string | null {
@@ -232,7 +234,7 @@ export const DishCard = memo(function DishCard({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1A1A1A]/60 via-[#1A1A1A]/15 to-transparent" />
 
         <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-[0.6rem] font-black uppercase tracking-[0.09em] text-[#1A1A1A] shadow-sm sm:left-3.5 sm:top-3.5 sm:px-3 sm:py-1.5 sm:text-[0.64rem]">
-          {dish.category}
+          {menuCategoryLabel(dish.category)}
         </span>
 
         <button
@@ -310,6 +312,14 @@ export const DishCard = memo(function DishCard({
               <Clock3 className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
               {dish.time}
             </span>
+            {/* Beside the cooking time, as in the app: a chilli and Mild, Medium or Spicy. */}
+            {dish.spiceLevel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
+                <FaPepperHot className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
+                <span className="sr-only">Spice: </span>
+                {dish.spiceLevel}
+              </span>
+            ) : null}
             {dish.serves ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
                 <UsersRound className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />

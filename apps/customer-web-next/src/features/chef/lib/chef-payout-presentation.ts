@@ -80,10 +80,11 @@ const WORDS = messages({
 
 type StatusKey = "requested" | "sending" | "withBank" | "paid" | "failed" | "returned" | "cancelled";
 // The app's words. Anything new the server adds (and REVIEW_REQUIRED, UNKNOWN) reads as Craves checking, never as a raw code.
+// Money still on its way is amber, as in the app (1.34.5).
 const PAYOUT_STATUS: Record<string, { key: StatusKey; tone: ChefTone }> = {
-  RESERVED: { key: "requested", tone: "active" },
-  SUBMITTING: { key: "sending", tone: "active" },
-  PROCESSING: { key: "withBank", tone: "active" },
+  RESERVED: { key: "requested", tone: "warning" },
+  SUBMITTING: { key: "sending", tone: "warning" },
+  PROCESSING: { key: "withBank", tone: "warning" },
   PAID: { key: "paid", tone: "success" },
   FAILED: { key: "failed", tone: "danger" },
   REVERSED: { key: "returned", tone: "danger" },
@@ -99,6 +100,19 @@ export function payoutStatusView(
     ? PAYOUT_STATUS[status]
     : { key: "checking" as const, tone: "warning" as const };
   return { label: words[key], tone, note: words[`${key}Note`] };
+}
+
+/** "HDFC Bank ••1234": the account money goes to, as the app names it; null until its last digits are known. */
+export function bankLine(bank: { bankName?: string | null; lastFour: string | null } | null | undefined): string | null {
+  return bank?.lastFour ? [bank.bankName?.trim(), `••${bank.lastFour}`].filter(Boolean).join(" ") : null;
+}
+
+/**
+ * A withdrawal answer that is a clear no (a 4xx other than a timeout): no transfer was made for its key, so a new
+ * request may start. Anything else (5xx, a timeout, no answer) may have made one: only the same request goes again.
+ */
+export function withdrawalRefused(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408;
 }
 
 /** Newest-first rows under "October"-style India-month headings; the year is added only for another year. */

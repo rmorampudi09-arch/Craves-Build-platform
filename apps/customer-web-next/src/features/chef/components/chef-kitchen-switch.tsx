@@ -169,7 +169,7 @@ function kitchenStatusCopy(state: KitchenOpenState, text: Words): { title: strin
 }
 
 /** The time to the minute, so a pause ends and the hours turn over on screen; it stops while the tab is hidden. */
-function useMinuteClock(): Date {
+export function useMinuteClock(): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let timer = 0;
@@ -194,7 +194,7 @@ function useMinuteClock(): Date {
  * hours apply). It is read again whenever the schedule is and after a special day is saved or removed, so one for
  * today shows straight away.
  */
-function useSpecialDay(
+export function useSpecialDay(
   schedule: { timezoneId: string } | null,
   date: string | null,
 ): ChefScheduleOverride | null {

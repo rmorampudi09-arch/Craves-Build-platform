@@ -1,6 +1,6 @@
 import { indiaBusinessDate, type CustomerSubscription, type CustomerSubscriptionStatus, type DayCredit } from "./subscription-contract.ts";
 import { mealSlotLabel } from "./meal-plan-schedule.ts";
-import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
+import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "./subscription-lifecycle-contract.ts";
 
 /** Customer words for meal plans; never the raw enums or minute counts. */
 const INDIA = "Asia/Kolkata";
@@ -80,6 +80,40 @@ export function changeDeadline(
   const closesDay = relativeDay(isoDay.format(next.closes), now);
   const when = closesDay === "today" || closesDay === "tomorrow" ? closesDay : `on ${closesDay}`;
   return `Changes for ${relativeDay(next.meal.serviceDate, now)} close at ${clock.format(next.closes)} ${when}.`;
+}
+
+/** "Tomorrow, 4:30 pm · Samosa + Chai": the next meal still to come, as the app's plan card says it; null when none is. */
+export function nextMealLine(
+  occurrences: readonly Pick<SubscriptionOccurrence, "serviceDate" | "serviceAt" | "status" | "items">[],
+  dishNames: ReadonlyMap<string, string>,
+  now = new Date(),
+): string | null {
+  const next = occurrences
+    .filter((meal) => Date.parse(meal.serviceAt) > now.getTime() && !["SKIPPED", "CANCELLED", "FAILED"].includes(meal.status))
+    .sort((left, right) => Date.parse(left.serviceAt) - Date.parse(right.serviceAt))[0];
+  if (!next) return null;
+  const day = relativeDay(next.serviceDate, now);
+  const dishes = next.items.map((item) => dishNames.get(item.menuItemId) ?? "Meal item").join(" + ");
+  return `${day[0].toUpperCase()}${day.slice(1)}, ${clock.format(new Date(next.serviceAt)).toLowerCase()}${dishes ? ` · ${dishes}` : ""}`;
+}
+
+export type PlanAction = "pause" | "resume" | "skip";
+
+/** Pause, Resume and Skip a meal, offered exactly when the plan page offers them. */
+export function planActions(
+  subscription: Pick<CustomerSubscription, "status" | "pauseDaysLeft" | "pauseAutoResumeDate">,
+  policy: Pick<SubscriptionPlanPolicy, "customerPauseEnabled" | "customerResumeEnabled" | "customerSkipEnabled"> | null,
+  resumeDate: string,
+  today: string,
+): PlanAction[] {
+  if (!policy) return [];
+  const pausing = pauseInfo(subscription, resumeDate, today);
+  if (subscription.status === "PAUSED") return policy.customerResumeEnabled && pausing.resumeOffered ? ["resume"] : [];
+  if (subscription.status !== "ACTIVE") return [];
+  return [
+    ...(policy.customerPauseEnabled && pausing.pauseDisabledLabel === null ? (["pause"] as const) : []),
+    ...(policy.customerSkipEnabled ? (["skip"] as const) : []),
+  ];
 }
 
 /** Ended and cancelled plans live in History; every other plan is on My plans. */

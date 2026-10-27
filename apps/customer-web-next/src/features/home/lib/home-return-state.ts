@@ -1,3 +1,4 @@
+import { toMenuCategory, type MenuCategory } from "@/features/home/lib/dishCategories";
 import { SPICE_LEVELS, type SpiceLevel } from "@/shared/lib/spice-level";
 
 export type HomeDishSort =
@@ -23,7 +24,7 @@ export type HomeReturnState = {
   scrollY: number;
   searchTerm: string;
   searchOpen: boolean;
-  homeCategory: string | null;
+  homeCategory: MenuCategory | null;
   dishSort: HomeDishSort;
   foodPreference: HomeFoodPreference;
   dishFilters: HomeDishFilters;
@@ -116,7 +117,8 @@ export function readHomeReturnState(): HomeReturnState | null {
       scrollY: parsed.scrollY,
       searchTerm: parsed.searchTerm,
       searchOpen: parsed.searchOpen,
-      homeCategory: parsed.homeCategory ?? null,
+      // A category Home no longer offers (an older saved state) opens All.
+      homeCategory: toMenuCategory(parsed.homeCategory),
       dishSort: isHomeDishSort(parsed.dishSort) ? parsed.dishSort : "recommended",
       foodPreference: isHomeFoodPreference(parsed.foodPreference)
         ? parsed.foodPreference

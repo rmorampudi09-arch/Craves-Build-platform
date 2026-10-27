@@ -251,21 +251,26 @@ describe("balance card and money rows", () => {
     expect(screen.getByRole("link", { name: "Help & support" }).getAttribute("href")).toBe("/chef/support");
   });
 
-  it("the Money tab's card keeps the balance and its button, and links to the rest", async () => {
+  it("the Earnings tab's card keeps the balance and its button, and links to the rest", async () => {
     serve(false, bank("VERIFIED", "1234"));
     render(createElement(ChefWithdrawalPanel, { compact: true }));
-    expect(await screen.findByRole("button", { name: "Send ₹500.00 to my bank" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Withdraw ₹500.00" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Payouts and how it’s worked out" }).getAttribute("href")).toBe("/chef/finance");
     expect(screen.queryByText("Money sent to your bank")).toBeNull();
     expect(screen.queryByText("How your balance is worked out")).toBeNull();
     expect(screen.queryByRole("button", { name: "Check balance again" })).toBeNull();
-    // Without a hold the bank account isn't read.
-    expect(routes.mock.calls.some(([path]) => path === "/api/chef-onboarding/bank")).toBe(false);
+  });
+
+  it("an account that isn't verified stops Withdraw and says what to do, even without a hold", async () => {
+    serve(false, bank("NOT_SUBMITTED"));
+    render(createElement(ChefWithdrawalPanel, { compact: true }));
+    expect(await screen.findByText("Add your bank account to get paid.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Withdraw ₹500.00" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it.each([
     [bank("NOT_SUBMITTED"), "Not added yet"],
-    [bank("VERIFIED", "1234"), "Account ending 1234"],
+    [bank("VERIFIED", "1234"), "••1234"],
     [null, "Where Craves sends your money"],
   ])("the bank row says where the money goes (%#)", async (account, meta) => {
     serve(false, account);
@@ -274,5 +279,117 @@ describe("balance card and money rows", () => {
     expect(row.getAttribute("href")).toBe("/chef/bank");
     await waitFor(() => expect(routes.mock.calls.some(([path]) => path === "/api/chef-onboarding/bank")).toBe(true));
     await waitFor(() => expect(row.textContent).toContain(meta));
+  });
+});
+
+describe("withdraw", () => {
+  const balance = {
+    available: "500.00",
+    outstanding: "500.00",
+    reservedOrPaid: "0.00",
+    onHold: false,
+    manualRequestUsedToday: false,
+    nextManualRequestAt: "2026-10-16T00:00:00Z",
+    recentPayouts: [],
+    executionEnabled: true,
+    payoutMode: "CRAVES_MANUAL",
+  };
+  const verified = {
+    id: "b1000000-0000-4000-8000-000000000001",
+    state: "VERIFIED",
+    lastFour: "1234",
+    ifsc: "HDFC0000123",
+    bankValidated: true,
+    applicationApproved: true,
+    automaticActivation: true,
+    accountHolderName: "Lakshmi Devi",
+    bankName: "HDFC Bank",
+    branchName: null,
+    message: "",
+    updatedAt: null,
+  };
+  const payout = {
+    id: "a1000000-0000-4000-8000-000000000009",
+    amount: "500.00",
+    mode: "MANUAL",
+    status: "RESERVED",
+    payoutChannel: "CRAVES_MANUAL",
+    providerStatus: null,
+    transferReference: null,
+    createdAt: "2026-10-15T04:30:00Z",
+  };
+  // Each withdrawal answer in turn; the balance and the bank account answer as above.
+  function serve(...answers: (() => Response)[]) {
+    routes.mockImplementation((path) =>
+      path === "/api/chef/finance/withdrawals"
+        ? answers.shift()!()
+        : path === "/api/chef-onboarding/bank"
+          ? Response.json(verified)
+          : Response.json(balance),
+    );
+  }
+  const sent = () =>
+    vi.mocked(fetch).mock.calls
+      .filter(([path]) => path === "/api/chef/finance/withdrawals")
+      .map(([, init]) => JSON.parse(String(init?.body)) as { requestKey: string; expectedAvailableAmount: string });
+  async function openConfirm() {
+    const main = await screen.findByRole("button", { name: "Withdraw ₹500.00" });
+    await waitFor(() => expect(routes.mock.calls.some(([path]) => path === "/api/chef-onboarding/bank")).toBe(true));
+    fireEvent.click(main);
+    return screen.findByRole("dialog", { name: "Withdraw to your bank" });
+  }
+
+  it("asks first, naming the bank, account and holder, then sends one request however often it is tapped", async () => {
+    let answer!: (response: Response) => void;
+    serve(() => new Promise<Response>((resolve) => (answer = resolve)) as unknown as Response);
+    render(createElement(ChefWithdrawalPanel, { compact: true }));
+    const sheet = await openConfirm();
+    expect(sent()).toHaveLength(0);
+    await waitFor(() => expect(within(sheet).getByText("HDFC Bank")).toBeTruthy());
+    expect(within(sheet).getByText("Account ••1234 · Lakshmi Devi")).toBeTruthy();
+    expect(within(sheet).getByText("Verified")).toBeTruthy();
+    const confirm = within(sheet).getByRole("button", { name: "Withdraw ₹500.00" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(sent()).toHaveLength(1));
+    expect(sent()[0].expectedAvailableAmount).toBe("500.00");
+    answer(Response.json(payout));
+    expect(await screen.findByText("₹500.00 is on its way")).toBeTruthy();
+    expect(screen.getByText("Sent to HDFC Bank ••1234. Track it in Payout history.")).toBeTruthy();
+    expect(sent()).toHaveLength(1);
+  });
+
+  it("an unknown outcome locks Withdraw; Check withdrawal status sends the same request again", async () => {
+    serve(
+      () => Response.json({ code: "FINANCE_UNAVAILABLE" }, { status: 503 }),
+      () => Response.json(payout),
+    );
+    render(createElement(ChefWithdrawalPanel, { compact: true }));
+    const sheet = await openConfirm();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Withdraw ₹500.00" }));
+    expect(await screen.findByText("We couldn’t confirm your withdrawal")).toBeTruthy();
+    expect(screen.getByText("Please don’t ask again. Check its status first.")).toBeTruthy();
+    // The sheet has closed (its exit animation over), and Withdraw stays off until the request is checked.
+    await waitFor(() => expect((screen.getByRole("button", { name: "Withdraw ₹500.00" }) as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "Check withdrawal status" }));
+    expect(await screen.findByText("₹500.00 is on its way")).toBeTruthy();
+    const [first, again] = sent();
+    expect(again).toEqual(first);
+  });
+
+  it("a clear no says why and lets a new request start with a new key", async () => {
+    serve(
+      () => Response.json({ code: "FINANCE_REQUEST_REJECTED" }, { status: 409 }),
+      () => Response.json(payout),
+    );
+    render(createElement(ChefWithdrawalPanel, { compact: true }));
+    fireEvent.click(within(await openConfirm()).getByRole("button", { name: "Withdraw ₹500.00" }));
+    expect(await screen.findByText("Your withdrawal didn’t go through")).toBeTruthy();
+    expect(screen.getByText(/^Your balance changed\. Check the amount and try again\./)).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Withdraw ₹500.00" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(await openConfirm()).getByRole("button", { name: "Withdraw ₹500.00" }));
+    expect(await screen.findByText("₹500.00 is on its way")).toBeTruthy();
+    const [first, second] = sent();
+    expect(second.requestKey).not.toBe(first.requestKey);
   });
 });

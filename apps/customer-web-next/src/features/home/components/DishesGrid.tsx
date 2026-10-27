@@ -1,18 +1,13 @@
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  MapPin,
-  RefreshCw,
-  RotateCcw,
-  SearchX,
-} from "lucide-react";
+import { RefreshCw, RotateCcw } from "lucide-react";
 
 import { DishCard } from "@/features/home/components/DishCard";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
 import type { DishCategory } from "@/features/home/lib/dishCategories";
 import { DishFilterBar } from "@/features/home/components/DishFilterBar";
-import { activeFilterCount, type DishView } from "@/features/home/lib/dish-filters";
+import { activeFilterCount, FOOD_LABELS, type DishView } from "@/features/home/lib/dish-filters";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
 import { listItem } from "@/shared/lib/motion";
 import type { Dish } from "@/features/dish/api/dishes";
@@ -35,7 +30,6 @@ interface DishesGridProps {
   countFor: (view: DishView) => number;
   onRemoveFilters: () => void;
   onRetry: () => void;
-  onManageAddress: () => void;
   hasMoreRemote?: boolean;
   loadingMoreRemote?: boolean;
   onLoadMore?: () => void;
@@ -69,7 +63,6 @@ export function DishesGrid({
   countFor,
   onRemoveFilters,
   onRetry,
-  onManageAddress,
   hasMoreRemote = false,
   loadingMoreRemote = false,
   onLoadMore,
@@ -138,19 +131,16 @@ export function DishesGrid({
     visibleCount,
   ]);
   const { sort, foodPreference } = view;
-  // Veg lives in the header switch; every other narrowing shows in the filter bar.
-  const narrowing =
-    activeFilterCount({ filters: view.filters, foodPreference: foodPreference === "veg" ? "all" : foodPreference }) > 0;
+  // The food type lives in the pill beside the search; every other narrowing shows in the filter bar.
+  const narrowing = activeFilterCount(view) > 0;
   const hasFilters = selectedCategory !== "All" || sort !== "recommended" || narrowing;
-  const heading = selectedCategory === "All" ? "Dishes near you" : selectedCategory;
+  const heading = selectedCategory === "All" ? "Popular near you" : selectedCategory;
   const more = hasMoreRemote ? "+" : "";
   const countLabel = `${dishes.length}${more} ${dishes.length === 1 && !more ? "dish" : "dishes"}`;
   const emptyMessage = narrowing
-    ? "No dishes match these filters. Clear a filter to see more."
-    : foodPreference === "veg"
-      ? normalizedSearch
-        ? `No vegetarian dishes match “${normalizedSearch}”. Turn off the Veg filter to see all available dishes.`
-        : "No vegetarian dishes are available for this view. Turn off the Veg filter to see all available dishes."
+    ? "Clear a filter to see more dishes."
+    : foodPreference !== "all"
+      ? `Kitchens near you aren't cooking ${FOOD_LABELS[foodPreference].toLowerCase()} dishes${normalizedSearch ? ` that match “${normalizedSearch}”` : ""} right now.`
       : normalizedSearch
         ? `No live dishes match “${normalizedSearch}”. Try another search.`
         : selectedCategory === "All"
@@ -168,13 +158,13 @@ export function DishesGrid({
             id="available-dishes-heading"
             // Focus lands here when "Clear filters" (which then disappears) is pressed.
             tabIndex={-1}
-            className="mt-1.5 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-3xl lg:text-4xl"
+            className="font-display text-[1.375rem] font-black tracking-[-0.03em] text-[#1A1A1A] md:text-2xl lg:text-[1.75rem]"
           >
             {/* Heading and count change with the list in one frame: no blank fade gap. */}
             {heading}
           </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            Freshly prepared by nearby home kitchens, made with care.
+          <p className="mt-1 max-w-xl text-sm leading-6 text-[#6B6B6B]">
+            Fresh home-cooked dishes from kitchens that deliver to you.
           </p>
         </div>
         {state === "ready" ? (
@@ -224,90 +214,32 @@ export function DishesGrid({
         </div>
       ) : null}
 
-      {state === "address-required" ? (
-        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_14px_40px_rgba(26,26,26,0.05)] md:p-12">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-            <MapPin
-              className="h-6 w-6 fill-current"
-              strokeWidth={1.5}
-              aria-hidden="true"
-            />
-          </span>
-          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">
-            Choose your delivery location
-          </h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            {message}
-          </p>
-          <button
-            type="button"
-            onClick={onManageAddress}
-            className="mt-6 min-h-11 rounded-full bg-[#F62E18] px-5 text-sm font-black text-white transition-shadow hover:shadow-[0_7px_18px_rgba(26,26,26,0.14)]"
-          >
-            Choose location
-          </button>
-        </div>
-      ) : null}
-
-      {state === "error" ? (
-        <div className="rounded-[2rem] border border-[#E5E7EB] bg-white p-8 text-center md:p-12">
-          <AlertTriangle
-            className="mx-auto h-9 w-9 text-[#F62E18]"
-            aria-hidden="true"
-          />
-          <h3 className="mt-4 font-display text-xl font-black text-[#1A1A1A]">
-            Nearby dishes could not be loaded
-          </h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            {message}
-          </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-[#F62E18] bg-white px-5 text-sm font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            Try again
-          </button>
-        </div>
-      ) : null}
+      {/* "Choose your location" and "couldn't load" are one page-level state on Home, not one per section. */}
 
       {state === "ready" && dishes.length === 0 && !hasMoreRemote ? (
-        <div className="rounded-[2rem] border border-dashed border-[#E5E7EB] bg-[#F1F3F5] p-8 text-center md:p-10">
-          <SearchX className="mx-auto h-9 w-9 text-[#6B6B6B]" aria-hidden="true" />
-          <h3 className="mt-4 font-display text-lg font-black text-[#1A1A1A]">
-            Nothing available for this view
-          </h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-            {emptyMessage}
-          </p>
-          {foodPreference === "veg" ? (
-            <button
-              type="button"
-              onClick={() => onViewChange({ ...view, foodPreference: "all" })}
-              className="mt-5 min-h-10 rounded-full !bg-[#F1F3F5] px-4 text-xs font-black !text-[#1A1A1A] shadow-[0_4px_14px_rgba(26,26,26,0.05)] transition-[background-color,box-shadow,translate,scale] duration-200 hover:-translate-y-0.5 active:scale-[0.96] hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
-            >
-              Turn off Veg filter
-            </button>
-          ) : narrowing ? (
-            <button
-              type="button"
-              onClick={onRemoveFilters}
-              className="mt-5 inline-flex min-h-10 items-center gap-1.5 rounded-full !border !border-[#E5E7EB] !bg-white px-4 text-xs font-black !text-[#1A1A1A] !shadow-none"
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+        <EmptyState
+          compact
+          heading="h3"
+          illustration="search"
+          title={narrowing ? "No dishes match" : foodPreference !== "all" ? `No ${FOOD_LABELS[foodPreference].toLowerCase()} dishes here` : "Nothing cooking for this view"}
+          message={emptyMessage}
+        >
+          {narrowing ? (
+            <button type="button" onClick={onRemoveFilters} className={emptyStateSecondaryAction}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Clear filters
             </button>
+          ) : foodPreference !== "all" ? (
+            <button type="button" onClick={() => onViewChange({ ...view, foodPreference: "all" })} className={emptyStateSecondaryAction}>
+              Show all food
+            </button>
           ) : !normalizedSearch ? (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mt-5 min-h-10 rounded-full border border-[#F62E18] bg-white px-4 text-xs font-black text-[#F62E18] transition-colors hover:bg-[#F62E18] hover:text-white"
-            >
-              Refresh live catalog
+            <button type="button" onClick={onRetry} className={emptyStateSecondaryAction}>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Check again
             </button>
           ) : null}
-        </div>
+        </EmptyState>
       ) : null}
 
       {state === "ready" && dishes.length === 0 && hasMoreRemote ? (

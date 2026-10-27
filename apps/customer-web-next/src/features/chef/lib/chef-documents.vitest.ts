@@ -104,77 +104,28 @@ describe("Documents & verification", () => {
     expect(tab.location.href).toBe("");
   });
 
-  it("uploads another document and reads the status again", async () => {
-    respond({
-      "GET /api/chef/onboarding": () => Response.json(onboarding),
-      "POST /api/chef/application/proof-files": () => Response.json({ id: PROOF }),
-    });
-    render(createElement(ChefDocuments));
-    fireEvent.click(await screen.findByText("Upload another document"));
-    const input = document.querySelector<HTMLInputElement>("input[type=file]")!;
-    const picker = vi.spyOn(input, "click").mockImplementation(() => undefined);
-    fireEvent.click(screen.getByText("Kitchen photo"));
-    expect(picker).toHaveBeenCalled();
-    expect(input.accept).toBe("image/jpeg,image/png");
-    fireEvent.change(input, {
-      target: { files: [new File(["photo"], "kitchen.png", { type: "image/png" })] },
-    });
-    expect(await screen.findByText("Document uploaded. Craves will check it.")).toBeTruthy();
-    const upload = fetcher.mock.calls.find(([url]) => url === "/api/chef/application/proof-files")!;
-    expect((upload[1].body as FormData).get("documentType")).toBe("KITCHEN_PHOTO_1");
-    await waitFor(() =>
-      expect(fetcher.mock.calls.filter(([url]) => url === "/api/chef/onboarding")).toHaveLength(2),
-    );
-  });
-
-  it("refuses a PDF kitchen photo before sending, and shows the service's words for a refused upload", async () => {
-    respond({
-      "GET /api/chef/onboarding": () => Response.json(onboarding),
-      "POST /api/chef/application/proof-files": () =>
-        Response.json(
-          {
-            code: "CHEF_DOCUMENT_ALREADY_APPROVED",
-            message: "This document is already approved and cannot be replaced.",
-          },
-          { status: 409 },
-        ),
-    });
-    render(createElement(ChefDocuments));
-    fireEvent.click(await screen.findByText("Upload another document"));
-    const input = document.querySelector<HTMLInputElement>("input[type=file]")!;
-    vi.spyOn(input, "click").mockImplementation(() => undefined);
-    fireEvent.click(screen.getByText("Cooking setup photo"));
-    fireEvent.change(input, {
-      target: { files: [new File(["%PDF"], "kitchen.pdf", { type: "application/pdf" })] },
-    });
-    expect((await screen.findByRole("alert")).textContent).toBe("Choose a JPG or PNG photo.");
-    fireEvent.click(screen.getByText("PAN card · back"));
-    fireEvent.change(input, {
-      target: { files: [new File(["%PDF"], "pan.pdf", { type: "application/pdf" })] },
-    });
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe(
-        "This document is already approved and cannot be replaced.",
-      ),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByText("Upload another document"));
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("sends an approved chef to support from the upload dialog", async () => {
+  it("shows the documents to view only: there is no upload", async () => {
     respond({
       "GET /api/chef/onboarding": () =>
-        Response.json({
-          ...onboarding,
-          application: { ...onboarding.application, status: "APPROVED" },
-        }),
+        Response.json({ ...onboarding, application: { ...onboarding.application, status: "APPROVED" } }),
     });
     render(createElement(ChefDocuments));
-    fireEvent.click(await screen.findByText("Upload another document"));
-    expect(screen.getByRole("link", { name: "Contact support" }).getAttribute("href")).toBe(
-      "/chef/support/new?topic=Update%20my%20documents&from=/chef/documents",
-    );
+    expect(await screen.findByText("Your kitchen is verified")).toBeTruthy();
+    expect(screen.queryByText(/Upload/)).toBeNull();
+    expect(document.querySelector("input[type=file]")).toBeNull();
+    expect(screen.getByText(/Tap a document to view it/)).toBeTruthy();
+    expect(fetcher.mock.calls.every(([url]) => url === "/api/chef/onboarding")).toBe(true);
+  });
+
+  it("explains an empty list in plain words", async () => {
+    respond({
+      "GET /api/chef/onboarding": () =>
+        Response.json({ ...onboarding, details: { ...onboarding.details, fssaiNumber: "" }, documents: [] }),
+    });
+    render(createElement(ChefDocuments));
+    expect(await screen.findByText("Your documents were checked when you joined Craves.")).toBeTruthy();
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.getByRole("link", { name: "Ask to update a document" })).toBeTruthy();
   });
 
   it("tells a chef with no application on file to contact support", async () => {

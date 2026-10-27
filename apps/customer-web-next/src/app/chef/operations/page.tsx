@@ -11,7 +11,7 @@ export default function ChefOperationsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Can customers find you?" back={{ href: "/chef/profile", label: "More" }} />
+        <ChefPageHeader title="Can customers find you?" back={{ href: "/chef/profile", label: "Profile" }} />
         <ChefOperationsWorkspace />
       </ChefAccessBoundary>
     </main>

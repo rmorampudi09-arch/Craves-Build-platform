@@ -330,19 +330,46 @@ function applyIdentityLookup(identity: CravesIdentity, context: SessionContext, 
   return session;
 }
 
+/** No answer, a throttle or a server failure: the sign-in wasn't refused, it just couldn't be checked. */
+function unanswered(response: Response | null): boolean {
+  return !response || response.status === 429 || response.status >= 500;
+}
+
 export async function loadSession(
-  options: { failFastUnauthenticated?: boolean; hydrateCustomerProfile?: "await" | "background" } = {},
+  options: {
+    failFastUnauthenticated?: boolean;
+    hydrateCustomerProfile?: "await" | "background";
+    /**
+     * When the check can't answer (offline, or /me or the refresh busy or down), return the sign-in this tab already
+     * holds (in memory, or the tab's snapshot after a reload) instead of null or a rejection, so a signed-in customer
+     * isn't sent to the landing page; the backend still checks every request. Nobody known: unchanged.
+     */
+    keepOnOutage?: boolean;
+  } = {},
 ): Promise<CravesUser | null> {
   if (sessionEnding) return null;
   const context = captureSessionContext();
   const sequence = ++identityRequestSequence;
+  let networkError: unknown = null;
   const lookup = async () =>
     fetch("/api/auth/me", {
       cache: "no-store",
       credentials: "same-origin",
+    }).catch((error: unknown) => {
+      networkError = error;
+      return null;
     });
+  const keepSignedIn = () =>
+    options.keepOnOutage && isSessionContextCurrent(context) ? session ?? recoverSessionSnapshotForNavigation() : null;
+  // No answer at all: as before the check rejects, unless the caller keeps a sign-in it already knows.
+  const unreachable = () => {
+    const known = keepSignedIn();
+    if (known) return known;
+    throw networkError;
+  };
 
   let response = await lookup();
+  if (!response) return unreachable();
   if (!isSessionContextCurrent(context)) return session;
 
   if (response.status === 401) {
@@ -358,11 +385,22 @@ export async function loadSession(
     const refreshed = await refreshSessionForGeneration(context.generation);
     if (!isSessionContextCurrent(context)) return session;
     // 409: another tab renewed the sign-in first, and its cookies are already in this browser.
-    if (refreshed?.ok || refreshed?.status === 409) response = await lookup();
+    if (refreshed?.ok || refreshed?.status === 409) {
+      response = await lookup();
+      if (!response) return unreachable();
+    } else if (unanswered(refreshed)) {
+      const known = keepSignedIn();
+      if (known) return known;
+    }
   }
 
   if (!isSessionContextCurrent(context) || sequence < acceptedIdentityRequest) {
     return session;
+  }
+
+  if (unanswered(response)) {
+    const known = keepSignedIn();
+    if (known) return known;
   }
 
   if (!response.ok) {

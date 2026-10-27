@@ -58,6 +58,17 @@ test("keeps fulfillment address but removes identity/internal fields", () => {
   assert.equal("pickupAddress" in (parsed ?? {}), false);
 });
 
+test("keeps the address pin (whole and in range) and the order page's status history", () => {
+  const pinned = parseChefOrder({ ...order, deliveryAddress: { ...order.deliveryAddress, latitude: 17.4948, longitude: "78.4001" } });
+  assert.deepEqual([pinned?.deliveryAddress?.latitude, pinned?.deliveryAddress?.longitude], [17.4948, 78.4001]);
+  for (const pin of [{ latitude: 17.49, longitude: null }, { latitude: 95, longitude: 78 }, { latitude: "", longitude: "" }]) {
+    assert.equal("latitude" in (parseChefOrder({ ...order, deliveryAddress: { ...order.deliveryAddress, ...pin } })?.deliveryAddress ?? {}), false, JSON.stringify(pin));
+  }
+  const history = [{ status: "CHEF_ACCEPTANCE_PENDING", at: "2026-07-30T00:00:00Z" }, { status: "SHIPPED", at: "2026-07-30T00:01:00Z" }, { status: "CHEF_ACCEPTED", at: "soon" }];
+  assert.deepEqual(parseChefOrder({ ...order, statusHistory: history })?.statusHistory, [history[0]]);
+  assert.equal("statusHistory" in (parseChefOrder(order) ?? {}), false);
+});
+
 test("keeps the checkout (none for a meal-plan order), the response deadline and the customer's note", () => {
   assert.equal(parseChefOrder(order)?.checkoutId, order.checkoutId);
   assert.equal(parseChefOrder({ ...order, checkoutId: null })?.checkoutId, null);

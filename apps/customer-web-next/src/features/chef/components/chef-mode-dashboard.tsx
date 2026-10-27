@@ -8,11 +8,11 @@ import {
   BellOff,
   BellRing,
   ChevronRight,
-  Landmark,
   RefreshCw,
   Store,
   ToggleRight,
   Utensils,
+  Wallet,
 } from "lucide-react";
 import { ChefAccessRetry } from "@/features/chef/components/chef-account-menu";
 import { createKitchenFromApplication } from "@/features/chef/lib/chef-kitchen-handoff";
@@ -21,7 +21,11 @@ import {
   ChefNotice,
   ChefSection,
   formatInr,
+  timeAgo,
 } from "@/features/chef/components/chef-ui";
+import { ChefStars } from "@/features/chef/components/chef-reviews";
+import { fetchChefReviews, fetchChefReviewSummary } from "@/features/chef/api/chef-reviews";
+import type { ChefReview } from "@/features/chef/lib/chef-review-contract";
 import { ChefOrderCard, OrderUpdateNotice, focusOrderAfterUpdate, orderUpdateText } from "@/features/chef/components/chef-order-card";
 import { ChefKitchenSwitch } from "@/features/chef/components/chef-kitchen-switch";
 import { mergeOrders, noticeNewOrders, useAlertPrefs, useChefOrderPolling, writeAlertPrefs } from "@/features/chef/lib/chef-order-alert";
@@ -41,6 +45,8 @@ import {
   type ChefEarning,
 } from "@/features/chef/lib/chef-earnings-contract";
 import { bankStatusSchema } from "@/features/admin/finance/lib/bank-onboarding-contract";
+import { chefBalanceSchema, type ChefBalance } from "@/features/admin/finance/lib/finance-contract";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { getSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
@@ -57,8 +63,12 @@ type Snapshot = {
   menu: ChefMenuItem[];
   orders: ChefOrder[];
   earnings: ChefEarning[];
-  /** Whether Craves can pay this chef: false only when the bank check said no account was added. */
-  bankAdded: boolean;
+  /** True only when the bank check said there is no account to pay into (app needsBankAccount). */
+  needsBank: boolean;
+  /** Null when the balance couldn't be read: the card shows a dash, never a guess. */
+  balance: ChefBalance | null;
+  /** Null when reviews can't be read (not live yet, or failed): Home shows nothing about them. */
+  reviews: { latest: ChefReview | null; average: number | null } | null;
   unavailable: Part[];
   /** Why each unavailable part failed, as shown to the chef. */
   details: { part: Part; text: string }[];
@@ -72,7 +82,9 @@ const EMPTY: Snapshot = {
   menu: [],
   orders: [],
   earnings: [],
-  bankAdded: true,
+  needsBank: false,
+  balance: null,
+  reviews: null,
   unavailable: [],
   details: [],
 };
@@ -94,7 +106,8 @@ const TEXT = messages({
     firstDishTitle: "Add your first dish", firstDishText: "Add one dish so customers can see what you cook.", firstDishAction: "Add a dish",
     noDishOnTitle: "No dish is on today", noDishOnText: "Your kitchen is open, but customers can’t order anything. Turn on the dishes you are cooking today.", noDishOnAction: "Turn on dishes",
     soundOffTitle: "Order sound is off", soundOffText: "Your phone won’t ring for new orders. Turn it on so you don’t miss one.", soundOffAction: "Turn sound on",
-    bankTitle: "Add your bank account", bankText: "Craves sends your money to it. You can keep cooking while it is checked.", bankAction: "Add bank account",
+    bankAction: "Add bank account", available: "Available to withdraw", withdraw: "Withdraw",
+    rating: "Rating", latestReview: "Latest reviews", seeAll: "See all",
     newOne: "New order: answer now", newMany: "{count} new orders: answer now", inKitchen: "In your kitchen", allOrders: "All orders",
     noOrders: "No new orders right now.", keepOpen: "Keep Craves open: your phone rings when a customer orders.", checkNow: "Check now",
     ordersUnknown: "Orders couldn’t load. We keep trying every few seconds.", ordersWaitAccess: "Orders show here as soon as Craves confirms your chef access.",
@@ -114,7 +127,8 @@ const TEXT = messages({
     firstDishTitle: "మీ మొదటి వంటకం జోడించండి", firstDishText: "మీరు ఏం వండుతారో కస్టమర్లు చూడాలంటే ఒక వంటకం జోడించండి.", firstDishAction: "వంటకం జోడించండి",
     noDishOnTitle: "ఈరోజు ఏ వంటకం ఆన్‌లో లేదు", noDishOnText: "మీ వంటగది తెరిచి ఉంది, కానీ కస్టమర్లు ఏమీ ఆర్డర్ చేయలేరు. ఈరోజు వండే వంటకాలను ఆన్ చేయండి.", noDishOnAction: "వంటకాలు ఆన్ చేయండి",
     soundOffTitle: "ఆర్డర్ శబ్దం ఆఫ్‌లో ఉంది", soundOffText: "కొత్త ఆర్డర్ వస్తే మీ ఫోన్ మోగదు. ఒక్క ఆర్డర్ కూడా మిస్ కాకుండా ఆన్ చేయండి.", soundOffAction: "శబ్దం ఆన్ చేయండి",
-    bankTitle: "మీ బ్యాంక్ ఖాతా జోడించండి", bankText: "Craves మీ డబ్బును దానికే పంపుతుంది. అది చెక్ అయ్యే వరకు మీరు వండుతూనే ఉండవచ్చు.", bankAction: "బ్యాంక్ ఖాతా జోడించండి",
+    bankAction: "బ్యాంక్ ఖాతా జోడించండి", available: "మీరు తీసుకోగల డబ్బు", withdraw: "డబ్బు తీసుకోండి",
+    rating: "రేటింగ్", latestReview: "తాజా రివ్యూలు", seeAll: "అన్నీ చూడండి",
     newOne: "కొత్త ఆర్డర్: ఇప్పుడే జవాబు ఇవ్వండి", newMany: "{count} కొత్త ఆర్డర్లు: ఇప్పుడే జవాబు ఇవ్వండి", inKitchen: "మీ వంటగదిలో", allOrders: "అన్ని ఆర్డర్లు",
     noOrders: "ఇప్పుడు కొత్త ఆర్డర్లు లేవు.", keepOpen: "Craves తెరిచే ఉంచండి: కస్టమర్ ఆర్డర్ చేస్తే మీ ఫోన్ మోగుతుంది.", checkNow: "ఇప్పుడు చూడండి",
     ordersUnknown: "ఆర్డర్లు లోడ్ కాలేదు. కొన్ని సెకన్లకు ఒకసారి మళ్లీ ప్రయత్నిస్తున్నాం.", ordersWaitAccess: "Craves మీ చెఫ్ అనుమతిని నిర్ధారించగానే ఆర్డర్లు ఇక్కడ కనిపిస్తాయి.",
@@ -134,7 +148,8 @@ const TEXT = messages({
     firstDishTitle: "ನಿಮ್ಮ ಮೊದಲ ಖಾದ್ಯ ಸೇರಿಸಿ", firstDishText: "ನೀವು ಏನು ಅಡುಗೆ ಮಾಡುತ್ತೀರಿ ಎಂದು ಗ್ರಾಹಕರು ನೋಡಲು ಒಂದು ಖಾದ್ಯ ಸೇರಿಸಿ.", firstDishAction: "ಖಾದ್ಯ ಸೇರಿಸಿ",
     noDishOnTitle: "ಇಂದು ಯಾವ ಖಾದ್ಯವೂ ಆನ್ ಇಲ್ಲ", noDishOnText: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ತೆರೆದಿದೆ, ಆದರೆ ಗ್ರಾಹಕರು ಏನೂ ಆರ್ಡರ್ ಮಾಡಲಾಗದು. ಇಂದು ಮಾಡುವ ಖಾದ್ಯಗಳನ್ನು ಆನ್ ಮಾಡಿ.", noDishOnAction: "ಖಾದ್ಯಗಳನ್ನು ಆನ್ ಮಾಡಿ",
     soundOffTitle: "ಆರ್ಡರ್ ಶಬ್ದ ಆಫ್ ಆಗಿದೆ", soundOffText: "ಹೊಸ ಆರ್ಡರ್ ಬಂದರೆ ನಿಮ್ಮ ಫೋನ್ ರಿಂಗ್ ಆಗುವುದಿಲ್ಲ. ಯಾವ ಆರ್ಡರ್ ಕೂಡ ತಪ್ಪದಂತೆ ಆನ್ ಮಾಡಿ.", soundOffAction: "ಶಬ್ದ ಆನ್ ಮಾಡಿ",
-    bankTitle: "ನಿಮ್ಮ ಬ್ಯಾಂಕ್ ಖಾತೆ ಸೇರಿಸಿ", bankText: "Craves ನಿಮ್ಮ ಹಣವನ್ನು ಅದಕ್ಕೇ ಕಳುಹಿಸುತ್ತದೆ. ಅದು ಪರಿಶೀಲನೆ ಆಗುವವರೆಗೂ ನೀವು ಅಡುಗೆ ಮುಂದುವರಿಸಬಹುದು.", bankAction: "ಬ್ಯಾಂಕ್ ಖಾತೆ ಸೇರಿಸಿ",
+    bankAction: "ಬ್ಯಾಂಕ್ ಖಾತೆ ಸೇರಿಸಿ", available: "ನೀವು ತೆಗೆದುಕೊಳ್ಳಬಹುದಾದ ಹಣ", withdraw: "ಹಣ ತೆಗೆದುಕೊಳ್ಳಿ",
+    rating: "ರೇಟಿಂಗ್", latestReview: "ಇತ್ತೀಚಿನ ರಿವ್ಯೂಗಳು", seeAll: "ಎಲ್ಲಾ ನೋಡಿ",
     newOne: "ಹೊಸ ಆರ್ಡರ್: ಈಗಲೇ ಉತ್ತರಿಸಿ", newMany: "{count} ಹೊಸ ಆರ್ಡರ್‌ಗಳು: ಈಗಲೇ ಉತ್ತರಿಸಿ", inKitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯಲ್ಲಿ", allOrders: "ಎಲ್ಲಾ ಆರ್ಡರ್‌ಗಳು",
     noOrders: "ಈಗ ಹೊಸ ಆರ್ಡರ್‌ಗಳಿಲ್ಲ.", keepOpen: "Craves ತೆರೆದೇ ಇಡಿ: ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಿದಾಗ ನಿಮ್ಮ ಫೋನ್ ರಿಂಗ್ ಆಗುತ್ತದೆ.", checkNow: "ಈಗ ನೋಡಿ",
     ordersUnknown: "ಆರ್ಡರ್‌ಗಳು ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಕೆಲವು ಸೆಕೆಂಡಿಗೊಮ್ಮೆ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸುತ್ತಿದ್ದೇವೆ.", ordersWaitAccess: "Craves ನಿಮ್ಮ ಚೆಫ್ ಅನುಮತಿ ಖಚಿತಪಡಿಸಿದ ತಕ್ಷಣ ಆರ್ಡರ್‌ಗಳು ಇಲ್ಲಿ ಕಾಣುತ್ತವೆ.",
@@ -206,9 +221,20 @@ export function ChefModeDashboard() {
         if (raw === null || !parseChefKitchen(raw)) return null;
         return sessionFetch("/api/chef/menu", { cache: "no-store", credentials: "same-origin" });
       });
-      // Only to remind a chef with no bank account; a failed check shows nothing.
+      // Only to send a chef with no bank account to add one; a failed check shows Withdraw, as the app does.
       const bankRequest = sessionFetch("/api/chef-onboarding/bank", { cache: "no-store", credentials: "same-origin" })
         .then(async (response) => (response.ok ? bankStatusSchema.safeParse(await response.json().catch(() => null)) : null))
+        .catch(() => null);
+      const balanceRequest = sessionFetch("/api/chef/finance/balance", { cache: "no-store", credentials: "same-origin" })
+        .then(async (response) => (response.ok ? chefBalanceSchema.safeParse(await response.json().catch(() => null)) : null))
+        .then((parsed) => (parsed?.success ? parsed.data : null))
+        .catch(() => null);
+      // The newest review and the kitchen's average; Home leaves reviews out when they can't be read.
+      const reviewsRequest = fetchChefReviews({ limit: 1 })
+        .then(async ({ items: [latest = null] }) => ({
+          latest,
+          average: latest ? ((await fetchChefReviewSummary(latest.kitchenId).catch(() => null))?.overallAverage ?? null) : null,
+        }))
         .catch(() => null);
       const requests = await Promise.allSettled([
         sessionFetch("/api/chef/application", {
@@ -288,12 +314,13 @@ export function ChefModeDashboard() {
         // The application already named the kitchen and its address: save it, so the chef's only step is a first dish.
         kitchen = await createKitchenFromApplication(application, getSession()?.phoneNumber ?? "").catch(() => null);
       }
-      const bank = await bankRequest;
+      const [bank, balance, reviews] = await Promise.all([bankRequest, balanceRequest, reviewsRequest]);
 
       if (!active) return;
       // Orders already waiting when Chef Mode opens are on screen; only later ones ring.
       if (!unavailable.includes("orders")) noticeNewOrders(orders);
-      setSnapshot({ application, kitchen, menu, orders, earnings, bankAdded: !(bank?.success && bank.data.state === "NOT_SUBMITTED"), unavailable, details, accessProblem });
+      const needsBank = Boolean(bank?.success && (bank.data.state === "NOT_SUBMITTED" || bank.data.state === "SUPERSEDED"));
+      setSnapshot({ application, kitchen, menu, orders, earnings, needsBank, balance, reviews, unavailable, details, accessProblem });
       if (application?.status === "APPROVED" && !unavailable.includes("kitchen") && !unavailable.includes("menu")) {
         const noticeKey = `craves-chef-approved:${application.id ?? getSession()?.id}:${application.reviewedAt ?? "approved"}`;
         setApprovalNoticeKey(noticeKey);
@@ -374,7 +401,7 @@ export function ChefModeDashboard() {
     return (
       <ChefSection>
         <ChefEmpty
-          icon={AlertTriangle}
+          illustration="loadError"
           title={text.loadFailedTitle}
           text={text.loadFailed}
           action={
@@ -398,7 +425,7 @@ export function ChefModeDashboard() {
   else if (snapshot.menu.length === 0) fixes.push({ key: "first-dish", title: text.firstDishTitle, text: text.firstDishText, icon: Utensils, href: "/chef/menu", action: text.firstDishAction, urgent: true });
   else if (takingOrders && stats.availableMenu.length === 0) fixes.push({ key: "no-dish-on", title: text.noDishOnTitle, text: text.noDishOnText, icon: ToggleRight, href: "/chef/menu", action: text.noDishOnAction, urgent: true });
   if (!alertPrefs.ring) fixes.push({ key: "sound", title: text.soundOffTitle, text: text.soundOffText, icon: BellOff, onClick: () => writeAlertPrefs({ ...alertPrefs, ring: true }), action: text.soundOffAction });
-  if (!snapshot.bankAdded) fixes.push({ key: "bank", title: text.bankTitle, text: text.bankText, icon: Landmark, href: "/chef/bank", action: text.bankAction });
+  // A missing bank account is the balance card's button below, as in the app.
 
   const kitchenName = snapshot.kitchen?.kitchenName || text.yourKitchen;
   // The chef's name from the application: never the phone number, never the customer profile.
@@ -434,9 +461,13 @@ export function ChefModeDashboard() {
       />
 
       <div className="chef-stack">
-        <header className="min-w-0">
-          <h1 className="chef-page-title">{format(text[greeting()], { name: firstName })}</h1>
-          <p className="mt-1 truncate text-[0.9375rem] font-semibold text-[#6B6B6B]">{kitchenName}</p>
+        <header className="flex min-w-0 items-center gap-3">
+          {/* The chef's drawn face (never a photo of them), or their initial. */}
+          <ChefFace photoUrl={snapshot.kitchen?.chefPhotoUrl} name={firstName} size={52} />
+          <div className="min-w-0">
+            <h1 className="chef-page-title">{format(text[greeting()], { name: firstName })}</h1>
+            <p className="mt-1 truncate text-[0.9375rem] font-semibold text-[#6B6B6B]">{kitchenName}</p>
+          </div>
         </header>
 
         {snapshot.unavailable.length > 0 ? (
@@ -551,8 +582,42 @@ export function ChefModeDashboard() {
                   <p className="chef-stat-label">{text.earnedWeek}</p>
                   <p className="chef-stat-value">{stats.weekAmount > 0 ? formatInr(stats.weekAmount, { currency: stats.weekCurrency, decimals: 0 }) : "₹0"}</p>
                 </Link>
+                {/* Only a real average: a chef with no reviews yet gets no empty "—" tile. */}
+                {snapshot.reviews && snapshot.reviews.average !== null ? (
+                  <Link href="/chef/reviews" className="chef-stat col-span-2 !border-r-0">
+                    <p className="chef-stat-label">{text.rating}</p>
+                    <p className="chef-stat-value">
+                      {snapshot.reviews.average.toFixed(1)}<span aria-hidden="true"> ★</span>
+                    </p>
+                  </Link>
+                ) : null}
               </div>
             </ChefSection>
+            <section className="rounded-[var(--chef-radius)] bg-[#261A15] p-4 text-white md:p-5" aria-labelledby="chef-home-balance">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  {/* Not text-white: a legacy chef rule turns any heading with "text-white" ink-coloured. */}
+                  <h2 id="chef-home-balance" className="text-[0.875rem] font-semibold text-[#EFE6E1]">{text.available}</h2>
+                  <p className="chef-amount mt-1 truncate font-display text-[1.75rem] font-bold leading-tight">{snapshot.balance ? formatInr(snapshot.balance.available) : "—"}</p>
+                </div>
+                <Wallet className="h-7 w-7 shrink-0" aria-hidden="true" />
+              </div>
+              {/* Withdraw opens Money, where the balance's own button sends it to the bank. */}
+              <Link href={snapshot.needsBank ? "/chef/bank" : "/chef/earnings"} className="chef-btn is-block mt-4 focus-visible:!outline-2 focus-visible:!outline-white">
+                {snapshot.needsBank ? text.bankAction : text.withdraw}
+              </Link>
+            </section>
+            {snapshot.reviews?.latest ? (
+              <ChefSection
+                title={text.latestReview}
+                labelledBy="chef-latest-review"
+                action={<Link href="/chef/reviews" className="chef-btn is-small">{text.seeAll}</Link>}
+              >
+                <ChefStars rating={snapshot.reviews.latest.overallRating} className="text-lg" />
+                {snapshot.reviews.latest.reviewText ? <p className="mt-1 line-clamp-3 break-words text-[0.9375rem] leading-6 text-[#1A1A1A]">{snapshot.reviews.latest.reviewText}</p> : null}
+                <p className="mt-2 text-[0.8125rem] text-[#6B6B6B]">{timeAgo(snapshot.reviews.latest.publishedAt, undefined, language)}</p>
+              </ChefSection>
+            ) : null}
             {alertPrefs.ring ? (
               // Sound settings live in Order settings; Home only says the phone will ring.
               <Link href="/chef/preferences" className="chef-section chef-row">

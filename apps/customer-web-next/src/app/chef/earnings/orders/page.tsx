@@ -11,7 +11,7 @@ export default function ChefOrderEarningsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Money from each order" description="What Craves paid for each delivered order." back={{ href: "/chef/earnings", label: "Money" }} />
+        <ChefPageHeader title="Money from each order" description="What Craves paid for each delivered order." back={{ href: "/chef/earnings", label: "Earnings" }} />
         <ChefEarningsLedger />
       </ChefAccessBoundary>
     </main>

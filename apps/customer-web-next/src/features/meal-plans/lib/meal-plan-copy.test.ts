@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeDeadline, dayCreditCard, formatMoney, isPastSubscription, noticeLength, pauseDaysLine, pauseInfo, planDay, resumeDateFor } from "./meal-plan-copy.ts";
+import { changeDeadline, dayCreditCard, formatMoney, isPastSubscription, nextMealLine, noticeLength, pauseDaysLine, pauseInfo, planActions, planDay, resumeDateFor } from "./meal-plan-copy.ts";
 import type { DayCredit } from "./subscription-contract.ts";
 import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
 
@@ -116,4 +116,29 @@ test("a settled choice shows its outcome instead of buttons", () => {
   // Like the app: a failed refund keeps its card (title only), with no choice offered again.
   const failed = dayCreditCard({ ...decline, status: "REFUND_FAILED" }, "2026-10-14");
   assert.deepEqual([failed.pending, failed.note, failed.settledLine], [false, null, null]);
+});
+
+test("the plan card names the next meal still to come, like the app", () => {
+  const now = new Date("2026-10-26T12:00:00+05:30");
+  const names = new Map([["samosa", "Samosa"], ["chai", "Chai"]]);
+  const at = (serviceDate: string, time: string, status: SubscriptionOccurrence["status"] = "READY_FOR_ORDER", items = [{ menuItemId: "samosa", quantity: 1, sequenceNumber: 1 }, { menuItemId: "chai", quantity: 1, sequenceNumber: 2 }]) =>
+    ({ serviceDate, serviceAt: `${serviceDate}T${time}:00+05:30`, status, items });
+  // Earlier today has been served; the next one is tomorrow's, unless it was skipped.
+  assert.match(nextMealLine([at("2026-10-26", "09:00"), at("2026-10-27", "16:30")], names, now) ?? "", /^Tomorrow, 4:30\spm · Samosa \+ Chai$/u);
+  assert.match(nextMealLine([at("2026-10-26", "19:00", "ORDER_CREATED", [{ menuItemId: "gone", quantity: 1, sequenceNumber: 1 }])], names, now) ?? "", /^Today, 7:00\spm · Meal item$/u);
+  assert.match(nextMealLine([at("2026-10-27", "16:30", "SKIPPED"), at("2026-10-29", "13:00")], names, now) ?? "", /^Thu 29 Oct, 1:00\spm/u);
+  assert.equal(nextMealLine([at("2026-10-26", "09:00"), at("2026-10-28", "13:00", "CANCELLED")], names, now), null);
+});
+
+test("Pause, Resume and Skip a meal are offered only when the plan page would offer them", () => {
+  const policy = { customerPauseEnabled: true, customerResumeEnabled: true, customerSkipEnabled: true };
+  const active = { status: "ACTIVE" as const, pauseDaysLeft: 2, pauseAutoResumeDate: null };
+  assert.deepEqual(planActions(active, policy, "2026-10-27", "2026-10-26"), ["pause", "skip"]);
+  assert.deepEqual(planActions({ ...active, pauseDaysLeft: 0 }, policy, "2026-10-27", "2026-10-26"), ["skip"]);
+  assert.deepEqual(planActions(active, { ...policy, customerSkipEnabled: false }, "2026-10-27", "2026-10-26"), ["pause"]);
+  assert.deepEqual(planActions({ ...active, status: "PAUSED" }, policy, "2026-10-27", "2026-10-26"), ["resume"]);
+  // Resuming on or after the automatic restart would change nothing.
+  assert.deepEqual(planActions({ ...active, status: "PAUSED", pauseAutoResumeDate: "2026-10-27" }, policy, "2026-10-27", "2026-10-26"), []);
+  assert.deepEqual(planActions({ ...active, status: "PENDING_PAYMENT" }, policy, "2026-10-27", "2026-10-26"), []);
+  assert.deepEqual(planActions(active, null, "2026-10-27", "2026-10-26"), []);
 });

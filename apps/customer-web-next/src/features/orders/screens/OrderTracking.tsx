@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { FaArrowLeft, FaArrowsRotate } from "react-icons/fa6";
 import {
   formatOrderStatus,
@@ -26,6 +26,7 @@ import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { CurrentStatusCard } from "@/features/orders/components/CurrentStatusCard";
 import { DeliveryCodeCard } from "@/features/orders/components/DeliveryCodeCard";
 import { OrderTimeline } from "@/features/orders/components/OrderTimeline";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import { DeliveryAddressCard } from "@/features/orders/components/DeliveryAddressCard";
 import { TrackingOrderSummaryCard } from "@/features/orders/components/TrackingOrderSummaryCard";
 
@@ -65,6 +66,8 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  // The sign-in couldn't be checked (offline, or Craves didn't answer): not the same as signed out.
+  const [signInFailed, setSignInFailed] = useState(false);
 
   const refresh = useCallback(
     async (orderId: string, background = false) => {
@@ -81,7 +84,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
 
         const orderRaw = await orderResponse.json().catch(() => null);
         if (!orderResponse.ok) {
-          throw new Error(responseMessage(orderRaw, UNAVAILABLE));
+          throw new Error(UNAVAILABLE);
         }
         const parsedOrder = parseCustomerOrder(orderRaw);
         if (!parsedOrder || parsedOrder.id.toLowerCase() !== orderId.toLowerCase()) {
@@ -116,8 +119,9 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
           );
         }
         setLastUpdatedAt(new Date());
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : UNAVAILABLE);
+      } catch {
+        // Our own words only: never the browser's ("Failed to fetch") or a parser's.
+        setError(UNAVAILABLE);
       } finally {
         refreshingRef.current = false;
         setLoading(false);
@@ -127,6 +131,27 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
     [],
   );
 
+  const begin = useCallback(
+    (isActive: () => boolean = () => true) => {
+      loadSession({ keepOnOutage: true }).then(
+        (session) => {
+          if (!isActive()) return;
+          if (!session) {
+            navigate({ to: "/" });
+            return;
+          }
+          void refresh(id);
+        },
+        () => {
+          if (!isActive()) return;
+          setSignInFailed(true);
+          setLoading(false);
+        },
+      );
+    },
+    [id, navigate, refresh],
+  );
+
   useEffect(() => {
     if (!id || !UUID.test(id)) {
       navigate({ to: "/orders", replace: true });
@@ -134,14 +159,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
     }
 
     let cancelled = false;
-    void loadSession().then((session) => {
-      if (cancelled) return;
-      if (!session) {
-        navigate({ to: "/" });
-        return;
-      }
-      void refresh(id);
-    });
+    begin(() => !cancelled);
 
     const timer = window.setInterval(() => {
       if (
@@ -157,7 +175,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [id, navigate, refresh]);
+  }, [begin, id, navigate, refresh]);
 
   if (!id || !UUID.test(id)) return null;
 
@@ -210,35 +228,43 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
       <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
         {loading ? (
           <CustomerSectionSkeleton variant="tracking" label="Loading order tracking" />
+        ) : signInFailed ? (
+          <EmptyState
+            illustration="session"
+            title="We couldn’t sign you back in"
+            message="Check your connection and try again. You can also sign in again with your phone number."
+            role="alert"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setSignInFailed(false);
+                setLoading(true);
+                begin();
+              }}
+              className="craves-primary-action"
+            >
+              Try again
+            </button>
+            <a href={`/sign-in?returnTo=${encodeURIComponent(`/orders/${id}/tracking`)}`} className={emptyStateSecondaryAction}>
+              Go to sign in
+            </a>
+          </EmptyState>
         ) : !order ? (
-          <section className="rounded-2xl border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-12">
-            <AlertTriangle
-              className="mx-auto h-10 w-10 text-[#C4200F]"
-              aria-hidden="true"
-            />
-            <h2 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
-              Tracking unavailable
-            </h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#6B6B6B]">
-              {error || UNAVAILABLE}
-            </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => void refresh(id)}
-                className="craves-primary-action"
-              >
-                <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                Try again
-              </button>
-              <Link
-                to="/orders"
-                className="inline-flex min-h-12 items-center rounded-full bg-[#F1F3F5] px-6 text-base font-bold !text-[#1A1A1A]"
-              >
-                Back to orders
-              </Link>
-            </div>
-          </section>
+          <EmptyState
+            illustration={typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "loadError"}
+            title={typeof navigator !== "undefined" && navigator.onLine === false ? "You’re offline" : "Tracking didn’t load"}
+            message={error || UNAVAILABLE}
+            role="alert"
+          >
+            <button type="button" onClick={() => void refresh(id)} className="craves-primary-action">
+              <RefreshCw className="h-5 w-5" aria-hidden="true" />
+              Try again
+            </button>
+            <Link to="/orders" className={emptyStateSecondaryAction}>
+              My Orders
+            </Link>
+          </EmptyState>
         ) : (
           <div className="space-y-5">
             <OrderMap

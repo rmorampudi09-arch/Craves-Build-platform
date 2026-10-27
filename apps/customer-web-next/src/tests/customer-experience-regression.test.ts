@@ -27,36 +27,34 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(home, /CustomerPageSkeleton/);
   assert.match(home, /loadMoreDiscoveredDishes/);
   assert.match(home, /hasMoreDiscoveredDishes/);
-  assert.match(home, /dishes=\{nearbyDishes\}/);
+  assert.match(home, /dishes=\{dietDishes\}/);
   assert.match(chefs, /CustomerPageSkeleton/);
   assert.match(chefs, /discoverDishes\(/);
   assert.match(chefs, /dishes=\{dishes\}/);
-  assert.match(kitchens, /KitchenDishPreview/);
-  // Kitchen photos slide on by themselves (the next one follows from the right) only with a
-  // Pause photos control (WCAG 2.2.2), never for reduced motion, only while the card is on
-  // screen, held on hover or focus; a swipe hands the card to the customer.
-  assert.match(kitchens, /Pause photos/);
+  // Top kitchens near you (app 1.35): one row of up to eight cards. Each photo fades in over the
+  // last every 4 s, cards 0.8 s apart, only while on screen, held on hover or focus, with a
+  // Pause control (WCAG 2.2.2) and never for reduced motion. No swiping inside the photo.
+  assert.match(kitchens, /function KitchenPhotos/);
+  assert.match(kitchens, /PHOTO_MS = 4_000/);
+  assert.match(kitchens, /PHOTO_STAGGER_MS = 800/);
+  assert.match(kitchens, /transition-opacity duration-\[650ms\]/);
+  assert.match(kitchens, /Pause kitchen photos/);
   assert.match(kitchens, /useReducedMotion\(\)/);
   assert.match(kitchens, /intersectionRatio >= 0\.6/);
   assert.match(kitchens, /:hover, :focus-within/);
-  assert.match(kitchens, /if \(!moving\.current\) setSwiped\(true\)/);
-  assert.match(kitchens, /behavior: "smooth"/);
-  // Home shows a few kitchens and links to all of them with the count.
-  assert.match(kitchens, /See all \{kitchens\.length\} home chefs/);
-  assert.match(home, /limit=\{6\}/);
-  assert.doesNotMatch(kitchens, /ChevronLeft/);
-  assert.doesNotMatch(kitchens, /ChevronRight/);
-  assert.doesNotMatch(kitchens, /kitchenPreviewTrack/);
-  assert.doesNotMatch(kitchens, /\b3000\b/);
-  // A native snap strip follows the finger; dots track the scroll with opacity/scale only.
-  assert.match(kitchens, /snap-x snap-mandatory overflow-x-auto/);
-  assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|duration-500/);
-  assert.match(kitchens, /new window\.Image\(\)/);
-  assert.match(kitchens, /kitchenImagePreloads/);
-  assert.match(kitchens, /priority=\{index < 4\}/);
-  assert.match(kitchens, /fetchPriority=\{priority && index === 0 \? "high" : "auto"\}/);
-  assert.match(kitchens, /transition-\[opacity,scale\]/);
-  assert.doesNotMatch(kitchens, /transition-all|w-4 bg-white/);
+  assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|setSwiped/);
+  assert.match(home, /limit=\{8\}/);
+  // The app's order: banner, top kitchens, the category row, then "Popular near you".
+  assert.match(home, /<WelcomeBanner[\s\S]*<KitchensGrid[\s\S]*<HomeCategoryRail[\s\S]*<DishesGrid/);
+  assert.match(dishes, /"Popular near you"/);
+  // Phones and tablets swipe a snap row with the next card peeking in; desktop shows four with arrows.
+  assert.match(kitchens, /w-\[clamp\(248px,74vw,286px\)\]/);
+  assert.match(kitchens, /snap-x snap-mandatory/);
+  assert.match(kitchens, /aria-label="Show more kitchens"/);
+  assert.match(kitchens, /See all <span className="sr-only">kitchens near you<\/span>/);
+  assert.match(kitchens, /priority=\{order < 4\}/);
+  assert.match(kitchens, /fetchPriority=\{index === 0 && priority \? "high" : "auto"\}/);
+  assert.doesNotMatch(kitchens, /transition-all/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(dishes, /priorityImage=\{index < 4\}/);
   assert.match(progressiveImage, /unoptimized = true/);
@@ -67,21 +65,21 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(dishHeader, /fetchPriority=\{index === safeIndex \? "high" : "low"\}/);
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
-  assert.match(cravings, /fetchPriority=\{priorityImage \? "high" : "auto"\}/);
-  assert.match(cravings, /md:top-\[4\.25rem\] lg:top-\[4\.65rem\]/);
-  assert.match(cravings, /shadow-\[0_3px_10px_rgba\(26,26,26,0\.09\)\]/);
+  assert.match(cravings, /image: "\/home\/categories\/biryani\.webp"/);
+  // Below Home's red-top header, which is 1rem taller than the plain one (room for its clouds).
+  assert.match(cravings, /md:top-\[5\.25rem\] lg:top-\[5\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
   // Chips: a real press state, scroll arrows only for pointers, selection without a tint.
   assert.match(cravings, /group-active:scale-\[0\.96\]/);
   assert.match(cravings, /duration-\(--dur-component\)/);
   assert.match(cravings, /ring-2 ring-\[#F62E18\] ring-offset-2/);
-  assert.match(cravings, /md:left-4 md:top-\[3\.75rem\] md:flex/);
+  assert.match(cravings, /md:left-4 md:top-\[2\.875rem\] md:flex/);
   assert.doesNotMatch(cravings, /rgba\(246,46,24,0\.12\)|backdrop-blur/);
   // No chef shortcut in the Home header: Profile is the way into chef mode.
   assert.doesNotMatch(header, /to="\/chef/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
-  assert.match(header, /<CravesLogo size="md" \/>/);
+  assert.match(header, /<CravesLogo size=\{onRed \? "sm" : "md"\} \/>/);
   assert.doesNotMatch(header, /Food From Home/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);
@@ -168,7 +166,7 @@ test("favorites hydrate the shared cart and notifications offer read-all and und
   assert.match(wishlist, /CustomerFloatingCart/);
   assert.match(wishlist, /CustomerPageSkeleton/);
   assert.match(notifications, /Mark all as read/);
-  assert.match(notifications, /fetch\("\/api\/notifications\/in-app\/read-all"/);
+  assert.match(notifications, /[fF]etch\("\/api\/notifications\/in-app\/read-all"/);
   assert.match(notifications, /<UndoToast/);
   assert.match(notifications, /CustomerPageSkeleton/);
   assert.match(notifications, /Clear read/);
@@ -201,7 +199,7 @@ test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart 
   assert.match(skeleton, /export type CustomerPageSkeletonVariant = "home" \| "dish" \| "kitchen" \| "cart" \| "chefs"/);
   // The dish skeleton reserves the action bar so the tab bar does not flash in and out.
   assert.match(skeleton, /data-craves-action-bar/);
-  assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[16\/9\]/);
+  assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[100\/63\]/);
 });
 
 test("every page loads in its own shape under its own header, and quick loads show nothing", () => {

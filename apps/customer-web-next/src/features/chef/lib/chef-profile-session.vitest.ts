@@ -74,16 +74,16 @@ describe("Chef navigation placement", () => {
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" }).closest(".chef-panel-theme")).toBeTruthy();
   });
   it.each([
-    ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Money", "page"],
-    ["/chef/finance", "Money", "true"], ["/chef/statements", "Money", "true"], ["/chef/bank", "Money", "true"],
-    ["/chef/earnings/payouts", "Money", "true"], ["/chef/earnings/orders", "Money", "true"], ["/chef/meal-plans", "Menu", "true"],
-    ["/chef/profile", "More", "page"], ["/chef/kitchen", "More", "true"], ["/chef/operations", "More", "true"], ["/chef/hours", "More", "true"],
-    ["/chef/capacity", "More", "true"], ["/chef/support", "More", "true"], ["/chef/application/status", "More", "true"],
+    ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Earnings", "page"],
+    ["/chef/finance", "Earnings", "true"], ["/chef/statements", "Earnings", "true"], ["/chef/bank", "Earnings", "true"],
+    ["/chef/earnings/payouts", "Earnings", "true"], ["/chef/earnings/orders", "Earnings", "true"], ["/chef/meal-plans", "Menu", "true"],
+    ["/chef/profile", "Profile", "page"], ["/chef/kitchen", "Profile", "true"], ["/chef/operations", "Profile", "true"], ["/chef/hours", "Profile", "true"],
+    ["/chef/capacity", "Profile", "true"], ["/chef/support", "Profile", "true"], ["/chef/application/status", "Profile", "true"],
   ])("keeps labeled active navigation for %s", (pathname, label, current) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Money", "More"]);
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "Profile"]);
     expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe(current);
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });
@@ -131,24 +131,24 @@ describe("chef finance owner boundaries", () => {
   it("shows the authoritative verified email alongside real finance panels", async () => {
     render(createElement(ChefFinancePage));
     await screen.findByDisplayValue("a@example.invalid");
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     // The money summary PDF moved to Statements; Balance & payouts keeps how the balance is worked out.
     expect(screen.getByText("How your balance is worked out")).toBeTruthy();
   });
 
   it("clears bank inputs and the old balance on owner change and ignores a late refresh", async () => {
     render(createElement(Fragment, null, createElement(ChefFinancePage), createElement(ChefBankPage)));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/chef/finance/balance" && identity?.id === a.id ? late.promise : normal(input));
     fireEvent.click(screen.getByRole("button", { name: "Check balance again" }));
     change(b);
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
-    await screen.findByRole("button", { name: "Send ₹22.00 to my bank" });
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
+    await screen.findByRole("button", { name: "Withdraw ₹22.00" });
     expect((screen.getByLabelText("Account number") as HTMLInputElement).value).toBe("");
     await act(async () => { late.resolve(Response.json(balance(a))); });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
@@ -189,9 +189,9 @@ describe("chef finance owner boundaries", () => {
 
   it("removes finance and gives sign-in guidance for an inactive owner", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     change({ ...a, status: "SUSPENDED" });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
   });
 
@@ -199,10 +199,10 @@ describe("chef finance owner boundaries", () => {
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     let signingOut!: Promise<void>;
     act(() => { signingOut = clearSession(); });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     identity = null;
     expect(navigate).not.toHaveBeenCalled();
     await act(async () => { late.resolve(Response.json({ signedOut: true })); await signingOut; });
@@ -370,7 +370,7 @@ describe("Chef menu save and recovery", () => {
   }
   async function fillRequired() {
     fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture dish" } });
-    await pickCategory("Meals");
+    await pickCategory("Rice");
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "500" } });
@@ -622,7 +622,7 @@ describe("Chef menu save and recovery", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish name/)));
     expect(screen.getByText("Give your dish a name.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture" } });
-    await pickCategory("Meals");
+    await pickCategory("Rice");
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Veg" })));
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));

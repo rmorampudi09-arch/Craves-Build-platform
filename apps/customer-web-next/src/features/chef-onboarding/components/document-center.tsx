@@ -70,7 +70,7 @@ const TEXT = messages({
     reviewFields: "వివరాలు సరిచూడండి.", downloadFailed: "PDF డౌన్‌లోడ్ కాలేదు. 'మళ్లీ చూడండి' నొక్కి మళ్లీ ప్రయత్నించండి.",
     integrity: "ఈ PDF ఫైల్ సరిగ్గా రాలేదు.", downloaded: "PDF డౌన్‌లోడ్ అయింది.",
     emailing: "మీ Craves ఈమెయిల్‌కు ఒక కాపీ పంపుతున్నాం.", emailHistoryFailed: "ఈమెయిల్ వివరాలు చదవలేకపోయాం.",
-    offTitle: "PDFలు ఇంకా ఆన్ కాలేదు", offText: "Craves త్వరలో వీటిని ఆన్ చేస్తుంది. మీ సంపాదన, బ్యాంక్‌కు పంపిన డబ్బు 'డబ్బు' పేజీలో చూడవచ్చు.",
+    offTitle: "PDFలు ఇంకా ఆన్ కాలేదు", offText: "Craves త్వరలో వీటిని ఆన్ చేస్తుంది. మీ సంపాదన, బ్యాంక్‌కు పంపిన డబ్బు 'సంపాదన' పేజీలో చూడవచ్చు.",
     loading: "మీ స్టేట్‌మెంట్లు లోడ్ అవుతున్నాయి", makeTitle: "PDF తయారు చేయండి",
     makeNote: "మీరు ఎంచుకున్న రోజుల ఆర్డర్లు, డబ్బు వివరాలు. ఇది GST పన్ను ఇన్‌వాయిస్ కాదు.",
     showLegend: "ఇందులో ఏం ఉండాలి?", daysLegend: "ఏ రోజులు?", chooseDates: "తేదీలు ఎంచుకోండి", firstDay: "మొదటి రోజు", lastDay: "చివరి రోజు",
@@ -86,7 +86,7 @@ const TEXT = messages({
     reviewFields: "ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ.", downloadFailed: "PDF ಡೌನ್‌ಲೋಡ್ ಆಗಲಿಲ್ಲ. 'ಮತ್ತೆ ನೋಡಿ' ಒತ್ತಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
     integrity: "ಈ PDF ಫೈಲ್ ಸರಿಯಾಗಿ ಬರಲಿಲ್ಲ.", downloaded: "PDF ಡೌನ್‌ಲೋಡ್ ಆಗಿದೆ.",
     emailing: "ನಿಮ್ಮ Craves ಇಮೇಲ್‌ಗೆ ಒಂದು ಪ್ರತಿ ಕಳುಹಿಸುತ್ತಿದ್ದೇವೆ.", emailHistoryFailed: "ಇಮೇಲ್ ವಿವರಗಳನ್ನು ಓದಲಾಗಲಿಲ್ಲ.",
-    offTitle: "PDFಗಳು ಇನ್ನೂ ಆನ್ ಆಗಿಲ್ಲ", offText: "Craves ಶೀಘ್ರದಲ್ಲೇ ಇವುಗಳನ್ನು ಆನ್ ಮಾಡುತ್ತದೆ. ನಿಮ್ಮ ಗಳಿಕೆ ಮತ್ತು ಬ್ಯಾಂಕ್‌ಗೆ ಕಳುಹಿಸಿದ ಹಣ 'ಹಣ' ಪುಟದಲ್ಲಿ ನೋಡಬಹುದು.",
+    offTitle: "PDFಗಳು ಇನ್ನೂ ಆನ್ ಆಗಿಲ್ಲ", offText: "Craves ಶೀಘ್ರದಲ್ಲೇ ಇವುಗಳನ್ನು ಆನ್ ಮಾಡುತ್ತದೆ. ನಿಮ್ಮ ಗಳಿಕೆ ಮತ್ತು ಬ್ಯಾಂಕ್‌ಗೆ ಕಳುಹಿಸಿದ ಹಣ 'ಗಳಿಕೆ' ಪುಟದಲ್ಲಿ ನೋಡಬಹುದು.",
     loading: "ನಿಮ್ಮ ಸ್ಟೇಟ್‌ಮೆಂಟ್‌ಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ", makeTitle: "PDF ತಯಾರಿಸಿ",
     makeNote: "ನೀವು ಆಯ್ಕೆಮಾಡಿದ ದಿನಗಳ ಆರ್ಡರ್‌ಗಳು ಮತ್ತು ಹಣದ ವಿವರ. ಇದು GST ತೆರಿಗೆ ಇನ್‌ವಾಯ್ಸ್ ಅಲ್ಲ.",
     showLegend: "ಇದರಲ್ಲಿ ಏನು ಇರಬೇಕು?", daysLegend: "ಯಾವ ದಿನಗಳು?", chooseDates: "ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ", firstDay: "ಮೊದಲ ದಿನ", lastDay: "ಕೊನೆಯ ದಿನ",
@@ -232,7 +232,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
     }
   }
 
-  if (capabilities && !capabilities.enabled) return mode === "customer" ? null : <ChefSection><ChefEmpty icon={FileText} title={text.offTitle} text={text.offText} /></ChefSection>;
+  if (capabilities && !capabilities.enabled) return mode === "customer" ? null : <ChefSection><ChefEmpty illustration="comingSoon" title={text.offTitle} text={text.offText} /></ChefSection>;
   if (mode === "customer" && !orders.length) return null;
   if (mode === "chef") {
     // Until PDFs are known to be on and the first list is in, the form could vanish and "No PDFs yet" be untrue.
@@ -279,7 +279,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
           action={<button className="chef-btn is-small" type="button" disabled={busy || !capabilities?.enabled} onClick={() => void action(refresh)}><RefreshCw className="h-4 w-4" aria-hidden="true" />{text.refresh}</button>}
         >
           {items.length === 0 ? (
-            <ChefEmpty icon={FileText} title={text.noneTitle} text={text.noneText} />
+            <ChefEmpty illustration="earnings" title={text.noneTitle} text={text.noneText} />
           ) : (
             <ul className="chef-list border-t border-[#E3E6EA]">
               {items.map((item) => (

@@ -83,18 +83,7 @@ export function DishFilterBar({ view, onViewChange, countFor, moreToLoad }: Dish
           {view.sort === "recommended" ? "Sort" : SORT_LABELS[view.sort]}
           <ChevronDown className="h-4 w-4" aria-hidden="true" />
         </button>
-        {/* Egg or Non-veg only come from the sheet (the header switch is Veg), so they get a chip. */}
-        {view.foodPreference === "egg" || view.foodPreference === "non-veg" ? (
-          <button
-            type="button"
-            aria-pressed="true"
-            onClick={() => onViewChange({ ...view, foodPreference: "all" })}
-            className={filterPillClass(true)}
-          >
-            {FOOD_LABELS[view.foodPreference]} only
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        ) : null}
+        {/* The food type has no chip here: the pill beside the search shows it (app 1.34.7). */}
         {view.filters.spice !== "any" ? (
           <button type="button" aria-pressed="true" onClick={() => setFilter("spice", "any")} className={filterPillClass(true)}>
             Spice: {SPICE_LEVEL_LABELS[view.filters.spice]}

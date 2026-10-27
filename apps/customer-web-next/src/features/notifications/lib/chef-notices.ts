@@ -20,10 +20,11 @@ export function chefNoticeCategory(notice: CustomerNotification): ChefNoticeCate
   return "other";
 }
 
-/** Where a tap leads: the order, Payout history, Meal plans, or the chef application. Reviews have no chef page on the web yet. */
+/** Where a tap leads: the order, Reviews, Payout history, Meal plans, or the chef application. */
 export function chefNoticeHref(notice: CustomerNotification): string | null {
   const category = chefNoticeCategory(notice);
   if (category === "orders") return notice.targetId ? `/chef/orders/${notice.targetId}` : null;
+  if (category === "reviews") return "/chef/reviews";
   if (category === "money") return "/chef/earnings/payouts";
   if (category === "plans") return "/chef/meal-plans";
   return (notice.targetType ?? "").toUpperCase() === "CHEF_APPLICATION"

@@ -11,7 +11,7 @@ export default function ChefSecurityPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Login & security" back={{ href: "/chef/profile", label: "More" }} />
+        <ChefPageHeader title="Login & security" back={{ href: "/chef/profile", label: "Profile" }} />
         <ChefSecurity />
       </ChefAccessBoundary>
     </main>

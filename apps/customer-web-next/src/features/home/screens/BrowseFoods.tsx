@@ -1,5 +1,6 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
+import { ArrowUp, MapPin, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import {
   useCallback,
@@ -20,15 +21,18 @@ import { CartAddressAvailabilityBanner } from "@/features/home/components/CartAd
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { DishesGrid } from "@/features/home/components/DishesGrid";
 import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatingCart";
-import {
-  HomeCategoryRail,
-  type CravingCategory,
-} from "@/features/home/components/HomeCategoryRail";
+import { HomeCategoryRail } from "@/features/home/components/HomeCategoryRail";
+import { HomeComingSoon } from "@/features/home/components/HomeComingSoon";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
 import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
-import { ALL_DISHES_CATEGORY } from "@/features/home/lib/dishCategories";
+import {
+  ALL_DISHES_CATEGORY,
+  inMenuCategory,
+  menuCategoryLabel,
+  type MenuCategory,
+} from "@/features/home/lib/dishCategories";
 import {
   DEFAULT_DISCOVERY_RADIUS_METERS,
 } from "@/features/home/lib/catalog-discovery-policy";
@@ -48,6 +52,7 @@ import {
   sortDishes,
   type DishView,
 } from "@/features/home/lib/dish-filters";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import {
   deliveryPlaceLabel,
   useCartAddressAvailability,
@@ -110,31 +115,6 @@ function loadHomeSearchOverlay(): Promise<SearchOverlay> {
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
-/** A dish belongs to a craving when its name, category or description mentions one of its words. */
-function matchesCraving(dish: Dish, keywords: readonly string[] | null): boolean {
-  if (!keywords) return true;
-  const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
-  return keywords.some((keyword) => searchable.includes(keyword));
-}
-
-const HOME_CATEGORY_KEYWORDS: Record<CravingCategory, readonly string[]> = {
-  Biryani: ["biryani"],
-  Tiffins: ["tiffin", "dosa", "idli", "pongal", "upma", "breakfast"],
-  Curry: ["curry", "kura", "gravy"],
-  Pickles: ["pickle", "pachadi", "chutney"],
-  Meals: ["meal", "thali", "lunch", "dinner"],
-  Snacks: ["snack", "pakoda", "pakora", "samosa", "chaat", "vada"],
-  Sweets: ["sweet", "dessert", "halwa", "kheer", "laddu", "ladoo"],
-  Desserts: ["dessert", "pudding", "custard", "mousse"],
-  Cake: ["cake", "pastry", "cupcake"],
-  "Fast Food": ["fast food", "burger", "pizza", "sandwich", "noodles", "fries"],
-  "Ice Cream": ["ice cream", "kulfi", "gelato"],
-};
-
-const CRAVING_CATEGORIES = new Set<CravingCategory>(
-  Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[],
-);
-
 export const routeMeta = {
   head: () => ({
     meta: [
@@ -152,10 +132,6 @@ export const routeMeta = {
 const readKitchenMenu = (kitchenId: string) => loadKitchenMenu(kitchenId);
 /** Where dish photos were served from last time, so the next visit can connect early. */
 const MEDIA_ORIGIN_KEY = "craves.media-origin";
-
-function isCravingCategory(value: string | null): value is CravingCategory {
-  return value !== null && CRAVING_CATEGORIES.has(value as CravingCategory);
-}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -176,6 +152,31 @@ function forceInstantWindowScroll(top: number): void {
 
 const noSubscribe = () => () => {};
 
+/** Ends Home's long list (app 1.35.1): back up to the address and search, with focus there too. */
+function BackToTop() {
+  const goUp = () => {
+    holdScrollChrome();
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    // The location button that is on screen (the desktop and phone headers each have one).
+    const target = Array.from(document.querySelectorAll<HTMLElement>("[data-craves-location-button]")).find(
+      (button) => button.offsetParent !== null,
+    );
+    target?.focus({ preventScroll: true });
+  };
+  return (
+    <div className="flex justify-center px-4 pb-6 pt-2">
+      <button
+        type="button"
+        onClick={goUp}
+        className="inline-flex min-h-11 items-center gap-2 rounded-full !border-transparent !bg-[#F6F7F8] px-5 text-sm font-bold !text-[#1A1A1A] !shadow-none transition-colors hover:!bg-[#ECEEF0] active:!bg-[#E5E7EB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+      >
+        <ArrowUp className="h-4 w-4 text-[#D92714]" aria-hidden="true" />
+        Back to top
+      </button>
+    </div>
+  );
+}
+
 function BrowseFoodsPage() {
   const navigate = useNavigate();
   // Cached dishes, address and cart paint Home instantly when it opens inside the app. A full
@@ -195,7 +196,7 @@ function BrowseFoodsPage() {
 
   const [user, setUser] = useState<CravesUser | null>(initialCache.user);
   const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
-  const [homeCategory, setHomeCategory] = useState<CravingCategory | null>(null);
+  const [homeCategory, setHomeCategory] = useState<MenuCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
   const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
   const [dishFilters, setDishFilters] = useState<HomeDishFilters>(DEFAULT_DISH_FILTERS);
@@ -395,9 +396,7 @@ function BrowseFoodsPage() {
     window.history.scrollRestoration = "manual";
     pendingHomeScrollYRef.current = Math.max(0, restored.scrollY);
 
-    setHomeCategory(
-      isCravingCategory(restored.homeCategory) ? restored.homeCategory : null,
-    );
+    setHomeCategory(restored.homeCategory);
     setDishSort(restored.dishSort);
     setFoodPreference(restored.foodPreference);
     setDishFilters(restored.dishFilters);
@@ -696,20 +695,6 @@ function BrowseFoodsPage() {
     readMenu: readKitchenMenu,
   });
 
-  const categoryImages = useMemo<Partial<Record<CravingCategory, string>>>(() => {
-    const result: Partial<Record<CravingCategory, string>> = {};
-    for (const nextCategory of Object.keys(HOME_CATEGORY_KEYWORDS) as CravingCategory[]) {
-      const keywords = HOME_CATEGORY_KEYWORDS[nextCategory];
-      const matchingDish = nearbyDishes.find((dish) => {
-        if (dish.imageIsPlaceholder) return false;
-        const searchable = `${dish.name} ${dish.category} ${dish.desc}`.toLocaleLowerCase("en-IN");
-        return keywords.some((keyword) => searchable.includes(keyword));
-      });
-      if (matchingDish) result[nextCategory] = matchingDish.img;
-    }
-    return result;
-  }, [nearbyDishes]);
-
   // Dish photos come from one storage host: open that connection while discovery is loading,
   // instead of after the first card asks for its photo.
   useEffect(() => {
@@ -730,14 +715,21 @@ function BrowseFoodsPage() {
     }
   }, [nearbyDishes]);
 
-  const filteredKitchens = kitchens;
+  // The food type pill narrows the kitchens too (app 1.34.7): a kitchen with no matching dish
+  // drops out, and the cards' photos and starting price come from matching dishes only.
+  const dietDishes = useMemo(
+    () =>
+      listFoodPreference === "all"
+        ? nearbyDishes
+        : nearbyDishes.filter((dish) => matchesFoodPreference(dish, listFoodPreference)),
+    [listFoodPreference, nearbyDishes],
+  );
 
   const filteredDishes = useMemo(() => {
-    const homeKeywords = listCategory ? HOME_CATEGORY_KEYWORDS[listCategory] : null;
     return sortDishes(
       nearbyDishes.filter(
         (dish) =>
-          matchesCraving(dish, homeKeywords) &&
+          inMenuCategory(dish, listCategory) &&
           matchesFoodPreference(dish, listFoodPreference) &&
           matchesDishFilters(dish, listDishFilters),
       ),
@@ -745,13 +737,12 @@ function BrowseFoodsPage() {
     );
   }, [listCategory, listDishFilters, listFoodPreference, listSort, nearbyDishes]);
 
-  // The filter sheet's "Show N dishes": the same rules on the current craving, for a draft view.
+  // The filter sheet's "Show N dishes": the same rules on the current category, for a draft view.
   const countDishes = useCallback(
     (view: DishView) => {
-      const keywords = homeCategory ? HOME_CATEGORY_KEYWORDS[homeCategory] : null;
       return nearbyDishes.filter(
         (dish) =>
-          matchesCraving(dish, keywords) &&
+          inMenuCategory(dish, homeCategory) &&
           matchesFoodPreference(dish, view.foodPreference) &&
           matchesDishFilters(dish, view.filters),
       ).length;
@@ -781,6 +772,18 @@ function BrowseFoodsPage() {
           ? "Other"
           : rawLocationType || "Location";
 
+  // No kitchen cooks near this address at all (discovery answered, not failed): Home is only the
+  // coming-soon page, as in the app.
+  const comingSoonAddress =
+    discoveryState === "ready" &&
+    kitchenDiscoveryVerified &&
+    kitchens.length === 0 &&
+    nearbyDishes.length === 0 &&
+    typeof address?.lat === "number" &&
+    typeof address.lng === "number"
+      ? { ...address, lat: address.lat, lng: address.lng }
+      : null;
+
   const searchDishes = useMemo(
     () =>
       foodPreference === "all"
@@ -807,18 +810,16 @@ function BrowseFoodsPage() {
   };
 
   if (sessionUnavailable) {
+    // The session service didn't answer (the sign-in itself is kept): try again, or sign in afresh (app 1.35.2).
     return (
-      <main className="flex min-h-screen items-center justify-center bg-white px-5 text-[#1A1A1A]">
-        <section className="w-full max-w-md rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_14px_42px_rgba(26,26,26,0.08)]">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#F62E18]">
-            C
-          </div>
-          <h1 className="mt-4 text-xl font-black tracking-[-0.02em]">
-            Reconnecting to Craves
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
-            Your sign-in has not been cleared. We just couldn’t reach the session service for a moment.
-          </p>
+      <main className="flex min-h-screen items-center justify-center bg-white text-[#1A1A1A]">
+        <EmptyState
+          heading="h1"
+          role="alert"
+          illustration="session"
+          title="We couldn't sign you back in"
+          message="Check your connection and try again. You can also sign in again with your phone number."
+        >
           <button
             type="button"
             onClick={() => {
@@ -826,11 +827,15 @@ function BrowseFoodsPage() {
               setDefaultAddressResolved(false);
               setSessionRetryNonce((current) => current + 1);
             }}
-            className="mt-5 min-h-11 rounded-xl !border-transparent !bg-[#F62E18] px-5 text-sm font-bold !text-white shadow-[0_6px_18px_rgba(26,26,26,0.14)] active:!bg-[#C4200F]"
+            className="craves-primary-action"
           >
+            <RefreshCw className="h-5 w-5" aria-hidden="true" />
             Try again
           </button>
-        </section>
+          <Link to="/sign-in" search={{ returnTo: "/home" }} className={emptyStateSecondaryAction}>
+            Go to sign in
+          </Link>
+        </EmptyState>
       </main>
     );
   }
@@ -857,8 +862,47 @@ function BrowseFoodsPage() {
         onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
         onFoodPreferenceChange={changeFoodPreference}
+        tone="red"
       />
 
+      {comingSoonAddress ? (
+        <main>
+          <HomeComingSoon
+            address={comingSoonAddress}
+            addressTypeLabel={locationTypeLabel}
+            onChangeAddress={openAddressManager}
+            onCheckAgain={() => void refreshDiscovery(address, false, false)}
+          />
+        </main>
+      ) : discoveryState === "address-required" || discoveryState === "error" ? (
+        // One state for the page, as in the app, rather than one per section.
+        <main>
+          {discoveryState === "error" ? (
+            <EmptyState
+              role="alert"
+              illustration="loadError"
+              title="We couldn't load food near you"
+              message="Check your connection and try again."
+            >
+              <button type="button" onClick={() => void refreshDiscovery(address, false, false)} className="craves-primary-action">
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                Try again
+              </button>
+            </EmptyState>
+          ) : (
+            <EmptyState
+              illustration="location"
+              title="Where should we deliver?"
+              message="Choose an address to see the home kitchens cooking near you."
+            >
+              <button type="button" onClick={openAddressManager} className="craves-primary-action">
+                <MapPin className="h-5 w-5" aria-hidden="true" />
+                Choose location
+              </button>
+            </EmptyState>
+          )}
+        </main>
+      ) : (
       <main>
         <CartAddressAvailabilityBanner
           open={cartAvailabilityOpen}
@@ -874,19 +918,9 @@ function BrowseFoodsPage() {
 
         <WelcomeBanner onOpenSearch={openSearchOnTap} />
 
-        <HomeCategoryRail
-          selected={homeCategory}
-          images={categoryImages}
-          onSelect={(nextCategory) => {
-            // aria-pressed chips: tapping the selected one again shows every dish.
-            setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
-            setSearchTerm("");
-            revealDishes();
-          }}
-        />
-
+        {/* As in the app: banner, top kitchens, the category row (it pins while scrolling), then dishes. */}
         <KitchensGrid
-          kitchens={filteredKitchens}
+          kitchens={kitchens}
           searchTerm=""
           state={discoveryState}
           message={catalogMessage}
@@ -896,13 +930,23 @@ function BrowseFoodsPage() {
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
           onManageAddress={openAddressManager}
-          dishes={nearbyDishes}
-          limit={6}
+          dishes={dietDishes}
+          limit={8}
+        />
+
+        <HomeCategoryRail
+          selected={homeCategory}
+          onSelect={(nextCategory) => {
+            // aria-pressed chips: tapping the selected one again shows every dish.
+            setHomeCategory((current) => (current === nextCategory ? null : nextCategory));
+            setSearchTerm("");
+            revealDishes();
+          }}
         />
 
         <DishesGrid
           dishes={filteredDishes}
-          selectedCategory={listCategory ?? ALL_DISHES_CATEGORY}
+          selectedCategory={listCategory ? menuCategoryLabel(listCategory) : ALL_DISHES_CATEGORY}
           searchTerm=""
           state={discoveryState}
           message={catalogMessage}
@@ -913,8 +957,7 @@ function BrowseFoodsPage() {
             setHomeCategory(null);
             setDishSort("recommended");
             setDishFilters(DEFAULT_DISH_FILTERS);
-            // Veg is the header switch's choice and stays; Egg or Non-veg came from the filters.
-            setFoodPreference((current) => (current === "veg" ? current : "all"));
+            // The food type stays: it is the pill's choice, shown beside the search.
             revealDishes();
             // The button goes away with the filters: keep keyboard focus on the list it changed.
             window.requestAnimationFrame(() =>
@@ -922,14 +965,16 @@ function BrowseFoodsPage() {
             );
           }}
           onRetry={() => void refreshDiscovery(address, false, false)}
-          onManageAddress={openAddressManager}
           hasMoreRemote={hasMoreDiscoveredDishes()}
           loadingMoreRemote={dishLoadMoreBusy}
           onLoadMore={loadMoreNearbyDishes}
         />
 
         <HomeBottomSections />
+
+        {filteredDishes.length > 8 ? <BackToTop /> : null}
       </main>
+      )}
 
       <CustomerFloatingCart />
 
@@ -940,9 +985,11 @@ function BrowseFoodsPage() {
             dishes={searchDishes}
             kitchens={kitchens}
             searchTerm={searchTerm}
-            vegOnly={foodPreference === "veg"}
+            foodPreference={foodPreference}
+            latitude={address?.lat ?? null}
+            longitude={address?.lng ?? null}
             onSearchTermChange={setSearchTerm}
-            onDisableVeg={() => setFoodPreference("all")}
+            onShowAllFood={() => setFoodPreference("all")}
             onClose={closeSearch}
           />
         ) : null}

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { MotionGlobalConfig } from "framer-motion";
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ChefPreferences } from "../components/chef-preferences";
+import { ChefEmailPreference, ChefPreferences } from "../components/chef-preferences";
 
 let settings: { autoAcceptOrders: boolean; defaultPrepMinutes: number | null };
 let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;
@@ -103,5 +103,33 @@ describe("Chef preferences", () => {
     render(createElement(ChefPreferences));
     fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("switch", { name: "Accept orders automatically" })).toBeTruthy();
+  });
+
+  it("turns statement emails off and on, one save at a time", async () => {
+    let enabled = true;
+    fetcher.mockImplementation(async (_input, init) => {
+      if (init?.method === "PUT") enabled = JSON.parse(String(init.body)).enabled;
+      return Response.json({ enabled });
+    });
+    render(createElement(ChefEmailPreference));
+    const email = await screen.findByRole("switch", { name: "Email" });
+    expect(email.getAttribute("aria-checked")).toBe("true");
+    expect(email.getAttribute("aria-describedby")).toBe("chef-email-note");
+    fireEvent.click(email);
+    fireEvent.click(email); // a second tap while the first save runs sends nothing
+    await waitFor(() => expect(email.getAttribute("aria-checked")).toBe("false"));
+    expect(puts()).toEqual([{ enabled: false }]);
+    expect(String(fetcher.mock.calls[0][0])).toBe("/api/notifications/preferences/email");
+  });
+
+  it("says Coming soon for email until the gateway routes it", async () => {
+    fetcher.mockImplementation(async () =>
+      Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 }),
+    );
+    render(createElement(ChefEmailPreference));
+    expect(await screen.findByText("Coming soon")).toBeTruthy();
+    expect(screen.getByText("Statements and updates")).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

@@ -21,7 +21,7 @@ export default async function ChefSupportPage({
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Help & support" back={{ href: "/chef/profile", label: "More" }} />
+        <ChefPageHeader title="Help & support" back={{ href: "/chef/profile", label: "Profile" }} />
         <ChefSupportHub />
       </ChefAccessBoundary>
     </main>

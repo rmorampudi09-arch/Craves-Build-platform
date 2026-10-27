@@ -12,9 +12,9 @@ const ORDER: readonly Language[] = ["te", "kn", "en"];
 const LETTER: Record<Language, string> = { te: "అ", kn: "ಅ", en: "A" };
 
 const TEXT = messages({
-  en: { choose: "Choose your language", change: "Change language", hint: "You can change it any time in More." },
-  te: { choose: "మీ భాషను ఎంచుకోండి", change: "భాష మార్చండి", hint: "దీన్ని ఎప్పుడైనా 'మరిన్ని'లో మార్చవచ్చు." },
-  kn: { choose: "ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ", change: "ಭಾಷೆ ಬದಲಿಸಿ", hint: "ಇದನ್ನು ಯಾವಾಗ ಬೇಕಾದರೂ 'ಇನ್ನಷ್ಟು'ದಲ್ಲಿ ಬದಲಿಸಬಹುದು." },
+  en: { choose: "Choose your language", change: "Change language", hint: "You can change it any time in Profile." },
+  te: { choose: "మీ భాషను ఎంచుకోండి", change: "భాష మార్చండి", hint: "దీన్ని ఎప్పుడైనా 'ప్రొఫైల్'లో మార్చవచ్చు." },
+  kn: { choose: "ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ", change: "ಭಾಷೆ ಬದಲಿಸಿ", hint: "ಇದನ್ನು ಯಾವಾಗ ಬೇಕಾದರೂ 'ಪ್ರೊಫೈಲ್'ನಲ್ಲಿ ಬದಲಿಸಬಹುದು." },
 });
 
 /** Three big choices: the letter of the script, the name in its own script, and the English name. */

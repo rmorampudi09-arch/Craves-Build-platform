@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, X } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/relative-time";
+import { EmptyIllustration, type EmptyIllustrationName } from "@/shared/ui/feedback/EmptyIllustration";
 import { messages, type Language } from "@/shared/i18n/language";
 import { useText } from "@/shared/i18n/language-context";
 
@@ -183,6 +184,7 @@ export function ChefSection({
 export function ChefEmpty({
   icon: Icon,
   image,
+  illustration,
   title,
   text,
   action,
@@ -190,13 +192,17 @@ export function ChefEmpty({
   icon?: ComponentType<{ className?: string }>;
   /** A drawing of the work this screen is about, shown in place of the icon. */
   image?: { src: string; alt: string; width: number; height: number };
+  /** One of the app's empty-state drawings (app 1.35.0), so a chef sees the same picture in the app and here. */
+  illustration?: EmptyIllustrationName;
   title: ReactNode;
   text?: ReactNode;
   action?: ReactNode;
 }) {
   return (
     <div className="chef-empty">
-      {image ? (
+      {illustration ? (
+        <EmptyIllustration name={illustration} className="chef-empty-drawing" />
+      ) : image ? (
         <Image src={image.src} alt={image.alt} width={image.width} height={image.height} sizes="20rem" className="chef-empty-image" />
       ) : Icon ? (
         <span className="chef-empty-icon">
@@ -207,6 +213,41 @@ export function ChefEmpty({
       {text ? <p className="chef-empty-text">{text}</p> : null}
       {action ? <div className="mt-3">{action}</div> : null}
     </div>
+  );
+}
+
+/**
+ * Red underline tabs with counts, as in the app (1.34.5) on Orders, Menu and Payout history. Buttons
+ * with aria-pressed, like the chips they replace; `urgent` puts the count in a red badge (new orders).
+ */
+export function ChefUnderlineTabs<T extends string>({
+  label,
+  tabs,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  tabs: readonly { value: T; label: ReactNode; count?: number; urgent?: boolean }[];
+  value: T;
+  onChange: (next: T) => void;
+  className?: string;
+}) {
+  return (
+    <nav aria-label={label} className={className ? `chef-underline-tabs ${className}` : "chef-underline-tabs"}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.value}
+          type="button"
+          aria-pressed={tab.value === value}
+          onClick={() => onChange(tab.value)}
+          className="chef-underline-tab"
+        >
+          {tab.label}
+          {tab.count ? <span className={tab.urgent ? "chef-underline-count is-urgent" : "chef-underline-count"}>{tab.count}</span> : null}
+        </button>
+      ))}
+    </nav>
   );
 }
 

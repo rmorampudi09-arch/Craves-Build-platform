@@ -349,8 +349,8 @@ describe("Chef meal plans", { timeout: 20_000 }, () => {
   it("shows counts on the Menu toggle and keeps Menu as the way back from Daily limits", async () => {
     plans = [base];
     render(createElement(ChefSubscriptionPlanManager, { inMenu: true }));
-    expect(await screen.findByRole("link", { name: "Meal plans · 1" })).toBeTruthy();
-    await screen.findByRole("link", { name: "Dishes · 1" });
+    expect((await screen.findByRole("button", { name: /^Meal plans\s*1$/ })).getAttribute("aria-pressed")).toBe("true");
+    await screen.findByRole("button", { name: /^Dishes\s*1$/ });
     expect(screen.getByRole("link", { name: "Daily limits" }).getAttribute("href")).toBe(
       `/chef/capacity?plan=${PLAN_ID}&from=menu`,
     );

@@ -7,15 +7,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  AlertTriangle,
   ArrowLeft,
   Camera,
   ChevronRight,
+  Clock3,
   CopyPlus,
   Ellipsis,
   Gauge,
   Minus,
   Plus,
+  Search,
   Store,
   ToggleRight,
   Trash2,
@@ -38,9 +39,12 @@ import { Dialog, secondaryActionClass, Sheet, useOverlayHistory } from "@/shared
 import { isFeatureUnavailable } from "@/shared/lib/feature-availability";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
 import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
-import { categoryLabel, DISH_CATEGORIES, knownCategory } from "@/features/chef/lib/dish-categories";
+import { categoryLabel } from "@/features/chef/lib/dish-categories";
+import { ALL_DISHES, categoryKey, dishState, filterDishes, menuCounts, sortCategories, type DishFilter } from "@/features/chef/lib/chef-menu-filters";
+import { loadMealPlans } from "@/features/chef/api/chef-meal-plans";
 import {
   parseChefMenuItem,
+  parseChefMenuItemInput,
   parseChefMenuItems,
   type ChefMenuItem,
   type ChefMenuItemInput,
@@ -58,7 +62,7 @@ const TEXT = messages({
     menu: "Menu", VEG: "Veg", NON_VEG: "Non-veg", EGG: "Egg",
     // The words customers see and filter by.
     MILD: SPICE_LEVEL_LABELS.MILD, MEDIUM: SPICE_LEVEL_LABELS.MEDIUM, SPICY: SPICE_LEVEL_LABELS.SPICY, spiceNotSet: "Not set",
-    draft: "Draft · not on your menu", notOnMenu: "Not on your menu", onSale: "On sale", hidden: "Hidden from customers",
+    draft: "Draft · not on your menu",
     kitchenCheckFailed: "Your kitchen could not be checked. Please retry.", kitchenInvalid: "Your kitchen could not be verified. Please retry.",
     menuLoadFailed: "Your menu could not be loaded. Please retry.", menuIncomplete: "The menu response was incomplete. Please retry.",
     menuUnreachable: "Could not connect to your menu. Please retry.",
@@ -84,17 +88,18 @@ const TEXT = messages({
     photoRemoved: "Photo removed", coverChanged: "Cover photo changed",
     setUpFirst: "Set up your kitchen first", setUpText: "Save your kitchen name and pickup address, then add your dishes.",
     setUpKitchen: "Set up my kitchen", checkAgain: "Check again",
-    loadingDishes: "Loading your dishes…", countOne: "{count} dish · {onSale} on sale now", countMany: "{count} dishes · {onSale} on sale now",
+    loadingDishes: "Loading your dishes…",
     intro: "Dishes customers can order from your kitchen.", addDish: "Add dish",
     loadFailed: "Your menu couldn’t load", reloadMenu: "Reload menu", loadingMenu: "Loading menu",
-    emptyImage: "A home chef tipping chopped vegetables from a board into a pot on the stove",
     firstDish: "Add your first dish", firstDishText: "Start with something you cook often. A photo, a price and the packed weight are all customers need.",
     noDishOnTitle: "No dish is on today", noDishOnText: "Customers can’t order. Turn on the dishes you are cooking today.",
     limits: "Daily limits", limitsMeta: "How many plates you can cook each day",
-    showDishes: "Show dishes", all: "All", filterOn: "On sale", notOnSale: "Not on sale",
+    showDishes: "Show dishes", all: "All", on: "On", off: "Off", drafts: "Drafts", search: "Search dishes", canOrderCount: "{on} of {all} dishes customers can order",
+    noMatch: "No dishes match", noMatchText: "Try another word or filter.", clearFilters: "Clear filters", offForCustomers: "Off for customers", prepMissing: "Prep time missing",
+    publish: "Publish", publishLabel: "Publish {name}", publishTitle: "Publish {name}?", publishText: "It goes on your kitchen page and customers can order it.",
+    publishDish: "Publish dish", publishing: "Publishing…", isLive: "{name} is live", publishFailed: "We couldn’t publish {name}. Try again.",
     groupOne: "{category}, {count} dish", groupMany: "{category}, {count} dishes",
     editName: "Edit {name}", servesCount: "Serves {count}", available: "{name} available to order",
-    draftNote: "To put a draft dish on your menu, open it and turn on “Customers can order it”.",
     editDish: "Edit dish", addADish: "Add a dish", options: "Dish options",
     editIntro: "Customers see your changes as soon as you save.", newIntro: "Fill in the basics. You can change any of this later.",
     photos: "Photos", photosNote: "The first photo is the one customers see. Up to 5.", gallery: "Photo gallery",
@@ -128,7 +133,7 @@ const TEXT = messages({
   te: {
     menu: "మెనూ", VEG: "వెజ్", NON_VEG: "నాన్-వెజ్", EGG: "ఎగ్",
     MILD: "తక్కువ కారం", MEDIUM: "మధ్యస్థ కారం", SPICY: "ఎక్కువ కారం", spiceNotSet: "ఎంచుకోలేదు",
-    draft: "డ్రాఫ్ట్ · మీ మెనూలో లేదు", notOnMenu: "మీ మెనూలో లేదు", onSale: "అమ్మకానికి ఉంది", hidden: "కస్టమర్లకు కనిపించదు",
+    draft: "డ్రాఫ్ట్ · మీ మెనూలో లేదు",
     kitchenCheckFailed: "మీ వంటగదిని చూడలేకపోయాం. మళ్లీ ప్రయత్నించండి.", kitchenInvalid: "మీ వంటగది వివరాలు సరిచూడలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
     menuLoadFailed: "మీ మెనూ లోడ్ కాలేదు. మళ్లీ ప్రయత్నించండి.", menuIncomplete: "మెనూ వివరాలు పూర్తిగా రాలేదు. మళ్లీ ప్రయత్నించండి.",
     menuUnreachable: "మీ మెనూకు కనెక్ట్ కాలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
@@ -154,17 +159,18 @@ const TEXT = messages({
     photoRemoved: "ఫోటో తీసేశాం", coverChanged: "ముఖ్య ఫోటో మార్చాం",
     setUpFirst: "ముందు మీ వంటగదిని సిద్ధం చేయండి", setUpText: "మీ వంటగది పేరు, పికప్ చిరునామా సేవ్ చేసి, తర్వాత మీ వంటకాలు జోడించండి.",
     setUpKitchen: "వంటగది సిద్ధం చేయండి", checkAgain: "మళ్లీ చూడండి",
-    loadingDishes: "మీ వంటకాలు లోడ్ అవుతున్నాయి…", countOne: "{count} వంటకం · ఇప్పుడు అమ్మకంలో {onSale}", countMany: "{count} వంటకాలు · ఇప్పుడు అమ్మకంలో {onSale}",
+    loadingDishes: "మీ వంటకాలు లోడ్ అవుతున్నాయి…",
     intro: "మీ వంటగది నుండి కస్టమర్లు ఆర్డర్ చేయగల వంటకాలు.", addDish: "వంటకం జోడించండి",
     loadFailed: "మీ మెనూ లోడ్ కాలేదు", reloadMenu: "మెనూ మళ్లీ లోడ్ చేయండి", loadingMenu: "మెనూ లోడ్ అవుతోంది",
-    emptyImage: "ఒక ఇంటి చెఫ్ తరిగిన కూరగాయలను బోర్డు నుండి స్టవ్ మీది గిన్నెలో వేస్తున్నారు",
     firstDish: "మీ మొదటి వంటకం జోడించండి", firstDishText: "మీరు తరచుగా వండేదానితో మొదలుపెట్టండి. ఫోటో, ధర, ప్యాక్ బరువు — కస్టమర్లకు ఇవి చాలు.",
     noDishOnTitle: "ఈరోజు ఏ వంటకం ఆన్‌లో లేదు", noDishOnText: "కస్టమర్లు ఆర్డర్ చేయలేరు. ఈరోజు వండే వంటకాలను ఆన్ చేయండి.",
     limits: "రోజువారీ పరిమితి", limitsMeta: "రోజుకు మీరు ఎన్ని ప్లేట్లు వండగలరు",
-    showDishes: "చూపించాల్సిన వంటకాలు", all: "అన్నీ", filterOn: "అమ్మకానికి ఉన్నవి", notOnSale: "అమ్మకానికి లేనివి",
+    showDishes: "చూపించాల్సిన వంటకాలు", all: "అన్నీ", on: "ఆన్", off: "ఆఫ్", drafts: "డ్రాఫ్ట్‌లు", search: "వంటకాలు వెతకండి", canOrderCount: "{all} లో {on} వంటకాలు కస్టమర్లు ఆర్డర్ చేయవచ్చు",
+    noMatch: "సరిపోయే వంటకాలు లేవు", noMatchText: "వేరే పదం రాయండి, లేదా వేరేది ఎంచుకోండి.", clearFilters: "ఎంపికలు తీసేయండి", offForCustomers: "కస్టమర్లకు ఆఫ్", prepMissing: "వంట సమయం ఇవ్వలేదు",
+    publish: "మెనూలో పెట్టండి", publishLabel: "{name} మెనూలో పెట్టండి", publishTitle: "{name} మెనూలో పెట్టాలా?", publishText: "ఇది మీ వంటగది పేజీలో కనిపిస్తుంది, కస్టమర్లు ఆర్డర్ చేయవచ్చు.",
+    publishDish: "మెనూలో పెట్టండి", publishing: "పెడుతున్నాం…", isLive: "{name} ఇప్పుడు మెనూలో ఉంది", publishFailed: "{name} మెనూలో పెట్టలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
     groupOne: "{category}, {count} వంటకం", groupMany: "{category}, {count} వంటకాలు",
     editName: "{name} మార్చండి", servesCount: "{count} మందికి", available: "{name} — కస్టమర్లు ఆర్డర్ చేయవచ్చు",
-    draftNote: "డ్రాఫ్ట్ వంటకాన్ని మెనూలో పెట్టడానికి, దాన్ని తెరిచి “కస్టమర్లు దీన్ని ఆర్డర్ చేయవచ్చు” ఆన్ చేయండి.",
     editDish: "వంటకం మార్చండి", addADish: "వంటకం జోడించండి", options: "వంటకం ఆప్షన్లు",
     editIntro: "మీరు సేవ్ చేసిన వెంటనే కస్టమర్లకు మార్పులు కనిపిస్తాయి.", newIntro: "ముఖ్యమైన వివరాలు నింపండి. తర్వాత ఏదైనా మార్చుకోవచ్చు.",
     photos: "ఫోటోలు", photosNote: "కస్టమర్లకు మొదటి ఫోటో కనిపిస్తుంది. 5 వరకు.", gallery: "ఫోటో గ్యాలరీ",
@@ -198,7 +204,7 @@ const TEXT = messages({
   kn: {
     menu: "ಮೆನು", VEG: "ವೆಜ್", NON_VEG: "ನಾನ್-ವೆಜ್", EGG: "ಎಗ್",
     MILD: "ಕಡಿಮೆ ಖಾರ", MEDIUM: "ಮಧ್ಯಮ ಖಾರ", SPICY: "ಹೆಚ್ಚು ಖಾರ", spiceNotSet: "ಆಯ್ಕೆ ಮಾಡಿಲ್ಲ",
-    draft: "ಡ್ರಾಫ್ಟ್ · ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಇಲ್ಲ", notOnMenu: "ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಇಲ್ಲ", onSale: "ಮಾರಾಟಕ್ಕಿದೆ", hidden: "ಗ್ರಾಹಕರಿಗೆ ಕಾಣುವುದಿಲ್ಲ",
+    draft: "ಡ್ರಾಫ್ಟ್ · ನಿಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಇಲ್ಲ",
     kitchenCheckFailed: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯನ್ನು ಪರಿಶೀಲಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", kitchenInvalid: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ವಿವರಗಳನ್ನು ಖಚಿತಪಡಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
     menuLoadFailed: "ನಿಮ್ಮ ಮೆನು ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", menuIncomplete: "ಮೆನು ವಿವರಗಳು ಪೂರ್ತಿ ಬರಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
     menuUnreachable: "ನಿಮ್ಮ ಮೆನುಗೆ ಸಂಪರ್ಕಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
@@ -224,17 +230,18 @@ const TEXT = messages({
     photoRemoved: "ಫೋಟೋ ತೆಗೆದುಹಾಕಲಾಗಿದೆ", coverChanged: "ಮುಖ್ಯ ಫೋಟೋ ಬದಲಾಯಿಸಲಾಗಿದೆ",
     setUpFirst: "ಮೊದಲು ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಿದ್ಧಮಾಡಿ", setUpText: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಹೆಸರು ಮತ್ತು ಪಿಕಪ್ ವಿಳಾಸ ಉಳಿಸಿ, ನಂತರ ನಿಮ್ಮ ಖಾದ್ಯಗಳನ್ನು ಸೇರಿಸಿ.",
     setUpKitchen: "ಅಡುಗೆಮನೆ ಸಿದ್ಧಮಾಡಿ", checkAgain: "ಮತ್ತೆ ನೋಡಿ",
-    loadingDishes: "ನಿಮ್ಮ ಖಾದ್ಯಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ…", countOne: "{count} ಖಾದ್ಯ · ಈಗ ಮಾರಾಟದಲ್ಲಿ {onSale}", countMany: "{count} ಖಾದ್ಯಗಳು · ಈಗ ಮಾರಾಟದಲ್ಲಿ {onSale}",
+    loadingDishes: "ನಿಮ್ಮ ಖಾದ್ಯಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ…",
     intro: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯಿಂದ ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಬಹುದಾದ ಖಾದ್ಯಗಳು.", addDish: "ಖಾದ್ಯ ಸೇರಿಸಿ",
     loadFailed: "ನಿಮ್ಮ ಮೆನು ಲೋಡ್ ಆಗಲಿಲ್ಲ", reloadMenu: "ಮೆನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ", loadingMenu: "ಮೆನು ಲೋಡ್ ಆಗುತ್ತಿದೆ",
-    emptyImage: "ಮನೆಯ ಚೆಫ್ ಒಬ್ಬರು ಹೆಚ್ಚಿದ ತರಕಾರಿಗಳನ್ನು ಹಲಗೆಯಿಂದ ಒಲೆಯ ಮೇಲಿನ ಪಾತ್ರೆಗೆ ಹಾಕುತ್ತಿದ್ದಾರೆ",
     firstDish: "ನಿಮ್ಮ ಮೊದಲ ಖಾದ್ಯ ಸೇರಿಸಿ", firstDishText: "ನೀವು ಆಗಾಗ ಮಾಡುವ ಅಡುಗೆಯಿಂದ ಶುರುಮಾಡಿ. ಫೋಟೋ, ಬೆಲೆ ಮತ್ತು ಪ್ಯಾಕ್ ತೂಕ — ಗ್ರಾಹಕರಿಗೆ ಇಷ್ಟೇ ಸಾಕು.",
     noDishOnTitle: "ಇಂದು ಯಾವ ಖಾದ್ಯವೂ ಆನ್ ಇಲ್ಲ", noDishOnText: "ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಲಾಗದು. ಇಂದು ಮಾಡುವ ಖಾದ್ಯಗಳನ್ನು ಆನ್ ಮಾಡಿ.",
     limits: "ದಿನದ ಮಿತಿ", limitsMeta: "ದಿನಕ್ಕೆ ನೀವು ಎಷ್ಟು ಪ್ಲೇಟ್ ಅಡುಗೆ ಮಾಡಬಹುದು",
-    showDishes: "ತೋರಿಸಬೇಕಾದ ಖಾದ್ಯಗಳು", all: "ಎಲ್ಲಾ", filterOn: "ಮಾರಾಟಕ್ಕಿರುವವು", notOnSale: "ಮಾರಾಟಕ್ಕಿಲ್ಲದವು",
+    showDishes: "ತೋರಿಸಬೇಕಾದ ಖಾದ್ಯಗಳು", all: "ಎಲ್ಲಾ", on: "ಆನ್", off: "ಆಫ್", drafts: "ಡ್ರಾಫ್ಟ್‌ಗಳು", search: "ಖಾದ್ಯಗಳನ್ನು ಹುಡುಕಿ", canOrderCount: "{all} ರಲ್ಲಿ {on} ಖಾದ್ಯಗಳನ್ನು ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಬಹುದು",
+    noMatch: "ಹೊಂದುವ ಖಾದ್ಯಗಳಿಲ್ಲ", noMatchText: "ಬೇರೆ ಪದ ಬರೆಯಿರಿ, ಅಥವಾ ಬೇರೆಯದನ್ನು ಆಯ್ಕೆಮಾಡಿ.", clearFilters: "ಆಯ್ಕೆಗಳನ್ನು ತೆಗೆಯಿರಿ", offForCustomers: "ಗ್ರಾಹಕರಿಗೆ ಆಫ್", prepMissing: "ಅಡುಗೆ ಸಮಯ ನೀಡಿಲ್ಲ",
+    publish: "ಮೆನುಗೆ ಸೇರಿಸಿ", publishLabel: "{name} ಮೆನುಗೆ ಸೇರಿಸಿ", publishTitle: "{name} ಮೆನುಗೆ ಸೇರಿಸಬೇಕೇ?", publishText: "ಇದು ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಪುಟದಲ್ಲಿ ಕಾಣುತ್ತದೆ, ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಬಹುದು.",
+    publishDish: "ಮೆನುಗೆ ಸೇರಿಸಿ", publishing: "ಸೇರಿಸಲಾಗುತ್ತಿದೆ…", isLive: "{name} ಈಗ ಮೆನುವಿನಲ್ಲಿದೆ", publishFailed: "{name} ಮೆನುಗೆ ಸೇರಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
     groupOne: "{category}, {count} ಖಾದ್ಯ", groupMany: "{category}, {count} ಖಾದ್ಯಗಳು",
     editName: "{name} ಬದಲಾಯಿಸಿ", servesCount: "{count} ಜನರಿಗೆ", available: "{name} — ಗ್ರಾಹಕರು ಆರ್ಡರ್ ಮಾಡಬಹುದು",
-    draftNote: "ಡ್ರಾಫ್ಟ್ ಖಾದ್ಯವನ್ನು ಮೆನುಗೆ ಸೇರಿಸಲು, ಅದನ್ನು ತೆರೆದು “ಗ್ರಾಹಕರು ಇದನ್ನು ಆರ್ಡರ್ ಮಾಡಬಹುದು” ಆನ್ ಮಾಡಿ.",
     editDish: "ಖಾದ್ಯ ಬದಲಾಯಿಸಿ", addADish: "ಖಾದ್ಯ ಸೇರಿಸಿ", options: "ಖಾದ್ಯದ ಆಯ್ಕೆಗಳು",
     editIntro: "ನೀವು ಉಳಿಸಿದ ತಕ್ಷಣ ಗ್ರಾಹಕರಿಗೆ ಬದಲಾವಣೆಗಳು ಕಾಣುತ್ತವೆ.", newIntro: "ಮುಖ್ಯ ವಿವರಗಳನ್ನು ತುಂಬಿ. ನಂತರ ಯಾವುದನ್ನಾದರೂ ಬದಲಾಯಿಸಬಹುದು.",
     photos: "ಫೋಟೋಗಳು", photosNote: "ಗ್ರಾಹಕರಿಗೆ ಮೊದಲ ಫೋಟೋ ಕಾಣುತ್ತದೆ. 5 ರವರೆಗೆ.", gallery: "ಫೋಟೋ ಗ್ಯಾಲರಿ",
@@ -285,7 +292,6 @@ type FormState = {
   status: MenuItemStatus;
 };
 type Field = keyof FormState | "photo";
-type Filter = "all" | "on" | "off";
 const EMPTY: FormState = {
   id: null,
   itemName: "",
@@ -308,7 +314,7 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const FOOD_TYPES = [
   { value: "VEG", color: "bg-[#2E7D32]", border: "border-[#2E7D32]" },
   { value: "NON_VEG", color: "bg-[#D92D20]", border: "border-[#D92D20]" },
-  { value: "EGG", color: "bg-[#D99A00]", border: "border-[#D99A00]" },
+  { value: "EGG", color: "bg-[#B45309]", border: "border-[#B45309]" },
 ] as const;
 const SPICE_LEVELS = ["", "MILD", "MEDIUM", "SPICY"] as const;
 // One tap fills the usual answers; the box still takes any number.
@@ -366,13 +372,6 @@ function grams(value: number, text: Text) {
     ? format(text.kilograms, { value: value / 1000 })
     : format(text.grams, { value });
 }
-/** Known categories in the order customers browse them, then the chef's own, A to Z. */
-function categoryOrder(name: string) {
-  const index = DISH_CATEGORIES.findIndex(
-    (category) => category.name === knownCategory(name)?.name,
-  );
-  return index === -1 ? DISH_CATEGORIES.length : index;
-}
 function FoodIndicator({ type }: { type: FoodType }) {
   const text = useText(TEXT);
   const food = FOOD_TYPES.find((option) => option.value === type)!;
@@ -388,14 +387,19 @@ function FoodIndicator({ type }: { type: FoodType }) {
     </span>
   );
 }
-function MenuStatus({ item }: { item: ChefMenuItem }) {
+/** A row's last line: a draft says so; otherwise what keeps customers from ordering, in red, or how long it takes (app DishRow). */
+function DishNote({ item }: { item: ChefMenuItem }) {
   const text = useText(TEXT);
-  if (item.status === "DRAFT") return <ChefPill tone="warning">{text.draft}</ChefPill>;
-  if (item.status !== "ACTIVE") return <ChefPill tone="muted">{text.notOnMenu}</ChefPill>;
-  return item.available ? (
-    <ChefPill tone="success">{text.onSale}</ChefPill>
+  const state = dishState(item);
+  if (state === "DRAFT") return <ChefPill tone="warning">{text.draft}</ChefPill>;
+  if (state === "OFF") return <span className="font-semibold text-[#D92714]">{text.offForCustomers}</span>;
+  return item.preparationTimeMinutes ? (
+    <span className="inline-flex items-center gap-1">
+      <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+      {format(text.minutes, { minutes: item.preparationTimeMinutes })}
+    </span>
   ) : (
-    <ChefPill tone="muted">{text.hidden}</ChefPill>
+    <span className="font-semibold text-[#D92714]">{text.prepMissing}</span>
   );
 }
 function QuickPicks({
@@ -460,7 +464,12 @@ export function ChefMenuManager() {
   const copyAfterDiscard = useRef<ChefMenuItem | null>(null);
   /** Dish options: the menu, or the delete question in its place. */
   const [options, setOptions] = useState<"menu" | "delete" | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<DishFilter>(ALL_DISHES);
+  const [query, setQuery] = useState("");
+  /** The draft whose Publish asks first. */
+  const [publishing, setPublishing] = useState<ChefMenuItem | null>(null);
+  /** For the Meal plans tab's count; unknown (no count) until read or when it can't be. */
+  const [planCount, setPlanCount] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [kitchenRequired, setKitchenRequired] = useState(false);
@@ -529,6 +538,13 @@ export function ChefMenuManager() {
   useEffect(() => {
     void load(true);
   }, [load]);
+  useEffect(() => {
+    let live = true;
+    loadMealPlans().then((plans) => live && setPlanCount(plans.length), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
 
   function closeEditor() {
@@ -792,6 +808,37 @@ export function ChefMenuManager() {
       setBusy(false);
     }
   }
+  /** A draft goes on the menu with the same save the dish form makes: the dish as it is, on and orderable. */
+  async function publish(item: ChefMenuItem) {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setMessage("");
+    setNotice("");
+    const failed = format(text.publishFailed, { name: item.itemName });
+    try {
+      const response = await sessionFetch(`/api/chef/menu/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parseChefMenuItemInput({ ...item, status: "ACTIVE", available: true })),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      const saved = response.ok ? parseChefMenuItem(body) : null;
+      if (!saved) {
+        setMessage(response.ok ? failed : chefErrorText(apiError(response, body, failed), failed));
+        return;
+      }
+      upsert(saved);
+      setNotice(format(text.isLive, { name: saved.itemName }));
+    } catch (error) {
+      setMessage(chefErrorText(error, failed));
+    } finally {
+      // The question closes either way, so the answer shows (as the app).
+      setPublishing(null);
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
   async function deleteDish() {
     const dish = items.find((item) => item.id === form.id);
     if (!dish || busyRef.current) return;
@@ -871,20 +918,28 @@ export function ChefMenuManager() {
     </>
   );
 
-  const onSale = items.filter((item) => item.status === "ACTIVE" && item.available).length;
-  // Dishes grouped the way customers browse: by category, in Home's order, then the chef's own.
+  const counts = menuCounts(items);
+  const categories = sortCategories(items.map((item) => categoryKey(item.category)));
+  // The dishes the pill and the search leave, grouped the way customers browse: by category, in Home's order, then the chef's own.
   const groups = useMemo(() => {
     const byCategory = new Map<string, ChefMenuItem[]>();
-    for (const item of items) {
-      const live = item.status === "ACTIVE" && item.available;
-      if (filter !== "all" && (filter === "on") !== live) continue;
-      const name = knownCategory(item.category)?.name ?? item.category.trim();
-      byCategory.set(name, [...(byCategory.get(name) ?? []), item]);
+    for (const item of filterDishes(items, query, filter, language)) {
+      const key = categoryKey(item.category);
+      byCategory.set(key, [...(byCategory.get(key) ?? []), item]);
     }
-    return [...byCategory].sort(
-      ([a], [b]) => categoryOrder(a) - categoryOrder(b) || a.localeCompare(b),
-    );
-  }, [items, filter]);
+    return sortCategories(byCategory.keys()).map((key) => [key, byCategory.get(key)!] as const);
+  }, [items, query, filter, language]);
+  const pill = (next: DishFilter, label: string) => (
+    <button
+      key={next.kind === "category" ? `category:${next.category}` : next.status}
+      type="button"
+      className="chef-chip is-filter"
+      aria-pressed={JSON.stringify(filter) === JSON.stringify(next)}
+      onClick={() => setFilter(next)}
+    >
+      {label}
+    </button>
+  );
 
   if (kitchenRequired && !loading && !loadError)
     return (
@@ -925,13 +980,7 @@ export function ChefMenuManager() {
     <div className="mx-auto w-full max-w-3xl">
       <ChefPageHead
         title={text.menu}
-        subtitle={
-          loading
-            ? text.loadingDishes
-            : items.length
-              ? format(items.length === 1 ? text.countOne : text.countMany, { count: items.length, onSale })
-              : text.intro
-        }
+        subtitle={loading ? text.loadingDishes : items.length ? undefined : text.intro}
         action={
           <button
             type="button"
@@ -944,11 +993,11 @@ export function ChefMenuManager() {
         }
       />
       <div className="chef-stack">
-        <ChefMenuViews current="dishes" counts={{ dishes: loading || loadError ? undefined : items.length }} />
+        <ChefMenuViews current="dishes" counts={{ dishes: loading || loadError ? undefined : items.length, plans: planCount }} />
         {loadError ? (
           <ChefSection>
             <ChefEmpty
-              icon={AlertTriangle}
+              illustration="loadError"
               title={text.loadFailed}
               text={loadError}
               action={
@@ -975,12 +1024,7 @@ export function ChefMenuManager() {
         ) : !loadError && items.length === 0 ? (
           <ChefSection>
             <ChefEmpty
-              image={{
-                src: "/landing-v20/images/story-grid/cook-fresh-pot.png",
-                alt: text.emptyImage,
-                width: 1696,
-                height: 954,
-              }}
+              illustration="menu"
               title={text.firstDish}
               text={text.firstDishText}
               action={
@@ -993,7 +1037,7 @@ export function ChefMenuManager() {
         ) : items.length ? (
           <>
             {/* With no dish on, customers can't order anything, even from an open kitchen: say so first. */}
-            {onSale === 0 ? (
+            {counts.ON === 0 ? (
               <div className="chef-fix-card is-urgent">
                 <span className="chef-fix-card-icon"><ToggleRight className="h-5 w-5" aria-hidden="true" /></span>
                 <h2 className="chef-fix-card-title">{text.noDishOnTitle}</h2>
@@ -1010,26 +1054,39 @@ export function ChefMenuManager() {
                 <ChevronRight className="chef-chevron h-5 w-5" aria-hidden="true" />
               </Link>
             </div>
-            {items.length > 4 && onSale > 0 && onSale < items.length ? (
-              <div role="group" aria-label={text.showDishes} className="chef-chips">
-                {(
-                  [
-                    ["all", text.all, items.length],
-                    ["on", text.filterOn, onSale],
-                    ["off", text.notOnSale, items.length - onSale],
-                  ] as const
-                ).map(([key, label, count]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className="chef-chip"
-                    aria-pressed={filter === key}
-                    onClick={() => setFilter(key)}
-                  >
-                    {label} <span className="tabular-nums opacity-70">{count}</span>
-                  </button>
-                ))}
-              </div>
+            <label className="relative block">
+              <span className="sr-only">{text.search}</span>
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#6B6B6B]" aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={text.search}
+                className="block min-h-12 w-full rounded-xl border border-[#D3D7DD] bg-white pl-12 pr-4 text-base text-[#1A1A1A]"
+                data-craves-single-border="true"
+              />
+            </label>
+            <div role="group" aria-label={text.showDishes} className="chef-chips">
+              {pill(ALL_DISHES, `${text.all} ${counts.ALL}`)}
+              {pill({ kind: "status", status: "ON" }, `${text.on} ${counts.ON}`)}
+              {pill({ kind: "status", status: "OFF" }, `${text.off} ${counts.OFF}`)}
+              {counts.DRAFT ? pill({ kind: "status", status: "DRAFT" }, `${text.drafts} ${counts.DRAFT}`) : null}
+              {categories.map((category) => pill({ kind: "category", category }, categoryLabel(category, language)))}
+            </div>
+            <p className="px-1 text-[0.875rem] text-[#6B6B6B]">{format(text.canOrderCount, { on: counts.ON, all: counts.ALL })}</p>
+            {groups.length === 0 ? (
+              <ChefSection>
+                <ChefEmpty
+                  illustration="search"
+                  title={text.noMatch}
+                  text={text.noMatchText}
+                  action={
+                    <button type="button" className="chef-btn" onClick={() => { setQuery(""); setFilter(ALL_DISHES); }}>
+                      {text.clearFilters}
+                    </button>
+                  }
+                />
+              </ChefSection>
             ) : null}
             {groups.map(([category, dishes]) => (
               <section
@@ -1046,7 +1103,6 @@ export function ChefMenuManager() {
                 </h2>
                 <ul className="chef-section chef-list">
                   {dishes.map((item) => {
-                    const live = item.status === "ACTIVE" && item.available;
                     const image = primaryImage(item);
                     return (
                       <li key={item.id} className="flex items-center gap-1 pr-3 md:pr-4">
@@ -1084,19 +1140,32 @@ export function ChefMenuManager() {
                               </span>
                               {item.servesCount ? <span>{format(text.servesCount, { count: item.servesCount })}</span> : null}
                             </span>
-                            <span className="mt-1.5 block">
-                              <MenuStatus item={item} />
+                            <span className="chef-row-meta mt-1.5 block">
+                              <DishNote item={item} />
                             </span>
                           </span>
                         </button>
-                        <AppleSwitch
-                          tone="go"
-                          size="md"
-                          aria-label={format(text.available, { name: item.itemName })}
-                          checked={live}
-                          disabled={busy || item.status !== "ACTIVE"}
-                          onCheckedChange={(value) => void setAvailability(item, value)}
-                        />
+                        {/* A draft gets Publish; a dish taken off the menu is changed in its form; the rest switch on and off. */}
+                        {item.status === "DRAFT" ? (
+                          <button
+                            type="button"
+                            className="chef-btn is-small shrink-0"
+                            aria-label={format(text.publishLabel, { name: item.itemName })}
+                            disabled={busy}
+                            onClick={() => setPublishing(item)}
+                          >
+                            {text.publish}
+                          </button>
+                        ) : item.status === "ACTIVE" ? (
+                          <AppleSwitch
+                            tone="go"
+                            size="md"
+                            aria-label={format(text.available, { name: item.itemName })}
+                            checked={item.available}
+                            disabled={busy}
+                            onCheckedChange={(value) => void setAvailability(item, value)}
+                          />
+                        ) : null}
                       </li>
                     );
                   })}
@@ -1105,12 +1174,32 @@ export function ChefMenuManager() {
             ))}
           </>
         ) : null}
-        {items.some((item) => item.status !== "ACTIVE") ? (
-          <p className="text-[0.8125rem] leading-5 text-[#6B6B6B]">
-            {text.draftNote}
-          </p>
-        ) : null}
       </div>
+      <Dialog
+        open={publishing !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setPublishing(null);
+        }}
+        busy={busy}
+        title={format(text.publishTitle, { name: publishing?.itemName ?? text.thisDish })}
+        description={text.publishText}
+        footer={
+          <>
+            <button type="button" className={secondaryActionClass} disabled={busy} onClick={() => setPublishing(null)}>
+              {text.cancel}
+            </button>
+            <button
+              type="button"
+              className="craves-primary-action w-full sm:w-auto"
+              aria-busy={busy || undefined}
+              disabled={busy}
+              onClick={() => publishing && void publish(publishing)}
+            >
+              {busy ? text.publishing : text.publishDish}
+            </button>
+          </>
+        }
+      />
     </div>
   ) : (
     <motion.form

@@ -128,7 +128,7 @@ function earnedPaise(entries: readonly ChefEarning[], bounds: Bounds): number {
     .reduce((sum, entry) => sum + paise(entry.netPayable), 0);
 }
 
-/** Sales numbers for the Money tab: money from the earnings entries, counts and dishes from the orders. */
+/** Sales numbers for the Earnings tab: money from the earnings entries, counts and dishes from the orders. */
 export function summarizeEarnings(input: {
   orders: readonly ChefOrder[];
   earnings: readonly ChefEarning[];

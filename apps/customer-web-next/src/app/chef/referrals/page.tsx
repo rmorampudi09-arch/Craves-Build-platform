@@ -11,7 +11,7 @@ export default function ChefReferralsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Refer a chef" description="Invite home chefs and earn from their sales." back={{ href: "/chef/profile", label: "More" }} />
+        <ChefPageHeader title="Refer a chef" description="Invite home chefs and earn from their sales." back={{ href: "/chef/profile", label: "Profile" }} />
         <ChefReferrals />
       </ChefAccessBoundary>
     </main>

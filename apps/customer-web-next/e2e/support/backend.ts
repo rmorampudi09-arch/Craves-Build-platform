@@ -216,6 +216,9 @@ export class FakeBackend {
     }
     if (key === "GET /api/chef/menu" || key === "GET /api/chef/orders" || key === "GET /api/chef/earnings") return ok([]);
     if (key === "GET /api/chef/orders/page") return ok({ orders: [], nextCursor: null, hasMore: false });
+    if (key === "GET /api/chef/reviews") return ok({ items: [], nextCursor: null, hasMore: false });
+    if (key === "GET /api/chef/subscription-plans") return ok([]);
+    if (key === "GET /api/chef/scheduled-orders") return ok({ items: [], nextCursor: null, hasMore: false });
     if (key === "GET /api/chef/finance/balance") return ok({ accounting: { recordedOrders: 0, grossFood: "0.00", totalServiceFee: "0.00", feeBeforeGst: "0.00", feeGst: "0.00", withholding: "0.00", originalNetEarnings: "0.00", recordedPayments: "0.00", outstanding: "0.00", otherLedgerMovements: "0.00", legacyRecords: 0 }, available: "0.00", outstanding: "0.00", reservedOrPaid: "0.00", onHold: true, manualRequestUsedToday: false, nextManualRequestAt: "2026-10-12T18:30:00Z", recentPayouts: [], executionEnabled: false, payoutMode: "CRAVES_MANUAL" });
     if (key === "GET /api/chef/finance/withdrawals") return ok({ code: "FINANCE_OPERATION_NOT_FOUND" }, 404);
     if (key === "GET /api/documents/capabilities") return ok({ enabled: true, emailEnabled: true, types: ["CHEF_ORDER_STATEMENT", "CHEF_EARNINGS_STATEMENT", "CHEF_SETTLEMENT_STATEMENT"], maxPeriodDays: 31, maxRows: 1000, taxInvoicesEnabled: false });
@@ -229,6 +232,8 @@ export class FakeBackend {
     if (key === "GET /api/chef/application/evidence-status") return ok(this.documents);
     if (key === "GET /api/chef/subscription-capacity") return ok({ chefIdentityId: CHEF_ID, adminSalesFrozen: false, freezeReason: null, slotRules: [], menuItemRules: [], dateOverrides: [], menuItemDateOverrides: [], openIncidentCount: 0 });
     if (key === "POST /api/chef/errors") return ok({}, 200);
+    // The kitchen's public review summary (Profile's Reviews row): no reviews yet.
+    if (method === "GET" && /^\/api\/reviews\/kitchens\/[^/]+\/summary$/.test(path)) return ok({ kitchenId: path.split("/")[4], reviewCount: 0, overallAverage: null });
     return null;
   }
 }

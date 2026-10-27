@@ -45,7 +45,7 @@ export const DISTANCE_LABELS: Record<Exclude<HomeDishFilters["distance"], "any">
   "5": "Within 5 km",
 };
 
-export function matchesFoodPreference(dish: Dish, preference: HomeFoodPreference): boolean {
+export function matchesFoodPreference(dish: Pick<Dish, "foodType" | "veg">, preference: HomeFoodPreference): boolean {
   if (preference === "all") return true;
   const type = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
   return preference === "veg" ? type === "VEG" : preference === "egg" ? type === "EGG" : type === "NON_VEG";
@@ -77,11 +77,13 @@ export function sortDishes(dishes: Dish[], sort: HomeDishSort): Dish[] {
   return dishes;
 }
 
-/** How many filters are on (food type counts; sort order does not). */
-export function activeFilterCount(view: Pick<DishView, "filters" | "foodPreference">): number {
-  const { filters, foodPreference } = view;
-  return [filters.price, filters.ready, filters.distance, filters.spice].filter((value) => value !== "any").length +
-    (foodPreference === "all" ? 0 : 1);
+/**
+ * How many filters are on. Food type and sort order don't count: the food type pill beside the
+ * search shows the diet (app 1.34.7), so the Filters button doesn't light up for it too.
+ */
+export function activeFilterCount(view: Pick<DishView, "filters">): number {
+  const { filters } = view;
+  return [filters.price, filters.ready, filters.distance, filters.spice].filter((value) => value !== "any").length;
 }
 
 export const DEFAULT_DISH_VIEW: DishView = {

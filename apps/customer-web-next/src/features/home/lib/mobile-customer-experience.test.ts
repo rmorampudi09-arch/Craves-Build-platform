@@ -60,16 +60,18 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   // while hidden, so it never stacks a second tall bar over the dishes.
   assert.match(cravings, /"pointer-events-none sticky z-30 -mb-14 h-14"/);
   assert.match(cravings, /inert=\{!stuck\}/);
-  assert.match(cravings, /rootMargin: "-80px 0px 0px 0px"/);
+  // The slim row shows once it really sticks: the threshold is the row's own sticky top, not a fixed 80 px.
+  assert.match(cravings, /rootMargin: `-\$\{top\}px 0px 0px 0px`/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
-  assert.match(cravings, /hidden \? "md:top-0" : "md:top-\[4\.25rem\] lg:top-\[4\.65rem\]"/);
+  assert.match(cravings, /hidden \? "md:top-0" : "md:top-\[5\.25rem\] lg:top-\[5\.65rem\]"/);
   assert.doesNotMatch(cravings, /translate-y-\[var\(--craves-mobile-search-offset/);
   assert.doesNotMatch(cravings, /will-change/);
   // One controller drives header, compact bar, rail and tab bar with the same timing.
-  for (const surface of [header, cravings]) {
-    assert.match(surface, /useScrollChrome\(\)/);
-    assert.doesNotMatch(surface, /window\.addEventListener\("scroll"/);
-  }
+  for (const surface of [header, cravings]) assert.match(surface, /useScrollChrome\(\)/);
+  assert.doesNotMatch(cravings, /window\.addEventListener\("scroll"/);
+  // The header's one scroll listener only tells whether the page is at its top (red or white), never hide or show.
+  assert.equal(header.match(/addEventListener\("scroll"/g)?.length, 1);
+  assert.match(header, /function useAtPageTop\(enabled: boolean\)/);
   assert.match(autoHide, /COMPACT_AFTER_PX = 76/);
   assert.match(autoHide, /Math\.abs\(delta\) > window\.innerHeight/);
   assert.match(header, /duration-\(--dur-chrome\) ease-\(--ease-standard\)/);
@@ -79,7 +81,7 @@ test("mobile discovery keeps search, veg and cravings accessible while scrolling
   assert.doesNotMatch(cravings, /md:static/);
 });
 
-test("mobile browse keeps dish proportions and cart glass with larger craving images", () => {
+test("mobile browse keeps dish proportions and cart glass, with the app's category photos", () => {
   const card = source("../components/DishCard.tsx");
   const grid = source("../components/DishesGrid.tsx");
   const cravings = source("../components/HomeCategoryRail.tsx");
@@ -90,7 +92,9 @@ test("mobile browse keeps dish proportions and cart glass with larger craving im
   assert.doesNotMatch(card, /aspect-\[4\/3\]/);
   assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
   assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
-  assert.match(cravings, /h-\[5\.75rem\] w-\[5\.75rem\]/);
+  // The app's 128 px category photos, shown at the app's 64 px (72 px from md) so they stay sharp.
+  assert.match(cravings, /h-16 w-16 [^"]*md:h-\[4\.5rem\] md:w-\[4\.5rem\]/);
+  assert.match(cravings, /image: "\/home\/categories\/all\.webp"/);
   // Tabs and the cart bar share one floating glass bar (the desktop cart bar's glass);
   // only View cart is coloured (leaf green, AA).
   assert.match(nav, /\$\{glass\.glassDock\} pointer-events-auto relative isolate/);

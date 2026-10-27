@@ -5,6 +5,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const addToCart = vi.hoisted(() => vi.fn());
+const setQty = vi.hoisted(() => vi.fn(async () => undefined));
+// The cart line each dish shows in its stepper (none unless a test puts one in).
+const cartLines = vi.hoisted(() => new Map<string, { id: string; qty: number }>());
 // Stable like the router's own navigate, so the page's load effect runs once.
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({
@@ -26,11 +29,13 @@ vi.mock("@/features/auth/api/cravesAuth", () => ({
 }));
 vi.mock("@/features/cart/api/cravesCart", () => ({
   addToCart,
+  setQty,
   loadCart: async () => [],
   CartKeptError: class extends Error {},
 }));
 vi.mock("@/features/cart/components/CustomerFloatingCart", () => ({
   CustomerFloatingCart: () => null,
+  useCartLine: (menuItemId: string) => cartLines.get(menuItemId),
 }));
 
 let WishlistPage: typeof import("@/features/favorites/screens/Wishlist").default;
@@ -128,6 +133,8 @@ function stub(override: Route = () => undefined) {
 
 beforeEach(async () => {
   addToCart.mockReset();
+  setQty.mockClear();
+  cartLines.clear();
   navigate.mockReset();
   vi.resetModules(); // a fresh "once per page load" saved-kitchen store for each case
   WishlistPage = (await import("@/features/favorites/screens/Wishlist")).default;
@@ -157,6 +164,27 @@ describe("Saved screen", () => {
     );
   });
 
+  it("shows how many of a saved dish are in the cart, with a stepper in place of Add", async () => {
+    stub();
+    cartLines.set(NOW, { id: "line-1", qty: 1 });
+    render(createElement(WishlistPage));
+    const today = await screen.findByRole("region", { name: "Your favorites are cooking today" });
+    const stepper = within(today).getByRole("group", { name: "Dal makhani in cart" });
+    expect(stepper.textContent).toContain("1");
+    expect(within(today).queryByRole("button", { name: "Add Dal makhani to cart" })).toBeNull();
+    expect(within(today).getByRole("link", { name: "View dish: Dal makhani" }).getAttribute("href")).toBe(
+      `/dish/${NOW}`,
+    );
+    fireEvent.click(within(stepper).getByRole("button", { name: "Increase Dal makhani quantity" }));
+    expect(setQty).toHaveBeenLastCalledWith("line-1", 2);
+    fireEvent.click(within(stepper).getByRole("button", { name: "Remove Dal makhani from cart" }));
+    expect(setQty).toHaveBeenLastCalledWith("line-1", 0);
+    // The heart, not a bin, takes the dish out of Saved.
+    expect(
+      within(today).getByRole("button", { name: "Remove Dal makhani from saved dishes" }),
+    ).toBeTruthy();
+  });
+
   it("keeps saves when today's facts can't be read", async () => {
     stub((url) =>
       url === "/api/discovery/saved/menu-items/resolve"
@@ -172,8 +200,9 @@ describe("Saved screen", () => {
     const fetch = stub();
     render(createElement(WishlistPage));
     fireEvent.mouseDown(await screen.findByRole("tab", { name: "Home chefs" }));
-    const bell = await screen.findByRole("button", { name: "Cooking alerts from Asha's kitchen" });
-    expect(bell.getAttribute("aria-pressed")).toBe("false");
+    const bell = await screen.findByRole("button", {
+      name: "Alert me in the app when Asha's kitchen is cooking",
+    });
     expect(
       screen
         .getAllByRole("listitem")
@@ -184,7 +213,9 @@ describe("Saved screen", () => {
     );
 
     fireEvent.click(bell);
-    await waitFor(() => expect(bell.getAttribute("aria-pressed")).toBe("true"));
+    expect(
+      await screen.findByRole("button", { name: "Stop cooking alerts from Asha's kitchen" }),
+    ).toBe(bell);
     expect(
       fetch.mock.calls
         .filter(([, init]) => init?.method === "PUT")
@@ -195,6 +226,9 @@ describe("Saved screen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Asha's kitchen from saved" }));
     expect(await screen.findByText("No saved home chefs yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Explore home chefs" }).getAttribute("href")).toBe(
+      "/chefs",
+    );
     expect(
       fetch.mock.calls
         .filter(([, init]) => init?.method === "DELETE")
@@ -265,8 +299,8 @@ describe("Saved screen", () => {
           : undefined,
       );
       render(createElement(WishlistPage));
-      expect(await screen.findByText("Saved home chefs")).toBeTruthy();
-      expect(screen.getByText("Coming soon")).toBeTruthy();
+      expect(await screen.findByRole("heading", { name: "Saved home chefs are coming soon" })).toBeTruthy();
+      expect(screen.getByTestId("empty-illustration-comingSoon")).toBeTruthy();
     },
   );
 

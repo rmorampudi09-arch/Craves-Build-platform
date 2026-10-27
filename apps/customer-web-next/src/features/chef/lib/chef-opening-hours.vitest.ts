@@ -51,6 +51,25 @@ afterEach(() => {
 });
 
 describe("Opening hours", () => {
+  it("puts the Taking orders switch on top, as in the app, once the kitchen is read", async () => {
+    const route = fetcher.getMockImplementation()!;
+    fetcher.mockImplementation(async (input, init) =>
+      String(input) === "/api/chef/kitchen" && !init?.method
+        ? Response.json({
+            id: "6b1c0000-0000-4000-8000-000000000001", kitchenName: "Fixture kitchen", displayName: null, description: null,
+            phoneNumber: "+919999999999", email: null, addressLine1: "1 Road", addressLine2: null, landmark: null,
+            areaName: "Madhapur", city: "Hyderabad", state: "Telangana", postalCode: "500081", latitude: 17.4, longitude: 78.3,
+            status: "ACTIVE", createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z",
+          })
+        : route(input, init),
+    );
+    render(createElement(ChefOpeningHours));
+    const taking = await screen.findByRole("switch", { name: "Taking orders" });
+    const week = await screen.findByRole("button", { name: /^Monday/ });
+    // The card comes before the week's hours.
+    expect(taking.compareDocumentPosition(week) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("lists the week, with days that have no hours closed", async () => {
     render(createElement(ChefOpeningHours));
     expect((await screen.findByRole("button", { name: /^Monday/ })).textContent).toContain(

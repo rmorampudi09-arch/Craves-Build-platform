@@ -179,22 +179,27 @@ export function ReferFriend() {
           </p>
         </section>
 
-        <section aria-labelledby="refer-how" className="rounded-2xl border border-[#E5E7EB] p-4">
-          <h2 id="refer-how" className="font-display text-base font-black">
-            How it works
+        <section aria-labelledby="refer-next" className="rounded-2xl border border-[#E5E7EB] p-4">
+          <h2 id="refer-next" className="font-display text-base font-black">
+            What happens next
           </h2>
           <ol className="mt-3 space-y-3">
-            <Step
-              number={1}
-              title="Send your invitation"
-              detail="Choose WhatsApp, Messages or another app to share it."
-            />
-            <Step
-              number={2}
-              title="Let them discover Craves"
-              detail="They explore meals from home chefs."
-            />
+            <Step number={1} title="Send your invitation" detail="Your contact receives your message." />
+            <Step number={2} title="They explore Craves" detail="They browse homemade meals from home chefs." />
+            <Step number={3} title="Join and order" detail="They sign up and order homemade food." />
           </ol>
+        </section>
+
+        <section aria-labelledby="refer-rewards" className="rounded-2xl border border-[#E5E7EB] p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 id="refer-rewards" className="font-display text-base font-black">
+              Referral rewards
+            </h2>
+            <span className="rounded-full bg-[#FDEAE8] px-2.5 py-0.5 text-xs font-bold text-[#C4200F]">Coming soon</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
+            Rewards for inviting friends are coming soon. For now, only your invitation message is shared.
+          </p>
         </section>
       </main>
     </div>

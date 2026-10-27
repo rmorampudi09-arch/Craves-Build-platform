@@ -11,7 +11,7 @@ export default function ChefStatementsPage() {
   return (
     <main className="chef-page is-narrow">
       <ChefAccessBoundary>
-        <ChefPageHeader title="Statements" description="PDF records of your orders and money, to keep or share." back={{ href: "/chef/earnings", label: "Money" }} />
+        <ChefPageHeader title="Statements" description="PDF records of your orders and money, to keep or share." back={{ href: "/chef/earnings", label: "Earnings" }} />
         <div className="chef-stack">
           <DocumentCenter mode="chef" />
           <ChefLedgerStatementPanel />

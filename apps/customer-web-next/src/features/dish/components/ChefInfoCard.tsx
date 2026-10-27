@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
 import { ArrowUpRight, MapPin, Star, UtensilsCrossed } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
-import { loadKitchenMenu } from "@/features/dish/api/dishes";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 
@@ -13,6 +11,8 @@ interface ChefInfoCardProps {
   reviewCount?: number | null;
   distanceMeters?: number;
   kitchenDescription?: string;
+  /** How many dishes the kitchen's menu has (the dish page reads the menu once); null leaves the count out. */
+  menuDishCount?: number | null;
 }
 
 export function ChefInfoCard({
@@ -22,21 +22,11 @@ export function ChefInfoCard({
   reviewCount = null,
   distanceMeters,
   kitchenDescription,
+  menuDishCount = null,
 }: ChefInfoCardProps) {
   const { profile } = useKitchenProfile(chefId);
   const description = kitchenDescription ?? profile?.description;
-  const [menu, setMenu] = useState<{ kitchenId: string; dishes: number } | null>(null);
-  useEffect(() => {
-    if (!chefId) return;
-    let live = true;
-    // Only the count is shown; reading it must not add the menu to the dishes Home lists.
-    loadKitchenMenu(chefId, { remember: false }).then(
-      (dishes) => { if (live) setMenu({ kitchenId: chefId, dishes: dishes.length }); },
-      () => undefined,
-    );
-    return () => { live = false; };
-  }, [chefId]);
-  const menuDishes = menu && menu.kitchenId === chefId ? menu.dishes : 0;
+  const menuDishes = menuDishCount ?? 0;
 
   const distance =
     typeof distanceMeters === "number"

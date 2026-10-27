@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {AppApiError} from '../../../core/http/apiError';
 import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderNotice, RiderProfile, TripEarning} from '../api/contract';
 import {riderApi} from '../api/riderApi';
+import {istDay} from '../domain/format';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
@@ -298,7 +299,7 @@ describe('Payouts (17)', () => {
     await render(<PayoutsScreen />, seed());
     await press('rider-withdraw');
     await settle();
-    const day = new Date().toISOString().slice(0, 10);
+    const day = istDay();
     expect(riderApi.requestWithdrawal).toHaveBeenCalledWith(82200, `rider-withdraw-${day}-r1`);
     expect(allText()).toContain('Withdrawal requested. It reaches you by 1 pm tomorrow.');
     expect(has('rider-withdraw')).toBe(false);

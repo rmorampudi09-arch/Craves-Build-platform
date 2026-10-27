@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Synthetic orders for a fixture kitchen; no backend is contacted.
 import { createElement } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChefOrderDetails } from "../components/chef-order-details";
 import type { ChefOrder } from "./chef-order-contract";
@@ -49,6 +49,20 @@ describe("order details", () => {
     expect(screen.queryByText("Fixture Customer")).toBeNull();
     expect(screen.queryByText(/1 Fixture Road/)).toBeNull();
     expect(screen.queryByRole("link", { name: /Call|Message customer/ })).toBeNull();
+  });
+
+  it("shows the steps with their times and opens the customer's pin in Google Maps", async () => {
+    const cooking = order("PREPARING");
+    open({
+      ...cooking, prepTimeMinutes: 20, updatedAt: "2026-10-10T08:04:00Z",
+      deliveryAddress: { ...cooking.deliveryAddress!, latitude: 17.4948, longitude: 78.4001 },
+      statusHistory: [{ status: "CHEF_ACCEPTANCE_PENDING", at: "2026-10-10T08:00:00Z" }, { status: "CHEF_ACCEPTED", at: "2026-10-10T08:04:00Z" }],
+    });
+    const steps = within(await screen.findByRole("region", { name: "Where this order is" })).getAllByRole("listitem");
+    expect(steps.map((step) => step.textContent)).toEqual([
+      "Order placed (done)1:30 pm", "Cooking1:34 pm · ready in 20 min", "Ready for pickup", "On the way", "Delivered",
+    ]);
+    expect(screen.getByRole("link", { name: /1 Fixture Road/ }).getAttribute("href")).toBe("https://www.google.com/maps/search/?api=1&query=17.4948,78.4001");
   });
 
   it("shows the customer's contact details once the order is paid", async () => {

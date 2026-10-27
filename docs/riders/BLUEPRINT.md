@@ -336,17 +336,17 @@ Queries go in `scripts/riders/pilot_health.sql` with a runbook, `docs/riders/PIL
 
 ### Phase 1: pilot-ready reliability
 
-**Entry criteria:** services deployed, dispatch off, a live APK from `main` and CI green. All are true on 27 Oct.
+**Entry criteria:** services deployed, dispatch off, a live APK from `main` and CI green. All are true on 27 Oct. `docs/riders/WORKPLAN.md` spells out every task below step by step, with the people steps.
 
 Each row is one PR with tests and any flag off by default. Customer and chef apps are untouched. Each migration is additive, starting at V161 in merge order.
 
 | ID | Change | Files | Proof |
 |---|---|---|---|
-| P1-01 | Heartbeat: each `/locations` call sets `rider_shift.last_seen_at`, longest silence and silences over 60 s, in the existing shift-row update. Eligibility: heartbeat ≤ 45 s and a non-mock fix ≤ 3 min. | migration, `FleetLocationService.java`, `FleetDispatcher.java`, `BACKEND.md` | `FleetLocationApiDatabaseTest`: an empty batch moves `last_seen_at`, within 5 statements. `FleetDispatchDatabaseTest`: a 2-min-old fix with a heartbeat is eligible; 46 s of silence is not. |
+| P1-01 | Heartbeat: each `/locations` call sets `rider_shift.last_seen_at`, longest silence and silences over 60 s, in the existing shift-row update. Eligibility: heartbeat ≤ 45 s and a non-mock fix ≤ 3 min. | migration, `FleetLocationService.java`, `FleetDispatcher.java`, `FleetOpsService.java`, `BACKEND.md` | `FleetLocationApiDatabaseTest`: an empty batch moves `last_seen_at`, within 5 statements. `FleetDispatchDatabaseTest`: a 2-min-old fix with a heartbeat is eligible; 46 s of silence is not. |
 | P1-02 | Watchdog that doesn't strand food: ASSIGNED 90 s without heartbeat; AT_PICKUP alerts ops at 90 s, hands back at 300 s. | `FleetDispatchJobs.java` | `FleetDispatchJobsDatabaseTest`: AT_PICKUP silent 120 s alerts and keeps the trip; 301 s hands back; a heartbeat with no fix never triggers. |
 | P1-03 | Clock-safe fixes (`ageMs`). | `RiderOnlineService.kt`, `rider-v1.yaml`, `contract.ts`, `FleetRiderModels.java`, `FleetLocationService.java`, `NATIVE.md` | `FleetLocationServiceTest`: a phone 10 min fast keeps its fixes with `ageMs`; without it, today's rule. |
 | P1-04 | Steps record when and where (`ageMs`, `fix`, clamp; photo form fields read). | `FleetTripController.java`, `FleetTripService.java`, `rider-v1.yaml`, `contract.ts`, `riderApi.live.ts`, `TripScreen.tsx` | `FleetTripStepsDatabaseTest`: a late "arrived at drop" plus photo passes; `ageMs` over 30 min clamped; mock fix ignored. |
-| P1-05 | OTP survives restarts, encrypted; "Waiting to confirm" instead of "Trip complete" (decision E1). | `tripQueue.ts`, `offlineQueue.ts`, `TripEnd.tsx`, `strings/en.ts` | `offlineQueue.test.ts`: the OTP survives a new queue instance and never reaches AsyncStorage. |
+| P1-05 | OTP survives restarts, encrypted; "Waiting to confirm" instead of "Trip complete" (decision E1). | `tripQueue.ts`, `offlineQueue.ts`, `TripEnd.tsx`, `strings/en.ts`, `FleetTripService.java` | `offlineQueue.test.ts`: the OTP survives a new queue instance and never reaches AsyncStorage. |
 | P1-06 | Show the step from the queue (`displayedStep`). | new `domain/tripSteps.ts`, `TripScreen.tsx` | `trip.test.tsx`: a restart with a pending "Picked up" opens on the to-customer step. |
 | P1-07 | Keep the delivery photo: native `keepPhoto` copies it into app storage, long edge 1600 px; no photo-less replays; the server checks replay and DELIVERED before the photo. | `RiderDeviceModule.kt`, `riderDevice.ts`, `NotAnswering.tsx`, `riderApi.live.ts`, `FleetTripService.java` | `riderApi.live.test.ts`: a missing file is never sent; the entry asks for a retake. |
 | P1-08 | Flush on the service's ONLINE event; reset backoff when an upload succeeds; show refusals on the trip screen. | `RiderRuntime.tsx`, `offlineQueue.ts`, `TripEnd.tsx` | `RiderRuntime.test.tsx`: an ONLINE event flushes past backoff. |
@@ -358,6 +358,8 @@ Each row is one PR with tests and any flag off by default. Customer and chef app
 | P1-14 | Retention: delete the latest position at shift end; drop `trip_track` partitions older than 90 days; ops sees on-shift riders only. | `FleetShiftService.java`, `FleetLocationService.java`, `FleetOpsService.java`, `BACKEND.md` | `FleetOpsDatabaseTest`: an off-shift rider isn't listed; an old partition is dropped. |
 | P1-15 | Pilot health queries; test plans gain an airplane-mode trip test with a kill and a reboot, survival on 4 GB and 3 GB phones, battery per hour, 100 ms screen renders, and the right column name. | new `scripts/riders/pilot_health.sql`, new `docs/riders/PILOT-HEALTH.md`, `PHONE-TESTS.md`, `PERF.md` | a DB test runs the SQL on fixtures. |
 | P1-16 | Pool 8 with one replica (decision E3). | runtime settings, `check-db-connection-budget.py` input | the budget script passes. |
+| P1-17 | Door wait shows "You can leave at" a time, not a bar (decision E5). | `NotAnswering.tsx`, `strings/en.ts` | `trip.test.tsx`. |
+| P1-18 | Release 1.1.0: `versionName` and `RIDER_APP_VERSION` together, checked in CI. | `build.gradle`, `riderConfig.ts`, `rider-apk.yml` | the APK workflow. |
 
 **People steps:** (1) build the live APK from `main` after P1-03 to P1-13 and set `minAppVersion` to it; (2) run `PHONE-TESTS.md` and `PERF.md` on a 4 GB and a 3 GB phone, and the offer test on all five brands; (3) shadow for a day, reading `FLEET_SHADOW` and the pilot-health queries; (4) go live in one zone.
 

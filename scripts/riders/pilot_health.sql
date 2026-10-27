@@ -120,3 +120,122 @@ FROM fleet_schema.trip_stage st
 WHERE st.provider = 'CRAVES_FLEET' AND st.opened_at > now() - INTERVAL '7 days'
 GROUP BY 1, 2
 ORDER BY day_ist DESC, orders DESC, outcome;
+
+-- name: batching_candidates
+-- This query and the ones after it measure the triggers for work that waits for pilot data (PILOT-HEALTH.md
+-- "Triggers"). Distances are great-circle metres (haversine, earth radius 6371 km); fleet_schema has no PostGIS.
+-- Two orders per trip (blueprint C7): orders, over every provider, with another order from the same kitchen ready
+-- within 10 minutes and a drop within 2 km, per day (IST). Worth designing when this is 15% or more for two weeks in
+-- one zone while rider_busy_share is over 60%. A trip's ready time is the chef's "ready" tap, else when it was created.
+SELECT (t.created_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist,
+       count(*) AS orders,
+       count(*) FILTER (WHERE p.paired) AS with_pair,
+       round(100.0 * count(*) FILTER (WHERE p.paired) / count(*), 1) AS pair_pct
+FROM fleet_schema.trip t
+CROSS JOIN LATERAL (
+    SELECT EXISTS (
+        SELECT 1
+        FROM fleet_schema.trip o
+        WHERE o.chef_id = t.chef_id AND o.id <> t.id
+          AND o.created_at BETWEEN t.created_at - INTERVAL '2 hours' AND t.created_at + INTERVAL '2 hours'
+          AND abs(extract(epoch FROM COALESCE(o.chef_ready_at, o.created_at) - COALESCE(t.chef_ready_at, t.created_at))) <= 600
+          AND 12742000 * asin(LEAST(1, sqrt(power(sin(radians(o.drop_lat - t.drop_lat) / 2), 2)
+              + cos(radians(t.drop_lat)) * cos(radians(o.drop_lat)) * power(sin(radians(o.drop_lng - t.drop_lng) / 2), 2)))) <= 2000
+    ) AS paired
+) p
+WHERE t.created_at > now() - INTERVAL '14 days'
+GROUP BY 1
+ORDER BY day_ist DESC;
+
+-- name: rider_busy_share
+-- How much of riders' online time went on trips, per day (IST) of the shift's start: from accepting a trip to its end,
+-- within the shift. Read with batching_candidates (blueprint C7: over 60%).
+SELECT (s.started_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist,
+       count(DISTINCT s.rider_id) AS riders,
+       round((sum(extract(epoch FROM COALESCE(s.ended_at, now()) - s.started_at)) / 3600)::numeric, 1) AS online_h,
+       round((sum(b.busy_s) / 3600)::numeric, 1) AS busy_h,
+       round((100 * sum(b.busy_s) / NULLIF(sum(extract(epoch FROM COALESCE(s.ended_at, now()) - s.started_at)), 0))::numeric, 1)
+           AS busy_pct
+FROM fleet_schema.rider_shift s
+CROSS JOIN LATERAL (
+    SELECT COALESCE(sum(extract(epoch FROM LEAST(COALESCE(t.finished_at, now()), COALESCE(s.ended_at, now()))
+                                         - GREATEST(t.accepted_at, s.started_at))), 0) AS busy_s
+    FROM fleet_schema.trip t
+    WHERE t.rider_id = s.rider_id AND t.accepted_at IS NOT NULL
+      AND t.accepted_at < COALESCE(s.ended_at, now()) AND COALESCE(t.finished_at, now()) > s.started_at
+) b
+WHERE s.started_at > now() - INTERVAL '14 days'
+GROUP BY 1
+ORDER BY day_ist DESC;
+
+-- name: pickup_detour
+-- Road-ETA ranking (blueprint C7): how much longer the ride to the kitchen really was than the straight line. The path
+-- runs through the trip's own real fixes from accepting to arriving; the straight line from the first of them to the
+-- kitchen. Trips with fewer than 3 fixes, or starting within 300 m, are left out. Worth switching on (dispatch policy,
+-- BACKEND.md) when over 20% of trips are more than 1.5 times longer.
+WITH steps AS (
+    -- The first fix has no step (LEAST ignores a NULL, so it must not reach asin).
+    SELECT t.id, t.kitchen_lat, t.kitchen_lng, f.recorded_at, f.lat, f.lng,
+           CASE WHEN f.prev_lat IS NULL THEN 0 ELSE 12742000 * asin(LEAST(1, sqrt(power(sin(radians(f.lat - f.prev_lat) / 2), 2)
+               + cos(radians(f.prev_lat)) * cos(radians(f.lat)) * power(sin(radians(f.lng - f.prev_lng) / 2), 2)))) END AS step_m
+    FROM fleet_schema.trip t
+    CROSS JOIN LATERAL (
+        SELECT tt.recorded_at, tt.lat, tt.lng,
+               lag(tt.lat) OVER (ORDER BY tt.recorded_at) AS prev_lat,
+               lag(tt.lng) OVER (ORDER BY tt.recorded_at) AS prev_lng
+        FROM fleet_schema.trip_track tt
+        WHERE tt.trip_id = t.id AND NOT tt.mock AND tt.recorded_at BETWEEN t.accepted_at AND t.arrived_kitchen_at
+    ) f
+    WHERE t.arrived_kitchen_at > now() - INTERVAL '14 days' AND t.accepted_at IS NOT NULL
+), legs AS (
+    SELECT id, kitchen_lat, kitchen_lng, sum(step_m) AS path_m,
+           (array_agg(lat ORDER BY recorded_at))[1] AS lat0, (array_agg(lng ORDER BY recorded_at))[1] AS lng0
+    FROM steps
+    GROUP BY id, kitchen_lat, kitchen_lng
+    HAVING count(*) >= 3
+), ratios AS (
+    SELECT path_m / straight_m AS ratio
+    FROM legs
+    CROSS JOIN LATERAL (SELECT 12742000 * asin(LEAST(1, sqrt(power(sin(radians(kitchen_lat - lat0) / 2), 2)
+        + cos(radians(lat0)) * cos(radians(kitchen_lat)) * power(sin(radians(kitchen_lng - lng0) / 2), 2)))) AS straight_m) d
+    WHERE straight_m >= 300
+)
+SELECT count(*) AS trips,
+       count(*) FILTER (WHERE ratio > 1.5) AS longer_than_1_5x,
+       round(100.0 * count(*) FILTER (WHERE ratio > 1.5) / NULLIF(count(*), 0), 1) AS longer_pct,
+       round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ratio)::numeric, 2) AS median_ratio
+FROM ratios;
+
+-- name: fcm_on_time
+-- Offers whose push rang the phone within 5 s of the offer, by phone model, over offers whose push was sent (blueprint
+-- C1). Server-set idle polling (P2-04) is worth turning on when a model is under 92% over 200+ offers.
+SELECT COALESCE(d.model, 'unknown') AS model,
+       count(*) AS pushed,
+       count(*) FILTER (WHERE o.rang_channel = 'fcm' AND o.rang_at <= o.offered_at + INTERVAL '5 seconds') AS on_time,
+       round(100.0 * count(*) FILTER (WHERE o.rang_channel = 'fcm' AND o.rang_at <= o.offered_at + INTERVAL '5 seconds')
+           / count(*), 1) AS on_time_pct
+FROM fleet_schema.trip_offer o
+LEFT JOIN fleet_schema.rider_device d ON d.rider_id = o.rider_id AND d.state = 'BOUND'
+WHERE o.offered_at > now() - INTERVAL '7 days' AND o.push_result = 'SENT'
+GROUP BY 1
+ORDER BY pushed DESC, model;
+
+-- name: offer_outcomes
+-- How offers ended, per day (IST): ACCEPTED, DECLINED, EXPIRED (unanswered), LOST (another rider was faster), WITHDRAWN
+-- or still ACTIVE. Blueprint C5: if over 20% expire unanswered, riders aren't hearing them; the offer sound should then
+-- repeat until the offer is opened.
+SELECT d.day_ist, d.state, d.offers, round(100.0 * d.offers / sum(d.offers) OVER (PARTITION BY d.day_ist), 1) AS pct
+FROM (SELECT (o.offered_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist, o.state, count(*) AS offers
+      FROM fleet_schema.trip_offer o
+      WHERE o.offered_at > now() - INTERVAL '7 days'
+      GROUP BY 1, 2) d
+ORDER BY d.day_ist DESC, d.offers DESC, d.state;
+
+-- name: track_size
+-- trip_track on disk: its day partitions and the default one. Thinning old tracks (P2-11) is worth doing past about 5 GB.
+SELECT count(*) AS partitions,
+       sum(pg_total_relation_size(c.oid)) AS total_bytes,
+       pg_size_pretty(sum(pg_total_relation_size(c.oid))) AS total_size
+FROM pg_inherits i
+JOIN pg_class c ON c.oid = i.inhrelid
+WHERE i.inhparent = 'fleet_schema.trip_track'::regclass;

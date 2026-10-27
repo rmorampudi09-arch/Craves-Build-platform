@@ -15,7 +15,7 @@
 4. A contract change updates, in the same PR:
    - `contracts/openapi/rider-v1.yaml`;
    - `apps/mobile/src/features/rider/api/contract.ts`;
-   - the mock API (`riderApi.mock.ts`).
+   - the mock API (`riderApi.mock.ts`), where the app would see a difference: a new optional request field the demo can ignore needs no mock change (Phase 1's `ageMs`, `fix` and `capturedOffline` are such fields).
 
    Every new field is optional. APKs already installed must keep working.
 5. Update `docs/riders/BACKEND.md` or `docs/riders/NATIVE.md` in the same PR when behaviour changes.

@@ -13,7 +13,7 @@ awk '/^-- name: offer_to_ring$/{f=1; next} /^-- name: /{f=0} f' scripts/riders/p
   | psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1                                          # one query
 ```
 
-Every query looks at the last 7 days. During the first week of live dispatch, run the whole file once a day and keep the output with the day's notes. The data comes from app 1.1.0 (`RELEASE.md`): offer receipts, phone health and tap ages are empty for older apps.
+The health queries look at the last 7 days, the trigger queries at the last 14. During the first week of live dispatch, run the whole file once a day and keep the output with the day's notes. The data comes from app 1.1.0 (`RELEASE.md`): offer receipts, phone health and tap ages are empty for older apps.
 
 ## The queries
 
@@ -27,6 +27,30 @@ Every query looks at the last 7 days. During the first week of live dispatch, ru
 | `sync_delay` | Seconds from the rider's tap to the server, by trip step (the step's `ageMs`; a negative one, from a phone clock set back, counts as 0). `with_tap` counts steps that carried an age. | A few seconds online. Long tails are steps tapped without signal: they still count from the tap. |
 | `battery_per_hour` | Battery used per unplugged hour on shift, by phone model, over shifts with at least 30 unplugged minutes. | No target yet: record it per model, and look at a phone far above the others. |
 | `fleet_stage_outcomes` | How the Craves riders' stage of the dispatch chain ended, per day (IST): `ACCEPTED`, or the reason it passed the order on. | The `ACCEPTED` share should grow as riders are added. |
+
+## Triggers
+
+Some work waits until pilot data shows it is needed (blueprint C1, C5 and C7; WORKPLAN P2-04, P2-11 and P3-06). These queries measure each trigger. Run them weekly from the second week of live dispatch, and start the work only when its trigger holds.
+
+| Query | What it shows | Trigger and what it starts |
+|---|---|---|
+| `batching_candidates` | Orders, over every provider, with another order from the same kitchen ready within 10 minutes and a drop within 2 km, per day. | **15% or more for two weeks in one zone, while `rider_busy_share` is over 60%:** design two orders per trip (blueprint C7). |
+| `rider_busy_share` | Riders' online hours, the hours spent from accepting a trip to its end, and the busy share, per day of the shift's start. | Read with `batching_candidates`. |
+| `pickup_detour` | The ride to the kitchen through the trip's own fixes, against the straight line from its first fix: how many trips were more than 1.5 times longer, and the median ratio. | **Over 20% of trips:** switch on road-distance ranking in the dispatch policy (BACKEND.md); it is an automated-system change once dispatch is live, so 14 days' notice first. |
+| `fcm_on_time` | Offers whose push rang within 5 s of the offer, by phone model, over offers whose push was sent. | **Under 92% over 200+ offers for a model:** set the server's idle polling to 5 s (P2-04). |
+| `offer_outcomes` | How offers ended, per day: accepted, declined, expired unanswered, lost to another rider, withdrawn. | **Expired over 20%:** riders aren't hearing offers; make the offer sound repeat until it is opened (blueprint C5). |
+| `track_size` | `trip_track` on disk, all partitions. | **Past about 5 GB:** thin tracks older than 7 days to one fix per 10 s per trip (P2-11). |
+
+### Weekly: FCM delivery data
+
+Google's own numbers for the rider app's pushes, a few days behind and only from phones that share usage data. Read them once a week with an account that can see the Firebase project:
+
+```bash
+curl -sS -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://fcmdata.googleapis.com/v1beta1/projects/<firebase project id>/androidApps/<rider app id>/deliveryData"
+```
+
+`<rider app id>` is the rider app's Firebase app ID (`1:…:android:…`, Project settings → Your apps). Each day has `data.deliveryPerformancePercents.deliveredNoDelay` (should stay high) and `data.messageInsightPercents.priorityLowered` (should stay about 0: FCM lowers a high-priority push to normal when the app doesn't show a notification for it, and lowered offers ring late). A rising `priorityLowered` is a bug to fix before it hurts offer-to-ring.
 
 ## Stop rules (live dispatch)
 

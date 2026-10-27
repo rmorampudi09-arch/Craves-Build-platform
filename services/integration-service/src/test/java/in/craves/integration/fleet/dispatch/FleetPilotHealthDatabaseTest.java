@@ -52,10 +52,25 @@ class FleetPilotHealthDatabaseTest {
         fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, state, outcome, opened_at, deadline_at, closed_at) "
             + "VALUES (?, ?, 1, 'CRAVES_FLEET', 'CLOSED', 'ACCEPTED', now() - INTERVAL '1 hour', now() - INTERVAL '59 minutes', "
             + "now() - INTERVAL '59 minutes')", UUID.randomUUID(), trip);
+        // Two orders from one kitchen, ready 5 minutes apart, to the same drop: a batching pair. The rider took the first,
+        // from 30 to 60 minutes ago, and rode three sides of a square (about 3.28 km) to a kitchen about 1.06 km away.
+        UUID first = fleet.trip(UUID.randomUUID());
+        UUID second = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET chef_id = (SELECT chef_id FROM fleet_schema.trip WHERE id = ?), "
+            + "chef_ready_at = now() - INTERVAL '5 minutes' WHERE id = ?", first, second);
+        fleet.db.update("UPDATE fleet_schema.trip SET chef_ready_at = now() - INTERVAL '10 minutes', rider_id = ?, "
+            + "accepted_at = now() - INTERVAL '60 minutes', arrived_kitchen_at = now() - INTERVAL '45 minutes', "
+            + "finished_at = now() - INTERVAL '30 minutes' WHERE id = ?", rider, first);
+        double[][] path = {{17.44, 78.40}, {17.45, 78.40}, {17.45, 78.39}, {17.44, 78.39}};
+        for (int i = 0; i < path.length; i++) {
+            fleet.db.update("INSERT INTO fleet_schema.trip_track (trip_id, rider_id, recorded_at, lat, lng, accuracy_m, mock) "
+                + "VALUES (?, ?, now() - make_interval(mins => ?), ?, ?, 8, false)", first, rider, 58 - 4 * i, path[i][0], path[i][1]);
+        }
 
         Map<String, String> queries = queries();
         assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
-            "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes");
+            "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes", "batching_candidates", "rider_busy_share",
+            "pickup_detour", "fcm_on_time", "offer_outcomes", "track_size");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
 
         assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
@@ -88,6 +103,28 @@ class FleetPilotHealthDatabaseTest {
         assertThat(number(picked, "p50_s")).as("0 and 90 s").isEqualTo(45.0);
         assertThat(number(fleet.db.queryForList(queries.get("battery_per_hour")).get(0), "pct_per_hour")).isEqualTo(6.0);
         assertThat(fleet.db.queryForList(queries.get("fleet_stage_outcomes")).get(0)).containsEntry("outcome", "ACCEPTED");
+
+        Map<String, Object> batching = fleet.db.queryForList(queries.get("batching_candidates")).get(0);
+        assertThat(number(batching, "orders")).isEqualTo(3);
+        assertThat(number(batching, "with_pair")).as("the two from one kitchen, not the third").isEqualTo(2);
+        assertThat(number(batching, "pair_pct")).isEqualTo(66.7);
+        // Shifts of 2 h (open) and 3 h (closed); the trip took 30 minutes of the first. Summed, as they may start on two IST days.
+        List<Map<String, Object>> busy = fleet.db.queryForList(queries.get("rider_busy_share"));
+        assertThat(busy.stream().mapToDouble(row -> number(row, "online_h")).sum()).isCloseTo(5.0, within(0.001));
+        assertThat(busy.stream().mapToDouble(row -> number(row, "busy_h")).sum()).isCloseTo(0.5, within(0.001));
+        Map<String, Object> detour = fleet.db.queryForList(queries.get("pickup_detour")).get(0);
+        assertThat(number(detour, "trips")).isEqualTo(1);
+        assertThat(number(detour, "longer_than_1_5x")).isEqualTo(1);
+        assertThat(number(detour, "median_ratio")).as("3284.7 m ridden over 1060.8 m straight").isCloseTo(3.10, within(0.011));
+        assertThat(fleet.db.queryForList(queries.get("fcm_on_time")).get(0)).containsEntry("model", "Redmi Note 12");
+        assertThat(fleet.db.queryForList(queries.get("fcm_on_time"))).extracting(row -> number(row, "pushed"), row -> number(row, "on_time"),
+            row -> number(row, "on_time_pct")).as("rang by FCM within 5 s: 1, 2, 3 and 5 s; 4 s came by the location call")
+            .containsExactly(tuple(20.0, 4.0, 20.0));
+        assertThat(fleet.db.queryForList(queries.get("offer_outcomes"))).extracting(row -> row.get("state"), row -> number(row, "offers"),
+            row -> number(row, "pct")).containsExactly(tuple("DECLINED", 21.0, 100.0));
+        Map<String, Object> track = fleet.db.queryForList(queries.get("track_size")).get(0);
+        assertThat(number(track, "partitions")).isGreaterThanOrEqualTo(1);
+        assertThat(number(track, "total_bytes")).isGreaterThan(0);
     }
 
     private static double number(Map<String, Object> row, String column) {

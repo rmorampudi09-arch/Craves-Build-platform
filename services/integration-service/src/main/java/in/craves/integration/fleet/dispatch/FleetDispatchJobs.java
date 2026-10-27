@@ -17,6 +17,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryS
 import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripService;
 import java.sql.Connection;
@@ -49,6 +50,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   alerted and the order goes to the next stage; CANCELLED is never published for it. At the kitchen the rider may
  *   already hold the food, so 90 s silent only alerts ops (once per trip) and the trip goes back at 300 s silent;
  * - positions of riders no longer on shift or on a trip are forgotten after 15 minutes (forgetOffShiftPositions);
+ * - a phone silent for 3 minutes on an open shift is asked to come back online (nudgeSilentShifts);
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
  *   ops alert; a queued order closes there too once a courier is assigned after all. A watchdog order is booked with Borzo or Pidge here, through the router, and its delivery job is handed
  *   over with handoffFromProviderId craves_fleet.
@@ -66,6 +68,9 @@ public class FleetDispatchJobs {
     /** No call from any of the trip's rider's shifts since the given time. */
     private static final String SILENT_SINCE = "NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = t.rider_id "
         + "AND s.last_seen_at >= now() - %s)";
+    static final int NUDGES_PER_TICK = 20;
+    /** The first rider app that shows the GO_ONLINE push (P1-13). */
+    static final String NUDGE_MIN_APP_VERSION = "1.1.0";
     static final int OPS_QUEUE_SECONDS = 24 * 3600; // nominal: ops closes a queued order by hand
     static final String RIDER_LOST = "Your location stopped before pickup, so the order went to another courier.";
     static final String RIDER_LOST_HOLD = "Your location stopped before pickup. Ops checks this trip before paying it.";
@@ -109,6 +114,38 @@ public class FleetDispatchJobs {
         watchdog();
         courierStages();
         forgetOffShiftPositions();
+        nudgeSilentShifts();
+    }
+
+    /**
+     * "You're offline. Tap to go back online" (blueprint A7) to each rider whose shift is open and unexpired but whose phone
+     * has not called for 3 minutes (the app swiped away or killed): at most every 30 minutes per shift, 20 a tick, only to
+     * a bound phone with a push token on app 1.1.0 or later (older apps can't show it). The tap opens the app and Home
+     * resumes the shift. Each nudge is claimed in the database before it is sent, so two replicas never send it twice, and
+     * sent on its own thread, so a slow push never holds up this tick.
+     */
+    int nudgeSilentShifts() {
+        List<Map<String, Object>> silent = jdbc.queryForList("""
+            SELECT s.id, d.fcm_token, d.app_version FROM fleet_schema.rider_shift s
+            JOIN fleet_schema.rider_device d ON d.rider_id = s.rider_id AND d.state = 'BOUND' AND d.fcm_token IS NOT NULL
+            WHERE s.ended_at IS NULL AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now()
+              AND COALESCE(s.last_seen_at, s.started_at) < now() - INTERVAL '3 minutes'
+              AND (s.last_nudge_at IS NULL OR s.last_nudge_at < now() - INTERVAL '30 minutes')
+            ORDER BY COALESCE(s.last_seen_at, s.started_at) LIMIT ?""", NUDGES_PER_TICK * 2);
+        int nudged = 0;
+        for (Map<String, Object> shift : silent) {
+            if (nudged == NUDGES_PER_TICK || FleetShiftService.versionBelow((String) shift.get("app_version"), NUDGE_MIN_APP_VERSION)) {
+                continue;
+            }
+            if (jdbc.update("UPDATE fleet_schema.rider_shift SET last_nudge_at = now() WHERE id = ? "
+                + "AND (last_nudge_at IS NULL OR last_nudge_at < now() - INTERVAL '30 minutes')", shift.get("id")) == 1) {
+                nudged++;
+                String token = (String) shift.get("fcm_token");
+                Thread.ofVirtual().name("fleet-go-online").start(() -> LOGGER.info("FLEET_GO_ONLINE shift={} result={}", shift.get("id"),
+                    alerts.goOnline(token)));
+            }
+        }
+        return nudged;
     }
 
     /**

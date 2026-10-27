@@ -27,11 +27,14 @@ import org.json.JSONObject
 object RiderOffers {
   const val OFFERS_CHANNEL = "rider_offers"
   const val ONLINE_CHANNEL = "rider_online"
+  /** Trip and shift notices that aren't offers: "Trip cancelled", "You're offline" (default importance, no ringtone). */
+  const val TRIP_CHANNEL = "rider_trip"
   const val EXTRA_OFFER = "craves.rider.offer"
   const val EXTRA_RECEIVED_AT = "craves.rider.offerReceivedAtMs"
   const val EXTRA_CHANNEL = "craves.rider.offerChannel"
   private const val TAG = "CravesRiderOffer"
   private const val OFFER_NOTIFICATION_ID = 2
+  private const val NOTICE_NOTIFICATION_ID = 3
   private const val TEST_TAG = "test-ring"
   private const val KEEP_SEEN_MS = 10 * 60_000L
   private val RING = longArrayOf(0, 800, 400, 800, 400, 800, 400, 800)
@@ -81,7 +84,10 @@ object RiderOffers {
     val online = NotificationChannelCompat.Builder(ONLINE_CHANNEL, NotificationManagerCompat.IMPORTANCE_LOW)
       .setName("Online status")
       .build()
-    NotificationManagerCompat.from(context).createNotificationChannelsCompat(listOf(offers, online))
+    val trip = NotificationChannelCompat.Builder(TRIP_CHANNEL, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+      .setName("Trip updates")
+      .build()
+    NotificationManagerCompat.from(context).createNotificationChannelsCompat(listOf(offers, online, trip))
   }
 
   /** Returns true when this is the first arrival of a valid, unexpired offer. */
@@ -141,6 +147,30 @@ object RiderOffers {
   /** Forgets the receipts a successful /locations call carried; any that arrived meanwhile stay for the next call. */
   fun receiptsSent(offerIds: Collection<String>) {
     synchronized(this) { offerIds.forEach { receipts.remove(it) } }
+  }
+
+  /**
+   * A notice on rider_trip that opens the app when tapped: "Trip cancelled" (P1-12), "You're offline" (P1-13). One per
+   * tag, so a newer notice of the same kind replaces the last. Nothing is posted while notifications are off.
+   */
+  fun notice(context: Context, tag: String, title: String, body: String) {
+    if (Build.VERSION.SDK_INT >= 33 &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+      Log.w(TAG, "notifications are not allowed; $tag can't be shown")
+      return
+    }
+    createChannels(context)
+    val notification = NotificationCompat.Builder(context, TRIP_CHANNEL)
+      .setSmallIcon(context.applicationInfo.icon)
+      .setContentTitle(title)
+      .setContentText(body)
+      .setContentIntent(openAppIntent(context, null))
+      .setAutoCancel(true)
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .build()
+    NotificationManagerCompat.from(context).notify(tag, NOTICE_NOTIFICATION_ID, notification)
   }
 
   /** Whether an offer can ring now: the app's notifications are on and the offers channel is still at high importance. */

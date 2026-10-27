@@ -63,10 +63,27 @@ public class RiderPushClient {
         if (client == null) {
             return "OFF";
         }
-        Map<String, Object> request = Map.of("app", "rider", "token", fcmToken,
+        return realtime(Map.of("app", "rider", "token", fcmToken,
             "data", Map.of("type", "OFFER", "offerId", offerId.toString(), "offer", offerJson),
             "notification", Map.of("title", title, "body", body),
-            "ttlSeconds", Math.min(600, ttlSeconds), "collapseKey", "offer-" + offerId);
+            "ttlSeconds", Math.min(600, ttlSeconds), "collapseKey", "offer-" + offerId));
+    }
+
+    /**
+     * "You're offline. Tap to go back online" on a phone whose shift is open but which stopped calling (blueprint A7): a
+     * data message of type GO_ONLINE, alive 10 minutes, a newer one replacing it. Returns SENT, OFF or notification-service's
+     * code, as offer does.
+     */
+    public String goOnline(String fcmToken) {
+        if (client == null) {
+            return "OFF";
+        }
+        return realtime(Map.of("app", "rider", "token", fcmToken, "data", Map.of("type", "GO_ONLINE"),
+            "notification", Map.of("title", "You're offline", "body", "Tap to go back online and get orders."),
+            "ttlSeconds", 600, "collapseKey", "go-online"));
+    }
+
+    private String realtime(Map<String, Object> request) {
         try {
             return client.post().uri("/internal/v1/push/realtime").header("X-Craves-Internal-Key", secret)
                 .contentType(MediaType.APPLICATION_JSON).body(request)

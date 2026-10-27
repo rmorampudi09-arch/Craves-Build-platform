@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -33,10 +34,13 @@ import java.util.TimeZone
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -434,6 +438,39 @@ class RiderOnlineService : Service() {
     fun stop(context: Context) {
       clearShift(context)
       context.stopService(Intent(context, RiderOnlineService::class.java))
+    }
+
+    /**
+     * Sends a new FCM token with the shift credential (POST /devices; P1-13), on OkHttp's own thread, when a shift is
+     * saved. JS sends it too when it runs; this covers a token that changes while JS isn't running.
+     */
+    fun registerToken(context: Context, token: String) {
+      val shift = loadShift(context) ?: return
+      val installationId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: return
+      val body =
+        JSONObject()
+          .put("installationId", installationId)
+          .put("fcmToken", token)
+          .put("appVersion", BuildConfig.VERSION_NAME)
+          .put("model", Build.MODEL)
+          .toString()
+      val request =
+        Request.Builder()
+          .url("${shift.apiBaseUrl}/api/v1/rider/devices")
+          .header(CREDENTIAL_HEADER, shift.credential)
+          .post(body.toRequestBody(JSON))
+          .build()
+      http.newCall(request).enqueue(
+        object : Callback {
+          override fun onFailure(call: Call, e: IOException) {
+            Log.w(TAG, "new push token not sent; JS sends it on the next start", e)
+          }
+
+          override fun onResponse(call: Call, response: Response) {
+            response.use { if (!it.isSuccessful) Log.w(TAG, "new push token refused: ${it.code}") }
+          }
+        },
+      )
     }
 
     /** The saved shift, or null (and forgotten) once it has expired. */

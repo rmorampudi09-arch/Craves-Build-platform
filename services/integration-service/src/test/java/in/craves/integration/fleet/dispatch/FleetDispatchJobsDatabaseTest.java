@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -181,6 +182,33 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(jobs.forgetOffShiftPositions()).isEqualTo(1);
         assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.rider_position_latest", UUID.class))
             .containsExactlyInAnyOrder(delivering, waiting);
+    }
+
+    /**
+     * Blueprint A7: a shift still open whose phone stopped calling gets one "tap to go online" push per 30 minutes; none for
+     * an ended shift, an unbound phone, app 1.0.0 (it can't show it) or a phone that is still calling.
+     */
+    @Test
+    void aSilentOpenShiftGetsOneGoOnlinePushPerHalfHour() {
+        when(alerts.goOnline(anyString())).thenReturn("SENT");
+        FleetDispatchFixtures.seen(fleet.db, rider, 200);
+        UUID ended = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 200, false);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now() WHERE rider_id = ?", ended);
+        UUID unbound = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 200, false);
+        fleet.db.update("UPDATE fleet_schema.rider_device SET state = 'PENDING_APPROVAL' WHERE rider_id = ?", unbound);
+        UUID calling = FleetDispatchFixtures.riderOnShift(fleet, "+919800000004", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_device SET app_version = '1.1.0' WHERE rider_id IN (?, ?, ?, ?)", rider, ended, unbound, calling);
+        UUID oldApp = FleetDispatchFixtures.riderOnShift(fleet, "+919800000005", KITCHEN_LAT, KITCHEN_LNG, 200, false);
+
+        assertThat(jobs.nudgeSilentShifts()).isEqualTo(1);
+        verify(alerts, timeout(2000).times(1)).goOnline("fcm-+919800000001");
+        assertThat(jobs.nudgeSilentShifts()).as("at most every 30 minutes").isZero();
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET last_nudge_at = now() - INTERVAL '31 minutes' WHERE rider_id = ?", rider);
+        assertThat(jobs.nudgeSilentShifts()).isEqualTo(1);
+        verify(alerts, timeout(2000).times(2)).goOnline("fcm-+919800000001");
+        verify(alerts, never()).goOnline("fcm-+919800000005");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.rider_shift WHERE last_nudge_at IS NOT NULL AND rider_id <> ?",
+            Integer.class, rider)).as("nobody else: ended " + ended + ", unbound, calling, app 1.0.0 " + oldApp).isZero();
     }
 
     @Test

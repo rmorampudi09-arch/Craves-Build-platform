@@ -180,7 +180,7 @@ public class FleetShiftService {
     }
 
     /** True when the dotted version is below the minimum, compared part by part as the app does ("1.9" < "1.10"). */
-    static boolean versionBelow(String version, String minimum) {
+    public static boolean versionBelow(String version, String minimum) {
         if (version == null || !version.matches(VERSION)) {
             return true;
         }

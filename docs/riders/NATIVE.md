@@ -49,6 +49,10 @@ notification-service sends a **data-only** message (no `notification` payload), 
 
 The app always posts a visible notification on channel `rider_offers` (high importance, ringtone and vibration). FCM deprioritises later high-priority pushes from apps that don't.
 
+`type=GO_ONLINE` (app 1.1.0) comes when the shift is open but the phone stopped calling: unless the service is running again, the app posts "You're offline" / "Tap to go back online and get orders." on channel `rider_trip` (default importance); the tap opens the app and Home resumes the saved shift.
+
+`onNewToken` emits `riderFcmToken` for JS and, when a shift is saved, also sends `POST /api/v1/rider/devices` itself with the shift credential (`installationId` ANDROID_ID, the token, `BuildConfig.VERSION_NAME`, `Build.MODEL`), so a token that changes while JS isn't running still reaches the server.
+
 ### API base URL
 
 `apiBaseUrl` comes from JS (`getRuntimeConfig().apiBaseUrl`, from react-native-config `CRAVES_API_BASE_URL`, origin only) as a `start()` argument.

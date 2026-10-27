@@ -312,9 +312,11 @@ Fleet jobs run on their own pool, `fleetScheduler` (`FleetConfiguration`, fleet 
 |---|---|---|
 | `RiderJoinsExitsExport.writeYesterday` | 00:20 IST | Yesterday's joins and exits CSV to `riders/exports/rider-joins-exits-YYYY-MM-DD.csv`. JOINED is a move to ACTIVE from PENDING (or a rejoin); EXITED is a deactivation. |
 | `FleetSlotService.settleDue` | every 60 s | Settles finished slots. |
-| `FleetDispatchJobs.tick` | every 5 s | Offer expiry, stage deadlines, the watchdog, the ops queue, cancelled orders, forgetting off-shift positions. |
+| `FleetDispatchJobs.tick` | every 5 s | Offer expiry, stage deadlines, the watchdog, the ops queue, cancelled orders, forgetting off-shift positions, go-online pushes. |
 | `FleetLocationService.createTrackDays` | 1 min after start, then every 6 h (location ingest flag) | Creates the next 7 days of `trip_track` partitions, never today; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED`. Then drops day partitions older than 90 days and deletes older rows in `trip_track_default`; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_RETENTION_FAILED`. A drop waits at most 3 s for its lock. |
 | `FleetEarnings.tick` | every 60 s | Credits finished trips and slot top-ups still waiting, releases holds that are due. |
+
+**Go-online push** (blueprint A7). When a shift is still open and unexpired but its phone hasn't called for 3 minutes (the app was swiped away or killed), the tick sends `RiderPushClient.goOnline`: a data message `type=GO_ONLINE`, "You're offline" / "Tap to go back online and get orders.", TTL 600 s, collapse key `go-online`. Only to a bound phone with a token on app 1.1.0 or later, at most every 30 minutes per shift (`rider_shift.last_nudge_at`, claimed before sending so two replicas never both send), 20 a tick, each on its own virtual thread. notification-service needed no change.
 
 A trip's credit after its delivery commits is also handed to this pool (`FleetEarnings.onTripPayFinalized`), so the rider's request never waits for a second database connection; if the pool refuses it, the money job credits it.
 

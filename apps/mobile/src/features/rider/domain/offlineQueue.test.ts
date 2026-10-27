@@ -1,5 +1,5 @@
 import type {Trip} from '../api/contract';
-import {createOfflineQueue, OTP_KEPT_MS, QueueDeps, QueueEntry, REFUSALS_KEY, STORAGE_KEY} from './offlineQueue';
+import {createOfflineQueue, OTP_KEPT_MS, OTP_REFS_KEY, QueueDeps, QueueEntry, REFUSALS_KEY, STORAGE_KEY} from './offlineQueue';
 
 class HttpError extends Error {
   constructor(readonly status?: number) {
@@ -221,9 +221,12 @@ describe('rider offline queue', () => {
 
     it('is let go after 24 hours: the step then goes without it and the server refuses it', async () => {
       let online = false;
-      const send = jest.fn(async (_entry: QueueEntry) => {
+      const send = jest.fn(async (entry: QueueEntry) => {
         if (!online) {
           throw new HttpError();
+        }
+        if (!(entry.body as {otp?: string}).otp) {
+          throw new HttpError(400); // "Enter the 4-digit OTP the customer reads out."
         }
         return trip;
       });
@@ -235,9 +238,36 @@ describe('rider offline queue', () => {
       restarted.advance(OTP_KEPT_MS + 1);
       expect(await restarted.queue.pending('r1')).toBe(1);
       expect(secret.data.size).toBe(0);
+      expect(JSON.parse(storage.data.get(OTP_REFS_KEY)!)).toEqual([]);
       await restarted.queue.flush('r1');
       expect(send.mock.calls.at(-1)?.[0].body).toEqual({method: 'OTP', fix: otpStep('k1').body.fix, capturedOffline: true});
+      expect(await restarted.queue.refusals('r1')).toEqual([expect.objectContaining({tripId: 't1', message: 'HTTP 400'})]);
     });
+
+    it('leaves no code behind when the app died before tidying up: it goes at the next start', async () => {
+      const secret = memorySecret();
+      const storage = memoryStorage();
+      secret.data.set('9-1', '4831');
+      storage.data.set(OTP_REFS_KEY, JSON.stringify([{id: '9-1', at: 1_000}]));
+      const {queue} = setup(async () => trip, {secret}, storage);
+      expect(await queue.pending('r1')).toBe(0);
+      expect(secret.data.size).toBe(0);
+      expect(JSON.parse(storage.data.get(OTP_REFS_KEY)!)).toEqual([]);
+    });
+  });
+
+  it('answers reads from memory, so a screen opened during an upload sees the queue at once', async () => {
+    let finish: (sent: Trip) => void = () => undefined;
+    const send = jest.fn(() => new Promise<Trip>(resolve => (finish = resolve)));
+    const {queue} = setup(send);
+    const sending = queue.enqueue({riderId: 'r1', tripId: 't1', action: 'picked-up', key: 'k1'});
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    expect(send).toHaveBeenCalledTimes(1); // still in flight
+    expect((await queue.entries('r1')).map(e => e.key)).toEqual(['k1']);
+    expect(await queue.pending('r1', 't1')).toBe(1);
+    finish(trip);
+    await sending;
+    expect(await queue.pending('r1')).toBe(0);
   });
 
   it('never queues the same idempotency key twice', async () => {
@@ -272,7 +302,8 @@ describe('rider offline queue', () => {
     ]);
     expect(rejected).toHaveBeenCalledTimes(1);
     expect(await queue.pending('r1')).toBe(0);
-    expect(send).toHaveBeenCalledTimes(2);
+    // Offline the second tap tries the first step again at once; online the refusal ends both.
+    expect(send).toHaveBeenCalledTimes(3);
   });
 
   it("replays only the signed-in rider's actions", async () => {

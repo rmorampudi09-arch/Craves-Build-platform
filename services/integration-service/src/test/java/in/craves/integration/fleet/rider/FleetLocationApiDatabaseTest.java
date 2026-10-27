@@ -168,9 +168,14 @@ class FleetLocationApiDatabaseTest {
         assertThat(fleet.db.queryForList("SELECT mock FROM fleet_schema.trip_track WHERE trip_id = ? ORDER BY recorded_at", Boolean.class, trip))
             .containsExactly(false, true);
 
-        fleet.db.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', version = 2, finished_at = now() WHERE id = ?", trip);
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', version = 2, finished_at = now(), updated_at = now() WHERE id = ?", trip);
         locations(rider, List.of()).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED")).andExpect(jsonPath("$.activeTrip.version").value(2));
+        // Reported on every call for 2 minutes after the trip ended, so one lost response can't hide it (P1-12); then it goes.
         locations(rider, List.of(fix(t.plusSeconds(6), false))).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED"));
+        locations(rider, List.of(fix(t.plusSeconds(9), false))).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED"));
+        fleet.db.update("UPDATE fleet_schema.trip SET finished_at = now() - INTERVAL '3 minutes', updated_at = now() - INTERVAL '3 minutes' "
+            + "WHERE id = ?", trip);
+        locations(rider, List.of(fix(t.plusSeconds(12), false))).andExpect(jsonPath("$.activeTrip.step").value("CANCELLED"));
         locations(rider, List.of()).andExpect(jsonPath("$.activeTrip").doesNotExist());
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE trip_id = ?", Integer.class, trip)).isEqualTo(2);
     }

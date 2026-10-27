@@ -21,6 +21,19 @@ WHERE o.offered_at > now() - INTERVAL '7 days'
 GROUP BY ROLLUP (o.rang_channel, d.model)
 ORDER BY GROUPING(o.rang_channel) DESC, GROUPING(d.model) DESC, channel, model;
 
+-- name: offer_to_ring_by_day
+-- The same, all offers, per day (IST): the stop rule is p95 over 8 s for a day (PILOT-HEALTH.md).
+SELECT (o.offered_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist,
+       count(*) AS offers,
+       count(o.rang_at) AS rang,
+       round(percentile_cont(0.50) WITHIN GROUP (ORDER BY extract(epoch FROM o.rang_at - o.offered_at)::float8)::numeric, 1) AS p50_s,
+       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM o.rang_at - o.offered_at)::float8)::numeric, 1) AS p95_s,
+       round(percentile_cont(0.99) WITHIN GROUP (ORDER BY extract(epoch FROM o.rang_at - o.offered_at)::float8)::numeric, 1) AS p99_s
+FROM fleet_schema.trip_offer o
+WHERE o.offered_at > now() - INTERVAL '7 days'
+GROUP BY 1
+ORDER BY day_ist DESC;
+
 -- name: first_channel
 -- Which channel reached the phone first: fcm (the push) or locations (the next /locations call, up to ~11 s later).
 -- Mostly locations means pushes arrive late or not at all: read push_results.
@@ -47,31 +60,37 @@ ORDER BY offers DESC, push_result;
 -- name: shift_survival
 -- Each shift: how long it ran, the longest gap between two /locations calls, how many gaps were over 60 s, the silence
 -- right now (open shifts only) and why the app's process last ended. Target: no gap over 60 s on a 4-hour screen-off shift.
+-- The gap after the last call (to the shift's end, or to now) counts too: a phone that died never calls again to report it.
 SELECT s.id AS shift_id,
        s.rider_id,
        COALESCE(d.model, 'unknown') AS model,
        s.started_at,
        s.ended_at IS NULL AS open,
        round((extract(epoch FROM COALESCE(s.ended_at, now()) - s.started_at) / 3600)::numeric, 2) AS hours,
-       s.max_silence_seconds AS longest_silence_s,
-       s.silences_over_60s,
-       CASE WHEN s.ended_at IS NULL THEN extract(epoch FROM now() - COALESCE(s.last_seen_at, s.started_at))::integer END AS silent_now_s,
+       GREATEST(s.max_silence_seconds, g.last_gap_s) AS longest_silence_s,
+       s.silences_over_60s + CASE WHEN g.last_gap_s > 60 THEN 1 ELSE 0 END AS silences_over_60s,
+       CASE WHEN s.ended_at IS NULL THEN g.last_gap_s END AS silent_now_s,
        s.health ->> 'lastExitReason' AS last_exit_reason
 FROM fleet_schema.rider_shift s
+CROSS JOIN LATERAL (SELECT extract(epoch FROM COALESCE(s.ended_at, now()) - COALESCE(s.last_seen_at, s.started_at))::integer
+                    AS last_gap_s) g
 LEFT JOIN fleet_schema.rider_device d ON d.id = s.device_id
 WHERE s.started_at > now() - INTERVAL '7 days'
 ORDER BY s.started_at DESC;
 
 -- name: sync_delay
 -- How long a trip step took from the rider's tap to the server (the step's ageMs, app 1.1.0), by step. Large numbers are
--- steps tapped offline; "with_tap" counts the steps that carried an age (older apps send none).
+-- steps tapped offline; "with_tap" counts the steps that carried an age (older apps send none). A negative age (a phone's
+-- clock set back between tap and send) counts as 0.
 SELECT e.kind AS step,
        count(*) AS steps,
-       count(e.detail -> 'ageMs') AS with_tap,
-       round(percentile_cont(0.50) WITHIN GROUP (ORDER BY (e.detail ->> 'ageMs')::float8 / 1000)::numeric, 1) AS p50_s,
-       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY (e.detail ->> 'ageMs')::float8 / 1000)::numeric, 1) AS p95_s,
-       round(max((e.detail ->> 'ageMs')::float8 / 1000)::numeric, 1) AS max_s
+       count(a.age_s) AS with_tap,
+       round(percentile_cont(0.50) WITHIN GROUP (ORDER BY a.age_s)::numeric, 1) AS p50_s,
+       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY a.age_s)::numeric, 1) AS p95_s,
+       round(max(a.age_s)::numeric, 1) AS max_s
 FROM fleet_schema.trip_event e
+CROSS JOIN LATERAL (SELECT CASE WHEN e.detail ->> 'ageMs' IS NOT NULL THEN GREATEST((e.detail ->> 'ageMs')::float8, 0) / 1000 END
+                    AS age_s) a
 WHERE e.created_at > now() - INTERVAL '7 days' AND e.actor_type = 'RIDER'
   AND e.kind IN ('ARRIVED_PICKUP', 'FOOD_NOT_READY', 'PICKED_UP', 'ARRIVED_DROP', 'DELIVERED', 'FAILED')
 GROUP BY e.kind

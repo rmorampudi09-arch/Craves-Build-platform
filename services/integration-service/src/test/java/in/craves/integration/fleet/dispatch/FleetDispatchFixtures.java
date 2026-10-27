@@ -57,10 +57,15 @@ public final class FleetDispatchFixtures {
             + "recorded_at = EXCLUDED.recorded_at, received_at = EXCLUDED.received_at", rider, lat, lng, mock, secondsAgo, secondsAgo);
     }
 
-    /** The rider's open shift last called /locations secondsAgo (the heartbeat), whatever its fixes say. */
+    /**
+     * The rider's open shift last called /locations secondsAgo (the heartbeat), whatever its fixes say. No position can have
+     * reached the server after that call, so the latest one's received_at moves back to it if it was later.
+     */
     public static void seen(JdbcTemplate db, UUID rider, int secondsAgo) {
         db.update("UPDATE fleet_schema.rider_shift SET last_seen_at = now() - make_interval(secs => ?) WHERE rider_id = ? AND ended_at IS NULL",
             secondsAgo, rider);
+        db.update("UPDATE fleet_schema.rider_position_latest SET received_at = LEAST(received_at, now() - make_interval(secs => ?)) "
+            + "WHERE rider_id = ?", secondsAgo, rider);
     }
 
     /** The chef behind a sub-order (from the checkout's finance quote), allow-listed for test mode. Returns the chef id. */

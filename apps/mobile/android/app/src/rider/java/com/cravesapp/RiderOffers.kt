@@ -173,6 +173,11 @@ object RiderOffers {
     NotificationManagerCompat.from(context).notify(tag, NOTICE_NOTIFICATION_ID, notification)
   }
 
+  /** Takes a notice down: "You're offline" once the service runs again, however the rider came back. */
+  fun cancelNotice(context: Context, tag: String) {
+    NotificationManagerCompat.from(context).cancel(tag, NOTICE_NOTIFICATION_ID)
+  }
+
   /** Whether an offer can ring now: the app's notifications are on and the offers channel is still at high importance. */
   fun canRing(context: Context): Boolean {
     val manager = NotificationManagerCompat.from(context)

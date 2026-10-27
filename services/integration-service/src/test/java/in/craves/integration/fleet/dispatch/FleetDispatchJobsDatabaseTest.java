@@ -57,6 +57,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** The dispatch chain's clock (PLAN F8a, F8b): watchdog, Borzo, Pidge and the ops queue, against a real database. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
@@ -167,6 +168,34 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(state(kept)).isEqualTo("ASSIGNED");
     }
 
+    @Test
+    void aStepCommittingWhileTheWatchdogWaitsForTheTripKeepsTheKitchenWindow() throws Exception {
+        when(router.borzoTimedPolicyReady()).thenReturn(false);
+        UUID trip = acceptedTrip(UUID.randomUUID(), "ASSIGNED");
+        FleetDispatchFixtures.seen(fleet.db, rider, 100); // past the 90 s on the way, inside the 300 s at the kitchen
+        CountDownLatch moved = new CountDownLatch(1);
+        ExecutorService rider = Executors.newSingleThreadExecutor();
+        try {
+            // "I've reached the kitchen" holds the trip row as the watchdog's tick starts, and commits 1.5 s later.
+            Future<?> arrival = rider.submit(() -> new TransactionTemplate(fleet.transactions).execute(status -> {
+                fleet.db.update("UPDATE fleet_schema.trip SET state = 'AT_PICKUP', version = version + 1 WHERE id = ?", trip);
+                moved.countDown();
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                return null;
+            }));
+            assertThat(moved.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(jobs.watchdog()).as("it waits for the step, then judges the kitchen's 300 s").isZero();
+            arrival.get(10, TimeUnit.SECONDS);
+        } finally {
+            rider.shutdownNow();
+        }
+        assertThat(state(trip)).isEqualTo("AT_PICKUP");
+    }
+
     /** Retention (blueprint E6): a position goes 15 minutes after the shift ends, and never while the rider is on a trip. */
     @Test
     void offShiftPositionsAreForgottenAfterFifteenMinutesButNotDuringATrip() {
@@ -207,8 +236,10 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(jobs.nudgeSilentShifts()).isEqualTo(1);
         verify(alerts, timeout(2000).times(2)).goOnline("fcm-+919800000001");
         verify(alerts, never()).goOnline("fcm-+919800000005");
-        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.rider_shift WHERE last_nudge_at IS NOT NULL AND rider_id <> ?",
-            Integer.class, rider)).as("nobody else: ended " + ended + ", unbound, calling, app 1.0.0 " + oldApp).isZero();
+        assertThat(fleet.db.queryForObject("SELECT last_nudge_at IS NOT NULL FROM fleet_schema.rider_shift WHERE rider_id = ?", Boolean.class,
+            oldApp)).as("app 1.0.0: claimed without a push, so it leaves the front of the list for 30 minutes").isTrue();
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.rider_shift WHERE last_nudge_at IS NOT NULL "
+            + "AND rider_id NOT IN (?, ?)", Integer.class, rider, oldApp)).as("nobody else: ended " + ended + ", unbound, calling").isZero();
     }
 
     @Test

@@ -29,10 +29,10 @@ class RiderMessagingService : FirebaseMessagingService() {
     RiderOnlineService.registerToken(this, token)
   }
 
-  private companion object {
+  companion object {
     const val GO_ONLINE_TAG = "go-online"
     // shortcut: English only, like the offer texts; move to strings.xml with te/hi (P2-08).
-    const val GO_ONLINE_TITLE = "You're offline"
-    const val GO_ONLINE_BODY = "Tap to go back online and get orders."
+    private const val GO_ONLINE_TITLE = "You're offline"
+    private const val GO_ONLINE_BODY = "Tap to go back online and get orders."
   }
 }

@@ -49,7 +49,7 @@ notification-service sends a **data-only** message (no `notification` payload), 
 
 The app always posts a visible notification on channel `rider_offers` (high importance, ringtone and vibration). FCM deprioritises later high-priority pushes from apps that don't.
 
-`type=GO_ONLINE` (app 1.1.0) comes when the shift is open but the phone stopped calling: unless the service is running again, the app posts "You're offline" / "Tap to go back online and get orders." on channel `rider_trip` (default importance); the tap opens the app and Home resumes the saved shift.
+`type=GO_ONLINE` (app 1.1.0) comes when the shift is open but the phone stopped calling: unless the service is running again, the app posts "You're offline" / "Tap to go back online and get orders." on channel `rider_trip` (default importance); the tap opens the app and Home resumes the saved shift. The notice goes as soon as the service runs again, whether the rider tapped it or opened the app another way.
 
 When a location call reports the rider's trip as `CANCELLED` (ops, the customer or the watchdog ended it), the service posts "Trip cancelled" / "Open Craves Rider to see what's next." on `rider_trip`, once per change, so the rider knows with the screen off; the tap opens the app (app 1.1.0).
 
@@ -82,7 +82,7 @@ JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken,
 
 `installationId` is `Settings.Secure.ANDROID_ID`, from `CravesRiderDevice.getInstallationId()` (null if the phone has none; JS then registers nothing and sends no header). The server binds the first one; `POST /shift/start` sends it again as `X-Craves-Installation-Id`, and Go online shows the server's message on 409 `DEVICE_NOT_BOUND`. ANDROID_ID depends on the signing key: a build signed with another key looks like a new phone, so keep one rider signing key (see RELEASE.md).
 
-The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the camera's photo into `filesDir/rider-photos/<uuid>.jpg`, upright (EXIF rotation applied), the long edge at most 1600 px, JPEG quality 80, and resolves its `file://` URI; the queue sends that copy and `deletePhoto(uri)` removes it once the server has answered (sent or refused). `deletePhoto` only deletes inside `rider-photos`. A missing copy is never sent: the step becomes a refusal "Take the photo again" on screen.
+The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the camera's photo into `filesDir/rider-photos/<uuid>.jpg`, upright (EXIF rotation applied), the long edge at most 1600 px, JPEG quality 80, and resolves its `file://` URI; the queue sends that copy and `deletePhoto(uri)` removes it once the server has answered (sent or refused). `deletePhoto` only deletes inside `rider-photos`. If the copy can't be made or fully written, `keepPhoto` leaves no file and fails, and the camera's own photo is queued instead. A missing copy is never sent: the step becomes a refusal "Take the photo again" on screen.
 
 ## Rules the code keeps
 

@@ -288,6 +288,20 @@ class FleetTripStepsDatabaseTest {
             .containsEntry("mock", false).containsEntry("age_ms", 11 * 60_000L);
     }
 
+    /** Reached the door with no signal and no usable fix, both steps synced later: the wait still runs between the two taps. */
+    @Test
+    void theDoorWaitRunsBetweenTheArrivalAndPhotoTapsEvenWithoutAFixAtTheDoor() {
+        trips.step(identity, tripId, "arrived-pickup", "k1");
+        trips.step(identity, tripId, "picked-up", "k2");
+        trips.step(identity, tripId, "arrived-drop", "k3", new Tap(15 * 60_000L, null));
+        assertThat(minutesAgo("arrived_drop_at")).as("no fix at the door: the arrival itself counts from now").isLessThan(0.2);
+        MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);
+        refused(() -> trips.deliveredByPhoto(identity, tripId, 2, photo, "p1", new Tap(11 * 60_000L, null)), 422, "WAIT_NOT_OVER");
+        refused(() -> trips.failed(identity, tripId, "CUSTOMER_UNREACHABLE", null, "f1", new Tap(11 * 60_000L, null)), 422, "WAIT_NOT_OVER");
+        assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p2", new Tap(5 * 60_000L, null)).step())
+            .as("10 minutes after the arrival tap, though both reached the server just now").isEqualTo("DELIVERED");
+    }
+
     /** An arrival's earlier time needs evidence; a step's age is capped at 30 minutes and never goes before the step before. */
     @Test
     void anEarlierArrivalNeedsARealFixAtThePlaceAndATapAgeIsCapped() {

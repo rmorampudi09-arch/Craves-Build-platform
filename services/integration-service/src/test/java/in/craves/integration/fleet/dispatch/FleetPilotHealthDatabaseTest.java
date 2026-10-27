@@ -41,15 +41,24 @@ class FleetPilotHealthDatabaseTest {
         fleet.db.update(OFFER.formatted("NULL"), UUID.randomUUID(), trip, rider, "NO_TOKEN", null);
         fleet.db.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, detail) "
             + "VALUES (?, ?, 'PICKED_UP', 'RIDER', ?, '{\"ageMs\": 90000}')", UUID.randomUUID(), trip, rider);
+        // An older app's step (no age) isn't timed; a phone clock set back between tap and send counts as 0.
+        fleet.db.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, detail) "
+            + "VALUES (?, ?, 'PICKED_UP', 'RIDER', ?, '{}'), (?, ?, 'PICKED_UP', 'RIDER', ?, '{\"ageMs\": -5000}')",
+            UUID.randomUUID(), trip, rider, UUID.randomUUID(), trip, rider);
+        // A shift whose phone died 2 hours in and was closed at 3 hours: the silence after its last call counts.
+        UUID died = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - INTERVAL '4 hours', last_seen_at = now() - INTERVAL '2 hours', "
+            + "ended_at = now() - INTERVAL '1 hour' WHERE rider_id = ?", died);
         fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, state, outcome, opened_at, deadline_at, closed_at) "
             + "VALUES (?, ?, 1, 'CRAVES_FLEET', 'CLOSED', 'ACCEPTED', now() - INTERVAL '1 hour', now() - INTERVAL '59 minutes', "
             + "now() - INTERVAL '59 minutes')", UUID.randomUUID(), trip);
 
         Map<String, String> queries = queries();
-        assertThat(queries.keySet()).containsExactly("offer_to_ring", "first_channel", "push_results", "shift_survival", "sync_delay",
-            "battery_per_hour", "fleet_stage_outcomes");
+        assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
+            "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
 
+        assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
         List<Map<String, Object>> ring = fleet.db.queryForList(queries.get("offer_to_ring"));
         Map<String, Object> all = ring.get(0);
         assertThat(all).containsEntry("channel", "all").containsEntry("model", "all");
@@ -64,11 +73,19 @@ class FleetPilotHealthDatabaseTest {
         assertThat(fleet.db.queryForList(queries.get("first_channel"))).extracting(row -> row.get("first_channel"), row -> number(row, "offers"))
             .containsExactly(tuple("fcm", 15.0), tuple("locations", 5.0), tuple("never rang", 1.0));
         assertThat(fleet.db.queryForList(queries.get("push_results")).get(0)).containsEntry("push_result", "SENT");
-        Map<String, Object> shift = fleet.db.queryForList(queries.get("shift_survival")).get(0);
+        List<Map<String, Object>> shifts = fleet.db.queryForList(queries.get("shift_survival"));
+        Map<String, Object> shift = shifts.get(0);
         assertThat(shift).containsEntry("model", "Redmi Note 12").containsEntry("longest_silence_s", 75).containsEntry("silences_over_60s", 1)
             .containsEntry("last_exit_reason", "LOW_MEMORY").containsEntry("open", true);
         assertThat(number(shift, "hours")).isCloseTo(2.0, within(0.02));
-        assertThat(number(fleet.db.queryForList(queries.get("sync_delay")).get(0), "p95_s")).isEqualTo(90.0);
+        assertThat(shifts.get(1)).containsEntry("open", false).containsEntry("silences_over_60s", 1).containsEntry("silent_now_s", null);
+        assertThat(number(shifts.get(1), "longest_silence_s")).as("the hour after its last call").isCloseTo(3600, within(2.0));
+        Map<String, Object> picked = fleet.db.queryForList(queries.get("sync_delay")).get(0);
+        assertThat(picked).containsEntry("step", "PICKED_UP");
+        assertThat(number(picked, "steps")).isEqualTo(3);
+        assertThat(number(picked, "with_tap")).isEqualTo(2);
+        assertThat(number(picked, "max_s")).isEqualTo(90.0);
+        assertThat(number(picked, "p50_s")).as("0 and 90 s").isEqualTo(45.0);
         assertThat(number(fleet.db.queryForList(queries.get("battery_per_hour")).get(0), "pct_per_hour")).isEqualTo(6.0);
         assertThat(fleet.db.queryForList(queries.get("fleet_stage_outcomes")).get(0)).containsEntry("outcome", "ACCEPTED");
     }

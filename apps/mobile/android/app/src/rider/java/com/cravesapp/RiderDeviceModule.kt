@@ -135,9 +135,16 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
     }
     val upright = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
     val file = File(File(reactContext.filesDir, PHOTO_DIR).apply { mkdirs() }, "${UUID.randomUUID()}.jpg")
-    FileOutputStream(file).use { upright.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
-    if (upright !== decoded) upright.recycle()
-    decoded.recycle()
+    try {
+      // A failed or partial write leaves no file behind: JS then queues the camera's own photo.
+      check(FileOutputStream(file).use { upright.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }) { "JPEG not written" }
+    } catch (error: Exception) {
+      file.delete()
+      throw error
+    } finally {
+      if (upright !== decoded) upright.recycle()
+      decoded.recycle()
+    }
     return file
   }
 

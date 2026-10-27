@@ -134,6 +134,8 @@ class RiderOnlineService : Service() {
     shift = saved
     if (firstStart) {
       running = true
+      // Back online, from the notice or from the launcher: "You're offline" no longer holds.
+      RiderOffers.cancelNotice(this, RiderMessagingService.GO_ONLINE_TAG)
       holdWakeLock(saved)
       executor.execute {
         exitReason = lastExitReason()

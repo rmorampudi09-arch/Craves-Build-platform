@@ -73,6 +73,8 @@ export interface QueueDeps {
 
 export const STORAGE_KEY = 'rider.queue.v1';
 export const REFUSALS_KEY = 'rider.queue.refusals.v1';
+/** The ids of the OTPs in the secret store and when each was kept: the store can't list its keys (decision E1). */
+export const OTP_REFS_KEY = 'rider.queue.otpRefs.v1';
 const MAX_REFUSALS = 5;
 /** The longest the customer's OTP waits on the phone (decision E1). */
 export const OTP_KEPT_MS = 24 * 60 * 60_000;
@@ -80,6 +82,7 @@ const BASE_DELAY_MS = 2_000;
 const MAX_DELAY_MS = 60_000;
 
 type OtpBody = {method: 'OTP'; otp?: string; otpRef?: string; capturedOffline?: boolean};
+type OtpRef = {id: string; at: number};
 
 /** An OTP delivery's body: in memory it has the otp, as stored only the otpRef. */
 function otpBody(entry: QueueEntry): OtpBody | undefined {
@@ -100,15 +103,18 @@ function forStorage(entry: QueueEntry): QueueEntry {
 
 export function createOfflineQueue(deps: QueueDeps) {
   const now = deps.now ?? Date.now;
-  let entries: QueueEntry[] | null = null;
-  let refused: Refusal[] | null = null;
+  let entries: QueueEntry[] = [];
+  let refused: Refusal[] = [];
+  let loaded: Promise<void> | null = null;
+  let refusalsLoaded: Promise<void> | null = null;
   let chain: Promise<unknown> = Promise.resolve();
   let counter = 0;
   const changeListeners = new Set<() => void>();
   const rejectListeners = new Set<(entry: QueueEntry, info: RejectInfo) => void>();
   const sentListeners = new Set<(entry: QueueEntry, trip: Trip) => void>();
 
-  // Every operation runs one after another, so a replay never races an enqueue.
+  // Every change runs one after another, so a replay never races an enqueue. Reads come from memory and never wait
+  // behind a send, so a screen opened during an upload shows what is queued at once.
   function serial<T>(task: () => Promise<T>): Promise<T> {
     const next = chain.then(task, task);
     chain = next.catch(() => undefined);
@@ -124,18 +130,52 @@ export function createOfflineQueue(deps: QueueDeps) {
     }
   }
 
+  /** The queue, read from storage once; after that, memory. */
   async function load(): Promise<QueueEntry[]> {
-    if (!entries) {
+    loaded ??= (async () => {
       entries = await read<QueueEntry>(STORAGE_KEY);
-      // An OTP waits at most 24 h: then the step goes without it and the server's refusal shows (E1).
-      await Promise.all(entries.filter(e => now() - e.createdAt > OTP_KEPT_MS).map(forgetOtp));
-    }
+      await sweepOtps();
+    })();
+    await loaded;
     return entries;
   }
 
+  async function saveOtpRefs(refs: OtpRef[]): Promise<void> {
+    await deps.storage.setItem(OTP_REFS_KEY, JSON.stringify(refs)).catch(() => undefined);
+  }
+
+  /** The OTP goes to the secret store, its id to the list first, so a crash between the two never hides one. */
+  async function keepOtp(id: string, otp: string): Promise<void> {
+    if (deps.secret) {
+      await saveOtpRefs([...(await read<OtpRef>(OTP_REFS_KEY)), {id, at: now()}]);
+      await deps.secret.save(id, otp).catch(() => undefined);
+    }
+  }
+
   async function forgetOtp(entry: QueueEntry): Promise<void> {
-    if (otpBody(entry)) {
-      await deps.secret?.remove(entry.id).catch(() => undefined);
+    if (otpBody(entry) && deps.secret) {
+      await deps.secret.remove(entry.id).catch(() => undefined);
+      const refs = await read<OtpRef>(OTP_REFS_KEY);
+      if (refs.some(r => r.id === entry.id)) {
+        await saveOtpRefs(refs.filter(r => r.id !== entry.id));
+      }
+    }
+  }
+
+  /**
+   * At start, an OTP leaves the secret store when its step is gone (the app died before it could tidy up) or it was kept
+   * over 24 h (E1); a step still waiting then goes without it and the server's refusal shows.
+   */
+  async function sweepOtps(): Promise<void> {
+    if (!deps.secret) {
+      return;
+    }
+    const refs = await read<OtpRef>(OTP_REFS_KEY);
+    const waiting = new Set(entries.map(e => e.id));
+    const gone = refs.filter(r => !waiting.has(r.id) || now() - r.at > OTP_KEPT_MS);
+    if (gone.length > 0) {
+      await Promise.all(gone.map(r => deps.secret?.remove(r.id).catch(() => undefined)));
+      await saveOtpRefs(refs.filter(r => !gone.includes(r)));
     }
   }
 
@@ -164,7 +204,10 @@ export function createOfflineQueue(deps: QueueDeps) {
   }
 
   async function loadRefusals(): Promise<Refusal[]> {
-    refused ??= await read<Refusal>(REFUSALS_KEY);
+    refusalsLoaded ??= read<Refusal>(REFUSALS_KEY).then(list => {
+      refused = list;
+    });
+    await refusalsLoaded;
     return refused;
   }
 
@@ -226,7 +269,9 @@ export function createOfflineQueue(deps: QueueDeps) {
           const list = await load();
           const dropped = list.filter(e => e.tripId === entry.tripId && e.riderId === riderId);
           await save(list.filter(e => !dropped.includes(e)));
-          await Promise.all(dropped.map(letGo));
+          for (const e of dropped) {
+            await letGo(e);
+          }
           dropped.forEach(e => results.set(e.id, {kind: 'rejected', ...info}));
           if (deps.keepRefusal?.(entry, info) ?? true) {
             const refusal: Refusal = {...info, riderId, tripId: entry.tripId, action: entry.action, at: now()};
@@ -258,11 +303,13 @@ export function createOfflineQueue(deps: QueueDeps) {
           const otp = otpBody(entry)?.otp;
           if (otp !== undefined) {
             // Kept before the entry is stored, so no stored entry points at a code that isn't there.
-            await deps.secret?.save(entry.id, otp).catch(() => undefined);
+            await keepOtp(entry.id, otp);
           }
           await save([...list, entry]);
         }
-        const results = await flushFor(input.riderId);
+        // The rider just tapped: try now, even what waits out a backoff, so a code typed as the signal returns is
+        // checked at the door rather than queued behind an older step.
+        const results = await flushFor(input.riderId, true);
         const outcome = results.get(entry.id) ?? {kind: 'queued'};
         if (outcome.kind === 'queued' && !entry.deferred) {
           const id = entry.id;
@@ -276,35 +323,26 @@ export function createOfflineQueue(deps: QueueDeps) {
       return serial(() => flushFor(riderId, options?.now));
     },
     /** This rider's entries waiting to send, oldest first, optionally for one trip (copies). */
-    entries(riderId: string, tripId?: string): Promise<QueueEntry[]> {
-      return serial(async () =>
-        (await load())
-          .filter(e => e.riderId === riderId && (tripId === undefined || e.tripId === tripId))
-          .map(e => ({...e})),
-      );
+    async entries(riderId: string, tripId?: string): Promise<QueueEntry[]> {
+      return (await load())
+        .filter(e => e.riderId === riderId && (tripId === undefined || e.tripId === tripId))
+        .map(e => ({...e}));
     },
-    pending(riderId: string, tripId?: string): Promise<number> {
-      return serial(async () =>
-        (await load()).filter(
-          e => e.riderId === riderId && (tripId === undefined || e.tripId === tripId),
-        ).length,
-      );
+    async pending(riderId: string, tripId?: string): Promise<number> {
+      return (await load()).filter(e => e.riderId === riderId && (tripId === undefined || e.tripId === tripId)).length;
     },
     /** The server's refusals this rider hasn't dismissed, newest first, optionally for one trip (P1-08). */
-    refusals(riderId: string, tripId?: string): Promise<Refusal[]> {
-      return serial(async () =>
-        (await loadRefusals()).filter(r => r.riderId === riderId && (tripId === undefined || r.tripId === tripId)),
-      );
+    async refusals(riderId: string, tripId?: string): Promise<Refusal[]> {
+      return (await loadRefusals()).filter(r => r.riderId === riderId && (tripId === undefined || r.tripId === tripId));
     },
-    dismissRefusal(tripId: string): Promise<void> {
-      return serial(async () => saveRefusals((await loadRefusals()).filter(r => r.tripId !== tripId)));
+    /** Not queued behind a send: the notice goes at once. Each change reads and writes in one step, so none is lost. */
+    async dismissRefusal(tripId: string): Promise<void> {
+      await saveRefusals((await loadRefusals()).filter(r => r.tripId !== tripId));
     },
     /** Every rider's entries waiting, and the oldest one's createdAt (null when none): the phone's health report. */
-    stats(): Promise<{pending: number; oldestAt: number | null}> {
-      return serial(async () => {
-        const list = await load();
-        return {pending: list.length, oldestAt: list.length ? Math.min(...list.map(e => e.createdAt)) : null};
-      });
+    async stats(): Promise<{pending: number; oldestAt: number | null}> {
+      const list = await load();
+      return {pending: list.length, oldestAt: list.length ? Math.min(...list.map(e => e.createdAt)) : null};
     },
     subscribe(listener: () => void): () => void {
       changeListeners.add(listener);

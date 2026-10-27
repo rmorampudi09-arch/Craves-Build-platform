@@ -65,9 +65,13 @@ public class FleetDispatchJobs {
     /** Silent long enough to lose the trip in its state: 90 s on the way to the kitchen, 300 s at it. */
     private static final String HANDBACK_WINDOW = "make_interval(secs => CASE WHEN t.state = 'AT_PICKUP' THEN " + KITCHEN_HANDBACK_SECONDS
         + " ELSE " + WATCHDOG_SECONDS + " END)";
-    /** No call from any of the trip's rider's shifts since the given time. */
+    /**
+     * Nothing from the trip's rider since the given time: no call on any of their shifts and no position received. Either
+     * counts, so a server that doesn't write last_seen_at yet (the old revision during a deploy) still keeps riders alive.
+     */
     private static final String SILENT_SINCE = "NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = t.rider_id "
-        + "AND s.last_seen_at >= now() - %s)";
+        + "AND s.last_seen_at >= now() - %1$s) AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_position_latest p "
+        + "WHERE p.rider_id = t.rider_id AND p.received_at >= now() - %1$s)";
     static final int NUDGES_PER_TICK = 20;
     /** The first rider app that shows the GO_ONLINE push (P1-13). */
     static final String NUDGE_MIN_APP_VERSION = "1.1.0";
@@ -122,7 +126,8 @@ public class FleetDispatchJobs {
      * has not called for 3 minutes (the app swiped away or killed): at most every 30 minutes per shift, 20 a tick, only to
      * a bound phone with a push token on app 1.1.0 or later (older apps can't show it). The tap opens the app and Home
      * resumes the shift. Each nudge is claimed in the database before it is sent, so two replicas never send it twice, and
-     * sent on its own thread, so a slow push never holds up this tick.
+     * sent on its own thread, so a slow push never holds up this tick. A shift on an older app is claimed without a push,
+     * so it leaves the front of the list for 30 minutes instead of keeping newer apps' shifts out of it.
      */
     int nudgeSilentShifts() {
         List<Map<String, Object>> silent = jdbc.queryForList("""
@@ -134,11 +139,12 @@ public class FleetDispatchJobs {
             ORDER BY COALESCE(s.last_seen_at, s.started_at) LIMIT ?""", NUDGES_PER_TICK * 2);
         int nudged = 0;
         for (Map<String, Object> shift : silent) {
-            if (nudged == NUDGES_PER_TICK || FleetShiftService.versionBelow((String) shift.get("app_version"), NUDGE_MIN_APP_VERSION)) {
-                continue;
+            if (nudged == NUDGES_PER_TICK) {
+                break;
             }
             if (jdbc.update("UPDATE fleet_schema.rider_shift SET last_nudge_at = now() WHERE id = ? "
-                + "AND (last_nudge_at IS NULL OR last_nudge_at < now() - INTERVAL '30 minutes')", shift.get("id")) == 1) {
+                + "AND (last_nudge_at IS NULL OR last_nudge_at < now() - INTERVAL '30 minutes')", shift.get("id")) == 1
+                && !FleetShiftService.versionBelow((String) shift.get("app_version"), NUDGE_MIN_APP_VERSION)) {
                 nudged++;
                 String token = (String) shift.get("fcm_token");
                 Thread.ofVirtual().name("fleet-go-online").start(() -> LOGGER.info("FLEET_GO_ONLINE shift={} result={}", shift.get("id"),
@@ -236,14 +242,19 @@ public class FleetDispatchJobs {
             .formatted(SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")")), UUID.randomUUID(), tripId) == 1;
     }
 
-    /** One silent rider's trip ends (pay per its state, held) and the next stage opens. Null if it changed meanwhile. */
+    /**
+     * One silent rider's trip ends (pay per its state, held) and the next stage opens. Null if it changed meanwhile. The trip
+     * is locked first and the silence judged after, in its own statement: when the lock waits for a step, Postgres re-checks
+     * only the trip row, so a silence test in the locking query would keep the old state's 90 s window at the kitchen.
+     */
     private Map<String, Object> handBack(UUID tripId) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
             SELECT t.state, t.order_code, t.rider_id FROM fleet_schema.trip t
             WHERE t.id = ? AND t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP')
-              AND t.accepted_at < now() - make_interval(secs => %d) AND %s
-            FOR UPDATE OF t""".formatted(WATCHDOG_SECONDS, SILENT_SINCE.formatted(HANDBACK_WINDOW)), tripId);
-        if (rows.isEmpty()) {
+              AND t.accepted_at < now() - make_interval(secs => %d)
+            FOR UPDATE OF t""".formatted(WATCHDOG_SECONDS), tripId);
+        if (rows.isEmpty() || !Boolean.TRUE.equals(jdbc.queryForObject("SELECT %s FROM fleet_schema.trip t WHERE t.id = ?"
+            .formatted(SILENT_SINCE.formatted(HANDBACK_WINDOW)), Boolean.class, tripId))) {
             return null;
         }
         Map<String, Object> trip = rows.get(0);

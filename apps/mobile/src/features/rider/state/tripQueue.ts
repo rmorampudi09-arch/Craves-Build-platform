@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AppApiError} from '../../../core/http/apiError';
 import type {DeliverBody} from '../api/contract';
 import {riderApi} from '../api/riderApi';
-import {createOfflineQueue} from '../domain/offlineQueue';
+import {createOfflineQueue, type QueueEntry} from '../domain/offlineQueue';
 import {riderOnlineService} from '../native/riderOnlineService';
 
 /** The one queue every trip action goes through, kept in AsyncStorage so it survives restarts. */
@@ -42,18 +42,18 @@ function reportQueueStats() {
 tripQueue.subscribe(reportQueueStats);
 reportQueueStats();
 
-/** Count of this rider's actions still waiting to sync; drives "Saved · will sync" and the sign-out block. */
-export function usePendingActions(riderId: string | undefined, tripId?: string): number {
-  const [count, setCount] = useState(0);
+/** This rider's actions still waiting to sync, oldest first: the trip screen shows the step they lead to (P1-06). */
+export function usePendingEntries(riderId: string | undefined, tripId?: string): QueueEntry[] {
+  const [entries, setEntries] = useState<QueueEntry[]>([]);
   useEffect(() => {
     if (!riderId) {
       return;
     }
     let active = true;
     const refresh = () =>
-      tripQueue.pending(riderId, tripId).then(n => {
+      tripQueue.entries(riderId, tripId).then(list => {
         if (active) {
-          setCount(n);
+          setEntries(list);
         }
       });
     refresh();
@@ -63,5 +63,10 @@ export function usePendingActions(riderId: string | undefined, tripId?: string):
       unsubscribe();
     };
   }, [riderId, tripId]);
-  return count;
+  return entries;
+}
+
+/** Count of this rider's actions still waiting to sync; drives "Saved · will sync" and the sign-out block. */
+export function usePendingActions(riderId: string | undefined, tripId?: string): number {
+  return usePendingEntries(riderId, tripId).length;
 }

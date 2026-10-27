@@ -70,7 +70,7 @@ export function NotAnswering({
         return;
       }
       onPhotoSent();
-      await run('delivered', 'DELIVERED', {
+      await run('delivered', {
         method: 'PHOTO',
         photoUri: shot.assets[0]?.uri,
         callsMade: callTimes.length,
@@ -84,7 +84,7 @@ export function NotAnswering({
   function markFailed(reason: FailReason) {
     Alert.alert(t.markFailed, t.failReasons[reason], [
       {text: strings.common.cancel, style: 'cancel'},
-      {text: t.confirmFail, style: 'destructive', onPress: () => run('failed', 'FAILED', {reason})},
+      {text: t.confirmFail, style: 'destructive', onPress: () => run('failed', {reason})},
     ]);
   }
 

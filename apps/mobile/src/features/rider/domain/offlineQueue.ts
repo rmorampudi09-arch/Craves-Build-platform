@@ -156,6 +156,14 @@ export function createOfflineQueue(deps: QueueDeps) {
     flush(riderId: string): Promise<Map<string, QueueOutcome>> {
       return serial(() => flushFor(riderId));
     },
+    /** This rider's entries waiting to send, oldest first, optionally for one trip (copies). */
+    entries(riderId: string, tripId?: string): Promise<QueueEntry[]> {
+      return serial(async () =>
+        (await load())
+          .filter(e => e.riderId === riderId && (tripId === undefined || e.tripId === tripId))
+          .map(e => ({...e})),
+      );
+    },
     pending(riderId: string, tripId?: string): Promise<number> {
       return serial(async () =>
         (await load()).filter(

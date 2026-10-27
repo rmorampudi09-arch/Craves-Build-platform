@@ -20,7 +20,7 @@ export function ToKitchen({trip, run, syncing}: StepProps) {
       header={<TripHeader title={t.titles.TO_KITCHEN} trip={trip} step={1} />}
       testID="rider-to-kitchen"
       footer={
-        <BottomAction label={t.reachedKitchen} onPress={() => run('arrived-pickup', 'AT_KITCHEN')} testID="rider-reached-kitchen" />
+        <BottomAction label={t.reachedKitchen} onPress={() => run('arrived-pickup')} testID="rider-reached-kitchen" />
       }>
       <SyncNote show={syncing} />
       <PlaceCard label={t.pickUpFrom} name={trip.kitchen.kitchenName} place={trip.kitchen} />
@@ -65,7 +65,7 @@ export function AtKitchen({trip, run, syncing}: StepProps) {
     <RiderScreen
       header={<TripHeader title={t.titles.AT_KITCHEN} trip={trip} step={2} />}
       testID="rider-pickup-check"
-      footer={<BottomAction label={t.pickedUp} onPress={() => run('picked-up', 'PICKED_UP')} testID="rider-picked-up" />}>
+      footer={<BottomAction label={t.pickedUp} onPress={() => run('picked-up')} testID="rider-picked-up" />}>
       <SyncNote show={syncing} />
       <HeroCard style={styles.codeCard}>
         <Text style={[text.body, text.secondary, text.center]}>{t.matchCode}</Text>
@@ -113,7 +113,7 @@ export function AtKitchen({trip, run, syncing}: StepProps) {
               label={t.foodNotReady}
               variant="outline"
               disabled={lateSent}
-              onPress={async () => setLateSent(await run('food-not-ready', null))}
+              onPress={async () => setLateSent(await run('food-not-ready'))}
               testID="rider-food-not-ready"
             />
           }

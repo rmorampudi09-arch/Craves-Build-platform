@@ -3,15 +3,15 @@ import React, {type ReactNode} from 'react';
 import {Linking, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
 import {Badge} from '../../../../shared/components';
 import {colors, fontWeight, spacing, typography} from '../../../../design/tokens';
-import type {DeliverBody, FailBody, Place, Trip, TripAction, TripStep} from '../../api/contract';
+import type {DeliverBody, FailBody, Place, Trip, TripAction} from '../../api/contract';
 import {RiderHeader} from '../../components/RiderHeader';
 import {StepBar} from '../../components/StepBar';
 import {Card, RateRow} from '../../components/ui';
 import {formatRupees} from '../../domain/format';
 import {useStrings} from '../../strings/StringsProvider';
 
-/** Sends a step through the offline queue; resolves false when the server refused it. */
-export type RunStep = (action: TripAction, nextStep: TripStep | null, body?: DeliverBody | FailBody) => Promise<boolean>;
+/** Sends a step through the offline queue; resolves false when the server refused it. The screen shows its step at once. */
+export type RunStep = (action: TripAction, body?: DeliverBody | FailBody) => Promise<boolean>;
 
 /** What every trip step gets from TripScreen. */
 export interface StepProps {

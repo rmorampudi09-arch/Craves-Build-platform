@@ -13,7 +13,12 @@ import {RiderRuntime} from '../components/RiderRuntime';
 import {TripScreen} from './TripScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
-const mockPending = {count: 0};
+// Offline, the queue keeps what the screen sends; the screen shows the step those entries lead to (P1-06).
+const mockPending = {offline: false, entries: [] as {action: string; tripId: string}[], listeners: new Set<() => void>()};
+function mockSetEntries(entries: {action: string; tripId: string}[]) {
+  mockPending.entries = entries;
+  mockPending.listeners.forEach(listener => listener());
+}
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/native', () => ({
@@ -33,18 +38,31 @@ jest.mock('../api/riderApi', () => {
 });
 type RejectListener = (entry: unknown, info: unknown) => void;
 const mockRejected = new Set<RejectListener>();
-jest.mock('../state/tripQueue', () => ({
-  tripQueue: {
-    enqueue: jest.fn(async () => ({kind: 'queued'})),
-    onRejected: jest.fn((listener: RejectListener) => {
-      mockRejected.add(listener);
-      return () => mockRejected.delete(listener);
-    }),
-    onSent: () => () => undefined,
-    flush: jest.fn(async () => new Map()),
-  },
-  usePendingActions: () => mockPending.count,
-}));
+jest.mock('../state/tripQueue', () => {
+  const {useSyncExternalStore} = require('react');
+  const subscribe = (listener: () => void) => {
+    mockPending.listeners.add(listener);
+    return () => mockPending.listeners.delete(listener);
+  };
+  return {
+    tripQueue: {
+      enqueue: jest.fn(async (entry: {action: string; tripId: string}) => {
+        if (mockPending.offline) {
+          mockSetEntries([...mockPending.entries, entry]);
+        }
+        return {kind: 'queued'};
+      }),
+      onRejected: jest.fn((listener: RejectListener) => {
+        mockRejected.add(listener);
+        return () => mockRejected.delete(listener);
+      }),
+      onSent: () => () => undefined,
+      flush: jest.fn(async () => new Map()),
+    },
+    usePendingEntries: () => useSyncExternalStore(subscribe, () => mockPending.entries),
+    usePendingActions: () => useSyncExternalStore(subscribe, () => mockPending.entries.length),
+  };
+});
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {
     lastFix: () => mockFix.value,
@@ -144,7 +162,8 @@ const press = (testID: string) => act(async () => byId(testID).props.onPress());
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockPending.count = 0;
+  mockPending.offline = false;
+  mockPending.entries = [];
   mockFix.value = null;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
@@ -212,9 +231,19 @@ describe('Trip: to the kitchen (step 1)', () => {
     expect(allText()).not.toContain('sealed bag');
   });
 
+  it('opens on the step the queued steps lead to, after a restart while offline (blueprint A3)', async () => {
+    mockSetEntries([
+      {action: 'arrived-pickup', tripId: 't1'},
+      {action: 'picked-up', tripId: 't1'},
+    ]);
+    await render(trip);
+    expect(has('rider-reached-customer')).toBe(true);
+    expect(allText()).toContain('Saved · will sync');
+  });
+
   it('moves to the kitchen step at once and says it will sync when offline', async () => {
     await render(trip);
-    mockPending.count = 1;
+    mockPending.offline = true;
     await press('rider-reached-kitchen');
     expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
     expect(allText()).toContain('At the kitchen');
@@ -410,7 +439,7 @@ describe('Trip: deliver with the OTP (step 4)', () => {
 
   it('completes at once and says it will sync when offline', async () => {
     await render(atDrop);
-    mockPending.count = 1;
+    mockPending.offline = true;
     await typeOtp('4719');
     await press('rider-delivered');
     expect(allText()).toContain('Trip complete');
@@ -616,7 +645,7 @@ describe('Trip: complete, failed and cancelled', () => {
 
   it('while offline says it will sync and holds the credited note and today', async () => {
     await render({...trip, step: 'AT_DROP'});
-    mockPending.count = 1;
+    mockPending.offline = true;
     await act(async () => tree.root.findByType(TextInput).props.onChangeText('4719'));
     await press('rider-delivered');
     const text = allText();

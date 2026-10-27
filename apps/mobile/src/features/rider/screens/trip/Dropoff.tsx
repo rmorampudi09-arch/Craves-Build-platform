@@ -29,7 +29,7 @@ export function ToCustomer({trip, run, syncing}: StepProps) {
       header={<TripHeader title={t.titles.PICKED_UP} trip={trip} step={3} />}
       testID="rider-to-customer"
       footer={
-        <BottomAction label={t.reachedCustomer} onPress={() => run('arrived-drop', 'AT_DROP')} testID="rider-reached-customer" />
+        <BottomAction label={t.reachedCustomer} onPress={() => run('arrived-drop')} testID="rider-reached-customer" />
       }>
       <SyncNote show={syncing} />
       <PlaceCard label={t.deliverTo} name={trip.customer.firstName} place={trip.customer} />
@@ -83,7 +83,7 @@ export function Deliver({
   const locked = otpError?.lockedMessage !== undefined;
 
   async function deliver() {
-    if (!(await run('delivered', 'DELIVERED', {method: 'OTP', otp, fix: riderOnlineService.lastFix()}))) {
+    if (!(await run('delivered', {method: 'OTP', otp, fix: riderOnlineService.lastFix()}))) {
       setOtp(''); // the reason shows under the boxes
     }
   }

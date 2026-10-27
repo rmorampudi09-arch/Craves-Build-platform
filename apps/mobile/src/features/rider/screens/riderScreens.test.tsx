@@ -16,7 +16,8 @@ import {documentBadge, ProfileScreen} from './ProfileScreen';
 import {EarningsScreen} from './EarningsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
-const mockPending = {count: 0};
+// With count > 0 the phone is offline: the queue keeps what the screen sends, and the screen shows where it leads.
+const mockPending = {count: 0, entries: [] as {action: string; tripId: string}[], listeners: new Set<() => void>()};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/native', () => ({
@@ -36,8 +37,21 @@ jest.mock('../api/riderApi', () => {
   };
 });
 jest.mock('../state/tripQueue', () => ({
-  tripQueue: {enqueue: jest.fn(async () => ({kind: 'queued'}))},
+  tripQueue: {
+    enqueue: jest.fn(async (entry: {action: string; tripId: string}) => {
+      if (mockPending.count > 0) {
+        mockPending.entries = [...mockPending.entries, entry];
+        mockPending.listeners.forEach(listener => listener());
+      }
+      return {kind: 'queued'};
+    }),
+  },
   usePendingActions: () => mockPending.count,
+  usePendingEntries: () =>
+    require('react').useSyncExternalStore((listener: () => void) => {
+      mockPending.listeners.add(listener);
+      return () => mockPending.listeners.delete(listener);
+    }, () => mockPending.entries),
 }));
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {
@@ -127,6 +141,7 @@ const byId = (testID: string) => tree.root.findAll(node => node.props.testID ===
 beforeEach(() => {
   jest.clearAllMocks();
   mockPending.count = 0;
+  mockPending.entries = [];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 

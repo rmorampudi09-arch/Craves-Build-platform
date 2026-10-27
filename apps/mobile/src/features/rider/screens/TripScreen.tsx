@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {SectionSkeleton} from '../../../shared/components';
 import {AppApiError} from '../../../core/http/apiError';
-import type {DeliverBody, FailBody, Trip, TripAction, TripStep} from '../api/contract';
+import type {DeliverBody, FailBody, Trip, TripAction} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -11,7 +11,8 @@ import {RiderScreen, Title} from '../components/ui';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
-import {tripQueue, usePendingActions} from '../state/tripQueue';
+import {displayedStep} from '../domain/tripSteps';
+import {tripQueue, usePendingEntries} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
 import {Deliver, ToCustomer, type OtpError} from './trip/Dropoff';
 import {NotAnswering} from './trip/NotAnswering';
@@ -28,14 +29,14 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const supportPhone = useRiderMe().data?.supportPhone;
   // Keep the last trip we saw: once it ends the server may stop returning it.
   const [trip, setTrip] = useState<Trip | null>(active.data ?? null);
-  const [localStep, setLocalStep] = useState<TripStep | null>(null);
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<OtpError | null>(null);
   const [notAnswering, setNotAnswering] = useState(false);
   // When the rider tapped Call at the door; the customer-not-answering steps show each time.
   const [callTimes, setCallTimes] = useState<number[]>([]);
   const [photoDelivery, setPhotoDelivery] = useState(false);
-  const pending = usePendingActions(riderId, trip?.tripId);
+  const queued = usePendingEntries(riderId, trip?.tripId);
+  const pending = queued.length;
 
   useEffect(() => {
     if (active.data) {
@@ -92,11 +93,11 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     );
   }
 
-  // The optimistic step only counts while this trip still has actions waiting to sync.
-  const step = pending > 0 ? localStep ?? trip.step : trip.step;
+  // The server's step with this trip's queued steps applied: a restart opens where the rider left off (blueprint A3).
+  const step = displayedStep(trip.step, queued);
 
-  /** Sends a step through the offline queue; false when the server refused it. */
-  async function run(action: TripAction, nextStep: TripStep | null, body?: DeliverBody | FailBody): Promise<boolean> {
+  /** Sends a step through the offline queue; false when the server refused it. A queued step shows at once (the queue's entries). */
+  async function run(action: TripAction, body?: DeliverBody | FailBody): Promise<boolean> {
     if (!trip) {
       return false;
     }
@@ -115,9 +116,6 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     if (outcome.kind === 'sent') {
       queryClient.setQueryData(riderKeys.activeTrip, outcome.trip);
       setTrip(outcome.trip);
-      setLocalStep(null);
-    } else if (outcome.kind === 'queued' && nextStep) {
-      setLocalStep(nextStep); // the step changes on screen at once and syncs later
     }
     return outcome.kind !== 'rejected';
   }

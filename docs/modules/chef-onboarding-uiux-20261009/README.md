@@ -1,5 +1,7 @@
 # Chef onboarding web UI/UX redesign — 9 October 2026
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 Scope: **website UI/UX only** (`apps/customer-web-next`). Built on the existing onboarding implementation from PR #440/#442 and `main` at `422349f6`. No backend, APIM, mobile, database or pipeline file changes. Bank / RazorpayX stays deferred exactly as configured (`bankEnrollmentRequired=false`).
 
 ## What changed for applicants

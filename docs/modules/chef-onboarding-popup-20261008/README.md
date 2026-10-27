@@ -1,5 +1,7 @@
 # Chef web onboarding popup - 8 October 2026
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 The Chef onboarding popup uses the existing Craves dialog, phone OTP, authoritative email verification, location, application, support and private storage APIs. The current backend completion is PR #442, based on main `347b20e592b5757722d58d2537f169f478dc9ec9`.
 
 This release connects partial draft saving, saved upload preview/removal, number-only FSSAI review, IFSC lookup, correction/resubmission and kitchen handoff. It retains existing customer access, mobile, operational approval and financial controls. Production activation must be established by release receipts.

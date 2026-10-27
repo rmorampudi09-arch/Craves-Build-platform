@@ -1,5 +1,7 @@
 # Meal plan backend release (subscription-service V18), 2026-10-11
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 Branch `feat/meal-plan-backend`. It backs the redesigned meal-plan screens in app 1.26.0. The app already works without this release; the release turns on plan photos, ratings data paths, the "Renews" date, the order tracker, chef photo upload and the chef "Accepting new subscribers" switch.
 
 ## What changes in production

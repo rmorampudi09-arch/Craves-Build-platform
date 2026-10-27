@@ -35,6 +35,39 @@ Each image tag is the GitHub commit it was built from. For an image pinned by di
 
 Leftovers (no traffic, not behind Front Door; do not deploy to them): `ca-craves-admin-web-prodlow`, an admin copy built on 30 Sep from the unmerged branch `fix/admin-operations-production-20260930`; and the manual job `cj-craves-referral-check-39033`, whose image registry `cravesramacr721906` no longer exists.
 
+## Azure DevOps pipelines (rmorampudi09 / Craves)
+
+Every pipeline you may run builds from GitHub `main`. All are manual (no triggers) except the health check.
+
+| # | Pipeline | YAML on `main` | Use it for |
+|---|---|---|---|
+| 12 | `Craves-Customer-Web-Production` | `azure-pipelines-razorpay-customer-web.yml` | customer web (craves.in) image |
+| 13 | `Craves-Approved-Chef-Publishing` | `azure-pipelines-approved-chef-publishing.yml` | approved chef publishing |
+| 15 | `Craves-Customer-Location-Ola-Maps` | `azure-pipelines-customer-location-ola-maps.yml` | Ola Maps location release |
+| 16 | `Craves-Support-Assistant` | `azure-pipelines-support-assistant.yml` | support assistant |
+| 17 | `Craves-User-Chef-Release` | `azure-pipelines-rmorampudi09-address-readiness.yml` | user-chef service and address readiness |
+| 19 | `Craves-Media-CDN` | `azure-pipelines-media-cdn.yml` | media CDN |
+| 22 | `Craves-Production-Health-Check` | `azure-pipelines-production-stabilization.yml` | read-only health check, every 6 hours |
+| 23 | `Craves-Chef-Onboarding-Release` | `azure-pipelines-chef-onboarding-release.yml` | chef onboarding release: backend, apim, web (also redeploys admin), catalog, media |
+| 24 | `Craves-Referral-Chef-Release` | `azure-pipelines-referral-chef.yml` | chef referral programme: inspect, test, release, activate, verify |
+
+Pipeline 18 (`azure-pipelines.yml`) fails on purpose: `AZURE_SERVICE_CONNECTION` stays unset because it can deploy `infra/main.bicep`.
+
+**Turned off on 27 Oct 2026; never run, re-enable or recreate.** These ran old copies from the Azure Repos `Craves` repository, not GitHub `main`. Running one could put weeks-old code over newer live code. Their branches and history are kept as an archive.
+
+| # | Old pipeline | Use instead |
+|---|---|---|
+| 3 | `Craves-RMORAMPUDI09-Product-Activation` | #17, or the pipeline for that service above |
+| 4 | `Craves-RMORAMPUDI09-Finance-Referral-Completion` | #24 |
+| 6 | `Craves` (chef registration fix) | #23 or #17 |
+| 7, 8, 9, 10 | `Craves-Delivery-Borzo-Pidge-CI`, `Craves-Order-Delivery-120s`, `Craves-Integration-Delivery-120s`, `Craves-Delivery-Production-Activation` | their code is on `main`; release order/integration from `main` only |
+| 11 | `Craves-Borzo-Secret-Binding` | none needed; the binding is live |
+| 14 | `Craves (14)` | #23 |
+| 20 | `Craves-Referral-Chef` | #24 |
+| 21 | `Craves-Admin-Portal-Fix` | #23 (`operation=web` redeploys admin) |
+
+If a release you need has no pipeline above, create a new one from GitHub `main` (Azure DevOps: New pipeline → GitHub → `rmorampudi09-arch/Craves-Build-platform` → existing YAML) and add it to this table in the same PR.
+
 ## Retired: never use
 
 The first environment lived in another Azure account and is gone. Scripts that still use these names fail with "not found"; do not recreate them.

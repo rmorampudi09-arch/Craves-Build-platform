@@ -376,7 +376,8 @@ object RiderOutbox {
     return generator.generateKey()
   }
 
-  private fun bootCount(context: Context): Int =
+  /** Settings.Global.BOOT_COUNT, or -1: whether a monotonic-clock reading is still comparable. */
+  fun bootCount(context: Context): Int =
     try {
       Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
     } catch (error: Exception) {

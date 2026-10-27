@@ -248,7 +248,7 @@ class FleetSchemaDatabaseTest {
             + "(?, ?, now() - INTERVAL '200 days', 17.4, 78.3, 5, false), (?, ?, now() - INTERVAL '10 days', 17.4, 78.3, 5, false)",
             UUID.randomUUID(), ravi, UUID.randomUUID(), ravi);
 
-        new FleetLocationService(db, new ObjectMapper()).createTrackDays();
+        new FleetLocationService(db, new ObjectMapper(), FleetDatabase.properties(true)).createTrackDays();
 
         assertThat(db.queryForList("SELECT relname::text FROM pg_class WHERE relname IN (?, ?)", String.class, old, kept)).containsExactly(kept);
         assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track_default", Integer.class)).as("the 10-day-old row")

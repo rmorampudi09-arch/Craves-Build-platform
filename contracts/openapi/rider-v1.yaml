@@ -445,7 +445,7 @@ components:
       type: object
       required: [fixes]
       properties:
-        fixes: {type: array, maxItems: 5, items: {$ref: '#/components/schemas/RiderFix'}}
+        fixes: {type: array, maxItems: 20, description: 'Oldest first. A phone that was offline sends the fixes it kept (one per 30 s, an hour at most), as many a call as the last answer''s maxFixes, else 5 (P2-03).', items: {$ref: '#/components/schemas/RiderFix'}}
         offerReceipts:
           type: array
           maxItems: 10
@@ -480,6 +480,8 @@ components:
         activeTrip: {type: object, required: [tripId, step, version], properties: {tripId: {type: string}, step: {type: string}, version: {type: integer}}}
         stop: {type: boolean}
         stopReason: {type: string}
+        maxFixes: {type: integer, minimum: 1, maximum: 20, description: 'P2-03: the most fixes the next call may carry; absent with a stop and from servers before it (send at most 5)'}
+        nextPollSec: {type: integer, minimum: 5, maximum: 30, description: 'P2-04: how often to upload while waiting for offers (CRAVES_FLEET_IDLE_POLL_SECONDS); absent: 10'}
     SupportIssue:
       type: object
       required: [category]

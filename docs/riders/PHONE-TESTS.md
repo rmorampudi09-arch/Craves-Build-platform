@@ -29,7 +29,7 @@ Also try once per phone (record, not pass/fail):
 
 - Reboot while online: the service doesn't come back on its own (no background location by design). Opening the app resumes it without a new selfie while the shift is valid.
 - Force stop in Settings, then open the app: same as reboot.
-- Airplane mode for 2 minutes, then off: uploads resume within 10 s and the fixes from the gap are not all lost (the newest 5 are kept).
+- Airplane mode for 2 minutes, then off: uploads resume within 10 s and the fixes from the gap arrive (all of the first minute, then one per 30 s; P2-03), oldest first.
 - Trip cancelled with the screen off: on a test trip, lock the phone and have ops cancel the trip in the console. The "Trip cancelled" notification appears within 15 s, and tapping it opens the app on the cancelled trip.
 
 ## 2. Offer to ring: p95 under 5 s (Xiaomi, Oppo, Vivo, Realme, Samsung)

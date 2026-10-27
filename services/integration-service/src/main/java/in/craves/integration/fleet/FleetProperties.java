@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * minAppVersion blocks going online (never a running shift) unless a rider has an override. insuranceLabel describes
  * the group accident cover on the rider's profile; claims go to the support line. tripShiftCredentialEnabled (P2-01, off)
  * lets trip steps carry the shift credential, and tells the app to send them from its native outbox (features).
+ * idlePollSeconds (P2-04, 5 to 30, default 10) is how often a phone waiting for offers uploads (/locations nextPollSec).
  */
 @ConfigurationProperties("craves.fleet")
 public record FleetProperties(
@@ -27,6 +28,7 @@ public record FleetProperties(
     String supportWhatsappUrl,
     @DefaultValue("1.0.0") String minAppVersion,
     String insuranceLabel,
-    boolean tripShiftCredentialEnabled
+    boolean tripShiftCredentialEnabled,
+    @DefaultValue("10") int idlePollSeconds
 ) {
 }

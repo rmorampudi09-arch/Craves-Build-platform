@@ -166,6 +166,36 @@ class RiderOutboxCoreTest {
     assertEquals(listOf("a1"), tokenSent)
   }
 
+  /** P2-03: an hour offline on a trip (a fix every 3 s) keeps the first call's worth dense, then one per 30 s, 120 at most. */
+  @Test
+  fun anHourOfflineOnATripKeepsOneFixPer30sAfterTheFirstCallsWorth() {
+    val kept = ArrayDeque<Long>()
+    for (second in 0L until 3_600L step 3) {
+      val at = now + second * 1_000
+      if (kept.size >= 2 && RiderOutboxCore.replacesNewest(kept.size, kept[kept.size - 1], kept[kept.size - 2])) kept.removeLast()
+      kept.addLast(at)
+      while (kept.size > RiderOutboxCore.MAX_FIXES_KEPT) kept.removeFirst()
+    }
+    assertEquals(RiderOutboxCore.MAX_FIXES_KEPT, kept.size)
+    assertEquals(now + 3_597_000, kept.last())
+    val gaps = kept.zipWithNext { a, b -> b - a }.dropLast(1)
+    assertTrue("thinned to 30 s apart", gaps.all { it >= RiderOutboxCore.FIX_SPACING_MS })
+    assertTrue("an hour fits", kept.last() - kept.first() >= 3_500_000)
+    // Online, a call's worth never waits, so nothing is thinned.
+    assertFalse(RiderOutboxCore.replacesNewest(5, now + 3_000, now))
+  }
+
+  @Test
+  fun theServerSaysHowManyFixesACallCarriesAndHowOftenToUploadWithinLimits() {
+    assertEquals(5, RiderOutboxCore.fixesPerCall(null))
+    assertEquals(listOf(1, 20, 20), listOf(0, 20, 500).map { RiderOutboxCore.fixesPerCall(it) })
+    assertEquals(10_000L, RiderOutboxCore.idleUploadMs(null))
+    assertEquals(listOf(5_000L, 15_000L, 30_000L), listOf(1, 15, 600).map { RiderOutboxCore.idleUploadMs(it) })
+    // A fix kept across a reboot is aged by the wall clock; within the boot, by the monotonic clock.
+    assertEquals(5_000L, RiderOutboxCore.ageMs(now - 60_000, 10_000, 3, now + 3_600_000, 15_000, 3))
+    assertEquals(60_000L, RiderOutboxCore.ageMs(now - 60_000, 10_000, 3, now, 500, 4))
+  }
+
   @Test
   fun stepsReadAtStartOutlivedTheirTapAndACodeOlderThanADayGoes() {
     val fresh = entry("a1").copy(otpSealed = "sealed", createdAt = now - 60_000)

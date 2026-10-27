@@ -135,7 +135,12 @@ public final class FleetRiderModels {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record LocationBatchResponse(List<FleetTripModels.Offer> offers, ActiveTrip activeTrip, Boolean stop, String stopReason) {
+    /**
+     * maxFixes: the most fixes the next call may carry (P2-03; a phone that doesn't see it sends at most 5). nextPollSec: how
+     * often to upload while waiting for offers (P2-04). Neither comes with a stop.
+     */
+    public record LocationBatchResponse(List<FleetTripModels.Offer> offers, ActiveTrip activeTrip, Boolean stop, String stopReason,
+                                        Integer maxFixes, Integer nextPollSec) {
     }
 
     public record ActiveTrip(String tripId, String step, int version) {

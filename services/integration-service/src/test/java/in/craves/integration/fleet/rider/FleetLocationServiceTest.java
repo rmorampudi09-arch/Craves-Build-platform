@@ -44,12 +44,18 @@ class FleetLocationServiceTest {
 
     @Test
     void healthLeavesOutWhatThePhoneDidNotSendAndKeepsTheExitReasonToOneShortLine() {
-        FleetLocationService service = new FleetLocationService(null, new com.fasterxml.jackson.databind.ObjectMapper());
+        FleetLocationService service = new FleetLocationService(null, new com.fasterxml.jackson.databind.ObjectMapper(),
+            in.craves.integration.fleet.FleetDatabase.properties(true));
         assertThat(service.health(null)).isNull();
         assertThat(service.health(new FleetRiderModels.DeviceHealth(81, null, null, true, null, null, null, null, null)))
             .isEqualTo("{\"batteryPct\":81,\"canRing\":true}");
         assertThat(FleetLocationService.oneLine("CRASH\nat line 2\u0000")).isEqualTo("CRASH at line 2");
         assertThat(FleetLocationService.oneLine("x".repeat(500))).hasSize(200);
+    }
+
+    @Test
+    void thePollSettingStaysWithinFiveToThirtySeconds() {
+        assertThat(List.of(1, 5, 10, 30, 600).stream().map(FleetLocationService::pollSeconds).toList()).containsExactly(5, 5, 10, 30, 30);
     }
 
     @Test

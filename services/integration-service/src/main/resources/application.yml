@@ -39,6 +39,8 @@ craves:
     # Trip steps may come from the phone's native outbox with the shift credential instead of a JWT (P2-01): only the
     # rider's trip in progress or one that ended during the shift. Keep false until the security review signs it off.
     trip-shift-credential-enabled: ${CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED:false}
+    # How often a phone waiting for offers uploads (P2-04), 5 to 30 s; lower it only if offer receipts show pushes ring late.
+    idle-poll-seconds: ${CRAVES_FLEET_IDLE_POLL_SECONDS:10}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

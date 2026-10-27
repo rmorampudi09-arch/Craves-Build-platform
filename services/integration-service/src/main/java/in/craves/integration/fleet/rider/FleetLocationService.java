@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetConfiguration;
+import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.rider.FleetRiderModels.ActiveTrip;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceHealth;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
@@ -53,7 +54,10 @@ import org.springframework.transaction.annotation.Transactional;
     havingValue = "true")
 public class FleetLocationService {
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetLocationService.class);
-    static final int MAX_FIXES = 5;
+    /** A phone that was offline drains its kept fixes (one per 30 s, an hour at most) 20 a call (P2-03). */
+    static final int MAX_FIXES = 20;
+    static final int MIN_POLL_SECONDS = 5;
+    static final int MAX_POLL_SECONDS = 30;
     /** The most one gap between fixes adds to in-zone time; the phone may sleep longer than that. */
     static final Duration MAX_GAP = Duration.ofSeconds(60);
     /** Fixes stamped further ahead of the database clock are dropped. */
@@ -127,10 +131,17 @@ public class FleetLocationService {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
+    private final int nextPollSec;
 
-    public FleetLocationService(JdbcTemplate jdbc, ObjectMapper json) {
+    public FleetLocationService(JdbcTemplate jdbc, ObjectMapper json, FleetProperties properties) {
         this.jdbc = jdbc;
         this.json = json;
+        this.nextPollSec = pollSeconds(properties.idlePollSeconds());
+    }
+
+    /** CRAVES_FLEET_IDLE_POLL_SECONDS kept within 5 to 30 seconds: faster drains batteries, slower rings offers late. */
+    static int pollSeconds(int configured) {
+        return Math.max(MIN_POLL_SECONDS, Math.min(MAX_POLL_SECONDS, configured));
     }
 
     /**
@@ -140,7 +151,7 @@ public class FleetLocationService {
     @Transactional
     public LocationBatchResponse ingest(UUID identityId, String credential, LocationBatch batch) {
         if (batch == null || batch.fixes() == null || batch.fixes().size() > MAX_FIXES) {
-            throw FleetApiException.invalid("Send at most 5 fixes.");
+            throw FleetApiException.invalid("Send at most " + MAX_FIXES + " fixes.");
         }
         boolean byCredential = credential != null;
         // The cast keeps the credential_hash unique index usable whatever type the driver binds.
@@ -185,7 +196,7 @@ public class FleetLocationService {
             LOGGER.info("FLEET_APP_EXIT rider={} reason={}", shift.riderId(), oneLine(batch.health().lastExitReason()));
         }
         List<Offer> offers = jdbc.query(OFFERS, (row, n) -> FleetTripModels.offer(row, json), shift.riderId());
-        return new LocationBatchResponse(offers, activeTrip(shift), null, null);
+        return new LocationBatchResponse(offers, activeTrip(shift), null, null, MAX_FIXES, nextPollSec);
     }
 
     /**
@@ -393,7 +404,7 @@ public class FleetLocationService {
     }
 
     private static LocationBatchResponse stop(String reason) {
-        return new LocationBatchResponse(List.of(), null, true, reason);
+        return new LocationBatchResponse(List.of(), null, true, reason, null, null);
     }
 
     private static Context context(ResultSet row) throws SQLException {

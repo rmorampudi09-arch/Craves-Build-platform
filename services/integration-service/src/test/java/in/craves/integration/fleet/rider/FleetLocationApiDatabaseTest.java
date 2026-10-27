@@ -129,7 +129,8 @@ class FleetLocationApiDatabaseTest {
         assertThat(fleet.db.queryForObject("SELECT ended_at IS NULL FROM fleet_schema.rider_shift WHERE id = ?", Boolean.class, rider.shift()))
             .isTrue();
         locations(rider, List.of()).andExpect(status().isOk()).andExpect(jsonPath("$.offers.length()").value(0))
-            .andExpect(jsonPath("$.stop").doesNotExist()).andExpect(jsonPath("$.activeTrip").doesNotExist());
+            .andExpect(jsonPath("$.stop").doesNotExist()).andExpect(jsonPath("$.activeTrip").doesNotExist())
+            .andExpect(jsonPath("$.maxFixes").value(20)).andExpect(jsonPath("$.nextPollSec").value(10));
     }
 
     @Test
@@ -147,11 +148,30 @@ class FleetLocationApiDatabaseTest {
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE rider_id = ?", Integer.class, rider.id()))
             .as("no trip, no track").isZero();
 
-        List<String> six = new ArrayList<>();
-        for (int i = 0; i < 6; i++) {
-            six.add(fix(t.plusSeconds(40 + i), false));
+        List<String> tooMany = new ArrayList<>();
+        for (int i = 0; i < 21; i++) {
+            tooMany.add(fix(t.plusSeconds(40 + i), false));
         }
-        locations(rider, six).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        locations(rider, tooMany).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    /** P2-03: a phone back from a dead zone drains its kept fixes 20 a call, all tracked, still within 5 statements. */
+    @Test
+    void twentyKeptFixesGoInOneCallWithinTheStatementBudget() throws Exception {
+        OnShift rider = onShift();
+        UUID trip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'PICKED_UP', rider_id = ? WHERE id = ?", rider.id(), trip);
+        Instant t = Instant.now().minusSeconds(900).truncatedTo(ChronoUnit.MILLIS);
+        List<String> kept = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            kept.add(fix(t.plusSeconds(30L * i), false));
+        }
+        STATEMENTS.set(0);
+        locations(rider, kept).andExpect(status().isOk()).andExpect(jsonPath("$.activeTrip.tripId").value(trip.toString()));
+        assertThat(STATEMENTS.get()).isLessThanOrEqualTo(5);
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE trip_id = ?", Integer.class, trip)).isEqualTo(20);
+        assertThat(fleet.db.queryForObject("SELECT recorded_at FROM fleet_schema.rider_position_latest WHERE rider_id = ?", Timestamp.class,
+            rider.id())).isEqualTo(Timestamp.from(t.plusSeconds(570)));
     }
 
     @Test
@@ -405,7 +425,8 @@ class FleetLocationApiDatabaseTest {
 
     void stop(OnShift rider, String reason) throws Exception {
         locations(rider, List.of(fix(Instant.now().minusSeconds(1), false))).andExpect(status().isOk()).andExpect(jsonPath("$.stop").value(true))
-            .andExpect(jsonPath("$.stopReason").value(reason)).andExpect(jsonPath("$.offers.length()").value(0));
+            .andExpect(jsonPath("$.stopReason").value(reason)).andExpect(jsonPath("$.offers.length()").value(0))
+            .andExpect(jsonPath("$.maxFixes").doesNotExist());
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.rider_position_latest WHERE rider_id = ?", Integer.class, rider.id()))
             .isZero();
         assertThat(fleet.db.queryForObject("SELECT ended_at IS NOT NULL AND credential_revoked_at IS NOT NULL FROM fleet_schema.rider_shift "

@@ -1,9 +1,10 @@
 package com.cravesapp
 
 /**
- * The native outbox's rules without Android (P2-02a), so a JVM test proves them (RiderOutboxCoreTest): which answer sends,
- * keeps, holds or drops a trip step, the backoff, the tap's age, and one pass over the queue in order per trip. It mirrors
- * the JS queue (src/features/rider/domain/offlineQueue.ts, flushFor); RiderOutbox runs it on the file and the network.
+ * The phone's outbox rules without Android, so a JVM test proves them (RiderOutboxCoreTest). Trip steps (P2-02a): which
+ * answer sends, keeps, holds or drops a step, the backoff, the tap's age, and one pass over the queue in order per trip,
+ * mirroring the JS queue (src/features/rider/domain/offlineQueue.ts, flushFor); RiderOutbox runs them on the file and the
+ * network. Unsent fixes (P2-03): which to keep while offline and how many go per call; RiderOnlineService runs those.
  */
 object RiderOutboxCore {
   private const val BASE_DELAY_MS = 2_000L
@@ -96,12 +97,16 @@ object RiderOutboxCore {
   /** Due now, or the phone's clock went back (a wait longer than any backoff). */
   fun due(entry: Entry, now: Long): Boolean = entry.nextAttemptAt <= now || entry.nextAttemptAt - now > MAX_DELAY_MS
 
-  /** How long ago the rider tapped: the monotonic clock within the same boot, else the wall clock; null without a tap. */
-  fun sinceTapMs(entry: Entry, nowWall: Long, nowElapsed: Long, nowBoot: Int): Long? {
-    val occurredAt = entry.occurredAt ?: return null
-    val sameBoot = entry.boot >= 0 && entry.boot == nowBoot && entry.elapsedMs >= 0
-    return (if (sameBoot) nowElapsed - entry.elapsedMs else nowWall - occurredAt).coerceAtLeast(0)
-  }
+  /**
+   * How long ago something happened (a tap, a fix): by the monotonic clock within the same boot, so a wrong or changed
+   * phone clock doesn't matter (blueprint A6); else by the wall clock. Never negative.
+   */
+  fun ageMs(atWall: Long, atElapsed: Long, atBoot: Int, nowWall: Long, nowElapsed: Long, nowBoot: Int): Long =
+    (if (atBoot >= 0 && atBoot == nowBoot && atElapsed >= 0) nowElapsed - atElapsed else nowWall - atWall).coerceAtLeast(0)
+
+  /** How long ago the rider tapped; null without a tap. */
+  fun sinceTapMs(entry: Entry, nowWall: Long, nowElapsed: Long, nowBoot: Int): Long? =
+    entry.occurredAt?.let { ageMs(it, entry.elapsedMs, entry.boot, nowWall, nowElapsed, nowBoot) }
 
   /** The fix's age as sent: its age at the tap plus the time since (stepTap in riderApi.live.ts); null when unknown. */
   fun fixAgeMs(ageAtTapMs: Double?, sinceTapMs: Long): Long? =
@@ -115,6 +120,23 @@ object RiderOutboxCore {
     state.copy(
       entries = state.entries.map { it.copy(deferred = true, otpSealed = it.otpSealed.takeIf { _ -> now - it.createdAt <= OTP_KEPT_MS }) },
     )
+
+  /** Unsent fixes (P2-03): one call's worth stays dense; beyond that one per 30 s; an hour (120) at most. */
+  const val DENSE_FIXES = 20
+  const val FIX_SPACING_MS = 30_000L
+  const val MAX_FIXES_KEPT = 120
+  /** The server caps a fix's age at an hour (FleetLocationService.MAX_FIX_AGE_MS): an older fix is dropped, never sent. */
+  const val MAX_FIX_AGE_MS = 3_600_000L
+
+  /** A new fix takes the newest kept one's place while more than a call's worth waits and that one is within 30 s of the one before. */
+  fun replacesNewest(waiting: Int, newestAtMs: Long, beforeNewestAtMs: Long): Boolean =
+    waiting >= DENSE_FIXES && newestAtMs - beforeNewestAtMs < FIX_SPACING_MS
+
+  /** The server's maxFixes, 1 to 20; a server that doesn't say takes at most 5 (before P2-03). */
+  fun fixesPerCall(maxFixes: Int?): Int = maxFixes?.coerceIn(1, DENSE_FIXES) ?: 5
+
+  /** The server's nextPollSec (P2-04), 5 to 30 s; 10 s when it doesn't say. */
+  fun idleUploadMs(nextPollSec: Int?): Long = (nextPollSec?.coerceIn(5, 30) ?: 10) * 1_000L
 
   /** The refusals with this one first: newest first, one per trip, at most 5. */
   fun withRefusal(refusals: List<Refusal>, refusal: Refusal): List<Refusal> =

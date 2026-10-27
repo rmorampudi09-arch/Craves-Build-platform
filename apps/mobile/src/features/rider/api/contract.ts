@@ -284,6 +284,9 @@ export interface LocationBatchResponse {
   activeTrip?: {tripId: string; step: TripStep; version: number};
   stop?: boolean;
   stopReason?: string;
+  /** P2-03 and P2-04, read by the native service: the most fixes per call, and the idle upload period. */
+  maxFixes?: number;
+  nextPollSec?: number;
 }
 
 export type TripAction =

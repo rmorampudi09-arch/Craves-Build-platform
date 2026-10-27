@@ -19,23 +19,25 @@ JS side: `src/features/rider/native/riderOnlineService.ts` uses the module in li
 
 - `POST {apiBaseUrl}/api/v1/rider/locations`
 - Header `X-Craves-Shift-Credential: <shiftCredential>`. Native code sends no JWT.
-- Body `{"fixes": [{"lat", "lng", "accuracyM", "at", "mock", "ageMs"}]}`, at most 5 fixes, `at` in ISO-8601 UTC (`2026-10-20T10:15:30.123Z`). `ageMs` (app 1.1.0) is `SystemClock.elapsedRealtime()` minus the fix's `elapsedRealtimeNanos`, worked out when the call is built: the server times the fix as its clock minus `ageMs`, so the phone's wall clock doesn't matter. An empty `fixes` array is sent when there is no fix yet: the call is also the heartbeat and the second offer channel.
+- Body `{"fixes": [{"lat", "lng", "accuracyM", "at", "mock", "ageMs"}]}`, oldest first, as many as the last answer's `maxFixes` (20; 5 until a server says), `at` in ISO-8601 UTC (`2026-10-20T10:15:30.123Z`). `ageMs` (app 1.1.0) is `SystemClock.elapsedRealtime()` minus the fix's `elapsedRealtimeNanos`, worked out when the call is built (a fix kept across a reboot falls back to the wall clock): the server times the fix as its clock minus `ageMs`, so the phone's wall clock doesn't matter. An empty `fixes` array is sent when there is no fix yet: the call is also the heartbeat and the second offer channel.
+- Unsent fixes (P2-03): kept oldest first, the first 20 as they come, then one per 30 s (the newest kept fix gives way to the next unless 30 s apart), 120 (about an hour) at most; a fix over an hour old is dropped, as the server caps a fix's age there. While some wait they are also in `filesDir/rider/fixes.json` (`AtomicFile`, with the shift's expiry so another shift's are dropped), so a kill leaves no gap in the trip's track; the file goes once all are sent and when the shift ends.
 - `mock` is `Location.isMock()` on Android 12+ and `isFromMockProvider()` before.
 - `health` (app 1.1.0), at most once a minute, until a 2xx takes it: `batteryPct` and `charging` (`BatteryManager`), `powerSave`, `canRing` (notifications on and the `rider_offers` channel still at high importance), `drainPct` and `unpluggedMin` (counted only while unplugged, since the service started), `queuePending` and `queueOldestAgeS` (the JS queue's from `setQueueStats`, plus the native outbox's), and `lastExitReason` once after each start (`ActivityManager.getHistoricalProcessExitReasons`, Android 11+, e.g. `LOW_MEMORY at 2026-10-27T09:12:03.000Z`).
 - `offerReceipts` (app 1.1.0): every offer's first arrival, from either channel, as `{offerId, channel, ageMs}` with `ageMs` from `SystemClock.elapsedRealtime()` worked out when the call is built. At most 10 are kept; they are forgotten after a 2xx, so a failed call sends them again. The server keeps the first arrival of each of the rider's own offers (`trip_offer.rang_at`, `rang_channel`).
-- Response `LocationBatchResponse` `{offers: Offer[], activeTrip?: {tripId, step, version}, stop?: boolean, stopReason?: string}`:
+- Response `LocationBatchResponse` `{offers: Offer[], activeTrip?: {tripId, step, version}, stop?: boolean, stopReason?: string, maxFixes?: number, nextPollSec?: number}`:
+  - `maxFixes` (1 to 20) is how many fixes the next call carries; `nextPollSec` (5 to 30, P2-04) is the idle upload period, 10 s when absent;
   - every offer goes through the offer dedupe (channel `locations`); offers the server no longer lists stop ringing;
   - a new `activeTrip` (tripId or version changed) emits `riderTripChanged`; a trip whose step isn't DELIVERED, FAILED or CANCELLED switches to trip mode;
   - `stop: true` ends the shift with `stopReason` as the message.
 - 401 or 403: the credential is dead. The service forgets it, stops, and reports `OFFLINE` with a message.
-- Network error or other non-2xx: fixes are kept (the newest 5) and sent on the next tick; status `ERROR`, "No internet. Retrying."
+- Network error or other non-2xx: fixes are kept (thinned as above) and sent on the next tick; status `ERROR`, "No internet. Retrying."
 - OkHttp (4.9.2, from React Native): connect, read and write timeouts 10 s, call timeout 15 s.
 
 | | Idle | On a trip |
 |---|---|---|
 | Location priority | `PRIORITY_BALANCED_POWER_ACCURACY` | `PRIORITY_HIGH_ACCURACY` |
 | Fix interval | 10 s | 3 s |
-| Upload (and max batch delay) | every 10 s | every 15 s |
+| Upload (and max batch delay) | every 10 s (`nextPollSec`, 5 to 30) | every 15 s |
 
 ### FCM offer push
 

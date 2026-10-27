@@ -536,6 +536,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** `FleetLocationApiDatabaseTest` with 20 fixes, and an airplane test showing the trip track has no gap.
 
+**Done (agent part):** the server takes 20 fixes a call (`MAX_FIXES`, the contract's `maxItems`) and says so in every answer (`maxFixes`), so a new app never sends an old server more than 5; 20 fixes are about 4 KB, well inside the gateway's 16 KB, which stays. Kotlin keeps unsent fixes oldest first, the first 20 as they come, then one per 30 s, 120 at most, drops any over an hour old (the server's cap), sends `maxFixes` a call oldest first, and keeps them in `filesDir/rider/fixes.json` while some wait (this shift's only, gone once sent or when the shift ends). A fix kept across a reboot is aged by the wall clock. Proved by `FleetLocationIngestDatabaseTest` (20 kept fixes tracked in order, 21 refused), `FleetLocationApiDatabaseTest.twentyKeptFixesGoInOneCallWithinTheStatementBudget` and `RiderOutboxCoreTest` (an hour offline on a trip keeps 120, 30 s apart). **Still open (people):** the airplane test's track check (PHONE-TESTS §3).
+
 ### P2-04 Server-set idle polling
 **Who:** agent. **Only if** receipts show FCM rings on time for fewer than 92% of 200+ offers on a phone brand (blueprint C1).
 
@@ -545,6 +547,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 3. Kotlin uses it for the idle upload period.
 
 **Prove it:** a database test, and receipts showing the p95 recovered.
+
+**Done (agent part), as a setting rather than a `dispatch_policy` column:** the dispatch policy is versioned and published with 14 days' notice to riders, which a technical polling period shouldn't wait for. `CRAVES_FLEET_IDLE_POLL_SECONDS` (default 10, kept within 5 to 30) comes back on every `/locations` answer as `nextPollSec`, and the app uses it for the idle upload period, so phones follow a change within one call without a new app. Default 10 changes nothing; lowering it is still for when the receipts show the need. Proved by `FleetLocationIngestDatabaseTest`, `FleetLocationServiceTest` (the 5 to 30 clamp) and `RiderOutboxCoreTest`.
 
 ### P2-05 Chef handover stops the watchdog
 **Who:** agent, with the order-service owner's agreement.

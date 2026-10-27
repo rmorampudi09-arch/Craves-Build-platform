@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.AtomicFile
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -28,6 +29,8 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -56,17 +59,37 @@ class RiderOnlineService : Service() {
   /** JS only hands the shift credential over from /shift/start; it is kept only in this app's private preferences. */
   class Shift(val credential: String, val expiresAtMs: Long, val apiBaseUrl: String)
 
-  /** elapsedMs is the fix's SystemClock.elapsedRealtime time: the server times the fix from its age, not from atMs. */
-  class Fix(val lat: Double, val lng: Double, val accuracyM: Float, val atMs: Long, val mock: Boolean, val elapsedMs: Long) {
-    /** ageMs is worked out when the call is built, by the monotonic clock, so a wrong phone clock doesn't matter (blueprint A6). */
-    fun toJson(): JSONObject =
+  /**
+   * elapsedMs is the fix's SystemClock.elapsedRealtime time and boot the phone's boot count then: the server times the fix
+   * from its age, not from atMs.
+   */
+  class Fix(val lat: Double, val lng: Double, val accuracyM: Float, val atMs: Long, val mock: Boolean, val elapsedMs: Long, val boot: Int) {
+    /**
+     * ageMs is worked out when the call is built, by the monotonic clock within the same boot (a fix kept on disk across a
+     * reboot falls back to the wall clock), so a wrong phone clock doesn't matter (blueprint A6).
+     */
+    fun toJson(nowBoot: Int): JSONObject =
       JSONObject()
         .put("lat", lat)
         .put("lng", lng)
         .put("accuracyM", accuracyM.toDouble())
         .put("at", iso(atMs))
         .put("mock", mock)
-        .put("ageMs", (SystemClock.elapsedRealtime() - elapsedMs).coerceAtLeast(0L))
+        .put("ageMs", ageMs(nowBoot))
+
+    fun ageMs(nowBoot: Int): Long =
+      RiderOutboxCore.ageMs(atMs, elapsedMs, boot, System.currentTimeMillis(), SystemClock.elapsedRealtime(), nowBoot)
+
+    /** As fixes.json keeps it (P2-03). */
+    fun stored(): JSONObject =
+      JSONObject()
+        .put("lat", lat)
+        .put("lng", lng)
+        .put("accuracyM", accuracyM.toDouble())
+        .put("atMs", atMs)
+        .put("mock", mock)
+        .put("elapsedMs", elapsedMs)
+        .put("boot", boot)
 
     /** ageMs is the fix's age now; JS adds the time since, so a trip step can say how old its fix was (blueprint A4). */
     fun toMap(): WritableMap =
@@ -78,6 +101,18 @@ class RiderOnlineService : Service() {
         putBoolean("mock", mock)
         putDouble("ageMs", (SystemClock.elapsedRealtime() - elapsedMs).coerceAtLeast(0L).toDouble())
       }
+
+    companion object {
+      fun fromStored(json: JSONObject?): Fix? =
+        try {
+          json?.let {
+            Fix(it.getDouble("lat"), it.getDouble("lng"), it.getDouble("accuracyM").toFloat(), it.getLong("atMs"), it.optBoolean("mock"),
+              it.getLong("elapsedMs"), it.optInt("boot", -1))
+          }
+        } catch (error: Exception) {
+          null
+        }
+    }
   }
 
   private lateinit var executor: ScheduledExecutorService
@@ -87,8 +122,14 @@ class RiderOnlineService : Service() {
   @Volatile private var stopMessage: String? = null
   /** Set under the callback's lock in onDestroy, so the executor can't re-register location updates or report after it. */
   @Volatile private var destroyed = false
-  // Touched only on the executor thread, which also receives the location callbacks.
+  // Touched only on the executor thread, which also receives the location callbacks. Unsent fixes, oldest first: one
+  // call's worth dense, then one per 30 s, an hour at most (P2-03), kept in fixes.json while some wait.
   private val fixes = ArrayDeque<Fix>()
+  /** How many fixes a call carries: the server's maxFixes (P2-03), 5 until a server says. */
+  private var fixesPerCall = RiderOutboxCore.fixesPerCall(null)
+  /** The upload period while waiting for offers: the server's nextPollSec (P2-04), 10 s until it says. */
+  private var idleUploadMs = RiderOutboxCore.idleUploadMs(null)
+  private var boot = -1
   private var onTrip = false
   private var tripSignature = ""
   // Phone health (blueprint A5), also only on the executor thread. shortcut: drain and unplugged time restart with the
@@ -123,6 +164,7 @@ class RiderOnlineService : Service() {
     super.onCreate()
     executor = Executors.newSingleThreadScheduledExecutor()
     fused = LocationServices.getFusedLocationProviderClient(this)
+    boot = RiderOutbox.bootCount(this)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -151,6 +193,8 @@ class RiderOnlineService : Service() {
       watchNetwork()
       executor.execute {
         exitReason = lastExitReason()
+        // Fixes kept from before the phone killed the service, this shift's only, go first (P2-03).
+        loadFixes(saved)
         requestLocations()
         tick()
       }
@@ -186,9 +230,13 @@ class RiderOnlineService : Service() {
 
   private fun add(location: Location) {
     val mock = if (Build.VERSION.SDK_INT >= 31) location.isMock else @Suppress("DEPRECATION") location.isFromMockProvider
-    val fix = Fix(location.latitude, location.longitude, location.accuracy, location.time, mock, location.elapsedRealtimeNanos / 1_000_000)
+    val fix = Fix(location.latitude, location.longitude, location.accuracy, location.time, mock, location.elapsedRealtimeNanos / 1_000_000, boot)
+    // Behind (offline): the newest kept fix gives way unless it is 30 s from the one before, so an hour fits in 120.
+    if (fixes.size >= 2 && RiderOutboxCore.replacesNewest(fixes.size, fixes[fixes.size - 1].atMs, fixes[fixes.size - 2].atMs)) {
+      fixes.removeLast()
+    }
     fixes.addLast(fix)
-    while (fixes.size > MAX_FIXES) fixes.removeFirst()
+    while (fixes.size > RiderOutboxCore.MAX_FIXES_KEPT) fixes.removeFirst()
     lastFix = fix
   }
 
@@ -210,7 +258,7 @@ class RiderOnlineService : Service() {
     }
   }
 
-  private fun uploadEveryMs() = if (onTrip) TRIP_UPLOAD_MS else IDLE_UPLOAD_MS
+  private fun uploadEveryMs() = if (onTrip) TRIP_UPLOAD_MS else idleUploadMs
 
   private fun tick() {
     val current = shift ?: return
@@ -218,12 +266,14 @@ class RiderOnlineService : Service() {
       end(ENDED_MESSAGE)
       return
     }
-    val sent = fixes.toList()
+    // A fix over an hour old is no use to the server, which caps a fix's age there: dropped, never sent.
+    fixes.removeAll { it.ageMs(boot) > RiderOutboxCore.MAX_FIX_AGE_MS }
+    val sent = fixes.take(fixesPerCall)
     val sentAtMs = System.currentTimeMillis()
     val receipts = RiderOffers.pendingReceipts()
     val health = if (SystemClock.elapsedRealtime() - healthSentAtMs >= HEALTH_EVERY_MS) health() else null
     try {
-      val body = JSONObject().put("fixes", JSONArray(sent.map { it.toJson() }))
+      val body = JSONObject().put("fixes", JSONArray(sent.map { it.toJson(boot) }))
         .apply { if (receipts.length() > 0) put("offerReceipts", receipts) }
         .apply { if (health != null) put("health", health) }
         .toString()
@@ -241,7 +291,8 @@ class RiderOnlineService : Service() {
           }
           !response.isSuccessful -> status("ERROR", RETRY_MESSAGE)
           else -> {
-            fixes.clear()
+            // The oldest went; newer ones wait for the next call. Nothing else touches fixes on this thread meanwhile.
+            repeat(sent.size) { fixes.removeFirst() }
             RiderOffers.receiptsSent((0 until receipts.length()).map { receipts.getJSONObject(it).getString("offerId") })
             if (health != null) {
               healthSentAtMs = SystemClock.elapsedRealtime()
@@ -254,12 +305,13 @@ class RiderOnlineService : Service() {
         }
       }
     } catch (error: IOException) {
-      // Fixes stay (newest 5) for the next tick.
+      // Fixes stay, thinned, for the next tick.
       status("ERROR", RETRY_MESSAGE)
     } catch (error: Exception) {
       // A bad response must not end the upload loop.
       Log.w(TAG, "bad /locations call", error)
     }
+    saveFixes()
     if (!executor.isShutdown) executor.schedule({ tick() }, uploadEveryMs(), TimeUnit.MILLISECONDS)
   }
 
@@ -278,6 +330,9 @@ class RiderOnlineService : Service() {
     }
     RiderOffers.keepRinging(this, open, sentAtMs)
 
+    fixesPerCall = RiderOutboxCore.fixesPerCall(response.intOrNull("maxFixes"))
+    val idle = RiderOutboxCore.idleUploadMs(response.intOrNull("nextPollSec"))
+
     val trip = response.optJSONObject("activeTrip")
     val step = trip?.optString("step").orEmpty()
     val signature = if (trip == null) "" else "${trip.optString("tripId")}:${trip.optInt("version")}"
@@ -294,8 +349,11 @@ class RiderOnlineService : Service() {
     }
     tripSignature = signature
     val nowOnTrip = trip != null && step !in ENDED_STEPS
-    if (nowOnTrip != onTrip) {
-      onTrip = nowOnTrip
+    // The batch delay follows the upload period: ask again when the trip starts or ends, or the idle period changed.
+    val relocate = nowOnTrip != onTrip || (!nowOnTrip && idle != idleUploadMs)
+    onTrip = nowOnTrip
+    idleUploadMs = idle
+    if (relocate) {
       fused.removeLocationUpdates(callback)
       requestLocations()
     }
@@ -394,6 +452,42 @@ class RiderOnlineService : Service() {
     stopSelf()
   }
 
+  /** Writes the unsent fixes to fixes.json while some wait (offline), so a kill leaves no gap; deletes it once all went. */
+  private fun saveFixes() {
+    val file = fixesFile(this)
+    try {
+      if (fixes.isEmpty()) {
+        if (file.baseFile.exists()) file.delete()
+        return
+      }
+      val json = JSONObject().put("v", 1).put("shiftExpiresAtMs", shift?.expiresAtMs ?: 0L).put("fixes", JSONArray(fixes.map { it.stored() }))
+      val out = file.startWrite()
+      try {
+        out.write(json.toString().toByteArray(Charsets.UTF_8))
+        file.finishWrite(out)
+      } catch (error: IOException) {
+        file.failWrite(out)
+        throw error
+      }
+    } catch (error: Exception) {
+      Log.w(TAG, "unsent fixes not kept on disk", error)
+    }
+  }
+
+  /** The fixes fixes.json kept for this shift (another shift's are dropped), before any new one. */
+  private fun loadFixes(current: Shift) {
+    try {
+      val json = JSONObject(String(fixesFile(this).readFully(), Charsets.UTF_8))
+      if (json.optLong("shiftExpiresAtMs") != current.expiresAtMs) return
+      val saved = json.optJSONArray("fixes") ?: return
+      (0 until saved.length()).mapNotNull { Fix.fromStored(saved.optJSONObject(it)) }.takeLast(RiderOutboxCore.MAX_FIXES_KEPT).forEach { fixes.addLast(it) }
+    } catch (error: FileNotFoundException) {
+      // Nothing kept.
+    } catch (error: Exception) {
+      Log.w(TAG, "kept fixes unreadable", error)
+    }
+  }
+
   private fun watchNetwork() {
     try {
       getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(network)
@@ -428,8 +522,6 @@ class RiderOnlineService : Service() {
     private const val NOTIFICATION_ID = 1
     private const val PREFS = "craves_rider_shift"
     private const val CREDENTIAL_HEADER = "X-Craves-Shift-Credential"
-    private const val MAX_FIXES = 5
-    private const val IDLE_UPLOAD_MS = 10_000L
     private const val TRIP_UPLOAD_MS = 15_000L
     private const val IDLE_FIX_MS = 10_000L
     private const val TRIP_FIX_MS = 3_000L
@@ -532,7 +624,13 @@ class RiderOnlineService : Service() {
 
     private fun clearShift(context: Context) {
       prefs(context).edit().clear().apply()
+      // The shift's unsent fixes go with it: the server takes none after its end.
+      fixesFile(context).delete()
     }
+
+    private fun fixesFile(context: Context) = AtomicFile(File(File(context.filesDir, "rider").apply { mkdirs() }, "fixes.json"))
+
+    private fun JSONObject.intOrNull(name: String): Int? = if (isNull(name)) null else optInt(name)
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 

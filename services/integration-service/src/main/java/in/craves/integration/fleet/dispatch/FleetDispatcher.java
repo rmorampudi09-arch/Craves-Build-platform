@@ -59,10 +59,11 @@ public class FleetDispatcher implements FleetStage {
     static final int FIX_WITHIN_SECONDS = 180;
     /**
      * A phone dispatch can reach, on the shift row s and the position row p (BACKEND.md "Dispatch chain"): the shift's last
-     * /locations call within 45 s, with or without new fixes, and a real (non-mock) fix under 3 minutes old for the distance.
+     * /locations call within 45 s, with or without new fixes, a real (non-mock) fix under 3 minutes old for the distance,
+     * and a phone that can ring (can_ring: notifications on and the offers channel high; unknown counts as yes).
      */
     static final String HEARD_FROM = "s.last_seen_at > now() - make_interval(secs => " + SEEN_WITHIN_SECONDS + ") AND NOT p.mock "
-        + "AND p.recorded_at > now() - make_interval(secs => " + FIX_WITHIN_SECONDS + ")";
+        + "AND p.recorded_at > now() - make_interval(secs => " + FIX_WITHIN_SECONDS + ") AND s.can_ring IS NOT FALSE";
     static final int BORZO_WINDOW_SECONDS = 120; // DeliveryProviderRouter's Borzo selection window
     // The delivery command looks again at least this often while riders decide (and at the stage deadline).
     static final Duration CHECK_EVERY = Duration.ofSeconds(10);
@@ -241,7 +242,8 @@ public class FleetDispatcher implements FleetStage {
 
     /**
      * Eligible riders, nearest first: ACTIVE, on an open shift, idle (no active trip or open offer), heard from (HEARD_FROM:
-     * a call in the last 45 s and a real fix under 3 minutes old), inside the policy radius. Declines play no part.
+     * a call in the last 45 s, a real fix under 3 minutes old, a phone that can ring), inside the policy radius. Declines
+     * play no part.
      */
     private List<Candidate> nearbyRiders(double lat, double lng, int radiusM) {
         double dLat = radiusM / 111_320.0;

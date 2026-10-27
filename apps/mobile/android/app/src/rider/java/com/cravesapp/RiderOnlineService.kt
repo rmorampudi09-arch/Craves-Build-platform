@@ -270,7 +270,8 @@ class RiderOnlineService : Service() {
       fused.removeLocationUpdates(callback)
       requestLocations()
     }
-    status("ONLINE", null)
+    // Connected either way; while offers can't ring the server sends none, so Home says why (blueprint A9).
+    if (RiderOffers.canRing(this)) status("ONLINE", null) else status("ERROR", RING_OFF_MESSAGE, connected = true)
     return true
   }
 
@@ -337,12 +338,14 @@ class RiderOnlineService : Service() {
     }
   }
 
-  private fun status(state: String, message: String?) {
+  /** connected: this call reached the server (ONLINE, or ERROR only because offers can't ring), so JS may send its queue. */
+  private fun status(state: String, message: String?, connected: Boolean = state == "ONLINE") {
     // A call cut short by Go offline must not report ERROR after onDestroy's OFFLINE.
     if (destroyed) return
     RiderEvents.emit("riderStatus") {
       Arguments.createMap().apply {
         putString("state", state)
+        putBoolean("connected", connected)
         lastFix?.let { putMap("lastFix", it.toMap()) }
         message?.let { putString("message", it) }
       }
@@ -395,6 +398,7 @@ class RiderOnlineService : Service() {
     private const val RESTART_MESSAGE = "Craves Rider was closed by the phone. Open the app to get orders again."
     private const val PERMISSION_MESSAGE = "Allow location to go online."
     private const val RETRY_MESSAGE = "No internet. Retrying."
+    private const val RING_OFF_MESSAGE = "Turn on notifications to get orders."
 
     private val http =
       OkHttpClient.Builder()

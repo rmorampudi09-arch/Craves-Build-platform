@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.location.LocationManagerCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -32,7 +31,8 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
       state.putBoolean("ignoringBatteryOptimizations", power.isIgnoringBatteryOptimizations(reactContext.packageName))
       state.putBoolean("powerSaveMode", power.isPowerSaveMode)
       state.putBoolean("locationEnabled", LocationManagerCompat.isLocationEnabled(location))
-      state.putBoolean("notificationsEnabled", NotificationManagerCompat.from(reactContext).areNotificationsEnabled())
+      // Offers must be able to ring: notifications on and the offers channel still high (blueprint A9).
+      state.putBoolean("notificationsEnabled", RiderOffers.canRing(reactContext))
       state.putString("manufacturer", Build.MANUFACTURER.lowercase())
       promise.resolve(state)
     } catch (error: Exception) {

@@ -10,6 +10,8 @@ export interface RiderOnlineStatus {
   state: 'OFFLINE' | 'ONLINE' | 'ERROR';
   lastFix?: RiderFix;
   message?: string;
+  /** The upload reached the server (ONLINE, or ERROR only because offers can't ring): a good moment to send the queue. */
+  connected?: boolean;
 }
 
 export interface TripChange {

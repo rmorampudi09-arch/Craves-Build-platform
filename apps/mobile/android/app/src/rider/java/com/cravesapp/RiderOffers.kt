@@ -148,7 +148,9 @@ object RiderOffers {
     val manager = NotificationManagerCompat.from(context)
     if (!manager.areNotificationsEnabled()) return false
     if (Build.VERSION.SDK_INT < 26) return true
-    val channel = manager.getNotificationChannelCompat(OFFERS_CHANNEL) ?: return false
+    // The channel is made when the service first starts; make it now so a phone that never went online can pass setup.
+    val channel = manager.getNotificationChannelCompat(OFFERS_CHANNEL)
+      ?: run { createChannels(context); manager.getNotificationChannelCompat(OFFERS_CHANNEL) } ?: return false
     return channel.importance >= NotificationManagerCompat.IMPORTANCE_HIGH
   }
 

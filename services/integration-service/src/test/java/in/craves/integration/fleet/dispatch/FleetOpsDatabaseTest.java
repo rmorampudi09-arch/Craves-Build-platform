@@ -161,6 +161,10 @@ class FleetOpsDatabaseTest {
         FleetDispatchFixtures.seen(fleet.db, other, 5);
         FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 200, false);
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");
+        FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET can_ring = false WHERE rider_id = ?", other);
+        refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET can_ring = NULL WHERE rider_id = ?", other);
         FleetDispatchFixtures.fix(fleet.db, other, KITCHEN_LAT, KITCHEN_LNG, 5, true);
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, "PIDGE", "Both")), 400, "VALIDATION_FAILED");

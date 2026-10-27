@@ -171,6 +171,23 @@ class FleetDispatchDatabaseTest {
             .containsExactly(calling);
     }
 
+    /** Blueprint A9: a phone that can't ring (notifications off) gets no offer, and is offered again once it can. */
+    @Test
+    void aPhoneThatCannotRingGetsNoOfferUntilItCan() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID silenced = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET can_ring = false WHERE rider_id = ?", silenced);
+        assertThat(dispatcher.run(command, () -> OptionalLong.of(9000), true)).as("nobody to ring: the next courier at once").isEmpty();
+        assertThat(count("fleet_schema.trip_offer")).isZero();
+
+        UUID chefSubOrder = UUID.fromString("0bde0102-1111-4111-8111-111111111111");
+        FleetDispatchFixtures.kitchen(fleet.db, chefSubOrder, true);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET can_ring = true WHERE rider_id = ?", silenced);
+        assertThatThrownBy(() -> dispatcher.run(FleetDispatchFixtures.command(chefSubOrder), () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE state = 'ACTIVE'", UUID.class)).containsExactly(silenced);
+    }
+
     /** Push results are stored on each offer (blueprint A5): SENT, or NO_TOKEN for a phone without a push token. */
     @Test
     void eachOffersPushResultIsStored() throws Exception {

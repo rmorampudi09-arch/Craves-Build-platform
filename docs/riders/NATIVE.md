@@ -60,7 +60,8 @@ The app always posts a visible notification on channel `rider_offers` (high impo
 | `start(shiftCredential: string \| null, expiresAtMs: number, apiBaseUrl: string)` | Saves the credential and starts the service. `expiresAtMs` is `Date.parse(ShiftStart.expiresAt)`. A null credential resumes the saved shift (the app reopened while the server says online). Rejects `LOCATION_PERMISSION`, `NO_SHIFT` (nothing saved or expired; also emits `OFFLINE` with a message) or `START_FAILED` |
 | `stop()` | Forgets the credential and stops the service. JS then calls `POST /shift/end`, which revokes it on the server |
 | `testRing()` | Posts a test notification on `rider_offers` (phone setup) |
-| `lastFix()` | The latest fix, or null |
+| `lastFix()` | The latest fix, or null; its `ageMs` is the fix's age when read (JS adds the time since) |
+| `setQueueStats(pending: number, oldestAtMs: number)` | The trip actions JS has waiting and the oldest one's `Date.now()`, for the health report (`tripQueue` calls it on every queue change) |
 | `getFcmToken()` | The FCM token from `FirebaseMessaging.getToken()`, which keeps the current token itself. Rejects `FCM_TOKEN` in demo builds with the placeholder Firebase config |
 | `getPendingOffer()` | The offer whose notification opened the app, or one that arrived while JS wasn't running; null once expired. Read once. JS's `pendingOffer()` also returns a `riderOffer` that came while no screen listened (the activity swiped away while online) |
 
@@ -68,7 +69,7 @@ The app always posts a visible notification on channel `rider_offers` (high impo
 |---|---|
 | `riderOffer` | `{offer: string (Offer JSON), receivedAtMs: number, channel: "fcm" \| "locations"}` |
 | `riderTripChanged` | `{tripId, step, version}` |
-| `riderStatus` | `{state: "ONLINE" \| "OFFLINE" \| "ERROR", lastFix?, message?}` after every upload and when the service stops |
+| `riderStatus` | `{state: "ONLINE" \| "OFFLINE" \| "ERROR", connected, lastFix?, message?}` after every upload and when the service stops. While offers can't ring (notifications off, or the `rider_offers` channel turned down) a successful upload reports `ERROR` "Turn on notifications to get orders." with `connected: true`; the server sends that phone no offers (`can_ring`), and Home's notifications warning shows (device state `notificationsEnabled` is the same check) |
 | `riderFcmToken` | `{token}` |
 
 JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken, appVersion, model}` from `RiderRuntime` once the gate is ready and on every token change. A 409 `DEVICE_NOT_BOUND` shows "This phone isn't approved".

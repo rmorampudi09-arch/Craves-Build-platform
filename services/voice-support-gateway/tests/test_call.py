@@ -296,7 +296,7 @@ def test_settings_read_the_environment(monkeypatch):
     loaded = Settings.from_env()
     assert loaded.missing() == []
     assert loaded.voices["te"] == "te-IN-MohanNeural" and loaded.voices["hi"] == "hi-IN-SwaraNeural"
-    assert loaded.max_call_seconds == 900 and loaded.voice_live_model == "gpt-4.1"
+    assert loaded.max_call_seconds == 900 and loaded.voice_live_model == "gpt-4.1-mini"
     assert os.environ.get("PORT") is None or loaded.port == int(os.environ["PORT"])
 
 
@@ -317,3 +317,4 @@ async def test_barge_in_stops_the_model_and_drops_its_remaining_audio():
                 await asyncio.wait_for(exotel.recv(), 5)
     session = next(m for m in voice_live.received if m["type"] == "session.update")["session"]
     assert session["turn_detection"]["interrupt_response"] is True  # Voice Live stops the model; we only drop audio
+    assert session["input_audio_echo_cancellation"] == {"type": "server_echo_cancellation"}

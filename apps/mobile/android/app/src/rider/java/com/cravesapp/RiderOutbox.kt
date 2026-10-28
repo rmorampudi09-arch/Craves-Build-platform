@@ -31,6 +31,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -67,9 +68,12 @@ object RiderOutbox {
   private val JPEG = "image/jpeg".toMediaType()
   private val ISO_PATTERNS = listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX")
 
-  /** Sends and the changes they make run here, one at a time; reading the queue and dismissing a notice don't wait. */
+  /** Sends and the changes they make run here, one at a time; saving a tap, reading the queue and dismissing a notice don't wait. */
   private val executor = Executors.newSingleThreadExecutor()
   private val lock = Any()
+  /** At most one background pass waits for the send thread, and whether it skips backoffs (a caller asked it to). */
+  private val backgroundWaiting = AtomicBoolean(false)
+  @Volatile private var backgroundSkipsBackoff = false
   /** The queue as stored, read once per process; guarded by lock. */
   private var state: State? = null
   /** Codes the Keystore couldn't seal wait in memory only, as in the JS queue without a secret store. */
@@ -100,14 +104,26 @@ object RiderOutbox {
    */
   fun enqueue(context: Context, json: String, options: String, promise: Promise) {
     val app = context.applicationContext
-    submit(promise) {
+    val tripId: String
+    val id: String
+    try {
       val input = JSONObject(json)
-      val queued = current(app).entries.firstOrNull { it.key == input.getString("key") }
-      val id = queued?.id ?: newEntry(app, input, moved = false).also { entry -> mutate(app) { it.copy(entries = it.entries + entry) } }.id
+      tripId = input.getString("tripId")
+      // Saved here, not on the send thread: a send already running there (a photo can take 90 s) must not leave the tap in
+      // JS memory only, where a kill would lose it.
+      id =
+        synchronized(lock) {
+          current(app).entries.firstOrNull { it.key == input.getString("key") }?.id
+            ?: newEntry(app, input, moved = false).also { entry -> mutate(app) { it.copy(entries = it.entries + entry) } }.id
+        }
       // On disk now: should the app die during the send, the job still sends it.
       syncJob(app)
-      passFor(app, JSONObject(options).put("tripId", input.getString("tripId"))).put("entryId", id).toString()
+    } catch (error: Exception) {
+      Log.w(TAG, "step not saved", error)
+      promise.reject("RIDER_OUTBOX", error)
+      return
     }
+    submit(promise) { passFor(app, JSONObject(options).put("tripId", tripId)).put("entryId", id).toString() }
   }
 
   /** The JS queue moved in ({entries, refusals}, P2-02b): steps keep their ids and keys, and count as deferred. */
@@ -149,16 +165,26 @@ object RiderOutbox {
   /**
    * A pass with the shift credential when JS may not be running: after an upload reached the server, on a new network,
    * and from the job. Tells JS what changed (riderOutboxChanged). done(retry): a step failed and is worth another try.
+   * skipBackoff: the phone just reached a network, so no step waits out a backoff (as JS on a signal); after an upload,
+   * steps keep their backoff, so a slow failing send isn't repeated on every upload. One pass waits at most: another
+   * call then joins it (done(false) at once), so sends can't pile up ahead of a tap.
    */
-  fun flushInBackground(context: Context, done: ((Boolean) -> Unit)? = null) {
+  fun flushInBackground(context: Context, skipBackoff: Boolean, done: ((Boolean) -> Unit)? = null) {
     val app = context.applicationContext
+    if (skipBackoff) backgroundSkipsBackoff = true
+    if (!backgroundWaiting.compareAndSet(false, true)) {
+      done?.invoke(false)
+      return
+    }
     executor.execute {
+      backgroundWaiting.set(false)
+      val skip = backgroundSkipsBackoff
+      backgroundSkipsBackoff = false
       var retry = false
       try {
         val auth = if (current(app).entries.isEmpty()) null else credentialAuth(app)
         if (auth != null) {
-          // The phone just reached the network or the server, so no step waits out a backoff (as JS on a signal).
-          val pass = pass(app, auth, null, skipBackoff = true, skipTrip = null)
+          val pass = pass(app, auth, null, skipBackoff = skip, skipTrip = null)
           retry = pass.retrying
           if (pass.results.isNotEmpty()) {
             val answer = passJson(pass).toString()
@@ -244,8 +270,10 @@ object RiderOutbox {
         return photoHttp.newCall(request.post(form.build()).build()).execute().use { answer(it) }
       }
       if (body.optString("method") == "OTP") {
-        // The code back from its seal, and capturedOffline once the step outlived its tap.
-        (entry.otpSealed?.let { unseal(it) } ?: unsealed[entry.id])?.let { body.put("otp", it) }
+        // The code back from its seal, unless it waited past 24 hours (decision E1); capturedOffline once the step outlived its tap.
+        if (System.currentTimeMillis() - entry.createdAt <= RiderOutboxCore.OTP_KEPT_MS) {
+          (entry.otpSealed?.let { unseal(it) } ?: unsealed[entry.id])?.let { body.put("otp", it) }
+        }
         if (entry.deferred) body.put("capturedOffline", true)
       }
       if (since != null) {
@@ -361,7 +389,8 @@ object RiderOutbox {
       null
     }
 
-  /** The outbox's AES key, made once in the Android Keystore; only the outbox thread seals and opens. */
+  /** The outbox's AES key, made once in the Android Keystore; one thread at a time, so two first uses can't make two keys. */
+  @Synchronized
   private fun key(): SecretKey {
     val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -436,22 +465,31 @@ object RiderOutbox {
 
   private fun read(context: Context): State {
     val file = file(context)
-    return try {
-      val json = JSONObject(String(file.readFully(), Charsets.UTF_8))
-      val state =
+    val stored =
+      try {
+        val json = JSONObject(String(file.readFully(), Charsets.UTF_8))
         State(
           objects(json.optJSONArray("entries")).map { entry(it) },
           objects(json.optJSONArray("refusals")).map { refusal(it) },
         )
-      RiderOutboxCore.loaded(state, System.currentTimeMillis())
-    } catch (error: FileNotFoundException) {
-      State()
-    } catch (error: Exception) {
-      // Never written over: kept aside for support, and the outbox starts empty.
-      Log.e(TAG, "outbox unreadable, kept aside", error)
-      file.baseFile.renameTo(File(file.baseFile.path + ".unreadable-" + System.currentTimeMillis()))
-      State()
+      } catch (error: FileNotFoundException) {
+        return State()
+      } catch (error: Exception) {
+        // Never written over: kept aside for support, and the outbox starts empty.
+        Log.e(TAG, "outbox unreadable, kept aside", error)
+        file.baseFile.renameTo(File(file.baseFile.path + ".unreadable-" + System.currentTimeMillis()))
+        return State()
+      }
+    val state = RiderOutboxCore.loaded(stored, System.currentTimeMillis())
+    if (state.entries.zip(stored.entries).any { (loaded, before) -> loaded.otpSealed != before.otpSealed }) {
+      // A code past 24 hours leaves the file too, not only memory (decision E1).
+      try {
+        write(context, state)
+      } catch (error: IOException) {
+        Log.w(TAG, "an expired code stays sealed in the file until the next write", error)
+      }
     }
+    return state
   }
 
   private fun write(context: Context, state: State) {

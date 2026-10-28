@@ -57,7 +57,7 @@ public class FleetSupportService {
     /** A problem with a trip or a payout of this rider (404 for anyone else's), or anything else. */
     @Transactional
     public void report(UUID riderId, IssueInput input) {
-        if (input == null || !CATEGORIES.contains(input.category())) {
+        if (input == null || input.category() == null || !CATEGORIES.contains(input.category())) {
             throw FleetApiException.invalid("Choose what the problem is about.");
         }
         String note = input.note() == null || input.note().isBlank() ? null : input.note().trim();

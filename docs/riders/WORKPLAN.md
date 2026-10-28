@@ -685,7 +685,7 @@ Live before 13 May 2027.
 
 **Done:**
 1. `state/riderSnapshot.ts` keeps the last `RiderMe`, Home and the trip in progress, encrypted with `expo-secure-store` because the trip has the customer's contact details. The trip is dropped once it ends, and everything at sign-out. A start without signal seeds the query cache from a snapshot under a day old.
-2. The rider's live session treats a start that failed for lack of signal, with the refresh credential still saved, as signed in. It checks the session again every 10 s and whenever the app comes back to the front; once signed in again it refetches and sends the queued steps. A refused session (expired or revoked) goes to sign-in. The customer and chef apps keep today's behaviour.
+2. The rider's live session treats a start that failed for lack of signal, with the refresh credential still saved, as signed in. It checks the session again every 60 s (each check renews the refresh token, so not more often on a weak link) and whenever the app comes back to the front; queued steps go as soon as the phone reaches Craves; once signed in again it refetches and sends the queued steps. A refused session (expired or revoked) goes to sign-in. The customer and chef apps keep today's behaviour.
 
 **Proved by:** `RiderApp.live.test.tsx` (a restart with no network opens the trip on the step its queued step leads to; the step reaches the server once the signal is back) and `riderSnapshot.test.ts`; `PHONE-TESTS.md` §3 no longer needs "Try again".
 

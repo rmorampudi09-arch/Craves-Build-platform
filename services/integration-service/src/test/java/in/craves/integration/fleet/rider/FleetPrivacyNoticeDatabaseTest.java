@@ -49,12 +49,22 @@ class FleetPrivacyNoticeDatabaseTest {
     }
 
     @Test
-    void anUnknownLanguageIsRecordedAsTheRidersOwn() {
+    void anUnknownOrMissingLanguageIsRecordedAsTheRidersOwn() {
         UUID rider = fleet.rider("Sita Devi", "+919876543210");
         fleet.db.update("UPDATE fleet_schema.rider SET identity_id = ?, language = 'te' WHERE id = ?", identity, rider);
         riders("2027-05-v1").acceptPrivacyNotice(identity, "2027-05-v1", "fr");
-        assertThat(fleet.db.queryForObject("SELECT language FROM fleet_schema.rider_privacy_acceptance WHERE rider_id = ?", String.class, rider))
-            .isEqualTo("te");
+        riders("2027-06-v2").acceptPrivacyNotice(identity, "2027-06-v2", null);
+        assertThat(fleet.db.queryForList("SELECT language FROM fleet_schema.rider_privacy_acceptance WHERE rider_id = ?", String.class, rider))
+            .containsExactly("te", "te");
+    }
+
+    /** rider_privacy_acceptance.version holds 40 characters: a longer setting is treated as unset, so no rider is held. */
+    @Test
+    void aVersionTooLongToRecordShowsNoNotice() {
+        UUID rider = fleet.rider("Sita Devi", "+919876543210");
+        fleet.db.update("UPDATE fleet_schema.rider SET identity_id = ? WHERE id = ?", identity, rider);
+        assertThat(riders("v".repeat(41)).me(pending).privacyNotice()).isNull();
+        assertThat(riders("v".repeat(40)).me(pending).privacyNotice()).isNotNull();
     }
 
     @Test

@@ -286,6 +286,21 @@ class FleetOpsDatabaseTest {
             .isEqualTo(2);
     }
 
+    /** P2-05: the chef handed this rider the food, so another rider or a courier would find an empty kitchen. */
+    @Test
+    void aTripTheChefHandedOverIsNotMovedToAnotherRiderOrACourier() {
+        contractMigration();
+        UUID first = accept(near);
+        FleetDispatchFixtures.seen(fleet.db, other, 5);
+        fleet.db.update("UPDATE fleet_schema.trip SET chef_handed_over_at = now() WHERE id = ?", first);
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(other, null, "Swap riders")), 409, "TRIP_NOT_REASSIGNABLE");
+        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(null, "BORZO", "Too slow")), 409, "TRIP_NOT_REASSIGNABLE");
+        assertThat(fleet.db.queryForMap("SELECT state, rider_id FROM fleet_schema.trip WHERE id = ?", first))
+            .containsEntry("state", "ASSIGNED").containsEntry("rider_id", near);
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_stage WHERE trip_id = ? AND state = 'OPEN'", Integer.class, first))
+            .isZero();
+    }
+
     @Test
     void aHeldTripStaysWithItsRiderWhenTheOtherRiderCannotTakeItOrTheFoodIsPickedUp() {
         contractMigration();

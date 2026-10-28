@@ -9,7 +9,7 @@ import android.app.job.JobService
  */
 class RiderOutboxJob : JobService() {
   override fun onStartJob(params: JobParameters): Boolean {
-    RiderOutbox.flushInBackground(this) { retry -> jobFinished(params, retry) }
+    RiderOutbox.flushInBackground(this, skipBackoff = true) { retry -> jobFinished(params, retry) }
     return true
   }
 

@@ -189,6 +189,23 @@ class FleetDispatchJobsDatabaseTest {
         verify(alerts, never()).opsAlert(eq("FLEET_RIDER_LOST"), anyString(), anyString(), anyMap());
     }
 
+    /** The chef handed over the food before the rider tapped "arrived" (still ASSIGNED): one alert, the trip stays, ticks move on. */
+    @Test
+    void aHandedOverTripTheRiderNeverMarkedArrivedIsAlertedOnceAndKept() {
+        UUID chefSubOrderId = UUID.randomUUID();
+        UUID onTheWay = acceptedTrip(chefSubOrderId, "ASSIGNED");
+        dispatcher.chefHandedOver(chefSubOrderId, java.time.Instant.now().minusSeconds(30));
+        FleetDispatchFixtures.seen(fleet.db, rider, 600);
+
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(state(onTheWay)).isEqualTo("ASSIGNED");
+        verify(alerts, times(1)).opsAlert(eq("FLEET_RIDER_SILENT_AT_KITCHEN"), anyString(), contains("the chef handed them the food"), anyMap());
+        verify(alerts, never()).opsAlert(eq("FLEET_RIDER_LOST"), anyString(), anyString(), anyMap());
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_event WHERE trip_id = ? AND kind = 'WATCHDOG_ALERTED'",
+            Integer.class, onTheWay)).as("out of later ticks").isOne();
+    }
+
     @Test
     void aStepCommittingWhileTheWatchdogWaitsForTheTripKeepsTheKitchenWindow() throws Exception {
         when(router.borzoTimedPolicyReady()).thenReturn(false);

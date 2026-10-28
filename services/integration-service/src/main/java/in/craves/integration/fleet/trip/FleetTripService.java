@@ -593,7 +593,7 @@ public class FleetTripService {
 
     private static byte[] photoBytes(MultipartFile photo) {
         if (photo == null || photo.isEmpty() || photo.getSize() > MAX_PHOTO_BYTES
-            || !List.of("image/jpeg", "image/png").contains(photo.getContentType())) {
+            || photo.getContentType() == null || !List.of("image/jpeg", "image/png").contains(photo.getContentType())) {
             throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
         }
         try (java.io.InputStream input = photo.getInputStream()) {

@@ -338,7 +338,9 @@ public class FleetOpsService {
             LOGGER.warn("FLEET_HANDOVER_WAITS_FOR_MIGRATION trip={} (trip_chef_sub_order_id_key still exists)", trip.id());
             throw notReassignable("Moving a trip to another rider isn't switched on yet. Give it to Borzo or Pidge, or cancel it.");
         }
-        PayQuote quote = quoteFor(riderId, lock(trip));
+        Map<String, Object> locked = lock(trip);
+        foodNotHandedOver(locked);
+        PayQuote quote = quoteFor(riderId, locked);
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), replaced_at = now(), "
             + "version = version + 1, updated_at = now() WHERE id = ?", HANDED_TO_RIDER, trip.id());
         event(trip.id(), "OPS_REASSIGNED", by);
@@ -374,7 +376,8 @@ public class FleetOpsService {
     private PayQuote quoteFor(UUID riderId, Map<String, Object> locked) {
         Map<String, Object> rider = jdbc.queryForList("""
             SELECT p.lat, p.lng FROM fleet_schema.rider r
-            JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL
+            JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
+              AND s.credential_expires_at > now()
             JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
             WHERE r.id = ? AND r.status = 'ACTIVE' AND\s""" + FleetDispatcher.HEARD_FROM + """
 
@@ -412,7 +415,7 @@ public class FleetOpsService {
             if (!Set.of("ASSIGNED", "AT_PICKUP").contains(trip.state())) {
                 throw notReassignable("The rider has the food. Cancel the trip instead, or let them finish.");
             }
-            lock(trip);
+            foodNotHandedOver(lock(trip));
             jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
                 + "updated_at = now() WHERE id = ?", RELEASED, trip.id());
             event(trip.id(), "OPS_REASSIGNED", by);
@@ -475,10 +478,17 @@ public class FleetOpsService {
         }
     }
 
+    /** The chef handed this rider the food (P2-05): another rider or a courier would find an empty kitchen. */
+    private static void foodNotHandedOver(Map<String, Object> locked) {
+        if (locked.get("chef_handed_over_at") != null) {
+            throw notReassignable("The chef already handed this rider the food. Call the rider, or cancel the trip.");
+        }
+    }
+
     /** The trip row, locked, unchanged since it was read. */
     private Map<String, Object> lock(Current trip) {
-        Map<String, Object> row = jdbc.queryForList("SELECT state, rider_id, chef_id, rate_card_version, drop_distance_m, kitchen_lat, kitchen_lng "
-            + "FROM fleet_schema.trip WHERE id = ? FOR UPDATE", trip.id()).stream().findFirst().orElseThrow(FleetOpsService::changed);
+        Map<String, Object> row = jdbc.queryForList("SELECT state, rider_id, chef_id, rate_card_version, drop_distance_m, kitchen_lat, kitchen_lng, "
+            + "chef_handed_over_at FROM fleet_schema.trip WHERE id = ? FOR UPDATE", trip.id()).stream().findFirst().orElseThrow(FleetOpsService::changed);
         if (!trip.state().equals(row.get("state")) || !java.util.Objects.equals(trip.riderId(), row.get("rider_id"))) {
             throw changed();
         }

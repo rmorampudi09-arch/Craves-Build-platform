@@ -158,7 +158,7 @@ public class FleetRiderService {
             throw FleetApiException.conflict("NOTICE_CHANGED", "The privacy notice changed. Please read the new one.");
         }
         jdbc.update("INSERT INTO fleet_schema.rider_privacy_acceptance (rider_id, version, language) VALUES (?, ?, ?) "
-            + "ON CONFLICT (rider_id, version) DO NOTHING", rider.id(), version, LANGUAGES.contains(language) ? language : rider.language());
+            + "ON CONFLICT (rider_id, version) DO NOTHING", rider.id(), version, language != null && LANGUAGES.contains(language) ? language : rider.language());
     }
 
     /**

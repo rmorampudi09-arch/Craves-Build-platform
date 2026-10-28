@@ -237,14 +237,15 @@ public class FleetDispatchJobs {
     }
 
     /**
-     * Records the one kitchen alert of a trip still at the kitchen and silent; false if it changed or was alerted already.
-     * The event's fixed idempotency key makes it once per trip even with two replicas ticking.
+     * Records the one alert of a silent trip still before pickup: at the kitchen, or with the food the chef handed over
+     * before the rider tapped "arrived" (P2-05). False if it changed or was alerted already. The event's fixed idempotency
+     * key makes it once per trip even with two replicas ticking, and takes the trip out of later ticks.
      */
     private boolean alertedAtKitchen(UUID tripId) {
         return jdbc.update("""
             INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key, trip_version)
             SELECT ?, t.id, 'WATCHDOG_ALERTED', 'SYSTEM', 'watchdog-kitchen-alert', t.version FROM fleet_schema.trip t
-            WHERE t.id = ? AND t.state = 'AT_PICKUP' AND %s
+            WHERE t.id = ? AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND %s
             ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING"""
             .formatted(SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")")), UUID.randomUUID(), tripId) == 1;
     }

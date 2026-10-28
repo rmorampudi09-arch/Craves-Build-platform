@@ -162,7 +162,7 @@ class RiderOnlineService : Service() {
   private val network =
     object : ConnectivityManager.NetworkCallback() {
       override fun onAvailable(network: Network) {
-        RiderOutbox.flushInBackground(this@RiderOnlineService)
+        RiderOutbox.flushInBackground(this@RiderOnlineService, skipBackoff = true)
       }
     }
 
@@ -318,7 +318,11 @@ class RiderOnlineService : Service() {
             end(text(R.string.rider_shift_ended))
             return
           }
-          !response.isSuccessful -> status("ERROR", text(R.string.rider_no_internet))
+          !response.isSuccessful -> {
+            // A server that refused the batch may take fewer fixes (an older one takes 5): back to 5 until one says more.
+            fixesPerCall = RiderOutboxCore.fixesPerCall(null)
+            status("ERROR", text(R.string.rider_no_internet))
+          }
           else -> {
             // The oldest went; newer ones wait for the next call. Nothing else touches fixes on this thread meanwhile.
             repeat(sent.size) { fixes.removeFirst() }
@@ -329,7 +333,7 @@ class RiderOnlineService : Service() {
             }
             if (!handle(JSONObject(response.body?.string() ?: "{}"), sentAtMs)) return
             // The upload reached the server: the outbox's waiting trip steps go now, on its own thread (P2-02a).
-            RiderOutbox.flushInBackground(this)
+            RiderOutbox.flushInBackground(this, skipBackoff = false)
           }
         }
       }
@@ -340,7 +344,8 @@ class RiderOnlineService : Service() {
       // A bad response must not end the upload loop.
       Log.w(TAG, "bad /locations call", error)
     }
-    saveFixes()
+    // After onDestroy (Go offline mid-call) the file is the stopped shift's: leave it as clearShift left it.
+    if (!destroyed) saveFixes()
     // One backup timer at a time: an upload on a location batch moves it on.
     nextTick?.cancel(false)
     if (!executor.isShutdown) nextTick = executor.schedule({ maybeUpload(force = true) }, uploadEveryMs(), TimeUnit.MILLISECONDS)
@@ -348,6 +353,8 @@ class RiderOnlineService : Service() {
 
   /** Applies a LocationBatchResponse; returns false when the server stopped the shift. */
   private fun handle(response: JSONObject, sentAtMs: Long): Boolean {
+    // An answer that arrives after Go offline (onDestroy) rings nothing and takes no lock.
+    if (destroyed) return false
     if (response.optBoolean("stop")) {
       end(RiderText.fromServer(this, response.optString("stopReason")) ?: text(R.string.rider_shift_ended))
       return false
@@ -366,8 +373,11 @@ class RiderOnlineService : Service() {
     // P2-10: while the server says so, uploads ride on location batches with short locks, not one lock for the whole shift.
     if (response.optBoolean("callbackUploads")) {
       wakeLock?.takeIf { it.isHeld }?.release()
-    } else if (wakeLock?.isHeld != true) {
-      shift?.let { holdWakeLock(it) }
+    } else {
+      // Under the lock onDestroy takes to set destroyed, so a lock taken here is one onDestroy then releases.
+      synchronized(callback) {
+        if (!destroyed && wakeLock?.isHeld != true) shift?.let { holdWakeLock(it) }
+      }
     }
 
     val trip = response.optJSONObject("activeTrip")

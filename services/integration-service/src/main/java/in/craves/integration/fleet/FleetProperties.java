@@ -1,5 +1,6 @@
 package in.craves.integration.fleet;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -37,4 +38,12 @@ public record FleetProperties(
     String privacyNoticeVersion,
     String privacyNoticeUrl
 ) {
+    public FleetProperties {
+        // rider_privacy_acceptance.version is VARCHAR(40): a longer version could never be accepted and would hold every rider.
+        if (privacyNoticeVersion != null && privacyNoticeVersion.trim().length() > 40) {
+            LoggerFactory.getLogger(FleetProperties.class).error("CRAVES_ALERT alert=FLEET_PRIVACY_NOTICE_VERSION_TOO_LONG length={} "
+                + "(no privacy notice is shown; use at most 40 characters)", privacyNoticeVersion.trim().length());
+            privacyNoticeVersion = null;
+        }
+    }
 }

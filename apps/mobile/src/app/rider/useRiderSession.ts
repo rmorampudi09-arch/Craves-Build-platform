@@ -32,8 +32,12 @@ export interface RiderSession {
   retry(): void;
 }
 
-/** How often a rider who started without signal checks the saved session again; also on every return to the app. */
-export const OFFLINE_RECHECK_MS = 10_000;
+/**
+ * How often a rider who started without signal checks the saved session again (also on every return to the app), as
+ * useSessionLifecycle retries: each check renews the refresh token, so on a weak link an answer lost after the renewal
+ * must not repeat every few seconds. Queued steps don't wait for it: RiderRuntime sends them once the phone reaches Craves.
+ */
+export const OFFLINE_RECHECK_MS = 60_000;
 
 /** no: normal. checking: the start failed, looking for a saved session and rider. yes: working offline. declined: nothing saved. */
 type OfflineMode = 'no' | 'checking' | 'yes' | 'declined';

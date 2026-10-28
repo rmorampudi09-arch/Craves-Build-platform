@@ -63,8 +63,8 @@ react {
 def enableProguardInReleaseBuilds = false
 
 /**
- * Rider CI only: .github/workflows/rider-apk.yml runs assembleRiderRelease with -PcravesRiderMinify=true (R8) and
- * -PcravesVersionCode=<run number>. Nothing else passes them, so the customer build is unchanged.
+ * Rider CI only: .github/workflows/rider-apk.yml runs assembleRiderRelease with -PcravesRiderMinify=true (R8, and every
+ * language in the Play bundle) and -PcravesVersionCode=<run number>. Nothing else passes them, so the customer build is unchanged.
  */
 def cravesRiderMinify = project.findProperty('cravesRiderMinify')?.toString() == 'true'
 def cravesVersionCode = project.findProperty('cravesVersionCode')?.toString()
@@ -116,6 +116,13 @@ android {
     }
     buildFeatures {
         buildConfig true
+    }
+    // A rider Play bundle keeps every language: RiderText shows the language the rider picked in the app (P2-08), and Play
+    // would deliver only the phone's. Rider CI builds only (cravesRiderMinify), so the customer bundle keeps its splits.
+    bundle {
+        language {
+            enableSplit = !cravesRiderMinify
+        }
     }
     // One codebase, two apps: the customer app keeps com.cravesapp; the rider app installs side by side.
     flavorDimensions "app"

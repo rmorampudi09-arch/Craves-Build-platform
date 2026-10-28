@@ -37,14 +37,21 @@ public final class FleetTripModels {
     /**
      * Why an offer went to its rider (Phase 4, docs/riders/DISPATCH.md), the rider's own numbers only. rule NEAREST: the
      * place-th nearest of riders free riders; FAIR: within bandM of the nearest (bandRiders riders), the rider's earnings per
-     * online hour today and minutes free decided the order. atOnce riders saw it together, in round round.
+     * online hour today and minutes free decided the order. atOnce riders saw it together, in round round. homeNearerM
+     * (Phase 5): the rider is heading home, and the drop leaves them this many metres nearer home.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record OfferReason(String rule, int place, int riders, int atOnce, int round, Integer bandM, Integer bandRiders,
-                              Long earnedPerHourPaise, Integer freeMinutes) {
+                              Long earnedPerHourPaise, Integer freeMinutes, Integer homeNearerM) {
+        /** Before Phase 5: nobody heading home. */
+        public OfferReason(String rule, int place, int riders, int atOnce, int round, Integer bandM, Integer bandRiders,
+                           Long earnedPerHourPaise, Integer freeMinutes) {
+            this(rule, place, riders, atOnce, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes, null);
+        }
+
         /** The same reason with atOnce the riders asked together, which the cost guard can make fewer than the policy's. */
         public OfferReason together(int count) {
-            return new OfferReason(rule, place, riders, count, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes);
+            return new OfferReason(rule, place, riders, count, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes, homeNearerM);
         }
     }
 

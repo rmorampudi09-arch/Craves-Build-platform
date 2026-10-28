@@ -64,6 +64,8 @@ export interface RiderProfile {
   insurance?: {label: string; claimPhone: string; claimStatus?: string};
   /** Phase 4, while rider choices are on: the farthest pickup and drop the rider wants to hear of. */
   preferences?: OrderPreferences;
+  /** Phase 5: when the rider saved their home spot for heading home; absent while none is saved. Never the spot itself. */
+  homeSavedAt?: string;
 }
 
 /** The farthest pickup (as offers show it) and drop, in metres; null or absent is any distance. */
@@ -146,6 +148,8 @@ export interface OfferReason {
   bandRiders?: number;
   earnedPerHourPaise?: Paise;
   freeMinutes?: number;
+  /** Phase 5: the rider is heading home, and this order's drop leaves them this many metres nearer home. */
+  homeNearerM?: number;
 }
 
 export interface HomeSummary {
@@ -171,6 +175,10 @@ export interface HomeSummary {
   todayPerHourPaise?: Paise;
   /** Phase 4: the middle pay per online hour today over 5 or more riders online 30 minutes or more. */
   fleetPerHourPaise?: Paise;
+  /** Phase 5, only while rider choices are on: the rider has a home spot, so Home can offer heading home. */
+  homeSaved?: boolean;
+  /** Phase 5: heading home is on until then. */
+  headingHomeUntil?: string;
 }
 
 export interface Offer {
@@ -433,7 +441,10 @@ export type RiderErrorCode =
   | 'AMOUNT_OVER_BALANCE'
   | 'PAYOUT_ACCOUNT_REQUIRED'
   | 'PAYOUTS_PAUSED'
-  | 'PAYOUT_NOT_FOUND';
+  | 'PAYOUT_NOT_FOUND'
+  | 'NOT_ONLINE'
+  | 'RIDER_CHOICES_OFF'
+  | 'HOME_NOT_SAVED';
 
 /** A refusal; the message is safe to show the rider. attemptsLeft comes only with 422 OTP_INVALID. */
 export interface ErrorBody {

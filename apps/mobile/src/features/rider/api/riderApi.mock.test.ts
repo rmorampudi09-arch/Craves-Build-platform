@@ -321,6 +321,32 @@ describe('mock rider server', () => {
     expect(offer.reason).toMatchObject({ rule: 'NEAREST', atOnce: 3 });
   });
 
+  it('saves a home spot, heads home for an hour with drops on the way, and always lets the rider stop or forget it', async () => {
+    const mock = setup();
+    await expect(mock.api.headHome()).rejects.toMatchObject({ code: 'NOT_ONLINE', status: 409 });
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
+    expect((await mock.api.getHome()).homeSaved).toBe(false);
+    await expect(mock.api.headHome()).rejects.toMatchObject({ code: 'HOME_NOT_SAVED', status: 409 });
+    await expect(mock.api.saveHomeSpot(Number.NaN, 78.39)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    const { savedAt } = await mock.api.saveHomeSpot(17.46, 78.39);
+    expect((await mock.api.getProfile()).homeSavedAt).toBe(savedAt);
+
+    const { until } = await mock.api.headHome();
+    expect(Date.parse(until) - Date.parse(savedAt)).toBe(3_600_000);
+    expect((await mock.api.getHome()).headingHomeUntil).toBe(until);
+    mock.advance(13_000);
+    expect((await mock.api.postLocations([])).offers[0].reason).toMatchObject({ homeNearerM: 3200 });
+    await mock.api.stopHeadingHome();
+    expect((await mock.api.getHome()).headingHomeUntil).toBeUndefined();
+
+    await mock.api.headHome();
+    await mock.api.forgetHomeSpot();
+    const home = await mock.api.getHome();
+    expect(home).toMatchObject({ homeSaved: false });
+    expect(home.headingHomeUntil).toBeUndefined();
+    expect((await mock.api.getProfile()).homeSavedAt).toBeUndefined();
+  });
+
   it('stops the shift when ops ends it', async () => {
     const mock = setup();
     await mock.api.startShift('file:///selfie.jpg', 'android-id-1');

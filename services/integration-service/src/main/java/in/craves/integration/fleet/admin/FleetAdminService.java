@@ -180,7 +180,7 @@ public class FleetAdminService {
     @Transactional
     public Map<String, Object> dataExport(Admin admin, UUID riderId) {
         header(riderId);
-        Map<String, Object> export = RiderDataExport.build(jdbc, riderId, Instant.now());
+        Map<String, Object> export = RiderDataExport.build(jdbc, riderId, Instant.now(), false);
         audit(admin, "RIDER_DATA_EXPORTED", riderId, riderId.toString(), "Downloaded the rider's data export.");
         return export;
     }

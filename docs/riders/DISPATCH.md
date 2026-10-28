@@ -12,7 +12,7 @@ Craves runs its own riders to deliver its chefs' food well, not to squeeze rider
 | **Only three things decide who hears first:** distance to the kitchen, pay per online hour today, and minutes waited. Nothing else counts: no ratings, no acceptance rate, no history before today, no hidden score. | `FleetDispatcher.ranked`, `fair`, `standings` | Bologna v Deliveroo [5]; Garante v Foodinho [6][7]; EU Platform Work Directive Art 7 [2] |
 | **Every offer says why it came to you.** | `trip_offer.reason`, the line on the offer card (`whyOffer`), and ops's "Why this rider" column | EU PWD Arts 9 and 11 [2]; CJEU C-203/22 [9]; Amsterdam v Uber and Ola [8] |
 | **The rules are in the app, in your language, and change only with 14 days' notice.** | Terms → "How you get orders" (`offerRulesLines`); refused otherwise (`RULES_NEED_NOTICE` and the V170 trigger); upcoming rules shown in advance (`upcoming.offerRules`) | Telangana s.12, s.13(2) [1] |
-| **You choose when and how far you work.** Go online or offline any time. Take a 5 to 60 minute break without going offline. Set the farthest ride to a kitchen and to a customer you'll take. None of it counts against you. | `/shift/pause`, `/shift/resume` and `/preferences`, behind the switch `CRAVES_FLEET_RIDER_CHOICES_ENABLED` | Telangana s.13(3)(b) [1]; NDMA heat advisory [32] |
+| **You choose when and how far you work.** Go online or offline any time. Take a 5 to 60 minute break without going offline. Set the farthest ride to a kitchen and to a customer you'll take. Head home and hear only of orders on your way. None of it counts against you. | `/shift/pause`, `/shift/resume`, `/preferences`, `/home-spot` and `/shift/heading-home`, behind the switch `CRAVES_FLEET_RIDER_CHOICES_ENABLED` | Telangana s.13(3)(b) [1]; NDMA heat advisory [32] |
 | **No speed pressure.** No countdown on a trip except the kitchen's free wait, no lateness penalty, and no delivery promise to customers that you pay for. | Rider screens (WORKPLAN rule 8) | EU PWD Art 12 [2]; India's Labour Ministry against 10-minute delivery [33] |
 | **You see your pay per online hour**, and the fleet's middle figure once five or more riders work that day. | Home (`todayPerHourPaise`, `fleetPerHourPaise`) | Fairwork's fair-pay principle [30] |
 | **Your data is yours:** a full copy from the app, any time. | `GET /my-data` | DPDP Act 2023 s.11 [4]; Amsterdam v Ola [8] |
@@ -129,6 +129,14 @@ Behind `CRAVES_FLEET_RIDER_CHOICES_ENABLED` (off). `GET /me` reports it as `feat
 - **Kitchen to customer:** any distance, or at most 3, 5, 8 or 12 km.
 - **Limits.** The server accepts 0.5 to 10 km and 1 to 20 km. The kitchen distance is measured as offers show it.
 - **Effect.** Dispatch leaves the rider out of any order beyond either limit, so fewer orders may reach them. The choice never counts against them.
+
+**Heading home** (Phase 5; Home → "Head home").
+- **The home spot.** The rider saves it in Profile, standing at home ("I'm home: save this spot"). The phone rounds it to 2 decimal places (an area about 1 km across) and the server keeps no more, so it is never an address. Only the rider sees it, in the app and in their data copy; ops's copy says only that one is kept. It can be deleted any time, even with the switch off, and is forgotten 90 days after it was last saved or used.
+- **For an hour** the rider hears only of orders whose drop leaves them at least 500 m nearer home, and whose ride (to the kitchen, to the customer, then home) adds at most 2 km, or a quarter of the way home if that is more, to riding straight home. Distances are straight lines. All the other rules still apply.
+- **It ends** after the hour, when the rider stops it ("Stop heading home" always works), when they go offline, or when a real fix comes within 1 km of the home spot. Turning it on again starts a new hour. There is no daily limit.
+- **The offer card** adds "On your way home: the drop leaves you 3.2 km nearer home."
+- **Fair turns are unchanged:** heading home only narrows which orders reach the rider. Like the other choices, it never counts against them.
+- **Where the numbers come from:** Uber's destination filter uses the same added-distance test, and Namma Yatri a 2 km corridor (research R14).
 
 ## 5. Pay per online hour
 

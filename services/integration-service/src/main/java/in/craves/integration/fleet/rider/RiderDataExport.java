@@ -6,6 +6,7 @@ import in.craves.integration.fleet.FleetRules;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,7 @@ public final class RiderDataExport {
             SELECT id AS "shiftId", started_at AS "startedAt", ended_at AS "endedAt", selfie_state AS "selfieState",
                    selfie_reason AS "selfieReason", selfie_blob IS NOT NULL AS "selfieKept", in_zone_seconds AS "inZoneSeconds",
                    last_seen_at AS "lastSeenAt", max_silence_seconds AS "maxSilenceSeconds", silences_over_60s AS "silencesOver60s",
-                   health::text AS "phoneHealth"
+                   health::text AS "phoneHealth", heading_home_until AS "headingHomeUntil"
             FROM fleet_schema.rider_shift WHERE rider_id = ? ORDER BY started_at DESC"""),
         new Section("breaks", """
             SELECT shift_id AS "shiftId", started_at AS "startedAt", ends_at AS "endsAt"
@@ -121,25 +122,31 @@ public final class RiderDataExport {
     }
 
     /**
-     * The rider's data, newest first in each list; at, when it was put together. shortcut: trip has no full rider_id index,
-     * so each export scans it once a section; add one if exports get slow.
+     * The rider's data, newest first in each list; at, when it was put together. withHomeSpot (Phase 5): the rider's own copy
+     * holds their home spot; the copy ops downloads for them says only whether one is kept, as ops never sees it.
+     * shortcut: trip has no full rider_id index, so each export scans it once a section; add one if exports get slow.
      */
-    public static Map<String, Object> build(JdbcTemplate jdbc, UUID riderId, Instant at) {
+    public static Map<String, Object> build(JdbcTemplate jdbc, UUID riderId, Instant at, boolean withHomeSpot) {
         Map<String, Object> export = new LinkedHashMap<>();
+        List<String> notIncluded = new ArrayList<>(List.of(
+            "Photos of your documents, shift selfies and delivery photos: ask rider support to see one.",
+            "GPS points on your trips (counted in tripGpsPoints), kept 90 days: ask rider support for a copy.",
+            "Customers' names, phone numbers and addresses: they are the customers' data."));
+        if (!withHomeSpot) {
+            notIncluded.add("Your home spot for heading home: Craves staff never see it. The app's own copy (Profile, Your data) has it.");
+        }
         export.put("about", Map.of(
             "generatedAt", at.toString(),
             "eachListHoldsAtMost", LIMIT,
             "tripGpsPoints", jdbc.queryForObject("SELECT count(*) FROM fleet_schema.trip_track k JOIN fleet_schema.trip t ON t.id = k.trip_id "
                 + "AND t.rider_id = k.rider_id WHERE t.rider_id = ?", Long.class, riderId),
-            "notIncluded", List.of(
-                "Photos of your documents, shift selfies and delivery photos: ask rider support to see one.",
-                "GPS points on your trips (counted in tripGpsPoints), kept 90 days: ask rider support for a copy.",
-                "Customers' names, phone numbers and addresses: they are the customers' data.")));
+            "notIncluded", List.copyOf(notIncluded)));
         export.put("profile", jdbc.queryForList("""
             SELECT id AS "riderId", name, phone, language, status, vehicle_kind AS "vehicleKind", vehicle_label AS "vehicleLabel",
                    vehicle_reg_number AS "vehicleRegNumber", max_pickup_m AS "maxPickupM", max_drop_m AS "maxDropM",
-                   created_at AS "createdAt"
-            FROM fleet_schema.rider WHERE id = ?""", riderId).stream().map(RiderDataExport::plain).findFirst().orElse(Map.of()));
+                   %s, home_saved_at AS "homeSavedAt", home_used_at AS "homeUsedAt", created_at AS "createdAt"
+            FROM fleet_schema.rider WHERE id = ?""".formatted(withHomeSpot ? "home_lat AS \"homeLat\", home_lng AS \"homeLng\""
+                : "home_lat IS NOT NULL AS \"homeSpotKept\""), riderId).stream().map(RiderDataExport::plain).findFirst().orElse(Map.of()));
         export.put("latestPosition", jdbc.queryForList("""
             SELECT lat, lng, accuracy_m AS "accuracyM", recorded_at AS "recordedAt"
             FROM fleet_schema.rider_position_latest WHERE rider_id = ?""", riderId).stream().map(RiderDataExport::plain).findFirst()

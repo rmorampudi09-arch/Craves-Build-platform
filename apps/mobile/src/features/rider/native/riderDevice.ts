@@ -20,6 +20,10 @@ interface NativeRiderDevice {
 
 // Present only in the rider flavor (android/app/src/rider); undefined in the customer app and in Jest.
 const native = NativeModules.CravesRiderDevice as NativeRiderDevice | undefined;
+// From the shared main source set (both apps register it; the customer app's address screen uses it); undefined in Jest.
+const location = NativeModules.CravesCurrentLocation as
+  | {getCurrentLocation(): Promise<{latitude: number; longitude: number; accuracy?: number | null}>}
+  | undefined;
 const {ACCESS_FINE_LOCATION, POST_NOTIFICATIONS} = PermissionsAndroid.PERMISSIONS;
 const needsNotificationPermission = Platform.OS === 'android' && Number(Platform.Version) >= 33;
 
@@ -52,6 +56,18 @@ export const riderDevice = {
       return native ? await native.keepPhoto(uri) : uri;
     } catch {
       return uri;
+    }
+  },
+  /**
+   * Phase 5: where the phone is now, for the home spot; null when location is off, not allowed or unknown. The caller
+   * rounds it (roundToSpot) before it leaves the phone.
+   */
+  async currentPosition(): Promise<{lat: number; lng: number} | null> {
+    try {
+      const here = location ? await location.getCurrentLocation() : null;
+      return here && Number.isFinite(here.latitude) && Number.isFinite(here.longitude) ? {lat: here.latitude, lng: here.longitude} : null;
+    } catch {
+      return null;
     }
   },
   /** Deletes a photo keepPhoto made, once the server has answered for its delivery; any other file is left alone. */

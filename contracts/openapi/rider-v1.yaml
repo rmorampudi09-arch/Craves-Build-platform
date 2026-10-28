@@ -103,6 +103,19 @@ paths:
       description: Each null is any distance; the pickup is as offers show it. Dispatch leaves the rider out of an order beyond either while rider choices are on. 400 VALIDATION_FAILED (pickup 500 to 10000 m, drop 1000 to 20000 m); 503 RIDER_CHOICES_OFF.
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OrderPreferences'}}}}
       responses: {'200': {description: Saved, content: {application/json: {schema: {$ref: '#/components/schemas/OrderPreferences'}}}}, '400': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+  /home-spot:
+    put:
+      summary: Save the rider's home spot for heading home (Phase 5, features.riderChoices)
+      description: The phone's position, which the app rounds to 2 decimal places (about a kilometre) before sending; the server rounds it again and keeps no more. Never an address, never shown to ops; forgotten 90 days after it was last saved or used. Saving again moves it. 400 VALIDATION_FAILED (a missing or impossible position); 503 RIDER_CHOICES_OFF.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/HomeSpotRequest'}}}}
+      responses: {'200': {description: Saved, content: {application/json: {schema: {$ref: '#/components/schemas/HomeSpot'}}}}, '400': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+    delete: {summary: Forget the home spot and end heading home, description: '204 also when none is saved, and while rider choices are off, so a rider can always delete it.', responses: {'204': {description: Forgotten}}}
+  /shift/heading-home:
+    post:
+      summary: Head home for an hour (Phase 5, features.riderChoices)
+      description: Until the returned time, offers come only for orders whose drop leaves the rider at least 500 m nearer the home spot and add at most 2 km (or a quarter of the way home, if more) to riding straight home, by straight lines. No daily limit; declining stays free. It ends sooner when the rider turns it off, goes offline, or a real fix comes within 1 km of the home spot. Turning it on again starts the hour again. 409 NOT_ONLINE; 409 HOME_NOT_SAVED; 503 RIDER_CHOICES_OFF.
+      responses: {'200': {description: Heading home, content: {application/json: {schema: {$ref: '#/components/schemas/HeadingHome'}}}}, '409': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+    delete: {summary: Stop heading home now, description: '204 also when it is off, and while rider choices are off.', responses: {'204': {description: Every order counts again}}}
   /documents:
     post:
       summary: A new photo of one document; ops reviews it by hand and the document shows as PENDING until then
@@ -261,7 +274,7 @@ components:
             RIDER_NOT_ACTIVE, DEVICE_NOT_BOUND, APP_UPDATE_REQUIRED, DOCUMENTS_EXPIRED, SELFIE_INVALID, SHIFT_OPEN, SHIFT_CREDENTIAL_INVALID,
             OFFER_TAKEN, OFFER_EXPIRED, OFFER_NOT_FOUND, ORDER_CANCELLED, TRIP_IN_PROGRESS, TRIP_NOT_FOUND, TRIP_NOT_ACTIVE, STEP_CONFLICT,
             OTP_INVALID, OTP_LOCKED, OTP_UNAVAILABLE, CALLS_REQUIRED, WAIT_NOT_OVER, PHOTO_REQUIRED,
-            WITHDRAWAL_LIMIT, AMOUNT_OVER_BALANCE, PAYOUT_ACCOUNT_REQUIRED, PAYOUTS_PAUSED, PAYOUT_NOT_FOUND, NOT_ONLINE, RIDER_CHOICES_OFF]
+            WITHDRAWAL_LIMIT, AMOUNT_OVER_BALANCE, PAYOUT_ACCOUNT_REQUIRED, PAYOUTS_PAUSED, PAYOUT_NOT_FOUND, NOT_ONLINE, RIDER_CHOICES_OFF, HOME_NOT_SAVED]
         message: {type: string}
         attemptsLeft: {type: integer, minimum: 1, description: Only on 422 OTP_INVALID}
     Paise: {type: integer, description: Indian rupees x 100}
@@ -303,6 +316,7 @@ components:
         payoutAccountMasked: {type: string, description: The account payouts go to (ops set or confirmed it)}
         preferences: {$ref: '#/components/schemas/OrderPreferences'}
         payoutAccountSubmitted: {type: string, description: An account the rider sent that ops has not confirmed yet}
+        homeSavedAt: {type: string, format: date-time, description: 'Phase 5: when the rider saved their home spot for heading home; absent while none is saved. Sent with rider choices off too, so the rider can delete it. The spot itself is never sent back.'}
         insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
     SignUp:
       type: object
@@ -354,6 +368,9 @@ components:
         profile: {type: object, additionalProperties: true}
     PauseRequest: {type: object, required: [minutes], properties: {minutes: {type: integer, minimum: 5, maximum: 60}}}
     ShiftPause: {type: object, required: [offersPausedUntil], properties: {offersPausedUntil: {type: string, format: date-time}}}
+    HomeSpotRequest: {type: object, required: [lat, lng], description: 'Phase 5: the phone''s position, rounded by the app to 2 decimal places', properties: {lat: {type: number, minimum: -90, maximum: 90}, lng: {type: number, minimum: -180, maximum: 180}}}
+    HomeSpot: {type: object, required: [savedAt], properties: {savedAt: {type: string, format: date-time}}}
+    HeadingHome: {type: object, required: [until], properties: {until: {type: string, format: date-time, description: An hour from now}}}
     OrderPreferences:
       type: object
       description: 'Phase 4: the farthest pickup (as offers show it) and drop the rider wants to hear of; null or absent is any distance. On RiderProfile only while rider choices are on.'
@@ -384,6 +401,7 @@ components:
         bandRiders: {type: integer, description: 'FAIR only: riders inside the band'}
         earnedPerHourPaise: {type: integer, description: 'FAIR only: the rider''s pay today per online hour (at least 30 minutes counted)'}
         freeMinutes: {type: integer, description: 'FAIR only: minutes since the rider''s last trip ended or the shift started'}
+        homeNearerM: {type: integer, description: 'Phase 5: the rider is heading home, and this order''s drop leaves them this many metres nearer home (straight line)'}
     HomeSummary:
       type: object
       required: [online, todayEarningsPaise, todayTrips]
@@ -403,6 +421,8 @@ components:
         todayOnlineMinutes: {type: integer, minimum: 0, description: 'Phase 4: minutes online today (IST), shifts less breaks'}
         todayPerHourPaise: {type: integer, description: 'Phase 4, paise: todayEarningsPaise per online hour, once online 30 minutes today; fair turns compare riders by it'}
         fleetPerHourPaise: {type: integer, description: 'Phase 4, paise: the middle pay per online hour today over riders online 30 minutes or more, with todayPerHourPaise, once there are 5 such riders (so no one rider''s pay shows)'}
+        homeSaved: {type: boolean, description: 'Phase 5, only while rider choices are on: the rider has a home spot, so Home can offer heading home'}
+        headingHomeUntil: {type: string, format: date-time, description: 'Phase 5: heading home is on until then; absent otherwise'}
     Offer:
       type: object
       required: [offerId, tripId, expiresAt, expiresInSec, payPaise, pickupDistanceM, dropDistanceM, kitchenArea, customerLocality, estMinutes, payLines]

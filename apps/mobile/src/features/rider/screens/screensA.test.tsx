@@ -758,6 +758,31 @@ describe('Home', () => {
     expect(allText()).not.toContain('On a break');
   });
 
+  it('heads home for an hour only with rider choices on and a home spot saved', async () => {
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    await render(<HomeScreen />, seed({...onlineHome, homeSaved: false}, choosing));
+    expect(press('rider-head-home')).toBeUndefined();
+    await render(<HomeScreen />, seed({...onlineHome, homeSaved: true}));
+    expect(press('rider-head-home')).toBeUndefined();
+    (riderApi.headHome as jest.Mock).mockResolvedValueOnce({until: at(23)});
+    await render(<HomeScreen />, seed({...onlineHome, homeSaved: true}, choosing));
+    expect(allText()).toContain('For an hour you hear only of orders that take you nearer home.');
+    await act(async () => press('rider-head-home').props.onPress());
+    expect(riderApi.headHome).toHaveBeenCalled();
+  });
+
+  it('shows heading home while it is on and stops it, even with rider choices off', async () => {
+    const until = new Date(Date.now() + 40 * 60_000);
+    (riderApi.stopHeadingHome as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<HomeScreen />, seed({...onlineHome, headingHomeUntil: until.toISOString()}));
+    expect(tree.root.findByProps({testID: 'rider-heading-home'}).props.children).toMatch(/^Heading home until \d{1,2}:\d\d [ap]m$/);
+    expect(allText()).toContain('You hear only of orders whose drop is on your way home. It ends when you get near home.');
+    await act(async () => press('rider-heading-home-stop').props.onPress());
+    expect(riderApi.stopHeadingHome).toHaveBeenCalled();
+    await render(<HomeScreen />, seed({...onlineHome, headingHomeUntil: new Date(Date.now() - 1000).toISOString()}));
+    expect(allText()).not.toContain('Heading home until');
+  });
+
   it('opens the notice on its own screen', async () => {
     const notice = {title: 'Review of a delivery', reason: 'A customer says it did not arrive.', appealPhone: '+910000000000'};
     await render(<HomeScreen />, seed(offlineHome, {...me, notice}));
@@ -913,6 +938,12 @@ describe('Offer', () => {
     await render(<OfferScreen {...props()} />);
     expect(allText()).not.toContain('Fair turns');
     expect(allText()).toContain('About 28 min in total, 2 items | Declining is free');
+  });
+
+  it('tells a rider heading home how much nearer home the drop leaves them', async () => {
+    const homeward = {rule: 'NEAREST' as const, place: 1, riders: 2, atOnce: 1, round: 1, homeNearerM: 3240};
+    await render(<OfferScreen {...{...props(), route: {...props().route, params: {offer: {...offer, reason: homeward}, receivedAtMs: Date.now()}}}} />);
+    expect(allText()).toContain("You're the nearest free rider. | On your way home: the drop leaves you 3.2 km nearer home. | Declining is free");
   });
 
   it('leaves the item count off when the server sends none, and says "1 item"', async () => {

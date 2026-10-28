@@ -39,9 +39,32 @@ public final class FleetRiderModels {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    /** payoutAccountSubmitted: the account the rider sent from the app, masked, until ops confirms it. */
+    /**
+     * payoutAccountSubmitted: the account the rider sent from the app, masked, until ops confirms it. homeSavedAt (Phase 5):
+     * when the rider saved their home spot for heading home; absent while none is saved. The spot itself is never sent back.
+     */
     public record RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
-                               @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted, OrderPreferences preferences) {
+                               @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted, OrderPreferences preferences,
+                               Instant homeSavedAt) {
+        public RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
+                            String payoutAccountSubmitted, OrderPreferences preferences) {
+            this(vehicle, documents, payoutAccountMasked, insurance, payoutAccountSubmitted, preferences, null);
+        }
+    }
+
+    /**
+     * Phase 5: the rider's home spot for heading home, from the phone's position. The app rounds it to 2 decimal places
+     * (about a kilometre) before sending; the server rounds it again and keeps no more.
+     */
+    public record HomeSpotRequest(Double lat, Double lng) {
+    }
+
+    /** The home spot is saved (savedAt), or not (null). */
+    public record HomeSpot(Instant savedAt) {
+    }
+
+    /** Phase 5: heading home is on until then (an hour), unless the rider turns it off, goes offline or gets near home. */
+    public record HeadingHome(Instant until) {
     }
 
     /**
@@ -72,11 +95,15 @@ public final class FleetRiderModels {
     public record Insurance(String label, String claimPhone, String claimStatus) {
     }
 
+    /**
+     * homeSaved (Phase 5, only while rider choices are on): the rider has a home spot, so Home can offer heading home;
+     * headingHomeUntil: heading home is on until then.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record HomeSummary(boolean online, Instant shiftStartedAt, String zoneName, Instant slotEndsAt, long todayEarningsPaise,
                               int todayTrips, String activeTripId, NextSlot nextSlot, Long guaranteedPerHourPaise, RestPoint restPoint,
                               Banner banner, Instant offersPausedUntil, int todayOnlineMinutes, Long todayPerHourPaise,
-                              Long fleetPerHourPaise) {
+                              Long fleetPerHourPaise, Boolean homeSaved, Instant headingHomeUntil) {
     }
 
     public record NextSlot(Instant startsAt, Instant endsAt, String zoneName) {

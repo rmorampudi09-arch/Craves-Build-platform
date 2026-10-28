@@ -11,7 +11,7 @@ import {BottomAction} from '../components/BottomAction';
 import {CountdownBar} from '../components/CountdownBar';
 import {Card} from '../components/ui';
 import {formatKm, formatRupees} from '../domain/format';
-import {whyOffer} from '../domain/offerRules';
+import {whyHome, whyOffer} from '../domain/offerRules';
 import {offerDeadlineMs, secondsLeft} from '../domain/offerTiming';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
@@ -105,6 +105,7 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   const parts = offer.payLines.map(line => `${formatRupees(line.amountPaise)} ${line.label}`).join(' + ');
   const breakdown = parts ? `${parts}. ${o.locked}` : o.locked;
   const why = whyOffer(offer.reason, o);
+  const home = whyHome(offer.reason, o);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID="rider-offer">
@@ -146,6 +147,11 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
         {why ? (
           <Text style={styles.secondary} testID="rider-offer-why">
             {why}
+          </Text>
+        ) : null}
+        {home ? (
+          <Text style={styles.secondary} testID="rider-offer-home">
+            {home}
           </Text>
         ) : null}
         <Text style={styles.note}>{o.freeDecline}</Text>

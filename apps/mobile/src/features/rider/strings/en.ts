@@ -241,6 +241,12 @@ export const en = {
     onBreak: (time: string) => `On a break until ${time}`,
     onBreakBody: 'No offers until then. Come back any time.',
     backNow: "I'm back",
+    // Heading home (Phase 5).
+    headHome: 'Head home',
+    headHomeNote: 'For an hour you hear only of orders that take you nearer home.',
+    headingHome: (time: string) => `Heading home until ${time}`,
+    headingHomeBody: 'You hear only of orders whose drop is on your way home. It ends when you get near home.',
+    stopHeadingHome: 'Stop heading home',
   },
   goOnline: {
     title: 'Quick selfie to go online',
@@ -281,6 +287,7 @@ export const en = {
     whyFair: "Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn.",
     whyFairGroup: (count: number) =>
       `Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn: ${count} riders hear at once, and the first to accept gets it.`,
+    whyHome: (km: string) => `On your way home: the drop leaves you ${km} km nearer home.`,
   },
   trip: {
     titles: {
@@ -485,6 +492,13 @@ export const en = {
     help: 'Help',
     signOut: 'Sign out',
     signOutBlocked: "You have trip updates that haven't synced. Connect to the internet first.",
+    // The home spot for heading home (Phase 5).
+    homeSpotTitle: 'Home spot for heading home',
+    homeSpotNone: 'At home? Save this spot. Craves keeps only an area about 1 km across, never your address.',
+    homeSpotSaved: (day: string) => `Saved on ${day}. Craves keeps only an area about 1 km across, never your address, and staff never see it.`,
+    saveHomeSpot: "I'm home: save this spot",
+    deleteHomeSpot: 'Delete home spot',
+    homeSpotNoFix: "We couldn't find where you are. Turn on location and try again.",
   },
   help: {
     title: 'Help',

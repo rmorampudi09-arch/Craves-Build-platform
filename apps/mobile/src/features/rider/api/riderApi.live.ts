@@ -95,6 +95,18 @@ export const liveRiderApi: RiderApi = {
   async setPreferences(preferences) {
     return (await apiClient.put(`${BASE}/preferences`, preferences)).data;
   },
+  async saveHomeSpot(lat, lng) {
+    return (await apiClient.put(`${BASE}/home-spot`, {lat, lng})).data;
+  },
+  async forgetHomeSpot() {
+    await apiClient.delete(`${BASE}/home-spot`);
+  },
+  async headHome() {
+    return (await apiClient.post(`${BASE}/shift/heading-home`)).data;
+  },
+  async stopHeadingHome() {
+    await apiClient.delete(`${BASE}/shift/heading-home`);
+  },
   async registerDevice(device) {
     await apiClient.post(`${BASE}/devices`, device);
   },

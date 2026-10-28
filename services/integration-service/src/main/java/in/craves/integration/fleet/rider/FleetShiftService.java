@@ -4,6 +4,7 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
+import in.craves.integration.fleet.rider.FleetRiderModels.HeadingHome;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftPause;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import java.io.IOException;
@@ -48,6 +49,8 @@ public class FleetShiftService {
     /** Phase 4: when the break running on the shift %s ends; NULL when none runs. */
     public static final String BREAK_ENDS = "(SELECT max(b.ends_at) FROM fleet_schema.rider_break b WHERE b.shift_id = %s "
         + "AND b.started_at <= now() AND b.ends_at > now())";
+    /** Phase 5: how long heading home lasts once turned on (research R14: an hour; turning it on again extends it). */
+    static final int HEADING_HOME_MINUTES = 60;
     // Riding a petrol two-wheeler needs these four, each verified by ops with an expiry date (IST) that has not passed;
     // an electric one needs no PUC and a bicycle none of them (FleetRiderService.REQUIRED_DOCUMENTS).
     private static final String MISSING_DOCUMENTS = """
@@ -168,6 +171,38 @@ public class FleetShiftService {
     public void resume(UUID identityId) {
         jdbc.queryForList("SELECT s.id FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id "
             + "WHERE r.identity_id = ? AND s.ended_at IS NULL", UUID.class, identityId).forEach(this::endBreak);
+    }
+
+    /**
+     * Phase 5: heading home for the next HEADING_HOME_MINUTES (turning it on again starts the hour again). Offers then come
+     * only for orders that take the rider home (FleetDispatcher.homeNearerM); there is no daily limit, and declining stays
+     * free. It ends sooner when the rider turns it off, goes offline or gets within 1 km of home (FleetLocationService).
+     * 409 NOT_ONLINE without an open shift; 409 HOME_NOT_SAVED; 503 RIDER_CHOICES_OFF.
+     */
+    @Transactional
+    public HeadingHome headHome(UUID identityId) {
+        if (!properties.riderChoicesEnabled()) {
+            throw FleetRiderService.choicesOff();
+        }
+        List<Map<String, Object>> shift = jdbc.queryForList("SELECT s.id, r.id AS rider_id, r.home_saved_at FROM fleet_schema.rider_shift s "
+            + "JOIN fleet_schema.rider r ON r.id = s.rider_id WHERE r.identity_id = ? AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL "
+            + "AND s.credential_expires_at > now() FOR UPDATE OF s", identityId);
+        if (shift.isEmpty()) {
+            throw FleetApiException.conflict("NOT_ONLINE", "Go online first.");
+        }
+        if (shift.get(0).get("home_saved_at") == null) {
+            throw FleetApiException.conflict("HOME_NOT_SAVED", "Save your home spot in Profile first.");
+        }
+        jdbc.update("UPDATE fleet_schema.rider SET home_used_at = now() WHERE id = ?", shift.get(0).get("rider_id"));
+        return new HeadingHome(jdbc.queryForObject("UPDATE fleet_schema.rider_shift SET heading_home_until = now() + make_interval(mins => ?) "
+            + "WHERE id = ? RETURNING heading_home_until", Timestamp.class, HEADING_HOME_MINUTES, shift.get(0).get("id")).toInstant());
+    }
+
+    /** Ends heading home now. Always allowed, also with rider choices off; repeating is harmless. */
+    @Transactional
+    public void stopHeadingHome(UUID identityId) {
+        jdbc.update("UPDATE fleet_schema.rider_shift s SET heading_home_until = NULL FROM fleet_schema.rider r WHERE r.id = s.rider_id "
+            + "AND r.identity_id = ? AND s.ended_at IS NULL AND s.heading_home_until IS NOT NULL", identityId);
     }
 
     /** Ends the break running on this shift now, if one is. */

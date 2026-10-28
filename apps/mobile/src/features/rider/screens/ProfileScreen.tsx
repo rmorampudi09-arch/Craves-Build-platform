@@ -14,6 +14,8 @@ import {RiderHeader} from '../components/RiderHeader';
 import {StatusBadge} from '../components/StatusBadge';
 import {Body, Card, Label, RiderScreen, Title, Value} from '../components/ui';
 import {formatDay} from '../domain/format';
+import {roundToSpot} from '../domain/homeSpot';
+import {riderDevice} from '../native/riderDevice';
 import {useRiderShell, type RiderNav} from '../navigation';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
 import {usePendingActions} from '../state/tripQueue';
@@ -85,6 +87,69 @@ function LimitChips({label, limits, value, onPick, testID}: {
         })}
       </View>
     </View>
+  );
+}
+
+/**
+ * Phase 5: the home spot heading home leads to. Saved from where the phone is now, rounded on the phone to about a kilometre;
+ * shown while rider choices are on, and whenever one is saved, so the rider can always delete it.
+ */
+function HomeSpotCard({savedAt, choices, onChange}: {savedAt?: string; choices: boolean; onChange: () => void}) {
+  const {strings} = useStrings();
+  const p = strings.profile;
+  const [busy, setBusy] = useState(false);
+
+  async function run(work: () => Promise<unknown>) {
+    setBusy(true);
+    try {
+      await work();
+      onChange();
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save() {
+    const here = await riderDevice.currentPosition();
+    if (!here) {
+      Alert.alert(p.homeSpotNoFix);
+      return;
+    }
+    const spot = roundToSpot(here);
+    await riderApi.saveHomeSpot(spot.lat, spot.lng);
+  }
+
+  if (!savedAt && !choices) {
+    return null;
+  }
+  return (
+    <Card>
+      <Label>{p.homeSpotTitle}</Label>
+      <Body>{savedAt ? p.homeSpotSaved(formatDay(savedAt)) : p.homeSpotNone}</Body>
+      {savedAt ? (
+        <BottomAction
+          label={p.deleteHomeSpot}
+          variant="outline"
+          size="compact"
+          disabled={busy}
+          onPress={() => run(() => riderApi.forgetHomeSpot())}
+          style={styles.upload}
+          testID="rider-home-spot-delete"
+        />
+      ) : (
+        <BottomAction
+          label={p.saveHomeSpot}
+          variant="outline"
+          size="compact"
+          disabled={busy}
+          onPress={() => run(save)}
+          style={styles.upload}
+          testID="rider-home-spot-save"
+        />
+      )}
+    </Card>
   );
 }
 
@@ -259,6 +324,11 @@ export function ProfileScreen() {
               />
             </Card>
           ) : null}
+          <HomeSpotCard
+            savedAt={profile.data.homeSavedAt}
+            choices={Boolean(me.data?.features.riderChoices)}
+            onChange={() => queryClient.invalidateQueries({queryKey: riderKeys.all})}
+          />
           <Card>
             <Label>{p.dataTitle}</Label>
             <Body>{p.dataBody}</Body>

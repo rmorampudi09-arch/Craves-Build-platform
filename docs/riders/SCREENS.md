@@ -701,6 +701,18 @@ Built with the shared pieces above. The copy is in `strings/en.ts`, with Telugu 
 - **20 Profile, "Your data".** The line "Get a copy of everything Craves keeps about you: trips, offers and why they came to you, pay, shifts and more." and an outline button "Share a copy of my data", which opens the phone's share sheet. If the copy is too big for the phone, it says to call rider support.
 - **21 Help.** A fifth question, "Who gets an order first?", pointing to "How you get orders".
 
+## 24. Phase 5 additions (no PNG)
+
+Heading home (`DISPATCH.md` §4), with rider choices on. The copy is in `strings/en.ts`, with Telugu and Hindi waiting for review.
+
+- **20 Profile, "Home spot for heading home"**, before "Your data":
+  - **None saved:** "At home? Save this spot. Craves keeps only an area about 1 km across, never your address." and an outline button "I'm home: save this spot". With no location fix, an alert says "We couldn't find where you are. Turn on location and try again." and nothing is sent.
+  - **Saved:** "Saved on 20 Oct. Craves keeps only an area about 1 km across, never your address, and staff never see it." and an outline button "Delete home spot". This shows even with rider choices off, so a rider can always delete it.
+- **07 Home, under the break card:**
+  - **Offering it** (a home spot is saved): an outline button "Head home", with "For an hour you hear only of orders that take you nearer home." under it.
+  - **While on:** a card with "Heading home until 13:40", "You hear only of orders whose drop is on your way home. It ends when you get near home." and a button "Stop heading home". It shows even with rider choices off, so a rider can always stop it. Like the break, it shows the end time, never a countdown.
+- **08 Offer.** For a rider heading home, a second line under why the offer came: "On your way home: the drop leaves you 3.2 km nearer home."
+
 ---
 
 ## Differences between the PNGs and the spec list

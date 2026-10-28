@@ -8,6 +8,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderNotice, RiderProfile, TripEarning} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {istDay} from '../domain/format';
+import {riderDevice} from '../native/riderDevice';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
@@ -37,6 +38,7 @@ jest.mock('../state/tripQueue', () => ({usePendingActions: () => 0}));
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {lastFix: () => ({lat: 17.4615, lng: 78.3657, accuracyM: 10, at: '2026-10-21T10:00:00Z'})},
 }));
+jest.mock('../native/riderDevice', () => ({riderDevice: {currentPosition: jest.fn(async () => ({lat: 17.45678, lng: 78.39123}))}}));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
   return {
@@ -520,6 +522,35 @@ describe('Profile (20)', () => {
     expect(riderApi.setPreferences).toHaveBeenCalledWith({maxPickupM: 2000, maxDropM: null});
     await settle();
     expect(tree.root.findByProps({testID: 'rider-pickup-limit-2000'}).props.accessibilityState).toEqual({checked: true});
+  });
+
+  it('saves the home spot rounded on the phone to about a kilometre, only while the server offers rider choices', async () => {
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    await render(screen(), seed);
+    expect(has('rider-home-spot-save')).toBe(false);
+    (riderApi.saveHomeSpot as jest.Mock).mockResolvedValueOnce({savedAt: '2026-10-28T07:00:00Z'});
+    await render(screen(), [[riderKeys.me, choosing], [riderKeys.profile, full]]);
+    expect(allText()).toContain('Home spot for heading home | At home? Save this spot. Craves keeps only an area about 1 km across, never your address.');
+    await press('rider-home-spot-save');
+    expect(riderDevice.currentPosition).toHaveBeenCalled();
+    expect(riderApi.saveHomeSpot).toHaveBeenCalledWith(17.46, 78.39);
+  });
+
+  it('says when the phone cannot tell where it is, and sends nothing', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    (riderDevice.currentPosition as jest.Mock).mockResolvedValueOnce(null);
+    await render(screen(), [[riderKeys.me, {...me, features: {...me.features, riderChoices: true}}], [riderKeys.profile, full]]);
+    await press('rider-home-spot-save');
+    expect(alert).toHaveBeenCalledWith("We couldn't find where you are. Turn on location and try again.");
+    expect(riderApi.saveHomeSpot).not.toHaveBeenCalled();
+  });
+
+  it('always lets the rider delete a saved home spot, even with rider choices off', async () => {
+    (riderApi.forgetHomeSpot as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(screen(), [[riderKeys.me, me], [riderKeys.profile, {...full, homeSavedAt: '2026-10-20T07:00:00Z'}]]);
+    expect(allText()).toContain('Saved on 20 Oct. Craves keeps only an area about 1 km across, never your address, and staff never see it.');
+    await press('rider-home-spot-delete');
+    expect(riderApi.forgetHomeSpot).toHaveBeenCalled();
   });
 
   it('shares a copy of the rider data from the phone, or sends a big one through rider support', async () => {

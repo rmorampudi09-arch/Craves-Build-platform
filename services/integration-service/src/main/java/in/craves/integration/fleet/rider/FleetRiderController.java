@@ -4,6 +4,9 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.rider.FleetRiderModels.AcceptPrivacyNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.AcceptTerms;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
+import in.craves.integration.fleet.rider.FleetRiderModels.HeadingHome;
+import in.craves.integration.fleet.rider.FleetRiderModels.HomeSpot;
+import in.craves.integration.fleet.rider.FleetRiderModels.HomeSpotRequest;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.OrderPreferences;
 import in.craves.integration.fleet.rider.FleetRiderModels.PauseRequest;
@@ -20,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -105,6 +109,32 @@ public class FleetRiderController {
     public ResponseEntity<OrderPreferences> preferences(@AuthenticationPrincipal CravesPrincipal principal,
                                                         @RequestBody OrderPreferences body) {
         return noStore(service.setPreferences(identity(principal), body));
+    }
+
+    /** Phase 5: the home spot heading home leads to, rounded to about a kilometre. 400; 503 RIDER_CHOICES_OFF. */
+    @PutMapping("/home-spot")
+    public ResponseEntity<HomeSpot> saveHome(@AuthenticationPrincipal CravesPrincipal principal, @RequestBody HomeSpotRequest body) {
+        return noStore(service.saveHome(identity(principal), body));
+    }
+
+    /** Forgets the home spot and ends heading home; always allowed. */
+    @DeleteMapping("/home-spot")
+    public ResponseEntity<Void> forgetHome(@AuthenticationPrincipal CravesPrincipal principal) {
+        service.forgetHome(identity(principal));
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Phase 5: heading home for an hour. 409 NOT_ONLINE or HOME_NOT_SAVED; 503 RIDER_CHOICES_OFF. */
+    @PostMapping("/shift/heading-home")
+    public ResponseEntity<HeadingHome> headHome(@AuthenticationPrincipal CravesPrincipal principal) {
+        return noStore(shifts.headHome(identity(principal)));
+    }
+
+    /** Ends heading home now; always allowed. */
+    @DeleteMapping("/shift/heading-home")
+    public ResponseEntity<Void> stopHeadingHome(@AuthenticationPrincipal CravesPrincipal principal) {
+        shifts.stopHeadingHome(identity(principal));
+        return ResponseEntity.noContent().build();
     }
 
     /**

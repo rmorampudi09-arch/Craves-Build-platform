@@ -149,12 +149,60 @@ function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boole
   );
 }
 
+/**
+ * Phase 5: heading home. While it's on the rider can stop it (always); with rider choices on and a home spot saved they can
+ * turn it on for an hour. Ending it near home is the server's job.
+ */
+function HeadingHomeCard({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
+  const {strings} = useStrings();
+  const h = strings.home;
+
+  async function run(work: () => Promise<unknown>) {
+    try {
+      await work();
+      onChange();
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    }
+  }
+
+  if (home.headingHomeUntil && Date.parse(home.headingHomeUntil) > Date.now()) {
+    return (
+      <Card style={styles.slot}>
+        <View style={styles.tight}>
+          <Text style={styles.strong} testID="rider-heading-home">
+            {h.headingHome(formatClock(home.headingHomeUntil))}
+          </Text>
+          <Text style={styles.secondary}>{h.headingHomeBody}</Text>
+        </View>
+        <BottomAction
+          label={h.stopHeadingHome}
+          variant="outline"
+          size="compact"
+          onPress={() => run(() => riderApi.stopHeadingHome())}
+          testID="rider-heading-home-stop"
+        />
+      </Card>
+    );
+  }
+  if (!choices || !home.homeSaved) {
+    return null;
+  }
+  return (
+    <View style={styles.tight}>
+      <BottomAction label={h.headHome} variant="outline" size="compact" onPress={() => run(() => riderApi.headHome())} testID="rider-head-home" />
+      <Text style={[styles.small, styles.center]}>{h.headHomeNote}</Text>
+    </View>
+  );
+}
+
 /** Online (07-HomeOnline.png): the shift, today, where to rest, and that offers ring with the screen off. */
 function OnlineCards({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
   const h = useStrings().strings.home;
   return (
     <>
       <BreakCard home={home} choices={choices} onChange={onChange} />
+      <HeadingHomeCard home={home} choices={choices} onChange={onChange} />
       <Card style={styles.slot}>
         <View style={styles.tight}>
           <View style={styles.spread}>

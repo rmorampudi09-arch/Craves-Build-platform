@@ -20,6 +20,10 @@ route|rider|rider-post-shift-end|POST|/shift/end|json
 route|rider|rider-post-shift-pause|POST|/shift/pause|json
 route|rider|rider-post-shift-resume|POST|/shift/resume|json
 route|rider|rider-put-preferences|PUT|/preferences|json
+route|rider|rider-put-home-spot|PUT|/home-spot|json
+route|rider|rider-delete-home-spot|DELETE|/home-spot|json
+route|rider|rider-post-shift-heading-home|POST|/shift/heading-home|json
+route|rider|rider-delete-shift-heading-home|DELETE|/shift/heading-home|json
 route|rider|rider-post-documents|POST|/documents|upload
 route|rider|rider-post-devices|POST|/devices|location
 route|rider|rider-post-locations|POST|/locations|location

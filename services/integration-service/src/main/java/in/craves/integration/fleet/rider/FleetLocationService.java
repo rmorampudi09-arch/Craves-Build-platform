@@ -67,6 +67,10 @@ public class FleetLocationService {
     static final int TRACK_DAYS_KEPT = 90;
     /** Phone health on a shift is kept this many days (blueprint E6). */
     static final int HEALTH_DAYS_KEPT = 90;
+    /** A home spot (Phase 5) is forgotten this many days after it was last saved or used (research R14). */
+    static final int HOME_DAYS_KEPT = 90;
+    /** Heading home ends once a real fix is this close to the home spot (metres). */
+    static final int HOME_ARRIVED_M = 1_000;
     /** A fix's ageMs is capped at an hour: older is no use to dispatch or the track. */
     static final long MAX_FIX_AGE_MS = 3_600_000;
     static final int MAX_RECEIPTS = 10;
@@ -110,7 +114,9 @@ public class FleetLocationService {
      * slot. The slot's settle the guarantee, so a break (Phase 4) adds none to it; a slot that settled meanwhile is
      * COMPLETED and keeps its settled seconds.
      * The same statement records the offer receipts: the first arrival of each of this rider's offers, never earlier than
-     * the offer itself; and the phone's health, each key keeping its latest value, with can_ring for dispatch.
+     * the offer itself; and the phone's health, each key keeping its latest value, with can_ring for dispatch. Heading home
+     * (Phase 5) ends once the newest real fix is within HOME_ARRIVED_M of the home spot (a flat-earth distance, fine at
+     * this range).
      */
     private static final String HEARTBEAT = """
         WITH slot AS (UPDATE fleet_schema.rider_slot SET in_zone_seconds = in_zone_seconds + ? WHERE id = ? AND status = 'BOOKED'),
@@ -124,8 +130,13 @@ public class FleetLocationService {
           silences_over_60s = silences_over_60s
             + CASE WHEN now() - COALESCE(last_seen_at, started_at) > INTERVAL '60 seconds' THEN 1 ELSE 0 END,
           health = CASE WHEN CAST(? AS jsonb) IS NULL THEN health ELSE COALESCE(health, '{}'::jsonb) || CAST(? AS jsonb) END,
-          can_ring = COALESCE(?, can_ring)
-        WHERE id = ?""";
+          can_ring = COALESCE(?, can_ring),
+          heading_home_until = CASE WHEN heading_home_until IS NOT NULL AND CAST(? AS double precision) IS NOT NULL
+            AND EXISTS (SELECT 1 FROM fleet_schema.rider h WHERE h.id = rider_shift.rider_id AND h.home_lat IS NOT NULL
+              AND 111320 * sqrt(power(CAST(? AS double precision) - h.home_lat, 2)
+                + power((CAST(? AS double precision) - h.home_lng) * cos(radians(h.home_lat)), 2)) <= %d)
+            THEN NULL ELSE heading_home_until END
+        WHERE id = ?""".formatted(HOME_ARRIVED_M);
     private static final String OFFERS = "SELECT " + FleetTripModels.OFFER_COLUMNS + """
 
         FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
@@ -197,8 +208,13 @@ public class FleetLocationService {
         }
         String health = health(batch.health());
         long slotSeconds = shift.paused() ? 0 : seconds;
+        // Only a real (non-mock) fix can end heading home.
+        RiderFix arrived = fresh.isEmpty() || fresh.get(fresh.size() - 1).mock() ? null : fresh.get(fresh.size() - 1);
+        Double arrivedLat = arrived == null ? null : arrived.lat();
+        Double arrivedLng = arrived == null ? null : arrived.lng();
         jdbc.update(HEARTBEAT, slotSeconds, slotSeconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(),
-            seconds, health, health, batch.health() == null ? null : batch.health().canRing(), shift.shiftId());
+            seconds, health, health, batch.health() == null ? null : batch.health().canRing(), arrivedLat, arrivedLat, arrivedLng,
+            shift.shiftId());
         if (batch.health() != null && batch.health().lastExitReason() != null) {
             LOGGER.info("FLEET_APP_EXIT rider={} reason={}", shift.riderId(), oneLine(batch.health().lastExitReason()));
         }
@@ -225,6 +241,21 @@ public class FleetLocationService {
         }
         dropOldTrackDays(today);
         forgetOldHealth();
+        forgetUnusedHomes();
+    }
+
+    /** Retention (Phase 5, BACKEND.md "Data retention"): a home spot nobody saved or used for 90 days is forgotten. */
+    void forgetUnusedHomes() {
+        try {
+            int forgotten = jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, "
+                + "home_used_at = NULL WHERE home_saved_at < now() - make_interval(days => ?) "
+                + "AND (home_used_at IS NULL OR home_used_at < now() - make_interval(days => ?))", HOME_DAYS_KEPT, HOME_DAYS_KEPT);
+            if (forgotten > 0) {
+                LOGGER.info("FLEET_HOME_SPOTS_FORGOTTEN count={}", forgotten);
+            }
+        } catch (DataAccessException exception) {
+            LOGGER.error("CRAVES_ALERT alert=HOME_SPOT_RETENTION_FAILED reason={}", exception.getMostSpecificCause().getMessage());
+        }
     }
 
     /** Retention (BACKEND.md "Data retention", blueprint E6): a shift's phone health is kept 90 days. */

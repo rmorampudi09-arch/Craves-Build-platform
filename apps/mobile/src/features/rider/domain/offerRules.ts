@@ -1,6 +1,7 @@
 import type {OfferReason, OfferRules} from '../api/contract';
 import type {RiderStrings} from '../strings/en';
 import {formatKm} from './format';
+import {nearerKm} from './homeSpot';
 
 /**
  * Why this offer came to the rider, in one line (Phase 4, docs/riders/DISPATCH.md). It states the rule and the rider's
@@ -22,6 +23,11 @@ export function whyOffer(reason: OfferReason | undefined, o: RiderStrings['offer
     return together > 1 ? o.whyNextGroup(together) : o.whyNextNearest;
   }
   return together > 1 ? o.whyNearestGroup(together) : o.whyNearest;
+}
+
+/** Phase 5: for a rider heading home, how much nearer home the drop leaves them; null otherwise. */
+export function whyHome(reason: OfferReason | undefined, o: RiderStrings['offer']): string | null {
+  return typeof reason?.homeNearerM === 'number' ? o.whyHome(nearerKm(reason.homeNearerM)) : null;
 }
 
 /** How orders are offered, as the lines of "How you get orders" in the rider's language. */

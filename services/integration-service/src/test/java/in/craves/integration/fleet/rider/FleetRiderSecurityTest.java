@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -65,6 +66,11 @@ class FleetRiderSecurityTest {
             .content("{\"maxPickupM\":2000}")).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/rider/my-data").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/rider/my-data")).andExpect(status().is4xxClientError());
+        mvc.perform(put("/api/v1/rider/home-spot").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"lat\":17.47,\"lng\":78.35}")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/rider/home-spot").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/rider/devices").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
             .content("{\"installationId\":\"9774d56d682e549c\",\"fcmToken\":\"t\",\"appVersion\":\"1.0.0\",\"model\":\"Redmi\"}"))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -112,6 +118,25 @@ class FleetRiderSecurityTest {
         verify(service).myData(identity);
         verify(shifts).pause(identity, 10);
         verify(shifts).resume(identity);
+    }
+
+    /** Phase 5: with a RIDER token, the home spot and heading home reach the services as that identity. */
+    @Test
+    void aRiderSavesAndDeletesTheirHomeSpotAndHeadsHome() throws Exception {
+        UUID identity = UUID.randomUUID();
+        when(verifier.verify("rider")).thenReturn(new CravesPrincipal(identity, "+919000000000", Set.of("RIDER")));
+        when(service.saveHome(eq(identity), any())).thenReturn(new FleetRiderModels.HomeSpot(Instant.parse("2026-10-28T07:00:00Z")));
+        mvc.perform(put("/api/v1/rider/home-spot").header("Authorization", "Bearer rider").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"lat\":17.47,\"lng\":78.35}")).andExpect(status().isOk()).andExpect(jsonPath("$.savedAt").value("2026-10-28T07:00:00Z"));
+        mvc.perform(delete("/api/v1/rider/home-spot").header("Authorization", "Bearer rider")).andExpect(status().isNoContent());
+        when(shifts.headHome(identity)).thenReturn(new FleetRiderModels.HeadingHome(Instant.parse("2026-10-28T08:00:00Z")));
+        mvc.perform(post("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer rider")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.until").value("2026-10-28T08:00:00Z"));
+        mvc.perform(delete("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer rider")).andExpect(status().isNoContent());
+        verify(service).saveHome(eq(identity), eq(new FleetRiderModels.HomeSpotRequest(17.47, 78.35)));
+        verify(service).forgetHome(identity);
+        verify(shifts).headHome(identity);
+        verify(shifts).stopHeadingHome(identity);
     }
 
     @Test

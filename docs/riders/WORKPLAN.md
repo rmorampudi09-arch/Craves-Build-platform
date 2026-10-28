@@ -827,3 +827,21 @@ Live before 13 May 2027.
 - `PHONE-TESTS.md` §6 passes on two phones.
 - The pilot has run four weeks with the chosen rules, with the fairness queries read every week and one fleet summary sent to riders.
 - Rider choices are on, and no rider has been refused anything for a decline, a break or a distance choice.
+
+---
+
+## Phase 5: the fleet core
+
+**Why.** Gopi's briefs of 28 Oct: make how orders reach riders the best there is, and help riders be free; then, no more features: concentrate on the core (dispatch and GPS at scale, payments, ML), synced with what Craves already runs. Heading home (P5-01) was built before that redirect and is kept, behind the rider choices switch.
+
+**Entry:** none; it builds on Phase 1–4 code.
+**Rule for every item:** nothing changes for riders until a person acts. Every new path is behind a switch that is off.
+
+### P5-01 Heading home (done; switch off)
+- **Migration V172.** `rider.home_lat`, `home_lng` (2 decimal places only), `home_saved_at`, `home_used_at`; `rider_shift.heading_home_until`.
+- **Rider routes,** behind `CRAVES_FLEET_RIDER_CHOICES_ENABLED`: `PUT /home-spot`, `POST /shift/heading-home`; `DELETE /home-spot` and `DELETE /shift/heading-home` always work.
+- **Dispatch.** A rider heading home hears only of orders whose drop leaves them at least 500 m nearer home and adds at most 2 km, or a quarter of the way home, to riding straight home (`FleetDispatcher.homeNearerM`). The offer's reason carries `homeNearerM`.
+- **It ends** after an hour, on stop, offline, or a real fix within 1 km of home (in the heartbeat statement, so `/locations` stays within 5 statements).
+- **Privacy.** The spot is about a kilometre, only the rider sees it, and it is forgotten 90 days after it was last saved or used (`forgetUnusedHomes`).
+- **App.** Profile "Home spot for heading home", the Home "Head home" card, and the offer's home line.
+- **Proved by** `FleetHeadingHomeTest`, `FleetHeadingHomeDatabaseTest`, `FleetDispatchDatabaseTest`, `FleetRiderSecurityTest`, the migration tests, `homeSpot.test.ts`, `offerRules.test.ts`, `screensA.test.tsx`, `screensC.test.tsx`, `riderApi.mock.test.ts` and `riderApi.live.test.ts`.

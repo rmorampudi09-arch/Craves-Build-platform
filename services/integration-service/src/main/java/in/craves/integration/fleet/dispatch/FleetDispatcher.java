@@ -71,6 +71,10 @@ public class FleetDispatcher implements FleetStage {
     static final int ROAD_RANKED = 5;
     static final int SEEN_WITHIN_SECONDS = 45;
     static final int FIX_WITHIN_SECONDS = 180;
+    /** Heading home (Phase 5): the drop must leave the rider at least this much nearer home (straight lines, metres). */
+    static final int HOME_PROGRESS_M = 500;
+    /** Heading home: the trip may add to the ride home at most this, or a quarter of the way home if that is more. */
+    static final int HOME_DETOUR_M = 2_000;
     /**
      * A phone dispatch can reach, on the shift row s and the position row p (BACKEND.md "Dispatch chain"): the shift's last
      * /locations call within 45 s, with or without new fixes, a real (non-mock) fix under 3 minutes old for the distance,
@@ -256,7 +260,8 @@ public class FleetDispatcher implements FleetStage {
     /** Riders who could take an order at this kitchen now (the policy radius, else 5 km); test mode applies. */
     int ridersNear(double lat, double lng) {
         int radius = policies.currentDispatchPolicy().map(DispatchPolicy::radiusM).orElse(5000);
-        return (int) nearbyRiders(lat, lng, radius).stream().filter(rider -> testMode.riderAllowed(rider.riderId())).count();
+        return (int) nearbyRiders(lat, lng, radius, -1, 100, null, null).stream().filter(rider -> testMode.riderAllowed(rider.riderId()))
+            .count();
     }
 
     int pidgeSeconds() {
@@ -291,9 +296,11 @@ public class FleetDispatcher implements FleetStage {
         }
         double kitchenLat = request.pickup().latitude().doubleValue();
         double kitchenLng = request.pickup().longitude().doubleValue();
-        int dropM = roads.meters(kitchenLat, kitchenLng, request.dropoff().latitude().doubleValue(), request.dropoff().longitude().doubleValue());
-        List<Candidate> riders = ranked(nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent()), policy,
-            kitchenLat, kitchenLng, command.chefSubOrderId());
+        double dropLat = request.dropoff().latitude().doubleValue();
+        double dropLng = request.dropoff().longitude().doubleValue();
+        int dropM = roads.meters(kitchenLat, kitchenLng, dropLat, dropLng);
+        List<Candidate> riders = ranked(nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent(), dropLat,
+            dropLng), policy, kitchenLat, kitchenLng, command.chefSubOrderId());
         OptionalLong courier = riders.isEmpty() ? OptionalLong.empty() : courierQuotePaise.get();
         Choice choice = choose(riders, policy, card, dropM, courier, 1);
         return new Plan(chefId, card.version(), dropM, choice.offers(), choice.outcome(), courier.isPresent() ? courier.getAsLong() : null);
@@ -370,9 +377,10 @@ public class FleetDispatcher implements FleetStage {
             }
             Standing standing = rider.standing();
             OfferReason reason = standing == null
-                ? new OfferReason("NEAREST", place, riders.size(), policy.offersAtOnce(), round, null, null, null, null)
+                ? new OfferReason("NEAREST", place, riders.size(), policy.offersAtOnce(), round, null, null, null, null, rider.homeNearerM())
                 : new OfferReason("FAIR", place, riders.size(), policy.offersAtOnce(), round, policy.fairBandM(), band,
-                    standing.perHourPaise(), (int) Math.max(0, Duration.between(standing.freeSince(), Instant.now()).toMinutes()));
+                    standing.perHourPaise(), (int) Math.max(0, Duration.between(standing.freeSince(), Instant.now()).toMinutes()),
+                    rider.homeNearerM());
             offers.add(new Planned(UUID.randomUUID(), rider.riderId(), quote, reason));
         }
         // The cost guard can leave out riders: each reason counts only the riders asked together.
@@ -389,7 +397,7 @@ public class FleetDispatcher implements FleetStage {
      */
     private List<RingingOffer> nextRound(UUID tripId, DispatchPolicy policy, Supplier<OptionalLong> courierQuotePaise) {
         Map<String, Object> trip = jdbc.queryForMap("""
-            SELECT t.chef_sub_order_id, t.kitchen_lat, t.kitchen_lng, t.drop_distance_m, t.rate_card_version,
+            SELECT t.chef_sub_order_id, t.kitchen_lat, t.kitchen_lng, t.drop_lat, t.drop_lng, t.drop_distance_m, t.rate_card_version,
                    (SELECT COALESCE(MAX(o.round), 0) FROM fleet_schema.trip_offer o WHERE o.trip_id = t.id) AS rounds
             FROM fleet_schema.trip t WHERE t.id = ?""", tripId);
         int rounds = ((Number) trip.get("rounds")).intValue();
@@ -400,7 +408,8 @@ public class FleetDispatcher implements FleetStage {
         double lat = ((Number) trip.get("kitchen_lat")).doubleValue();
         double lng = ((Number) trip.get("kitchen_lng")).doubleValue();
         int dropM = trip.get("drop_distance_m") == null ? 0 : ((Number) trip.get("drop_distance_m")).intValue();
-        List<Candidate> riders = ranked(nearbyRiders(lat, lng, policy.radiusM(), dropM, policy.pickupDetourPercent()).stream()
+        List<Candidate> riders = ranked(nearbyRiders(lat, lng, policy.radiusM(), dropM, policy.pickupDetourPercent(),
+            ((Number) trip.get("drop_lat")).doubleValue(), ((Number) trip.get("drop_lng")).doubleValue()).stream()
             .filter(rider -> !offered.contains(rider.riderId())).toList(), policy, lat, lng, (UUID) trip.get("chef_sub_order_id"));
         RateCard card = policies.rateCard((String) trip.get("rate_card_version")).filter(own -> !own.draft())
             .or(() -> policies.rateCardInForce(null)).orElse(null);
@@ -453,32 +462,47 @@ public class FleetDispatcher implements FleetStage {
         }
         List<Candidate> ranked = new ArrayList<>(nearest.stream()
             .map(rider -> new Candidate(rider.riderId(), rider.straightLineM(), rider.lat(), rider.lng(),
-                metres.getOrDefault(rider.riderId(), Integer.MAX_VALUE), null))
+                metres.getOrDefault(rider.riderId(), Integer.MAX_VALUE), null, rider.homeNearerM()))
             .sorted(Comparator.comparingDouble(Candidate::rankM)).toList());
         LOGGER.info("FLEET_ROAD_RANKED chefSubOrderId={} straightLineM={} roadM={}", chefSubOrderId,
             nearest.stream().map(rider -> Math.round(rider.straightLineM())).toList(), ranked.stream().map(rider -> metres.get(rider.riderId())).toList());
         allowed.subList(nearest.size(), allowed.size()).forEach(rider -> ranked.add(new Candidate(rider.riderId(), rider.straightLineM(),
-            rider.lat(), rider.lng(), Double.POSITIVE_INFINITY, null)));
+            rider.lat(), rider.lng(), Double.POSITIVE_INFINITY, null, rider.homeNearerM())));
         return ranked;
     }
 
-    /** Riders who could take an order at this kitchen, whatever its drop (ridersNear). */
-    private List<Candidate> nearbyRiders(double lat, double lng, int radiusM) {
-        return nearbyRiders(lat, lng, radiusM, -1, 100);
+    /**
+     * Heading home (Phase 5, docs/riders/DISPATCH.md §4), by straight lines: how many metres nearer home the drop leaves the
+     * rider, or null when the order doesn't take them home. It must leave them at least HOME_PROGRESS_M nearer than they are
+     * now, and the ride to the kitchen, the drop and on home may add at most HOME_DETOUR_M, or a quarter of the way home if
+     * that is more, to riding straight home (Uber's added-distance test; Namma Yatri's 2 km corridor; research R14).
+     */
+    static Integer homeNearerM(double riderLat, double riderLng, double kitchenLat, double kitchenLng, double dropLat, double dropLng,
+                               double homeLat, double homeLng) {
+        double riderHome = RoadDistanceClient.straightLineMetres(riderLat, riderLng, homeLat, homeLng);
+        double dropHome = RoadDistanceClient.straightLineMetres(dropLat, dropLng, homeLat, homeLng);
+        if (dropHome > riderHome - HOME_PROGRESS_M) {
+            return null;
+        }
+        double added = RoadDistanceClient.straightLineMetres(riderLat, riderLng, kitchenLat, kitchenLng)
+            + RoadDistanceClient.straightLineMetres(kitchenLat, kitchenLng, dropLat, dropLng) + dropHome - riderHome;
+        return added > Math.max(HOME_DETOUR_M, riderHome / 4) ? null : (int) Math.round(riderHome - dropHome);
     }
 
     /**
      * Eligible riders, nearest first: ACTIVE, on an open shift and not on a break (Phase 4), idle (no active trip or open
      * offer), heard from (HEARD_FROM: a call in the last 45 s, a real fix under 3 minutes old, a phone that can ring),
      * inside the policy radius. With rider choices on and an order's drop (dropM >= 0), also within each rider's farthest
-     * drop and pickup (the pickup as the offer shows it, at this detour). Declines play no part.
+     * drop and pickup (the pickup as the offer shows it, at this detour), and, for a rider heading home (Phase 5), only an
+     * order that takes them home (homeNearerM). Declines play no part.
      */
-    private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent) {
+    private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng) {
         double dLat = radiusM / 111_320.0;
         double dLng = radiusM / (111_320.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));
         boolean choices = riderChoices && dropM >= 0;
         return jdbc.query("""
-                SELECT r.id, p.lat, p.lng, r.max_pickup_m FROM fleet_schema.rider r
+                SELECT r.id, p.lat, p.lng, r.max_pickup_m, r.home_lat, r.home_lng, s.heading_home_until > now() AS heading_home
+                FROM fleet_schema.rider r
                 JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
                   AND s.credential_expires_at > now() AND\s""" + FleetShiftService.BREAK_ENDS.formatted("s.id") + """
                  IS NULL
@@ -494,8 +518,19 @@ public class FleetDispatcher implements FleetStage {
                     double metres = RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng"));
                     Integer maxPickupM = choices ? (Integer) row.getObject("max_pickup_m") : null;
                     // A rider who chose a nearer pickup is left out (null), as if out of range.
-                    return maxPickupM != null && FleetPay.pickupDistanceM(metres, detourPercent) > maxPickupM ? null
-                        : new Candidate(row.getObject("id", UUID.class), metres, row.getDouble("lat"), row.getDouble("lng"), metres, null);
+                    if (maxPickupM != null && FleetPay.pickupDistanceM(metres, detourPercent) > maxPickupM) {
+                        return null;
+                    }
+                    Integer homeNearerM = null;
+                    if (choices && row.getBoolean("heading_home") && row.getObject("home_lat") != null && dropLat != null) {
+                        homeNearerM = homeNearerM(row.getDouble("lat"), row.getDouble("lng"), lat, lng, dropLat, dropLng,
+                            row.getDouble("home_lat"), row.getDouble("home_lng"));
+                        if (homeNearerM == null) {
+                            return null;
+                        }
+                    }
+                    return new Candidate(row.getObject("id", UUID.class), metres, row.getDouble("lat"), row.getDouble("lng"), metres, null,
+                        homeNearerM);
                 },
                 lat - dLat, lat + dLat, lng - dLng, lng + dLng, choices, Math.max(dropM, 0))
             .stream().filter(rider -> rider != null && rider.straightLineM() <= radiusM).sorted(Comparator.comparingDouble(Candidate::straightLineM))
@@ -674,10 +709,13 @@ public class FleetDispatcher implements FleetStage {
     record TripState(UUID id, UUID chefSubOrderId, String state, String provider) {
     }
 
-    /** rankM: the distance riders are ranked by (road metres with road ranking, else straight line); standing: fair turns only. */
-    record Candidate(UUID riderId, double straightLineM, double lat, double lng, double rankM, Standing standing) {
+    /**
+     * rankM: the distance riders are ranked by (road metres with road ranking, else straight line); standing: fair turns only;
+     * homeNearerM: for a rider heading home, how much nearer home this order's drop leaves them (Phase 5), else null.
+     */
+    record Candidate(UUID riderId, double straightLineM, double lat, double lng, double rankM, Standing standing, Integer homeNearerM) {
         Candidate with(Standing day) {
-            return new Candidate(riderId, straightLineM, lat, lng, rankM, day);
+            return new Candidate(riderId, straightLineM, lat, lng, rankM, day, homeNearerM);
         }
     }
 

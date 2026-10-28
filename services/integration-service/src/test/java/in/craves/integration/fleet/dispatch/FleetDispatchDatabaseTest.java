@@ -573,6 +573,54 @@ class FleetDispatchDatabaseTest {
         assertThat(activeOffers()).as("switched off: every nearby rider hears").containsExactlyInAnyOrder(shortDrops, nearKitchens, anything);
     }
 
+    /**
+     * Phase 5 heading home, with rider choices on: a rider heading home hears only of an order whose drop leaves them nearer
+     * home, and the offer says how much nearer; one whose home lies the other way hears nothing of it; a rider with a home
+     * spot who isn't heading home, or whose hour ran out, hears as usual. With the switch off, heading home is ignored.
+     */
+    @Test
+    void aRiderHeadingHomeHearsOnlyOfOrdersThatTakeThemHome() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID homeward = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.003, KITCHEN_LNG, 5, false);
+        UUID otherWay = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.004, KITCHEN_LNG, 5, false);
+        UUID notHeading = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        home(homeward, "17.47", "78.35", "now() + INTERVAL '50 minutes'");   // north-west, past the Kondapur drop
+        home(otherWay, "17.43", "78.42", "now() + INTERVAL '50 minutes'");   // south-east: the drop is the other way
+        home(notHeading, "17.43", "78.42", null);
+        FleetDispatcher choices = new FleetDispatcher(fleet.db, fleet.transactions, new FleetPolicyStore(fleet.db, json),
+            new FleetTestMode(fleet.db, FleetDatabase.properties(true)), roads, push, json, false, true);
+        assertThatThrownBy(() -> choices.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactlyInAnyOrder(homeward, notHeading);
+        assertThat(((Number) reason(homeward).get("homeNearerM")).intValue()).as("from about 4.9 km to about 1.5 km from home")
+            .isBetween(3_200, 3_500);
+        assertThat(reason(notHeading)).doesNotContainKey("homeNearerM");
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now()");
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET heading_home_until = now() - INTERVAL '1 second' WHERE rider_id = ?", otherWay);
+        UUID second = UUID.fromString("0bde0202-2222-4222-8222-222222222222");
+        FleetDispatchFixtures.kitchen(fleet.db, second, true);
+        assertThatThrownBy(() -> choices.run(FleetDispatchFixtures.command(second), () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("the hour ran out: the rider hears as usual").contains(otherWay);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now()");
+        UUID third = UUID.fromString("0bde0303-3333-4333-8333-333333333333");
+        FleetDispatchFixtures.kitchen(fleet.db, third, true);
+        home(otherWay, "17.43", "78.42", "now() + INTERVAL '50 minutes'");
+        assertThatThrownBy(() -> dispatcher.run(FleetDispatchFixtures.command(third), () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("switched off: heading home is ignored").containsExactlyInAnyOrder(homeward, otherWay, notHeading);
+    }
+
+    /** The rider's home spot (2 decimal places, as the app sends it) and, when headingUntil isn't null, heading home until then. */
+    private void home(UUID rider, String lat, String lng, String headingUntil) {
+        fleet.db.update("UPDATE fleet_schema.rider SET home_lat = CAST(? AS numeric), home_lng = CAST(? AS numeric), home_saved_at = now() "
+            + "WHERE id = ?", lat, lng, rider);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET heading_home_until = " + (headingUntil == null ? "NULL" : headingUntil)
+            + " WHERE rider_id = ? AND ended_at IS NULL", rider);
+    }
+
     /** A live policy that offers to one rider at a time, 20 s each, up to three rounds in a 90 s stage, with this fair band. */
     private void fairPolicy(int bandM) {
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 90, 1, 3, bandM);

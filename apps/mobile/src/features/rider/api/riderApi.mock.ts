@@ -7,6 +7,7 @@ import type {
   DeliverBody,
   FailBody,
   Offer,
+  OfferReason,
   OfferRules,
   OrderPreferences,
   PayLine,
@@ -257,6 +258,9 @@ export function createMockRiderApi(options: MockOptions = {}) {
     /** Phase 4: a break while online ends then (0: none); the farthest pickup and drop the rider chose. */
     pausedUntil: 0,
     preferences: { maxPickupM: null, maxDropM: null } as OrderPreferences,
+    /** Phase 5: when the home spot was saved (0: none), and heading home until then (0: off). */
+    homeSavedAt: 0,
+    headingHomeUntil: 0,
   };
 
   async function respond<T>(work: () => T): Promise<T> {
@@ -290,6 +294,11 @@ export function createMockRiderApi(options: MockOptions = {}) {
     // Like dispatch with rider choices on: only orders within the rider's farthest pickup and drop reach them.
     const pickupDistanceM = Math.min(400 + ((n * 523) % 1600), state.preferences.maxPickupM ?? Infinity);
     const dropDistanceM = Math.min(1800 + ((n * 977) % 4200), state.preferences.maxDropM ?? Infinity);
+    // Today's rules until the demo's new terms are accepted, then fair turns, one rider at a time (DEMO_RULES).
+    const reason: OfferReason =
+      state.me.termsVersion === '2026-10-v1'
+        ? { rule: 'NEAREST', place: 1, riders: 3, atOnce: 3, round: 1 }
+        : { rule: 'FAIR', place: 1, riders: 4, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12 };
     return {
       offerId: `offer-${n}`,
       tripId: `trip-${n}`,
@@ -303,11 +312,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
       itemsCount: 1 + (n % 3),
-      // Today's rules until the demo's new terms are accepted, then fair turns, one rider at a time (DEMO_RULES).
-      reason:
-        state.me.termsVersion === '2026-10-v1'
-          ? { rule: 'NEAREST', place: 1, riders: 3, atOnce: 3, round: 1 }
-          : { rule: 'FAIR', place: 1, riders: 4, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12 },
+      // Phase 5: heading home, the demo's drops lie on the way.
+      reason: state.headingHomeUntil > now() ? { ...reason, homeNearerM: 3200 } : reason,
     };
   }
 
@@ -552,6 +558,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
           payoutAccountMasked: state.me.status === 'PENDING' ? state.payoutConfirmed ?? undefined : 'UPI ••••@okhdfc',
           payoutAccountSubmitted: state.payoutSubmitted ?? undefined,
           preferences: state.me.features.riderChoices ? { ...state.preferences } : undefined,
+          homeSavedAt: state.homeSavedAt ? iso(state.homeSavedAt) : undefined,
           insurance: {
             label: 'Group accident cover, ₹10 lakh, 24×7',
             claimPhone: DEMO_PHONE,
@@ -676,6 +683,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
           todayOnlineMinutes: 225,
           todayPerHourPaise: Math.round((today.reduce((sum, e) => sum + e.amountPaise, 0) * 60) / 225),
           fleetPerHourPaise: 9000,
+          homeSaved: state.me.features.riderChoices ? state.homeSavedAt > 0 : undefined,
+          headingHomeUntil: state.online && state.headingHomeUntil > now() ? iso(state.headingHomeUntil) : undefined,
         };
       }),
     startShift: () =>
@@ -706,11 +715,12 @@ export function createMockRiderApi(options: MockOptions = {}) {
         state.online = false;
         state.offer = null;
         state.pausedUntil = 0;
+        state.headingHomeUntil = 0;
       }),
     pauseShift: minutes =>
       respond(() => {
         if (!state.me.features.riderChoices) {
-          throw apiError('RIDER_CHOICES_OFF', "Breaks and order preferences aren't switched on yet.", 503);
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
         }
         if (minutes < 5 || minutes > 60) {
           throw apiError('VALIDATION_FAILED', 'Choose a break of 5 to 60 minutes.', 400);
@@ -729,10 +739,44 @@ export function createMockRiderApi(options: MockOptions = {}) {
     setPreferences: preferences =>
       respond(() => {
         if (!state.me.features.riderChoices) {
-          throw apiError('RIDER_CHOICES_OFF', "Breaks and order preferences aren't switched on yet.", 503);
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
         }
         state.preferences = { maxPickupM: preferences.maxPickupM ?? null, maxDropM: preferences.maxDropM ?? null };
         return { ...state.preferences };
+      }),
+    saveHomeSpot: (lat, lng) =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
+        }
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+          throw apiError('VALIDATION_FAILED', "We couldn't read where you are. Turn on location and try again.", 400);
+        }
+        state.homeSavedAt = now();
+        return { savedAt: iso(state.homeSavedAt) };
+      }),
+    forgetHomeSpot: () =>
+      respond(() => {
+        state.homeSavedAt = 0;
+        state.headingHomeUntil = 0;
+      }),
+    headHome: () =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
+        }
+        if (!state.online) {
+          throw apiError('NOT_ONLINE', 'Go online first.', 409);
+        }
+        if (!state.homeSavedAt) {
+          throw apiError('HOME_NOT_SAVED', 'Save your home spot in Profile first.', 409);
+        }
+        state.headingHomeUntil = now() + HOUR;
+        return { until: iso(state.headingHomeUntil) };
+      }),
+    stopHeadingHome: () =>
+      respond(() => {
+        state.headingHomeUntil = 0;
       }),
     signUp: input =>
       respond(() => {

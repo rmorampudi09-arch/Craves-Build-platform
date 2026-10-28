@@ -3,7 +3,7 @@ import type {OfferReason} from '../api/contract';
 import {en} from '../strings/en';
 import {hi} from '../strings/hi';
 import {te} from '../strings/te';
-import {offerRulesLines, whyOffer} from './offerRules';
+import {offerRulesLines, whyHome, whyOffer} from './offerRules';
 
 const nearest: OfferReason = {rule: 'NEAREST', place: 1, riders: 4, atOnce: 1, round: 1};
 
@@ -33,6 +33,15 @@ describe('whyOffer', () => {
   it('speaks Telugu and Hindi too', () => {
     expect(whyOffer(nearest, te.offer)).toBe(te.offer.whyNearest);
     expect(whyOffer({...nearest, atOnce: 3}, hi.offer)).toBe(hi.offer.whyNearestGroup(3));
+  });
+});
+
+describe('whyHome', () => {
+  it('says how much nearer home the drop leaves a rider heading home, and nothing otherwise', () => {
+    expect(whyHome({...nearest, homeNearerM: 3240}, en.offer)).toBe('On your way home: the drop leaves you 3.2 km nearer home.');
+    expect(whyHome({...nearest, homeNearerM: 3240}, te.offer)).toBe(te.offer.whyHome('3.2'));
+    expect(whyHome(nearest, en.offer)).toBeNull();
+    expect(whyHome(undefined, hi.offer)).toBeNull();
   });
 });
 

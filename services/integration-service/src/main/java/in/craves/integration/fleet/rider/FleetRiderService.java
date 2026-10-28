@@ -11,6 +11,8 @@ import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.rider.FleetRiderModels.Banner;
 import in.craves.integration.fleet.rider.FleetRiderModels.Features;
+import in.craves.integration.fleet.rider.FleetRiderModels.HomeSpot;
+import in.craves.integration.fleet.rider.FleetRiderModels.HomeSpotRequest;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.Insurance;
 import in.craves.integration.fleet.rider.FleetRiderModels.LabelValue;
@@ -30,6 +32,7 @@ import in.craves.integration.security.CravesPrincipal;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -207,7 +210,48 @@ public class FleetRiderService {
             ? new Insurance(properties.insuranceLabel(), properties.supportPhone() == null ? "" : properties.supportPhone(), null) : null;
         return new RiderProfile(new Vehicle(rider.vehicleLabel(),
             rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber()), kind), documents, payoutAccount,
-            insurance, submitted, properties.riderChoicesEnabled() ? preferences(rider.id()) : null);
+            insurance, submitted, properties.riderChoicesEnabled() ? preferences(rider.id()) : null, homeSavedAt(rider.id()));
+    }
+
+    /** When the rider saved their home spot; null while none is saved. Shown even with rider choices off, so it can be deleted. */
+    private Instant homeSavedAt(UUID riderId) {
+        Timestamp saved = jdbc.queryForObject("SELECT home_saved_at FROM fleet_schema.rider WHERE id = ?", Timestamp.class, riderId);
+        return saved == null ? null : saved.toInstant();
+    }
+
+    /**
+     * Phase 5: the home spot heading home leads to, from the phone's position, kept to 2 decimal places (about a kilometre;
+     * never an address). Saving again moves it. 503 RIDER_CHOICES_OFF; 400 for a missing or impossible position.
+     */
+    @Transactional
+    public HomeSpot saveHome(UUID identityId, HomeSpotRequest body) {
+        if (!properties.riderChoicesEnabled()) {
+            throw choicesOff();
+        }
+        Double lat = body == null ? null : body.lat();
+        Double lng = body == null ? null : body.lng();
+        if (lat == null || lng == null || !Double.isFinite(lat) || !Double.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+            throw FleetApiException.invalid("We couldn't read where you are. Turn on location and try again.");
+        }
+        UUID riderId = rider(identityId).id();
+        Timestamp saved = jdbc.queryForObject("UPDATE fleet_schema.rider SET home_lat = ?, home_lng = ?, home_saved_at = now(), "
+            + "home_used_at = NULL, updated_at = now() WHERE id = ? RETURNING home_saved_at", Timestamp.class, spot(lat), spot(lng), riderId);
+        return new HomeSpot(saved.toInstant());
+    }
+
+    /** Forgets the home spot and ends heading home. Always allowed, also with rider choices off; repeating is harmless. */
+    @Transactional
+    public void forgetHome(UUID identityId) {
+        UUID riderId = rider(identityId).id();
+        jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, home_used_at = NULL, "
+            + "updated_at = now() WHERE id = ? AND home_saved_at IS NOT NULL", riderId);
+        jdbc.update("UPDATE fleet_schema.rider_shift SET heading_home_until = NULL WHERE rider_id = ? AND heading_home_until IS NOT NULL",
+            riderId);
+    }
+
+    /** A coordinate as the home spot keeps it: 2 decimal places, half up. */
+    static BigDecimal spot(double degrees) {
+        return BigDecimal.valueOf(degrees).setScale(2, RoundingMode.HALF_UP);
     }
 
     /**
@@ -238,7 +282,7 @@ public class FleetRiderService {
     }
 
     static FleetApiException choicesOff() {
-        return new FleetApiException(503, "RIDER_CHOICES_OFF", "Breaks and order preferences aren't switched on yet.");
+        return new FleetApiException(503, "RIDER_CHOICES_OFF", "Breaks, order preferences and heading home aren't switched on yet.");
     }
 
     /**
@@ -274,10 +318,13 @@ public class FleetRiderService {
             + "ORDER BY starts_at DESC LIMIT 1", (row, n) -> new Banner(row.getString("tone"), row.getString("text")))
             .stream().findFirst().orElse(null);
         Map<String, Object> shift = jdbc.queryForList("SELECT started_at, " + FleetShiftService.BREAK_ENDS.formatted("rider_shift.id")
-            + " AS paused_until FROM fleet_schema.rider_shift WHERE rider_id = ? AND ended_at IS NULL AND credential_revoked_at IS NULL "
+            + " AS paused_until, CASE WHEN heading_home_until > now() THEN heading_home_until END AS heading_home_until "
+            + "FROM fleet_schema.rider_shift WHERE rider_id = ? AND ended_at IS NULL AND credential_revoked_at IS NULL "
             + "AND credential_expires_at > now()", rider.id()).stream().findFirst().orElse(Map.of());
         Instant shiftStartedAt = shift.get("started_at") == null ? null : ((Timestamp) shift.get("started_at")).toInstant();
         Instant pausedUntil = shift.get("paused_until") == null ? null : ((Timestamp) shift.get("paused_until")).toInstant();
+        Instant headingHomeUntil = shift.get("heading_home_until") == null ? null : ((Timestamp) shift.get("heading_home_until")).toInstant();
+        Boolean homeSaved = properties.riderChoicesEnabled() ? homeSavedAt(rider.id()) != null : null;
         String activeTripId = jdbc.queryForList("SELECT id::text FROM fleet_schema.trip WHERE rider_id = ? "
             + "AND state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')", String.class, rider.id()).stream().findFirst().orElse(null);
         FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
@@ -287,7 +334,8 @@ public class FleetRiderService {
             rider.id());
         Long perHour = online >= FleetEarnings.MIN_ONLINE_SECONDS ? FleetEarnings.perOnlineHourPaise(earned[0], online) : null;
         return new HomeSummary(shiftStartedAt != null, shiftStartedAt, zoneName, slotEndsAt, earned[0], (int) earned[1], activeTripId, next,
-            guaranteed, restPoint, banner, pausedUntil, (int) (online / 60), perHour, perHour == null ? null : fleetPerHour(today));
+            guaranteed, restPoint, banner, pausedUntil, (int) (online / 60), perHour, perHour == null ? null : fleetPerHour(today), homeSaved,
+            headingHomeUntil);
     }
 
     /**
@@ -349,7 +397,7 @@ public class FleetRiderService {
     /** Phase 4: a copy of everything Craves keeps about this rider (RiderDataExport; DPDP Act s.11). */
     @Transactional(readOnly = true)
     public Map<String, Object> myData(UUID identityId) {
-        return RiderDataExport.build(jdbc, rider(identityId).id(), Instant.now());
+        return RiderDataExport.build(jdbc, rider(identityId).id(), Instant.now(), true);
     }
 
     /** Only the version in force can be accepted; anything else means the terms changed while the rider read them. */

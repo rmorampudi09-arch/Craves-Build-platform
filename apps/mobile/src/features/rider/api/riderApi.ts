@@ -60,6 +60,14 @@ export interface RiderApi {
   resumeShift(): Promise<void>;
   /** Phase 4: the farthest pickup and drop to hear of (null: any); answers what was saved. */
   setPreferences(preferences: OrderPreferences): Promise<OrderPreferences>;
+  /** Phase 5: the home spot for heading home, already rounded to 2 decimal places (about a kilometre). */
+  saveHomeSpot(lat: number, lng: number): Promise<{savedAt: string}>;
+  /** Forgets the home spot and ends heading home; always allowed. */
+  forgetHomeSpot(): Promise<void>;
+  /** Phase 5: heading home for an hour. 409 NOT_ONLINE or HOME_NOT_SAVED. */
+  headHome(): Promise<{until: string}>;
+  /** Ends heading home now; always allowed. */
+  stopHeadingHome(): Promise<void>;
   /** After sign-in and whenever the FCM token changes. Rejects with 409 DEVICE_NOT_BOUND on an unapproved phone. */
   registerDevice(device: DeviceRegistration): Promise<void>;
   /** A new photo of one document (multipart "photo"); ops reviews it by hand. */

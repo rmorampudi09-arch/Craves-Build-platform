@@ -127,7 +127,7 @@ On a live build, after `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_P
 Set-up:
 - Two pilot riders, A and B, online near one pilot kitchen, on a live build, in test mode.
 - A dispatch policy in `live` with the rules from `DISPATCH.md` §7: one rider at a time, 30 s to accept, 3 rounds.
-- For steps 3 and 4, `CRAVES_FLEET_RIDER_CHOICES_ENABLED` on, after the gateway runs this release (`GO-LIVE.md` §8).
+- For steps 3, 4 and 6, `CRAVES_FLEET_RIDER_CHOICES_ENABLED` on, after the gateway runs this release (`GO-LIVE.md` §8).
 
 1. **Why this offer.** Place a test order at the kitchen.
    - Only one phone rings, and its offer says why, for example "You're the nearest free rider." or the fair-turns line.
@@ -146,6 +146,14 @@ Set-up:
    - The JSON holds A's offers, each with `whyThisOffer`, and A's break.
    - Ops downloads A's data from the rider's page in the console.
    - A's next copy lists that download under `opsActions`.
+
+6. **Heading home (Phase 5).** Have A stand at a spot about 4 km from the kitchen, on the far side from where test orders drop.
+   - Profile → "Home spot for heading home" → **I'm home: save this spot**. It reads "Saved on …".
+   - Ride back near the kitchen. Home → **Head home**: Home shows "Heading home until …" (an hour from now).
+   - A test order whose drop lies toward the saved spot rings A, with "On your way home: the drop leaves you … km nearer home."
+   - A test order dropping the other way rings only B.
+   - Ride to within 1 km of the saved spot: within a minute Home no longer says "Heading home".
+   - Profile → **Delete home spot**: it reads "At home? Save this spot…" again.
 
 **Pass:** every step as written; on Rider pilot health, `offer_rules` shows round 2, and `rider_choices` counts the break and the limit.
 

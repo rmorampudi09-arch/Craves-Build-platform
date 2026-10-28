@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,7 +41,7 @@ public class InternalVoiceSupportController {
         this.authorizer = authorizer;
     }
 
-    @GetMapping("/context")
+    @GetMapping(value = "/context", produces = "application/json")
     public ResponseEntity<ContextResponse> context(
         @RequestHeader(name = INTERNAL_HEADER, required = false) String suppliedSecret,
         @RequestParam String phone
@@ -54,7 +55,7 @@ public class InternalVoiceSupportController {
             context.orders()));
     }
 
-    @PostMapping("/tickets")
+    @PostMapping(value = "/tickets", produces = "application/json")
     public ResponseEntity<SupportCaseRef> ticket(
         @RequestHeader(name = INTERNAL_HEADER, required = false) String suppliedSecret,
         @Valid @RequestBody TicketRequest request
@@ -70,6 +71,7 @@ public class InternalVoiceSupportController {
     public ResponseEntity<AppErrorHandler.ErrorBody> rateLimited(SupportChatLimiter.Limited limited) {
         return ResponseEntity.status(429)
             .header("Retry-After", Integer.toString(limited.retryAfterSeconds()))
+            .contentType(MediaType.APPLICATION_JSON)
             .body(new AppErrorHandler.ErrorBody(
                 "VOICE_TICKET_RATE_LIMITED",
                 limited.daily() ? "This number has reached today's ticket limit." : "Too many tickets. Please wait a moment.",

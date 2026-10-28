@@ -78,6 +78,12 @@ public class FleetAdminController {
         return json(200, service.getRider(riderId));
     }
 
+    /** Phase 4: everything kept about the rider, for a rider who asks support for a copy (DPDP Act s.11). Audited. */
+    @GetMapping("/riders/{riderId}/data-export")
+    public ResponseEntity<Object> riderDataExport(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID riderId) {
+        return json(200, service.dataExport(admin(principal, FILE_READERS), riderId));
+    }
+
     @GetMapping("/riders/{riderId}/documents/{documentId}/content")
     public ResponseEntity<byte[]> documentContent(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID riderId,
                                                   @PathVariable UUID documentId) {

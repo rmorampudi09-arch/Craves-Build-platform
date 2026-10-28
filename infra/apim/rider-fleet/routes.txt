@@ -11,6 +11,7 @@ route|rider|rider-post-apply|POST|/apply|json
 route|rider|rider-post-payout-account|POST|/payout-account|json
 route|rider|rider-get-profile|GET|/profile|json
 route|rider|rider-get-terms|GET|/terms|json
+route|rider|rider-get-my-data|GET|/my-data|json
 route|rider|rider-post-terms-accept|POST|/terms/accept|json
 route|rider|rider-post-privacy-notice-accept|POST|/privacy-notice/accept|json
 route|rider|rider-get-home|GET|/home|json
@@ -35,6 +36,7 @@ route|rider|rider-post-sos|POST|/sos|json
 route|admin|fleet-get-riders|GET|/riders|admin
 route|admin|fleet-post-riders|POST|/riders|admin
 route|admin|fleet-get-riders-riderId|GET|/riders/{riderId}|admin
+route|admin|fleet-get-riders-riderId-data-export|GET|/riders/{riderId}/data-export|admin
 route|admin|fleet-get-riders-riderId-documents-documentId-content|GET|/riders/{riderId}/documents/{documentId}/content|admin
 route|admin|fleet-post-riders-riderId-documents-documentId-approve|POST|/riders/{riderId}/documents/{documentId}/approve|admin
 route|admin|fleet-post-riders-riderId-documents-documentId-reject|POST|/riders/{riderId}/documents/{documentId}/reject|admin

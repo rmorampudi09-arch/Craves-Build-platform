@@ -99,6 +99,13 @@ describe("admin fleet BFF", () => {
     expect((await fleetProxy(request("exports/rider-joins-exits?date=2026-10-19"), ["exports", "rider-joins-exits"])).status).toBe(502);
   });
 
+  it("downloads a rider's data export as a JSON attachment", async () => {
+    upstream.mockResolvedValue(Response.json({ about: { generatedAt: "2026-10-28T04:41:02Z" }, profile: {} }));
+    const response = await fleetProxy(request(`riders/${RIDER}/data-export`), ["riders", RIDER, "data-export"]);
+    expect(response.headers.get("content-disposition")).toBe(`attachment; filename="rider-${RIDER}-data.json"`);
+    expect(await response.json()).toEqual({ about: { generatedAt: "2026-10-28T04:41:02Z" }, profile: {} });
+  });
+
   it("downloads a payout bank file and passes a same-approver refusal through", async () => {
     upstream.mockResolvedValue(new Response("payoutId,amount\n", { headers: { "content-type": "text/csv" } }));
     const file = await fleetProxy(request(`payout-batches/${RIDER}/file`), ["payout-batches", RIDER, "file"]);

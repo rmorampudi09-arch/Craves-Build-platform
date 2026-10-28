@@ -1,6 +1,6 @@
 // Screens 15–21: Earnings, Trip pay, Payouts, SOS, Notice, Profile and Help, in every state.
 import React from 'react';
-import {AccessibilityInfo, Alert, Animated, Linking, Text} from 'react-native';
+import {AccessibilityInfo, Alert, Animated, Linking, Share, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -520,6 +520,20 @@ describe('Profile (20)', () => {
     expect(riderApi.setPreferences).toHaveBeenCalledWith({maxPickupM: 2000, maxDropM: null});
     await settle();
     expect(tree.root.findByProps({testID: 'rider-pickup-limit-2000'}).props.accessibilityState).toEqual({checked: true});
+  });
+
+  it('shares a copy of the rider data from the phone, or sends a big one through rider support', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({action: 'sharedAction'});
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    (riderApi.getMyData as jest.Mock).mockResolvedValueOnce({about: {generatedAt: '2026-10-28T04:41:02Z'}, profile: {name: 'Ravi Kumar'}});
+    await render(screen(), seed);
+    expect(allText()).toContain('Your data | Get a copy of everything Craves keeps about you');
+    await press('rider-share-data');
+    expect(share).toHaveBeenCalledWith({title: 'Your data', message: expect.stringContaining('"name": "Ravi Kumar"')});
+    (riderApi.getMyData as jest.Mock).mockResolvedValueOnce({trips: 'x'.repeat(400_001)});
+    await press('rider-share-data');
+    expect(alert).toHaveBeenCalledWith('Your copy is too big to share from the phone. Call rider support and they will send it to you.');
+    expect(share).toHaveBeenCalledTimes(1);
   });
 
   it('uploads a new photo of a document from the back camera and refreshes', async () => {

@@ -14,7 +14,7 @@ export const reasonBody = z.object({ reason: reasonText });
 export type FleetFile = {
   types: readonly string[];
   maxBytes: number;
-  /** Download name for CSV files; images and PDFs open inline. */
+  /** Download name for CSV and JSON files; images and PDFs open inline. */
   attachment?: (ids: string[], query: URLSearchParams) => string;
 };
 

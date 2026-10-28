@@ -456,6 +456,11 @@ export const en = {
     dropLimit: 'Kitchen to customer, at most',
     anyDistance: 'Any',
     km: (km: string) => `${km} km`,
+    // A copy of your data (Phase 4).
+    dataTitle: 'Your data',
+    dataBody: 'Get a copy of everything Craves keeps about you: trips, offers and why they came to you, pay, shifts and more.',
+    dataShare: 'Share a copy of my data',
+    dataTooLarge: 'Your copy is too big to share from the phone. Call rider support and they will send it to you.',
     vehicle: 'Vehicle',
     documents: 'Documents',
     docStatus: {VERIFIED: 'Verified', PENDING: 'Checking', REJECTED: 'Not accepted', EXPIRED: 'Expired', MISSING: 'Not sent'},

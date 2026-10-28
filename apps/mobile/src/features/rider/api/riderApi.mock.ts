@@ -559,6 +559,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
           },
         }),
       ),
+    getMyData: () =>
+      respond(() => ({
+        about: { generatedAt: iso(now()), eachListHoldsAtMost: 5000, notIncluded: ['Photos and GPS points: ask rider support.'] },
+        profile: { name: state.me.name, phone: DEMO_PHONE, language: state.me.language, status: state.me.status },
+        trips: state.earnings.slice(0, 10).map(e => ({ tripId: e.tripId, kitchenArea: e.kitchenArea, dropArea: e.customerLocality })),
+        breaks: [],
+        preferences: { ...state.preferences },
+      })),
     getTerms: () =>
       respond(
         (): Terms => ({

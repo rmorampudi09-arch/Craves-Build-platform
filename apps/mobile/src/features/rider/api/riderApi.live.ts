@@ -66,6 +66,7 @@ export const liveRiderApi: RiderApi = {
     await apiClient.post(`${BASE}/payout-account`, input);
   },
   getTerms: () => get('/terms'),
+  getMyData: () => get('/my-data'),
   async acceptTerms(version) {
     await apiClient.post(`${BASE}/terms/accept`, {version});
   },

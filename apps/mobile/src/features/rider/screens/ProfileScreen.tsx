@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Alert, Image, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Alert, Image, Linking, Pressable, Share, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,6 +24,8 @@ const SOON_MS = 30 * 24 * 3_600_000;
 /** Phase 4 order preferences, in metres; null is any distance. */
 const PICKUP_LIMITS = [null, 1000, 2000, 3000, 5000];
 const DROP_LIMITS = [null, 3000, 5000, 8000, 12000];
+/** Android's share sheet carries about 1 MB: a larger copy goes through rider support. */
+const SHARE_LIMIT = 400_000;
 
 type Doc = RiderProfile['documents'][number];
 
@@ -102,6 +104,20 @@ export function ProfileScreen() {
     try {
       const saved = await riderApi.setPreferences(next);
       queryClient.setQueryData<RiderProfile>(riderKeys.profile, old => (old ? {...old, preferences: saved} : old));
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    }
+  }
+
+  /** Phase 4: the rider's copy of their data, shared as text from the phone's share sheet. */
+  async function shareData() {
+    try {
+      const text = JSON.stringify(await riderApi.getMyData(), null, 1);
+      if (text.length > SHARE_LIMIT) {
+        Alert.alert(p.dataTooLarge);
+        return;
+      }
+      await Share.share({title: p.dataTitle, message: text});
     } catch (error) {
       Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
     }
@@ -243,6 +259,11 @@ export function ProfileScreen() {
               />
             </Card>
           ) : null}
+          <Card>
+            <Label>{p.dataTitle}</Label>
+            <Body>{p.dataBody}</Body>
+            <BottomAction label={p.dataShare} variant="outline" size="compact" onPress={shareData} style={styles.upload} testID="rider-share-data" />
+          </Card>
           {profile.data.insurance ? (
             <Card>
               <Label>{p.insurance}</Label>

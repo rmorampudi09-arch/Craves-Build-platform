@@ -30,6 +30,7 @@ import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.VehicleInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.ZoneBanner;
 import in.craves.integration.fleet.rider.FleetShiftService;
+import in.craves.integration.fleet.rider.RiderDataExport;
 import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import in.craves.integration.payout.bank.BankDataCipher;
 import in.craves.integration.payout.bank.BankOnboardingModels;
@@ -170,6 +171,18 @@ public class FleetAdminService {
             return new Done(new RiderSummary(rider.riderId(), rider.name(), rider.phoneMasked(), rider.status(), 0, false,
                 rider.createdAt()), id, id.toString(), "Created rider " + name + " (" + rider.phoneMasked() + ").");
         });
+    }
+
+    /**
+     * Phase 4: everything kept about a rider (RiderDataExport), for a rider who asked support for a copy (DPDP Act s.11).
+     * Audited as RIDER_DATA_EXPORTED; 404 RIDER_NOT_FOUND.
+     */
+    @Transactional
+    public Map<String, Object> dataExport(Admin admin, UUID riderId) {
+        header(riderId);
+        Map<String, Object> export = RiderDataExport.build(jdbc, riderId, Instant.now());
+        audit(admin, "RIDER_DATA_EXPORTED", riderId, riderId.toString(), "Downloaded the rider's data export.");
+        return export;
     }
 
     @Transactional(readOnly = true)

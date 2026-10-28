@@ -148,6 +148,8 @@ export const RIDER_ROUTES: readonly FleetRoute[] = [
   { method: "POST", path: "riders", body: createRiderSchema, response: riderSummarySchema },
   { method: "GET", path: "riders/:id", response: riderDetailSchema },
   { method: "GET", path: "riders/:id/documents/:id/content", file: { types: ["application/pdf", "image/jpeg", "image/png"], maxBytes: 10 * 1024 * 1024 } },
+  // Phase 4: everything kept about the rider, for a rider who asks support for a copy (audited; the rider sees the download).
+  { method: "GET", path: "riders/:id/data-export", file: { types: ["application/json"], maxBytes: 20 * 1024 * 1024, attachment: ids => `rider-${ids[0]}-data.json` } },
   { method: "POST", path: "riders/:id/documents/:id/approve", body: approveDocumentSchema, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/documents/:id/reject", body: reasonBody, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/devices/:id/approve", response: riderDeviceSchema },

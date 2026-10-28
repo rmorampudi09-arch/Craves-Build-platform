@@ -346,6 +346,12 @@ public class FleetRiderService {
             ((Number) policy.get("radius_m")).intValue(), ((Number) policy.get("fair_band_m")).intValue())).orElse(null);
     }
 
+    /** Phase 4: a copy of everything Craves keeps about this rider (RiderDataExport; DPDP Act s.11). */
+    @Transactional(readOnly = true)
+    public Map<String, Object> myData(UUID identityId) {
+        return RiderDataExport.build(jdbc, rider(identityId).id(), Instant.now());
+    }
+
     /** Only the version in force can be accepted; anything else means the terms changed while the rider read them. */
     @Transactional
     public void acceptTerms(UUID identityId, String version) {

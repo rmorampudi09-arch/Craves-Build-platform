@@ -42,6 +42,8 @@ export interface RiderApi {
   /** The UPI ID or bank account to be paid into; ops confirms it. 409 PAYOUT_ACCOUNT_NOT_UNIQUE, 422 HOLDER_NAME_MISMATCH. */
   submitPayoutAccount(input: PayoutAccountInput): Promise<void>;
   getTerms(): Promise<Terms>;
+  /** Phase 4: a copy of everything Craves keeps about the rider (GET /my-data), as the server's JSON. */
+  getMyData(): Promise<Record<string, unknown>>;
   acceptTerms(version: string): Promise<void>;
   /** The notice in RiderMe.privacyNotice, read in language; 409 NOTICE_CHANGED when another version is in force (P2-09). */
   acceptPrivacyNotice(version: string, language: Language): Promise<void>;

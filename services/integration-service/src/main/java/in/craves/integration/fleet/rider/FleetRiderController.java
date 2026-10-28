@@ -13,6 +13,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.ShiftPause;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import in.craves.integration.fleet.rider.FleetRiderModels.Terms;
 import in.craves.integration.security.CravesPrincipal;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
@@ -120,6 +121,12 @@ public class FleetRiderController {
             throw FleetShiftService.deviceNotBound();
         }
         return ResponseEntity.noContent().build();
+    }
+
+    /** Phase 4: a copy of everything Craves keeps about the rider (DPDP Act s.11): JSON, newest first in each list. */
+    @GetMapping("/my-data")
+    public ResponseEntity<Map<String, Object>> myData(@AuthenticationPrincipal CravesPrincipal principal) {
+        return noStore(service.myData(identity(principal)));
     }
 
     @GetMapping("/terms")

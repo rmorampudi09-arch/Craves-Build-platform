@@ -80,6 +80,21 @@ paths:
               schema: { $ref: '#/components/schemas/RiderDetail' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/admin/fleet/riders/{riderId}/data-export:
+    get:
+      operationId: getRiderDataExport
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN]
+      description: >-
+        Phase 4: everything Craves keeps about the rider, for a rider who asks support for a copy (DPDP Act 2023 s.11): the
+        same JSON document the rider gets from GET /api/v1/rider/my-data. Audited as RIDER_DATA_EXPORTED, which the rider
+        then sees in their own copy. The console offers it as a file.
+      parameters: [{ $ref: '#/components/parameters/RiderId' }]
+      responses:
+        '200':
+          description: The rider's data (rider-v1.yaml RiderDataExport).
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/admin/fleet/riders/{riderId}/documents/{documentId}/content:
     get:
       operationId: getRiderDocumentContent

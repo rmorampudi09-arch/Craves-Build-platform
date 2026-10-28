@@ -54,6 +54,11 @@ paths:
     get: {summary: 'Vehicle, documents, payout account and insurance', description: 'Also for a PENDING rider (no RIDER role yet), who also sees each document still to send as MISSING. 403 NOT_A_RIDER.', responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RiderProfile'}}}}, '403': {$ref: '#/components/responses/Error'}}}
   /terms:
     get: {summary: Current terms and rate card, description: 503 TERMS_UNAVAILABLE while no rate card is stored., responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Terms'}}}}, '503': {$ref: '#/components/responses/Error'}}}
+  /my-data:
+    get:
+      summary: A copy of everything Craves keeps about the rider (Phase 4; DPDP Act 2023 s.11)
+      description: JSON, newest first in each list, at most 5000 rows a list. Other people's data stays out (a trip has the kitchen and drop areas, never the customer's name, phone or address). Files and on-trip GPS points are counted or listed, not included; about.notIncluded says how to ask for them.
+      responses: {'200': {description: The rider's data, content: {application/json: {schema: {$ref: '#/components/schemas/RiderDataExport'}}}}}
   /terms/accept:
     post:
       summary: Accept the version shown; 409 if the terms changed meanwhile
@@ -339,6 +344,14 @@ components:
             summaryOfChanges: {type: array, items: {type: string}}
             rateCardLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
             offerRules: {$ref: '#/components/schemas/OfferRules'}
+    RiderDataExport:
+      type: object
+      description: 'Phase 4: about (generatedAt, eachListHoldsAtMost, tripGpsPoints, notIncluded), profile and latestPosition (objects), then lists: documents, phones, shifts, breaks, offers (with whyThisOffer), trips, tripSteps, earnings, payHolds, payouts, payoutAccounts (masked), withdrawals, recoveries, slots, statusChanges, supportIssues, sos, termsAccepted, privacyNoticesAccepted, opsActions (what ops did on the account, downloads of this export included).'
+      required: [about, profile]
+      additionalProperties: true
+      properties:
+        about: {type: object, additionalProperties: true}
+        profile: {type: object, additionalProperties: true}
     PauseRequest: {type: object, required: [minutes], properties: {minutes: {type: integer, minimum: 5, maximum: 60}}}
     ShiftPause: {type: object, required: [offersPausedUntil], properties: {offersPausedUntil: {type: string, format: date-time}}}
     OrderPreferences:

@@ -73,6 +73,8 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
         <div><dt className={labelClass}>Vehicle</dt><dd>{rider.vehicleNumberMasked ?? "Not recorded"}</dd></div>
         <div><dt className={labelClass}>Joined</dt><dd>{when(rider.createdAt)}</dd></div>
       </dl>
+      <p className="cr-muted mt-4 text-sm">A rider may ask for a copy of everything Craves keeps about them. Each download is recorded, and the rider sees it in their copy.</p>
+      <a className="cr-button mt-2 inline-block" href={`/api/admin/fleet/riders/${riderId}/data-export`} download>Download the rider&apos;s data (JSON)</a>
     </section>
 
     <section className="cr-panel space-y-3">

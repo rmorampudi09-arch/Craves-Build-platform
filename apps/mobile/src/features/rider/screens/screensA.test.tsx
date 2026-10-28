@@ -1,7 +1,7 @@
 // Screens 1–8 of "Rider app P1: screens to the design": every state of sign-in, account status, terms,
 // phone setup, home, go online and the offer.
 import React from 'react';
-import {AccessibilityInfo, Alert, Keyboard, StyleSheet, Text} from 'react-native';
+import {AccessibilityInfo, Alert, Keyboard, Linking, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AxiosError} from 'axios';
@@ -21,6 +21,7 @@ import {GoOnlineScreen} from './GoOnlineScreen';
 import {HomeScreen} from './HomeScreen';
 import {OfferScreen} from './OfferScreen';
 import {phoneBrand, PhoneSetupScreen} from './PhoneSetupScreen';
+import {PrivacyNoticeScreen} from './PrivacyNoticeScreen';
 import {TermsScreen} from './TermsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
@@ -553,6 +554,33 @@ describe('Terms', () => {
     await flush();
     expect(allText()).toContain('Something went wrong. Try again.');
     expect(allText()).toContain('Try again');
+  });
+});
+
+describe('Privacy notice (P2-09)', () => {
+  const privacyNotice = {version: '2027-05-v1', url: 'https://craves.in/riders/privacy/{language}', accepted: false};
+  beforeEach(() => jest.spyOn(Linking, 'openURL').mockResolvedValue(true));
+
+  it('opens the text in the language on screen, then accepts that version', async () => {
+    const client = await render(<PrivacyNoticeScreen />, [[riderKeys.me, {...me, status: 'PENDING', privacyNotice}]]);
+    expect(allText()).toContain('Your privacy');
+    expect(allText()).toContain('Version 2027-05-v1');
+    await act(async () => press('rider-privacy-read').props.onPress());
+    expect(Linking.openURL).toHaveBeenCalledWith('https://craves.in/riders/privacy/en');
+    (riderApi.acceptPrivacyNotice as jest.Mock).mockResolvedValueOnce(undefined);
+    const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    await act(async () => press('rider-privacy-accept').props.onPress());
+    expect(riderApi.acceptPrivacyNotice).toHaveBeenCalledWith('2027-05-v1', 'en');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+  });
+
+  it('says so when the notice changed while the rider read it, and reads it again', async () => {
+    (riderApi.acceptPrivacyNotice as jest.Mock).mockRejectedValueOnce(new AppApiError('NOTICE_CHANGED', 'changed', 409));
+    const client = await render(<PrivacyNoticeScreen />, [[riderKeys.me, {...me, privacyNotice}]]);
+    const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    await act(async () => press('rider-privacy-accept').props.onPress());
+    expect(Alert.alert).toHaveBeenCalledWith('The notice changed. Read the new one.');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
   });
 });
 

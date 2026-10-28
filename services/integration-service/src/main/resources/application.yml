@@ -44,6 +44,13 @@ craves:
     # Phones upload on location callbacks with short wake locks instead of one for the whole shift (P2-10). Keep false
     # until PHONE-TESTS section 1 passes with it on and battery per hour is no worse; needed before a Play rollout.
     callback-uploads-enabled: ${CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED:false}
+    # Daily deletion of shift selfies after 30 days and delivery photos after 90, unless flagged or disputed (P2-09,
+    # FleetPhotoRetention). While false it only logs how many are due; turn it on once the lawyer agrees the periods.
+    photo-retention-enabled: ${CRAVES_FLEET_PHOTO_RETENTION_ENABLED:false}
+    # The privacy notice in force (P2-09, DPDP) and where its text is ({language} becomes en, te or hi). Riders accept a
+    # new version before they continue; leave both empty until the lawyer's text is published at that address.
+    privacy-notice-version: ${CRAVES_FLEET_PRIVACY_NOTICE_VERSION:}
+    privacy-notice-url: ${CRAVES_FLEET_PRIVACY_NOTICE_URL:}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

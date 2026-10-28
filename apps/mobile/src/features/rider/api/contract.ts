@@ -37,6 +37,8 @@ export interface RiderMe {
   supportWhatsappUrl?: string;
   /** nativeTripOutbox (P2-02): trip steps go through the phone's native outbox, which sends them after a kill or reboot. */
   features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean};
+  /** P2-09: the privacy notice in force, absent while none is set; url may hold {language}. */
+  privacyNotice?: {version: string; url: string; accepted: boolean};
 }
 
 export interface RiderProfile {

@@ -39,8 +39,14 @@ public final class FleetDatabase {
 
     /** callbackUploads: phones are told to upload on location callbacks (P2-10). */
     public static FleetProperties properties(boolean testMode, boolean callbackUploads) {
+        return properties(testMode, callbackUploads, null);
+    }
+
+    /** privacyNotice: the version in force (P2-09), its text at https://craves.in/riders/privacy/{language}; null for none. */
+    public static FleetProperties properties(boolean testMode, boolean callbackUploads, String privacyNotice) {
         return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents", "+914012345678",
-            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false, 10, callbackUploads);
+            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false, 10, callbackUploads,
+            privacyNotice, privacyNotice == null ? null : "https://craves.in/riders/privacy/{language}");
     }
 
     public UUID rider(String name, String phone) {

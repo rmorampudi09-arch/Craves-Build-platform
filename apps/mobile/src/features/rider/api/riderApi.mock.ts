@@ -609,6 +609,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
         }
         state.me = { ...state.me, acceptedTermsVersion: version };
       }),
+    acceptPrivacyNotice: version =>
+      respond(() => {
+        const notice = state.me.privacyNotice;
+        if (!notice || version !== notice.version) {
+          throw apiError('NOTICE_CHANGED', 'The privacy notice changed. Please read the new one.', 409);
+        }
+        state.me = { ...state.me, privacyNotice: { ...notice, accepted: true } };
+      }),
     getHome: () =>
       respond(() => {
         const todayStart = new Date(now()).setHours(0, 0, 0, 0);

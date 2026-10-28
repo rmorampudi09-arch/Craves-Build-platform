@@ -27,6 +27,7 @@ import {NoticeScreen} from '../../features/rider/screens/NoticeScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
 import {PayoutsScreen} from '../../features/rider/screens/PayoutsScreen';
 import {PhoneSetupScreen} from '../../features/rider/screens/PhoneSetupScreen';
+import {PrivacyNoticeScreen} from '../../features/rider/screens/PrivacyNoticeScreen';
 import {ProfileScreen} from '../../features/rider/screens/ProfileScreen';
 import {SosScreen} from '../../features/rider/screens/SosScreen';
 import {TermsScreen} from '../../features/rider/screens/TermsScreen';
@@ -85,7 +86,7 @@ function RiderTabs() {
   );
 }
 
-/** GET /me decides where a signed-in rider lands: account status, new terms, or work. */
+/** GET /me decides where a signed-in rider lands: the privacy notice, account status, new terms, or work. */
 function SignedIn() {
   const {strings, adoptServerLanguage} = useStrings();
   const session = useRiderSession();
@@ -146,6 +147,8 @@ function SignedIn() {
           <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
         ) : gate.kind === 'terms' ? (
           <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'accept'}} navigationKey={gate.kind} />
+        ) : gate.kind === 'privacy' ? (
+          <Stack.Screen name="Privacy" component={PrivacyNoticeScreen} navigationKey={gate.kind} />
         ) : (
           <>
             <Stack.Screen name="Tabs" component={RiderTabs} />
@@ -164,7 +167,7 @@ function SignedIn() {
           </>
         )}
         {gate.kind !== 'ready' ? (
-          // The account and terms screens show SOS and the demo chip too.
+          // The account, terms and privacy screens show SOS and the demo chip too.
           <>
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
             <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />

@@ -74,6 +74,20 @@ public class FleetStorage {
         }
     }
 
+    /** Deletes a stored file (retention, FleetPhotoRetention); one already gone counts as deleted. */
+    public void delete(String blobName) {
+        requireRiderPath(blobName);
+        try {
+            BlobContainerClient container = container();
+            requirePrivate(container);
+            container.getBlobClient(blobName).deleteIfExists();
+        } catch (FleetApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw unavailable();
+        }
+    }
+
     public static boolean signatureMatches(String contentType, byte[] bytes) {
         byte[] signature = switch (contentType == null ? "" : contentType) {
             case "application/pdf" -> new byte[] {0x25, 0x50, 0x44, 0x46, 0x2d};

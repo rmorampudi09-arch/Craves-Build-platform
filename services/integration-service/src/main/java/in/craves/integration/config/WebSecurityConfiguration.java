@@ -46,10 +46,11 @@ public class WebSecurityConfiguration {
                 .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations", "/api/v1/rider/devices").permitAll()
                 .requestMatchers(credentialTripSteps).permitAll()
                 // Any signed-in user may ask whether they are a rider, and sign up (apply). A PENDING rider (no RIDER role
-                // until ops activates them) may read their profile and send documents and a payout account: the services
-                // require their rider row. Every other rider route needs RIDER.
+                // until ops activates them) may read their profile, accept the privacy notice, and send documents and a
+                // payout account: the services require their rider row. Every other rider route needs RIDER.
                 .requestMatchers("/api/v1/rider/me").authenticated()
-                .requestMatchers(HttpMethod.POST, "/api/v1/rider/apply", "/api/v1/rider/payout-account").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/v1/rider/apply", "/api/v1/rider/payout-account",
+                    "/api/v1/rider/privacy-notice/accept").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/rider/profile").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/v1/rider/documents").authenticated()
                 .requestMatchers("/api/v1/rider/**").hasRole("RIDER")

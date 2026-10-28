@@ -19,12 +19,12 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 public class FleetConfiguration {
     public static final String FLEET_SCHEDULER = "fleetScheduler";
 
-    // One thread per fleet job: the joins-and-exits export, slot settlement, the dispatch tick, the trip_track partitions
-    // and the money job (trip credits handed over after commit queue on it too).
+    // One thread per fleet job: the joins-and-exits export, slot settlement, the dispatch tick, the trip_track partitions,
+    // the money job (trip credits handed over after commit queue on it too) and photo retention.
     @Bean(name = FLEET_SCHEDULER)
     ThreadPoolTaskScheduler fleetScheduler() {
         ThreadPoolTaskScheduler scheduler = new SchedulerLagWatchdog.MonitoredTaskScheduler();
-        scheduler.setPoolSize(5);
+        scheduler.setPoolSize(6);
         scheduler.setThreadNamePrefix("fleet-");
         scheduler.setRemoveOnCancelPolicy(true);
         return scheduler;

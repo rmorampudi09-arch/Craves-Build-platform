@@ -79,6 +79,13 @@ describe('live rider API: every path in rider-v1.yaml', () => {
     ['getProfile', () => liveRiderApi.getProfile(), 'get', '/api/v1/rider/profile', undefined],
     ['getTerms', () => liveRiderApi.getTerms(), 'get', '/api/v1/rider/terms', undefined],
     ['acceptTerms', () => liveRiderApi.acceptTerms('v2'), 'post', '/api/v1/rider/terms/accept', {version: 'v2'}],
+    [
+      'acceptPrivacyNotice',
+      () => liveRiderApi.acceptPrivacyNotice('2027-05-v1', 'te'),
+      'post',
+      '/api/v1/rider/privacy-notice/accept',
+      {version: '2027-05-v1', language: 'te'},
+    ],
     ['getHome', () => liveRiderApi.getHome(), 'get', '/api/v1/rider/home', undefined],
     ['endShift', () => liveRiderApi.endShift(), 'post', '/api/v1/rider/shift/end', undefined],
     ['postLocations', () => liveRiderApi.postLocations([fix]), 'post', '/api/v1/rider/locations', {fixes: [fix]}],

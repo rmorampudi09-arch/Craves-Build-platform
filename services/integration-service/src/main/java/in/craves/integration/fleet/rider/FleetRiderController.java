@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.rider;
 
 import in.craves.integration.fleet.FleetApiException;
+import in.craves.integration.fleet.rider.FleetRiderModels.AcceptPrivacyNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.AcceptTerms;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
@@ -27,8 +28,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * The rider app's API (contracts/openapi/rider-v1.yaml). WebSecurityConfiguration requires the RIDER role on
- * every route here except GET /me, GET /profile and POST /documents (a signed-in identity; the service requires a rider
- * row) and POST /devices (the RIDER check or the shift credential is here). Off unless CRAVES_FLEET_RIDER_API_ENABLED.
+ * every route here except GET /me, GET /profile, POST /documents and POST /privacy-notice/accept (a signed-in identity;
+ * the service requires a rider row) and POST /devices (the RIDER check or the shift credential is here). Off unless
+ * CRAVES_FLEET_RIDER_API_ENABLED.
  */
 @RestController
 @RequestMapping("/api/v1/rider")
@@ -104,6 +106,14 @@ public class FleetRiderController {
     @PostMapping("/terms/accept")
     public ResponseEntity<Void> acceptTerms(@AuthenticationPrincipal CravesPrincipal principal, @RequestBody AcceptTerms body) {
         service.acceptTerms(identity(principal), body.version());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Also for a PENDING rider, before they send documents (P2-09). 409 NOTICE_CHANGED for any version but the one in force. */
+    @PostMapping("/privacy-notice/accept")
+    public ResponseEntity<Void> acceptPrivacyNotice(@AuthenticationPrincipal CravesPrincipal principal,
+                                                    @RequestBody AcceptPrivacyNotice body) {
+        service.acceptPrivacyNotice(identity(principal), body.version(), body.language());
         return ResponseEntity.noContent().build();
     }
 

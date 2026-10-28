@@ -12,6 +12,7 @@ route|rider|rider-post-payout-account|POST|/payout-account|json
 route|rider|rider-get-profile|GET|/profile|json
 route|rider|rider-get-terms|GET|/terms|json
 route|rider|rider-post-terms-accept|POST|/terms/accept|json
+route|rider|rider-post-privacy-notice-accept|POST|/privacy-notice/accept|json
 route|rider|rider-get-home|GET|/home|json
 route|rider|rider-post-shift-start|POST|/shift/start|upload
 route|rider|rider-post-shift-end|POST|/shift/end|json

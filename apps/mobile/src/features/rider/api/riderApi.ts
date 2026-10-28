@@ -3,6 +3,7 @@ import type {
   EarningsPage,
   EarningsRange,
   HomeSummary,
+  Language,
   LocationBatchResponse,
   Paise,
   PayoutAccountInput,
@@ -41,6 +42,8 @@ export interface RiderApi {
   submitPayoutAccount(input: PayoutAccountInput): Promise<void>;
   getTerms(): Promise<Terms>;
   acceptTerms(version: string): Promise<void>;
+  /** The notice in RiderMe.privacyNotice, read in language; 409 NOTICE_CHANGED when another version is in force (P2-09). */
+  acceptPrivacyNotice(version: string, language: Language): Promise<void>;
   getHome(): Promise<HomeSummary>;
   /**
    * The Go Online selfie is checked by ops in the pilot. installationId goes in the X-Craves-Installation-Id header;

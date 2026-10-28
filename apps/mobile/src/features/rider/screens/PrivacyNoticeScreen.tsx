@@ -1,0 +1,57 @@
+import React from 'react';
+import {Alert, Linking} from 'react-native';
+import {useQueryClient} from '@tanstack/react-query';
+import {AppApiError} from '../../../core/http/apiError';
+import {riderApi} from '../api/riderApi';
+import {BottomAction} from '../components/BottomAction';
+import {RiderHeader} from '../components/RiderHeader';
+import {Body, Card, Label, RiderScreen} from '../components/ui';
+import {riderKeys, useRiderMe} from '../state/riderQueries';
+import {useStrings} from '../strings/StringsProvider';
+
+/**
+ * The privacy notice in force (WORKPLAN P2-09): the lawyer's text opens on the web in the language on screen, and the
+ * rider accepts that version. The gate shows this before anything else and never mid-shift (domain/gate.ts).
+ */
+export function PrivacyNoticeScreen() {
+  const {strings, language} = useStrings();
+  const p = strings.privacy;
+  const queryClient = useQueryClient();
+  const notice = useRiderMe().data?.privacyNotice;
+  if (!notice) {
+    return null;
+  }
+  const {version} = notice;
+  const url = notice.url.replace('{language}', language);
+
+  async function accept() {
+    try {
+      await riderApi.acceptPrivacyNotice(version, language);
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError && error.code === 'NOTICE_CHANGED' ? p.changed : strings.common.error);
+    }
+    await queryClient.invalidateQueries({queryKey: riderKeys.me});
+  }
+
+  return (
+    <RiderScreen
+      header={<RiderHeader title={p.title} />}
+      testID="rider-privacy"
+      footer={
+        <>
+          <BottomAction label={p.accept} onPress={accept} testID="rider-privacy-accept" />
+          <BottomAction
+            label={p.read}
+            variant="outline"
+            onPress={() => Linking.openURL(url).catch(() => undefined)}
+            testID="rider-privacy-read"
+          />
+        </>
+      }>
+      <Card>
+        <Body>{p.intro}</Body>
+        <Label>{p.version(version)}</Label>
+      </Card>
+    </RiderScreen>
+  );
+}

@@ -658,6 +658,21 @@ No header, no tab bar.
 
 ---
 
+## 22. Privacy notice (WORKPLAN P2-09; no PNG)
+
+Shown before every other screen while `GET /me` has a privacy notice the rider hasn't accepted, also to a PENDING rider before they send documents; never during a shift or a trip.
+
+**Header:** variant A. Title "Your privacy". No tab bar.
+
+1. **Card:** the intro, 15/400 `colors.textPrimary`: "Before you go on, read how Craves uses your details: your phone number, documents, selfies, your location while you are online, and your pay." Then "Version 2027-05-v1" as a label.
+2. **Bottom action bar:**
+   - **primary** "I have read it and agree"
+   - **outline** "Read the privacy notice" (opens the lawyer's text on the web, in the language on screen)
+
+If the notice changed while the rider read it, an alert says "The notice changed. Read the new one." and the screen shows the new version.
+
+---
+
 ## Differences between the PNGs and the spec list
 
 **PNG order matches the spec order; no page/name mismatches.**

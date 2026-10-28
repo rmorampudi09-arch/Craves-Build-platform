@@ -69,6 +69,9 @@ export const liveRiderApi: RiderApi = {
   async acceptTerms(version) {
     await apiClient.post(`${BASE}/terms/accept`, {version});
   },
+  async acceptPrivacyNotice(version, language) {
+    await apiClient.post(`${BASE}/privacy-notice/accept`, {version, language});
+  },
   getHome: () => get('/home'),
   async startShift(selfieUri, installationId) {
     const form = new FormData();

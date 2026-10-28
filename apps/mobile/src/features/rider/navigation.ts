@@ -8,6 +8,7 @@ export type RiderStackParamList = {
   Otp: {phone: string};
   AccountStatus: undefined;
   Terms: {mode: 'accept' | 'view'};
+  Privacy: undefined;
   Tabs: NavigatorScreenParams<RiderTabParamList> | undefined;
   PhoneSetup: undefined;
   GoOnline: undefined;

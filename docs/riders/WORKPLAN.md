@@ -637,6 +637,29 @@ Also tell the lawyer: `rider_terms_acceptance.language` records the language sav
 
 **Prove it:** a database test for the delete rules, and a screen test for the notice.
 
+**Done (agent part), both off:**
+- **Photo retention, behind `CRAVES_FLEET_PHOTO_RETENTION_ENABLED`.** `FleetPhotoRetention` runs daily at 03:10 IST on its own fleet thread. It deletes selfies 30 days after the shift started and delivery photos 90 days after the delivery, 500 at a time, file first and then its reference. The rest stays:
+  - flagged: a selfie ops rejected;
+  - disputed: the trip's pay is on hold, or held and not credited yet, or a support issue about the trip isn't fixed.
+
+  A file that can't be deleted keeps its reference for the next run and raises an alert. While the setting is off, the job only logs how many are due, so ops sees the numbers first.
+- **Privacy notice, behind `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_PRIVACY_NOTICE_URL` (empty).**
+  - `GET /me` carries `privacyNotice {version, url, accepted}` while both are set.
+  - The app shows the notice before anything else, so a PENDING rider reads it before sending documents. It never interrupts a shift. The lawyer's text opens on the web in the language on screen (`{language}` in the URL).
+  - `POST /privacy-notice/accept` records the version, language and time (V169 `rider_privacy_acceptance`). A PENDING rider may call it, and any other version is 409 `NOTICE_CHANGED`.
+- **Proved by:**
+  - `FleetPhotoRetentionDatabaseTest` (what goes, what stays, a failed delete, off) and `FleetPrivacyNoticeDatabaseTest`;
+  - `FleetRiderApiDatabaseTest` (a PENDING rider gets through security);
+  - `gate.test.ts`, the screen tests in screensA, `riderApi.live.test.ts`, and `test_rider_fleet_apim.py` (the new route).
+
+**Still open (people):**
+1. The lawyer agrees the periods and writes the notice in English, Telugu and Hindi.
+2. Publish the text, then set the two notice settings.
+3. Republish the rider APIM (the configure script or pipeline, then the status script): the new route is in `routes.txt`.
+4. Switch retention on after a week of the "due" counts in the logs.
+
+Live before 13 May 2027.
+
 ### P2-10 Replace the 12-hour wake lock
 **Who:** agent. **Must be done before:** any Play rollout beyond internal testing.
 

@@ -14,7 +14,16 @@ public final class FleetRiderModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record RiderMe(String riderId, String name, String phoneMasked, String photoUrl, String status, String statusReason,
                           Instant statusEffectiveAt, RiderNotice notice, String termsVersion, String acceptedTermsVersion,
-                          String language, String minAppVersion, String supportPhone, String supportWhatsappUrl, Features features) {
+                          String language, String minAppVersion, String supportPhone, String supportWhatsappUrl, Features features,
+                          PrivacyNotice privacyNotice) {
+    }
+
+    /** P2-09: the privacy notice in force (absent while none is set) and whether this rider accepted it; url may hold {language}. */
+    public record PrivacyNotice(String version, String url, boolean accepted) {
+    }
+
+    /** language: the one the app showed the notice in (en, te or hi). */
+    public record AcceptPrivacyNotice(String version, String language) {
     }
 
     /** nativeTripOutbox (P2-02): the app sends trip steps from its native outbox, as trip steps take the shift credential. */

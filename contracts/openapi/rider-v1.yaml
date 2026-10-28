@@ -60,6 +60,12 @@ paths:
       description: 409 TERMS_CHANGED for any version but the one in force; 503 TERMS_UNAVAILABLE.
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [version], properties: {version: {type: string}}}}}}
       responses: {'204': {description: Accepted}, '409': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+  /privacy-notice/accept:
+    post:
+      summary: Accept the privacy notice shown (P2-09); also for a PENDING rider, before they send documents
+      description: 409 NOTICE_CHANGED for any version but the one in force (RiderMe.privacyNotice), or while none is set; 403 NOT_A_RIDER. Accepting again changes nothing.
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [version], properties: {version: {type: string}, language: {type: string, enum: [en, te, hi], description: The language the app showed the notice in; the rider's own when absent}}}}}}
+      responses: {'204': {description: Accepted}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
   /home:
     get: {summary: Online state and today's totals, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/HomeSummary'}}}}}}
   /shift/start:
@@ -266,6 +272,7 @@ components:
         supportPhone: {type: string}
         supportWhatsappUrl: {type: string, description: The riders' WhatsApp group}
         features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}, nativeTripOutbox: {type: boolean, description: 'P2-02: send trip steps from the native outbox (trip steps take the shift credential); absent or false: the JS queue'}}}
+        privacyNotice: {type: object, required: [version, url, accepted], description: 'P2-09: the privacy notice in force, absent while none is set; the app asks the rider to accept a version not yet accepted, never mid-shift', properties: {version: {type: string}, url: {type: string, description: 'Where the text is; {language} stands for en, te or hi'}, accepted: {type: boolean}}}
     RiderProfile:
       type: object
       required: [vehicle, documents]

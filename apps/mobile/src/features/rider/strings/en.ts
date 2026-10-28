@@ -513,6 +513,16 @@ export const en = {
     notApprovedTitle: "This phone isn't approved",
     notApprovedBody: "Call rider support to approve this phone. You won't get offers on it until then.",
   },
+  // The privacy notice itself is the lawyer's text, on the web page; this screen only leads to it (P2-09).
+  privacy: {
+    title: 'Your privacy',
+    intro:
+      'Before you go on, read how Craves uses your details: your phone number, documents, selfies, your location while you are online, and your pay.',
+    read: 'Read the privacy notice',
+    version: (version: string) => `Version ${version}`,
+    accept: 'I have read it and agree',
+    changed: 'The notice changed. Read the new one.',
+  },
   languages: {en: 'English', te: 'తెలుగు', hi: 'हिन्दी'},
 };
 

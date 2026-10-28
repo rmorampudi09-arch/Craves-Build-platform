@@ -27,6 +27,7 @@ Environment flags only switch code paths on. All are off by default (integration
 | `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` | Trip steps (`POST /trips/{tripId}/{action}`, JSON or the photo) may come from the phone's native outbox with the shift credential instead of a JWT (P2-01; see "Shifts and the shift credential"). Off by default: keep it off until the security review signs it off and an app with the native outbox (P2-02) ships. The gateway already passes the credential on that route. While on, `GET /me` sets `features.nativeTripOutbox`: apps with the native outbox then send trip steps from it; older apps ignore the field and keep sending with their token. |
 | `CRAVES_FLEET_RIDER_HANDOVER_ENABLED` | Ops may give a rider's trip before pickup to another rider (see "Ops reassign and cancel"). Turn it on only once order-service from the same release is live (an older one refuses the rider-to-rider handoff, so the order would keep showing the first rider) and the contract migration that drops `trip_chef_sub_order_id_key` has run. |
 | `CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED` | Every `/locations` answer says `callbackUploads: true`, so phones drop the wake lock they hold for the whole shift and upload on each location batch under a short lock (P2-10). Off by default; turn it on only after PHONE-TESTS §1 passes with it on and battery per hour is no worse, and before any Play rollout. |
+| `CRAVES_FLEET_PHOTO_RETENTION_ENABLED` | The daily deletion of shift selfies after 30 days and delivery photos after 90, unless flagged or disputed (P2-09, `FleetPhotoRetention`, see "Data retention"). Off by default; while off, the job only logs `FLEET_PHOTO_RETENTION off … due selfies=… photos=…`. Turn it on once the lawyer agrees the periods. |
 | `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` | Keep it false. Payouts are manual and RazorpayX is never called: no automated execution exists. The only reader is a guard in `FleetPayouts` that, when it is true, starts nothing and logs `CRAVES_ALERT alert=FLEET_PAYOUT_EXECUTION_REFUSED`. |
 
 Other integration-service settings:
@@ -41,6 +42,7 @@ Other integration-service settings:
 | `CRAVES_FLEET_MIN_APP_VERSION` | `1.0.0` | Blocks going online, never a running shift; `rider.min_app_version` overrides it per rider. |
 | `CRAVES_FLEET_IDLE_POLL_SECONDS` | `10` | How often a phone waiting for offers uploads (`nextPollSec`, kept within 5 to 30; P2-04). Lower it only if offer receipts show pushes ringing late on a phone brand. |
 | `CRAVES_FLEET_INSURANCE_LABEL` | empty | Insurance line on the rider's profile. |
+| `CRAVES_FLEET_PRIVACY_NOTICE_VERSION`, `CRAVES_FLEET_PRIVACY_NOTICE_URL` | empty | The privacy notice in force and the web page with its text, where `{language}` becomes en, te or hi (P2-09). With both set, `GET /me` carries `privacyNotice` and the app asks every rider, PENDING ones too, to accept that version before anything else (never mid-shift). Leave them empty until the lawyer's text is published at that address. |
 | `CRAVES_USER_CHEF_INTERNAL_BASE_URL` | empty | user-chef-service root for the drop's road distance. Unset: straight line × 1.3. |
 | `CRAVES_FLEET_ORDER_BASE_URL` | empty | order-service root for the delivery-code check. Unset: OTP delivery answers 503 `OTP_UNAVAILABLE`. |
 | `CRAVES_NOTIFICATION_INTERNAL_BASE_URL` | empty | notification-service root for offer pushes and ops alerts. Unset: offers reach the app on `/locations` only; alerts are `CRAVES_ALERT` log lines. |
@@ -75,7 +77,7 @@ Agents never change the mode.
 
 ## Tables
 
-Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V167.
+Money is BIGINT paise everywhere. The integration migrations are re-runnable (`IF NOT EXISTS`) because database tests drop the schemas and migrate again; they apply in order V152 to V169.
 
 | Table | Created by | Holds |
 |---|---|---|
@@ -87,13 +89,14 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 | `fleet_schema.rate_card` | integration V152; V154 adds the event fees; V159 a trigger in place of the 14-day CHECK | Versioned rider pay with declared ranges; `effective_from` at least 14 days after publishing, except for the first card ever. |
 | `fleet_schema.dispatch_policy` | integration V152; V154 and V155 add detour, overhead, premium, Pidge stage; V159 a trigger in place of the 14-day CHECK, and `withdrawn_at`, `withdrawn_by` | Versioned dispatch mode (`off`, `shadow`, `live`), offer and stage seconds, radius, with declared ranges; 14 days' notice only for a changed detour; scheduled versions an emergency stop withdrew. |
 | `fleet_schema.rider_terms_acceptance` | integration V152 | Which terms version each rider accepted, and when. |
+| `fleet_schema.rider_privacy_acceptance` | integration V169 | Which privacy notice version each rider accepted, when, and in which language the app showed it (P2-09). |
 | `fleet_schema.test_mode_rider`, `test_mode_kitchen` | integration V152 | Test-mode allow-lists: the pilot riders and kitchens, set from the console. |
 | `fleet_schema.rider_slot` | integration V152; V154 adds the guarantee and status, V153 `in_zone_seconds` | Ops-assigned slots with zone, rest point and hourly guarantee. |
 | `fleet_schema.ops_banner` | integration V152 | Messages on every rider's Home, such as a rain warning. |
 | `fleet_schema.rider_shift` | integration V152; V161 adds `last_seen_at`, `max_silence_seconds`, `silences_over_60s`; V163 `health`, `can_ring`; V164 `last_nudge_at` | Shifts: hashed shift credential (12 h at most), bound phone, selfie and its review, in-zone seconds, the heartbeat and the phone's last health report. One open shift per rider. |
 | `fleet_schema.rider_position_latest` | integration V152 | One latest fix per rider, with its mock flag. |
 | `fleet_schema.trip_track` | integration V152 | On-trip fixes, partitioned by IST day (see Jobs). |
-| `fleet_schema.trip` | integration V152; V154 adds final pay, V155 `accepted_at`, V156 `pay_credited_at`, V166 `replaced_at` and `replaces` | One rider's trip for a chef sub-order: order code, kitchen, drop, distances, locked pay, state, final pay lines and hold. One current trip per sub-order (V166's partial unique index): a trip ops gave to another rider is replaced by the new rider's, which names it in `replaces`. V166 only expands: the old one-trip-per-order constraint `trip_chef_sub_order_id_key` stays, because older images insert trips with `ON CONFLICT (chef_sub_order_id)`, until a contract migration drops it once no older image can run. |
+| `fleet_schema.trip` | integration V152; V154 adds final pay, V155 `accepted_at`, V156 `pay_credited_at`, V166 `replaced_at` and `replaces`, V168 `chef_handed_over_at` | One rider's trip for a chef sub-order: order code, kitchen, drop, distances, locked pay, state, final pay lines and hold. One current trip per sub-order (V166's partial unique index): a trip ops gave to another rider is replaced by the new rider's, which names it in `replaces`. V166 only expands: the old one-trip-per-order constraint `trip_chef_sub_order_id_key` stays, because older images insert trips with `ON CONFLICT (chef_sub_order_id)`, until a contract migration drops it once no older image can run. |
 | `fleet_schema.trip_offer` | integration V152; V162 adds `pushed_at`, `push_result`, `rang_at`, `rang_channel`; V165 indexes it by rider and time | Offers with locked pay, rate card and distances, and how the push went and when the phone rang; one `ACTIVE` per rider, one `ACCEPTED` per trip. |
 | `fleet_schema.trip_event` | integration V152 | Trip steps and OTP attempts, unique per trip and idempotency key. |
 | `fleet_schema.trip_stage` | integration V152 | The dispatch chain (`CRAVES_FLEET`, `BORZO`, `PIDGE`, `OPS_QUEUE`) with deadlines and outcomes; one `OPEN` stage per trip. |
@@ -118,11 +121,11 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 
 ### Rider API (`/api/v1/rider`, integration-service, rider API flag)
 
-Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET /me` and `POST /apply` (any signed-in user), `GET /profile`, `POST /documents` and `POST /payout-account` (any signed-in user with a rider row, so a PENDING rider can send documents and an account), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential), and trip steps with the shift credential once `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on. Errors are `{code, message}` (`FleetApiAdvice`); `rider-v1.yaml` lists every code each route returns.
+Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET /me` and `POST /apply` (any signed-in user), `GET /profile`, `POST /documents`, `POST /payout-account` and `POST /privacy-notice/accept` (any signed-in user with a rider row, so a PENDING rider can accept the privacy notice and send documents and an account), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential), and trip steps with the shift credential once `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on. Errors are `{code, message}` (`FleetApiAdvice`); `rider-v1.yaml` lists every code each route returns.
 
 | Route | Does |
 |---|---|
-| `GET /me` | Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise status `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts, `features` (payouts and withdrawals once ops verified a payout account; `nativeTripOutbox` while `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on, which moves the app's trip steps to the phone's native outbox, P2-02). |
+| `GET /me` | Links the rider whose phone matches the JWT `phone_number` on the first call; otherwise status `NOT_RIDER`. Status, reason, notice, terms versions, min app version, support contacts, `features` (payouts and withdrawals once ops verified a payout account; `nativeTripOutbox` while `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on, which moves the app's trip steps to the phone's native outbox, P2-02), and `privacyNotice` `{version, url, accepted}` while a notice is set (P2-09). |
 | `POST /apply` | Sign-up, like chefs: anyone signed in with an Indian mobile becomes a PENDING rider (name, language, vehicle kind, number plate unless a bicycle, 18+). A PENDING rider sends it again to correct their details (an empty plate keeps the one on file; a new name sets aside a payout account sent in the old one). 422 `NAME_LOCKED` for a new name once ops accepted the PAN card, driving licence or bank proof, or confirmed a payout account; 422 `VEHICLE_LOCKED` for another vehicle kind or plate once ops accepted the RC (going online only checks that some RC is accepted). The language still changes. Past PENDING it just answers `/me`; 409 `PHONE_IN_USE` for a phone on another account. |
 | `GET /profile` | Latest document per type (with ops's reason), and for a PENDING rider each required one not sent yet as `MISSING`; vehicle, masked payout account, `payoutAccountSubmitted`, insurance. |
 | `POST /payout-account` | The rider's UPI ID or bank account in their KYC name, stored encrypted as `SUBMITTED`. Never paid until a payments admin confirms it (`POST /admin/fleet/riders/{id}/payout-account/confirm`) against the bank proof. |
@@ -130,6 +133,7 @@ Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET 
 | `POST /documents` | Multipart `type` (DL, RC, INSURANCE, PUC, PAN, BANK) and `photo` (JPG, PNG or PDF, 10 MB); stored PENDING for ops. |
 | `GET /terms` | The rate card in force (else the next published one, else the draft, with `draft: true`), in the rider's language (te and hi fall back to English until translated). The lines include the pickup detour in force. While a card is in force, `upcoming` is the next change (see "Flags and settings"): the rate card in force then, its start, the lines riders will have then, and the card's summary and a pickup-distance line when they change. |
 | `POST /terms/accept` | Accepts the version in force; any other is 409 `TERMS_CHANGED`. |
+| `POST /privacy-notice/accept` | `{version, language}`: accepts the privacy notice in force, recording the language the app showed it in (the rider's own if not en, te or hi); any other version, or none set, is 409 `NOTICE_CHANGED`. Accepting again changes nothing. |
 | `POST /shift/start` | Goes online: multipart `selfie` and header `X-Craves-Installation-Id`. Returns `{shiftCredential, expiresAt}` once. See "Shifts". |
 | `POST /shift/end` | Closes the open shift and revokes its credential; 204 even when nothing is open. |
 | `POST /devices` | `{installationId, fcmToken, appVersion, model}`: 204 for the bound phone; 409 `DEVICE_NOT_BOUND` for another. See "Phones". |
@@ -327,6 +331,7 @@ Fleet jobs run on their own pool, `fleetScheduler` (`FleetConfiguration`, fleet 
 | `FleetDispatchJobs.tick` | every 5 s | Offer expiry, stage deadlines, the watchdog, the ops queue, cancelled orders, forgetting off-shift positions, go-online pushes. |
 | `FleetLocationService.createTrackDays` | 1 min after start, then every 6 h (location ingest flag) | Creates the next 7 days of `trip_track` partitions, never today; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_PARTITION_FAILED`. Then drops day partitions older than 90 days and deletes older rows in `trip_track_default`; a failure logs `CRAVES_ALERT alert=TRIP_TRACK_RETENTION_FAILED`. A drop waits at most 3 s for its lock. |
 | `FleetEarnings.tick` | every 60 s | Credits finished trips and slot top-ups still waiting, releases holds that are due. |
+| `FleetPhotoRetention.daily` | 03:10 IST | Deletes the selfies and delivery photos past retention, 500 at a time (see "Data retention"); only counts them while `CRAVES_FLEET_PHOTO_RETENTION_ENABLED` is off. A file that can't be deleted keeps its reference and logs `CRAVES_ALERT alert=FLEET_PHOTO_RETENTION_FAILED`. |
 
 **Go-online push** (blueprint A7). When a shift is still open and unexpired but its phone hasn't called for 3 minutes (the app was swiped away or killed), the tick sends `RiderPushClient.goOnline`: a data message `type=GO_ONLINE`, "You're offline" / "Tap to go back online and get orders.", TTL 600 s, collapse key `go-online`. Only to a bound phone with a token on app 1.1.0 or later, at most every 30 minutes per shift (`rider_shift.last_nudge_at`, claimed before sending so two replicas never both send), 20 a tick, each on its own virtual thread. notification-service needed no change.
 
@@ -350,10 +355,12 @@ Location is collected only while the rider is online, and kept only as long as b
 | Latest position (`rider_position_latest`) | While the rider is on an open, unexpired shift or on a trip, then 15 minutes after the last fix | `FleetDispatchJobs.forgetOffShiftPositions`, every 5 s. Ops `GET /positions` lists only riders on shift or on a trip. |
 | Phone health (`rider_shift.health`) | 90 days | `FleetLocationService.createTrackDays` clears it on shifts that started more than 90 days ago. |
 | On-trip fixes (`trip_track`) | 90 days | `FleetLocationService.createTrackDays` drops the IST day partitions and deletes `trip_track_default` rows past 90 days. |
-| Delivery photos (`riders/<riderId>/trips/<tripId>/delivery-…`) | 90 days | Not automated yet: P2-09 adds the delete job. |
-| Shift selfies (`riders/<riderId>/selfies/…`) | 30 days | Not automated yet: P2-09 adds the delete job. |
+| Delivery photos (`riders/<riderId>/trips/<tripId>/delivery-…`) | 90 days from the delivery, unless disputed: the trip's pay is on hold (or held and not credited yet), or a support issue about the trip is not fixed | `FleetPhotoRetention`, daily, once `CRAVES_FLEET_PHOTO_RETENTION_ENABLED` is on: deletes the file, then swaps the DELIVERED event's `photoBlob` for `photoDeletedAt`. |
+| Shift selfies (`riders/<riderId>/selfies/…`) | 30 days from the shift's start, unless flagged (ops rejected it) | The same job: deletes the file, then clears `rider_shift.selfie_blob` and `selfie_size_bytes`, so the selfie leaves the review queue. |
 
 Never stored: a full Aadhaar number (there is no Aadhaar document type), or location while the rider is offline (the app never asks for background location).
+
+Not swept: a selfie or delivery photo whose database row failed after the upload has no reference, so the job never sees it (the upload paths' `shortcut` comments; rare). A rejected selfie stays until a person deletes it; the lawyer may set a limit.
 
 Database connections: every service sets its Hikari pool explicitly so that pool × max replicas, summed over the eight apps on the shared server, stays within 45 (`scripts/release/check-db-connection-budget.py`, 43 today; integration-service 8 × 1 (blueprint E3), order-service 3 × 3). integration-service's other jobs keep one thread per job on their own watched pools.
 

@@ -13,7 +13,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * lets trip steps carry the shift credential, and tells the app to send them from its native outbox (features).
  * idlePollSeconds (P2-04, 5 to 30, default 10) is how often a phone waiting for offers uploads (/locations nextPollSec).
  * callbackUploadsEnabled (P2-10, off) tells phones to upload on location callbacks with short wake locks instead of holding
- * one wake lock for the whole shift (/locations callbackUploads).
+ * one wake lock for the whole shift (/locations callbackUploads). privacyNoticeVersion and privacyNoticeUrl (P2-09) are
+ * the privacy notice in force and where its text is; riders accept a new version before they continue. Unset: no notice.
  */
 @ConfigurationProperties("craves.fleet")
 public record FleetProperties(
@@ -32,6 +33,8 @@ public record FleetProperties(
     String insuranceLabel,
     boolean tripShiftCredentialEnabled,
     @DefaultValue("10") int idlePollSeconds,
-    boolean callbackUploadsEnabled
+    boolean callbackUploadsEnabled,
+    String privacyNoticeVersion,
+    String privacyNoticeUrl
 ) {
 }

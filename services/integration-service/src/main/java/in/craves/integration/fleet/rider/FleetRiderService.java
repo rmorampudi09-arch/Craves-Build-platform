@@ -14,6 +14,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.Insurance;
 import in.craves.integration.fleet.rider.FleetRiderModels.LabelValue;
 import in.craves.integration.fleet.rider.FleetRiderModels.NextSlot;
+import in.craves.integration.fleet.rider.FleetRiderModels.PrivacyNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.ProfileDocument;
 import in.craves.integration.fleet.rider.FleetRiderModels.RestPoint;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderMe;
@@ -69,6 +70,7 @@ public class FleetRiderService {
         "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
         "BICYCLE", List.of("PAN", "BANK_PROOF"));
     private static final Features NO_FEATURES = new Features(false, false, false);
+    private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
 
     private final JdbcTemplate jdbc;
     private final FleetPolicyStore policies;
@@ -101,7 +103,7 @@ public class FleetRiderService {
             + "FROM fleet_schema.rider WHERE identity_id = ?", (row, n) -> rider(row), identity);
         if (found.isEmpty()) {
             return new RiderMe("", "", FleetRules.maskPhone(phone), null, "NOT_RIDER", null, null, null, termsVersion, null, "en",
-                properties.minAppVersion(), support, whatsapp, NO_FEATURES);
+                properties.minAppVersion(), support, whatsapp, NO_FEATURES, null);
         }
         Rider rider = found.get(0);
         String statusReason = null;
@@ -132,7 +134,31 @@ public class FleetRiderService {
             + "ORDER BY (version = ?) DESC, accepted_at DESC LIMIT 1", String.class, rider.id(), termsVersion).stream().findFirst().orElse(null);
         return new RiderMe(rider.id().toString(), rider.name(), FleetRules.maskPhone(rider.phone()), null, rider.status(), statusReason,
             statusEffectiveAt, notice, termsVersion, accepted, rider.language(),
-            rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, features(rider.id()));
+            rider.minAppVersion() != null ? rider.minAppVersion() : properties.minAppVersion(), support, whatsapp, features(rider.id()),
+            privacyNotice(rider.id()));
+    }
+
+    /** The privacy notice in force and whether this rider accepted it; null while CRAVES_FLEET_PRIVACY_NOTICE_* are unset (P2-09). */
+    PrivacyNotice privacyNotice(UUID riderId) {
+        if (!StringUtils.hasText(properties.privacyNoticeVersion()) || !StringUtils.hasText(properties.privacyNoticeUrl())) {
+            return null;
+        }
+        String version = properties.privacyNoticeVersion().trim();
+        boolean accepted = !jdbc.queryForList("SELECT 1 FROM fleet_schema.rider_privacy_acceptance WHERE rider_id = ? AND version = ?",
+            Integer.class, riderId, version).isEmpty();
+        return new PrivacyNotice(version, properties.privacyNoticeUrl().trim(), accepted);
+    }
+
+    /** Only the version in force can be accepted; anything else means the notice changed while the rider read it. */
+    @Transactional
+    public void acceptPrivacyNotice(UUID identityId, String version, String language) {
+        Rider rider = rider(identityId);
+        PrivacyNotice notice = privacyNotice(rider.id());
+        if (notice == null || !notice.version().equals(version)) {
+            throw FleetApiException.conflict("NOTICE_CHANGED", "The privacy notice changed. Please read the new one.");
+        }
+        jdbc.update("INSERT INTO fleet_schema.rider_privacy_acceptance (rider_id, version, language) VALUES (?, ?, ?) "
+            + "ON CONFLICT (rider_id, version) DO NOTHING", rider.id(), version, LANGUAGES.contains(language) ? language : rider.language());
     }
 
     /**

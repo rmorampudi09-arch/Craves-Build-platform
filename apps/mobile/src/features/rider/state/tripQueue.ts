@@ -3,9 +3,9 @@ import {DeviceEventEmitter, NativeModules} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import {getRuntimeConfig} from '../../../core/config/runtimeConfig';
+import {refreshAccessToken} from '../../../core/http/apiClient';
 import {AppApiError, appApiErrorFromStatus} from '../../../core/http/apiError';
 import {tokenMemory} from '../../../core/security/tokenMemory';
-import {sessionManager} from '../../auth/api/sessionManager';
 import type {DeliverBody, Trip} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {lockedAtZero} from '../api/riderApi.live';
@@ -76,14 +76,6 @@ function reportQueueStats() {
 jsQueue.subscribe(reportQueueStats);
 reportQueueStats();
 
-async function renewToken(): Promise<string | null> {
-  try {
-    return (await sessionManager.refresh())?.accessToken ?? null;
-  } catch {
-    return null;
-  }
-}
-
 // Present only in the rider flavor's live builds (android/app/src/rider, P2-02); mock builds keep the JS queue.
 const outboxModule =
   riderApiMode === 'live' ? (NativeModules.CravesRiderOnline as Partial<NativeOutbox> | undefined) : undefined;
@@ -94,7 +86,7 @@ const nativeQueue =
     ? createNativeTripQueue({
         native: outboxModule as NativeOutbox,
         freshToken: () => (tokenMemory.isFresh() ? tokenMemory.get() : null),
-        renewToken,
+        renewToken: refreshAccessToken,
         apiBaseUrl: () => getRuntimeConfig().apiBaseUrl,
         describe: (status, answer): RejectInfo => {
           const error = lockedAtZero(appApiErrorFromStatus(status, answer));

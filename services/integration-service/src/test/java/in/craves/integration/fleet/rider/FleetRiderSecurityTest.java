@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,7 +19,9 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -55,6 +58,13 @@ class FleetRiderSecurityTest {
         mvc.perform(multipart("/api/v1/rider/shift/start").file(new MockMultipartFile("selfie", new byte[] {1}))
             .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/rider/shift/end").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/pause").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"minutes\":10}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/resume").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(put("/api/v1/rider/preferences").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"maxPickupM\":2000}")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/rider/my-data").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/rider/my-data")).andExpect(status().is4xxClientError());
         mvc.perform(post("/api/v1/rider/devices").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
             .content("{\"installationId\":\"9774d56d682e549c\",\"fcmToken\":\"t\",\"appVersion\":\"1.0.0\",\"model\":\"Redmi\"}"))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -85,6 +95,23 @@ class FleetRiderSecurityTest {
         verify(service).profile(pending);
         verify(service).profile(stranger);
         verifyNoMoreInteractions(service);
+    }
+
+    /** Phase 4: with a RIDER token, the rider's own data copy, a break and coming back reach the services as that identity. */
+    @Test
+    void aRiderReachesTheirDataCopyAndTheirBreaks() throws Exception {
+        UUID identity = UUID.randomUUID();
+        when(verifier.verify("rider")).thenReturn(new CravesPrincipal(identity, "+919000000000", Set.of("RIDER")));
+        when(service.myData(identity)).thenReturn(Map.of("about", Map.of("eachListHoldsAtMost", 5000)));
+        mvc.perform(get("/api/v1/rider/my-data").header("Authorization", "Bearer rider")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.about.eachListHoldsAtMost").value(5000));
+        when(shifts.pause(identity, 10)).thenReturn(new FleetRiderModels.ShiftPause(Instant.parse("2026-10-28T07:12:00Z")));
+        mvc.perform(post("/api/v1/rider/shift/pause").header("Authorization", "Bearer rider").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"minutes\":10}")).andExpect(status().isOk()).andExpect(jsonPath("$.offersPausedUntil").value("2026-10-28T07:12:00Z"));
+        mvc.perform(post("/api/v1/rider/shift/resume").header("Authorization", "Bearer rider")).andExpect(status().isNoContent());
+        verify(service).myData(identity);
+        verify(shifts).pause(identity, 10);
+        verify(shifts).resume(identity);
     }
 
     @Test

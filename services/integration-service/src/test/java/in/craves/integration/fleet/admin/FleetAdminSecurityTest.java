@@ -22,6 +22,7 @@ import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -89,6 +90,21 @@ class FleetAdminSecurityTest {
         mvc.perform(as(get("/api/v1/admin/fleet/exports/rider-joins-exits").param("date", "2026-10-20"), "SUPPORT_ADMIN"))
             .andExpect(status().isForbidden());
         verifyNoInteractions(service, joinsExits);
+    }
+
+    /** Phase 4: a rider's data copy is a file read, for platform, operations and compliance admins only; the service audits each. */
+    @Test
+    void onlyFileReadersDownloadARidersData() throws Exception {
+        for (String role : List.of("SUPPORT_ADMIN", "AUDIT_ADMIN", "PAYMENTS_ADMIN")) {
+            mvc.perform(as(get(RIDERS + "/" + rider + "/data-export"), role)).andExpect(status().isForbidden());
+        }
+        verifyNoInteractions(service);
+        when(service.dataExport(any(), eq(rider))).thenReturn(Map.of("trips", List.of()));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN")) {
+            mvc.perform(as(get(RIDERS + "/" + rider + "/data-export"), role)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.trips").isArray());
+        }
+        verify(service, times(3)).dataExport(any(), eq(rider));
     }
 
     @Test

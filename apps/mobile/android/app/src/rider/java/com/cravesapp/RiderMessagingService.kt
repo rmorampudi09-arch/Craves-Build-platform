@@ -17,7 +17,9 @@ class RiderMessagingService : FirebaseMessagingService() {
       "OFFER" -> RiderOffers.receive(this, data["offer"] ?: return, "fcm", data["title"], data["body"])
       // A push that arrives after the service came back by itself is stale.
       "GO_ONLINE" -> if (!RiderOnlineService.running) {
-        RiderOffers.notice(this, GO_ONLINE_TAG, data["title"] ?: GO_ONLINE_TITLE, data["body"] ?: GO_ONLINE_BODY)
+        RiderOffers.notice(this, GO_ONLINE_TAG,
+          RiderText.fromServer(this, data["title"]) ?: RiderText.get(this, R.string.rider_go_online_title),
+          RiderText.fromServer(this, data["body"]) ?: RiderText.get(this, R.string.rider_go_online_body))
       }
     }
   }
@@ -31,8 +33,5 @@ class RiderMessagingService : FirebaseMessagingService() {
 
   companion object {
     const val GO_ONLINE_TAG = "go-online"
-    // shortcut: English only, like the offer texts; move to strings.xml with te/hi (P2-08).
-    private const val GO_ONLINE_TITLE = "You're offline"
-    private const val GO_ONLINE_BODY = "Tap to go back online and get orders."
   }
 }

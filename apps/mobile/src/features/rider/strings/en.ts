@@ -1,4 +1,4 @@
-// Every word the rider sees. te.ts and hi.ts must keep the same keys.
+// Every word the rider sees. te.ts and hi.ts keep the same keys and placeholders (strings.test.ts checks).
 // Plain, short, second person; 12-hour time; Western digits.
 
 export const en = {
@@ -494,7 +494,7 @@ export const en = {
     checking: "What we're checking",
     next: 'What happens next',
     // [before, the date in bold, after], so a translation can move the date.
-    sideBy: (day: string) => ['Tell us your side by ', day, '.'] as const,
+    sideBy: (day: string): readonly [string, string, string] => ['Tell us your side by ', day, '.'],
     sideNow: 'Tell us your side.',
     person: 'A person at Craves looks at everything. The app never decides on its own.',
     writing: 'You get the decision in writing, with the reasons.',

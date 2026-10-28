@@ -34,7 +34,7 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
     val fine = ContextCompat.checkSelfPermission(reactContext, Manifest.permission.ACCESS_FINE_LOCATION)
     val coarse = ContextCompat.checkSelfPermission(reactContext, Manifest.permission.ACCESS_COARSE_LOCATION)
     if (fine != PackageManager.PERMISSION_GRANTED && coarse != PackageManager.PERMISSION_GRANTED) {
-      promise.reject("LOCATION_PERMISSION", "Allow location to go online.")
+      promise.reject("LOCATION_PERMISSION", RiderText.get(reactContext, R.string.rider_allow_location))
       return
     }
     try {
@@ -42,13 +42,14 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
         promise.resolve(null)
         return
       }
+      val ended = RiderText.get(reactContext, R.string.rider_shift_ended)
       RiderEvents.emit("riderStatus") {
         Arguments.createMap().apply {
           putString("state", "OFFLINE")
-          putString("message", RiderOnlineService.ENDED_MESSAGE)
+          putString("message", ended)
         }
       }
-      promise.reject("NO_SHIFT", RiderOnlineService.ENDED_MESSAGE)
+      promise.reject("NO_SHIFT", ended)
     } catch (error: Exception) {
       // ForegroundServiceStartNotAllowedException when the app isn't in the foreground.
       promise.reject("START_FAILED", error)
@@ -71,6 +72,12 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod
   fun setQueueStats(pending: Double, oldestAtMs: Double) {
     RiderOnlineService.queueStats = pending.toInt() to oldestAtMs.toLong()
+  }
+
+  /** The language the app shows the rider (en, te or hi; P2-08): notifications and the service's messages follow it. */
+  @ReactMethod
+  fun setLanguage(language: String) {
+    RiderText.setLanguage(reactContext, language)
   }
 
   // The native outbox of trip steps (P2-02, RiderOutbox): JSON text in and out. See docs/riders/NATIVE.md.

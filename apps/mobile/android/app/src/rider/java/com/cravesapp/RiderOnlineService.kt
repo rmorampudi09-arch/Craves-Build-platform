@@ -183,12 +183,12 @@ class RiderOnlineService : Service() {
     } catch (error: Exception) {
       // A sticky restart from the background can't start a location service on Android 12+; the shift stays saved for the next app open.
       Log.w(TAG, "can't start in the foreground", error)
-      end(RESTART_MESSAGE, clearShift = false)
+      end(text(R.string.rider_closed_by_phone), clearShift = false)
       return START_NOT_STICKY
     }
     val saved = loadShift(this)
     if (saved == null) {
-      end(ENDED_MESSAGE)
+      end(text(R.string.rider_shift_ended))
       return START_NOT_STICKY
     }
     val firstStart = shift == null
@@ -266,7 +266,7 @@ class RiderOnlineService : Service() {
         if (!destroyed) fused.requestLocationUpdates(request, executor, callback)
       }
     } catch (error: SecurityException) {
-      end(PERMISSION_MESSAGE)
+      end(text(R.string.rider_allow_location))
     }
   }
 
@@ -292,7 +292,7 @@ class RiderOnlineService : Service() {
     val current = shift ?: return
     lastUploadAt = SystemClock.elapsedRealtime()
     if (System.currentTimeMillis() >= current.expiresAtMs) {
-      end(ENDED_MESSAGE)
+      end(text(R.string.rider_shift_ended))
       return
     }
     // A fix over an hour old is no use to the server, which caps a fix's age there: dropped, never sent.
@@ -315,10 +315,10 @@ class RiderOnlineService : Service() {
       http.newCall(request).execute().use { response ->
         when {
           response.code == 401 || response.code == 403 -> {
-            end(ENDED_MESSAGE)
+            end(text(R.string.rider_shift_ended))
             return
           }
-          !response.isSuccessful -> status("ERROR", RETRY_MESSAGE)
+          !response.isSuccessful -> status("ERROR", text(R.string.rider_no_internet))
           else -> {
             // The oldest went; newer ones wait for the next call. Nothing else touches fixes on this thread meanwhile.
             repeat(sent.size) { fixes.removeFirst() }
@@ -335,7 +335,7 @@ class RiderOnlineService : Service() {
       }
     } catch (error: IOException) {
       // Fixes stay, thinned, for the next tick.
-      status("ERROR", RETRY_MESSAGE)
+      status("ERROR", text(R.string.rider_no_internet))
     } catch (error: Exception) {
       // A bad response must not end the upload loop.
       Log.w(TAG, "bad /locations call", error)
@@ -349,7 +349,7 @@ class RiderOnlineService : Service() {
   /** Applies a LocationBatchResponse; returns false when the server stopped the shift. */
   private fun handle(response: JSONObject, sentAtMs: Long): Boolean {
     if (response.optBoolean("stop")) {
-      end(response.optString("stopReason").ifEmpty { ENDED_MESSAGE })
+      end(RiderText.fromServer(this, response.optString("stopReason")) ?: text(R.string.rider_shift_ended))
       return false
     }
     val offers = response.optJSONArray("offers") ?: JSONArray()
@@ -382,7 +382,9 @@ class RiderOnlineService : Service() {
         }
       }
       // Ops, the customer or the watchdog ended it: say so with the screen off too (blueprint A7). Once per change.
-      if (step == "CANCELLED") RiderOffers.notice(this, CANCELLED_TAG, CANCELLED_TITLE, CANCELLED_BODY)
+      if (step == "CANCELLED") {
+        RiderOffers.notice(this, CANCELLED_TAG, text(R.string.rider_trip_cancelled_title), text(R.string.rider_trip_cancelled_body))
+      }
     }
     tripSignature = signature
     val nowOnTrip = trip != null && step !in ENDED_STEPS
@@ -395,7 +397,7 @@ class RiderOnlineService : Service() {
       requestLocations()
     }
     // Connected either way; while offers can't ring the server sends none, so Home says why (blueprint A9).
-    if (RiderOffers.canRing(this)) status("ONLINE", null) else status("ERROR", RING_OFF_MESSAGE, connected = true)
+    if (RiderOffers.canRing(this)) status("ONLINE", null) else status("ERROR", text(R.string.rider_notifications_off), connected = true)
     return true
   }
 
@@ -547,11 +549,14 @@ class RiderOnlineService : Service() {
     }
   }
 
+  /** Words in the rider's app language (P2-08). */
+  private fun text(id: Int) = RiderText.get(this, id)
+
   private fun ongoing(): Notification =
     NotificationCompat.Builder(this, RiderOffers.ONLINE_CHANNEL)
       .setSmallIcon(applicationInfo.icon)
-      .setContentTitle("You're online")
-      .setContentText("Craves Rider shares your location while you're online.")
+      .setContentTitle(text(R.string.rider_online_title))
+      .setContentText(text(R.string.rider_online_body))
       .setContentIntent(RiderOffers.openAppIntent(this, null))
       .setOngoing(true)
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
@@ -573,16 +578,7 @@ class RiderOnlineService : Service() {
     private const val MAX_SHIFT_MS = 12 * 60 * 60_000L
     private val ENDED_STEPS = setOf("DELIVERED", "FAILED", "CANCELLED")
     private val JSON = "application/json; charset=utf-8".toMediaType()
-    // shortcut: status messages are English only; JS shows them as given (like the server's stopReason).
-    const val ENDED_MESSAGE = "Your shift has ended. Go online again to get orders."
-    private const val RESTART_MESSAGE = "Craves Rider was closed by the phone. Open the app to get orders again."
-    private const val PERMISSION_MESSAGE = "Allow location to go online."
-    private const val RETRY_MESSAGE = "No internet. Retrying."
-    private const val RING_OFF_MESSAGE = "Turn on notifications to get orders."
-    // shortcut: English only, like the offer texts; move to strings.xml with te/hi (P2-08).
     private const val CANCELLED_TAG = "trip-cancelled"
-    private const val CANCELLED_TITLE = "Trip cancelled"
-    private const val CANCELLED_BODY = "Open Craves Rider to see what's next."
 
     private val http =
       OkHttpClient.Builder()

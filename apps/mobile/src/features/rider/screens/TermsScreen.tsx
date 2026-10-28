@@ -4,7 +4,6 @@ import {useQueryClient} from '@tanstack/react-query';
 import {Badge, SectionSkeleton} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
-import type {Language} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -13,16 +12,17 @@ import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatDay} from '../domain/format';
 import type {RiderScreenProps} from '../navigation';
 import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
-import {useStrings} from '../strings/StringsProvider';
-
-const LANGUAGES: Language[] = ['en', 'te', 'hi'];
+import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 
 /** Switches the whole app's language; each label is in its own script. 40 dp to see, 48 dp to touch. */
 function LanguageChips() {
   const {strings, language, setLanguage} = useStrings();
+  if (RIDER_LANGUAGES.length < 2) {
+    return null;
+  }
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={strings.terms.language} style={styles.chips}>
-      {LANGUAGES.map(code => {
+      {RIDER_LANGUAGES.map(code => {
         const selected = code === language;
         return (
           <Pressable

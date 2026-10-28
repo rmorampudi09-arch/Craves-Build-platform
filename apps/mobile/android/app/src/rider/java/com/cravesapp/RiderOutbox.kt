@@ -61,7 +61,7 @@ object RiderOutbox {
   /** One job id ("RDOB"), far from WorkManager's ids, which count up from 0. */
   private const val JOB_ID = 0x52444f42
   private const val CREDENTIAL_HEADER = "X-Craves-Shift-Credential"
-  // shortcut: English, as the same refusal in riderApi.live.ts; translate both with P2-08.
+  // The app shows riders strings.trip.photoMissing for this code, in their language (RefusalNotices); this is for logs.
   private const val PHOTO_MISSING = "The delivery photo is gone from this phone. Take the photo again."
   private val JSON = "application/json; charset=utf-8".toMediaType()
   private val JPEG = "image/jpeg".toMediaType()

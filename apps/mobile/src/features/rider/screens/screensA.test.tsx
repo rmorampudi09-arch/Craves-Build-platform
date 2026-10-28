@@ -543,6 +543,8 @@ describe('Terms', () => {
     await act(async () => chip('te').props.onPress());
     expect(chip('te').props.accessibilityState).toEqual({checked: true});
     expect(chip('en').props.accessibilityState).toEqual({checked: false});
+    // Demo builds show every translation, for the native speaker's review (P2-08).
+    expect(allText()).toContain('నిబంధనలు, రేట్ కార్డ్');
   });
 
   it('offers a retry when the terms cannot load', async () => {

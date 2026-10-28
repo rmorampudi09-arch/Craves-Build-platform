@@ -10,6 +10,7 @@ Kotlin in `apps/mobile/android/app/src/rider/java/com/cravesapp`, rider flavor o
 | `RiderOnlineModule.kt`, `RiderOnlinePackage.kt` | The `CravesRiderOnline` native module, registered in the rider `FlavorPackages` |
 | `RiderEvents.kt` | Sends events to JS through `RCTDeviceEventEmitter` when JS is running |
 | `RiderOutbox.kt`, `RiderOutboxCore.kt`, `RiderOutboxJob.kt` | The trip-step outbox (P2-02): the file, the sends, the rules (JVM-tested) and the persisted job |
+| `RiderText.kt`, `res/values*/strings.xml` | Every native word, in English, Telugu and Hindi, read in the language the app shows (P2-08) |
 
 JS side: `src/features/rider/native/riderOnlineService.ts` uses the module in live builds (`CRAVES_RIDER_API_MODE=live`) when `NativeModules.CravesRiderOnline` exists. Mock builds, Jest and the customer app use the JS loop against the mock server.
 
@@ -72,6 +73,7 @@ When a location call reports the rider's trip as `CANCELLED` (ops, the customer 
 | `testRing()` | Posts a test notification on `rider_offers` (phone setup) |
 | `lastFix()` | The latest fix, or null; its `ageMs` is the fix's age when read (JS adds the time since) |
 | `setQueueStats(pending: number, oldestAtMs: number)` | The trip actions JS has waiting and the oldest one's `Date.now()`, for the health report (`tripQueue` calls it on every queue change) |
+| `setLanguage(language: "en" \| "te" \| "hi")` | The language the app shows (`StringsProvider` calls it when that changes); notifications and the service's messages use it from then on. Saved in `craves_rider_text`; English until called |
 | `getFcmToken()` | The FCM token from `FirebaseMessaging.getToken()`, which keeps the current token itself. Rejects `FCM_TOKEN` in demo builds with the placeholder Firebase config |
 | `getPendingOffer()` | The offer whose notification opened the app, or one that arrived while JS wasn't running; null once expired. Read once. JS's `pendingOffer()` also returns a `riderOffer` that came while no screen listened (the activity swiped away while online) |
 | `outboxEnqueue(entryJson, optionsJson)` | Saves a trip step (`{riderId, tripId, action, key, body, occurredAt, fix}`; a key already queued is that step) and runs a pass in the same go; resolves `{entryId, results, needsAuth}` JSON. Options: `{riderId, accessToken (fresh, or null for the shift credential), apiBaseUrl}` |
@@ -116,6 +118,8 @@ The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the ca
 - **No background-location permission.** The service starts from the Go Online tap (the app is in the foreground). After the phone kills it, a sticky restart may be refused on Android 12+; the shift stays saved and resumes the next time the app opens.
 - **Wake lock.** Uploads go when a location batch arrives (the fused provider wakes the phone for each) and on a timer as a backup, each under a short partial wake lock (released after the call, 20 s at most). Until the server says `callbackUploads` (P2-10, `CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED`, off), a partial wake lock is also held for the whole shift (until the credential expires at most), as before; turn it on only once PHONE-TESTS §1 passes both ways, and before any Play rollout (Play flags wake locks held 2 hours or more with the screen off).
 
+- **Words in the app's language (P2-08).** Every word native code shows is in `src/rider/res/values/strings.xml`, with `values-te` and `values-hi` under the same names. `RiderText` reads them in the language JS last passed with `setLanguage`, never the phone's own: JS passes only a language the build offers riders, so an unreviewed translation never shows. The server writes English. Its words (an offer push's title and body, a stop reason, the go-online push) show only while that language is English. Otherwise, and for an offer from `/locations`, which comes without words, the phone writes its own: the offer's pay (`RiderText.rupees`, as the server writes it) and route from the offer itself, and "Your shift has ended" for a stop. A channel's name follows the language the next time an offer rings or the service starts.
+
 ## Permissions (rider manifest only)
 
 `POST_NOTIFICATIONS`, `VIBRATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` (the persisted outbox job) and `ACCESS_NETWORK_STATE` (a job waiting for a network on Android 14+, and the network callback), plus the services `.RiderOnlineService` (`foregroundServiceType="location"`, not exported), `.RiderOutboxJob` (`BIND_JOB_SERVICE`, not exported) and `.RiderMessagingService` (`MESSAGING_EVENT`, not exported). `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` and `INTERNET` come from `src/main`. No `ACCESS_BACKGROUND_LOCATION`, no `USE_FULL_SCREEN_INTENT`.
@@ -130,7 +134,7 @@ In `android/app/build.gradle`: `riderImplementation` `com.google.android.gms:pla
 
 - **Type check:** `/home/claude/tools/ktcheck apps/mobile/android/app/src/rider/java/com/cravesapp <okhttp stub>` in the agent workspace (stubs for play-services, Firebase and OkHttp; it checks no resources, manifest or Gradle). CI builds the real APK.
 - **JS:** `npx jest src/features/rider/native src/features/rider/components` (both service paths, registration, 409, pending offer); the outbox from JS: `npx jest src/features/rider/state src/features/rider/domain`.
-- **The outbox's rules on the JVM:** `./gradlew testRiderReleaseUnitTest` (`src/testRider/.../RiderOutboxCoreTest.kt`); the APK workflow runs it with the build.
+- **The outbox's rules on the JVM:** `./gradlew testRiderReleaseUnitTest` (`src/testRider/.../RiderOutboxCoreTest.kt`, and `RiderTextTest.kt` for the pay in a notification); the APK workflow runs it with the build.
 - **On a phone** (live build): see `docs/riders/PHONE-TESTS.md`. Useful commands:
   - `adb logcat -s CravesRiderOffer CravesRiderOnline`
   - `adb shell dumpsys deviceidle force-idle` (Doze), `adb shell dumpsys battery unplug`, `adb shell am set-inactive com.cravesapp.rider true`

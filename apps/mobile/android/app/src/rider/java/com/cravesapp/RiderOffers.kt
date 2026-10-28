@@ -39,10 +39,6 @@ object RiderOffers {
   private const val KEEP_SEEN_MS = 10 * 60_000L
   private val RING = longArrayOf(0, 800, 400, 800, 400, 800, 400, 800)
 
-  // shortcut: notification copy is English only; move to strings.xml with te/hi when native screens are translated.
-  private const val DEFAULT_TITLE = "New order"
-  private const val DEFAULT_BODY = "Tap to see the offer."
-
   /** offerId to when and through which channel it first arrived, for dedupe across channels. */
   private val seen = HashMap<String, Pair<Long, String>>()
   private var pending: Received? = null
@@ -75,17 +71,18 @@ object RiderOffers {
   }
 
   fun createChannels(context: Context) {
+    // Names in the rider's language; createNotificationChannels renames a channel that already exists.
     val offers = NotificationChannelCompat.Builder(OFFERS_CHANNEL, NotificationManagerCompat.IMPORTANCE_HIGH)
-      .setName("Order offers")
+      .setName(RiderText.get(context, R.string.rider_channel_offers))
       .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), ringAudio())
       .setVibrationEnabled(true)
       .setVibrationPattern(RING)
       .build()
     val online = NotificationChannelCompat.Builder(ONLINE_CHANNEL, NotificationManagerCompat.IMPORTANCE_LOW)
-      .setName("Online status")
+      .setName(RiderText.get(context, R.string.rider_channel_online))
       .build()
     val trip = NotificationChannelCompat.Builder(TRIP_CHANNEL, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-      .setName("Trip updates")
+      .setName(RiderText.get(context, R.string.rider_channel_trip))
       .build()
     NotificationManagerCompat.from(context).createNotificationChannelsCompat(listOf(offers, online, trip))
   }
@@ -107,7 +104,8 @@ object RiderOffers {
       while (receipts.size > MAX_RECEIPTS) receipts.remove(receipts.keys.first())
     }
     Log.i(TAG, "offer ${offer.offerId} first via $channel")
-    ring(context, offer, title ?: DEFAULT_TITLE, body ?: DEFAULT_BODY)
+    val (ownTitle, ownBody) = words(context, offer.json)
+    ring(context, offer, RiderText.fromServer(context, title) ?: ownTitle, RiderText.fromServer(context, body) ?: ownBody)
     if (!RiderEvents.emit("riderOffer") { offer.toMap() }) {
       synchronized(this) { pending = offer }
     }
@@ -190,7 +188,8 @@ object RiderOffers {
   }
 
   fun testRing(context: Context) {
-    post(context, TEST_TAG, "Test ring", "This is how an order offer rings.", 15_000L, openAppIntent(context, null))
+    post(context, TEST_TAG, RiderText.get(context, R.string.rider_test_ring_title), RiderText.get(context, R.string.rider_test_ring_body),
+      15_000L, openAppIntent(context, null))
   }
 
   fun openAppIntent(context: Context, offer: Received?): PendingIntent {
@@ -213,6 +212,19 @@ object RiderOffers {
   /** Rings even with the screen off: the high-importance channel plays the sound and vibration, not JS. */
   private fun ring(context: Context, offer: Received, title: String, body: String) {
     post(context, offer.offerId, title, body, offer.deadlineMs - offer.receivedAtMs, openAppIntent(context, offer))
+  }
+
+  /** The heading and line the server sends in English ("New order: ₹62", "Banjara Hills to Jubilee Hills"), from the offer itself, in the rider's language. */
+  private fun words(context: Context, json: String): Pair<String, String> {
+    val offer = JSONObject(json)
+    val pay = offer.optLong("payPaise", -1L)
+    val from = offer.optString("kitchenArea")
+    val to = offer.optString("customerLocality")
+    val title = if (pay >= 0) RiderText.get(context, R.string.rider_offer_title_pay, RiderText.rupees(pay))
+      else RiderText.get(context, R.string.rider_offer_title)
+    val body = if (from.isNotEmpty() && to.isNotEmpty()) RiderText.get(context, R.string.rider_offer_route, from, to)
+      else RiderText.get(context, R.string.rider_offer_body)
+    return title to body
   }
 
   private fun post(context: Context, tag: String, title: String, body: String, timeoutMs: Long, open: PendingIntent) {

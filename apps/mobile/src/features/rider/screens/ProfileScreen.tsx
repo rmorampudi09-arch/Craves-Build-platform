@@ -5,7 +5,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Icon, SectionSkeleton} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
-import type {Language, RiderProfile} from '../api/contract';
+import type {RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -16,11 +16,10 @@ import {formatDay} from '../domain/format';
 import {useRiderShell, type RiderNav} from '../navigation';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
 import {usePendingActions} from '../state/tripQueue';
-import {useStrings} from '../strings/StringsProvider';
+import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 import {LoadFailed} from './TripDetailScreen';
 
 const SOON_MS = 30 * 24 * 3_600_000;
-const LANGUAGES: Language[] = ['en', 'te', 'hi'];
 
 type Doc = RiderProfile['documents'][number];
 
@@ -198,23 +197,25 @@ export function ProfileScreen() {
       ) : (
         <SectionSkeleton lines={6} testID="rider-profile-loading" />
       )}
-      <View style={styles.language}>
-        <Label>{p.language}</Label>
-        <View accessibilityRole="radiogroup" accessibilityLabel={p.language} style={styles.chips}>
-          {LANGUAGES.map(code => (
-            <Pressable
-              key={code}
-              accessibilityRole="radio"
-              accessibilityState={{checked: language === code}}
-              hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
-              onPress={() => setLanguage(code)}
-              style={[styles.chip, language === code && styles.chipOn]}
-              testID={`rider-language-${code}`}>
-              <Text style={[styles.chipText, language === code && styles.chipTextOn]}>{strings.languages[code]}</Text>
-            </Pressable>
-          ))}
+      {RIDER_LANGUAGES.length > 1 ? (
+        <View style={styles.language}>
+          <Label>{p.language}</Label>
+          <View accessibilityRole="radiogroup" accessibilityLabel={p.language} style={styles.chips}>
+            {RIDER_LANGUAGES.map(code => (
+              <Pressable
+                key={code}
+                accessibilityRole="radio"
+                accessibilityState={{checked: language === code}}
+                hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
+                onPress={() => setLanguage(code)}
+                style={[styles.chip, language === code && styles.chipOn]}
+                testID={`rider-language-${code}`}>
+                <Text style={[styles.chipText, language === code && styles.chipTextOn]}>{strings.languages[code]}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
       <Card style={styles.links}>
         {links.map(([label, id, open], index) => (
           <Pressable

@@ -603,6 +603,29 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** a Jest check that every key exists in all three languages, and a screen pass in each language.
 
+**Done (agent part), hidden until reviewed:**
+- **Translations.** `te.ts` and `hi.ts` hold full Telugu and Hindi for every rider screen. They are plain and polite, with Western digits. Craves, OTP, UPI and the phone's own menu names stay in English, and the Hindi uses no first-person verb that needs the rider's gender.
+- **Only reviewed languages reach riders.** A language reaches riders only once it is in `REVIEWED_LANGUAGES` (`strings/StringsProvider.tsx`, empty now). Until then, live builds show English and hide the language pickers (sign-up, Profile, Terms). A rider's earlier pick stays saved, and sign-up sends the language shown. Demo builds offer all three, for the review.
+- **Native words.** The offer, trip-cancelled and offline notifications, their channel names, the "You're online" notice, the test ring and the service's messages are in `src/rider/res/values/strings.xml`, with `values-te` and `values-hi`. `RiderText.kt` reads them in the language JS passes (`setLanguage`), never the phone's own, so native follows the app.
+- **Server words in Telugu or Hindi.** The phone writes the offer notification from the offer itself instead of the server's English, and a stop shows the phone's own "Your shift has ended". An offer from `/locations` now also rings with its pay and route, as an FCM one does, instead of "Tap to see the offer."
+- **Proved by:**
+  - `strings.test.ts`: the same keys, lists, parameters and printed arguments as English, and every text translated in its own script.
+  - `StringsProvider.test.tsx`: a live build stays English and tells native.
+  - screensA's chips test: a demo build turns Telugu.
+  - `RiderTextTest`: the pay in a notification.
+  - The Kotlin type check: every resource name exists.
+
+**Not translated:**
+- Words the server writes: rate-card lines, document names and reasons, notices ops writes, stop reasons.
+- Dates and times (2 May, 12:42 pm).
+
+**Still open (people):**
+1. A native speaker of each language does PHONE-TESTS §4; an agent makes the corrections.
+2. The lawyer signs off the terms, appeal and notice words.
+3. In a release, add the language to `REVIEWED_LANGUAGES`. Riders who already picked it get it then.
+
+Also tell the lawyer: `rider_terms_acceptance.language` records the language saved at sign-up. Earlier builds let riders choose te or hi there while every screen was in English.
+
 ### P2-09 Photo retention and the DPDP notice
 **Who:** agent, plus the lawyer. **Blocked by:** E6. **Must be live before:** 13 May 2027.
 

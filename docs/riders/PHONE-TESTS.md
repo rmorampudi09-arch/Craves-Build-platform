@@ -90,6 +90,25 @@ A phone that has never been online with this app, or that was offline for more t
 
 **Pass:** every step of every run reaches the server, in order, within 60 s of the signal coming back. **Fail:** write down which step is missing or out of order and what the app showed.
 
+## 4. Language review: Telugu and Hindi (a native speaker of each, before riders get it)
+
+Live builds show riders English until a language is signed off (WORKPLAN P2-08). This review uses a **demo** build (`craves-rider-mock-<sha>.apk`: run the workflow with `mock`), which offers all three languages. Sign in with any 10-digit number and the code 123456.
+
+1. Profile, then Language, then తెలుగు (or हिन्दी). Go through every screen in that language:
+   - sign-up and the terms (sign out first);
+   - phone setup, home and going online;
+   - an offer;
+   - every trip step: food not ready, the customer not answering, the photo, the OTP, and marking a trip failed;
+   - trip complete, earnings, a trip's pay and payouts;
+   - Profile, Help, SOS and a notice.
+
+   The **Demo controls** screen makes offers and notices. Small screens: check that no button or banner cuts its words off.
+2. The notification words (an offer, "You're online", trip cancelled, "You're offline", the test ring) don't show in a demo build. Read them in `apps/mobile/android/app/src/rider/res/values-te/strings.xml` (or `values-hi`) against `values/strings.xml`, about 20 lines.
+3. Write each correction with its screen and the English line; an agent changes `strings/te.ts` or `hi.ts` and the strings file, and the speaker checks the next build.
+4. The lawyer reads the terms screen and the appeal, grievance and notice lines in each language.
+
+**Pass:** the speaker signs off every screen and notification line, and the lawyer the terms words. An agent then adds the language to `REVIEWED_LANGUAGES` in `apps/mobile/src/features/rider/strings/StringsProvider.tsx`. After that release, on a live build: pick the language, go online and let an offer ring; the notification reads in that language.
+
 ## Results
 
 ### Service survival
@@ -125,5 +144,12 @@ A phone that has never been online with this app, or that was offline for more t
 | 4 GB phone | | | native outbox: reboot, app not opened | | | |
 | 3 GB phone | | | native outbox: swiped away | | | |
 | 3 GB phone | | | native outbox: reboot, app not opened | | | |
+
+### Language review
+
+| Language | Date | Native speaker | Build | Screens signed off | Notification lines signed off | Lawyer (terms words) | Pass |
+|---|---|---|---|---|---|---|---|
+| Telugu | | | | | | | |
+| Hindi | | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

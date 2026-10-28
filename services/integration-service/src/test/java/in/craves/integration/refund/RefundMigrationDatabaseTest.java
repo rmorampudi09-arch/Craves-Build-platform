@@ -33,8 +33,8 @@ class RefundMigrationDatabaseTest {
         assertEquals("133",latest.info().current().getVersion().getVersion());
         var pending=java.util.Arrays.stream(latest.info().pending()).map(m->m.getVersion().getVersion()).toList();
         // V134 is the separately reviewed manual channel; V135 has never existed.
-        // V146 adds empty review storage; V149 adds bank directory labels; V150 adds an outbox index; V151 adds idempotency storage; V152-V174 add and extend the separate fleet_schema. None may change historical refund rows.
-        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144","145","146","147","148","149","150","151","152","153","154","155","156","157","158","159","160","161","162","163","164","165","166","167","168","169","170","171","172","173","174"),pending);
+        // V146 adds empty review storage; V149 adds bank directory labels; V150 adds an outbox index; V151 adds idempotency storage; V152-V175 add and extend the separate fleet_schema. None may change historical refund rows.
+        assertEquals(java.util.List.of("134","136","137","138","139","140","141","142","143","144","145","146","147","148","149","150","151","152","153","154","155","156","157","158","159","160","161","162","163","164","165","166","167","168","169","170","171","172","173","174","175"),pending);
         assertEquals(pending.size(),latest.migrate().migrationsExecuted);latest.validate();assertEquals(0,latest.migrate().migrationsExecuted);
         assertEquals(before,jdbc.queryForMap("SELECT status,attempt_count,last_error,provider_payload,created_at,updated_at FROM payment_schema.refund WHERE id=?",id));
         assertEquals(beforeEvent,jdbc.queryForMap("SELECT * FROM payment_schema.refund_status_outbox WHERE id=?",event));

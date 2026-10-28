@@ -24,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
@@ -51,7 +49,6 @@ public class FleetOpsService {
     static final String RELEASED = "Craves ops gave this order to another courier. You're paid for the trip so far.";
     static final String CANCELLED = "Craves ops cancelled this delivery. You're paid for the trip so far.";
     static final String HANDED_TO_RIDER = "Craves ops gave this order to another rider. You're paid for the trip so far.";
-    private static final Logger LOGGER = LoggerFactory.getLogger(FleetOpsService.class);
     private static final String TRIPS = """
         SELECT t.id, t.order_code, t.kitchen_name, t.drop_area, t.state, t.provider, t.rider_id, r.name AS rider_name, t.created_at,
                GREATEST(t.updated_at, j.updated_at, s.opened_at) AS updated_at, s.provider AS open_stage, j.provider_id AS job_provider,
@@ -331,12 +328,6 @@ public class FleetOpsService {
         }
         if (trip.openStage() != null || trip.courierJob()) {
             throw changed();
-        }
-        // V166 only expanded the schema; until the contract migration drops it, this constraint allows one trip per order.
-        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'fleet_schema.trip'::regclass "
-            + "AND conname = 'trip_chef_sub_order_id_key')", Boolean.class))) {
-            LOGGER.warn("FLEET_HANDOVER_WAITS_FOR_MIGRATION trip={} (trip_chef_sub_order_id_key still exists)", trip.id());
-            throw notReassignable("Moving a trip to another rider isn't switched on yet. Give it to Borzo or Pidge, or cancel it.");
         }
         Map<String, Object> locked = lock(trip);
         foodNotHandedOver(locked);

@@ -49,6 +49,9 @@ craves:
     photo-retention-enabled: ${CRAVES_FLEET_PHOTO_RETENTION_ENABLED:false}
     # The privacy notice in force (P2-09, DPDP) and where its text is ({language} becomes en, te or hi). Riders accept a
     # new version before they continue; leave both empty until the lawyer's text is published at that address.
+    # Offers go to the riders nearest by road among the 5 nearest by straight line (P3-06; 5 road-distance calls an order).
+    # Turn it on only when pilot_health.sql's pickup_detour shows over 20% of pickups longer than 1.5 x the straight line.
+    road-ranking-enabled: ${CRAVES_FLEET_ROAD_RANKING_ENABLED:false}
     privacy-notice-version: ${CRAVES_FLEET_PRIVACY_NOTICE_VERSION:}
     privacy-notice-url: ${CRAVES_FLEET_PRIVACY_NOTICE_URL:}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.

@@ -718,4 +718,6 @@ Live before 13 May 2027.
 
 **P3-06 Batching and road-ETA ranking.** Only if the triggers in blueprint C7 fire. The trigger queries are in `pilot_health.sql` (`batching_candidates`, `rider_busy_share`, `pickup_detour`; done); design only when they fire.
 
+**Road ranking: the switch is built, off** (`CRAVES_FLEET_ROAD_RANKING_ENABLED`), so turning it on when `pickup_detour` fires needs no release. Among the 5 nearest by straight line, offers go to the 3 nearest by road. The blueprint's 3 calls would only reorder the same 3 riders, who all get the offer at once. Pay keeps the straight line, as the terms say. Proved by `FleetDispatchDatabaseTest.roadRankingOffersTheRidersNearestByRoadAndPaysByTheStraightLine`. Batching stays unbuilt until its trigger fires.
+
 **Phase 3 done when:** the battery target is met on both phones, cold start is ≤ 2 s, the size alert is live, and the health page replaces the manual queries.

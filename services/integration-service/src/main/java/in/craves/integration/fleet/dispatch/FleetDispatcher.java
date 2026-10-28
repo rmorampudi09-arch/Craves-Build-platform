@@ -27,14 +27,20 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -55,6 +61,8 @@ public class FleetDispatcher implements FleetStage {
     // At most one "no rate card" line per dispatch tick (5 s), however many orders arrive.
     private static final long TICK_MS = 5_000;
     static final int OFFERS_AT_ONCE = 3;
+    /** Riders ranked by road with CRAVES_FLEET_ROAD_RANKING_ENABLED (P3-06): one road-distance call each per order. */
+    static final int ROAD_RANKED = 5;
     static final int SEEN_WITHIN_SECONDS = 45;
     static final int FIX_WITHIN_SECONDS = 180;
     /**
@@ -76,10 +84,18 @@ public class FleetDispatcher implements FleetStage {
     private final RoadDistanceClient roads;
     private final RiderPushClient push;
     private final ObjectMapper json;
+    private final boolean roadRanking;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
 
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json) {
+        this(jdbc, transactions, policies, testMode, roads, push, json, false);
+    }
+
+    @Autowired
+    public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
+                           RoadDistanceClient roads, RiderPushClient push, ObjectMapper json,
+                           @Value("${craves.fleet.road-ranking-enabled:false}") boolean roadRanking) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.policies = policies;
@@ -87,6 +103,7 @@ public class FleetDispatcher implements FleetStage {
         this.roads = roads;
         this.push = push;
         this.json = json;
+        this.roadRanking = roadRanking;
     }
 
     @Override
@@ -227,6 +244,9 @@ public class FleetDispatcher implements FleetStage {
         double kitchenLng = request.pickup().longitude().doubleValue();
         int dropM = roads.meters(kitchenLat, kitchenLng, request.dropoff().latitude().doubleValue(), request.dropoff().longitude().doubleValue());
         List<Candidate> riders = nearbyRiders(kitchenLat, kitchenLng, policy.radiusM());
+        if (roadRanking) {
+            riders = byRoad(riders, kitchenLat, kitchenLng, command.chefSubOrderId());
+        }
         OptionalLong courier = riders.isEmpty() ? OptionalLong.empty() : courierQuotePaise.get();
         List<Planned> offers = new ArrayList<>();
         String outcome = "NO_RIDERS";
@@ -245,6 +265,27 @@ public class FleetDispatcher implements FleetStage {
             offers.add(new Planned(UUID.randomUUID(), rider.riderId(), quote));
         }
         return new Plan(chefId, card.version(), dropM, List.copyOf(offers), outcome, courier.isPresent() ? courier.getAsLong() : null);
+    }
+
+    /**
+     * P3-06, behind CRAVES_FLEET_ROAD_RANKING_ENABLED (off): the ROAD_RANKED allowed riders nearest by straight line, ordered
+     * by road metres to the kitchen, one call each, all at once (RoadDistanceClient never fails: without an answer it is
+     * straight line × 1.3, which keeps the straight-line order). The rest follow in their order. More than OFFERS_AT_ONCE
+     * are ranked, or the same three would get the offer. Pay still uses the straight line, as the terms say.
+     */
+    List<Candidate> byRoad(List<Candidate> riders, double kitchenLat, double kitchenLng, UUID chefSubOrderId) {
+        List<Candidate> allowed = riders.stream().filter(rider -> testMode.riderAllowed(rider.riderId())).toList();
+        List<Candidate> nearest = allowed.subList(0, Math.min(ROAD_RANKED, allowed.size()));
+        Map<UUID, Integer> metres = new ConcurrentHashMap<>();
+        try (ExecutorService calls = Executors.newVirtualThreadPerTaskExecutor()) {
+            nearest.forEach(rider -> calls.execute(() -> metres.put(rider.riderId(), roads.meters(rider.lat(), rider.lng(), kitchenLat, kitchenLng))));
+        }
+        List<Candidate> ranked = new ArrayList<>(nearest.stream()
+            .sorted(Comparator.comparingInt(rider -> metres.getOrDefault(rider.riderId(), Integer.MAX_VALUE))).toList());
+        LOGGER.info("FLEET_ROAD_RANKED chefSubOrderId={} straightLineM={} roadM={}", chefSubOrderId,
+            nearest.stream().map(rider -> Math.round(rider.straightLineM())).toList(), ranked.stream().map(rider -> metres.get(rider.riderId())).toList());
+        ranked.addAll(allowed.subList(nearest.size(), allowed.size()));
+        return ranked;
     }
 
     /**
@@ -267,7 +308,8 @@ public class FleetDispatcher implements FleetStage {
                                   AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
                   AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())""",
                 (row, n) -> new Candidate(row.getObject("id", UUID.class),
-                    RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng"))),
+                    RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng")), row.getDouble("lat"),
+                    row.getDouble("lng")),
                 lat - dLat, lat + dLat, lng - dLng, lng + dLng)
             .stream().filter(rider -> rider.straightLineM() <= radiusM).sorted(Comparator.comparingDouble(Candidate::straightLineM)).toList();
     }
@@ -419,7 +461,7 @@ public class FleetDispatcher implements FleetStage {
     record TripState(UUID id, UUID chefSubOrderId, String state, String provider) {
     }
 
-    private record Candidate(UUID riderId, double straightLineM) {
+    private record Candidate(UUID riderId, double straightLineM, double lat, double lng) {
     }
 
     private record Planned(UUID offerId, UUID riderId, PayQuote quote) {

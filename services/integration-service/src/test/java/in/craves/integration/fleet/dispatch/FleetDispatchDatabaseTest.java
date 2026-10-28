@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -149,6 +150,31 @@ class FleetDispatchDatabaseTest {
         assertThat(rung.get("payLines").get(0).get("label").asText()).isEqualTo("base");
         assertThat(List.of(fourth, mock, stale, far, notListed, busy)).doesNotContainAnyElementsOf(
             offers.stream().map(offer -> (UUID) offer.get("rider_id")).toList());
+    }
+
+    /** P3-06: with road ranking on, the offers go to the nearest by road among the five nearest; pay keeps the straight line. */
+    @Test
+    void roadRankingOffersTheRidersNearestByRoadAndPaysByTheStraightLine() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID acrossTheRiver = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.002, KITCHEN_LNG, 5, false);
+        UUID third = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.003, KITCHEN_LNG, 5, false);
+        UUID fourth = FleetDispatchFixtures.riderOnShift(fleet, "+919800000004", KITCHEN_LAT + 0.004, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000005", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000006", KITCHEN_LAT + 0.006, KITCHEN_LNG, 5, false);
+        when(roads.meters(eq(KITCHEN_LAT + 0.001), eq(KITCHEN_LNG), anyDouble(), anyDouble())).thenReturn(9000);
+        FleetDispatcher ranking = new FleetDispatcher(fleet.db, fleet.transactions, new FleetPolicyStore(fleet.db, json),
+            new FleetTestMode(fleet.db, FleetDatabase.properties(true)), roads, push, json, true);
+
+        assertThatThrownBy(() -> ranking.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        List<Map<String, Object>> offers = fleet.db.queryForList("SELECT o.rider_id, o.pickup_distance_m FROM fleet_schema.trip_offer o "
+            + "JOIN fleet_schema.trip t ON t.id = o.trip_id WHERE t.chef_sub_order_id = ? ORDER BY o.pickup_distance_m", chefSubOrderId);
+        assertThat(offers).extracting(offer -> offer.get("rider_id")).containsExactly(second, third, fourth).doesNotContain(acrossTheRiver);
+        assertThat(offers).extracting(offer -> (Integer) offer.get("pickup_distance_m")).as("straight line × the detour, as the terms say")
+            .allSatisfy(metres -> assertThat(metres).isLessThan(1000));
+        verify(roads, times(6)).meters(anyDouble(), anyDouble(), anyDouble(), anyDouble()); // the drop, then the five nearest
     }
 
     /**

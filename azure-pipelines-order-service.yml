@@ -77,6 +77,9 @@ steps:
         # more than ten minutes to converge. Preserve fail-fast terminal-state
         # checks but use the proven bounded 25-minute observation window.
         echo 'Order Container App readiness window: 1500 seconds (150 x 10s).'
+        # Order runs with two plain app secrets set by the finance and referral activations; the release
+        # leaves them as they are (the helper still refuses any other non Key Vault secret).
+        ALLOW_PLAIN_SECRET_REFS='finance-internal referral-source-hmac' \
         READY_ATTEMPTS=150 \
         READY_SLEEP_SECONDS=10 \
         bash scripts/release/deploy-single-service-preserve-runtime.sh \

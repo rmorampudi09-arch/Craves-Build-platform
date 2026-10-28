@@ -593,6 +593,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** pilot riders install from the internal track, and Play vitals show crash and ANR rates.
 
+**Done (step 2):** a live manual run on `main` also builds the bundle, from the same Gradle call as the APK, and checks it is signed and ARM only. It is uploaded as the **craves-rider-aab** artifact with the mapping file (`RELEASE.md`, each pilot release). Steps 1 and 4 are open; step 3 needs nothing new. The first CI run proves the bundle step.
+
 ### P2-08 Telugu and Hindi
 **Who:** agent, plus native speakers and the lawyer.
 
@@ -710,7 +712,7 @@ Live before 13 May 2027.
 3. Remove startup work that Home doesn't need.
 4. Re-run `PERF.md` §1.
 
-**P3-03 APK size alert.** In `rider-apk.yml`, compare the APK size with the last `main` build and warn when it grows more than 5% (DoorDash practice, R8 E5).
+**P3-03 APK size alert (done).** In `rider-apk.yml`, compare the APK size with the last `main` build and warn when it grows more than 5% (DoorDash practice, R8 E5). Every run prints the size and the change; above 5% it raises a workflow warning and says so in the PR comment, without failing the build. The size from each run on `main` is kept in the Actions cache for the next runs (`RELEASE.md`). It is live once one run on `main` has set the first size.
 
 **P3-04 Pilot health page (done).** `GET /api/v1/admin/fleet/pilot-health` (`FleetPilotHealth`, trip readers) runs every named query of `services/integration-service/src/main/resources/fleet/pilot_health.sql`, each in its own read-only transaction with a 15 s limit and at most 200 rows, and reports a failing query without stopping the others. The console's Riders & fleet → Rider pilot health page shows each as a table with its description. Proved by `FleetPilotHealthDatabaseTest` (read-only, a writing query refused), `FleetPilotHealthTest`, `FleetOpsSecurityTest` and `health.vitest.ts`.
 

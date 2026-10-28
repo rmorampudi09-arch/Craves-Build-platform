@@ -664,6 +664,10 @@ export function createMockRiderApi(options: MockOptions = {}) {
             text: 'Heavy rain expected after 8 pm. Stop whenever you need to. It never affects your offers.',
           },
           offersPausedUntil: state.online && state.pausedUntil > now() ? iso(state.pausedUntil) : undefined,
+          // Demo: the hours since the demo day started stand in for time online.
+          todayOnlineMinutes: 225,
+          todayPerHourPaise: Math.round((today.reduce((sum, e) => sum + e.amountPaise, 0) * 60) / 225),
+          fleetPerHourPaise: 9000,
         };
       }),
     startShift: () =>

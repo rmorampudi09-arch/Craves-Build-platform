@@ -700,6 +700,16 @@ describe('Home', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
   });
 
+  it("shows today's pay per online hour once there is one, and the riders' middle only when the server sends it", async () => {
+    await render(<HomeScreen />, seed(onlineHome));
+    expect(allText()).not.toContain('an hour online today');
+    await render(<HomeScreen />, seed({...onlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253}));
+    expect(allText()).toContain('Today | ₹347 | 5 trips | ₹92.53 an hour online today');
+    expect(allText()).not.toContain("today's riders");
+    await render(<HomeScreen />, seed({...offlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253, fleetPerHourPaise: 8500}));
+    expect(allText()).toContain("₹92.53 an hour online today | Half of today's riders made ₹85 an hour or more.");
+  });
+
   it('never makes up a guaranteed rate the server did not send', async () => {
     await render(<HomeScreen />, seed({...offlineHome, guaranteedPerHourPaise: undefined}));
     expect(allText()).toContain('Your next slot');

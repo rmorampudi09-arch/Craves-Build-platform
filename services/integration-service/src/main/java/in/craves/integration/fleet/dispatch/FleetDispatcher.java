@@ -65,9 +65,8 @@ public class FleetDispatcher implements FleetStage {
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetDispatcher.class);
     // At most one "no rate card" line per dispatch tick (5 s), however many orders arrive.
     private static final long TICK_MS = 5_000;
-    /** Fair turns (Phase 4): earnings per online hour compare in ₹10 steps; under 30 minutes online counts as 30. */
+    /** Fair turns (Phase 4): earnings per online hour (FleetEarnings.perOnlineHourPaise) compare in ₹10 steps. */
     static final long FAIR_STEP_PAISE = 1_000;
-    static final long FAIR_MIN_ONLINE_SECONDS = 1_800;
     /** Riders ranked by road with CRAVES_FLEET_ROAD_RANKING_ENABLED (P3-06): one road-distance call each per order. */
     static final int ROAD_RANKED = 5;
     static final int SEEN_WITHIN_SECONDS = 45;
@@ -314,25 +313,21 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /**
-     * Each rider's day so far (IST): pay credited today (as Home shows it), minutes online on today's shifts, and when they
-     * last became free (shift start or last trip end).
+     * Each rider's day so far (IST): pay credited today (as Home shows it), available minutes online today (shifts less
+     * breaks), and when they last became free (shift start or last trip end).
      */
     private Map<UUID, Standing> standings(List<UUID> riderIds) {
         FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
+        Timestamp from = Timestamp.from(today.from());
+        Timestamp to = Timestamp.from(today.to());
         Map<UUID, Standing> standings = new HashMap<>();
         for (UUID riderId : riderIds) {
-            long earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> row.getLong("paise"), riderId,
-                Timestamp.from(today.from()), Timestamp.from(today.to()));
-            Map<String, Object> day = jdbc.queryForMap("""
-                SELECT COALESCE((SELECT SUM(EXTRACT(EPOCH FROM LEAST(COALESCE(s.ended_at, now()), now()) - GREATEST(s.started_at, ?)))
-                                 FROM fleet_schema.rider_shift s WHERE s.rider_id = ? AND s.started_at < now()
-                                   AND COALESCE(s.ended_at, now()) > ?), 0)::bigint AS online_seconds,
-                       GREATEST((SELECT MAX(s.started_at) FROM fleet_schema.rider_shift s WHERE s.rider_id = ? AND s.ended_at IS NULL),
-                                (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = ?)) AS free_since""",
-                Timestamp.from(today.from()), riderId, Timestamp.from(today.from()), riderId, riderId);
-            Timestamp freeSince = (Timestamp) day.get("free_since");
-            standings.put(riderId, new Standing(earned, ((Number) day.get("online_seconds")).longValue(),
-                freeSince == null ? Instant.EPOCH : freeSince.toInstant()));
+            long earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> row.getLong("paise"), riderId, from, to);
+            long online = jdbc.queryForObject(FleetEarnings.ONLINE_SECONDS_SQL, Long.class, from, to, riderId);
+            Timestamp freeSince = jdbc.queryForObject("""
+                SELECT GREATEST((SELECT MAX(s.started_at) FROM fleet_schema.rider_shift s WHERE s.rider_id = ? AND s.ended_at IS NULL),
+                                (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = ?))""", Timestamp.class, riderId, riderId);
+            standings.put(riderId, new Standing(earned, online, freeSince == null ? Instant.EPOCH : freeSince.toInstant()));
         }
         return standings;
     }
@@ -649,7 +644,7 @@ public class FleetDispatcher implements FleetStage {
     /** A rider's day so far: pay credited today, seconds online today, and when they last became free. */
     record Standing(long earnedPaise, long onlineSeconds, Instant freeSince) {
         long perHourPaise() {
-            return earnedPaise * 3600 / Math.max(onlineSeconds, FAIR_MIN_ONLINE_SECONDS);
+            return FleetEarnings.perOnlineHourPaise(earnedPaise, onlineSeconds);
         }
     }
 

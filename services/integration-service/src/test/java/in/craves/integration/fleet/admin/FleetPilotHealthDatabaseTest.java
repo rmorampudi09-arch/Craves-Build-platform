@@ -121,7 +121,7 @@ class FleetPilotHealthDatabaseTest {
         Map<String, String> queries = queries();
         assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
             "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes", "batching_candidates", "rider_busy_share",
-            "pickup_detour", "fcm_on_time", "offer_outcomes", "track_size");
+            "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "track_size");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
 
         assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
@@ -177,6 +177,61 @@ class FleetPilotHealthDatabaseTest {
         assertThat(number(track, "partitions")).isGreaterThanOrEqualTo(1);
         assertThat(number(track, "total_bytes")).isGreaterThan(0);
     }
+
+    /**
+     * Phase 4 fairness, on yesterday (IST) so the day is whole: A earned ₹150 in an hour, B nothing in an hour and a half
+     * with a 30-minute break, C was online only 20 minutes. Pay per available hour: A ₹150, B ₹0; C is left out.
+     */
+    @Test
+    void fairnessCountsPayPerAvailableOnlineHourAndTheSpreadBetweenRiders() {
+        UUID a = shift("+919800000011", "10:00", "11:00");
+        UUID b = shift("+919800000012", "10:00", "11:30");
+        UUID c = shift("+919800000013", "10:00", "10:20");
+        fleet.db.update("INSERT INTO fleet_schema.rider_break (id, rider_id, shift_id, started_at, ends_at) SELECT ?, rider_id, id, "
+            + YESTERDAY.formatted("10:30") + ", " + YESTERDAY.formatted("11:00") + " FROM fleet_schema.rider_shift WHERE rider_id = ?",
+            UUID.randomUUID(), b);
+        UUID trip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'DELIVERED', finished_at = " + YESTERDAY.formatted("10:30")
+            + ", pay_finalized_at = " + YESTERDAY.formatted("10:30") + " WHERE id = ?", a, trip);
+        fleet.db.update("INSERT INTO fleet_schema.rider_earning (id, rider_id, trip_id, component, revision, business_key, gross_paise, "
+            + "withheld_paise, net_paise, rate_card_version, withdrawable_at) VALUES (?, ?, ?, 'base', 1, ?, 15000, 0, 15000, '2026-10-v1', now())",
+            UUID.randomUUID(), a, trip, "fleet-trip-pay/" + trip + "/base/1");
+        fleet.db.update("UPDATE fleet_schema.rider SET max_drop_m = 5000 WHERE id = ?", c);
+        fleet.db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE' WHERE id = ?", c);
+        UUID offerTrip = fleet.trip(UUID.randomUUID());
+        fleet.db.update(OFFER.formatted("NULL"), UUID.randomUUID(), offerTrip, a, "SENT", null);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'ACCEPTED', round = 2, reason = '{\"rule\": \"FAIR\", \"place\": 1, "
+            + "\"riders\": 2, \"atOnce\": 1, \"round\": 2}' WHERE rider_id = ?", a);
+
+        Map<String, String> queries = queries();
+        Map<String, Object> day = fleet.db.queryForList(queries.get("earnings_per_online_hour")).stream()
+            .filter(row -> row.get("day_ist").toString().equals(fleet.db.queryForObject(
+                "SELECT ((now() AT TIME ZONE 'Asia/Kolkata')::date - 1)::text", String.class)))
+            .findFirst().orElseThrow();
+        assertThat(number(day, "riders")).as("C's 20 minutes leave C out").isEqualTo(2);
+        assertThat(number(day, "p10_rupees_h")).isEqualTo(15.0);
+        assertThat(number(day, "p50_rupees_h")).isEqualTo(75.0);
+        assertThat(number(day, "p90_rupees_h")).isEqualTo(135.0);
+        assertThat(number(day, "gini")).as("one of two riders earns it all: 0.5").isEqualTo(0.5);
+
+        assertThat(fleet.db.queryForList(queries.get("offer_rules"))).extracting(row -> row.get("rule"), row -> number(row, "round"),
+            row -> number(row, "offers"), row -> number(row, "accepted")).containsExactly(tuple("FAIR", 2.0, 1.0, 1.0));
+        Map<String, Object> choices = fleet.db.queryForList(queries.get("rider_choices")).get(0);
+        assertThat(number(choices, "with_farthest_drop")).isEqualTo(1);
+        assertThat(number(choices, "with_farthest_pickup")).isZero();
+    }
+
+    /** A closed shift yesterday (IST) from one time to another, for a new rider. */
+    private UUID shift(String phone, String from, String to) {
+        UUID rider = fleet.rider("Rider " + phone, phone);
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, ended_at) "
+            + "VALUES (?, ?, ?, " + YESTERDAY.formatted(to) + ", " + YESTERDAY.formatted(from) + ", " + YESTERDAY.formatted(to) + ")",
+            UUID.randomUUID(), rider, phone.substring(1).repeat(6).substring(0, 64));
+        return rider;
+    }
+
+    /** A time of day yesterday in IST, as SQL. */
+    static final String YESTERDAY = "((((now() AT TIME ZONE 'Asia/Kolkata')::date - 1) + TIME '%s') AT TIME ZONE 'Asia/Kolkata')";
 
     private static double number(Map<String, Object> row, String column) {
         return ((Number) row.get(column)).doubleValue();

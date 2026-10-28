@@ -218,6 +218,9 @@ export const en = {
     waitingPaid: (amount: string) => `Waiting is paid: at least ${amount} an hour in this slot.`,
     restPoint: (name: string, area: string) => `Rest point: ${name}, ${area}`,
     restPointBody: 'Water, washroom, shade and phone charging while you wait.',
+    // Pay per online hour (Phase 4): breaks don't count as online.
+    perHour: (amount: string) => `${amount} an hour online today`,
+    fleetPerHour: (amount: string) => `Half of today's riders made ${amount} an hour or more.`,
     ringsScreenOff: 'Offers ring even with the screen off.',
     resumeTitle: 'You have a trip in progress',
     resume: 'Open trip',

@@ -33,6 +33,15 @@ public final class FleetDatabase {
     }
 
     /** Fleet on, with the given test mode and nothing configured outside this service. */
+    /**
+     * For tests that put hours of shifts and pay into "today" (IST), which only holds once today is that old: they are
+     * skipped in the first hours after IST midnight rather than fail there.
+     */
+    public static void assumeTodayIsHoursOld(int hours) {
+        org.junit.jupiter.api.Assumptions.assumeTrue(java.time.LocalTime.now(java.time.ZoneId.of("Asia/Kolkata"))
+            .isAfter(java.time.LocalTime.of(hours, 0)), "today (IST) began less than " + hours + " hours ago");
+    }
+
     public static FleetProperties properties(boolean testMode) {
         return properties(testMode, false);
     }

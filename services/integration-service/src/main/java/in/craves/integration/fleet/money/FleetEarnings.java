@@ -97,6 +97,43 @@ public class FleetEarnings {
         LEFT JOIN fleet_schema.trip t ON t.id = e.trip_id
         LEFT JOIN fleet_schema.rider_slot sl ON sl.id = e.slot_id
         WHERE e.rider_id = ? AND COALESCE(t.pay_finalized_at, sl.ends_at) >= ? AND COALESCE(t.pay_finalized_at, sl.ends_at) < ?""";
+    /**
+     * Phase 4: each rider's available online time in a window (from, to): every shift cut to the window (an open one to
+     * now), less its breaks there. The CTEs win, w and available; the queries below add to them.
+     */
+    private static final String AVAILABLE = """
+        WITH win AS (SELECT CAST(? AS timestamptz) AS from_at, LEAST(CAST(? AS timestamptz), now()) AS to_at),
+        w AS (SELECT s.id, s.rider_id, GREATEST(s.started_at, win.from_at) AS from_at, LEAST(COALESCE(s.ended_at, now()), win.to_at) AS to_at
+              FROM fleet_schema.rider_shift s CROSS JOIN win WHERE s.started_at < win.to_at AND COALESCE(s.ended_at, now()) > win.from_at),
+        available AS (SELECT w.rider_id, EXTRACT(EPOCH FROM w.to_at - w.from_at) - COALESCE((
+                        SELECT SUM(EXTRACT(EPOCH FROM LEAST(b.ends_at, w.to_at) - GREATEST(b.started_at, w.from_at)))
+                        FROM fleet_schema.rider_break b WHERE b.shift_id = w.id AND b.started_at < w.to_at AND b.ends_at > w.from_at), 0) AS seconds
+                      FROM w)
+        """;
+    /** A rider's available online seconds in (from, to); parameters from, to, rider. */
+    public static final String ONLINE_SECONDS_SQL = AVAILABLE + "SELECT COALESCE(SUM(seconds), 0)::bigint FROM available WHERE rider_id = ?";
+    /**
+     * The middle (median) pay per available online hour in (from, to) over riders online 30 minutes or more then, in paise;
+     * NULL with fewer than 5 such riders, so no one rider's pay can be worked out. Parameters from, to.
+     */
+    public static final String FLEET_PER_HOUR_SQL = AVAILABLE + """
+        , online AS (SELECT rider_id, SUM(seconds) AS seconds FROM available GROUP BY rider_id),
+        earned AS (SELECT e.rider_id, SUM(e.net_paise) AS paise FROM fleet_schema.rider_earning e
+                   LEFT JOIN fleet_schema.trip t ON t.id = e.trip_id LEFT JOIN fleet_schema.rider_slot sl ON sl.id = e.slot_id
+                   CROSS JOIN win
+                   WHERE COALESCE(t.pay_finalized_at, sl.ends_at) >= win.from_at AND COALESCE(t.pay_finalized_at, sl.ends_at) < win.to_at
+                   GROUP BY e.rider_id)
+        SELECT CASE WHEN count(*) >= 5 THEN round(percentile_cont(0.5) WITHIN GROUP (ORDER BY COALESCE(earned.paise, 0) * 3600.0
+               / online.seconds))::bigint END
+        FROM online LEFT JOIN earned USING (rider_id) WHERE online.seconds >= 1800""";
+    /** Under half an hour online, pay per hour says little: fair turns count at least this much, Home shows nothing. */
+    public static final long MIN_ONLINE_SECONDS = 1_800;
+
+    /** Pay per available online hour, as fair turns compare riders and Home shows them: at least 30 minutes counted. */
+    public static long perOnlineHourPaise(long paise, long onlineSeconds) {
+        return paise * 3600 / Math.max(onlineSeconds, MIN_ONLINE_SECONDS);
+    }
+
     /** The current Indian financial year (from 1 April, IST) as a timestamptz. */
     static final String FINANCIAL_YEAR_START =
         "((date_trunc('year', (now() AT TIME ZONE 'Asia/Kolkata') - interval '3 months') + interval '3 months') AT TIME ZONE 'Asia/Kolkata')";

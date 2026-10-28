@@ -75,7 +75,8 @@ public final class FleetRiderModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record HomeSummary(boolean online, Instant shiftStartedAt, String zoneName, Instant slotEndsAt, long todayEarningsPaise,
                               int todayTrips, String activeTripId, NextSlot nextSlot, Long guaranteedPerHourPaise, RestPoint restPoint,
-                              Banner banner, Instant offersPausedUntil) {
+                              Banner banner, Instant offersPausedUntil, int todayOnlineMinutes, Long todayPerHourPaise,
+                              Long fleetPerHourPaise) {
     }
 
     public record NextSlot(Instant startsAt, Instant endsAt, String zoneName) {

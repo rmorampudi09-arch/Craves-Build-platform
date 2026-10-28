@@ -377,6 +377,7 @@ class FleetDispatchDatabaseTest {
      */
     @Test
     void fairTurnsGoFirstToTheRiderWhoHasEarnedLeastPerOnlineHourToday() {
+        FleetDatabase.assumeTodayIsHoursOld(4);
         fairPolicy(1500);
         UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
         UUID behind = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
@@ -408,6 +409,7 @@ class FleetDispatchDatabaseTest {
 
     @Test
     void equalEarningsGoToTheRiderFreeTheLongest() {
+        FleetDatabase.assumeTodayIsHoursOld(2);
         fairPolicy(1500);
         UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
         UUID waiting = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);

@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -79,6 +80,8 @@ public class FleetRiderService {
     private final FleetPolicyStore policies;
     private final FleetProperties properties;
     private final FleetStorage storage;
+
+    private final AtomicReference<FleetMedian> fleetMedian = new AtomicReference<>();
 
     public FleetRiderService(JdbcTemplate jdbc, FleetPolicyStore policies, FleetProperties properties, FleetStorage storage) {
         this.jdbc = jdbc;
@@ -280,8 +283,29 @@ public class FleetRiderService {
         FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
         long[] earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> new long[] {row.getLong("paise"), row.getLong("trips")},
             rider.id(), Timestamp.from(today.from()), Timestamp.from(today.to()));
+        long online = jdbc.queryForObject(FleetEarnings.ONLINE_SECONDS_SQL, Long.class, Timestamp.from(today.from()), Timestamp.from(today.to()),
+            rider.id());
+        Long perHour = online >= FleetEarnings.MIN_ONLINE_SECONDS ? FleetEarnings.perOnlineHourPaise(earned[0], online) : null;
         return new HomeSummary(shiftStartedAt != null, shiftStartedAt, zoneName, slotEndsAt, earned[0], (int) earned[1], activeTripId, next,
-            guaranteed, restPoint, banner, pausedUntil);
+            guaranteed, restPoint, banner, pausedUntil, (int) (online / 60), perHour, perHour == null ? null : fleetPerHour(today));
+    }
+
+    /**
+     * Phase 4: the middle pay per online hour today over riders online 30 minutes or more (FLEET_PER_HOUR_SQL), worked out
+     * at most once a minute per server; null under 5 riders.
+     */
+    private Long fleetPerHour(FleetEarnings.Window today) {
+        FleetMedian cached = fleetMedian.get();
+        Instant now = Instant.now();
+        if (cached != null && cached.day().equals(today.from()) && cached.at().isAfter(now.minusSeconds(60))) {
+            return cached.paise();
+        }
+        Long paise = jdbc.queryForObject(FleetEarnings.FLEET_PER_HOUR_SQL, Long.class, Timestamp.from(today.from()), Timestamp.from(today.to()));
+        fleetMedian.set(new FleetMedian(today.from(), now, paise));
+        return paise;
+    }
+
+    private record FleetMedian(Instant day, Instant at, Long paise) {
     }
 
     /** A new photo of one document, from any rider ops added (before activation too); PENDING until ops reviews it by hand. */

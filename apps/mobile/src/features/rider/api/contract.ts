@@ -165,6 +165,12 @@ export interface HomeSummary {
   banner?: {tone: 'info' | 'warning'; text: string};
   /** Phase 4: on a break, with no offers, until then. */
   offersPausedUntil?: string;
+  /** Phase 4: minutes online today, shifts less breaks. */
+  todayOnlineMinutes?: number;
+  /** Phase 4: today's pay per online hour, once online 30 minutes today. */
+  todayPerHourPaise?: Paise;
+  /** Phase 4: the middle pay per online hour today over 5 or more riders online 30 minutes or more. */
+  fleetPerHourPaise?: Paise;
 }
 
 export interface Offer {

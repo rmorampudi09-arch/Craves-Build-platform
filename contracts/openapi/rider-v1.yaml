@@ -387,6 +387,9 @@ components:
         restPoint: {type: object, required: [name, area], properties: {name: {type: string}, area: {type: string}}}
         banner: {type: object, description: 'A message from ops, e.g. a rain warning', required: [tone, text], properties: {tone: {type: string, enum: [info, warning]}, text: {type: string}}}
         offersPausedUntil: {type: string, format: date-time, description: 'Phase 4: the rider is on a break, with no offers, until then; absent otherwise'}
+        todayOnlineMinutes: {type: integer, minimum: 0, description: 'Phase 4: minutes online today (IST), shifts less breaks'}
+        todayPerHourPaise: {type: integer, description: 'Phase 4, paise: todayEarningsPaise per online hour, once online 30 minutes today; fair turns compare riders by it'}
+        fleetPerHourPaise: {type: integer, description: 'Phase 4, paise: the middle pay per online hour today over riders online 30 minutes or more, with todayPerHourPaise, once there are 5 such riders (so no one rider''s pay shows)'}
     Offer:
       type: object
       required: [offerId, tripId, expiresAt, expiresInSec, payPaise, pickupDistanceM, dropDistanceM, kitchenArea, customerLocality, estMinutes, payLines]

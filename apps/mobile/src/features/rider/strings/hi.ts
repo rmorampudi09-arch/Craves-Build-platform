@@ -229,6 +229,8 @@ export const hi: RiderStrings = {
     waitingPaid: (amount: string) => `इंतज़ार के भी पैसे मिलते हैं: इस स्लॉट में हर घंटे कम से कम ${amount}।`,
     restPoint: (name: string, area: string) => `आराम की जगह: ${name}, ${area}`,
     restPointBody: 'इंतज़ार के दौरान पानी, वॉशरूम, छाँव और फ़ोन चार्जिंग।',
+    perHour: (amount: string) => `आज ऑनलाइन हर घंटे ${amount}`,
+    fleetPerHour: (amount: string) => `आज आधे राइडरों ने हर घंटे ${amount} या उससे ज़्यादा कमाए।`,
     ringsScreenOff: 'स्क्रीन बंद होने पर भी ऑफ़र की घंटी बजेगी।',
     resumeTitle: 'आपकी एक ट्रिप चल रही है',
     resume: 'ट्रिप खोलें',

@@ -10,6 +10,7 @@ import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
+import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
 import in.craves.integration.fleet.rider.FleetRiderModels.OrderPreferences;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
@@ -112,6 +113,54 @@ class FleetRiderChoicesDatabaseTest {
         shifts.resume(identity);
         locations.ingest(null, credential, new LocationBatch(List.of(fix(t.plusSeconds(90)))));
         assertThat(slotSeconds(slot)).as("back from the break").isEqualTo(30);
+    }
+
+    /**
+     * Phase 4: pay per available online hour today, breaks left out, as Home shows it and fair turns compare it; and the
+     * middle over riders online 30 minutes or more, only once there are 5 of them.
+     */
+    @Test
+    void homeShowsPayPerOnlineHourTodayAndTheMiddleOfFiveOrMoreRiders() {
+        FleetDatabase.assumeTodayIsHoursOld(2);
+        FleetDispatchFixtures.onBreak(fleet.db, rider, 40, -20);
+        earned(rider, 20_000);
+        FleetRiderService fresh = new FleetRiderService(fleet.db, policies, FleetDatabase.properties(true), mock(FleetStorage.class));
+        HomeSummary alone = fresh.home(identity);
+        assertThat(alone.todayOnlineMinutes()).as("an hour on shift less a 20-minute break").isBetween(39, 40);
+        assertThat(alone.todayPerHourPaise()).as("₹200 over 40 minutes").isBetween(29_900L, 30_100L);
+        assertThat(alone.fleetPerHourPaise()).as("under 5 riders: nothing that could show one rider's pay").isNull();
+
+        for (long paise : new long[] {0, 10_000, 20_000, 40_000}) {
+            earned(online(60), paise);
+        }
+        earned(online(20), 100_000);
+        HomeSummary five = new FleetRiderService(fleet.db, policies, FleetDatabase.properties(true), mock(FleetStorage.class)).home(identity);
+        assertThat(five.fleetPerHourPaise()).as("the middle of ₹0, 100, 200, 300 and 400 an hour; 20 minutes online counts for nothing")
+            .isBetween(19_900L, 20_100L);
+        assertThat(alone.todayPerHourPaise()).isNotNull();
+    }
+
+    /** Another rider, online for the last minutes on an open shift. */
+    private UUID online(int minutes) {
+        UUID other = fleet.rider("Rider " + minutes, String.format("+9198%08d", Math.floorMod(UUID.randomUUID().getLeastSignificantBits(),
+            100_000_000L)));
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at) "
+            + "VALUES (?, ?, ?, now() + INTERVAL '11 hours', now() - make_interval(mins => ?))", UUID.randomUUID(), other,
+            FleetShiftService.hash(FleetShiftService.newCredential()), minutes);
+        return other;
+    }
+
+    /** Pay finalized just now for a delivered trip. */
+    private void earned(UUID who, long paise) {
+        if (paise == 0) {
+            return;
+        }
+        UUID trip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'DELIVERED', finished_at = now(), pay_finalized_at = now() "
+            + "WHERE id = ?", who, trip);
+        fleet.db.update("INSERT INTO fleet_schema.rider_earning (id, rider_id, trip_id, component, revision, business_key, gross_paise, "
+            + "withheld_paise, net_paise, rate_card_version, withdrawable_at) VALUES (?, ?, ?, 'base', 1, ?, ?, 0, ?, '2026-10-v1', now())",
+            UUID.randomUUID(), who, trip, "fleet-trip-pay/" + trip + "/base/1", paise, paise);
     }
 
     private static RiderFix fix(Instant at) {

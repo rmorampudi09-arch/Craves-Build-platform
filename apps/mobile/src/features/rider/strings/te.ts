@@ -231,6 +231,8 @@ export const te: RiderStrings = {
     waitingPaid: (amount: string) => `ఎదురుచూపుకి కూడా చెల్లింపు: ఈ స్లాట్‌లో గంటకు కనీసం ${amount}.`,
     restPoint: (name: string, area: string) => `విశ్రాంతి స్థలం: ${name}, ${area}`,
     restPointBody: 'ఎదురుచూసేటప్పుడు నీళ్లు, వాష్‌రూమ్, నీడ, ఫోన్ ఛార్జింగ్.',
+    perHour: (amount: string) => `ఈ రోజు ఆన్‌లైన్‌లో గంటకు ${amount}`,
+    fleetPerHour: (amount: string) => `ఈ రోజు సగం మంది రైడర్లు గంటకు ${amount} లేదా అంతకంటే ఎక్కువ సంపాదించారు.`,
     ringsScreenOff: 'స్క్రీన్ ఆఫ్‌లో ఉన్నా ఆఫర్లు రింగ్ అవుతాయి.',
     resumeTitle: 'మీ ట్రిప్ ఒకటి జరుగుతోంది',
     resume: 'ట్రిప్ తెరవండి',

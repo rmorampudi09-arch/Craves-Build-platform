@@ -42,6 +42,25 @@ const ShiftTimer = memo(function ShiftTimerView({startedAt}: {startedAt: string}
   );
 });
 
+/**
+ * Phase 4: today's pay per online hour (breaks left out), once online half an hour, and the middle over today's riders
+ * when there are enough of them that no one rider's pay shows.
+ */
+function PerHour({home}: {home: HomeSummary}) {
+  const h = useStrings().strings.home;
+  if (home.todayPerHourPaise === undefined) {
+    return null;
+  }
+  return (
+    <>
+      <Text style={styles.body} testID="rider-per-hour">
+        {h.perHour(formatRupees(home.todayPerHourPaise))}
+      </Text>
+      {home.fleetPerHourPaise !== undefined ? <Text style={styles.small}>{h.fleetPerHour(formatRupees(home.fleetPerHourPaise))}</Text> : null}
+    </>
+  );
+}
+
 /** Offline (05-HomeOffline.png): today so far, then the next slot and its guaranteed hourly pay from the server. */
 function OfflineCards({home}: {home: HomeSummary}) {
   const h = useStrings().strings.home;
@@ -52,6 +71,7 @@ function OfflineCards({home}: {home: HomeSummary}) {
         <Text style={styles.small}>{h.today}</Text>
         <Money paise={home.todayEarningsPaise} testID="rider-today-earnings" />
         <Text style={styles.small}>{h.trips(home.todayTrips)}</Text>
+        <PerHour home={home} />
       </Card>
       {slot ? (
         <Card style={styles.slot}>
@@ -148,14 +168,17 @@ function OnlineCards({home, choices, onChange}: {home: HomeSummary; choices: boo
           <Banner tone="success" inset text={h.waitingPaid(formatRupees(home.guaranteedPerHourPaise))} />
         ) : null}
       </Card>
-      <Card style={styles.spread}>
-        <View>
-          <Text style={styles.small}>{h.today}</Text>
-          <Text style={styles.hero} testID="rider-today-earnings">
-            {formatRupees(home.todayEarningsPaise)}
-          </Text>
+      <Card>
+        <View style={styles.spread}>
+          <View>
+            <Text style={styles.small}>{h.today}</Text>
+            <Text style={styles.hero} testID="rider-today-earnings">
+              {formatRupees(home.todayEarningsPaise)}
+            </Text>
+          </View>
+          <Text style={styles.secondary}>{h.trips(home.todayTrips)}</Text>
         </View>
-        <Text style={styles.secondary}>{h.trips(home.todayTrips)}</Text>
+        <PerHour home={home} />
       </Card>
       {home.restPoint ? (
         <Card style={styles.iconCard}>

@@ -1,0 +1,25 @@
+# services/fleet-engine (docs/riders/SCALE.md). The engine's own settings come from FLEET_ENGINE_* (EngineSettings).
+spring:
+  application:
+    name: fleet-engine
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+server:
+  port: 8080
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          # Not ready while Redis doesn't answer (EngineConfiguration.fleetRedisHealthIndicator).
+          include: readinessState,fleetRedis

@@ -8,6 +8,7 @@ import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetRules;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.rider.FleetRiderModels.Banner;
 import in.craves.integration.fleet.rider.FleetRiderModels.Features;
@@ -48,6 +49,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -91,6 +93,21 @@ public class FleetRiderService {
         this.policies = policies;
         this.properties = properties;
         this.storage = storage;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
+    }
+
+    /** The fleet engine reads the rider again once this transaction commits (FleetEngineFeed.refresh). */
+    private void engineRefresh(UUID identityId) {
+        if (engineFeed != null) {
+            engineFeed.refreshIdentity(identityId);
+        }
     }
 
     /**
@@ -236,6 +253,7 @@ public class FleetRiderService {
         UUID riderId = rider(identityId).id();
         Timestamp saved = jdbc.queryForObject("UPDATE fleet_schema.rider SET home_lat = ?, home_lng = ?, home_saved_at = now(), "
             + "home_used_at = NULL, updated_at = now() WHERE id = ? RETURNING home_saved_at", Timestamp.class, spot(lat), spot(lng), riderId);
+        engineRefresh(identityId);
         return new HomeSpot(saved.toInstant());
     }
 
@@ -243,10 +261,12 @@ public class FleetRiderService {
     @Transactional
     public void forgetHome(UUID identityId) {
         UUID riderId = rider(identityId).id();
-        jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, home_used_at = NULL, "
-            + "updated_at = now() WHERE id = ? AND home_saved_at IS NOT NULL", riderId);
+        // The shift row first, then the rider's, in the order heading home locks them, so the two never deadlock.
         jdbc.update("UPDATE fleet_schema.rider_shift SET heading_home_until = NULL WHERE rider_id = ? AND heading_home_until IS NOT NULL",
             riderId);
+        jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, home_used_at = NULL, "
+            + "updated_at = now() WHERE id = ? AND home_saved_at IS NOT NULL", riderId);
+        engineRefresh(identityId);
     }
 
     /** A coordinate as the home spot keeps it: 2 decimal places, half up. */
@@ -273,6 +293,7 @@ public class FleetRiderService {
         }
         UUID riderId = rider(identityId).id();
         jdbc.update("UPDATE fleet_schema.rider SET max_pickup_m = ?, max_drop_m = ?, updated_at = now() WHERE id = ?", pickup, drop, riderId);
+        engineRefresh(identityId);
         return preferences(riderId);
     }
 

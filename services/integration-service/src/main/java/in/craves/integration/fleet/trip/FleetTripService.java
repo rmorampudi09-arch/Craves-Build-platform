@@ -8,6 +8,7 @@ import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
 import in.craves.integration.fleet.rider.FleetShiftService;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -101,6 +103,14 @@ public class FleetTripService {
         this.alerts = alerts;
     }
 
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
+    }
+
     /**
      * 200 with the trip for the winner; 409 OFFER_TAKEN for a lost race; 409 ORDER_CANCELLED once the order is cancelled;
      * 410 OFFER_EXPIRED; a repeat by the winner gets the trip.
@@ -143,6 +153,10 @@ public class FleetTripService {
         if (!bridge.assigned(tripId)) {
             throw taken();
         }
+        // On a trip now: the engine hears it at once, not with the rider's next /locations call.
+        if (engineFeed != null) {
+            engineFeed.refresh(rider.id());
+        }
         return view(tripId);
     }
 
@@ -155,6 +169,10 @@ public class FleetTripService {
             && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE id = ? AND rider_id = ?)",
                 Boolean.class, offerId, rider.id()))) {
             throw offerNotFound();
+        }
+        // Free again at once for the next order, in the engine too (a decline costs the rider nothing).
+        if (engineFeed != null) {
+            engineFeed.refresh(rider.id());
         }
     }
 

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +26,7 @@ import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
 import in.craves.integration.fleet.dispatch.FleetDispatcher;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
 import java.util.ArrayList;
@@ -176,6 +178,17 @@ class FleetOfferDatabaseTest {
         assertThat(fleet.db.queryForMap("SELECT state, version, provider FROM fleet_schema.trip")).isEqualTo(before);
         refused(() -> trips.decline(firstIdentity, offerOf(second)), 404, "OFFER_NOT_FOUND");
         refused(() -> transaction.execute(status -> trips.accept(secondIdentity, offerOf(second), "k2")), 410, "OFFER_EXPIRED");
+    }
+
+    @Test
+    void withTheFleetEngineOnTheWinnerAndADeclinerAreReadAgainForIt() {
+        FleetEngineFeed feed = mock(FleetEngineFeed.class);
+        when(feed.on()).thenReturn(true);
+        trips.setEngineFeed(feed);
+        transaction.execute(status -> trips.accept(firstIdentity, offerOf(first), "rider-accept-engine"));
+        verify(feed).refresh(first); // on a trip now: no other order is ranked as if the winner were free
+        trips.decline(secondIdentity, offerOf(second));
+        verify(feed).refresh(second);
     }
 
     @Test

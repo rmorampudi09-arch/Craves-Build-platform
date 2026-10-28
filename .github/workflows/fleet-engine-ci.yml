@@ -1,0 +1,67 @@
+name: Craves Fleet Engine
+
+# Checks and builds services/fleet-engine (Java 21, Spring Boot; docs/riders/SCALE.md):
+# - every engine test, including the wire contract it shares with integration-service
+#   (contracts/proto/craves/fleet/v1/testdata). The tests start their own Redis servers: one node, and a three-node cluster.
+# - one pass of the benchmarks;
+# - the container image.
+# It deploys nothing.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'services/fleet-engine/**'
+      - 'contracts/proto/craves/fleet/**'
+      - '.github/workflows/fleet-engine-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/fleet-engine/**'
+      - 'contracts/proto/craves/fleet/**'
+      - '.github/workflows/fleet-engine-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-engine-${{ github.ref }}
+  # Pull requests only: every commit on main keeps its own result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: services/fleet-engine
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/fleet-engine/pom.xml
+
+      - name: Install redis-server for the tests
+        run: sudo apt-get update -q && sudo apt-get install -y -q redis-server
+
+      - name: Test
+        run: mvn -B -ntp verify
+
+      - name: Benchmarks, one pass
+        run: mvn -B -ntp test -Dfleet.bench=true -Dtest=EngineBenchmarkTest
+
+      - name: Build the image
+        run: docker build -t "fleet-engine:${GITHUB_SHA}" .

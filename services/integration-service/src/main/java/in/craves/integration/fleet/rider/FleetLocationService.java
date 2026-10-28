@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.FleetProperties;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
+import in.craves.integration.fleet.engine.FleetEngineWire;
 import in.craves.integration.fleet.rider.FleetRiderModels.ActiveTrip;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceHealth;
 import in.craves.integration.fleet.rider.FleetRiderModels.LocationBatch;
@@ -34,6 +36,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -67,8 +70,6 @@ public class FleetLocationService {
     static final int TRACK_DAYS_KEPT = 90;
     /** Phone health on a shift is kept this many days (blueprint E6). */
     static final int HEALTH_DAYS_KEPT = 90;
-    /** A home spot (Phase 5) is forgotten this many days after it was last saved or used (research R14). */
-    static final int HOME_DAYS_KEPT = 90;
     /** Heading home ends once a real fix is this close to the home spot (metres). */
     static final int HOME_ARRIVED_M = 1_000;
     /** A fix's ageMs is capped at an hour: older is no use to dispatch or the track. */
@@ -76,23 +77,14 @@ public class FleetLocationService {
     static final int MAX_RECEIPTS = 10;
     static final long MAX_RECEIPT_AGE_MS = 3_600_000;
     private static final Set<String> RECEIPT_CHANNELS = Set.of("fcm", "locations");
-    private static final String CONTEXT = """
-        SELECT s.id AS shift_id, s.started_at, s.ended_at, s.credential_revoked_at, s.credential_expires_at <= now() AS expired,
-               r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
-               p.trip_id AS last_trip_id, a.id AS trip_id, a.state AS trip_state, a.version AS trip_version,
-               e.rider_id AS last_trip_rider_id, e.state AS last_trip_state, e.version AS last_trip_version,
-               z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now,
-               """ + FleetShiftService.BREAK_ENDS.formatted("s.id") + """
-         IS NOT NULL AS paused
-        FROM fleet_schema.rider_shift s
-        JOIN fleet_schema.rider r ON r.id = s.rider_id
-        LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = s.rider_id
-        LEFT JOIN fleet_schema.trip a ON a.rider_id = s.rider_id AND a.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
-        LEFT JOIN fleet_schema.trip e ON e.id = p.trip_id
-        LEFT JOIN LATERAL (SELECT id, starts_at, ends_at FROM fleet_schema.rider_slot
-          WHERE rider_id = s.rider_id AND status = 'BOOKED' AND starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1) z ON true
-        WHERE %s
-        FOR UPDATE OF s""";
+    private static final String CONTEXT = contextSql("", "");
+    /**
+     * CONTEXT while the fleet engine is fed (Phase 5, FleetEngineFeed.ping): also what dispatch knows about the rider, with
+     * their open offer (at most one: trip_offer's index on ACTIVE offers). Still one statement.
+     */
+    private static final String ENGINE_CONTEXT = contextSql(", s.credential_expires_at, r.max_pickup_m, r.max_drop_m, r.home_lat, r.home_lng, "
+        + "o.expires_at AS offered_until, o.offered_at AS offered_from, " + FleetShiftService.BREAK_ENDS.formatted("s.id") + " AS break_until",
+        "\n        LEFT JOIN fleet_schema.trip_offer o ON o.rider_id = s.rider_id AND o.state = 'ACTIVE' AND o.expires_at > now()");
     /**
      * The latest position, kept only when newer. Its trip_id is the trip in progress; a trip that ended (or went to another
      * rider) stays, on the same shift, while it changed within the last 2 minutes or after the phone's previous position.
@@ -148,12 +140,19 @@ public class FleetLocationService {
     private final int nextPollSec;
     /** True or left out: an app that doesn't see it keeps its shift-long wake lock (P2-10). */
     private final Boolean callbackUploads;
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
 
     public FleetLocationService(JdbcTemplate jdbc, ObjectMapper json, FleetProperties properties) {
         this.jdbc = jdbc;
         this.json = json;
         this.nextPollSec = pollSeconds(properties.idlePollSeconds());
         this.callbackUploads = properties.callbackUploadsEnabled() ? Boolean.TRUE : null;
+    }
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed != null && feed.on() ? feed : null;
     }
 
     /** CRAVES_FLEET_IDLE_POLL_SECONDS kept within 5 to 30 seconds: faster drains batteries, slower rings offers late. */
@@ -173,7 +172,8 @@ public class FleetLocationService {
         boolean byCredential = credential != null;
         // The cast keeps the credential_hash unique index usable whatever type the driver binds.
         String where = byCredential ? "s.credential_hash = CAST(? AS CHAR(64))" : "r.identity_id = ? AND s.ended_at IS NULL";
-        Context shift = jdbc.query(CONTEXT.formatted(where), (row, n) -> context(row),
+        FleetEngineFeed feed = engineFeed;
+        Context shift = jdbc.query((feed == null ? CONTEXT : ENGINE_CONTEXT).formatted(where), (row, n) -> context(row, feed != null),
             byCredential ? FleetShiftService.hash(credential) : identityId).stream().findFirst().orElse(null);
         if (shift == null) {
             if (byCredential) {
@@ -184,6 +184,9 @@ public class FleetLocationService {
         String stopReason = stopReason(shift);
         if (stopReason != null) {
             jdbc.update(FleetShiftService.endShifts("id = ?"), shift.shiftId());
+            if (feed != null) {
+                feed.refresh(shift.riderId());
+            }
             return stop(stopReason);
         }
         boolean sameShift = shift.shiftId().equals(shift.lastShiftId());
@@ -212,9 +215,20 @@ public class FleetLocationService {
         RiderFix arrived = fresh.isEmpty() || fresh.get(fresh.size() - 1).mock() ? null : fresh.get(fresh.size() - 1);
         Double arrivedLat = arrived == null ? null : arrived.lat();
         Double arrivedLng = arrived == null ? null : arrived.lng();
-        jdbc.update(HEARTBEAT, slotSeconds, slotSeconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(),
+        Object[] heartbeat = {slotSeconds, slotSeconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(),
             seconds, health, health, batch.health() == null ? null : batch.health().canRing(), arrivedLat, arrivedLat, arrivedLng,
-            shift.shiftId());
+            shift.shiftId()};
+        if (feed == null) {
+            jdbc.update(HEARTBEAT, heartbeat);
+        } else {
+            // The engine hears of the shift as this call leaves it: can_ring and heading home after the update.
+            jdbc.query(HEARTBEAT + " RETURNING can_ring, heading_home_until", (row, n) -> {
+                feed.ping(shift.riderId(), shift.now(), fresh.stream().map(fix -> new FleetEngineWire.Fix(fix.lat(), fix.lng(),
+                    fix.at().toEpochMilli(), Boolean.TRUE.equals(fix.mock()), fix.accuracyM().floatValue())).toList(),
+                    engineState(shift, (Boolean) row.getObject("can_ring"), instant(row, "heading_home_until")));
+                return null;
+            }, heartbeat);
+        }
         if (batch.health() != null && batch.health().lastExitReason() != null) {
             LOGGER.info("FLEET_APP_EXIT rider={} reason={}", shift.riderId(), oneLine(batch.health().lastExitReason()));
         }
@@ -241,21 +255,6 @@ public class FleetLocationService {
         }
         dropOldTrackDays(today);
         forgetOldHealth();
-        forgetUnusedHomes();
-    }
-
-    /** Retention (Phase 5, BACKEND.md "Data retention"): a home spot nobody saved or used for 90 days is forgotten. */
-    void forgetUnusedHomes() {
-        try {
-            int forgotten = jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, "
-                + "home_used_at = NULL WHERE home_saved_at < now() - make_interval(days => ?) "
-                + "AND (home_used_at IS NULL OR home_used_at < now() - make_interval(days => ?))", HOME_DAYS_KEPT, HOME_DAYS_KEPT);
-            if (forgotten > 0) {
-                LOGGER.info("FLEET_HOME_SPOTS_FORGOTTEN count={}", forgotten);
-            }
-        } catch (DataAccessException exception) {
-            LOGGER.error("CRAVES_ALERT alert=HOME_SPOT_RETENTION_FAILED reason={}", exception.getMostSpecificCause().getMessage());
-        }
     }
 
     /** Retention (BACKEND.md "Data retention", blueprint E6): a shift's phone health is kept 90 days. */
@@ -441,18 +440,62 @@ public class FleetLocationService {
         return new ActiveTrip(shift.lastTripId().toString(), step, shift.lastTripVersion());
     }
 
+    /**
+     * The rider as the engine's PING carries them (FleetDispatcher.nearbyRiders' columns), after this call. Test mode is
+     * the feed's to apply; seen is this call.
+     */
+    static FleetEngineWire.State engineState(Context shift, Boolean canRing, Instant headingHomeUntil) {
+        Dispatch d = shift.dispatch();
+        // The home spot goes to Redis only while heading home uses it.
+        boolean home = headingHomeUntil != null && headingHomeUntil.isAfter(shift.now());
+        return new FleetEngineWire.State(shift.shiftId(), millis(d.shiftEnds()), "ACTIVE".equals(shift.status()), shift.tripId() != null,
+            millis(d.offeredUntil()), millis(d.breakUntil()), Boolean.FALSE.equals(canRing), d.maxPickupM() == null ? 0 : d.maxPickupM(),
+            d.maxDropM() == null ? 0 : d.maxDropM(), home ? d.homeLat() : null, home ? d.homeLng() : null, millis(headingHomeUntil), false,
+            shift.now().toEpochMilli(), null, millis(d.offeredFrom()));
+    }
+
+    private static long millis(Instant at) {
+        return at == null ? 0 : at.toEpochMilli();
+    }
+
+    /** The shift, rider, position, trip and slot read (CONTEXT), with any extra columns and joins; %s is the WHERE condition. */
+    private static String contextSql(String columns, String join) {
+        return """
+            SELECT s.id AS shift_id, s.started_at, s.ended_at, s.credential_revoked_at, s.credential_expires_at <= now() AS expired,
+                   r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
+                   p.trip_id AS last_trip_id, a.id AS trip_id, a.state AS trip_state, a.version AS trip_version,
+                   e.rider_id AS last_trip_rider_id, e.state AS last_trip_state, e.version AS last_trip_version,
+                   z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now,
+                   """ + FleetShiftService.BREAK_ENDS.formatted("s.id") + " IS NOT NULL AS paused" + columns + """
+
+            FROM fleet_schema.rider_shift s
+            JOIN fleet_schema.rider r ON r.id = s.rider_id
+            LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = s.rider_id
+            LEFT JOIN fleet_schema.trip a ON a.rider_id = s.rider_id AND a.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
+            LEFT JOIN fleet_schema.trip e ON e.id = p.trip_id
+            LEFT JOIN LATERAL (SELECT id, starts_at, ends_at FROM fleet_schema.rider_slot
+              WHERE rider_id = s.rider_id AND status = 'BOOKED' AND starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1) z ON true""" + join + """
+
+            WHERE %s
+            FOR UPDATE OF s""";
+    }
+
     private static LocationBatchResponse stop(String reason) {
         return new LocationBatchResponse(List.of(), null, true, reason, null, null, null);
     }
 
-    private static Context context(ResultSet row) throws SQLException {
+    private static Context context(ResultSet row, boolean engine) throws SQLException {
+        Dispatch dispatch = !engine ? null : new Dispatch(instant(row, "credential_expires_at"), (Integer) row.getObject("max_pickup_m"),
+            (Integer) row.getObject("max_drop_m"), row.getObject("home_lat") == null ? null : row.getDouble("home_lat"),
+            row.getObject("home_lng") == null ? null : row.getDouble("home_lng"), instant(row, "break_until"), instant(row, "offered_until"),
+            instant(row, "offered_from"));
         return new Context(row.getObject("shift_id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
             instant(row, "credential_revoked_at"), row.getBoolean("expired"), row.getObject("rider_id", UUID.class), row.getString("status"),
             row.getObject("last_shift_id", UUID.class), instant(row, "last_at"), (Boolean) row.getObject("last_mock"),
             row.getObject("last_trip_id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("trip_state"),
             (Integer) row.getObject("trip_version"), row.getObject("last_trip_rider_id", UUID.class), row.getString("last_trip_state"),
             (Integer) row.getObject("last_trip_version"), row.getObject("slot_id", UUID.class), instant(row, "slot_starts_at"),
-            instant(row, "slot_ends_at"), instant(row, "db_now"), row.getBoolean("paused"));
+            instant(row, "slot_ends_at"), instant(row, "db_now"), row.getBoolean("paused"), dispatch);
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
@@ -460,9 +503,22 @@ public class FleetLocationService {
         return value == null ? null : value.toInstant();
     }
 
+    /** dispatch: only while the fleet engine is fed (ENGINE_CONTEXT), else null. */
     record Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
                    UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
                    UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, UUID slotId, Instant slotStart, Instant slotEnd,
-                   Instant now, boolean paused) {
+                   Instant now, boolean paused, Dispatch dispatch) {
+        Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
+                UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
+                UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, UUID slotId, Instant slotStart, Instant slotEnd,
+                Instant now, boolean paused) {
+            this(shiftId, startedAt, endedAt, revokedAt, expired, riderId, status, lastShiftId, lastAt, lastMock, lastTripId, tripId, tripState,
+                tripVersion, lastTripRiderId, lastTripState, lastTripVersion, slotId, slotStart, slotEnd, now, paused, null);
+        }
+    }
+
+    /** Phase 5: the rest of what dispatch knows about the rider, for the engine's PING (ENGINE_CONTEXT). */
+    record Dispatch(Instant shiftEnds, Integer maxPickupM, Integer maxDropM, Double homeLat, Double homeLng, Instant breakUntil,
+                    Instant offeredUntil, Instant offeredFrom) {
     }
 }

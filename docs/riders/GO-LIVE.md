@@ -25,7 +25,7 @@ From `main` at the merged commit, run each pipeline by hand in this order. Befor
 2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
 3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
 4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V171 and the fleet package. All flags stay off, so no fleet bean or job starts.
+5. `azure-pipelines-integration-service.yml`: V152 to V173 and the fleet package. All flags stay off, so no fleet bean or job starts.
 
 ## 2. Gateway
 
@@ -134,10 +134,51 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | `CRAVES_FLEET_IDLE_POLL_SECONDS` (default 10, kept within 5 to 30) | How often an idle online phone calls in, which also rings offers FCM missed. | Lower it only if the offer receipts show late rings on a brand. | P2-04 |
 | Telugu and Hindi (`REVIEWED_LANGUAGES` in the app: a new APK) | Riders can pick the language, and notifications follow it. | PHONE-TESTS §4 signs the language off. | P2-08 |
 | `CRAVES_FLEET_RIDER_CHOICES_ENABLED` | Riders can take a 5 to 60 minute break while online, set the farthest ride to a kitchen and to a customer they want offers for, and head home for an hour hearing only of orders that take them nearer home (`DISPATCH.md` §4). | The gateway runs this release (step 2 again: it adds `/shift/pause`, `/shift/resume`, `/preferences`, `/home-spot` and `/shift/heading-home`), and the lawyer has read the wording. Then PHONE-TESTS §6, steps 3, 4 and 6. | P4-02, P5-01 |
+| `CRAVES_FLEET_ENGINE_MODE` (`off`, `shadow`, `live`) | The fleet engine (Phase 5) hears every rider and order. In shadow it only compares its rankings with dispatch's; live, dispatch asks it first and ranks riders itself when it doesn't answer within 300 ms. Both need road ranking off: with `CRAVES_FLEET_ROAD_RANKING_ENABLED` on, dispatch leaves the engine out. | §9. | P5-02, P5-03 |
+| `CRAVES_FLEET_ENGINE_JOINT` | With the engine live, orders asked at the same moment near each other are shared out together, so more of them get a rider. | `jointChanged` (orders whose riders sharing out together would change, against first come; counted in shadow and live) is 5% or more of peak orders for two weeks (the query in §9, step 6), and riders had 14 days' notice (*legal*: it changes who gets offers). | P5-02 |
 | Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, and fair turns (`DISPATCH.md` §2 and §3). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
 
 - **Notice first.** Once dispatch is live, road ranking changes who gets offers and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before either (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
 - **How to set one:** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars NAME=value` (order-service: `-n ca-craves-order-service-prodlow`). Wait for the new revision to be healthy, then run the runtime pipeline's **status** stage: it lists every switch above. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
+
+## 9. The fleet engine (Phase 5)
+
+The engine (`services/fleet-engine`, `SCALE.md`) keeps every online rider in Redis and ranks riders for orders by the same rules as dispatch, in milliseconds and in parallel per map block. Postgres stays the record: dispatch still makes every offer, and one ACTIVE offer per rider still holds. Each step needs the one before, and before each one, Used Memory Percentage on the cache is under 50% (`infra/fleet-engine/README.md`, "Before you start"). Road ranking stays off throughout. The engine logs `NAME key=value` lines, like the other services.
+
+1. **integration-service with Phase 5** (step 1 deploys it). The mode stays unset, so the engine is off and nothing changes.
+2. **Deploy the engine** with `azure-pipelines-fleet-engine.yml`, by `infra/fleet-engine/README.md`. Its `FLEET_ENGINE_STARTED` line must show `redisShards=1`. With more shards, stop here (`SCALE.md`, "When to grow").
+3. **Shadow.** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars CRAVES_FLEET_ENGINE_MODE=shadow`. Riders and offers don't change. Watch:
+   - integration-service logs `FLEET_ENGINE_FEED pings=... failed=0 dropped=0` each minute while riders are online;
+   - the engine logs `FLEET_ENGINE_STATS` each minute, each figure for that minute, with `riderEvents` above 0 while riders are online;
+   - for each order dispatch ranks, in each round, the engine logs `FLEET_ENGINE_SHADOW` with `agree=same`, `agree=same_set` (the same riders in another order) or `agree=differ`.
+4. **Shadow passes** after 7 days and at least 100 ranked orders, when all of these hold:
+   - `differ` is under 2% of orders;
+   - each `differ` you look at has an explanation, such as a rider whose phone went quiet between the two rankings;
+   - `failed` and `dropped` stay 0;
+   - Used Memory Percentage on the cache stays under 50%.
+
+   This Log Analytics query counts the outcomes per day, one per order (its first round):
+   ```kusto
+   ContainerAppConsoleLogs_CL
+   | where ContainerAppName_s == "ca-craves-fleet-engine-prodlow" and Log_s has "FLEET_ENGINE_SHADOW"
+   | extend agree = extract('agree=([a-z_]+)', 1, Log_s), round = toint(extract(' round=([0-9]+)', 1, Log_s))
+   | where round == 1
+   | summarize orders = count() by agree, day = bin(TimeGenerated, 1d)
+   ```
+5. **Live**, once the dispatch policy is live: set the mode to `live`. The rules and the riders who get offers stay what shadow showed. Live only makes ranking faster and stops two orders asked at once from choosing the same rider. So it needs no notice, but tell riders it is running. Watch:
+   - `FLEET_ENGINE_STATS` `replyP99Ms` under 50;
+   - `FLEET_ENGINE_FALLBACK` lines: a few a day at most;
+   - `FLEET_ENGINE_FOUND_NOBODY`: none, otherwise go back to shadow and look.
+6. **Joint** (`CRAVES_FLEET_ENGINE_JOINT=true`) only by its row in §8: it changes who gets offers. The engine counts `jointChanged` in shadow and live alike, so the two weeks can run before or after step 5. This query gives its share of the orders ranked at the lunch and dinner peaks, per day:
+   ```kusto
+   ContainerAppConsoleLogs_CL
+   | where ContainerAppName_s == "ca-craves-fleet-engine-prodlow" and Log_s has "FLEET_ENGINE_STATS"
+   | where hourofday(datetime_add('minute', 330, TimeGenerated)) in (12, 13, 14, 19, 20, 21)
+   | extend requests = tolong(extract(' requests=([0-9]+)', 1, Log_s)), changed = tolong(extract(' jointChanged=([0-9]+)', 1, Log_s))
+   | summarize requests = sum(requests), changed = sum(changed) by day = bin(TimeGenerated, 1d)
+   | extend percent = round(100.0 * changed / requests, 1)
+   ```
+7. **Stop:** set the mode to `off`. With its next revision, integration-service no longer writes to Redis and dispatch ranks riders itself, as before Phase 5. `CRAVES_ALERT alert=FLEET_ENGINE_PAUSED` means live dispatch stopped asking for 30 s after five failures and ranked riders itself meanwhile; look at the engine's log.
 
 ## Stopping
 
@@ -147,6 +188,7 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | Remove one rider or kitchen | Rider pilot setup → Pilot zone → Remove | Immediate. |
 | Switch the whole fleet off | Runtime pipeline stage **disable**, after stopping dispatch and letting trips finish | The rider API and the console's fleet pages go away. Wiring is kept, so **enable** brings it back. |
 | Take the gateway routes away | `azure-pipelines-rider-fleet-apim-rollback.yml` | The app and console get 404. |
+| Take the fleet engine out | integration-service `CRAVES_FLEET_ENGINE_MODE=off` (§9); then, if wanted, delete its app (`infra/fleet-engine/README.md`) | With the new revision, dispatch ranks riders itself, as before Phase 5. Nothing is lost: Postgres has everything. |
 
 ## Accounts and listings
 

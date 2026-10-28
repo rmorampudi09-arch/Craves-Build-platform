@@ -33,6 +33,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -122,6 +123,33 @@ public class FleetDispatchJobs {
         courierStages();
         forgetOffShiftPositions();
         nudgeSilentShifts();
+        long now = System.currentTimeMillis();
+        if (now >= nextHomeSweepMs) {
+            nextHomeSweepMs = now + HOME_SWEEP_EVERY_MS;
+            forgetUnusedHomes(jdbc);
+        }
+    }
+
+    /** A home spot (Phase 5) is forgotten this many days after it was last saved or used (research R14). */
+    public static final int HOME_DAYS_KEPT = 90;
+    private static final long HOME_SWEEP_EVERY_MS = 6 * 3_600_000L;
+    private long nextHomeSweepMs; // the tick runs on one thread at a time
+
+    /**
+     * Retention (Phase 5, BACKEND.md "Data retention"): a home spot nobody saved or used for 90 days is forgotten. Here, with
+     * the fleet on, so it runs whichever rider switches are on (a spot saved while the rider API was on is still forgotten).
+     */
+    public static void forgetUnusedHomes(JdbcTemplate jdbc) {
+        try {
+            int forgotten = jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, "
+                + "home_used_at = NULL WHERE home_saved_at < now() - make_interval(days => ?) "
+                + "AND (home_used_at IS NULL OR home_used_at < now() - make_interval(days => ?))", HOME_DAYS_KEPT, HOME_DAYS_KEPT);
+            if (forgotten > 0) {
+                LOGGER.info("FLEET_HOME_SPOTS_FORGOTTEN count={}", forgotten);
+            }
+        } catch (DataAccessException exception) {
+            LOGGER.error("CRAVES_ALERT alert=HOME_SPOT_RETENTION_FAILED reason={}", exception.getMostSpecificCause().getMessage());
+        }
     }
 
     /**

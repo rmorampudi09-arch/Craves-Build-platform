@@ -29,6 +29,7 @@ import in.craves.integration.fleet.admin.FleetAdminModels.StatusEvent;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.VehicleInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.ZoneBanner;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.rider.RiderDataExport;
 import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -106,6 +108,14 @@ public class FleetAdminService {
         this.storage = storage;
         this.roles = roles;
         this.cipher = cipher;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
     }
 
     @Transactional(readOnly = true)
@@ -485,6 +495,9 @@ public class FleetAdminService {
                 admin.id(), admin.name(), rider.status(), after, Timestamp.from(now));
             if (!after.equals(rider.status())) {
                 jdbc.update("UPDATE fleet_schema.rider SET status = ?, updated_at = now() WHERE id = ?", after, riderId);
+                if (engineFeed != null) {
+                    engineFeed.refresh(riderId); // a paused or deactivated rider leaves the engine's ranking at once
+                }
             }
             // The remote role change comes last, so its failure rolls the whole decision back.
             if (activates) {

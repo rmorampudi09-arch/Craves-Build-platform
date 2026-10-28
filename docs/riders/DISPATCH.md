@@ -223,14 +223,15 @@ New York's regulator publishes figures like these every quarter [29]. No Indian 
 |---|---|---|
 | Offers timed to the food | `kitchen_wait`: most kitchens over 10 minutes at the median, for two weeks | Send the offer when the food will be ready, less the ride and a buffer, using the chef's ready estimate. Meituan cut rider waiting by 51% in a trial [24]. FoodMatch cut it by about 40% on Swiggy data [13]. |
 | Two orders per trip | `batching_candidates` 15% or more while `rider_busy_share` is over 60% (blueprint C7) | Same kitchen or a close drop, only when the cooking time leaves room. |
-| Matching all open orders together | 20–30 riders online at peak, with idle riders and waiting orders often in the same zone | Every 10–30 s per zone, solve a table of orders × riders with the Hungarian method (milliseconds at this size). The cost is travel time plus a small weight on the fair-turn gap. Offers still go to one rider at a time. The industry has moved here [19][23][25]. FoodMatch cut extra delivery time by 30% against greedy dispatch [13]. |
-| Heading home | Riders ask for it | Only orders whose drop is nearer a place the rider picks for this shift. The place is kept on the shift and forgotten when it ends. It is a home location, so a privacy review comes first. |
+| Matching all open orders together | **Built in Phase 5, switched off** (`CRAVES_FLEET_ENGINE_JOINT`, with the fleet engine live). Turn it on when `jointChanged` (orders whose riders sharing out together would change, against first come; counted in shadow and live) is 5% or more of peak orders for two weeks; 14 days' notice to riders first. | The fleet engine ranks the orders waiting in one map block together, in milliseconds: every order gets one rider before any gets a second, as many orders as possible get a rider, then riders are shared out in fair-turn order (Hungarian method; greedy beyond a size limit or under load). Offers still go to one rider at a time. The industry has moved here [19][23][25]. FoodMatch cut extra delivery time by 30% against greedy dispatch [13]. `SCALE.md`, "Matching". |
 | Suggested limits by vehicle | Bicycle riders join | Suggest 3 km for a bicycle on the Profile chips. Never impose it. |
 | Weekly payslip | Riders or the lawyer ask | A PDF per week in the rider's language, from the earnings already shown. |
-| Many riders | A match cycle over 1–2 s, a second city, or 500 or more riders online in a city | Dispatch per city, then per zone. Rider positions in Redis with H3 cells, and events on Event Hubs (Kafka). Every solve is time-limited, with a greedy fallback. Replicas. |
+| Many riders | **Built in Phase 5, switched off** (`CRAVES_FLEET_ENGINE_MODE`): shadow first, live once shadow agrees (`GO-LIVE.md` §9) | The fleet engine: rider state in Redis, one GEO set per 0.05° block, events on Redis Streams in 16 partitions, one matching loop per block, every solve time-limited with a greedy fallback, replicas sharing the partitions. Event Hubs (Kafka) replaces the streams past the limits in `SCALE.md`. |
+
+Heading home (riders asked for it) was built in Phase 5: §4.
 
 Known shortcuts in today's code, each marked `shortcut:` in the code:
-- `FleetDispatcher.standings` runs 3 queries per rider in the band. That is fine for tens of riders; batch them past about 50 in a band.
+- `FleetDispatcher.standings` runs 3 queries per rider in the band. That is fine for tens of riders; batch them past about 50 in a band. The fleet engine keeps standings in Redis instead; its feed still reads them with 2 queries per rider (`FleetEngineFeed.standing`), fine to about 1,000 riders on a shift.
 - Each round asks the couriers for a fresh quote: about one per round, and a few more when two workers race. Keep the first one on the trip if couriers start limiting quotes.
 - A rider's data copy reads `trip` by rider, and `trip` has no full index on `rider_id`. Add one if copies get slow.
 

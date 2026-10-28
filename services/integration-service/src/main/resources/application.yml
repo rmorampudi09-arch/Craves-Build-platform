@@ -57,6 +57,19 @@ craves:
     # Riders may take a break while online and choose the farthest pickup and drop they hear of (Phase 4). Switch on once
     # the APIM routes for /shift/pause, /shift/resume and /preferences are published and the app that shows them is out.
     rider-choices-enabled: ${CRAVES_FLEET_RIDER_CHOICES_ENABLED:false}
+    # The fleet engine (Phase 5, services/fleet-engine, docs/riders/SCALE.md). off: nothing is written to Redis. shadow:
+    # rider events and every order's ranking go to the engine, which compares and logs (FLEET_ENGINE_SHADOW); offers stay
+    # Java's. live: dispatch asks the engine first and ranks itself after reply-timeout-ms. Partitions and key prefix must
+    # equal the engine's FLEET_ENGINE_* settings. joint shares out orders asked at once: 14 days' notice to riders first.
+    engine:
+      mode: ${CRAVES_FLEET_ENGINE_MODE:off}
+      joint: ${CRAVES_FLEET_ENGINE_JOINT:false}
+      rider-partitions: ${CRAVES_FLEET_ENGINE_RIDER_PARTITIONS:16}
+      dispatch-partitions: ${CRAVES_FLEET_ENGINE_DISPATCH_PARTITIONS:16}
+      stream-keep-seconds: ${CRAVES_FLEET_ENGINE_STREAM_KEEP_SECONDS:120}
+      reply-timeout-ms: ${CRAVES_FLEET_ENGINE_REPLY_TIMEOUT_MS:300}
+      queue-capacity: ${CRAVES_FLEET_ENGINE_QUEUE_CAPACITY:10000}
+      key-prefix: "${CRAVES_FLEET_ENGINE_KEY_PREFIX:craves:fleet:}"
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

@@ -3,6 +3,7 @@ package in.craves.integration.fleet.rider;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.HeadingHome;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftPause;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -71,6 +73,21 @@ public class FleetShiftService {
         this.jdbc = jdbc;
         this.properties = properties;
         this.storage = storage;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
+    }
+
+    /** The fleet engine reads the rider again once this transaction commits (FleetEngineFeed.refresh). */
+    private void engineRefresh(UUID identityId) {
+        if (engineFeed != null) {
+            engineFeed.refreshIdentity(identityId);
+        }
     }
 
     /**
@@ -126,6 +143,7 @@ public class FleetShiftService {
                 INSERT INTO fleet_schema.rider_shift (id, rider_id, device_id, credential_hash, credential_expires_at, selfie_blob,
                   selfie_size_bytes) VALUES (?, ?, ?, ?, now() + INTERVAL '12 hours', ?, ?) RETURNING credential_expires_at""",
                 Timestamp.class, shiftId, rider.id(), rider.deviceId(), hash(credential), blob, bytes.length);
+            engineRefresh(identityId);
             return new ShiftStart(credential, expires.toInstant());
         } catch (DuplicateKeyException exception) {
             throw shiftOpen(); // a parallel start opened the shift first
@@ -136,6 +154,7 @@ public class FleetShiftService {
     @Transactional
     public void end(UUID identityId) {
         jdbc.update(endShifts("rider_id = (SELECT id FROM fleet_schema.rider WHERE identity_id = ?)"), identityId);
+        engineRefresh(identityId);
     }
 
     /**
@@ -161,6 +180,7 @@ public class FleetShiftService {
         endBreak(shiftId);
         jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE rider_id = ? AND state = 'ACTIVE'",
             shift.get(0).get("rider_id"));
+        engineRefresh(identityId);
         return new ShiftPause(jdbc.queryForObject("INSERT INTO fleet_schema.rider_break (id, rider_id, shift_id, ends_at) "
             + "VALUES (?, ?, ?, now() + make_interval(mins => ?)) RETURNING ends_at", Timestamp.class, UUID.randomUUID(),
             shift.get(0).get("rider_id"), shiftId, minutes).toInstant());
@@ -171,6 +191,7 @@ public class FleetShiftService {
     public void resume(UUID identityId) {
         jdbc.queryForList("SELECT s.id FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id "
             + "WHERE r.identity_id = ? AND s.ended_at IS NULL", UUID.class, identityId).forEach(this::endBreak);
+        engineRefresh(identityId);
     }
 
     /**
@@ -194,6 +215,7 @@ public class FleetShiftService {
             throw FleetApiException.conflict("HOME_NOT_SAVED", "Save your home spot in Profile first.");
         }
         jdbc.update("UPDATE fleet_schema.rider SET home_used_at = now() WHERE id = ?", shift.get(0).get("rider_id"));
+        engineRefresh(identityId);
         return new HeadingHome(jdbc.queryForObject("UPDATE fleet_schema.rider_shift SET heading_home_until = now() + make_interval(mins => ?) "
             + "WHERE id = ? RETURNING heading_home_until", Timestamp.class, HEADING_HOME_MINUTES, shift.get(0).get("id")).toInstant());
     }
@@ -203,6 +225,7 @@ public class FleetShiftService {
     public void stopHeadingHome(UUID identityId) {
         jdbc.update("UPDATE fleet_schema.rider_shift s SET heading_home_until = NULL FROM fleet_schema.rider r WHERE r.id = s.rider_id "
             + "AND r.identity_id = ? AND s.ended_at IS NULL AND s.heading_home_until IS NOT NULL", identityId);
+        engineRefresh(identityId);
     }
 
     /** Ends the break running on this shift now, if one is. */

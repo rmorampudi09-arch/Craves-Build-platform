@@ -9,6 +9,7 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.dispatch.FleetDispatchJobs;
 import in.craves.integration.fleet.rider.FleetRiderModels.HeadingHome;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSpot;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSpotRequest;
@@ -126,11 +127,11 @@ class FleetHeadingHomeDatabaseTest {
         riders.saveHome(identity, new HomeSpotRequest(17.47, 78.35));
         fleet.db.update("UPDATE fleet_schema.rider SET home_saved_at = now() - INTERVAL '120 days', home_used_at = now() - INTERVAL '10 days' "
             + "WHERE id = ?", rider);
-        locations.forgetUnusedHomes();
+        FleetDispatchJobs.forgetUnusedHomes(fleet.db);
         assertThat(riders.profile(identity).homeSavedAt()).as("used 10 days ago: kept").isNotNull();
 
         fleet.db.update("UPDATE fleet_schema.rider SET home_used_at = now() - INTERVAL '91 days' WHERE id = ?", rider);
-        locations.forgetUnusedHomes();
+        FleetDispatchJobs.forgetUnusedHomes(fleet.db);
         assertThat(riders.profile(identity).homeSavedAt()).as("unused for 91 days: forgotten").isNull();
         assertThat(fleet.db.queryForObject("SELECT home_lat FROM fleet_schema.rider WHERE id = ?", BigDecimal.class, rider)).isNull();
     }

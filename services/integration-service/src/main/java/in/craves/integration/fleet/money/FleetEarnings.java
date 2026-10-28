@@ -9,6 +9,7 @@ import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetAdminService.Cursor;
 import in.craves.integration.fleet.admin.FleetAdminService.Done;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.money.FleetMoneyModels.Adjustment;
 import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.EarningsPage;
@@ -44,6 +45,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -185,6 +187,14 @@ public class FleetEarnings {
         this.ledgerOn = ledgerOn;
     }
 
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
+    }
+
     /**
      * After the trip's own transaction commits, so a failed credit never undoes a delivery (the money job retries it), and
      * on the fleet pool: the rider's request never waits for a second database connection while it still holds its own.
@@ -252,6 +262,10 @@ public class FleetEarnings {
                     UUID.randomUUID(), tripId, rider, reason, finalized, AUTOMATIC);
             }
             jdbc.update("UPDATE fleet_schema.trip SET pay_credited_at = now() WHERE id = ?", tripId);
+            if (engineFeed != null) {
+                // The day's pay for fair turns counts credited rows: read the rider again once these are committed.
+                engineFeed.refresh(rider);
+            }
             return true;
         }));
     }

@@ -1,6 +1,7 @@
 package in.craves.integration.fleet;
 
 import in.craves.integration.config.SchedulerLagWatchdog;
+import in.craves.integration.fleet.engine.FleetEngineProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -14,10 +15,16 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
-@EnableConfigurationProperties(FleetProperties.class)
+@EnableConfigurationProperties({FleetProperties.class, FleetEngineProperties.Settings.class})
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
 public class FleetConfiguration {
     public static final String FLEET_SCHEDULER = "fleetScheduler";
+
+    /** The fleet engine's settings, read from text so a typo can't stop the service starting (FleetEngineProperties.Settings). */
+    @Bean
+    FleetEngineProperties fleetEngineProperties(FleetEngineProperties.Settings settings) {
+        return settings.parsed();
+    }
 
     // One thread per fleet job: the joins-and-exits export, slot settlement, the dispatch tick, the trip_track partitions,
     // the money job (trip credits handed over after commit queue on it too) and photo retention.

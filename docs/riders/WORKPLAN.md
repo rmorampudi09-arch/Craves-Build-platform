@@ -1,6 +1,6 @@
 # Craves Rider: work plan by phase
 
-27 Oct 2026 · for Gopi · goes with `docs/riders/BLUEPRINT.md` (the why). This file is the what: every task, who does it, what to change, and how to prove it. Task IDs match the blueprint. Finding IDs (A1–A9) and decisions (E1–E8) refer to the blueprint. Phase 4 (28 Oct) goes with `docs/riders/DISPATCH.md`.
+27 Oct 2026 · for Gopi · goes with `docs/riders/BLUEPRINT.md` (the why). This file is the what: every task, who does it, what to change, and how to prove it. Task IDs match the blueprint. Finding IDs (A1–A9) and decisions (E1–E8) refer to the blueprint. Phase 4 (28 Oct) goes with `docs/riders/DISPATCH.md`, Phase 5 with `docs/riders/SCALE.md`.
 
 ## How to use this
 
@@ -832,7 +832,7 @@ Live before 13 May 2027.
 
 ## Phase 5: the fleet core
 
-**Why.** Gopi's briefs of 28 Oct: make how orders reach riders the best there is, and help riders be free; then, no more features: concentrate on the core (dispatch and GPS at scale, payments, ML), synced with what Craves already runs. Heading home (P5-01) was built before that redirect and is kept, behind the rider choices switch.
+**Why.** Gopi's briefs of 28 Oct: make how orders reach riders the best there is, and help riders be free; then, no more features: concentrate on the core (dispatch and GPS at scale, payments, ML), synced with what Craves already runs. Heading home (P5-01) was built before that redirect and is kept, behind the rider choices switch. On 29 Oct: the engine in Java, Craves's backend stack, not Go.
 
 **Entry:** none; it builds on Phase 1–4 code.
 **Rule for every item:** nothing changes for riders until a person acts. Every new path is behind a switch that is off.
@@ -845,3 +845,95 @@ Live before 13 May 2027.
 - **Privacy.** The spot is about a kilometre, only the rider sees it, and it is forgotten 90 days after it was last saved or used (`forgetUnusedHomes`).
 - **App.** Profile "Home spot for heading home", the Home "Head home" card, and the offer's home line.
 - **Proved by** `FleetHeadingHomeTest`, `FleetHeadingHomeDatabaseTest`, `FleetDispatchDatabaseTest`, `FleetRiderSecurityTest`, the migration tests, `homeSpot.test.ts`, `offerRules.test.ts`, `screensA.test.tsx`, `screensC.test.tsx`, `riderApi.mock.test.ts` and `riderApi.live.test.ts`.
+
+### P5-02 The fleet engine (done; not deployed)
+- **Contract.** `contracts/proto/craves/fleet/v1/fleet.proto`: rider events (PING, REFRESH, OFFLINE), dispatch requests (SHADOW, LIVE) and replies, as protobuf on Redis Streams. `testdata` holds golden bytes and partition vectors that both sides and protoc-generated code read.
+- **Engine.** `services/fleet-engine`, Java 21 and Spring Boot 3.5 like every Craves service, with Lettuce (the Redis client Spring Boot ships) and no other dependency:
+  - Redis through Lettuce, standalone or cluster as the cache is, TLS with the host's name on every node;
+  - live state: one hash per rider, written newest-wins by one Lua script, so no locks, plus a GEO set per 0.05° map block that moves a rider only once they have moved 50 m (or once a minute);
+  - partition leases shared fairly among instances, and stream readers that replay a minute after a takeover, each sending its batch's commands together;
+  - Craves's dispatch rules ported from `FleetDispatcher` and checked against its numbers;
+  - one matching loop per block, a virtual thread with a bounded queue, ranking the orders waiting there together (exact within a size limit, greedy beyond it or under load);
+  - live replies with 5-second holds, and shadow comparisons;
+  - Spring Boot's health probes, Micrometer counters, the live runtime lock, and one `FLEET_ENGINE_STATS` line a minute.
+- **CI.** `.github/workflows/fleet-engine-ci.yml`: `mvn verify` against real Redis (one node and a three-node cluster in the tests), one pass of the benchmarks, and the Docker build.
+- **Measured** (`EngineBenchmarkTest`, two shared cores with Redis on the same machine): ranking 200 riders takes 17 µs; a rider event costs 11 µs of engine CPU while the rider waits and 20 µs when their index moves, 50,000 to 90,000 a second per vCPU; a block ranks 16 orders together at about 1,700 orders a second and shares out 40 in 3.0 ms. Capacity math is in `SCALE.md`.
+- **Why Java.** Phase 5 was first drafted in Go. Craves's backend is Java, so the engine is too: one stack to build, deploy, secure and staff. On the same machine the Go draft applied rider events about a third faster; the Java engine sends each batch's commands together and touches the block index only for real moves, and at 11 to 20 µs of CPU an event it is never what limits Craves: 500,000 riders need 4 to 6 instances of 1 vCPU (`SCALE.md`, "Capacity").
+
+### P5-03 integration-service feeds the engine (done; switch off)
+- **New code.**
+  - `FleetEngineWire`: the same bytes as the engine (`FleetEngineWireTest` reads the goldens).
+  - `FleetEngineFeed`: PING, REFRESH and OFFLINE after commit; a bounded queue that drops rather than waits; a sweep every 5 minutes.
+  - `FleetEngineClient`: live ranking with a 300 ms timeout and a 30 s pause after 5 failures.
+  - `RedisEngineStreams`: the connection Spring already shares, used asynchronously.
+- **Hooks:**
+  - `/locations` sends a PING. With the switch off its statements are unchanged; on, it is still 5 statements.
+  - Dispatch ranks through the engine (shadow or live) and refreshes the riders it offered.
+  - Going online, offline, a break, heading home, a decline, a home spot or distance choice, and a trip's pay all trigger a refresh.
+- **Switches:** `CRAVES_FLEET_ENGINE_MODE` (off) and `CRAVES_FLEET_ENGINE_JOINT` (false); the settings are in `BACKEND.md`.
+- **Proved by** `FleetEngineWireTest`, `FleetEngineClientTest`, `FleetEngineFeedDatabaseTest` and `FleetEngineDispatchDatabaseTest`, with the existing dispatch, location, shift and offer tests unchanged.
+
+### P5-04 The engine on Azure (done; nothing deployed)
+- `infra/fleet-engine/main.bicep`: one container app in the existing environment, with no ingress. It needs a digest-pinned image built from `main` and reads the Redis URL from Key Vault. `deployEngine` is false by default.
+- `infra/fleet-engine/README.md` has the person's steps: build, the secret, what-if, deploy, check, update and roll back. `GO-LIVE.md` §9 has the switch from off to shadow to live.
+- The engine takes the services' own Redis URL (`FLEET_ENGINE_REDIS_URL`), must have `rediss://` in production (`CRAVES_ENVIRONMENT=prodlow`), and logs the cache's shard count at start. integration-service's standalone Redis client needs one shard.
+- Half a vCPU and 1 GiB, a heap of 70% (the image's `JAVA_TOOL_OPTIONS`, as for the other services), and Spring Boot's liveness and readiness probes, with up to 2 minutes to start.
+- integration-service streams keep two minutes of entries by age (`MINID ~`), not a count, so the engine's share of the small cache it shares with auth follows the event rate (`SCALE.md`, "Memory").
+- The runtime pipeline's status stage shows the two engine switches.
+
+### P5-05 The design at scale (done)
+- **`SCALE.md`,** in the brief's shape:
+  - the bottleneck audit;
+  - the topology as built and at 500,000 riders;
+  - the technology choices, with their limits and what was not chosen;
+  - the event schema and its rules;
+  - capacity from measured numbers: 808 bytes of Redis per online rider, 165 bytes per stream entry, 11 to 20 µs of engine CPU per rider event;
+  - matching, failures, backpressure and the degradation ladder;
+  - payments and models at scale;
+  - when to grow, each stage with a measured trigger.
+- **Checked against the code and the infra while writing it:**
+  - **The shared cache.** Its template (`infra/prodlow-rebuild/main.bicep`) sets VolatileLRU eviction and high availability off, where `infra/redis/README.md` intended NoEviction. Near full, auth's revocation keys could be dropped, so the 50% check before each step matters more. `infra/fleet-engine/README.md` now says so and shows how to read the live policy.
+  - **Trip calls.** On a trip, phones call every 15 s with a fix every 3 s; they do not call more often.
+  - **protoc.** The six golden messages decode with protoc-generated code, with no unknown field, and re-encode byte for byte (by hand, 28 Oct).
+- **Engine fix.** A percentile past the last bucket was +Inf, so `FLEET_ENGINE_STATS` would have printed nonsense just when lag was worst. It reads as the last bound (10,000 ms), as Prometheus does (`LatencyTest`).
+
+### P5-06 Fixes from an independent review of Phase 5 (done)
+An independent review read the engine, the feed and the template together, and reproduced each finding before it was fixed. The Java engine carries every engine fix from its first commit, with a test for each.
+- **Engine.**
+  - After a Redis failover or restart, the engine reconnects and finds a node that moved (Lettuce refreshes the cluster's slot map on a redirect and every 30 s); a reader that loses its connection opens a new one (`StreamReaderTest`, `EngineRunnerTest`).
+  - Leases: a Redis stall shorter than a lease costs no partition, and a lease that still names the instance is taken straight back. A survivor takes a dead instance's share at its next round once the leases lapse.
+  - OFFLINE leaves its time behind, so an older event can't bring the rider back.
+  - A late solve holds nobody. A request out of bounds is dropped as malformed. A batch that throws is logged and dropped; every other block carries on.
+  - The exact method's size limit counts the fair-band work too.
+  - `FLEET_ENGINE_STATS` gives each minute's figures, plus `malformed`, `failed` and `jointChanged` (orders whose riders sharing out together would change). A stream read that fails logs once a minute.
+  - A bad setting stops the start with every problem named, never the Redis URL (it holds the key); in production a plain `redis://` URL is refused.
+- **integration-service.**
+  - Live dispatch keeps only the engine's riders whom Postgres still lets hear of an order (one query; `FLEET_ENGINE_STALE`) and ranks riders itself if none is left, so a few seconds' lag never costs an order its round.
+  - An accept, a credited trip and an ops status change refresh the rider in the engine.
+  - The home spot reaches Redis only while heading home uses it.
+  - The stream writer sends nothing while the shared connection is down, cancels commands not answered in time, and after a failure asks again from one caller at a time, after 5 s. It trims by Redis's own clock, and a stream expires 3 minutes after its last write.
+  - An engine setting that can't be read raises `CRAVES_ALERT` and falls back to its default instead of stopping the service.
+  - The home-spot sweep runs with the dispatch jobs every 6 hours, whichever rider switches are on. Forgetting a home spot updates the shift row before the rider row, in the order heading home locks them.
+  - **Migration V173:** an index on `trip (rider_id, finished_at)` for each rider's last finished trip, which fair turns and the engine's feed read for every rider.
+- **Release.**
+  - `azure-pipelines-fleet-engine.yml`: the engine's tests, the image from a clean checkout of `main`, a what-if that may change nothing but the engine's own app, and the deploy only with `confirmProductionChange`. It is in the runbook's pipeline table, to be created once.
+  - The engine has its own identity, `id-craves-fleet-engine-prodlow`: AcrPull, and Key Vault Secrets User on its one secret.
+  - The template takes only the engine's app name and an image from this registry's repository pinned by a 64-hex digest, and reads the secret versionless.
+  - The engine's CI cancels superseded runs on pull requests only.
+- **Left as is:** a block's cleanup race heals itself the next round; readiness pings one Redis node.
+- **Proved by** the engine's tests (`WireTest`, `LiveStoreTest`, `LeaseManagerTest`, `StreamReaderTest`, `DispatchEngineTest`, `AssignTest`, `RulesTest`, `LatencyTest`, `EngineRunnerTest`), `FleetEngineDispatchDatabaseTest`, `FleetEngineClientTest`, `FleetEngineFeedDatabaseTest`, `FleetOfferDatabaseTest`, `FleetHeadingHomeDatabaseTest` and the migration tests.
+
+### People steps for Phase 5
+
+**S1. Deploy and gateway.** Deploy integration-service from `main` (`GO-LIVE.md` §1): V172 and V173 apply, and both engine switches stay off. Run the rider APIM pipeline again (§2) for the heading-home and home-spot routes.
+
+**S2. Heading home.** It is part of rider choices: `GO-LIVE.md` §8, after the lawyer reads the wording.
+
+**S3. The cache.** Read its eviction policy and Used Memory Percentage (`infra/fleet-engine/README.md`, "Before you start"). An Azure Monitor alert at 50% is worth adding.
+
+**S4. The engine.** Once: create the `Craves-Fleet-Engine` pipeline from `azure-pipelines-fleet-engine.yml`, and the engine's identity `id-craves-fleet-engine-prodlow` with its two roles (`infra/fleet-engine/README.md`). Then deploy it, shadow, then live, by `GO-LIVE.md` §9. Joint only by its row in §8, after 14 days' notice.
+
+### Phase 5 done when
+- Shadow has passed (`GO-LIVE.md` §9, step 4).
+- Live has run two weeks with `FLEET_ENGINE_FOUND_NOBODY` at none and `replyP99Ms` under 50.
+- The cache stayed under 50% used memory throughout.

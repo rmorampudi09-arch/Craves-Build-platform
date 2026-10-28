@@ -433,7 +433,8 @@ public class AdminDirectoryService {
         return compact;
     }
 
-    private static List<String> phoneVariants(String value) {
+    /** The three spellings a 10-digit Indian number is stored under: bare, 91-prefixed and +91-prefixed. */
+    public static List<String> phoneVariants(String value) {
         String digits = value.startsWith("+") ? value.substring(1) : value;
         List<String> variants = new ArrayList<>(3);
         if (digits.matches("\\d{10}")) {

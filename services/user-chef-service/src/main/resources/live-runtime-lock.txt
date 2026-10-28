@@ -4,6 +4,7 @@
 in.craves.userchef.admin.explorer.AdminExplorerController
 in.craves.userchef.email.AuthEmailProjectionController
 in.craves.userchef.onboarding.ChefOnboardingController
+in.craves.userchef.supportchat.InternalVoiceSupportController
 in.craves.userchef.supportchat.SupportChatController
 in.craves.userchef.web.AdminDirectoryController
 in.craves.userchef.web.AdminSupportCaseController

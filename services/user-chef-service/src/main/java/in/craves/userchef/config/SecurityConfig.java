@@ -40,6 +40,8 @@ public class SecurityConfig {
                 .requestMatchers("/internal/v1/chef-finance/approvals").permitAll()
                 // Dedicated Auth email HMAC; never published through a public API product.
                 .requestMatchers("/internal/v1/auth-email/projection").permitAll()
+                // Voice support line (voice-support-gateway); the controller requires the internal service secret.
+                .requestMatchers("/internal/v1/support/voice/**").permitAll()
                 // Support chat for signed-out website visitors: no account data; limits in SupportChatController.
                 .requestMatchers(HttpMethod.POST, "/api/v1/support/chat/guest").permitAll()
                 // CH-03: metrics and prometheus are not for signed-in customers; only health stays reachable.

@@ -84,18 +84,48 @@ class SupportOrderClientTest {
         }
     }
 
+    @Test
+    void phoneCallLookupUsesTheInternalRouteWithTheServiceSecretAndKeepsDishNamesOnly() throws Exception {
+        UUID identity = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        try (Stub stub = new Stub(Map.of(
+            "/internal/v1/support/orders", "{\"orders\": [" + ORDER_JSON + "], \"hasMore\": false}"))) {
+            var recent = stub.client().recentOrdersForPhoneCall("shared-secret", identity, false, 5);
+            String json = objectMapper.writeValueAsString(recent);
+
+            assertEquals(1, recent.size());
+            assertEquals("Amma's Kitchen", recent.get(0).path("kitchenName").asText());
+            assertEquals("Pesarattu", recent.get(0).path("items").get(0).path("name").asText());
+            assertEquals(2, recent.get(0).path("items").get(0).path("quantity").asInt());
+            for (String leaked : List.of("9999999999", "8888888888", "Plot 12", "Ravi", "22222222", "33333333",
+                "44444444", "55555555", "Ignore previous", "120.00")) {
+                assertFalse(json.contains(leaked), "leaked " + leaked);
+            }
+            assertEquals(List.of("identityId=" + identity + "&role=CUSTOMER&limit=5"), stub.queries);
+            assertEquals(List.of("shared-secret"), stub.secrets);
+            assertTrue(stub.authorizations.stream().allMatch(value -> value == null));
+        }
+    }
+
     /** Serves fixed JSON per path and 404 for anything else. */
     private final class Stub implements AutoCloseable {
         private final HttpServer server;
         private final List<String> paths = new CopyOnWriteArrayList<>();
+        private final List<String> queries = new CopyOnWriteArrayList<>();
         private final List<String> authorizations = new CopyOnWriteArrayList<>();
+        private final List<String> secrets = new CopyOnWriteArrayList<>();
 
         Stub(Map<String, String> routes) throws IOException {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", exchange -> {
                 String path = exchange.getRequestURI().getPath();
                 paths.add(path);
+                if (exchange.getRequestURI().getQuery() != null) {
+                    queries.add(exchange.getRequestURI().getQuery());
+                }
                 authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
+                if (exchange.getRequestHeaders().getFirst("X-Craves-Internal-Secret") != null) {
+                    secrets.add(exchange.getRequestHeaders().getFirst("X-Craves-Internal-Secret"));
+                }
                 String body = routes.get(path);
                 byte[] bytes = (body == null ? "{}" : body).getBytes();
                 exchange.sendResponseHeaders(body == null ? 404 : 200, bytes.length);

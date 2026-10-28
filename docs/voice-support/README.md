@@ -12,7 +12,7 @@ caller ──► Jio number (public customer care number, call-forwarded "always
                                          │ wss, 16 kHz PCM both ways (AgentStream)
                                          ▼
                         voice-support-gateway  (ca-craves-voice-prodlow, Container Apps)
-                            │ one Voice Live session per call: gpt-4.1 + azure-speech STT (en-IN, hi-IN, te-IN, kn-IN)
+                            │ one Voice Live session per call: gpt-4.1-mini + azure-speech STT (en-IN, hi-IN, te-IN, kn-IN)
                             │ + one Azure neural voice per language, switched by the set_language tool
                             ▼
                  Azure AI Foundry  ais-craves-voice-prodlow  (Central India, Voice Live)
@@ -87,14 +87,14 @@ call; 3 per number per day, 200 a day in total), `end_call`.
 - **Changing what the agent knows:** edit `services/user-chef-service/src/main/resources/support-assistant/guide.md`
   (public content only) and deploy the gateway (the image copies it) — the chat assistant picks it up at its next release.
   Phone manners and language rules live in `services/voice-support-gateway/voice_gateway/instructions.md`.
-- **Model, voices, limits:** container app env vars `VOICE_LIVE_MODEL` (default `gpt-4.1`; `gpt-4.1-mini` is cheaper),
+- **Model, voices, limits:** container app env var `VOICE_LIVE_MODEL` (default `gpt-4.1-mini`, chosen 29 Oct 2026 for lower delay; `gpt-4.1` answers better but slower; `deploy` sets it from the script default or the `VOICE_LIVE_MODEL` pipeline variable),
   `VOICE_EN|HI|TE|KN` (Azure voice names; defaults Neerja, Swara, Shruti, Sapna), `VOICE_SPEAKING_RATE`,
   `VOICE_STT_MODEL` (`azure-speech` with the four-language list, or `mai-transcribe-2` for automatic detection),
   `VOICE_LIVE_TURN_DETECTION` (`server_vad`; `azure_semantic_vad` is tuned for English and Hindi),
   `MAX_CONCURRENT_CALLS` (5; the 6th caller gets a busy signal from Exotel), `MAX_CALL_SECONDS` (600; the agent is asked
   to wrap up 30 s before).
 - **Cost:** Exotel bills the virtual number and incoming minutes (around ₹0.40–0.75/min plus the plan); Voice Live bills
-  per token of audio in, audio out and text (Pro tier for gpt-4.1). Budget on the order of a few rupees per minute of
+  per token of audio in, audio out and text (Standard tier for gpt-4.1-mini, Pro for gpt-4.1). Budget on the order of a few rupees per minute of
   conversation; check the Azure pricing calculator for the current Voice Live Pro rates and set a cost alert on the
   resource group. Idle time costs the one running replica only.
 - **Where to look:** Container Apps console logs of `ca-craves-voice-prodlow` (`call=<id> started|ended ...` lines);

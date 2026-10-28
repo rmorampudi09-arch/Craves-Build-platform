@@ -14,6 +14,9 @@ public interface EngineStreams {
     /** The value at key, or null; throws when Redis didn't answer within wait. */
     byte[] get(String key, Duration wait);
 
+    /** Sets key to value for keep; throws unless Redis took it within wait. */
+    void set(String key, byte[] value, Duration keep, Duration wait);
+
     record Entry(String stream, byte[] payload) {
     }
 }

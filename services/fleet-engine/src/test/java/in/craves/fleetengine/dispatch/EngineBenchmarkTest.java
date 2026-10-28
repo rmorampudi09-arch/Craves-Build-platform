@@ -2,9 +2,13 @@ package in.craves.fleetengine.dispatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.fleetengine.RedisSetup;
 import in.craves.fleetengine.RedisTestSupport;
 import in.craves.fleetengine.assign.Assign;
+import in.craves.fleetengine.eta.EtaModel;
+import in.craves.fleetengine.eta.EtaModels;
 import in.craves.fleetengine.live.LiveStore;
 import in.craves.fleetengine.rules.Rider;
 import in.craves.fleetengine.rules.Rules;
@@ -29,7 +33,8 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
  * The engine's benchmarks: the figures marked measured in docs/riders/SCALE.md. Skipped unless asked for:
  * <pre>mvn -B -ntp test -Dfleet.bench=true -Dtest=EngineBenchmarkTest</pre>
  * Each figure is the median of 5 timed runs after 3 warm-up runs, printed as one "BENCH name figure" line. The Redis
- * figures use a redis-server the test starts on the same machine.
+ * figures use a redis-server the test starts on the same machine. -Dfleet.bench.model=model.json ranks with that travel-time
+ * model instead of the golden one (60 trees; production versions have 200).
  */
 @EnabledIfSystemProperty(named = "fleet.bench", matches = "true")
 class EngineBenchmarkTest {
@@ -91,6 +96,15 @@ class EngineBenchmarkTest {
             List.of(), 1);
     }
 
+    static EtaModel model() throws Exception {
+        String path = System.getProperty("fleet.bench.model", "");
+        if (!path.isBlank()) {
+            return EtaModel.parse(Files.readString(Path.of(path)));
+        }
+        JsonNode golden = new ObjectMapper().readTree(Files.readString(Path.of("../../ml/fleet-eta/testdata/golden.json")));
+        return EtaModel.parse(golden.get("model").toString());
+    }
+
     @Test
     void codecRulesAndMatching() throws Exception {
         byte[] ping = HexFormat.of().parseHex(Files.readString(Path.of("../../contracts/proto/craves/fleet/v1/testdata/rider_event_ping.hex"))
@@ -103,11 +117,20 @@ class EngineBenchmarkTest {
         for (int i = 0; i < 200; i++) {
             riders.add(free(i, i * 20.0, now));
         }
-        Wire.Policy fair = new Wire.Policy(5000, 140, 3, 1500, 40, false, false);
+        Wire.Policy fair = new Wire.Policy(5000, 140, 3, 1500, 40, false, false, false, "");
         Wire.DispatchRequest q = request(new UUID(1, 1), now, KITCHEN_LAT, KITCHEN_LNG, fair);
-        assertEquals(200, Rules.rank(q, riders, now).size());
+        assertEquals(200, Rules.rank(q, riders, now, null).size());
         report("rank200Riders", String.format("%.1f us/op (fair band 1.5 km)",
-            nsPerOp(20_000, () -> Rules.rank(q, riders, now).size()) / 1_000));
+            nsPerOp(20_000, () -> Rules.rank(q, riders, now, null).size()) / 1_000));
+
+        EtaModel model = model();
+        Wire.Policy eta = new Wire.Policy(5000, 140, 3, 1500, 40, false, false, true, model.version());
+        Wire.DispatchRequest qe = request(new UUID(1, 2), now, KITCHEN_LAT, KITCHEN_LNG, eta);
+        assertEquals(200, Rules.rank(qe, riders, now, model).size());
+        report("rank200RidersEta", String.format("%.1f us/op (travel-time model %s on the %d nearest)",
+            nsPerOp(5_000, () -> Rules.rank(qe, riders, now, model).size()) / 1_000, model.version(), EtaModel.RANKED));
+        double[] row = EtaModel.features(EtaModel.PICKUP, 17.4483, 78.3915, 17.46, 78.36, now);
+        report("etaPredict", String.format("%.0f ns/op (%s)", nsPerOp(200_000, () -> (long) model.predict(row)), model.version()));
 
         Random rnd = new Random(1);
         List<Rider> pool = new ArrayList<>();
@@ -187,8 +210,8 @@ class EngineBenchmarkTest {
             }
             assertEquals(0, store.apply(conn.async, online).errors());
             DispatchEngine engine = new DispatchEngine(new DispatchEngine.Config(5_000, 20_000_000, 64, 64, 32, 50, 60_000), store,
-                conn.async, new SimpleMeterRegistry(), new Latency(), System::currentTimeMillis);
-            Wire.Policy policy = new Wire.Policy(5000, 140, 3, 1500, 40, false, true);
+                conn.async, new EtaModels(conn.async, prefix), new SimpleMeterRegistry(), new Latency(), System::currentTimeMillis);
+            Wire.Policy policy = new Wire.Policy(5000, 140, 3, 1500, 40, false, true, false, "");
             long[] n = {0};
             double[] r = withCpu(40, () -> {
                 n[0]++;

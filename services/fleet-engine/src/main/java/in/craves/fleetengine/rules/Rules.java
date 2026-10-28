@@ -1,5 +1,6 @@
 package in.craves.fleetengine.rules;
 
+import in.craves.fleetengine.eta.EtaModel;
 import in.craves.fleetengine.geo.Geo;
 import in.craves.fleetengine.wire.Wire;
 import java.util.ArrayList;
@@ -9,8 +10,9 @@ import java.util.UUID;
 
 /**
  * Ranks riders for one order exactly as integration-service's FleetDispatcher does (nearbyRiders, ranked, fair, standings;
- * docs/riders/DISPATCH.md): who may hear of the order, then nearest first, then fair turns within the band. Declines,
- * ratings and history play no part, as Telangana Act 21 of 2026 s.13(3)(b) requires.
+ * docs/riders/DISPATCH.md): who may hear of the order, then nearest first, or soonest at the kitchen by the travel-time
+ * model, then fair turns within the band. Declines, ratings and history play no part, as Telangana Act 21 of 2026
+ * s.13(3)(b) requires.
  */
 public final class Rules {
     /** FleetDispatcher's thresholds. */
@@ -39,8 +41,9 @@ public final class Rules {
     }
 
     /**
-     * One rider who may hear of the order. rankM is what riders are ranked by: straight metres. homeNearerM: heading home,
-     * metres nearer home; null when not heading home.
+     * One rider who may hear of the order. rankM is what riders are ranked by: straight metres, or with the travel-time
+     * model the predicted minutes to the kitchen as metres at 20 km/h (EtaModel.METRES_PER_MINUTE; +Infinity past the
+     * EtaModel.RANKED nearest). homeNearerM: heading home, metres nearer home; null when not heading home.
      */
     public static final class Ranked {
         public final Rider rider;
@@ -60,12 +63,13 @@ public final class Rules {
     }
 
     /**
-     * The riders who may hear of the order, in the order they would: nearbyRiders' filters, nearest first, then fair turns
-     * within the band. t is the time the rules are applied at: the request's own time for a shadow comparison, now for a
-     * live one. Live, riders held for another order are left out; in shadow, offers made at or after the request (most
-     * likely the ones Java made for it) don't count.
+     * The riders who may hear of the order, in the order they would: nearbyRiders' filters, nearest first (or soonest at
+     * the kitchen, with eta), then fair turns within the band. t is the time the rules are applied at: the request's own
+     * time for a shadow comparison, now for a live one. Live, riders held for another order are left out; in shadow,
+     * offers made at or after the request (most likely the ones Java made for it) don't count. eta: the travel-time model
+     * to rank by, or null for straight metres.
      */
-    public static List<Ranked> rank(Wire.DispatchRequest q, List<Rider> riders, long t) {
+    public static List<Ranked> rank(Wire.DispatchRequest q, List<Rider> riders, long t, EtaModel eta) {
         List<Ranked> out = new ArrayList<>();
         boolean live = q.mode() == Wire.LIVE;
         Wire.Policy p = q.policy();
@@ -110,6 +114,14 @@ public final class Rules {
             out.add(new Ranked(r, metres, nearer));
         }
         out.sort(NEAREST);
+        if (eta != null && !out.isEmpty()) {
+            for (int i = 0; i < out.size(); i++) {
+                Ranked r = out.get(i);
+                r.rankM = i < EtaModel.RANKED ? eta.minutes(EtaModel.PICKUP, r.rider.lat, r.rider.lng, q.kitchenLat(), q.kitchenLng(),
+                    q.atMs()) * EtaModel.METRES_PER_MINUTE : Double.POSITIVE_INFINITY;
+            }
+            out.sort(NEAREST);
+        }
         if (p.fairBandM() > 0 && !out.isEmpty()) {
             double limit = out.get(0).rankM + p.fairBandM();
             int n = 0;

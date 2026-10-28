@@ -17,7 +17,7 @@ import java.util.UUID;
  * keeps one ACTIVE offer per rider; this keeps the engine from proposing one rider twice) and each order gets at most its
  * offers-at-once. Shared out jointly (the min-cost matching delivery platforms run over a batch of orders), every order
  * first gets one rider before any gets a second, then fair turns pick riders by pay per hour within each order's band and
- * the rest go by fewest metres; first come, each order in arrival order
+ * the rest go by fewest metres (or fewest minutes, with the travel-time model); first come, each order in arrival order
  * takes its first riders still free, as the Java dispatcher does today.
  */
 public final class Assign {
@@ -28,6 +28,8 @@ public final class Assign {
     static final long SLOT_BONUS = 1L << 40;
     /** A rider outside an order's band sits there only when nothing else fits. */
     static final long OUTSIDE_BAND_CM = 1L << 32;
+    /** Riders past those the travel-time model ranked (rankM +Infinity) cost this plus their straight centimetres. */
+    static final long UNRANKED_CM = 1L << 31;
 
     private Assign() {
     }
@@ -82,9 +84,9 @@ public final class Assign {
         return work > exactLimit ? p.greedy() : p.exact();
     }
 
-    /** centimetres a rider's rank is worth. */
+    /** centimetres a rider's rank is worth: rankM, or past the model's ranked riders, UNRANKED_CM plus the straight line. */
     static long cm(Rules.Ranked r) {
-        return Math.round(r.rankM * 100);
+        return Double.isInfinite(r.rankM) ? UNRANKED_CM + Math.round(r.straightM * 100) : Math.round(r.rankM * 100);
     }
 
     private record Edge(int order, int index, long cm, boolean band) {

@@ -96,6 +96,8 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
   const save = useFleetAction();
   const stop = useFleetAction();
   const off = form.mode === "off";
+  // Off shows the values it keeps in force, read-only.
+  const visible = off && shown ? dispatchForm(shown) : form;
   // The detour and how orders are offered are rider terms: a change to either needs 14 days' notice.
   const notice = off ? "" : noticeFor(form, reference);
 
@@ -144,12 +146,18 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
         </label>)}</div>
       </fieldset>
       {off && <p className="cr-muted">Off stops dispatch now and keeps today&apos;s values.</p>}
-      <NumberInputs inputs={DISPATCH_INPUTS} values={off && shown ? dispatchForm(shown) : form} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+      <NumberInputs inputs={DISPATCH_INPUTS} values={visible} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
       <p className="cr-muted">The cost guard offers a trip to riders only when rider pay plus the overhead is at most the Borzo or Pidge quote plus the premium.</p>
       <fieldset className="space-y-2">
         <legend className="font-bold">How orders are offered</legend>
         <p className="cr-muted">One rider at a time is calm: each rider gets the full time to decide, and the next rider not yet asked hears in the next round. A fair band above 0 gives the order first to the rider who has earned the least per online hour today among the free riders that close to the nearest. Declining is always free.</p>
-        <NumberInputs inputs={RULE_INPUTS} values={off && shown ? dispatchForm(shown) : form} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+        <NumberInputs inputs={RULE_INPUTS} values={visible} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={visible.rankByTravelTime} disabled={off} aria-describedby="setup-travel-help"
+            onChange={event => setForm(current => ({ ...current, rankByTravelTime: event.target.checked }))} />
+          Rank by travel time: soonest at the kitchen first
+        </label>
+        <p id="setup-travel-help" className="cr-muted text-xs">The travel-time model decides who hears first, and a fair band counts its distance as minutes at 20 km/h. It applies only while the model is live and passed its ranking check; until then riders are ranked by distance and ops get an alert.</p>
       </fieldset>
       {notice && reference && <div>
         <label className={labelClass}>New {notice} start{notice === "detour" ? "s" : ""} (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-detour-help" value={form.effectiveFrom} onChange={event => setForm(current => ({ ...current, effectiveFrom: event.target.value }))} /></label>

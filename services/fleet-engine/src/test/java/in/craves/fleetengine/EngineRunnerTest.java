@@ -47,7 +47,7 @@ class EngineRunnerTest {
             }
             waitFor(() -> registry.counter(EngineStats.RIDER_EVENTS).count() == 2);
 
-            Wire.Policy policy = new Wire.Policy(5000, 140, 1, 0, 40, false, false);
+            Wire.Policy policy = new Wire.Policy(5000, 140, 1, 0, 40, false, false, false, "");
             String dq = Wire.dispatchStream(prefix, Wire.blockPartition(Wire.block(KITCHEN_LAT, KITCHEN_LNG), settings.dispatchPartitions()));
             Wire.DispatchRequest live = request(new UUID(7, 7), Wire.LIVE, policy, List.of());
             xadd(c, dq, Wire.encode(live));
@@ -74,7 +74,7 @@ class EngineRunnerTest {
             xadd(c, dq, Wire.encode(late));
 
             // Shadow: the same ranking as Java's is counted as such (shadow ignores the live holds).
-            Wire.Policy two = new Wire.Policy(5000, 140, 2, 0, 40, false, false);
+            Wire.Policy two = new Wire.Policy(5000, 140, 2, 0, 40, false, false, false, "");
             Wire.DispatchRequest shadow = request(new UUID(7, 10), Wire.SHADOW, two, List.of(
                 new Wire.Candidate(near, 0, 0, 0, false, 0, 0, 0, false), new Wire.Candidate(far, 0, 0, 0, false, 0, 0, 0, false)));
             xadd(c, dq, Wire.encode(shadow));

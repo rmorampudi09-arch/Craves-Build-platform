@@ -178,8 +178,10 @@ public class FleetSetupService {
             for (int i = 0; i < DISPATCH_POLICY_FIELDS.size(); i++) {
                 values.put(DISPATCH_POLICY_FIELDS.get(i), given.get(i).longValue());
             }
-            List<Integer> rules = offerRules(stop ? new DispatchPolicyInput(input.mode(), null, null, null, null, null, null, null, null)
-                : input, values);
+            DispatchPolicyInput asked = stop ? new DispatchPolicyInput(input.mode(), null, null, null, null, null, null, null, null) : input;
+            List<Integer> rules = offerRules(asked, values);
+            // Phase 5: the travel-time rule, as riders are shown it unless sent (an emergency stop never changes it).
+            boolean byTravelTime = asked.rankByTravelTime() != null ? asked.rankByTravelTime() : policies.dispatchRules(null).byTravelTime();
             // Before any policy is published, the seeded draft's ranges are the declared ones.
             Map<String, List<Long>> ranges = policies.publishedRanges(DISPATCH_POLICY).orElseGet(() -> jdbc.queryForList(
                 "SELECT ranges::text FROM fleet_schema.dispatch_policy WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1", String.class)
@@ -190,10 +192,11 @@ public class FleetSetupService {
                 : input.effectiveFrom().truncatedTo(ChronoUnit.MICROS)), input.mode()));
             args.addAll(given);
             args.addAll(rules);
+            args.add(byTravelTime);
             args.add(admin.write(ranges));
             jdbc.update("INSERT INTO fleet_schema.dispatch_policy (version, effective_from, mode, " + String.join(", ", DISPATCH_POLICY_FIELDS)
-                + ", " + String.join(", ", DISPATCH_RULE_FIELDS) + ", ranges) VALUES (?, ?, ?, "
-                + "?, ".repeat(DISPATCH_POLICY_FIELDS.size() + DISPATCH_RULE_FIELDS.size()) + "CAST(? AS jsonb))", args.toArray());
+                + ", " + String.join(", ", DISPATCH_RULE_FIELDS) + ", rank_by_travel_time, ranges) VALUES (?, ?, ?, "
+                + "?, ".repeat(DISPATCH_POLICY_FIELDS.size() + DISPATCH_RULE_FIELDS.size() + 1) + "CAST(? AS jsonb))", args.toArray());
             List<String> withdrawn = policies.publishDispatchPolicy(version, by.id());
             DispatchPolicyVersion policy = jdbc.queryForObject("SELECT * FROM fleet_schema.dispatch_policy WHERE version = ?",
                 (row, n) -> dispatchPolicy(row), version);
@@ -367,7 +370,8 @@ public class FleetSetupService {
             instant(row, "published_at"), row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"),
             row.getInt("radius_m"), row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"),
             row.getLong("cost_guard_premium_paise"), row.getInt("pidge_stage_seconds"), camel(read(row.getString("ranges"), RANGES)),
-            instant(row, "withdrawn_at"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"));
+            instant(row, "withdrawn_at"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"),
+            row.getBoolean("rank_by_travel_time"));
     }
 
     private static PilotRider pilotRider(ResultSet row) throws SQLException {

@@ -15,6 +15,8 @@ import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.engine.FleetEngineClient;
 import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.engine.FleetEngineWire;
+import in.craves.integration.fleet.eta.EtaModel;
+import in.craves.integration.fleet.eta.FleetEta;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
@@ -115,6 +117,9 @@ public class FleetDispatcher implements FleetStage {
     private FleetEngineFeed engineFeed;
     private FleetEngineClient engineClient;
     private boolean engineJoint;
+    /** Phase 5, the travel-time model (craves.fleet.eta.*): quotes predicted minutes while live, and ranks where the policy says. */
+    private FleetEta eta;
+    private final AtomicLong notRankingAlertedAt = new AtomicLong();
 
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json) {
@@ -148,6 +153,11 @@ public class FleetDispatcher implements FleetStage {
         this.engineFeed = feed.on() ? feed : null;
         this.engineClient = client.live() ? client : null;
         this.engineJoint = client.joint();
+    }
+
+    @Autowired(required = false)
+    public void setEta(FleetEta eta) {
+        this.eta = eta;
     }
 
     @Override
@@ -325,7 +335,7 @@ public class FleetDispatcher implements FleetStage {
         int dropM = roads.meters(kitchenLat, kitchenLng, dropLat, dropLng);
         List<Candidate> riders = riders(command.chefSubOrderId(), kitchenLat, kitchenLng, dropLat, dropLng, dropM, policy, Set.of(), 1);
         OptionalLong courier = riders.isEmpty() ? OptionalLong.empty() : courierQuotePaise.get();
-        Choice choice = choose(riders, policy, card, dropM, courier, 1);
+        Choice choice = choose(riders, policy, card, dropM, courier, 1, kitchenLat, kitchenLng, dropLat, dropLng);
         return new Plan(chefId, card.version(), dropM, choice.offers(), choice.outcome(), courier.isPresent() ? courier.getAsLong() : null);
     }
 
@@ -338,9 +348,11 @@ public class FleetDispatcher implements FleetStage {
      */
     private List<Candidate> riders(UUID chefSubOrderId, double kitchenLat, double kitchenLng, double dropLat, double dropLng, int dropM,
                                    DispatchPolicy policy, Set<UUID> exclude, int round) {
-        boolean engineLive = engineClient != null && !roadRanking && "live".equals(policy.mode());
+        EtaModel rankBy = rankingModel(policy);
+        // The engine ranks by the model only once it has it; until then this order is ranked here.
+        boolean engineLive = engineClient != null && !roadRanking && "live".equals(policy.mode()) && (rankBy == null || eta.published());
         Optional<List<FleetEngineWire.Candidate>> answer = engineLive ? engineClient.rank(chefSubOrderId, kitchenLat, kitchenLng, dropLat,
-            dropLng, dropM, enginePolicy(policy), exclude, round) : Optional.empty();
+            dropLng, dropM, enginePolicy(policy, rankBy), exclude, round) : Optional.empty();
         if (answer.isPresent() && !answer.get().isEmpty()) {
             List<Candidate> engineRiders = answer.get().stream().filter(rider -> testMode.riderAllowed(rider.riderId()))
                 .map(FleetDispatcher::candidate).toList();
@@ -350,19 +362,43 @@ public class FleetDispatcher implements FleetStage {
                     engineRiders.size(), free.size());
             }
             if (!free.isEmpty()) {
+                if (rankBy == null) {
+                    compareEta(chefSubOrderId, free, free, policy, kitchenLat, kitchenLng, new HashMap<>());
+                }
                 return free;
             }
         }
         List<Candidate> riders = ranked(nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent(), dropLat,
-            dropLng).stream().filter(rider -> !exclude.contains(rider.riderId())).toList(), policy, kitchenLat, kitchenLng, chefSubOrderId);
+            dropLng).stream().filter(rider -> !exclude.contains(rider.riderId())).toList(), policy, kitchenLat, kitchenLng, chefSubOrderId,
+            rankBy);
         if (answer.isPresent() && !riders.isEmpty()) {
             LOGGER.warn("FLEET_ENGINE_FOUND_NOBODY chefSubOrderId={} round={} javaRiders={}", chefSubOrderId, round, riders.size());
         }
-        if (engineFeed != null && !engineLive && !roadRanking) {
-            engineFeed.shadow(chefSubOrderId, kitchenLat, kitchenLng, dropLat, dropLng, dropM, enginePolicy(policy), exclude,
+        if (engineFeed != null && !engineLive && !roadRanking && (rankBy == null || eta.published())) {
+            engineFeed.shadow(chefSubOrderId, kitchenLat, kitchenLng, dropLat, dropLng, dropM, enginePolicy(policy, rankBy), exclude,
                 riders.stream().map(FleetDispatcher::engineCandidate).toList(), round);
         }
         return riders;
+    }
+
+    /**
+     * The travel-time model that decides who hears first, where the policy ranks by travel time (Phase 5, a rule riders had
+     * notice of) and a model that ranks riders well is live (FleetEta.ranking); else null, by distance. A policy that asks
+     * for it when none can raises CRAVES_ALERT, at most every 5 minutes: riders were told "soonest", and get "nearest".
+     */
+    private EtaModel rankingModel(DispatchPolicy policy) {
+        if (!policy.rankByTravelTime()) {
+            return null;
+        }
+        EtaModel model = eta == null ? null : eta.ranking();
+        long now = System.currentTimeMillis();
+        long last = notRankingAlertedAt.get();
+        if (model == null && now - last >= 300_000 && notRankingAlertedAt.compareAndSet(last, now)) {
+            LOGGER.error("CRAVES_ALERT alert=FLEET_ETA_NOT_RANKING policy={} mode={} (the dispatch policy ranks by travel time, but no "
+                + "live model judged to rank riders well is loaded: riders are ranked by distance)", policy.version(),
+                eta == null ? "absent" : eta.mode());
+        }
+        return model;
     }
 
     /**
@@ -381,10 +417,10 @@ public class FleetDispatcher implements FleetStage {
         return riders.stream().filter(rider -> free.contains(rider.riderId())).toList();
     }
 
-    /** The policy as the engine applies it. */
-    private FleetEngineWire.Policy enginePolicy(DispatchPolicy policy) {
+    /** The policy as the engine applies it; ranked by travel time, the engine ranks by the same version. */
+    private FleetEngineWire.Policy enginePolicy(DispatchPolicy policy, EtaModel rankBy) {
         return new FleetEngineWire.Policy(policy.radiusM(), policy.pickupDetourPercent(), policy.offersAtOnce(), policy.fairBandM(),
-            policy.offerSeconds(), riderChoices, engineJoint);
+            policy.offerSeconds(), riderChoices, engineJoint, rankBy != null, rankBy == null ? "" : rankBy.version());
     }
 
     /** An engine rider as dispatch's own; one in the fair band carries its pay per hour as Standing(perHour, 1 hour) and its time free. */
@@ -409,15 +445,76 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /**
-     * The riders test mode allows, in the order they hear of the order: nearest first (by road with road ranking), then,
-     * with a fair band, fair turns within it.
+     * The riders test mode allows, in the order they hear of the order: nearest first (soonest at the kitchen where the
+     * policy ranks by travel time and a model may, else by road with road ranking), then, with a fair band, fair turns
+     * within it. Otherwise, with a model loaded, the order it would give is logged beside today's (FLEET_ETA_SHADOW).
      */
     List<Candidate> ranked(List<Candidate> nearby, DispatchPolicy policy, double kitchenLat, double kitchenLng, UUID chefSubOrderId) {
+        return ranked(nearby, policy, kitchenLat, kitchenLng, chefSubOrderId, rankingModel(policy));
+    }
+
+    private List<Candidate> ranked(List<Candidate> nearby, DispatchPolicy policy, double kitchenLat, double kitchenLng, UUID chefSubOrderId,
+                                   EtaModel rankBy) {
         List<Candidate> riders = nearby.stream().filter(rider -> testMode.riderAllowed(rider.riderId())).toList();
-        if (roadRanking) {
+        if (rankBy != null) {
+            riders = byEta(riders, rankBy, kitchenLat, kitchenLng, System.currentTimeMillis());
+        } else if (roadRanking) {
             riders = byRoad(riders, kitchenLat, kitchenLng, chefSubOrderId);
         }
-        return policy.fairBandM() > 0 ? fair(riders, policy.fairBandM()) : riders;
+        Map<UUID, Standing> standings = new HashMap<>();
+        List<Candidate> hearing = policy.fairBandM() > 0 ? fair(riders, policy.fairBandM(), standings) : riders;
+        if (rankBy == null) {
+            compareEta(chefSubOrderId, riders, hearing, policy, kitchenLat, kitchenLng, standings);
+        }
+        return hearing;
+    }
+
+    /**
+     * With a model loaded but not ranking: the riders it would ask first, after fair turns as today's are, logged beside
+     * today's (FLEET_ETA_SHADOW). base: today's order before fair turns; hearing: after them.
+     */
+    private void compareEta(UUID chefSubOrderId, List<Candidate> base, List<Candidate> hearing, DispatchPolicy policy, double kitchenLat,
+                            double kitchenLng, Map<UUID, Standing> standings) {
+        EtaModel model = eta == null ? null : eta.model();
+        if (model == null || base.isEmpty()) {
+            return;
+        }
+        List<Candidate> byModel = byEta(base, model, kitchenLat, kitchenLng, System.currentTimeMillis());
+        etaShadow(chefSubOrderId, hearing, policy.fairBandM() > 0 ? fair(byModel, policy.fairBandM(), standings) : byModel, policy, model);
+    }
+
+    /**
+     * Phase 5, ranked by travel time (ml/fleet-eta, docs/riders/DISPATCH.md §2): the EtaModel.RANKED riders nearest by
+     * straight line, ordered by the travel-time model's minutes to the kitchen (a river, a flyover or a one-way street the
+     * straight line can't see); rankM holds them as metres at 20 km/h, so a fair band keeps its unit. The rest follow,
+     * nearest first, outside any band. Exactly as the fleet engine ranks (services/fleet-engine Rules.rank).
+     */
+    static List<Candidate> byEta(List<Candidate> riders, EtaModel model, double kitchenLat, double kitchenLng, long atMs) {
+        List<Candidate> ranked = new ArrayList<>(riders.size());
+        for (int i = 0; i < riders.size(); i++) {
+            Candidate r = riders.get(i);
+            double rankM = i < EtaModel.RANKED
+                ? model.minutes(EtaModel.PICKUP, r.lat(), r.lng(), kitchenLat, kitchenLng, atMs) * EtaModel.METRES_PER_MINUTE
+                : Double.POSITIVE_INFINITY;
+            ranked.add(new Candidate(r.riderId(), r.straightLineM(), r.lat(), r.lng(), rankM, r.standing(), r.homeNearerM()));
+        }
+        ranked.sort(Comparator.comparingDouble(Candidate::rankM).thenComparingDouble(Candidate::straightLineM));
+        return ranked;
+    }
+
+    /** Today's first riders and the model's, side by side, and the model's minutes for its own: the measure before going live. */
+    private static void etaShadow(UUID chefSubOrderId, List<Candidate> today, List<Candidate> byModel, DispatchPolicy policy, EtaModel model) {
+        int k = Math.max(1, policy.offersAtOnce());
+        List<UUID> first = today.stream().limit(k).map(Candidate::riderId).toList();
+        List<UUID> modelFirst = byModel.stream().limit(k).map(Candidate::riderId).toList();
+        LOGGER.info("FLEET_ETA_SHADOW chefSubOrderId={} model={} same={} today={} eta={} etaPickupMinutes={}", chefSubOrderId,
+            model.version(), first.equals(modelFirst), shortIds(first), shortIds(modelFirst),
+            byModel.stream().limit(k).map(rider -> Double.isInfinite(rider.rankM()) ? "-"
+                : String.valueOf(Math.round(rider.rankM() / EtaModel.METRES_PER_MINUTE * 10) / 10.0)).collect(Collectors.joining(",")));
+    }
+
+    private static String shortIds(List<UUID> ids) {
+        return ids.stream().map(id -> id.toString().substring(0, 8)).collect(Collectors.joining(","));
     }
 
     /**
@@ -426,12 +523,21 @@ public class FleetDispatcher implements FleetStage {
      * follow, nearest first. Declines and ratings play no part (Telangana Act s.13(3)).
      */
     List<Candidate> fair(List<Candidate> riders, int bandM) {
+        return fair(riders, bandM, new HashMap<>());
+    }
+
+    /** As fair(riders, bandM), reading only the standings known doesn't hold yet, and keeping them there. */
+    private List<Candidate> fair(List<Candidate> riders, int bandM, Map<UUID, Standing> known) {
         if (riders.isEmpty()) {
             return riders;
         }
         double limit = riders.get(0).rankM() + bandM;
         List<Candidate> band = riders.stream().filter(rider -> rider.rankM() <= limit).toList();
-        Map<UUID, Standing> standings = standings(band.stream().map(Candidate::riderId).toList());
+        List<UUID> missing = band.stream().map(Candidate::riderId).filter(id -> !known.containsKey(id)).toList();
+        if (!missing.isEmpty()) {
+            known.putAll(standings(missing));
+        }
+        Map<UUID, Standing> standings = known;
         List<Candidate> ordered = new ArrayList<>(band.stream().map(rider -> rider.with(standings.get(rider.riderId())))
             .sorted(Comparator.comparingLong((Candidate rider) -> rider.standing().perHourPaise() / FAIR_STEP_PAISE)
                 .thenComparing(rider -> rider.standing().freeSince()))
@@ -465,8 +571,16 @@ public class FleetDispatcher implements FleetStage {
         return standings;
     }
 
-    /** The first offersAtOnce riders, in order, whose locked pay passes the cost guard; each with why it went to them. */
-    private Choice choose(List<Candidate> riders, DispatchPolicy policy, RateCard card, int dropM, OptionalLong courier, int round) {
+    /**
+     * The first offersAtOnce riders, in order, whose locked pay passes the cost guard; each with why it went to them, and with
+     * the travel-time model live, the minutes it predicts for the ride to the kitchen and on to the drop, which the offer shows
+     * (whether or not it decided the order).
+     */
+    private Choice choose(List<Candidate> riders, DispatchPolicy policy, RateCard card, int dropM, OptionalLong courier, int round,
+                          double kitchenLat, double kitchenLng, double dropLat, double dropLng) {
+        EtaModel model = eta == null ? null : eta.shown();
+        boolean soonest = rankingModel(policy) != null; // ranked by travel time: the offer says "soonest", not "nearest"
+        long now = System.currentTimeMillis();
         List<Planned> offers = new ArrayList<>();
         String outcome = "NO_RIDERS";
         int band = (int) riders.stream().filter(rider -> rider.standing() != null).count();
@@ -479,16 +593,25 @@ public class FleetDispatcher implements FleetStage {
             }
             Standing standing = rider.standing();
             OfferReason reason = standing == null
-                ? new OfferReason("NEAREST", place, riders.size(), policy.offersAtOnce(), round, null, null, null, null, rider.homeNearerM())
+                ? new OfferReason(soonest ? "SOONEST" : "NEAREST", place, riders.size(), policy.offersAtOnce(), round, null, null, null, null,
+                    rider.homeNearerM(), null)
                 : new OfferReason("FAIR", place, riders.size(), policy.offersAtOnce(), round, policy.fairBandM(), band,
                     standing.perHourPaise(), (int) Math.max(0, Duration.between(standing.freeSince(), Instant.now()).toMinutes()),
-                    rider.homeNearerM());
-            offers.add(new Planned(UUID.randomUUID(), rider.riderId(), quote, reason));
+                    rider.homeNearerM(), soonest ? policy.rules().bandMinutes() : null);
+            Float pickupMinutes = null;
+            Float dropMinutes = null;
+            if (model != null) {
+                double pickup = model.minutes(EtaModel.PICKUP, rider.lat(), rider.lng(), kitchenLat, kitchenLng, now);
+                pickupMinutes = (float) pickup;
+                // The drop leg starts once the rider has reached the kitchen: the hour the model reads is then, not now.
+                dropMinutes = (float) model.minutes(EtaModel.DROP, kitchenLat, kitchenLng, dropLat, dropLng, now + Math.round(pickup * 60_000));
+            }
+            offers.add(new Planned(UUID.randomUUID(), rider.riderId(), quote, reason, pickupMinutes, dropMinutes));
         }
         // The cost guard can leave out riders: each reason counts only the riders asked together.
         int together = offers.size();
         return new Choice(offers.stream().map(offer -> new Planned(offer.offerId(), offer.riderId(), offer.quote(),
-            offer.reason().together(together))).toList(), outcome);
+            offer.reason().together(together), offer.pickupMinutes(), offer.dropMinutes())).toList(), outcome);
     }
 
     /**
@@ -518,7 +641,8 @@ public class FleetDispatcher implements FleetStage {
             return List.of();
         }
         // shortcut: a fresh courier quote each round sent (and on a rare raced attempt); keep the first on the trip if couriers limit quotes.
-        Choice choice = choose(riders, policy, card, dropM, courierQuotePaise.get(), rounds + 1);
+        Choice choice = choose(riders, policy, card, dropM, courierQuotePaise.get(), rounds + 1, lat, lng,
+            ((Number) trip.get("drop_lat")).doubleValue(), ((Number) trip.get("drop_lng")).doubleValue());
         if (choice.offers().isEmpty()) {
             return List.of();
         }
@@ -748,15 +872,15 @@ public class FleetDispatcher implements FleetStage {
         for (Planned offer : planned) {
             offered += jdbc.update("""
                 INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m,
-                  drop_distance_m, expires_at, round, reason)
-                SELECT ?, ?, r.id, ?, CAST(? AS jsonb), ?, ?, ?, now() + make_interval(secs => ?), ?, CAST(? AS jsonb)
+                  drop_distance_m, expires_at, round, reason, pickup_minutes, drop_minutes)
+                SELECT ?, ?, r.id, ?, CAST(? AS jsonb), ?, ?, ?, now() + make_interval(secs => ?), ?, CAST(? AS jsonb), ?, ?
                 FROM fleet_schema.rider r
                 WHERE r.id = ? AND\s""" + FREE_NOW + """
 
                 ON CONFLICT (rider_id) WHERE state = 'ACTIVE' DO NOTHING""",
                 offer.offerId(), tripId, offer.quote().totalPaise(), write(offer.quote().lines()), offer.quote().rateCardVersion(),
                 offer.quote().pickupDistanceM(), offer.quote().dropDistanceM(), policy.offerSeconds(), round, write(offer.reason()),
-                offer.riderId());
+                offer.pickupMinutes(), offer.dropMinutes(), offer.riderId());
         }
         if (offered > 0 && offered < planned.size()) {
             // Some riders were taken a moment ago: the reasons count only the riders actually asked together.
@@ -828,7 +952,8 @@ public class FleetDispatcher implements FleetStage {
         }
     }
 
-    private record Planned(UUID offerId, UUID riderId, PayQuote quote, OfferReason reason) {
+    /** pickupMinutes, dropMinutes: the travel-time model's, while it is live; else null. */
+    private record Planned(UUID offerId, UUID riderId, PayQuote quote, OfferReason reason, Float pickupMinutes, Float dropMinutes) {
     }
 
     private record Choice(List<Planned> offers, String outcome) {

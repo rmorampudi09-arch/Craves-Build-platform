@@ -288,8 +288,8 @@ GROUP BY day_ist
 ORDER BY day_ist DESC;
 
 -- name: offer_rules
--- Phase 4: how offers went out, per day (IST): by rule (NEAREST; FAIR, a fair turn; "before Phase 4" for offers without
--- a reason) and round, with how many were accepted and the mean pickup distance. Fair turns cost pickup metres: if FAIR
+-- Phase 4: how offers went out, per day (IST): by rule (NEAREST; SOONEST, ranked by travel time, Phase 5; FAIR, a fair
+-- turn; "before Phase 4" for offers without a reason) and round, with how many were accepted and the mean pickup distance. Fair turns cost pickup metres: if FAIR
 -- pickups run over 30% longer than NEAREST ones for a week, narrow the band. Later rounds mean riders passed or missed.
 SELECT (o.offered_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist, COALESCE(o.reason ->> 'rule', 'before Phase 4') AS rule,
        o.round, count(*) AS offers, count(*) FILTER (WHERE o.state = 'ACCEPTED') AS accepted,

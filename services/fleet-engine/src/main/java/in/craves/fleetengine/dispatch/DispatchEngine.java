@@ -3,6 +3,8 @@ package in.craves.fleetengine.dispatch;
 import in.craves.fleetengine.EngineStats;
 import in.craves.fleetengine.RedisSetup;
 import in.craves.fleetengine.assign.Assign;
+import in.craves.fleetengine.eta.EtaModel;
+import in.craves.fleetengine.eta.EtaModels;
 import in.craves.fleetengine.ingest.StreamReader;
 import in.craves.fleetengine.live.LiveStore;
 import in.craves.fleetengine.rules.Rider;
@@ -59,6 +61,7 @@ public final class DispatchEngine implements StreamReader.Handler, AutoCloseable
     private final Config cfg;
     private final LiveStore store;
     private final RedisClusterAsyncCommands<byte[], byte[]> redis;
+    private final EtaModels eta;
     private final LongSupplier clock;
     private final ReentrantLock lock = new ReentrantLock();
     private final Map<Long, ArrayBlockingQueue<Wire.DispatchRequest>> actors = new HashMap<>();
@@ -76,15 +79,17 @@ public final class DispatchEngine implements StreamReader.Handler, AutoCloseable
     private final Counter sameSet;
     private final Counter differ;
     private final Counter jointChanged;
+    private final Counter etaMissing;
     private final DistributionSummary batchOrders;
     private final Timer solve;
 
-    /** replyMs: from a live request to its reply. */
-    public DispatchEngine(Config cfg, LiveStore store, RedisClusterAsyncCommands<byte[], byte[]> redis, MeterRegistry registry,
-                          Latency replyMs, LongSupplier clock) {
+    /** eta: where travel-time models come from (null: none, so requests naming one are left to Java); replyMs: request to reply. */
+    public DispatchEngine(Config cfg, LiveStore store, RedisClusterAsyncCommands<byte[], byte[]> redis, EtaModels eta,
+                          MeterRegistry registry, Latency replyMs, LongSupplier clock) {
         this.cfg = cfg;
         this.store = store;
         this.redis = redis;
+        this.eta = eta;
         this.clock = clock;
         this.replyMs = replyMs;
         this.requests = registry.counter(EngineStats.REQUESTS);
@@ -97,6 +102,7 @@ public final class DispatchEngine implements StreamReader.Handler, AutoCloseable
         this.sameSet = registry.counter(EngineStats.SHADOW_SAME_SET);
         this.differ = registry.counter(EngineStats.SHADOW_DIFFER);
         this.jointChanged = registry.counter(EngineStats.JOINT_CHANGED);
+        this.etaMissing = registry.counter(EngineStats.ETA_MISSING);
         this.batchOrders = registry.summary("fleet.engine.batch.orders");
         this.solve = registry.timer("fleet.engine.solve");
         this.actorCount = registry.gauge("fleet.engine.block.actors", new AtomicInteger());
@@ -243,7 +249,21 @@ public final class DispatchEngine implements StreamReader.Handler, AutoCloseable
         solve.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     }
 
+    /**
+     * Ranks one group (one mode and policy). A group whose policy names a travel-time model the engine can't load is left to
+     * integration-service, counted (etaMissing): no reply live, so it ranks by the model itself once it stops waiting; no
+     * comparison in shadow, which would set distance against the model.
+     */
     private void group(List<Wire.DispatchRequest> g, long now, int waiting) {
+        Wire.Policy policy = g.get(0).policy();
+        EtaModel model = null;
+        if (policy.eta()) {
+            model = eta == null ? null : eta.forVersion(policy.etaModel(), now);
+            if (model == null) {
+                etaMissing.increment(g.size());
+                return;
+            }
+        }
         batchOrders.record(g.size());
         List<LiveStore.Centre> centres = new ArrayList<>(g.size());
         for (Wire.DispatchRequest q : g) {
@@ -260,14 +280,14 @@ public final class DispatchEngine implements StreamReader.Handler, AutoCloseable
         List<Assign.Order> orders = new ArrayList<>(g.size());
         for (Wire.DispatchRequest q : g) {
             long t = q.mode() == Wire.SHADOW ? q.atMs() : now; // the rules as they stood when Java ranked
-            orders.add(new Assign.Order(q.policy().offersAtOnce(), Rules.rank(q, riders, t)));
+            orders.add(new Assign.Order(q.policy().offersAtOnce(), Rules.rank(q, riders, t, model)));
         }
         long limit = waiting >= cfg.overloadQueue() ? 0 : cfg.exactLimit(); // behind: share out greedily until the queue is down
         // res is how the riders are shared out; other is the other way, worked out only to measure what sharing out jointly
         // changes against first come (jointChanged, the measure for CRAVES_FLEET_ENGINE_JOINT), in shadow and live alike.
         Assign.Result res;
         Assign.Result other = null;
-        boolean joint = g.get(0).policy().joint();
+        boolean joint = policy.joint();
         if (joint) {
             res = Assign.joint(orders, limit);
             if (g.size() > 1) {
@@ -390,8 +410,8 @@ public final class DispatchEngine implements StreamReader.Handler, AutoCloseable
             differ.increment();
         }
         LOG.info("FLEET_ENGINE_SHADOW order={} agree={} java={} engine={} joint={} jointChanged={} batch={} solver={} ranked={} "
-                + "javaRanked={} round={}", shortId(q.orderId()), agree, shorts(java), shorts(alone), shorts(joint), changed, batch,
-            solver, ord.ranked().size(), q.javaRanked().size(), q.round());
+                + "javaRanked={} round={} eta={}", shortId(q.orderId()), agree, shorts(java), shorts(alone), shorts(joint), changed, batch,
+            solver, ord.ranked().size(), q.javaRanked().size(), q.round(), q.policy().eta() ? q.policy().etaModel() : "off");
     }
 
     static boolean sameSet(List<UUID> a, List<UUID> b) {

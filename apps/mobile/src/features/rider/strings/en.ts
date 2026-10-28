@@ -149,6 +149,11 @@ export const en = {
     rulesNearest: 'Nearest first: the free riders closest to the kitchen hear first.',
     rulesFair: (km: string) =>
       `Fair turns: among the free riders within ${km} of the nearest, the one who has earned the least per online hour today hears first. If two have earned the same, the one who has waited longest goes first.`,
+    // Ranked by travel time (Phase 5, OfferRules.byTravelTime).
+    rulesSoonest:
+      "Soonest first: the free riders who can reach the kitchen soonest hear first, by Craves's travel-time estimate. Without an estimate, the nearest hear first.",
+    rulesFairMinutes: (minutes: number) =>
+      `Fair turns: among the free riders who can reach the kitchen within ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} of the soonest (by Craves's travel-time estimate), the one who has earned the least per online hour today hears first. If two have earned the same, the one who has waited longest goes first.`,
     rulesRounds: (rounds: number) => `If a rider passes or the time runs out, the next rider hears, in up to ${rounds} rounds.`,
     rulesRadius: (km: string) => `Only riders within ${km} of the kitchen hear of an order.`,
     rulesFree: 'Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.',
@@ -284,6 +289,12 @@ export const en = {
     whyNextNearest: "You're the next nearest free rider.",
     whyNearestGroup: (count: number) => `You're one of the ${count} nearest free riders. The first to accept gets it.`,
     whyNextGroup: (count: number) => `You're one of the next ${count} nearest free riders. The first to accept gets it.`,
+    whySoonest: 'Of the free riders, you can reach the kitchen soonest.',
+    whyNextSoonest: 'Of the free riders, you can reach the kitchen next soonest.',
+    whySoonestGroup: (count: number) =>
+      `You're one of the ${count} free riders who can reach the kitchen soonest. The first to accept gets it.`,
+    whyNextSoonestGroup: (count: number) =>
+      `You're one of the next ${count} free riders who can reach the kitchen soonest. The first to accept gets it.`,
     whyFair: "Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn.",
     whyFairGroup: (count: number) =>
       `Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn: ${count} riders hear at once, and the first to accept gets it.`,

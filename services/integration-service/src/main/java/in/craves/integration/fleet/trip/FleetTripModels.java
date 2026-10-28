@@ -18,7 +18,7 @@ public final class FleetTripModels {
     public static final String OFFER_COLUMNS = """
         o.id, o.trip_id, o.rider_id, o.expires_at, GREATEST(0, ceil(EXTRACT(EPOCH FROM o.expires_at - now())))::bigint AS expires_in_sec,
         o.pay_paise, o.pay_lines::text AS pay_lines, o.pickup_distance_m, o.drop_distance_m, t.kitchen_area, t.drop_area, t.items_count,
-        o.reason::text AS reason""";
+        o.reason::text AS reason, o.pickup_minutes, o.drop_minutes""";
     private static final TypeReference<List<PayLine>> LINES = new TypeReference<>() { };
 
     private FleetTripModels() {
@@ -36,22 +36,25 @@ public final class FleetTripModels {
 
     /**
      * Why an offer went to its rider (Phase 4, docs/riders/DISPATCH.md), the rider's own numbers only. rule NEAREST: the
-     * place-th nearest of riders free riders; FAIR: within bandM of the nearest (bandRiders riders), the rider's earnings per
+     * place-th nearest of riders free riders; SOONEST (Phase 5): the place-th soonest at the kitchen by the travel-time model,
+     * where the dispatch policy ranks by it; FAIR: within bandM of the nearest (bandRiders riders), the rider's earnings per
      * online hour today and minutes free decided the order. atOnce riders saw it together, in round round. homeNearerM
-     * (Phase 5): the rider is heading home, and the drop leaves them this many metres nearer home.
+     * (Phase 5): the rider is heading home, and the drop leaves them this many metres nearer home. bandMinutes (Phase 5, FAIR
+     * only): riders were ranked by travel time, so the band was counted in minutes, bandM at 20 km/h.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record OfferReason(String rule, int place, int riders, int atOnce, int round, Integer bandM, Integer bandRiders,
-                              Long earnedPerHourPaise, Integer freeMinutes, Integer homeNearerM) {
-        /** Before Phase 5: nobody heading home. */
+                              Long earnedPerHourPaise, Integer freeMinutes, Integer homeNearerM, Double bandMinutes) {
+        /** Before Phase 5: nobody heading home, ranked by distance. */
         public OfferReason(String rule, int place, int riders, int atOnce, int round, Integer bandM, Integer bandRiders,
                            Long earnedPerHourPaise, Integer freeMinutes) {
-            this(rule, place, riders, atOnce, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes, null);
+            this(rule, place, riders, atOnce, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes, null, null);
         }
 
         /** The same reason with atOnce the riders asked together, which the cost guard can make fewer than the policy's. */
         public OfferReason together(int count) {
-            return new OfferReason(rule, place, riders, count, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes, homeNearerM);
+            return new OfferReason(rule, place, riders, count, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes, homeNearerM,
+                bandMinutes);
         }
     }
 
@@ -88,7 +91,8 @@ public final class FleetTripModels {
         try {
             return new Offer(row.getString("id"), row.getString("trip_id"), row.getTimestamp("expires_at").toInstant(),
                 row.getLong("expires_in_sec"), row.getLong("pay_paise"), pickup, drop, row.getString("kitchen_area"),
-                row.getString("drop_area"), estMinutes(pickup, drop), items > 0 ? items : null, lines,
+                row.getString("drop_area"), estMinutes(pickup, drop, minutes(row, "pickup_minutes"), minutes(row, "drop_minutes")),
+                items > 0 ? items : null, lines,
                 reason == null ? null : json.readValue(reason, OfferReason.class));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("trip_offer.reason must be an OfferReason", exception);
@@ -98,6 +102,19 @@ public final class FleetTripModels {
     /** About 20 km/h on a two-wheeler plus 5 minutes at the kitchen and the door: the rider's own time, not the customer's promise. */
     public static int estMinutes(int pickupDistanceM, int dropDistanceM) {
         return (int) Math.ceil((pickupDistanceM + dropDistanceM) / 333.0) + 5;
+    }
+
+    /**
+     * The travel-time model's two legs (CRAVES_FLEET_ETA_MODE live; ml/fleet-eta) plus the same 5 minutes, when it predicted
+     * them for the offer; else estMinutes' 20 km/h rule.
+     */
+    public static int estMinutes(int pickupDistanceM, int dropDistanceM, Double pickupMinutes, Double dropMinutes) {
+        return pickupMinutes != null && dropMinutes != null ? (int) Math.ceil(pickupMinutes + dropMinutes) + 5
+            : estMinutes(pickupDistanceM, dropDistanceM);
+    }
+
+    private static Double minutes(ResultSet row, String column) throws SQLException {
+        return row.getObject(column) instanceof Number n ? n.doubleValue() : null;
     }
 
     /**

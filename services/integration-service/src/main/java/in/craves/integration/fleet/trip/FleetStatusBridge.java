@@ -39,6 +39,7 @@ public class FleetStatusBridge {
     public static final String PROVIDER_ID = "craves_fleet";
     private static final String TRIP = """
         SELECT t.id, t.chef_sub_order_id, t.order_id, t.state, t.order_code, t.rider_id, t.updated_at, t.picked_up_at, t.pickup_distance_m,
+               t.pickup_minutes,
                r.name AS rider_name, r.phone AS rider_phone, p.lat, p.lng, p.mock, p.received_at,
                (SELECT s.provider FROM fleet_schema.trip_stage s WHERE s.trip_id = t.id ORDER BY s.seq DESC LIMIT 1) <> 'CRAVES_FLEET' AS superseded
         FROM fleet_schema.trip t
@@ -79,8 +80,7 @@ public class FleetStatusBridge {
         }
         jdbc.update("UPDATE fleet_schema.trip SET delivery_job_id = ? WHERE id = ?", job, tripId);
         Courier courier = courier(trip);
-        // The chef sees roughly when the rider arrives: about 3 minutes a km to the kitchen.
-        Instant pickupEta = at.plus((long) Math.ceil((trip.pickupDistanceM() == null ? 0 : trip.pickupDistanceM()) / 333.0), ChronoUnit.MINUTES);
+        Instant pickupEta = pickupEta(at, trip);
         DeliveryStatusChangedData data = new DeliveryStatusChangedData(job, trip.orderId(), trip.chefSubOrderId(), PROVIDER_ID,
             tripId.toString(), DeliveryStatus.COURIER_ASSIGNED.name(), null, at, null, null, null, courier.name(), courier.phone(),
             courier.photoUrl(), pickupEta);
@@ -121,7 +121,7 @@ public class FleetStatusBridge {
             WHERE id = ?""", toTripId.toString(), fromTripId.toString(), Timestamp.from(at), job);
         jdbc.update("UPDATE fleet_schema.trip SET delivery_job_id = ? WHERE id = ?", job, toTripId);
         Courier courier = courier(trip);
-        Instant pickupEta = at.plus((long) Math.ceil((trip.pickupDistanceM() == null ? 0 : trip.pickupDistanceM()) / 333.0), ChronoUnit.MINUTES);
+        Instant pickupEta = pickupEta(at, trip);
         DeliveryStatusChangedData data = new DeliveryStatusChangedData(job, trip.orderId(), trip.chefSubOrderId(), PROVIDER_ID,
             toTripId.toString(), DeliveryStatus.COURIER_ASSIGNED.name(), null, at, PROVIDER_ID, fromTripId.toString(), null, courier.name(),
             courier.phone(), courier.photoUrl(), pickupEta);
@@ -188,11 +188,22 @@ public class FleetStatusBridge {
             row.getString("state"), row.getString("order_code"), row.getObject("rider_id", UUID.class),
             row.getTimestamp("updated_at").toInstant(), (Integer) row.getObject("pickup_distance_m"), row.getString("rider_name"),
             row.getString("rider_phone"), (Double) row.getObject("lat"), (Double) row.getObject("lng"), (Boolean) row.getObject("mock"),
-            moved, received == null ? null : received.toInstant(), row.getBoolean("superseded"));
+            moved, received == null ? null : received.toInstant(), row.getBoolean("superseded"),
+            row.getObject("pickup_minutes") instanceof Number n ? n.doubleValue() : null);
+    }
+
+    /**
+     * Roughly when the rider reaches the kitchen, for the chef: the travel-time model's minutes when the offer had them
+     * (CRAVES_FLEET_ETA_MODE live), else about 3 minutes a km.
+     */
+    static Instant pickupEta(Instant at, Snapshot trip) {
+        long minutes = trip.pickupMinutes() != null ? (long) Math.ceil(trip.pickupMinutes())
+            : (long) Math.ceil((trip.pickupDistanceM() == null ? 0 : trip.pickupDistanceM()) / 333.0);
+        return at.plus(minutes, ChronoUnit.MINUTES);
     }
 
     record Snapshot(UUID id, UUID chefSubOrderId, UUID orderId, String state, String orderCode, UUID riderId, Instant updatedAt,
                     Integer pickupDistanceM, String riderName, String riderPhone, Double lat, Double lng, Boolean mock,
-                    boolean movedAfterPickup, Instant positionAt, boolean superseded) {
+                    boolean movedAfterPickup, Instant positionAt, boolean superseded, Double pickupMinutes) {
     }
 }

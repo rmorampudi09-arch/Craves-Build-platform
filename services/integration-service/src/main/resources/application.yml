@@ -70,6 +70,15 @@ craves:
       reply-timeout-ms: ${CRAVES_FLEET_ENGINE_REPLY_TIMEOUT_MS:300}
       queue-capacity: ${CRAVES_FLEET_ENGINE_QUEUE_CAPACITY:10000}
       key-prefix: "${CRAVES_FLEET_ENGINE_KEY_PREFIX:craves:fleet:}"
+    # The travel-time model (Phase 5, ml/fleet-eta, docs/riders/DISPATCH.md §2): minutes to the kitchen and to the door
+    # predicted from Craves's own finished trips. off: today's 20 km/h rule. shadow: dispatch logs how the model would rank
+    # (FLEET_ETA_SHADOW); nothing riders see changes. live: offers and the chef's arrival time show predicted minutes, and
+    # riders are ranked by them only where the dispatch policy's rank_by_travel_time rule says so (14 days' notice) and the
+    # version's ranking passed. model-version names a row of fleet_schema.eta_model (python -m fleet_eta sql); without
+    # one, today's rule stays.
+    eta:
+      mode: ${CRAVES_FLEET_ETA_MODE:off}
+      model-version: ${CRAVES_FLEET_ETA_MODEL_VERSION:}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

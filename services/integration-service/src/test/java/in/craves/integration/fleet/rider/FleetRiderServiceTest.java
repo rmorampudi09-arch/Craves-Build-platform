@@ -80,6 +80,15 @@ class FleetRiderServiceTest {
         assertThat(FleetRiderService.offerRulesLine(new DispatchRules(2, 1, 1000))).isEqualTo("Among the free riders within 1 km of the "
             + "nearest, the 2 who have earned the least per online hour today hear at once, and the first to accept gets it. Declining is free.");
 
+        // Phase 5: ranked by travel time, "nearest" is the soonest at the kitchen, and the band is counted in minutes.
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 1, 0, true))).isEqualTo("The free rider who can reach the kitchen "
+            + "soonest hears first, one rider at a time. Soonest is by Craves's travel-time estimate; without one, the nearest hear first. "
+            + "Declining is free.");
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 3, 1500, true))).startsWith("Among the free riders who can reach "
+            + "the kitchen within 4.5 minutes of the soonest, the one who has earned the least per online hour today hears first");
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 1, 333, true))).startsWith("Among the free riders who can reach "
+            + "the kitchen within 1 minute of the soonest");
+
         OfferRules now = new OfferRules(3, 1, 40, 5000, 0);
         OfferRules then = new OfferRules(1, 3, 30, 5000, 1500);
         Instant at = Instant.parse("2026-11-20T00:00:00Z");

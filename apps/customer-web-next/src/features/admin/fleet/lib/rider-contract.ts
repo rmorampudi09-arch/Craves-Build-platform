@@ -45,10 +45,12 @@ export const shiftSchema = z.object({
 });
 export const OFFER_STATES = ["ACTIVE", "ACCEPTED", "DECLINED", "EXPIRED", "LOST", "WITHDRAWN"] as const;
 const count = z.number().int().nonnegative();
-/** Why the rider got the offer (Phase 4), as the rider saw it. */
+/** Why the rider got the offer (Phase 4), as the rider saw it; SOONEST (Phase 5) when riders were ranked by travel time. */
 export const offerReasonSchema = z.object({
-  rule: z.enum(["NEAREST", "FAIR"]), place: count, riders: count, atOnce: count, round: count,
+  rule: z.enum(["NEAREST", "FAIR", "SOONEST"]), place: count, riders: count, atOnce: count, round: count,
   bandM: count.optional(), bandRiders: count.optional(), earnedPerHourPaise: count.optional(), freeMinutes: count.optional(),
+  // Phase 5: ranked by travel time, the band was counted in these minutes.
+  bandMinutes: z.number().nonnegative().optional(),
 });
 export const riderOfferSchema = z.object({
   offerId: id, tripId: id, orderCode: z.string().max(9), state: z.enum(OFFER_STATES), offeredAt: instant,

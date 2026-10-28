@@ -36,9 +36,9 @@ const MAX_OTP_TRIES = 5;
 const PAGE_SIZE = 20;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-/** How orders are offered: today's rules, and the demo's announced change to fair turns, one rider at a time. */
+/** How orders are offered: today's rules, and the demo's announced change to fair turns by travel time, one rider at a time. */
 const DEMO_RULES_TODAY: OfferRules = { offersAtOnce: 3, offerRounds: 1, offerSeconds: 40, radiusM: 5000, fairBandM: 0 };
-const DEMO_RULES: OfferRules = { offersAtOnce: 1, offerRounds: 3, offerSeconds: 40, radiusM: 5000, fairBandM: 1500 };
+const DEMO_RULES: OfferRules = { offersAtOnce: 1, offerRounds: 3, offerSeconds: 40, radiusM: 5000, fairBandM: 1500, byTravelTime: true };
 
 const KITCHENS = [
   {

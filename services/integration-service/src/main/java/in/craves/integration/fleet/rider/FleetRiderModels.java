@@ -133,9 +133,15 @@ public final class FleetRiderModels {
     /**
      * How orders are offered (Phase 4, docs/riders/DISPATCH.md), as numbers the app words in the rider's language (Telangana
      * Act s.12): offersAtOnce riders at a time for offerSeconds each, up to offerRounds rounds, within radiusM of the kitchen;
-     * fairBandM 0 is nearest first, above 0 fair turns within that band.
+     * fairBandM 0 is nearest first, above 0 fair turns within that band. byTravelTime (Phase 5; absent when false): "nearest"
+     * means soonest at the kitchen by Craves's travel-time estimate, the band counted in minutes at 20 km/h.
      */
-    public record OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM, Boolean byTravelTime) {
+        /** Phase 4's rules: by distance. */
+        public OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM) {
+            this(offersAtOnce, offerRounds, offerSeconds, radiusM, fairBandM, null);
+        }
     }
 
     public record LabelValue(String label, String value) {

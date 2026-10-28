@@ -72,6 +72,8 @@ steps:
         sudo apt-get update -q && sudo apt-get install -y -q redis-server # without it the Redis tests would skip
         cd $(modulePath)
         mvn -B -ntp clean verify
+        cd "$(Build.SourcesDirectory)"
+        python3 scripts/release/verify-platform-copies.py # the travel-time model's evaluator, identical in both services
       displayName: Engine tests, as its GitHub CI runs them
 
     - task: AzureCLI@2

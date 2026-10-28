@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.engine;
 
 import io.lettuce.core.RedisFuture;
+import io.lettuce.core.SetArgs;
 import io.lettuce.core.XAddArgs;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
@@ -98,6 +99,20 @@ class RedisEngineStreams implements EngineStreams {
                 return await(value, deadline);
             } catch (RuntimeException failure) {
                 value.cancel(false);
+                throw failure;
+            }
+        });
+    }
+
+    @Override
+    public void set(String key, byte[] value, Duration keep, Duration wait) {
+        long deadline = System.nanoTime() + wait.toNanos();
+        run(commands -> {
+            RedisFuture<String> done = commands.set(key.getBytes(StandardCharsets.UTF_8), value, SetArgs.Builder.px(keep.toMillis()));
+            try {
+                return await(done, deadline);
+            } catch (RuntimeException failure) {
+                done.cancel(false);
                 throw failure;
             }
         });

@@ -25,6 +25,7 @@ Production on Azure will differ. Numbers marked *estimate* are arithmetic on sta
   - two orders asked at once can both choose the same rider, and the second loses a round.
 - **Built in Phase 5, off.**
   - **The fleet engine** (`services/fleet-engine`, Java 21 and Spring Boot like every Craves service) keeps every online rider in Redis and ranks riders for orders by the same rules, per map block, in parallel. It ranks 200 riders in 17 µs, and a rider event costs it 11 µs of CPU while the rider waits and 20 µs when they move, so one vCPU keeps up with 50,000 to 90,000 events a second (*measured*).
+  - **The travel-time model** (`ml/fleet-eta`) predicts each leg's minutes from Craves's own trips. Trained in Python, it is served in Java by integration-service and the engine alike, so offers and chefs can be shown its minutes, and riders ranked by when they would reach the kitchen rather than by the straight line. The ranking is a dispatch-policy rule riders get 14 days' notice of, and a version may rank only if it put riders in the right order more often than the straight line on trips it never saw (`DISPATCH.md` §2).
   - **integration-service** feeds it after each commit.
   - **In shadow**, the engine only compares its ranking with Java's.
   - **Live**, dispatch asks it first and falls back to its own ranking after 300 ms.
@@ -42,7 +43,7 @@ What breaks first, where and why, and what fixes it.
 | # | Where | What it does today | Where it breaks | Fixed by | Trigger |
 |---|---|---|---|---|---|
 | 1 | Location ingest: `POST /locations` (APIM, then integration-service, then Postgres) | Up to 5 statements in one transaction per call. Each phone calls every 10 s while it waits for offers (the server's `nextPollSec`, 5 to 30 s) and every 15 s on a trip, with a fix taken every 3 s. The Postgres pool is 8 connections on 1 replica (blueprint E3). | Each call holds a pooled connection for its statements, so the pool tops out somewhere around 1,000 to 1,500 calls a second. That is roughly 10,000 to 15,000 riders at the 10 s poll. The Burstable Postgres (B1ms, 1 vCore) likely runs out of CPU before that (*estimate*; the proven load target is 20 calls a second). | **Built:** the PING rides on the same 5 statements, so the engine adds no write. **Stage 6:** an ingest edge writes fixes to Event Hubs and Redis, and Postgres sees only shift and trip changes. | 5,000 riders online, or `/locations` p99 over 200 ms, or Postgres CPU over 60% at peak |
-| 2 | Ranking each order (`FleetDispatcher.nearbyRiders`, `standings`) | A bounding-box query; then, for fair turns, 3 standing queries per rider in the band, and one test-mode query per rider while test mode is on | Cost grows with the riders near a kitchen: fine for tens, slow for hundreds in a 5 km radius | **Built:** the engine ranks from Redis: a GEO set per block and one hash per rider, 17 µs for 200 riders (*measured*) | Live, once shadow passes (`GO-LIVE.md` §9) |
+| 2 | Ranking each order (`FleetDispatcher.nearbyRiders`, `standings`) | A bounding-box query; then, for fair turns, 3 standing queries per rider in the band, and one test-mode query per rider while test mode is on | Cost grows with the riders near a kitchen: fine for tens, slow for hundreds in a 5 km radius | **Built:** the engine ranks from Redis: a GEO set per block and one hash per rider, 17 µs for 200 riders, 116 µs with the travel-time model (*measured*) | Live, once shadow passes (`GO-LIVE.md` §9) |
 | 3 | Two orders at the same moment | Each order ranks alone. Both pick the nearest rider, and Postgres takes the first insert (`ON CONFLICT ... DO NOTHING`). | The second order loses its best rider and waits a round. This grows with order density. | **Built:** one actor per block ranks the orders waiting there together; live replies hold their riders for 5 s; joint sharing out (§7) | Live once shadow passes; joint after 5% of peak orders changed in shadow, and 14 days' notice |
 | 4 | Postgres writes | `trip_track` keeps every on-trip fix; plus offers, trips and the ledger | At 500,000 riders, with a third on trips and a fix every 3 s, `trip_track` takes about 55,000 rows a second. That is beyond one Postgres (*estimate*). | **Built:** daily partitions, 90-day retention. **Stage 8:** history goes to Event Hubs Capture and a data lake. | 2,000 `trip_track` rows a second, sustained |
 | 5 | Redis (`amr-craves-prodlow-kmqgfy`) | Shared with auth's token-revocation keys. The template that made it (`infra/prodlow-rebuild/main.bicep`) sets Balanced B0 (0.5 GB, the smallest Balanced size), the OSS clustering policy, VolatileLRU eviction and high availability off. | Memory: near full, VolatileLRU drops keys that have an expiry, least recently used first, and auth's revocation keys are among them (`infra/redis/README.md`, "Why NoEviction"). Shards: integration-service's standalone client reaches one shard's keys only. No replica: a restart loses everything in it. | **Built:** streams trimmed by age to 2 minutes; rider keys expire after 30 minutes; the engine logs the shard count at start; all it keeps rebuilds within minutes | Engine memory over 100 MB, used memory over 50%, or more than 1 shard (§13, stage 5) |
@@ -150,10 +151,11 @@ Without a reply in 300 ms, dispatch ranks riders itself. After 5 failures in a r
 | Compute | Azure Container Apps, the existing environment | Same as every Craves service; per-app scale | Core quota per environment | **AKS:** a cluster to run. |
 | Service events | Service Bus (existing) for domain events such as an order ready for pickup | Already wired | Not built for GPS rates | |
 | Logs and metrics | Log Analytics: `FLEET_ENGINE_STATS` once a minute, `FLEET_ENGINE_SHADOW` per order; Micrometer at `/actuator/metrics` | No new service needed | Minute resolution in the logs | |
+| Travel time | Gradient-boosted trees (scikit-learn), trained in Python, served in Java from JSON trees (`EtaModel`, bit-identical to scikit-learn) | The industry's way: DoorDash, Uber Eats and Swiggy rank by learned travel times (`DISPATCH.md` §2). Trees suit 10 tabular features and are fast: 1.9 µs for 200 trees (*measured*). No Python, model server or network hop in the dispatch path. | Retrained by a person, about monthly, until the data lake (stage 8) | **A model server:** a second runtime and a network hop on every order. **Deep learning:** no gain on 10 features, and much harder to check. |
 
 ## 5. The event schema
 
-`contracts/proto/craves/fleet/v1/fleet.proto` is the source of truth. Both sides test against its golden bytes and partition vectors in `testdata`. Code that protoc generates from the file decodes the same six golden messages with no unknown field and writes them back byte for byte (checked by hand on 28 Oct 2026).
+`contracts/proto/craves/fleet/v1/fleet.proto` is the source of truth. Both sides test against its golden bytes and partition vectors in `testdata`. Code that protoc generates from the file decodes the same seven golden messages with no unknown field and writes them back byte for byte (checked by hand on 29 Oct 2026, with the travel-time fields).
 
 ```proto
 message RiderEvent {                   // stream rq:{rq<p>}, p = hash32(rider_id) mod 16
@@ -181,7 +183,8 @@ message DispatchRequest {              // stream dq:{dq<p>}, p = hash32(kitchen 
   Policy policy = 11; repeated bytes exclude = 12; repeated Candidate java_ranked = 13; int32 round = 14;
 }
 message Policy { int32 radius_m = 1; int32 detour_percent = 2; int32 offers_at_once = 3; int32 fair_band_m = 4;
-                 int32 offer_seconds = 5; bool rider_choices = 6; bool joint = 7; }
+                 int32 offer_seconds = 5; bool rider_choices = 6; bool joint = 7;
+                 bool eta = 8; string eta_model = 9; }   // rank by the travel-time model, at this version
 message Candidate { bytes rider_id = 1; double straight_line_m = 2; double lat = 3; double lng = 4; bool in_band = 5;
                     int64 per_hour_paise = 6; int64 free_since_ms = 7; int32 home_nearer_m = 8; bool held = 9; }
 message DispatchReply {                // SET reply:{<request id hex>} PX 30000
@@ -239,6 +242,7 @@ This is the vehicle-routing problem sharded by space.
 - **Blocks own orders.** Every order goes to the stream of its kitchen's 0.05° block, so one engine instance, and inside it one virtual thread, owns each block. That actor ranks the orders waiting in its block together: whatever arrived while it worked forms the next batch, up to 64. Blocks run in parallel and share nothing while they rank. With joint off, a batch is served first come: each order, in arrival order, takes its first riders not taken by an earlier one. That alone ends the lost round of §2, row 3.
 - **Riders cross borders.** An order looks at every block its radius touches. Two actors may both want a rider near a border. The hold, a compare-and-set on the rider's own hash, gives the rider to the first for 5 s, and the second takes the next rider.
 - **The rules are dispatch's.** `Rules.rank` is ported from `FleetDispatcher` and checked against its numbers, distances included (bit-identical at city scale). That covers who may hear of an order (shift, break, trip, open offer, heard from in 45 s, a real fix under 3 minutes old, a phone that can ring, distance choices, heading home) and the order they hear in (nearest first, or fair turns in the band). Declines, ratings and history play no part.
+- **Soonest, not nearest,** when integration-service asks (the dispatch policy ranks by travel time, and the live version passed its ranking test): the 50 riders nearest by straight line are ranked by the model's minutes to the kitchen, exactly as `FleetDispatcher.byEta` does, with the version named in the request. Fair bands then count minutes as metres at 20 km/h. integration-service names a version only once it has published it to the engine's Redis; a request naming one the engine can't load is left to integration-service, never ranked by distance in its place.
 - **Joint sharing out,** with `CRAVES_FLEET_ENGINE_JOINT` and 14 days' notice, works in this order:
   1. every order gets one rider before any order gets a second, and as many orders as possible get one (augmenting paths);
   2. riders join in fair-turn order, so among those ways the fairest riders are chosen (a matroid greedy), then more riders inside the fair bands;
@@ -307,21 +311,21 @@ The money design in `BACKEND.md` ("Money") is already built to grow. These rules
 
 Models predict food and roads, never people. Craves builds no rider score of any kind (`DISPATCH.md` §10). Every model:
 
-- starts in shadow, with its predictions compared to what happened for two weeks;
+- starts in shadow, with its predictions compared to what happened (a week for travel time, two weeks for the others);
 - goes live behind its own switch;
 - can be turned off, after which dispatch uses today's rules.
 
 | Model | Predicts | Data already captured | Used for | Served as | Starts when |
 |---|---|---|---|---|---|
 | Prep time | Minutes from the chef accepting to the food being ready, per kitchen (p50 and p80) | The chef's accept time (order-service), `chef_ready.ready_at`, `trip.arrived_kitchen_at`, `trip.chef_handed_over_at`, items count, hour and weekday | Offers timed to the food, and the wait shown to riders (`DISPATCH.md` §9) | A table of kitchen × hour of the week in Redis, read by the engine; retrained weekly by quantile gradient boosting | `DISPATCH.md` §9's trigger (most kitchens over 10 minutes' median wait for two weeks), with about 2,000 orders that have a ready tap |
-| Travel time | Minutes from one block to another by hour of the week | `trip_track` (on-trip fixes), trip events (picked up, arrived), the Ola road distance | The offer's estimated minutes (today (pickup m + drop m) ÷ 333, rounded up, + 5) and customer ETAs | A median speed per block pair and hour, plus a small correction model | 1,000 delivered trips |
+| Travel time: **built in Phase 5, switched off** | The minutes of one leg, rider to kitchen or kitchen to customer, from both ends, the direction, the IST hour and weekday (`ml/fleet-eta`) | Delivered trips: the rider's first fix after accepting (`trip_track`), and the accept, kitchen, pickup and drop times | The offer's minutes and the chef's arrival time; who hears first (soonest at the kitchen) where the dispatch policy says so and the version passed its ranking test (`DISPATCH.md` §2) | Gradient-boosted trees (200, depth 5, median loss) as JSON in `fleet_schema.eta_model`, evaluated in Java by integration-service and the engine, bit-identical to scikit-learn; 1.9 µs a prediction | 500 delivered legs, and a version that beats today's rule on the newest trips and on riders it never saw; a week in shadow; ranking: 14 days' notice of the policy rule (`GO-LIVE.md` §10) |
 | Demand | Orders per block per 15 minutes | Orders (order-service) and their kitchens | Ops slot planning. Riders may be shown busy times as information only: no surge to stay, no penalty. | A seasonal model by weekday × hour × block, with holidays | 8 weeks of orders |
 
 - **Pipeline.** Today the data is in Postgres. From stage 8, Event Hubs Capture lands it in the data lake as Parquet.
-  - A scheduled job trains the models and writes versioned tables, published like rate cards.
-  - The engine reads them; no model runs in the dispatch path, so there is no Python there and no added latency.
-  - Weekly error reports cover each kitchen and block, with an alert when error drifts past the shadow baseline.
-- **Data protection.** Trip positions are kept 90 days (blueprint E6). Models train on aggregates by block and hour, never on a person, and no personal data goes into a model.
+  - **Training is Python, serving is Java.** A model is exported as plain data (trees as JSON), published as a version in the database and read by the services: no Python, model server or network hop in the dispatch path. The travel-time model is the first: a person exports the legs, trains, and publishes (`ml/fleet-eta/README.md`); a version is refused unless it beats today's rule on the newest trips and on riders it never trained on, and it may decide who hears first only if it also put riders in the right order more often than the straight line.
+  - A scheduled job takes over training once the data lake exists.
+  - Error reports compare each model with what happened (`python -m fleet_eta evaluate` monthly for travel time), and a model that drifts past today's rule is retrained or switched off.
+- **Data protection.** Trip positions are kept 90 days (blueprint E6). Models train on places, times and durations, never on a person: the travel-time model's training rows carry no rider, customer, order or trip id, and no personal data is a feature.
 
 ## 11. Switches and settings
 
@@ -333,6 +337,7 @@ All are off by default. People flip them in the order of `GO-LIVE.md` §9.
 |---|---|---|
 | integration-service `CRAVES_FLEET_ENGINE_MODE` | `off`: nothing is written to Redis | `shadow`: the engine compares and logs. `live` (with the dispatch policy live and road ranking off): dispatch asks the engine first. |
 | integration-service `CRAVES_FLEET_ENGINE_JOINT` | Orders asked together in a block are served first come: each takes its first riders not taken by an earlier one | Orders asked together in a block are shared out together: a rules change, so 14 days' notice first |
+| integration-service `CRAVES_FLEET_ETA_MODE`, with `CRAVES_FLEET_ETA_MODEL_VERSION` | Riders are ranked by distance; offers show minutes at 20 km/h | `shadow`: the model's choices are logged (`FLEET_ETA_SHADOW`). `live`: offers and chefs see its minutes. Riders are ranked by its minutes to the kitchen only where the dispatch policy's `rankByTravelTime` rule says so (14 days' notice) and the version's `rankingVerdict` is `better`; integration-service and the engine then rank alike (`GO-LIVE.md` §10) |
 | `infra/fleet-engine` `deployEngine` | No app | The engine's container app |
 
 ### Settings
@@ -351,8 +356,10 @@ The engine reads the same Redis URL as integration-service (`FLEET_ENGINE_REDIS_
 |---|---|---|
 | `FLEET_ENGINE_FEED pings=… refreshes=… offline=… shadows=… failed=… dropped=… queued=…` | integration-service, once a minute while there is traffic | `failed` and `dropped` 0; `queued` near 0 |
 | `FLEET_ENGINE_STARTED … redisShards=…` | engine, at start (`NAME key=value`, as every engine line) | `redisShards=1` while integration-service's Redis client is standalone |
-| `FLEET_ENGINE_STATS` | engine, once a minute, each figure for that minute | `riderEventLagP99Ms` under 1,000; `replyP99Ms` under 50; `expired`, `shed`, `malformed` and `failed` near 0; `jointChanged` for `CRAVES_FLEET_ENGINE_JOINT` (`GO-LIVE.md` §9, step 6). Percentiles are bucket bounds (1, 2, 5, 10, 20, 50, 100 ms and up); anything past 10 s reads 10,000. |
+| `FLEET_ENGINE_STATS` | engine, once a minute, each figure for that minute | `riderEventLagP99Ms` under 1,000; `replyP99Ms` under 50; `expired`, `shed`, `malformed` and `failed` near 0; `jointChanged` for `CRAVES_FLEET_ENGINE_JOINT` (`GO-LIVE.md` §9, step 6); `etaMissing` 0 (orders naming a model the engine couldn't load, left to integration-service). Percentiles are bucket bounds (1, 2, 5, 10, 20, 50, 100 ms and up); anything past 10 s reads 10,000. |
 | `FLEET_ENGINE_SHADOW … agree=…`: `same`, `same_set` or `differ` | engine, per ranked order and round | `differ` under 2% of first rounds, each one explained |
+| `FLEET_ENGINE_ETA_LOADED`, `FLEET_ENGINE_ETA_MISSING`, `FLEET_ENGINE_ETA_REFUSED` | engine, on the first request naming a version | `LOADED` once per version; `MISSING` or `REFUSED` should not appear, since integration-service names a version only after publishing it |
+| `FLEET_ETA_LOADED … ranking=…`; `CRAVES_ALERT alert=FLEET_ETA_MODEL_MISSING`, `FLEET_ETA_MODEL_REFUSED`, `FLEET_ETA_MODEL_UNSET` or `FLEET_ETA_NOT_RANKING` | integration-service, with the travel-time model in shadow or live | `LOADED` once per revision; an alert means today's rule is in use. `NOT_RANKING`: the policy ranks by travel time but no live model may (riders were told soonest and get nearest): publish a better version or schedule the rule off |
 | `FLEET_ENGINE_FALLBACK`, `FLEET_ENGINE_FOUND_NOBODY`, `FLEET_ENGINE_STALE` | integration-service | A few a day at most; FOUND_NOBODY none; STALE now and then (a rider who changed in the last seconds) |
 | `CRAVES_ALERT alert=FLEET_ENGINE_PAUSED` | integration-service | Never; when it appears, read the engine's log |
 | Used Memory Percentage | the cache, in the portal (an Azure Monitor alert at 50% is worth adding) | Under 50% |
@@ -388,4 +395,4 @@ ContainerAppConsoleLogs_CL
 3. Microsoft, "Azure Event Hubs quotas and limits": Standard 1 MB/s or 1,000 events/s per TU, 40 TUs, 32 partitions; Premium 100 partitions per event hub, 16 PUs. https://learn.microsoft.com/azure/event-hubs/event-hubs-quotas
 4. Microsoft, "Quotas for Azure Container Apps": cores per environment. https://learn.microsoft.com/azure/container-apps/quotas
 5. Microsoft, "Capacity of an Azure API Management instance". https://learn.microsoft.com/azure/api-management/api-management-capacity
-6. Craves: `DISPATCH.md` (the rules and promises), `BACKEND.md` (the code paths), `GO-LIVE.md` §9 (the steps), `services/fleet-engine` (benchmarks: `EngineBenchmarkTest`), `infra/prodlow-rebuild/main.bicep` (the cache's settings) and `infra/redis/README.md` (why revocation keys must not be evicted).
+6. Craves: `DISPATCH.md` (the rules and promises), `BACKEND.md` (the code paths), `GO-LIVE.md` §9 (the steps), `services/fleet-engine` (benchmarks: `EngineBenchmarkTest`), `ml/fleet-eta` (the travel-time model), `infra/prodlow-rebuild/main.bicep` (the cache's settings) and `infra/redis/README.md` (why revocation keys must not be evicted).

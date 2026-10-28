@@ -832,7 +832,7 @@ Live before 13 May 2027.
 
 ## Phase 5: the fleet core
 
-**Why.** Gopi's briefs of 28 Oct: make how orders reach riders the best there is, and help riders be free; then, no more features: concentrate on the core (dispatch and GPS at scale, payments, ML), synced with what Craves already runs. Heading home (P5-01) was built before that redirect and is kept, behind the rider choices switch. On 29 Oct: the engine in Java, Craves's backend stack, not Go.
+**Why.** Gopi's briefs of 28 Oct: make how orders reach riders the best there is, and help riders be free; then, no more features: concentrate on the core (dispatch and GPS at scale, payments, ML), synced with what Craves already runs. Heading home (P5-01) was built before that redirect and is kept, behind the rider choices switch. On 29 Oct: the engine in Java, Craves's backend stack, not Go, and matching to industry standard with machine learning (Python to train, Java to serve), without rider health checks or food-prep time.
 
 **Entry:** none; it builds on Phase 1–4 code.
 **Rule for every item:** nothing changes for riders until a person acts. Every new path is behind a switch that is off.
@@ -923,9 +923,24 @@ An independent review read the engine, the feed and the template together, and r
 - **Left as is:** a block's cleanup race heals itself the next round; readiness pings one Redis node.
 - **Proved by** the engine's tests (`WireTest`, `LiveStoreTest`, `LeaseManagerTest`, `StreamReaderTest`, `DispatchEngineTest`, `AssignTest`, `RulesTest`, `LatencyTest`, `EngineRunnerTest`), `FleetEngineDispatchDatabaseTest`, `FleetEngineClientTest`, `FleetEngineFeedDatabaseTest`, `FleetOfferDatabaseTest`, `FleetHeadingHomeDatabaseTest` and the migration tests.
 
+### P5-07 The travel-time model (done; switch off)
+Matching to the industry's standard: DoorDash, Uber Eats and Swiggy rank riders by learned travel times, not straight lines (`DISPATCH.md` §2, "The travel-time model").
+- **The model** (`ml/fleet-eta`, Python 3.13 and scikit-learn, pinned): gradient-boosted trees, trained on the median, predict a leg's minutes (rider to kitchen, kitchen to customer) from both ends, the direction, the IST hour and weekday. Never who the rider is.
+  - `training_data.sql` exports delivered trips' legs read-only: no rider, customer, order or trip id; places rounded to about 100 m and start times to 15 minutes; rider groups salted per export, so two exports can't be matched. A pickup leg starts when the rider sets off, so a wait before leaving isn't counted as riding.
+  - `python -m fleet_eta train` holds out a fifth of the riders entirely and the newest fifth of the others' legs. A version passes only if its minutes beat today's rule (the offer's own distances at 20 km/h) on pickups, on drops and on the riders it never saw; legs are weighted so a few busy riders can't make the model theirs. It may decide who hears first only if it also orders riders for the same kitchen correctly at least as often as the straight line (`rankingVerdict`). It writes a model only when it passes (exit 1 when worse, 2 with too little data); `evaluate` checks a version on later trips; `sql` publishes only a passing version.
+  - Exported as JSON trees, so production never runs Python.
+- **Serving, in Java** (`EtaModel`, one file in integration-service and the engine; `verify-platform-copies.py` keeps them identical). It evaluates the trees exactly as scikit-learn does: both are tested against scikit-learn's own predictions to the bit (`testdata/golden.json`). 1.9 µs for 200 trees. The minutes served stay between 60 km/h on the straight line and 120 minutes.
+- **integration-service** (`FleetEta`, `CRAVES_FLEET_ETA_MODE`). **Migration V174:** `fleet_schema.eta_model` (versions with their judgement), `trip_offer.pickup_minutes` and `drop_minutes`, `trip.pickup_minutes`, and the dispatch policy's `rank_by_travel_time` rule, which the notice trigger now covers.
+  - `shadow` logs the riders the model would ask first, after the same fair turns (`FLEET_ETA_SHADOW`).
+  - `live`: offers show the model's minutes and the chef's arrival time uses them. Riders are ranked by it (`FleetDispatcher.byEta`, the 50 nearest by straight line) only where the dispatch policy says so, a rule riders get 14 days' notice of, and only with a version whose ranking passed. The offer then says soonest, not nearest (`SOONEST`), and a fair band counts minutes. A policy asking for it with no such version raises `FLEET_ETA_NOT_RANKING` and ranks by distance.
+  - A missing or unreadable version alerts and keeps today's rule.
+- **The engine** ranks with the same version, which integration-service publishes to Redis before naming it in a request (`Policy` fields 8 and 9, a new golden). It loads a version on the first request naming it; a request naming one it can't load is left to integration-service.
+- **Console and app.** The console's dispatch form has the rule, with its notice. Riders read it in "How you get orders" and in each offer's reason (English; Telugu and Hindi hidden until reviewed).
+- **Proved by** `test_fleet_eta.py` (14); the engine's `EtaModelTest`, `RulesTest` and `DispatchEngineTest`; integration-service's `EtaModelTest`, `FleetEtaDatabaseTest`, `FleetEtaDispatchDatabaseTest`, `FleetEtaRankingTest`, `FleetSetupDatabaseTest`, `FleetRiderServiceTest`, `FleetEngineWireTest` and the migration tests; the console's and the app's tests. The training SQL was run on the real schema.
+
 ### People steps for Phase 5
 
-**S1. Deploy and gateway.** Deploy integration-service from `main` (`GO-LIVE.md` §1): V172 and V173 apply, and both engine switches stay off. Run the rider APIM pipeline again (§2) for the heading-home and home-spot routes.
+**S1. Deploy and gateway.** Deploy integration-service from `main` (`GO-LIVE.md` §1): V172, V173 and V174 apply, and the engine and travel-time switches stay off. Run the rider APIM pipeline again (§2) for the heading-home and home-spot routes.
 
 **S2. Heading home.** It is part of rider choices: `GO-LIVE.md` §8, after the lawyer reads the wording.
 
@@ -933,7 +948,10 @@ An independent review read the engine, the feed and the template together, and r
 
 **S4. The engine.** Once: create the `Craves-Fleet-Engine` pipeline from `azure-pipelines-fleet-engine.yml`, and the engine's identity `id-craves-fleet-engine-prodlow` with its two roles (`infra/fleet-engine/README.md`). Then deploy it, shadow, then live, by `GO-LIVE.md` §9. Joint only by its row in §8, after 14 days' notice.
 
+**S5. The travel-time model.** Once 500 legs are delivered: export, train and publish a version, shadow it for a week, then live, which shows its minutes. Ranking by it is a dispatch-policy rule: schedule it in the console 14 days ahead, only with a version whose ranking passed, and after the app release that words it (`GO-LIVE.md` §10). Check it monthly on the last month's trips.
+
 ### Phase 5 done when
 - Shadow has passed (`GO-LIVE.md` §9, step 4).
 - Live has run two weeks with `FLEET_ENGINE_FOUND_NOBODY` at none and `replyP99Ms` under 50.
 - The cache stayed under 50% used memory throughout.
+- A travel-time version has passed its shadow week, once 500 legs exist.

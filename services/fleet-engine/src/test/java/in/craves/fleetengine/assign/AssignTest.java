@@ -125,6 +125,22 @@ class AssignTest {
         assertEquals(Wire.SOLVER_EXACT, Assign.joint(banded, 24).solver());
     }
 
+    /** Riders past those the travel-time model ranked (rankM +Infinity) come last and never overflow the costs. */
+    @Test
+    void ridersPastTheModelsRankedComeLast() {
+        Rider ranked = rider(1);
+        Rider unranked = rider(2);
+        Rules.Ranked far = near(unranked, 100);
+        far.rankM = Double.POSITIVE_INFINITY;
+        Rules.Ranked minutes = near(ranked, 900);
+        minutes.rankM = 3 * 1000.0 / 3;
+        List<Assign.Order> orders = List.of(new Assign.Order(1, List.of(minutes, far)), new Assign.Order(1, List.of(near(ranked, 50))));
+        Assign.Result res = Assign.joint(orders, 1_000_000_000L);
+        assertArrayEquals(new int[] {2}, picked(orders.get(0), res.chosen()[0]));
+        assertArrayEquals(new int[] {1}, picked(orders.get(1), res.chosen()[1]));
+        assertTrue(Assign.cm(far) > Assign.cm(minutes) && Assign.cm(far) < Assign.OUTSIDE_BAND_CM);
+    }
+
     /**
      * Random blocks: nobody is chosen twice, no order goes over its capacity, shared out serves at least as many orders as first
      * come, and the exact answer seats at least as many riders as the greedy one for nearest-first.

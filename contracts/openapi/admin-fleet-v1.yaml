@@ -1076,7 +1076,7 @@ paths:
         detour): once a rate card is published, a detour other than the one riders are shown (the policy in force, else
         the seeded draft's) needs effectiveFrom at least 14 days away, and riders see it as upcoming in their terms. Values
         must lie inside the declared ranges: the newest published policy's, or before any is published, the seeded draft's.
-        How orders are offered (offersAtOnce, offerRounds, fairBandM; Phase 4, docs/riders/DISPATCH.md) goes with the
+        How orders are offered (offersAtOnce, offerRounds, fairBandM; Phase 4, and rankByTravelTime, Phase 5; docs/riders/DISPATCH.md) goes with the
         policy: each one left out keeps the rules riders are shown (today's: 3 at once, 1 round, nearest first, before any
         policy), the emergency stop never changes them, rounds x offerSeconds must fit in fleetStageSeconds, and once a rate
         card is published a change needs effectiveFrom at least 14 days away, as for the detour; riders see it as upcoming.
@@ -1258,11 +1258,11 @@ components:
         rangChannel: { type: string, enum: [fcm, locations], nullable: true }
         reason:
           nullable: true
-          description: "Why the rider got the offer (Phase 4), as the rider saw it; null on older offers and trips ops gave by hand. rule NEAREST or FAIR, the rider's place among riders free riders in round round, atOnce riders together; FAIR also bandM, bandRiders, earnedPerHourPaise and freeMinutes."
+          description: "Why the rider got the offer (Phase 4), as the rider saw it; null on older offers and trips ops gave by hand. rule NEAREST, SOONEST (Phase 5, ranked by travel time) or FAIR, the rider's place among riders free riders in round round, atOnce riders together; FAIR also bandM, bandRiders, earnedPerHourPaise and freeMinutes, and bandMinutes when ranked by travel time; homeNearerM for a rider heading home (Phase 5)."
           type: object
           required: [rule, place, riders, atOnce, round]
           properties:
-            rule: { type: string, enum: [NEAREST, FAIR] }
+            rule: { type: string, enum: [NEAREST, FAIR, SOONEST] }
             place: { type: integer, minimum: 1 }
             riders: { type: integer, minimum: 1 }
             atOnce: { type: integer, minimum: 1, maximum: 3 }
@@ -1271,6 +1271,8 @@ components:
             bandRiders: { type: integer }
             earnedPerHourPaise: { type: integer, format: int64 }
             freeMinutes: { type: integer }
+            bandMinutes: { type: number, description: "FAIR only, Phase 5: ranked by travel time, the band counted in minutes (bandM at 20 km/h)." }
+            homeNearerM: { type: integer, description: "Phase 5: the rider was heading home; the drop leaves them this many metres nearer home." }
     RiderDocument:
       type: object
       required: [documentId, type, status, expiresOn, reason, reviewedBy, reviewedAt, uploadedAt]
@@ -1671,6 +1673,7 @@ components:
         offersAtOnce: { type: integer, minimum: 1, maximum: 3, description: Riders who see an order at the same time. 1 is calm, one rider at a time; 3 is today's. }
         offerRounds: { type: integer, minimum: 1, maximum: 5, description: "Rounds while the fleet stage lasts: when everyone asked passes or the time runs out, the next riders not yet asked hear. Rounds x offerSeconds must fit in fleetStageSeconds." }
         fairBandM: { type: integer, minimum: 0, maximum: 5000, description: "0: nearest first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)." }
+        rankByTravelTime: { type: boolean, description: "Phase 5: who hears first is decided by the travel-time model's minutes to the kitchen (soonest first; a fair band then counts its metres at 20 km/h) instead of straight-line distance. Only with CRAVES_FLEET_ETA_MODE=live and a model whose rankingVerdict is better; otherwise riders are ranked by distance and CRAVES_ALERT FLEET_ETA_NOT_RANKING is logged. A rule riders are shown: left out, it keeps the one riders are shown; a change needs 14 days' notice once a rate card is published. Always present in responses." }
     DispatchPolicyInput:
       allOf:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }

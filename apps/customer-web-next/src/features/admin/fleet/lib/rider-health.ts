@@ -46,18 +46,20 @@ export function rang(offer: RiderOffer): string {
 }
 
 /**
- * Why the offer went to this rider (Phase 4), as the rider was told: "Nearest: 1 of 4 free riders" or "Fair turn: 1 of 2
- * within 1.5 km, ₹90.00 an hour today, free 12 min". "—" on older offers and trips given by hand.
+ * Why the offer went to this rider (Phase 4), as the rider was told: "Nearest: 1 of 4 free riders" (or "Soonest by travel
+ * time", Phase 5) or "Fair turn: 1 of 2 within 1.5 km, ₹90.00 an hour today, free 12 min". "—" on older offers and trips
+ * given by hand.
  */
 export function offerWhy(offer: RiderOffer): string {
   const reason = offer.reason;
   if (!reason) return "—";
   const extra = `${reason.round > 1 ? `, round ${reason.round}` : ""}${reason.atOnce > 1 ? `, ${reason.atOnce} at once` : ""}`;
   if (reason.rule === "FAIR") {
-    return `Fair turn: ${reason.place} of ${reason.bandRiders ?? reason.riders} within ${(reason.bandM ?? 0) / 1000} km, `
+    const band = reason.bandMinutes !== undefined ? `${reason.bandMinutes} min by travel time` : `${(reason.bandM ?? 0) / 1000} km`;
+    return `Fair turn: ${reason.place} of ${reason.bandRiders ?? reason.riders} within ${band}, `
       + `${formatPaise(reason.earnedPerHourPaise ?? 0)} an hour today, free ${reason.freeMinutes ?? 0} min${extra}`;
   }
-  return `Nearest: ${reason.place} of ${reason.riders} free riders${extra}`;
+  return `${reason.rule === "SOONEST" ? "Soonest by travel time" : "Nearest"}: ${reason.place} of ${reason.riders} free riders${extra}`;
 }
 
 /** An open shift's state: on shift, or on a break until a time (Phase 4). */

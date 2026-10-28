@@ -16,6 +16,12 @@ export function whyOffer(reason: OfferReason | undefined, o: RiderStrings['offer
   if (reason.rule === 'FAIR') {
     return together > 1 ? o.whyFairGroup(together) : o.whyFair;
   }
+  if (reason.rule === 'SOONEST') {
+    if (reason.round > 1) {
+      return together > 1 ? o.whyNextSoonestGroup(together) : o.whyNextSoonest;
+    }
+    return together > 1 ? o.whySoonestGroup(together) : o.whySoonest;
+  }
   if (reason.rule !== 'NEAREST') {
     return null;
   }
@@ -23,6 +29,11 @@ export function whyOffer(reason: OfferReason | undefined, o: RiderStrings['offer
     return together > 1 ? o.whyNextGroup(together) : o.whyNextNearest;
   }
   return together > 1 ? o.whyNearestGroup(together) : o.whyNearest;
+}
+
+/** A fair band in minutes when ranked by travel time: its metres at 20 km/h, to a tenth (the server's DispatchRules.bandMinutes). */
+export function bandMinutes(bandM: number): number {
+  return Math.max(0.1, Math.round((bandM * 3) / 100) / 10);
 }
 
 /** Phase 5: for a rider heading home, how much nearer home the drop leaves them; null otherwise. */
@@ -34,7 +45,13 @@ export function whyHome(reason: OfferReason | undefined, o: RiderStrings['offer'
 export function offerRulesLines(rules: OfferRules, t: RiderStrings['terms']): string[] {
   return [
     rules.offersAtOnce > 1 ? t.rulesAtOnce(rules.offersAtOnce, rules.offerSeconds) : t.rulesOneAtATime(rules.offerSeconds),
-    rules.fairBandM > 0 ? t.rulesFair(formatKm(rules.fairBandM)) : t.rulesNearest,
+    rules.byTravelTime
+      ? rules.fairBandM > 0
+        ? t.rulesFairMinutes(bandMinutes(rules.fairBandM))
+        : t.rulesSoonest
+      : rules.fairBandM > 0
+        ? t.rulesFair(formatKm(rules.fairBandM))
+        : t.rulesNearest,
     ...(rules.offerRounds > 1 ? [t.rulesRounds(rules.offerRounds)] : []),
     t.rulesRadius(formatKm(rules.radiusM)),
     t.rulesFree,

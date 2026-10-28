@@ -44,11 +44,14 @@ class WireTest {
             new Wire.Standing(20261028, 45000, 7200, true, 1761639000000L)));
         g.put("rider_event_offline", new Wire.RiderEvent(RIDER2, Wire.OFFLINE, 1761640002000L, List.of(), null, null));
         g.put("dispatch_request_live", new Wire.DispatchRequest(REQUEST, Wire.LIVE, ORDER, 1761640003000L, 1761640003300L, 17.4483,
-            78.3915, 17.46, 78.36, 4200, new Wire.Policy(5000, 140, 1, 1500, 40, true, true), List.of(RIDER2), List.of(), 2));
+            78.3915, 17.46, 78.36, 4200, new Wire.Policy(5000, 140, 1, 1500, 40, true, true, false, ""), List.of(RIDER2), List.of(), 2));
         g.put("dispatch_request_shadow", new Wire.DispatchRequest(REQUEST, Wire.SHADOW, ORDER, 1761640003000L, 0, 17.4483, 78.3915, 17.46,
-            78.36, 4200, new Wire.Policy(5000, 140, 3, 0, 40, false, false), List.of(),
+            78.36, 4200, new Wire.Policy(5000, 140, 3, 0, 40, false, false, false, ""), List.of(),
             List.of(new Wire.Candidate(RIDER, 412.75, 17.4486, 78.3908, true, 15000, 1761639000000L, 3240, false),
                 new Wire.Candidate(RIDER2, 1630.5, 17.4601, 78.3999, false, 0, 0, 0, false)), 1));
+        g.put("dispatch_request_eta", new Wire.DispatchRequest(REQUEST, Wire.LIVE, ORDER, 1761640003000L, 1761640003300L, 17.4483,
+            78.3915, 17.46, 78.36, 4200, new Wire.Policy(5000, 140, 1, 1500, 40, true, false, true, "eta-20261028-a"), List.of(),
+            List.of(), 1));
         g.put("dispatch_reply", new Wire.DispatchReply(REQUEST,
             List.of(new Wire.Candidate(RIDER, 412.75, 17.4486, 78.3908, true, 15000, 1761639000000L, 3240, true),
                 new Wire.Candidate(RIDER2, 1630.5, 17.4601, 78.3999, false, 0, 0, 0, false)), 3, Wire.SOLVER_EXACT, 1761640003042L));

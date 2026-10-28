@@ -142,6 +142,16 @@ public class FleetEngineFeed implements DisposableBean {
         return queue != null;
     }
 
+    /** How long a value published for the engine is kept (the travel-time model; FleetEta writes it again as it is used). */
+    static final Duration PUBLISHED_KEEP = Duration.ofDays(7);
+
+    /** Keeps value where the engine reads it, at keySuffix under the engine's key prefix; nothing while the engine is off. */
+    public void publish(String keySuffix, byte[] value) {
+        if (on()) {
+            streams.set(properties.keyPrefix() + keySuffix, value, PUBLISHED_KEEP, Duration.ofSeconds(2));
+        }
+    }
+
     /** A /locations call (FleetLocationService), sent once its transaction commits; test mode is applied here. */
     public void ping(UUID riderId, Instant at, List<Fix> fixes, State state) {
         if (on()) {

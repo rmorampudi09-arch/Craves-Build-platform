@@ -412,7 +412,8 @@ public class FleetRiderService {
     private OfferRules offerRules(Instant at) {
         return policies.shownDispatchPolicy(at, "").map(policy -> new OfferRules(((Number) policy.get("offers_at_once")).intValue(),
             ((Number) policy.get("offer_rounds")).intValue(), ((Number) policy.get("offer_seconds")).intValue(),
-            ((Number) policy.get("radius_m")).intValue(), ((Number) policy.get("fair_band_m")).intValue())).orElse(null);
+            ((Number) policy.get("radius_m")).intValue(), ((Number) policy.get("fair_band_m")).intValue(),
+            Boolean.TRUE.equals(policy.get("rank_by_travel_time")) ? Boolean.TRUE : null)).orElse(null);
     }
 
     /** Phase 4: a copy of everything Craves keeps about this rider (RiderDataExport; DPDP Act s.11). */
@@ -488,12 +489,27 @@ public class FleetRiderService {
     /** How orders are offered, in one English line. */
     static String offerRulesLine(DispatchRules rules) {
         int n = rules.offersAtOnce();
-        String who = rules.fairBandM() > 0
-            ? "Among the free riders within " + km(rules.fairBandM()) + " km of the nearest, " + (n == 1 ? "the one who has" : "the " + n
-                + " who have") + " earned the least per online hour today"
-            : n == 1 ? "The nearest free rider" : "The " + n + " nearest free riders";
+        String who;
+        if (rules.byTravelTime()) {
+            who = rules.fairBandM() > 0
+                ? "Among the free riders who can reach the kitchen within " + minutes(rules.bandMinutes()) + " of the soonest, "
+                    + (n == 1 ? "the one who has" : "the " + n + " who have") + " earned the least per online hour today"
+                : n == 1 ? "The free rider who can reach the kitchen soonest" : "The " + n + " free riders who can reach the kitchen soonest";
+        } else {
+            who = rules.fairBandM() > 0
+                ? "Among the free riders within " + km(rules.fairBandM()) + " km of the nearest, " + (n == 1 ? "the one who has" : "the " + n
+                    + " who have") + " earned the least per online hour today"
+                : n == 1 ? "The nearest free rider" : "The " + n + " nearest free riders";
+        }
         return who + (n == 1 ? " hears first, one rider at a time" : " hear at once, and the first to accept gets it")
-            + (rules.offerRounds() > 1 ? ", in up to " + rules.offerRounds() + " rounds" : "") + ". Declining is free.";
+            + (rules.offerRounds() > 1 ? ", in up to " + rules.offerRounds() + " rounds" : "") + "."
+            + (rules.byTravelTime() ? " Soonest is by Craves's travel-time estimate; without one, the nearest hear first." : "")
+            + " Declining is free.";
+    }
+
+    /** Minutes as riders read them: "1 minute", "3 minutes", "4.5 minutes". */
+    static String minutes(double minutes) {
+        return (minutes == Math.rint(minutes) ? Long.toString((long) minutes) : Double.toString(minutes)) + (minutes == 1 ? " minute" : " minutes");
     }
 
     private static List<String> summary(RateCard card, String language) {

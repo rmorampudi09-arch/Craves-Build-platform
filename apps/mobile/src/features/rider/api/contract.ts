@@ -133,11 +133,17 @@ export interface OfferRules {
   radiusM: number;
   /** 0: nearest first. Above 0: among the free riders this close to the nearest, the one who has earned least per online hour today. */
   fairBandM: number;
+  /**
+   * Phase 5: true when the free rider who can reach the kitchen soonest (Craves's travel-time estimate) hears first, and a
+   * fair band counts minutes (bandMinutes); left out: by distance.
+   */
+  byTravelTime?: boolean;
 }
 
 /** Why this rider heard of this order, stored with the offer: the rider and ops see the same reason. */
 export interface OfferReason {
-  rule: 'NEAREST' | 'FAIR';
+  /** SOONEST (Phase 5): ranked by travel time, the rider can reach the kitchen soonest. */
+  rule: 'NEAREST' | 'FAIR' | 'SOONEST';
   /** The rider's place in this round's order. */
   place: number;
   /** Free riders considered in this round (each round ranks the riders not yet asked). */
@@ -150,6 +156,8 @@ export interface OfferReason {
   freeMinutes?: number;
   /** Phase 5: the rider is heading home, and this order's drop leaves them this many metres nearer home. */
   homeNearerM?: number;
+  /** FAIR only, Phase 5: riders were ranked by travel time, so the band was counted in these minutes. */
+  bandMinutes?: number;
 }
 
 export interface HomeSummary {

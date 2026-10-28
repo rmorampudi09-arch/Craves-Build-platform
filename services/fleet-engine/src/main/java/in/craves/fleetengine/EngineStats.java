@@ -32,6 +32,7 @@ public final class EngineStats {
     public static final String SHADOW_SAME_SET = "fleet.engine.shadow.same_set";
     public static final String SHADOW_DIFFER = "fleet.engine.shadow.differ";
     public static final String JOINT_CHANGED = "fleet.engine.joint.changed";
+    public static final String ETA_MISSING = "fleet.engine.eta.missing";
 
     private final MeterRegistry registry;
     private final Latency lag;
@@ -67,7 +68,7 @@ public final class EngineStats {
             + " expired=" + delta(EXPIRED) + " shed=" + delta(SHED) + " malformed=" + delta(MALFORMED) + " failed=" + delta(FAILED)
             + " riderEventsMalformed=" + delta(RIDER_EVENTS_MALFORMED) + " riderEventsFailed=" + delta(RIDER_EVENTS_FAILED)
             + " shadowSame=" + delta(SHADOW_SAME) + " shadowSameSet=" + delta(SHADOW_SAME_SET) + " shadowDiffer=" + delta(SHADOW_DIFFER)
-            + " jointChanged=" + delta(JOINT_CHANGED);
+            + " jointChanged=" + delta(JOINT_CHANGED) + " etaMissing=" + delta(ETA_MISSING);
     }
 
     /** Logs the line every minute until stopping counts down. */

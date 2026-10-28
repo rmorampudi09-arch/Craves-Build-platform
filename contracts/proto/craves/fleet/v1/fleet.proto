@@ -100,6 +100,11 @@ message Policy {
   int32 offer_seconds = 5;
   bool rider_choices = 6;              // CRAVES_FLEET_RIDER_CHOICES_ENABLED
   bool joint = 7;                      // share out orders asked at once (needs 14 days' notice to riders)
+  // Rank by the travel-time model (ml/fleet-eta): predicted minutes to the kitchen instead of straight metres (a
+  // dispatch-policy rule riders get 14 days' notice of). The engine loads eta_model from craves:fleet:model:eta:<eta_model>;
+  // when it can't, the request is left to integration-service: no reply, no shadow comparison.
+  bool eta = 8;
+  string eta_model = 9;                // the model's version
 }
 
 message Candidate {

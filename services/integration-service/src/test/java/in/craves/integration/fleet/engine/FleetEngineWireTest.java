@@ -50,14 +50,18 @@ class FleetEngineWireTest {
                 1_761_640_000_123L, first, 1_761_640_000_000L), new Standing(20_261_028, 45_000, 7_200, true, 1_761_639_000_000L));
         RiderEvent offline = new RiderEvent(RIDER_2, FleetEngineWire.OFFLINE, 1_761_640_002_000L, List.of(), null, null);
         DispatchRequest live = new DispatchRequest(REQUEST, FleetEngineWire.LIVE, ORDER, 1_761_640_003_000L, 1_761_640_003_300L, 17.4483, 78.3915,
-            17.46, 78.36, 4_200, new Policy(5_000, 140, 1, 1_500, 40, true, true), List.of(RIDER_2), List.of(), 2);
+            17.46, 78.36, 4_200, new Policy(5_000, 140, 1, 1_500, 40, true, true, false, ""), List.of(RIDER_2), List.of(), 2);
         DispatchRequest shadow = new DispatchRequest(REQUEST, FleetEngineWire.SHADOW, ORDER, 1_761_640_003_000L, 0, 17.4483, 78.3915, 17.46,
-            78.36, 4_200, new Policy(5_000, 140, 3, 0, 40, false, false), List.of(), List.of(
+            78.36, 4_200, new Policy(5_000, 140, 3, 0, 40, false, false, false, ""), List.of(), List.of(
                 new Candidate(RIDER, 412.75, 17.4486, 78.3908, true, 15_000, 1_761_639_000_000L, 3_240, false),
                 new Candidate(RIDER_2, 1630.5, 17.4601, 78.3999, false, 0, 0, 0, false)), 1);
+        // The travel-time model's fields (Policy 8 and 9), as dispatch sends them with CRAVES_FLEET_ETA_MODE live.
+        DispatchRequest eta = new DispatchRequest(REQUEST, FleetEngineWire.LIVE, ORDER, 1_761_640_003_000L, 1_761_640_003_300L, 17.4483, 78.3915,
+            17.46, 78.36, 4_200, new Policy(5_000, 140, 1, 1_500, 40, true, false, true, "eta-20261028-a"), List.of(), List.of(), 1);
         return Map.of("rider_event_ping", FleetEngineWire.encode(ping), "rider_event_refresh", FleetEngineWire.encode(refresh),
             "rider_event_offline", FleetEngineWire.encode(offline), "dispatch_request_live", FleetEngineWire.encode(live),
-            "dispatch_request_shadow", FleetEngineWire.encode(shadow), "dispatch_reply", FleetEngineWire.encode(REPLY));
+            "dispatch_request_shadow", FleetEngineWire.encode(shadow), "dispatch_request_eta", FleetEngineWire.encode(eta),
+            "dispatch_reply", FleetEngineWire.encode(REPLY));
     }
 
     @Test

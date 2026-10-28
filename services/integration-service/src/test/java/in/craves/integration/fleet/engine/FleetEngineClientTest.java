@@ -28,7 +28,7 @@ class FleetEngineClientTest {
     static final UUID NEAR = UUID.randomUUID();
     static final UUID FAR = UUID.randomUUID();
     static final UUID OFFERED = UUID.randomUUID();
-    static final Policy POLICY = new Policy(5_000, 130, 3, 1_500, 40, true, false);
+    static final Policy POLICY = new Policy(5_000, 130, 3, 1_500, 40, true, false, false, "");
     final Engine engine = new Engine();
 
     @Test
@@ -147,6 +147,11 @@ class FleetEngineClientTest {
 
     /** Redis with the engine behind it: a request's reply appears as soon as it is appended, if the engine answers. */
     static final class Engine implements EngineStreams {
+        @Override
+        public void set(String key, byte[] value, Duration keep, Duration wait) {
+            replies.put(key, value);
+        }
+
         final List<String> streams = new ArrayList<>();
         final List<byte[]> payloads = new ArrayList<>();
         final Map<String, byte[]> replies = new ConcurrentHashMap<>();

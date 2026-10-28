@@ -76,14 +76,16 @@ public class FleetPolicyStore {
     public Optional<DispatchPolicy> currentDispatchPolicy() {
         return jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
-                   per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m
+                   per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m,
+                   rank_by_travel_time
             FROM fleet_schema.dispatch_policy
             WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now()
             ORDER BY effective_from DESC, created_at DESC LIMIT 1""",
             (row, n) -> new DispatchPolicy(row.getString("version"), row.getTimestamp("effective_from").toInstant(),
                 row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m"),
                 row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise"),
-                row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m")))
+                row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"),
+                row.getBoolean("rank_by_travel_time")))
             .stream().findFirst();
     }
 
@@ -123,7 +125,7 @@ public class FleetPolicyStore {
 
     static DispatchRules rules(Map<String, Object> policy) {
         return new DispatchRules(((Number) policy.get("offers_at_once")).intValue(), ((Number) policy.get("offer_rounds")).intValue(),
-            ((Number) policy.get("fair_band_m")).intValue());
+            ((Number) policy.get("fair_band_m")).intValue(), Boolean.TRUE.equals(policy.get("rank_by_travel_time")));
     }
 
     /**
@@ -147,9 +149,9 @@ public class FleetPolicyStore {
         }
         DispatchRules rules = dispatchRules(now);
         starts.addAll(jdbc.queryForList("SELECT effective_from FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
-            + "AND withdrawn_at IS NULL AND effective_from > ? AND (offers_at_once <> ? OR offer_rounds <> ? OR fair_band_m <> ?) "
-            + "ORDER BY effective_from LIMIT 1", Timestamp.class, Timestamp.from(now), rules.offersAtOnce(), rules.offerRounds(),
-            rules.fairBandM()));
+            + "AND withdrawn_at IS NULL AND effective_from > ? AND (offers_at_once <> ? OR offer_rounds <> ? OR fair_band_m <> ? "
+            + "OR rank_by_travel_time <> ?) ORDER BY effective_from LIMIT 1", Timestamp.class, Timestamp.from(now), rules.offersAtOnce(),
+            rules.offerRounds(), rules.fairBandM(), rules.byTravelTime()));
         return starts.stream().map(Timestamp::toInstant).min(Comparator.naturalOrder()).map(at -> {
             RateCard card = rateCardInForce(at).orElseThrow();
             return new TermsChange(at, card, card.effectiveFrom().equals(at), detour, pickupDetour(at), rules, dispatchRules(at));
@@ -383,7 +385,15 @@ public class FleetPolicyStore {
      */
     public record DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds,
                                  int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise,
-                                 int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM) {
+                                 int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM, boolean rankByTravelTime) {
+        /** Phase 4's shape: ranked by distance. */
+        public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM,
+                              int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
+                              int offersAtOnce, int offerRounds, int fairBandM) {
+            this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise,
+                costGuardPremiumPaise, pidgeStageSeconds, offersAtOnce, offerRounds, fairBandM, false);
+        }
+
         /** The P1 shape, with the seeded draft's detour, cost-guard and Pidge stage values. */
         public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM) {
             this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, 130, 500, 1000, 600);
@@ -398,17 +408,31 @@ public class FleetPolicyStore {
         }
 
         public DispatchRules rules() {
-            return new DispatchRules(offersAtOnce, offerRounds, fairBandM);
+            return new DispatchRules(offersAtOnce, offerRounds, fairBandM, rankByTravelTime);
         }
     }
 
     /**
      * How orders are offered (Phase 4): how many riders see an order at once, how many rounds the fleet stage runs, and the
      * fair band in metres (0: nearest first; above 0: among the free riders within it of the nearest, the one who has earned
-     * least per online hour today goes first).
+     * least per online hour today goes first). byTravelTime (Phase 5): "nearest" is the soonest at the kitchen by the
+     * travel-time model, when it is live and was judged to rank riders well (FleetEta.ranking); else the nearest by distance.
      */
-    public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM) {
+    public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime) {
         /** Before Phase 4, and with no dispatch policy at all. */
-        public static final DispatchRules TODAY = new DispatchRules(3, 1, 0);
+        public static final DispatchRules TODAY = new DispatchRules(3, 1, 0, false);
+
+        /** Phase 4's rules: by distance. */
+        public DispatchRules(int offersAtOnce, int offerRounds, int fairBandM) {
+            this(offersAtOnce, offerRounds, fairBandM, false);
+        }
+
+        /**
+         * Ranked by travel time, the fair band in minutes as riders are told it: its metres at 20 km/h (FleetDispatcher.byEta
+         * compares the exact value), to a tenth of a minute, at least 0.1. A 1.5 km band is 4.5 minutes.
+         */
+        public double bandMinutes() {
+            return Math.max(0.1, Math.round(fairBandM * 3 / 100.0) / 10.0);
+        }
     }
 }

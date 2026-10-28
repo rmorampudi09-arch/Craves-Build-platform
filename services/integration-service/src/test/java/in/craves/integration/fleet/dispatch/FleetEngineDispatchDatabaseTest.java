@@ -96,7 +96,7 @@ class FleetEngineDispatchDatabaseTest {
         ArgumentCaptor<FleetEngineWire.Policy> policy = ArgumentCaptor.forClass(FleetEngineWire.Policy.class);
         verify(engine).rank(eq(chefSubOrderId), eq(KITCHEN_LAT), eq(KITCHEN_LNG), eq(17.46), eq(78.36), eq(3500), policy.capture(), eq(Set.of()),
             eq(1));
-        assertThat(policy.getValue()).isEqualTo(new FleetEngineWire.Policy(5_000, 130, 3, 0, 40, false, false));
+        assertThat(policy.getValue()).isEqualTo(new FleetEngineWire.Policy(5_000, 130, 3, 0, 40, false, false, false, ""));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> offered = ArgumentCaptor.forClass(Collection.class);
         verify(feed).refresh(offered.capture());

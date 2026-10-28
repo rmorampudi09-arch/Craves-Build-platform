@@ -1,6 +1,7 @@
 package in.craves.fleetengine.wire;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
@@ -46,8 +47,9 @@ public final class Wire {
     public record RiderEvent(UUID riderId, int kind, long atMs, List<Fix> fixes, State state, Standing standing) {
     }
 
+    /** eta: rank by predicted minutes to the kitchen with the travel-time model etaModel (a version), not straight metres. */
     public record Policy(int radiusM, int detourPercent, int offersAtOnce, int fairBandM, int offerSeconds, boolean riderChoices,
-                         boolean joint) {
+                         boolean joint, boolean eta, String etaModel) {
     }
 
     public record Candidate(UUID riderId, double straightLineM, double lat, double lng, boolean inBand, long perHourPaise,
@@ -152,6 +154,8 @@ public final class Wire {
         m.uint(5, p.offerSeconds());
         m.bool(6, p.riderChoices());
         m.bool(7, p.joint());
+        m.bool(8, p.eta());
+        m.string(9, p.etaModel());
         o.message(11, m);
         for (UUID id : q.exclude() == null ? List.<UUID>of() : q.exclude()) {
             o.uuid(12, id);
@@ -299,7 +303,7 @@ public final class Wire {
         double dropLat = 0;
         double dropLng = 0;
         int dropM = 0;
-        Policy policy = new Policy(0, 0, 0, 0, 0, false, false);
+        Policy policy = new Policy(0, 0, 0, 0, 0, false, false, false, "");
         List<UUID> exclude = new ArrayList<>();
         List<Candidate> javaRanked = new ArrayList<>();
         int round = 0;
@@ -341,6 +345,8 @@ public final class Wire {
         int seconds = 0;
         boolean choices = false;
         boolean joint = false;
+        boolean eta = false;
+        String etaModel = "";
         while (in.more()) {
             long tag = in.varint();
             int type = (int) (tag & 7);
@@ -352,10 +358,12 @@ public final class Wire {
                 case 5 -> seconds = (int) in.number(type);
                 case 6 -> choices = in.number(type) != 0;
                 case 7 -> joint = in.number(type) != 0;
+                case 8 -> eta = in.number(type) != 0;
+                case 9 -> etaModel = new String(in.bytes(type), StandardCharsets.UTF_8);
                 default -> in.skip(type);
             }
         }
-        return new Policy(radius, detour, atOnce, band, seconds, choices, joint);
+        return new Policy(radius, detour, atOnce, band, seconds, choices, joint, eta, etaModel);
     }
 
     /** The engine's reply; unknown fields are skipped. */
@@ -548,6 +556,13 @@ public final class Wire {
             varint(len);
             for (int i = 0; i < len; i++) {
                 raw(b[i]);
+            }
+        }
+
+        void string(int num, String s) {
+            if (s != null && !s.isEmpty()) {
+                byte[] b = s.getBytes(StandardCharsets.UTF_8);
+                bytes(num, b, b.length);
             }
         }
 

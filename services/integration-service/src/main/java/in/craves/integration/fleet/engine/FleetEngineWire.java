@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.engine;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
@@ -45,8 +46,9 @@ public final class FleetEngineWire {
     public record RiderEvent(UUID riderId, int kind, long atMs, List<Fix> fixes, State state, Standing standing) {
     }
 
+    /** eta: rank by predicted minutes to the kitchen with the travel-time model etaModel (a version), not straight metres. */
     public record Policy(int radiusM, int detourPercent, int offersAtOnce, int fairBandM, int offerSeconds, boolean riderChoices,
-                         boolean joint) {
+                         boolean joint, boolean eta, String etaModel) {
     }
 
     public record Candidate(UUID riderId, double straightLineM, double lat, double lng, boolean inBand, long perHourPaise,
@@ -151,6 +153,11 @@ public final class FleetEngineWire {
         m.uint(5, p.offerSeconds());
         m.bool(6, p.riderChoices());
         m.bool(7, p.joint());
+        m.bool(8, p.eta());
+        if (p.etaModel() != null && !p.etaModel().isEmpty()) {
+            byte[] model = p.etaModel().getBytes(StandardCharsets.UTF_8);
+            m.bytes(9, model, model.length);
+        }
         o.message(11, m);
         for (UUID id : q.exclude() == null ? List.<UUID>of() : q.exclude()) {
             o.uuid(12, id);

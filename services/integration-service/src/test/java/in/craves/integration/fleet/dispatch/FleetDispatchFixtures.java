@@ -15,6 +15,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public final class FleetDispatchFixtures {
     public static final double KITCHEN_LAT = 17.4483;
     public static final double KITCHEN_LNG = 78.3915;
+    /**
+     * A travel-time model (ml/fleet-eta's format) of one tree: the drop leg takes 12 minutes; to the kitchen, 2 minutes from
+     * its south and 9 from its north (where, say, the lake or a one-way street adds a long way round the straight line can't see).
+     */
+    public static final String ETA_MODEL = """
+        {"format":1,"version":"split-1","features":["metres","from_lat","from_lng","to_lat","to_lng","bearing_sin","bearing_cos",
+         "ist_hour","ist_weekday","leg"],"init":0,"learning_rate":1,"trees":[{"feature":[9,1,0,0,0],
+         "threshold":[0.5,%s,0,0,0],"left":[1,3,-1,-1,-1],"right":[2,4,-1,-1,-1],"value":[0,0,12,2,9]}]}""".formatted(KITCHEN_LAT);
 
     private FleetDispatchFixtures() {
     }
@@ -32,9 +40,16 @@ public final class FleetDispatchFixtures {
      * policy goes in before the rate card: once riders have terms, new rules need 14 days' notice (V170's trigger).
      */
     public static void policy(JdbcTemplate db, String mode, int offerSeconds, int stageSeconds, int atOnce, int rounds, int fairBandM) {
+        policy(db, mode, offerSeconds, stageSeconds, atOnce, rounds, fairBandM, false);
+    }
+
+    /** The same, ranked by travel time where byTravelTime (Phase 5's rule, V174). */
+    public static void policy(JdbcTemplate db, String mode, int offerSeconds, int stageSeconds, int atOnce, int rounds, int fairBandM,
+                              boolean byTravelTime) {
         db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
-            + "fleet_stage_seconds, radius_m, ranges, offers_at_once, offer_rounds, fair_band_m) VALUES ('2026-09-v9', 'PUBLISHED', "
-            + "now() - INTERVAL '1 day', now(), ?, ?, ?, 5000, '{}', ?, ?, ?)", mode, offerSeconds, stageSeconds, atOnce, rounds, fairBandM);
+            + "fleet_stage_seconds, radius_m, ranges, offers_at_once, offer_rounds, fair_band_m, rank_by_travel_time) VALUES ('2026-09-v9', "
+            + "'PUBLISHED', now() - INTERVAL '1 day', now(), ?, ?, ?, 5000, '{}', ?, ?, ?, ?)", mode, offerSeconds, stageSeconds, atOnce,
+            rounds, fairBandM, byTravelTime);
         if ("live".equals(mode)) {
             db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() - INTERVAL '1 day' "
                 + "WHERE version = '2026-10-v1' AND status = 'DRAFT'");

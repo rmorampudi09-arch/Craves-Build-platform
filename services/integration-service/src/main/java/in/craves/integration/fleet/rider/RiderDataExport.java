@@ -49,7 +49,8 @@ public final class RiderDataExport {
             SELECT o.id AS "offerId", o.trip_id AS "tripId", t.order_code AS "orderCode", o.state, o.offered_at AS "offeredAt",
                    o.expires_at AS "expiresAt", o.decided_at AS "decidedAt", o.pay_paise AS "payPaise", o.pay_lines::text AS "payLines",
                    o.pickup_distance_m AS "pickupDistanceM", o.drop_distance_m AS "dropDistanceM", o.round, o.reason::text AS "whyThisOffer",
-                   o.rang_at AS "rangAt", o.rang_channel AS "rangChannel"
+                   o.rang_at AS "rangAt", o.rang_channel AS "rangChannel", o.pickup_minutes AS "predictedPickupMinutes",
+                   o.drop_minutes AS "predictedDropMinutes"
             FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
             WHERE o.rider_id = ? ORDER BY o.offered_at DESC"""),
         new Section("trips", """
@@ -58,7 +59,7 @@ public final class RiderDataExport {
                    pay_paise AS "offeredPayPaise", final_pay_paise AS "finalPayPaise", final_pay_lines::text AS "finalPayLines",
                    pay_held AS "payHeld", hold_reason AS "holdReason", accepted_at AS "acceptedAt",
                    arrived_kitchen_at AS "arrivedKitchenAt", picked_up_at AS "pickedUpAt", arrived_drop_at AS "arrivedDropAt",
-                   finished_at AS "finishedAt", cancel_reason AS "cancelReason"
+                   finished_at AS "finishedAt", cancel_reason AS "cancelReason", pickup_minutes AS "predictedPickupMinutes"
             FROM fleet_schema.trip WHERE rider_id = ? ORDER BY created_at DESC"""),
         // No step coordinates: the drop steps would place the customer's door.
         new Section("tripSteps", """

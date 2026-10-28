@@ -141,6 +141,7 @@ public class FleetTripService {
             if (jdbc.update("""
                 UPDATE fleet_schema.trip t SET state = 'ASSIGNED', rider_id = o.rider_id, pickup_distance_m = o.pickup_distance_m,
                   drop_distance_m = o.drop_distance_m, rate_card_version = o.rate_card_version, pay_paise = o.pay_paise, accepted_at = now(),
+                  pickup_minutes = o.pickup_minutes,
                   version = t.version + 1, updated_at = now()
                 FROM fleet_schema.trip_offer o
                 WHERE o.id = ? AND t.id = o.trip_id AND t.state = 'SEARCHING' AND t.provider = 'CRAVES_FLEET'""", offerId) != 1) {

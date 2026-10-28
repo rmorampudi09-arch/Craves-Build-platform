@@ -22,8 +22,8 @@ const SITA = "88888888-8888-4888-8888-888888888888";
 const CHEF = "33333333-3333-4333-8333-333333333333";
 const at = "2026-10-22T04:30:00Z";
 const values = { offerSeconds: 40, fleetStageSeconds: 60, radiusM: 5000, pickupDetourPercent: 130, perOrderOverheadPaise: 500, costGuardPremiumPaise: 1000, pidgeStageSeconds: 600 };
-// A server without Phase 4 sends no offer rules: the console reads them as today's and sends them back.
-const today = { offersAtOnce: 3, offerRounds: 1, fairBandM: 0 };
+// A server without Phase 4 (or 5) sends no offer rules: the console reads them as today's and sends them back.
+const today = { offersAtOnce: 3, offerRounds: 1, fairBandM: 0, rankByTravelTime: false };
 const policy = { version: "2026-10-v2", status: "PUBLISHED", effectiveFrom: at, publishedAt: at, mode: "live", ...values, ranges: {} };
 const card = {
   version: "2026-10-v1", status: "DRAFT", effectiveFrom: "2026-11-03T18:30:00Z", basePaise: 4000, baseDropM: 2000, dropPerKmPaise: 900, pickupFreeM: 1000,
@@ -210,6 +210,21 @@ describe("dispatch", () => {
     fireEvent.click(button("Save dispatch policy", panel));
     expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
     expect(sends()[0].body).toEqual({ mode: "shadow", ...values, ...today, offersAtOnce: 1, effectiveFrom: "2030-01-15T04:30:00.000Z" });
+  });
+
+  it("ranks by travel time as an offer rule, with the same notice", async () => {
+    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
+    render(createElement(FleetSetup));
+    const panel = await section("Dispatch");
+    const travel = within(panel).getByLabelText("Rank by travel time: soonest at the kitchen first") as HTMLInputElement;
+    expect(travel.checked).toBe(false);
+    fireEvent.click(travel);
+    expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the offer rules at 3 at once, 1 round, nearest first");
+    type("New offer rules start (IST)", "2030-01-15T10:00", panel);
+    answer = (method, path) => method === "POST" ? json({ ...policy, mode: "shadow", version: "2026-10-v3", rankByTravelTime: true, effectiveFrom: "2030-01-15T04:30:00Z" }, 201) : reads(method, path);
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
+    expect(sends()[0].body).toEqual({ mode: "shadow", ...values, ...today, rankByTravelTime: true, effectiveFrom: "2030-01-15T04:30:00.000Z" });
   });
 
   it("asks when a new detour starts, only when the detour changes", async () => {

@@ -25,7 +25,7 @@ From `main` at the merged commit, run each pipeline by hand in this order. Befor
 2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
 3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
 4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V173 and the fleet package. All flags stay off, so no fleet bean or job starts.
+5. `azure-pipelines-integration-service.yml`: V152 to V174 and the fleet package. All flags stay off, so no fleet bean or job starts.
 
 ## 2. Gateway
 
@@ -136,9 +136,10 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | `CRAVES_FLEET_RIDER_CHOICES_ENABLED` | Riders can take a 5 to 60 minute break while online, set the farthest ride to a kitchen and to a customer they want offers for, and head home for an hour hearing only of orders that take them nearer home (`DISPATCH.md` §4). | The gateway runs this release (step 2 again: it adds `/shift/pause`, `/shift/resume`, `/preferences`, `/home-spot` and `/shift/heading-home`), and the lawyer has read the wording. Then PHONE-TESTS §6, steps 3, 4 and 6. | P4-02, P5-01 |
 | `CRAVES_FLEET_ENGINE_MODE` (`off`, `shadow`, `live`) | The fleet engine (Phase 5) hears every rider and order. In shadow it only compares its rankings with dispatch's; live, dispatch asks it first and ranks riders itself when it doesn't answer within 300 ms. Both need road ranking off: with `CRAVES_FLEET_ROAD_RANKING_ENABLED` on, dispatch leaves the engine out. | §9. | P5-02, P5-03 |
 | `CRAVES_FLEET_ENGINE_JOINT` | With the engine live, orders asked at the same moment near each other are shared out together, so more of them get a rider. | `jointChanged` (orders whose riders sharing out together would change, against first come; counted in shadow and live) is 5% or more of peak orders for two weeks (the query in §9, step 6), and riders had 14 days' notice (*legal*: it changes who gets offers). | P5-02 |
-| Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, and fair turns (`DISPATCH.md` §2 and §3). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
+| `CRAVES_FLEET_ETA_MODE` (`off`, `shadow`, `live`) and `CRAVES_FLEET_ETA_MODEL_VERSION` | The travel-time model (Phase 5): live, the offer shows the model's minutes and the chef's "rider arrives at" uses them. Riders are ranked by its minutes only where the dispatch policy's "rank by travel time" rule says so (an offer rule, below). Shadow only logs what it would change. | §10. | P5-07 |
+| Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, fair turns (`DISPATCH.md` §2 and §3), and from Phase 5 whether riders are ranked by travel time (§10, step 6). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
 
-- **Notice first.** Once dispatch is live, road ranking changes who gets offers and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before either (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
+- **Notice first.** Once dispatch is live, road ranking changes who gets offers, and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before any of them (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
 - **How to set one:** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars NAME=value` (order-service: `-n ca-craves-order-service-prodlow`). Wait for the new revision to be healthy, then run the runtime pipeline's **status** stage: it lists every switch above. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
 
 ## 9. The fleet engine (Phase 5)
@@ -180,6 +181,24 @@ The engine (`services/fleet-engine`, `SCALE.md`) keeps every online rider in Red
    ```
 7. **Stop:** set the mode to `off`. With its next revision, integration-service no longer writes to Redis and dispatch ranks riders itself, as before Phase 5. `CRAVES_ALERT alert=FLEET_ENGINE_PAUSED` means live dispatch stopped asking for 30 s after five failures and ranked riders itself meanwhile; look at the engine's log.
 
+## 10. The travel-time model (Phase 5)
+
+The model predicts the minutes a rider needs to reach the kitchen, and from the kitchen to the customer, from Craves's own delivered trips (`DISPATCH.md` §2, "The travel-time model"; `ml/fleet-eta/README.md`). It needs no new service: integration-service (step 1) already has V174, which keeps model versions in `fleet_schema.eta_model`, and the fleet engine (§9) reads the same version from Redis. It works with or without the engine.
+
+1. **Wait for data.** Training needs at least 500 delivered legs: a few weeks of live pilot trips.
+2. **Train and publish a version** (a person with a read-only and an admin database login; `ml/fleet-eta/README.md`, steps 1 to 4). `python -m fleet_eta train` writes no model, so there is nothing to publish, unless it beats today's rule on trips and riders it never trained on. It prints `FLEET_ETA_VERDICT minutes=… ranking=…`: the ranking verdict says whether the version may also decide who hears first.
+3. **Shadow for a week.** On integration-service, set `CRAVES_FLEET_ETA_MODEL_VERSION=<the version>` and `CRAVES_FLEET_ETA_MODE=shadow`, as the switches in §8. Nothing riders or chefs see changes. Watch:
+   - `FLEET_ETA_LOADED version=… ranking=…` once after the revision starts. `CRAVES_ALERT alert=FLEET_ETA_MODEL_MISSING` or `FLEET_ETA_MODEL_REFUSED` means the version isn't in the table or can't be read: dispatch keeps today's rule.
+   - `FLEET_ETA_SHADOW … same=` per order: how often the model would ask someone else first.
+4. **Live:** set `CRAVES_FLEET_ETA_MODE=live`. The offer card's "About N min" and the chef's arrival time then come from the model. Who hears first doesn't change, so no notice is needed for this step; `FLEET_ETA_SHADOW` keeps logging.
+5. **Before ranking by it,** all of these:
+   - the version's ranking verdict is `better` (`FLEET_ETA_LOADED … ranking=better`);
+   - the rider app release that words the rule is on riders' phones (P5-07: "soonest first" in Terms and on offers; an older app shows the Terms' summary of the change but no reason line);
+   - the lawyer has read the wording (*legal*).
+6. **Rank by travel time:** in the console, Rider pilot setup → Dispatch, tick "Rank by travel time" and save with a start at least 14 days away (the console asks for one). Riders see it under Terms as an upcoming rule meanwhile (Telangana s.13(2); WORKPLAN rule 9). From that start, the riders who can reach the kitchen soonest hear first, the offer says so, and with the engine live it ranks with the same version. If no live version may rank, riders are ranked by distance and `CRAVES_ALERT alert=FLEET_ETA_NOT_RANKING` appears: publish a version that passes, or schedule the rule off.
+7. **Each month,** check the model on the last month's trips (`python -m fleet_eta evaluate`, `DISPATCH.md` §8). If it no longer beats today's rule, retrain it, and publish and shadow the new version the same way.
+8. **Stop:** set the mode to `off`, or the version back to the previous one. Old versions stay in the table. Ranking falls back to distance at once; the policy rule stays until a new version, with notice, takes it out.
+
 ## Stopping
 
 | What | How | Effect |
@@ -189,6 +208,7 @@ The engine (`services/fleet-engine`, `SCALE.md`) keeps every online rider in Red
 | Switch the whole fleet off | Runtime pipeline stage **disable**, after stopping dispatch and letting trips finish | The rider API and the console's fleet pages go away. Wiring is kept, so **enable** brings it back. |
 | Take the gateway routes away | `azure-pipelines-rider-fleet-apim-rollback.yml` | The app and console get 404. |
 | Take the fleet engine out | integration-service `CRAVES_FLEET_ENGINE_MODE=off` (§9); then, if wanted, delete its app (`infra/fleet-engine/README.md`) | With the new revision, dispatch ranks riders itself, as before Phase 5. Nothing is lost: Postgres has everything. |
+| Stop ranking by the travel-time model | integration-service `CRAVES_FLEET_ETA_MODE=off` (§10) | With the new revision, riders are ranked by distance again (an alert says so while the policy still asks for travel time), and offers show minutes at 20 km/h. |
 
 ## Accounts and listings
 

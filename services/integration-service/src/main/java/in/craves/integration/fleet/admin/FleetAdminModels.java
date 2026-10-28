@@ -138,14 +138,15 @@ public final class FleetAdminModels {
 
     /**
      * ranges are keyed by these camelCase field names, each [min, max]. withdrawnAt: an emergency stop withdrew it before it
-     * started. offersAtOnce, offerRounds and fairBandM are how orders are offered (Phase 4), within fixed bounds.
+     * started. offersAtOnce, offerRounds and fairBandM are how orders are offered (Phase 4), within fixed bounds;
+     * rankByTravelTime (Phase 5): the soonest at the kitchen by the travel-time model hear first, not the nearest.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record DispatchPolicyVersion(String version, String status, Instant effectiveFrom, Instant publishedAt, String mode,
                                         int offerSeconds, int fleetStageSeconds, int radiusM, int pickupDetourPercent,
                                         long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
                                         Map<String, List<Long>> ranges, Instant withdrawnAt, int offersAtOnce, int offerRounds,
-                                        int fairBandM) {
+                                        int fairBandM, boolean rankByTravelTime) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -172,19 +173,28 @@ public final class FleetAdminModels {
     }
 
     /**
-     * effectiveFrom counts only when it is at least 14 days away; otherwise the version starts now. offersAtOnce, offerRounds
-     * and fairBandM (Phase 4) keep the values riders are shown when absent.
+     * effectiveFrom counts only when it is at least 14 days away; otherwise the version starts now. offersAtOnce, offerRounds,
+     * fairBandM (Phase 4) and rankByTravelTime (Phase 5) keep the values riders are shown when absent.
      */
     public record DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
                                       Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
                                       Integer pidgeStageSeconds, Instant effectiveFrom, Integer offersAtOnce, Integer offerRounds,
-                                      Integer fairBandM) {
+                                      Integer fairBandM, Boolean rankByTravelTime) {
+        /** The console of Phase 4: by distance, unless riders are shown otherwise. */
+        public DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
+                                   Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
+                                   Integer pidgeStageSeconds, Instant effectiveFrom, Integer offersAtOnce, Integer offerRounds,
+                                   Integer fairBandM) {
+            this(mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise,
+                pidgeStageSeconds, effectiveFrom, offersAtOnce, offerRounds, fairBandM, null);
+        }
+
         /** The console before Phase 4: how orders are offered stays as riders are shown it. */
         public DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
                                    Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
                                    Integer pidgeStageSeconds, Instant effectiveFrom) {
             this(mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise,
-                pidgeStageSeconds, effectiveFrom, null, null, null);
+                pidgeStageSeconds, effectiveFrom, null, null, null, null);
         }
     }
 

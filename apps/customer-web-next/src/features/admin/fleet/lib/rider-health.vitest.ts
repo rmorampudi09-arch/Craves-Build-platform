@@ -67,8 +67,11 @@ describe("Phase 4 in words", () => {
     expect(offerWhy(offer)).toBe("—");
     expect(offerWhy({ ...offer, reason: { rule: "NEAREST", place: 1, riders: 4, atOnce: 3, round: 1 } })).toBe("Nearest: 1 of 4 free riders, 3 at once");
     expect(offerWhy({ ...offer, reason: { rule: "NEAREST", place: 1, riders: 2, atOnce: 1, round: 2 } })).toBe("Nearest: 1 of 2 free riders, round 2");
+    expect(offerWhy({ ...offer, reason: { rule: "SOONEST", place: 1, riders: 4, atOnce: 1, round: 1 } })).toBe("Soonest by travel time: 1 of 4 free riders");
     expect(offerWhy({ ...offer, reason: { rule: "FAIR", place: 1, riders: 3, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12 } }))
       .toBe("Fair turn: 1 of 2 within 1.5 km, ₹90.00 an hour today, free 12 min");
+    expect(offerWhy({ ...offer, reason: { rule: "FAIR", place: 1, riders: 3, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12, bandMinutes: 4.5 } }))
+      .toBe("Fair turn: 1 of 2 within 4.5 min by travel time, ₹90.00 an hour today, free 12 min");
   });
 
   it("shows a break on an open shift", () => {

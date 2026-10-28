@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import in.craves.fleetengine.eta.EtaModel;
 import in.craves.fleetengine.wire.Wire;
 import java.util.List;
 import java.util.UUID;
@@ -17,7 +18,7 @@ class RulesTest {
     static final double KITCHEN_LAT = 17.4483; // a Madhapur kitchen, as in FleetDispatchFixtures
     static final double KITCHEN_LNG = 78.3915;
     static final double METRES_LAT = 1 / 111_194.93; // degrees of latitude per metre on Java's 6,371 km sphere
-    static final Wire.Policy NEAREST = new Wire.Policy(5000, 140, 3, 0, 40, true, false);
+    static final Wire.Policy NEAREST = new Wire.Policy(5000, 140, 3, 0, 40, true, false, false, "");
 
     static UUID uid(int n) {
         return new UUID(0, n);
@@ -48,7 +49,8 @@ class RulesTest {
     }
 
     static Wire.Policy with(Wire.Policy p, int offersAtOnce, int fairBandM, boolean choices) {
-        return new Wire.Policy(p.radiusM(), p.detourPercent(), offersAtOnce, fairBandM, p.offerSeconds(), choices, p.joint());
+        return new Wire.Policy(p.radiusM(), p.detourPercent(), offersAtOnce, fairBandM, p.offerSeconds(), choices, p.joint(), p.eta(),
+            p.etaModel());
     }
 
     static int[] ids(List<Rules.Ranked> ranked) {
@@ -75,19 +77,19 @@ class RulesTest {
             standing(free(3, 1600), 4_000, 3_600, 35),  // Arjun: ₹40
             standing(free(4, 2300), 0, 3_600, 50));     // Kiran: ₹0, outside the band
         Wire.Policy fair = with(NEAREST, 1, 1500, true);
-        List<Rules.Ranked> got = Rules.rank(order(Wire.LIVE, fair), riders, NOW);
+        List<Rules.Ranked> got = Rules.rank(order(Wire.LIVE, fair), riders, NOW, null);
         assertArrayEquals(new int[] {3, 2, 1, 4}, ids(got), "round 1: Arjun, Salma, Ravi, then Kiran");
         assertTrue(got.get(0).inBand);
         assertEquals(4_000, got.get(0).perHourPaise);
         assertFalse(got.get(3).inBand);
-        assertArrayEquals(new int[] {2, 1, 4}, ids(Rules.rank(order(Wire.LIVE, fair, List.of(uid(3))), riders, NOW)),
+        assertArrayEquals(new int[] {2, 1, 4}, ids(Rules.rank(order(Wire.LIVE, fair, List.of(uid(3))), riders, NOW, null)),
             "round 2: Salma, Ravi, then Kiran");
     }
 
     @Test
     void nearestFirstWithATieBrokenById() {
         List<Rider> riders = List.of(free(9, 1200), free(5, 300), free(7, 300), free(6, 4990));
-        assertArrayEquals(new int[] {5, 7, 9, 6}, ids(Rules.rank(order(Wire.LIVE, NEAREST), riders, NOW)));
+        assertArrayEquals(new int[] {5, 7, 9, 6}, ids(Rules.rank(order(Wire.LIVE, NEAREST), riders, NOW, null)));
     }
 
     /** Ids order as Postgres orders uuids: by unsigned bytes, so 0x80... comes after 0x7f... */
@@ -97,7 +99,7 @@ class RulesTest {
         low.id = UUID.fromString("7fffffff-ffff-ffff-ffff-ffffffffffff");
         Rider high = free(2, 300);
         high.id = UUID.fromString("80000000-0000-0000-0000-000000000000");
-        List<Rules.Ranked> got = Rules.rank(order(Wire.LIVE, NEAREST), List.of(high, low), NOW);
+        List<Rules.Ranked> got = Rules.rank(order(Wire.LIVE, NEAREST), List.of(high, low), NOW, null);
         assertEquals(low.id, got.get(0).rider.id);
     }
 
@@ -107,10 +109,10 @@ class RulesTest {
      */
     @Test
     void theBoundingBoxEdgeIsFleetDispatchers() {
-        assertTrue(Rules.rank(order(Wire.LIVE, NEAREST), List.of(free(6, 4999)), NOW).isEmpty());
+        assertTrue(Rules.rank(order(Wire.LIVE, NEAREST), List.of(free(6, 4999)), NOW, null).isEmpty());
         Rider east = free(6, 0);
         east.lng = KITCHEN_LNG + 4990 / (111_194.93 * 0.95398); // about 4.99 km due east, inside the box
-        assertEquals(1, Rules.rank(order(Wire.LIVE, NEAREST), List.of(east), NOW).size());
+        assertEquals(1, Rules.rank(order(Wire.LIVE, NEAREST), List.of(east), NOW, null).size());
     }
 
     record Case(String name, int mode, UnaryOperator<Rider> change, boolean hears) {
@@ -159,18 +161,18 @@ class RulesTest {
             new Case("heading home, the drop the other way", Wire.LIVE, r -> home(r, 17.43, 78.42), false),
             new Case("heading home ran out", Wire.LIVE, r -> { home(r, 17.43, 78.42).headingHomeUntilMs = NOW; return r; }, true));
         for (Case c : cases) {
-            List<Rules.Ranked> got = Rules.rank(order(c.mode(), NEAREST), List.of(c.change().apply(free(1, 1000))), NOW);
+            List<Rules.Ranked> got = Rules.rank(order(c.mode(), NEAREST), List.of(c.change().apply(free(1, 1000))), NOW, null);
             assertEquals(c.hears(), got.size() == 1, c.name());
         }
-        assertTrue(Rules.rank(order(Wire.LIVE, NEAREST, List.of(uid(1))), List.of(free(1, 1000)), NOW).isEmpty(),
+        assertTrue(Rules.rank(order(Wire.LIVE, NEAREST, List.of(uid(1))), List.of(free(1, 1000)), NOW, null).isEmpty(),
             "a rider already offered this order heard of it again");
-        assertTrue(Rules.rank(order(Wire.LIVE, NEAREST), List.of(free(1, 5001)), NOW).isEmpty(), "past the radius");
+        assertTrue(Rules.rank(order(Wire.LIVE, NEAREST), List.of(free(1, 5001)), NOW, null).isEmpty(), "past the radius");
         Rider limited = free(1, 1000);
         limited.maxPickupM = 500;
         limited.maxDropM = 1000;
-        assertEquals(1, Rules.rank(order(Wire.LIVE, with(NEAREST, 3, 0, false)), List.of(limited), NOW).size(),
+        assertEquals(1, Rules.rank(order(Wire.LIVE, with(NEAREST, 3, 0, false)), List.of(limited), NOW, null).size(),
             "with rider choices off a rider's limits still counted");
-        List<Rules.Ranked> homeward = Rules.rank(order(Wire.LIVE, NEAREST), List.of(home(free(1, 1000), 17.47, 78.35)), NOW);
+        List<Rules.Ranked> homeward = Rules.rank(order(Wire.LIVE, NEAREST), List.of(home(free(1, 1000), 17.47, 78.35)), NOW, null);
         assertTrue(homeward.size() == 1 && homeward.get(0).homeNearerM >= 500);
     }
 
@@ -214,5 +216,49 @@ class RulesTest {
         assertEquals(20261027, Rules.istDay(midnight - 1));
         assertEquals(midnight, Rules.istMidnight(NOW));
         assertEquals(20240229, Rules.istDay(1709145000000L)); // a leap day
+    }
+
+    /**
+     * With the travel-time model, riders go by predicted minutes to the kitchen, which straight metres can get wrong (a river,
+     * a flyover, a one-way street); past the model's ranked riders the rest follow, nearest first, and the fair band is in the
+     * same unit (metres at 20 km/h).
+     */
+    @Test
+    void theTravelTimeModelRanksBySoonestAtTheKitchen() {
+        // A one-tree model: north of the kitchen's latitude takes 9 minutes, south of it 2 (the north side is over a lake).
+        EtaModel model = EtaModel.parse("""
+            {"format":1,"version":"t1","features":["metres","from_lat","from_lng","to_lat","to_lng","bearing_sin","bearing_cos",
+             "ist_hour","ist_weekday","leg"],"init":0,"learning_rate":1,
+             "trees":[{"feature":[1,0,0],"threshold":[17.4483,0,0],"left":[1,-1,-1],"right":[2,-1,-1],"value":[0,2,9]}]}""");
+        Rider northNear = free(1, 300);
+        Rider southFar = free(2, -1200);
+        List<Rules.Ranked> byMetres = Rules.rank(order(Wire.LIVE, NEAREST), List.of(northNear, southFar), NOW, null);
+        assertArrayEquals(new int[] {1, 2}, ids(byMetres));
+        List<Rules.Ranked> byMinutes = Rules.rank(order(Wire.LIVE, NEAREST), List.of(northNear, southFar), NOW, model);
+        assertArrayEquals(new int[] {2, 1}, ids(byMinutes));
+        assertEquals(2 * EtaModel.METRES_PER_MINUTE, byMinutes.get(0).rankM, 1e-9);
+        assertEquals(1200, byMinutes.get(0).straightM, 1);
+        // A 1.5 km band is 4.5 minutes: 2 and 9 minutes are 7 apart, so only the first is in it.
+        List<Rules.Ranked> fair = Rules.rank(order(Wire.LIVE, with(NEAREST, 1, 1500, true)), List.of(northNear, southFar), NOW, model);
+        assertTrue(fair.get(0).inBand);
+        assertFalse(fair.get(1).inBand);
+    }
+
+    @Test
+    void onlyTheNearestRankedByTheModelAreRankedByIt() {
+        EtaModel model = EtaModel.parse("""
+            {"format":1,"version":"t2","features":["metres","from_lat","from_lng","to_lat","to_lng","bearing_sin","bearing_cos",
+             "ist_hour","ist_weekday","leg"],"init":5,"learning_rate":1,"trees":[{"feature":[0],"threshold":[0],"left":[-1],
+             "right":[-1],"value":[0]}]}""");
+        List<Rider> riders = new java.util.ArrayList<>();
+        for (int i = 0; i < EtaModel.RANKED + 5; i++) {
+            riders.add(free(i + 1, 10 + i * 20));
+        }
+        List<Rules.Ranked> got = Rules.rank(order(Wire.LIVE, NEAREST), riders, NOW, model);
+        assertEquals(5 * EtaModel.METRES_PER_MINUTE, got.get(EtaModel.RANKED - 1).rankM, 1e-9);
+        assertEquals(Double.POSITIVE_INFINITY, got.get(EtaModel.RANKED).rankM);
+        for (int i = 1; i < got.size(); i++) { // the model ties every ranked rider at 5 minutes: straight metres break the tie
+            assertTrue(got.get(i - 1).straightM <= got.get(i).straightM);
+        }
     }
 }

@@ -1,6 +1,7 @@
 package in.craves.fleetengine;
 
 import in.craves.fleetengine.dispatch.DispatchEngine;
+import in.craves.fleetengine.eta.EtaModels;
 import in.craves.fleetengine.ingest.RiderEvents;
 import in.craves.fleetengine.ingest.StreamReader;
 import in.craves.fleetengine.lease.LeaseManager;
@@ -82,7 +83,8 @@ public class EngineRunner implements SmartLifecycle {
         redis = r;
         shared = r.open();
         LiveStore store = new LiveStore(prefix, settings.riderTtlMs());
-        engine = new DispatchEngine(settings.dispatch(), store, shared.async, registry, reply, System::currentTimeMillis);
+        engine = new DispatchEngine(settings.dispatch(), store, shared.async, new EtaModels(shared.async, prefix), registry, reply,
+            System::currentTimeMillis);
         new RiderEvents(store, registry, lag); // registers the rider counters before any partition is read
         riders = new LeaseManager(shared.async, prefix, "rq", settings.riderPartitions(), settings.instance(), settings.leaseMs(),
             (p, stop) -> {

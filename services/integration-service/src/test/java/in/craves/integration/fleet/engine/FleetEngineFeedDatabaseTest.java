@@ -180,7 +180,7 @@ class FleetEngineFeedDatabaseTest {
     @Test
     void aShadowRequestGoesToTheStreamOfTheKitchensBlock() {
         UUID order = UUID.randomUUID();
-        feed.shadow(order, KITCHEN_LAT, KITCHEN_LNG, 17.46, 78.36, 3_500, new Policy(5_000, 130, 3, 0, 40, false, false), Set.of(),
+        feed.shadow(order, KITCHEN_LAT, KITCHEN_LNG, 17.46, 78.36, 3_500, new Policy(5_000, 130, 3, 0, 40, false, false, false, ""), Set.of(),
             List.of(), 1);
         feed.flush();
         assertThat(streams.entries).singleElement().satisfies(entry ->
@@ -268,6 +268,14 @@ class FleetEngineFeedDatabaseTest {
                 throw failure;
             }
             return values.get(key);
+        }
+
+        @Override
+        public void set(String key, byte[] value, Duration keep, Duration wait) {
+            if (failure != null) {
+                throw failure;
+            }
+            values.put(key, value);
         }
     }
 }

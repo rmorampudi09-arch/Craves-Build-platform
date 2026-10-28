@@ -387,12 +387,13 @@ components:
         offerSeconds: {type: integer, description: 'Time a rider has to accept'}
         radiusM: {type: integer, description: 'Only riders this close to the kitchen (straight line) hear of an order'}
         fairBandM: {type: integer, minimum: 0, maximum: 5000, description: '0: the nearest free rider hears first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)'}
+        byTravelTime: {type: boolean, description: 'Phase 5, present only when true: the free rider who can reach the kitchen soonest by Craves''s travel-time estimate hears first (the nearest when there is no estimate), and a fair band counts minutes, max(1, round(fairBandM x 3 / 1000)), its metres at 20 km/h. Left out: by straight-line distance.'}
     OfferReason:
       type: object
       description: 'Why this rider heard of this order (Phase 4): stored with the offer, so the rider and ops see the same reason. Each round ranks the riders not yet asked.'
       required: [rule, place, riders, atOnce, round]
       properties:
-        rule: {type: string, enum: [NEAREST, FAIR], description: 'FAIR: the rider was inside the fair band and ranked by earnings per online hour today'}
+        rule: {type: string, enum: [NEAREST, FAIR, SOONEST], description: 'FAIR: the rider was inside the fair band and ranked by earnings per online hour today. SOONEST (Phase 5): ranked by travel time, the rider could reach the kitchen soonest; apps that predate it show no reason line.'}
         place: {type: integer, minimum: 1, description: 'The rider''s place in this round''s order'}
         riders: {type: integer, minimum: 1, description: 'Free riders considered in this round'}
         atOnce: {type: integer, minimum: 1, maximum: 3}
@@ -402,6 +403,7 @@ components:
         earnedPerHourPaise: {type: integer, description: 'FAIR only: the rider''s pay today per online hour (at least 30 minutes counted)'}
         freeMinutes: {type: integer, description: 'FAIR only: minutes since the rider''s last trip ended or the shift started'}
         homeNearerM: {type: integer, description: 'Phase 5: the rider is heading home, and this order''s drop leaves them this many metres nearer home (straight line)'}
+        bandMinutes: {type: number, description: 'FAIR only, Phase 5: riders were ranked by travel time, so the band was counted in minutes (bandM at 20 km/h, to a tenth)'}
     HomeSummary:
       type: object
       required: [online, todayEarningsPaise, todayTrips]

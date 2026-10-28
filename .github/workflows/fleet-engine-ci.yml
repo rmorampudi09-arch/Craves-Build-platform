@@ -1,9 +1,13 @@
 name: Craves Fleet Engine
 
-# Checks and builds services/fleet-engine (Java 21, Spring Boot; docs/riders/SCALE.md):
+# Checks and builds services/fleet-engine (Java 21, Spring Boot; docs/riders/SCALE.md) and the travel-time model it ranks
+# with (ml/fleet-eta; docs/riders/DISPATCH.md §2):
 # - every engine test, including the wire contract it shares with integration-service
-#   (contracts/proto/craves/fleet/v1/testdata). The tests start their own Redis servers: one node, and a three-node cluster.
+#   (contracts/proto/craves/fleet/v1/testdata) and the model's golden predictions. The tests start their own Redis servers:
+#   one node, and a three-node cluster.
 # - one pass of the benchmarks;
+# - the two Java copies of the model's evaluator are identical;
+# - the model's Python tests;
 # - the container image.
 # It deploys nothing.
 
@@ -13,14 +17,20 @@ on:
       - main
     paths:
       - 'services/fleet-engine/**'
+      - 'ml/fleet-eta/**'
+      - 'services/integration-service/src/main/java/in/craves/integration/fleet/eta/**'
       - 'contracts/proto/craves/fleet/**'
+      - 'scripts/release/verify-platform-copies.py'
       - '.github/workflows/fleet-engine-ci.yml'
   push:
     branches:
       - main
     paths:
       - 'services/fleet-engine/**'
+      - 'ml/fleet-eta/**'
+      - 'services/integration-service/src/main/java/in/craves/integration/fleet/eta/**'
       - 'contracts/proto/craves/fleet/**'
+      - 'scripts/release/verify-platform-copies.py'
       - '.github/workflows/fleet-engine-ci.yml'
   workflow_dispatch:
 
@@ -63,5 +73,35 @@ jobs:
       - name: Benchmarks, one pass
         run: mvn -B -ntp test -Dfleet.bench=true -Dtest=EngineBenchmarkTest
 
+      - name: The model's two Java copies are identical
+        working-directory: .
+        run: python3 scripts/release/verify-platform-copies.py
+
       - name: Build the image
         run: docker build -t "fleet-engine:${GITHUB_SHA}" .
+
+  travel-time-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ml/fleet-eta
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: ml/fleet-eta/requirements.txt
+
+      - name: Install the pinned dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Test
+        run: python -m unittest discover -s tests -v

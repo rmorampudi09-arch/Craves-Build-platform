@@ -5,12 +5,13 @@ The rider dispatch engine for Craves riders, in Java 21 and Spring Boot like the
 ## What it does
 
 - **Live rider state.** It reads the rider events integration-service writes to Redis Streams on every `/locations` call and every change (an offer, a trip, a break, a shift). It keeps each online rider's position, availability and fair-turn standing in Redis. Every write is one Lua script on that rider's key: newest wins, no locks.
-- **Matching.** It ranks riders for orders by Craves's rules, ported from `FleetDispatcher` and tested against the same numbers: free declines, fair turns within a band, the riders' distance limits and heading home.
+- **Matching.** It ranks riders for orders by Craves's rules, ported from `FleetDispatcher` and tested against the same numbers: free declines, fair turns within a band, the riders' distance limits and heading home. When integration-service asks (the dispatch policy ranks by travel time and the model passed its ranking test), it ranks by predicted minutes to the kitchen (`docs/riders/DISPATCH.md` §2).
   - Each 0.05° block (about 5.5 km) has one actor: a virtual thread with a bounded queue. All blocks run in parallel.
   - An actor ranks the orders waiting in its block together and shares the riders out, so no rider is proposed twice. It uses the Hungarian method, and falls back to greedy past a size limit or under load.
 - **Shadow or live.**
   - In shadow it only compares its choices with the Java dispatcher's, and logs `FLEET_ENGINE_SHADOW`.
   - Live, it holds the chosen riders for a few seconds and writes a reply. integration-service then makes the offers in Postgres, which keeps the last word: one ACTIVE offer per rider.
+- **The travel-time model.** A request can name a model version. The engine loads that version from Redis (`craves:fleet:model:eta:<version>`, published by integration-service) on the first request that names it, checks it, and ranks with it; the last four versions stay loaded. A request naming a version that isn't there is left to integration-service (no reply, no shadow comparison) and counted as `etaMissing`; the version is looked for again after 2 seconds.
 - **Input it can't use** (a request out of bounds, a batch that throws) is counted and dropped, and the other blocks and partitions carry on. Lettuce follows a Redis failover and the cluster's slot map by itself, and the engine reconnects after Redis restarts.
 - **Logs.** One line per event, `NAME key=value …`, as the other Craves services log. `FLEET_ENGINE_STATS` comes once a minute, each figure covering that minute (`docs/riders/SCALE.md`, "Watching the engine").
 
@@ -60,4 +61,5 @@ A bad value stops the start, with every problem named. The Redis URL is never lo
 | `rules`, `geo` | Craves's dispatch rules and distances, as integration-service computes them |
 | `assign` | Sharing riders out among orders ranked together: exact, or greedy under load |
 | `dispatch` | The block actors, live replies and shadow comparisons |
+| `eta` | The travel-time model: evaluation (the same code as integration-service's) and loading by version |
 | `support` | Latency histograms for the stats line |

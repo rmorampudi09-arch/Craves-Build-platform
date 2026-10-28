@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -73,12 +74,13 @@ class FleetDispatchJobsDatabaseTest {
     final BorzoPidgeHandoffRepository handoffs = mock(BorzoPidgeHandoffRepository.class);
     final List<Object> events = new ArrayList<>();
     FleetDispatchJobs jobs;
+    FleetDispatcher dispatcher;
     UUID rider;
 
     @BeforeEach
     void setUp() {
         FleetPolicyStore policies = new FleetPolicyStore(fleet.db, json);
-        FleetDispatcher dispatcher = new FleetDispatcher(fleet.db, fleet.transactions, policies,
+        dispatcher = new FleetDispatcher(fleet.db, fleet.transactions, policies,
             new FleetTestMode(fleet.db, FleetDatabase.properties(true)), mock(RoadDistanceClient.class), alerts, json);
         FleetTripPay tripPay = new FleetTripPay(fleet.db, policies, json, events::add);
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands,
@@ -166,6 +168,25 @@ class FleetDispatchJobsDatabaseTest {
         fleet.db.update("UPDATE fleet_schema.trip SET accepted_at = now() - INTERVAL '6 minutes' WHERE id = ?", kept);
         assertThat(jobs.watchdog()).isZero();
         assertThat(state(kept)).isEqualTo("ASSIGNED");
+    }
+
+    /** P2-05: once the chef hands the rider the food, a phone silent for 10 minutes never loses the trip; ops hears why. */
+    @Test
+    void aTripTheChefHandedOverStaysWithItsSilentRider() {
+        UUID chefSubOrderId = UUID.randomUUID();
+        UUID atKitchen = acceptedTrip(chefSubOrderId, "AT_PICKUP");
+        UUID someoneElses = acceptedTrip(UUID.randomUUID(), "AT_PICKUP",
+            FleetDispatchFixtures.riderOnShift(fleet, "+919800000005", KITCHEN_LAT, KITCHEN_LNG, 5, false));
+        dispatcher.chefHandedOver(chefSubOrderId, java.time.Instant.now().minusSeconds(30));
+        assertThat(fleet.db.queryForObject("SELECT chef_handed_over_at IS NOT NULL FROM fleet_schema.trip WHERE id = ?", Boolean.class,
+            someoneElses)).isFalse();
+
+        FleetDispatchFixtures.seen(fleet.db, rider, 600);
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(jobs.watchdog()).isZero();
+        assertThat(state(atKitchen)).isEqualTo("AT_PICKUP");
+        verify(alerts, times(1)).opsAlert(eq("FLEET_RIDER_SILENT_AT_KITCHEN"), anyString(), contains("the chef handed them the food"), anyMap());
+        verify(alerts, never()).opsAlert(eq("FLEET_RIDER_LOST"), anyString(), anyString(), anyMap());
     }
 
     @Test

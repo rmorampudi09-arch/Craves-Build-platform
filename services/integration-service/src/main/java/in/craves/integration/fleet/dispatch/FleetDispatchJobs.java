@@ -48,7 +48,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * - the watchdog, on the heartbeat (rider_shift.last_seen_at: every /locations call, with or without a new fix): a rider
  *   on the way to the kitchen whose phone stopped calling for 90 s loses the trip (pickup-leg pay, held for ops), ops is
  *   alerted and the order goes to the next stage; CANCELLED is never published for it. At the kitchen the rider may
- *   already hold the food, so 90 s silent only alerts ops (once per trip) and the trip goes back at 300 s silent;
+ *   already hold the food, so 90 s silent only alerts ops (once per trip) and the trip goes back at 300 s silent, never
+ *   once the chef handed the rider the food (P2-05, trip.chef_handed_over_at);
  * - positions of riders no longer on shift or on a trip are forgotten after 15 minutes (forgetOffShiftPositions);
  * - a phone silent for 3 minutes on an open shift is asked to come back online (nudgeSilentShifts);
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
@@ -72,6 +73,8 @@ public class FleetDispatchJobs {
     private static final String SILENT_SINCE = "NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = t.rider_id "
         + "AND s.last_seen_at >= now() - %1$s) AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_position_latest p "
         + "WHERE p.rider_id = t.rider_id AND p.received_at >= now() - %1$s)";
+    /** Silent long enough in its state, and the chef hasn't handed the rider the food (P2-05): after that the trip stays. */
+    static final String HANDS_BACK = SILENT_SINCE.formatted(HANDBACK_WINDOW) + " AND t.chef_handed_over_at IS NULL";
     static final int NUDGES_PER_TICK = 20;
     /** The first rider app that shows the GO_ONLINE push (P1-13). */
     static final String NUDGE_MIN_APP_VERSION = "1.1.0";
@@ -197,12 +200,13 @@ public class FleetDispatchJobs {
      */
     int watchdog() {
         List<Map<String, Object>> silent = jdbc.queryForList("""
-            SELECT t.id, t.state, t.order_code, t.rider_id, %s AS hand_back FROM fleet_schema.trip t
+            SELECT t.id, t.state, t.order_code, t.rider_id, %s AS hand_back, t.chef_handed_over_at IS NOT NULL AS handed_over
+            FROM fleet_schema.trip t
             WHERE t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND t.accepted_at < now() - make_interval(secs => %d)
               AND %s
               AND (%s OR NOT EXISTS (SELECT 1 FROM fleet_schema.trip_event e WHERE e.trip_id = t.id AND e.kind = 'WATCHDOG_ALERTED'))
-            ORDER BY t.accepted_at LIMIT 20""".formatted(SILENT_SINCE.formatted(HANDBACK_WINDOW), WATCHDOG_SECONDS,
-            SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")"), SILENT_SINCE.formatted(HANDBACK_WINDOW)));
+            ORDER BY t.accepted_at LIMIT 20""".formatted(HANDS_BACK, WATCHDOG_SECONDS,
+            SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")"), HANDS_BACK));
         int handedBack = 0;
         for (Map<String, Object> trip : silent) {
             UUID tripId = (UUID) trip.get("id");
@@ -211,8 +215,11 @@ public class FleetDispatchJobs {
             if (!Boolean.TRUE.equals(trip.get("hand_back"))) {
                 if (Boolean.TRUE.equals(transaction.execute(status -> alertedAtKitchen(tripId)))) {
                     alerts.opsAlert("FLEET_RIDER_SILENT_AT_KITCHEN", "Rider app silent at the kitchen, order " + trip.get("order_code"),
-                        "The rider reached the kitchen but their app has sent nothing for 90 seconds. They may have the food. Call the "
-                            + "rider. The order goes to the next courier only if the app stays silent for 5 minutes.", data);
+                        Boolean.TRUE.equals(trip.get("handed_over"))
+                            ? "The rider's app has sent nothing for 90 seconds, and the chef handed them the food, so the order stays with "
+                                + "this rider. Call the rider."
+                            : "The rider reached the kitchen but their app has sent nothing for 90 seconds. They may have the food. Call "
+                                + "the rider. The order goes to the next courier only if the app stays silent for 5 minutes.", data);
                 }
                 continue;
             }
@@ -260,8 +267,8 @@ public class FleetDispatchJobs {
             return null;
         }
         Map<String, Object> trip = rows.get(0);
-        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT %s FROM fleet_schema.trip t WHERE t.id = ?"
-            .formatted(SILENT_SINCE.formatted(HANDBACK_WINDOW)), Boolean.class, tripId))) {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT %s FROM fleet_schema.trip t WHERE t.id = ?".formatted(HANDS_BACK),
+            Boolean.class, tripId))) {
             return null;
         }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "

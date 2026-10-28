@@ -130,6 +130,13 @@ public class FleetDispatcher implements FleetStage {
             Timestamp.from(readyAt), chefSubOrderId);
     }
 
+    /** Only a trip still before pickup needs it: the watchdog watches no other (FleetDispatchJobs.HANDS_BACK). */
+    @Override
+    public void chefHandedOver(UUID chefSubOrderId, Instant handedOverAt) {
+        jdbc.update("UPDATE fleet_schema.trip SET chef_handed_over_at = ? WHERE chef_sub_order_id = ? AND provider = 'CRAVES_FLEET' "
+            + "AND state IN ('ASSIGNED', 'AT_PICKUP') AND chef_handed_over_at IS NULL", Timestamp.from(handedOverAt), chefSubOrderId);
+    }
+
     /** A known order: the rider's job once accepted, nothing once the fleet stage is closed, else wait or close the stage. */
     private Optional<UUID> carryOn(TripState trip, boolean borzoNext) {
         if ("CRAVES_FLEET".equals(trip.provider()) && TAKEN.contains(trip.state())) {

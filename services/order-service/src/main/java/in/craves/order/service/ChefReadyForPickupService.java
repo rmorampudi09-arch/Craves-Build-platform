@@ -1,5 +1,8 @@
 package in.craves.order.service;
 
+import in.craves.order.config.DomainEventOutboxProperties;
+import in.craves.order.event.OrderHandedOverEventData;
+import in.craves.order.event.OrderHandedOverEventFactory;
 import in.craves.order.event.OrderReadyForPickupEventData;
 import in.craves.order.event.OrderReadyForPickupEventFactory;
 import in.craves.order.event.SerializedDomainEvent;
@@ -21,17 +24,23 @@ public class ChefReadyForPickupService {
     private final OrderService orderService;
     private final OrderReadyForPickupEventFactory eventFactory;
     private final OrderDomainOutboxRepository outboxRepository;
+    private final OrderHandedOverEventFactory handedOverEvents;
+    private final DomainEventOutboxProperties outboxProperties;
 
     public ChefReadyForPickupService(
         JdbcTemplate jdbcTemplate,
         OrderService orderService,
         OrderReadyForPickupEventFactory eventFactory,
-        OrderDomainOutboxRepository outboxRepository
+        OrderDomainOutboxRepository outboxRepository,
+        OrderHandedOverEventFactory handedOverEvents,
+        DomainEventOutboxProperties outboxProperties
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.orderService = orderService;
         this.eventFactory = eventFactory;
         this.outboxRepository = outboxRepository;
+        this.handedOverEvents = handedOverEvents;
+        this.outboxProperties = outboxProperties;
     }
 
     @Transactional
@@ -88,6 +97,26 @@ public class ChefReadyForPickupService {
         }
 
         return orderService.getOrderForChef(principal, chefSubOrderId);
+    }
+
+    /**
+     * The chef handed the food over (OrderService.markHandedOver) and, while ORDER_HANDED_OVER is on the publication allow-list
+     * (CRAVES_DOMAIN_EVENT_ENABLED_TYPES), the event that tells the rider fleet, whose watchdog then keeps the trip with its
+     * rider (WORKPLAN P2-05). Off the list nothing is written, so no unpublished rows pile up. A repeat writes nothing new:
+     * the outbox's event key is the type and the order.
+     */
+    @Transactional
+    public OrderResponse markHandedOver(CravesPrincipal principal, UUID orderId) {
+        OrderResponse order = orderService.markHandedOver(principal, orderId);
+        if (order.chefHandedOverAt() != null
+            && outboxProperties.normalizedEnabledEventTypes().contains(OrderHandedOverEventFactory.EVENT_TYPE)) {
+            // A meal-plan order has no checkout; it stands in for its own checkout in delivery messages (as markReady).
+            UUID checkoutId = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(checkout_id, id) FROM order_schema.customer_order WHERE id = ?", UUID.class, orderId);
+            outboxRepository.insert(orderId, handedOverEvents.create(
+                new OrderHandedOverEventData(checkoutId, orderId, order.chefHandedOverAt())));
+        }
+        return order;
     }
 
     private LockedReadyState lockReadyState(UUID chefSubOrderId) {

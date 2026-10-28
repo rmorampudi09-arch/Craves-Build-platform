@@ -74,7 +74,8 @@ wait_ready() {
 }
 
 build_image() {
-  az acr build --registry "$REGISTRY" --image "$REPOSITORY:$SOURCE_SHA" --file "$DOCKERFILE" . --only-show-errors
+  # Build output goes to stderr: callers capture stdout for the image reference.
+  az acr build --registry "$REGISTRY" --image "$REPOSITORY:$SOURCE_SHA" --file "$DOCKERFILE" . --only-show-errors >&2
   local digest
   digest=$(az acr repository show --name "$REGISTRY" --image "$REPOSITORY:$SOURCE_SHA" --query digest -o tsv --only-show-errors)
   [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "image digest not found after build"

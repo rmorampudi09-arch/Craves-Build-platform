@@ -24,8 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Reads and publishes the versioned rate card and dispatch policy, so changing them needs no restart. Telangana Act 21 of
  * 2026, s.13(2) asks for 14 days' notice of changed terms: every rate card after the first, and a dispatch policy that
- * changes the pickup detour. Values must lie inside the declared ranges: those of the newest published version, or the
- * version's own for the first.
+ * changes the pickup detour or how orders are offered (the rules). Values must lie inside the declared ranges: those of the
+ * newest published version, or the version's own for the first; the rules inside fixed bounds.
  */
 @Component
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -42,6 +42,13 @@ public class FleetPolicyStore {
         "return_per_km_paise", "unreachable_wait_minutes");
     public static final List<String> DISPATCH_POLICY_FIELDS = List.of("offer_seconds", "fleet_stage_seconds", "radius_m",
         "pickup_detour_percent", "per_order_overhead_paise", "cost_guard_premium_paise", "pidge_stage_seconds");
+    /**
+     * How an order is offered (Phase 4, docs/riders/DISPATCH.md): riders at once, rounds and the fair band. Checked against
+     * fixed bounds (the table's CHECKs), not declared ranges; once a rate card is published, a change needs 14 days' notice.
+     */
+    public static final List<String> DISPATCH_RULE_FIELDS = List.of("offers_at_once", "offer_rounds", "fair_band_m");
+    public static final Map<String, List<Long>> DISPATCH_RULE_BOUNDS = Map.of("offers_at_once", List.of(1L, 3L),
+        "offer_rounds", List.of(1L, 5L), "fair_band_m", List.of(0L, 5000L));
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -69,13 +76,14 @@ public class FleetPolicyStore {
     public Optional<DispatchPolicy> currentDispatchPolicy() {
         return jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
-                   per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds FROM fleet_schema.dispatch_policy
+                   per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m
+            FROM fleet_schema.dispatch_policy
             WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now()
             ORDER BY effective_from DESC, created_at DESC LIMIT 1""",
             (row, n) -> new DispatchPolicy(row.getString("version"), row.getTimestamp("effective_from").toInstant(),
                 row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m"),
                 row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise"),
-                row.getInt("pidge_stage_seconds")))
+                row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m")))
             .stream().findFirst();
     }
 
@@ -108,9 +116,20 @@ public class FleetPolicyStore {
         return shownDispatchPolicy(at, "").map(policy -> ((Number) policy.get("pickup_detour_percent")).intValue()).orElse(null);
     }
 
+    /** How orders are offered as riders are shown at that time (null: now); today's rules when there is no policy at all. */
+    public DispatchRules dispatchRules(Instant at) {
+        return shownDispatchPolicy(at, "").map(FleetPolicyStore::rules).orElse(DispatchRules.TODAY);
+    }
+
+    static DispatchRules rules(Map<String, Object> policy) {
+        return new DispatchRules(((Number) policy.get("offers_at_once")).intValue(), ((Number) policy.get("offer_rounds")).intValue(),
+            ((Number) policy.get("fair_band_m")).intValue());
+    }
+
     /**
-     * The next change to riders' pay terms, while a rate card is in force: the earlier of the next published rate card and
-     * the next dispatch policy (not withdrawn) whose pickup detour differs from the one riders are shown now.
+     * The next change to riders' terms, while a rate card is in force: the earliest of the next published rate card, the
+     * next dispatch policy (not withdrawn) whose pickup detour differs from the one riders are shown now, and the next whose
+     * rules for offering orders differ.
      */
     public Optional<TermsChange> nextTermsChange() {
         Instant now = databaseNow();
@@ -126,9 +145,14 @@ public class FleetPolicyStore {
                 + "AND withdrawn_at IS NULL AND effective_from > ? AND pickup_detour_percent <> ? ORDER BY effective_from LIMIT 1",
                 Timestamp.class, Timestamp.from(now), detour));
         }
+        DispatchRules rules = dispatchRules(now);
+        starts.addAll(jdbc.queryForList("SELECT effective_from FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
+            + "AND withdrawn_at IS NULL AND effective_from > ? AND (offers_at_once <> ? OR offer_rounds <> ? OR fair_band_m <> ?) "
+            + "ORDER BY effective_from LIMIT 1", Timestamp.class, Timestamp.from(now), rules.offersAtOnce(), rules.offerRounds(),
+            rules.fairBandM()));
         return starts.stream().map(Timestamp::toInstant).min(Comparator.naturalOrder()).map(at -> {
             RateCard card = rateCardInForce(at).orElseThrow();
-            return new TermsChange(at, card, card.effectiveFrom().equals(at), detour, pickupDetour(at));
+            return new TermsChange(at, card, card.effectiveFrom().equals(at), detour, pickupDetour(at), rules, dispatchRules(at));
         });
     }
 
@@ -171,16 +195,22 @@ public class FleetPolicyStore {
         if ("live".equals(row.get("mode")) && rateCardInForce(now).isEmpty()) {
             throw FleetApiException.unprocessable("RATE_CARD_REQUIRED", "Publish a rate card before switching dispatch to live.");
         }
-        Integer shown = shownDispatchPolicy(now, version).map(policy -> ((Number) policy.get("pickup_detour_percent")).intValue())
-            .orElse(null);
-        if (!scheduled && shown != null && shown != ((Number) row.get("pickup_detour_percent")).intValue()
-            && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rate_card WHERE status = 'PUBLISHED')",
-                Boolean.class))) {
+        // What riders are shown now; once a rate card is published they have terms, and a change to them needs notice.
+        Map<String, Object> shown = scheduled ? null : shownDispatchPolicy(now, version).orElse(null);
+        boolean riderTerms = shown != null && Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM fleet_schema.rate_card WHERE status = 'PUBLISHED')", Boolean.class));
+        if (riderTerms && ((Number) shown.get("pickup_detour_percent")).intValue() != ((Number) row.get("pickup_detour_percent")).intValue()) {
             throw FleetApiException.unprocessable("DETOUR_NEEDS_NOTICE", "A new pickup detour changes rider pay, so it needs 14 days' "
                 + "notice. Choose a start at least 14 days from now.");
         }
+        // How orders are offered is part of what riders are told (Telangana Act s.12, s.13(2)).
+        if (riderTerms && !rules(shown).equals(rules(row))) {
+            throw FleetApiException.unprocessable("RULES_NEED_NOTICE", "A change to how orders are offered needs 14 days' notice to "
+                + "riders. Choose a start at least 14 days from now.");
+        }
         Map<String, List<Long>> declared = publishedRanges(DISPATCH_POLICY).orElseGet(() -> ranges((String) row.get("declared_ranges")));
         refuse(publishProblems(values(row, DISPATCH_POLICY_FIELDS), declared, scheduled ? requested : now, now, false));
+        refuse(publishProblems(values(row, DISPATCH_RULE_FIELDS), DISPATCH_RULE_BOUNDS, now, now, false));
         if (scheduled) {
             startFree(DISPATCH_POLICY, version, requested);
         }
@@ -317,10 +347,15 @@ public class FleetPolicyStore {
     }
 
     /**
-     * A change to riders' terms at at: the rate card in force then (cardStarts when it starts then) and the pickup detour
-     * riders are shown before and after it.
+     * A change to riders' terms at at: the rate card in force then (cardStarts when it starts then), and the pickup detour
+     * and the rules for offering orders riders are shown before and after it.
      */
-    public record TermsChange(Instant at, RateCard card, boolean cardStarts, Integer detourBefore, Integer detourAfter) {
+    public record TermsChange(Instant at, RateCard card, boolean cardStarts, Integer detourBefore, Integer detourAfter,
+                              DispatchRules rulesBefore, DispatchRules rulesAfter) {
+        /** A change that leaves how orders are offered as it is. */
+        public TermsChange(Instant at, RateCard card, boolean cardStarts, Integer detourBefore, Integer detourAfter) {
+            this(at, card, cardStarts, detourBefore, detourAfter, DispatchRules.TODAY, DispatchRules.TODAY);
+        }
     }
 
     /** cancellationFeePaise and returnPerKmPaise are the event fees; unreachableWaitMinutes the wait before the photo or "failed". */
@@ -348,10 +383,32 @@ public class FleetPolicyStore {
      */
     public record DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds,
                                  int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise,
-                                 int pidgeStageSeconds) {
+                                 int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM) {
         /** The P1 shape, with the seeded draft's detour, cost-guard and Pidge stage values. */
         public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM) {
             this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, 130, 500, 1000, 600);
         }
+
+        /** Before Phase 4: 3 riders at once, one round, nearest first. */
+        public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM,
+                              int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds) {
+            this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise,
+                costGuardPremiumPaise, pidgeStageSeconds, DispatchRules.TODAY.offersAtOnce(), DispatchRules.TODAY.offerRounds(),
+                DispatchRules.TODAY.fairBandM());
+        }
+
+        public DispatchRules rules() {
+            return new DispatchRules(offersAtOnce, offerRounds, fairBandM);
+        }
+    }
+
+    /**
+     * How orders are offered (Phase 4): how many riders see an order at once, how many rounds the fleet stage runs, and the
+     * fair band in metres (0: nearest first; above 0: among the free riders within it of the nearest, the one who has earned
+     * least per online hour today goes first).
+     */
+    public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM) {
+        /** Before Phase 4, and with no dispatch policy at all. */
+        public static final DispatchRules TODAY = new DispatchRules(3, 1, 0);
     }
 }

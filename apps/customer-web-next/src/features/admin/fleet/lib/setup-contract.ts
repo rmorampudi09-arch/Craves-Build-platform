@@ -10,8 +10,13 @@ export const RATE_CARD_FIELDS = [
   "basePaise", "baseDropM", "dropPerKmPaise", "pickupFreeM", "pickupPerKmPaise", "waitFreeMinutes", "waitPerMinutePaise",
   "slotGuaranteePerHourPaise", "cancellationFeePaise", "returnPerKmPaise", "unreachableWaitMinutes",
 ] as const;
+// How orders are offered (Phase 4, docs/riders/DISPATCH.md): riders at once, rounds, fair band in metres.
+export const RULE_FIELDS = ["offersAtOnce", "offerRounds", "fairBandM"] as const;
+/** Today's rules: the three nearest at once, one round. A server without them answers as if these were set. */
+export const TODAY_RULES = { offersAtOnce: 3, offerRounds: 1, fairBandM: 0 } as const;
 export type DispatchMode = (typeof DISPATCH_MODES)[number];
 export type DispatchField = (typeof DISPATCH_FIELDS)[number];
+export type RuleField = (typeof RULE_FIELDS)[number];
 export type RateCardField = (typeof RATE_CARD_FIELDS)[number];
 
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -23,9 +28,13 @@ const versionMeta = { version, status: z.enum(["DRAFT", "PUBLISHED"]), effective
 const note = z.string().max(200).nullish();
 const lines = z.array(z.string().max(200)).max(10);
 
+const atOnce = z.number().int().min(1).max(3);
+const rounds = z.number().int().min(1).max(5);
+const band = z.number().int().min(0).max(5000);
 export const dispatchPolicySchema = z.object({
   // withdrawnAt: an immediate off withdrew this scheduled version before it started; it never comes into force.
   ...versionMeta, withdrawnAt: instant.nullish(), mode: z.enum(DISPATCH_MODES), ...each(DISPATCH_FIELDS, count), ranges: z.object(each(DISPATCH_FIELDS, range.optional())),
+  offersAtOnce: atOnce.default(TODAY_RULES.offersAtOnce), offerRounds: rounds.default(TODAY_RULES.offerRounds), fairBandM: band.default(TODAY_RULES.fairBandM),
 });
 export const rateCardSchema = z.object({
   ...versionMeta, ...each(RATE_CARD_FIELDS, count), ranges: z.object(each(RATE_CARD_FIELDS, range.optional())),
@@ -50,7 +59,11 @@ export const rateCardDraftSchema = z.object({
   // Only while no rate card is published; later cards keep the first published ranges.
   ranges: z.object(each(RATE_CARD_FIELDS, range.refine(([min, max]) => min <= max, "A lowest value is above its highest."))).optional(),
 });
-export const dispatchPolicyInputSchema = z.object({ mode: z.enum(DISPATCH_MODES), ...each(DISPATCH_FIELDS, count), effectiveFrom: instant.optional() });
+export const dispatchPolicyInputSchema = z.object({
+  mode: z.enum(DISPATCH_MODES), ...each(DISPATCH_FIELDS, count), effectiveFrom: instant.optional(),
+  // Left out: the server keeps the rules riders are shown.
+  offersAtOnce: atOnce.optional(), offerRounds: rounds.optional(), fairBandM: band.optional(),
+});
 /** PUT pilot/... sends {note} or no body. */
 export const pilotNoteSchema = z.object({ note: z.string().trim().min(1).max(200, "Keep the note to 200 characters.").optional() }).optional();
 
@@ -63,7 +76,7 @@ export type RateCardDraft = z.infer<typeof rateCardDraftSchema>;
 export type DispatchPolicyInput = z.infer<typeof dispatchPolicyInputSchema>;
 
 /** How the console shows an API integer: paise as rupees, metres as km, the rest as they are. */
-export type Unit = "rupees" | "km" | "minutes" | "seconds" | "percent";
+export type Unit = "rupees" | "km" | "minutes" | "seconds" | "percent" | "count";
 export type UnitInput<F extends string> = { field: F; label: string; unit: Unit };
 
 export const DISPATCH_INPUTS: readonly UnitInput<DispatchField>[] = [
@@ -74,6 +87,11 @@ export const DISPATCH_INPUTS: readonly UnitInput<DispatchField>[] = [
   { field: "perOrderOverheadPaise", label: "Overhead per order, ₹", unit: "rupees" },
   { field: "costGuardPremiumPaise", label: "Cost guard premium, ₹", unit: "rupees" },
   { field: "pidgeStageSeconds", label: "Time Pidge gets before the ops queue, seconds", unit: "seconds" },
+];
+export const RULE_INPUTS: readonly UnitInput<RuleField>[] = [
+  { field: "offersAtOnce", label: "Riders who see an order at once, 1 to 3", unit: "count" },
+  { field: "offerRounds", label: "Rounds of offers, 1 to 5", unit: "count" },
+  { field: "fairBandM", label: "Fair band, km (0: nearest first)", unit: "km" },
 ];
 export const RATE_CARD_INPUTS: readonly UnitInput<RateCardField>[] = [
   { field: "basePaise", label: "Base pay, ₹", unit: "rupees" },
@@ -124,11 +142,49 @@ const tooSoon = (local: string, now: number) => !istInstant(local) || Date.parse
 /** Published, not withdrawn, and starting later. */
 export const isScheduled = (policy: DispatchPolicy, now = Date.now()) => policy.status === "PUBLISHED" && !policy.withdrawnAt && Date.parse(policy.effectiveFrom) > now;
 
-export type DispatchForm = Record<DispatchField, string> & { mode: DispatchMode; effectiveFrom: string };
+export type DispatchForm = Record<DispatchField | RuleField, string> & { mode: DispatchMode; effectiveFrom: string };
 
 export function dispatchForm(policy: DispatchPolicy | null, now = Date.now()): DispatchForm {
   const values = Object.fromEntries(DISPATCH_INPUTS.map(({ field, unit }) => [field, policy ? toUnitText(unit, policy[field]) : ""]));
-  return { ...values as Record<DispatchField, string>, mode: policy?.mode ?? "off", effectiveFrom: noticeStart(now) };
+  const rules = Object.fromEntries(RULE_INPUTS.map(({ field, unit }) => [field, toUnitText(unit, (policy ?? TODAY_RULES)[field])]));
+  return { ...values as Record<DispatchField, string>, ...rules as Record<RuleField, string>, mode: policy?.mode ?? "off", effectiveFrom: noticeStart(now) };
+}
+
+/** The rules in a few words for ops: "3 at once, 1 round, nearest first". */
+export function rulesText(rules: Record<RuleField, number>): string {
+  const roundsText = `${rules.offerRounds} ${rules.offerRounds === 1 ? "round" : "rounds"}`;
+  return `${rules.offersAtOnce} at once, ${roundsText}, ${rules.fairBandM > 0 ? `fair band ${toUnitText("km", rules.fairBandM)} km` : "nearest first"}`;
+}
+
+/**
+ * What changes for riders and so needs 14 days' notice: "", "detour", "offer rules" or "detour and offer rules". `reference`
+ * is what riders are shown (see detourChanges), null before any rate card is published.
+ */
+export function noticeFor(form: DispatchForm, reference: DispatchPolicy | null): string {
+  const rules = reference !== null && RULE_INPUTS.some(({ field, unit }) => {
+    const value = fromUnitText(unit, form[field]);
+    return value !== null && value !== reference[field];
+  });
+  return [detourChanges(form, reference) ? "detour" : "", rules ? "offer rules" : ""].filter(Boolean).join(" and ");
+}
+
+/** Why the start must be 14 days away, and what to keep to change things sooner. */
+export function noticeHelp(what: string, reference: DispatchPolicy): string {
+  const detour = what.includes("detour"), rules = what.includes("offer rules");
+  const why = [detour ? "The detour changes rider pay (pickup km = straight line × detour)" : "", rules ? `${detour ? "how" : "How"} orders are offered is part of riders' terms` : ""];
+  const keep = [detour ? `the detour at ${reference.pickupDetourPercent}%` : "", rules ? `the offer rules at ${rulesText(reference)}` : ""];
+  return `${why.filter(Boolean).join(" and ")}, so riders get 14 days' notice. This whole version, mode included, starts at this time, at least 14 days and 1 hour from now. To change anything sooner, keep ${keep.filter(Boolean).join(" and ")}.`;
+}
+
+/** The server's checks on the rules, so the console says them first. */
+function rulesProblem(rules: Record<RuleField, number>, values: Record<DispatchField, number>): string | null {
+  if (rules.offersAtOnce < 1 || rules.offersAtOnce > 3) return "Offer each order to 1, 2 or 3 riders at a time.";
+  if (rules.offerRounds < 1 || rules.offerRounds > 5) return "Run 1 to 5 rounds of offers.";
+  if (rules.fairBandM > 5000) return "Set the fair band from 0 (nearest first) to 5 km.";
+  if (rules.offerRounds > 1 && rules.offerRounds * values.offerSeconds > values.fleetStageSeconds) {
+    return "Each round needs its full time to accept: make “Time Craves riders get before Borzo” at least the rounds × “Time a rider has to accept”, or run fewer rounds.";
+  }
+  return null;
 }
 
 /**
@@ -143,9 +199,14 @@ export function detourChanges(form: DispatchForm, reference: DispatchPolicy | nu
 export function dispatchFromForm(form: DispatchForm, reference: DispatchPolicy | null, now = Date.now()): DispatchPolicyInput | string {
   const values = readValues(DISPATCH_INPUTS, form);
   if (typeof values === "string") return values;
-  if (!detourChanges(form, reference)) return { mode: form.mode, ...values };
-  if (tooSoon(form.effectiveFrom, now)) return "Pick a start for the new detour at least 14 days and 1 hour from now.";
-  return { mode: form.mode, ...values, effectiveFrom: istInstant(form.effectiveFrom) };
+  const rules = readValues(RULE_INPUTS, form);
+  if (typeof rules === "string") return rules;
+  const problem = rulesProblem(rules, values);
+  if (problem) return problem;
+  const what = noticeFor(form, reference);
+  if (!what) return { mode: form.mode, ...values, ...rules };
+  if (tooSoon(form.effectiveFrom, now)) return `Pick a start for the new ${what} at least 14 days and 1 hour from now.`;
+  return { mode: form.mode, ...values, ...rules, effectiveFrom: istInstant(form.effectiveFrom) };
 }
 
 export type RateCardForm = Record<RateCardField, string> & {

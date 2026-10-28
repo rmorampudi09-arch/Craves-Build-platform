@@ -2,6 +2,7 @@ package in.craves.integration.fleet.rider;
 
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
 import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.FleetProperties;
@@ -14,6 +15,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
 import in.craves.integration.fleet.rider.FleetRiderModels.Insurance;
 import in.craves.integration.fleet.rider.FleetRiderModels.LabelValue;
 import in.craves.integration.fleet.rider.FleetRiderModels.NextSlot;
+import in.craves.integration.fleet.rider.FleetRiderModels.OfferRules;
 import in.craves.integration.fleet.rider.FleetRiderModels.PrivacyNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.ProfileDocument;
 import in.craves.integration.fleet.rider.FleetRiderModels.RestPoint;
@@ -274,8 +276,16 @@ public class FleetRiderService {
     @Transactional(readOnly = true)
     public Terms terms(UUID identityId) {
         String language = rider(identityId).language();
-        return terms(currentRateCard(), policies.pickupDetour(null), policies.nextTermsChange().orElse(null), language,
-            properties.supportPhone());
+        TermsChange change = policies.nextTermsChange().orElse(null);
+        return terms(currentRateCard(), policies.pickupDetour(null), change, language, properties.supportPhone(), offerRules(null),
+            change == null ? null : offerRules(change.at()));
+    }
+
+    /** How orders are offered as riders are shown at that time (null: now); null when there is no dispatch policy at all. */
+    private OfferRules offerRules(Instant at) {
+        return policies.shownDispatchPolicy(at, "").map(policy -> new OfferRules(((Number) policy.get("offers_at_once")).intValue(),
+            ((Number) policy.get("offer_rounds")).intValue(), ((Number) policy.get("offer_seconds")).intValue(),
+            ((Number) policy.get("radius_m")).intValue(), ((Number) policy.get("fair_band_m")).intValue())).orElse(null);
     }
 
     /** Only the version in force can be accepted; anything else means the terms changed while the rider read them. */
@@ -312,21 +322,45 @@ public class FleetRiderService {
      * they are translated. change, when not null, is the next change riders get 14 days' notice of, shown the same way.
      */
     static Terms terms(RateCard card, Integer detour, TermsChange change, String language, String supportPhone) {
+        return terms(card, detour, change, language, supportPhone, null, null);
+    }
+
+    /** offerRules and upcomingRules: how orders are offered now and after the change (Phase 4); null without a policy. */
+    static Terms terms(RateCard card, Integer detour, TermsChange change, String language, String supportPhone, OfferRules offerRules,
+                       OfferRules upcomingRules) {
         List<LabelValue> grievance = List.of(
             new LabelValue("Craves rider support, every slot", supportPhone == null ? "" : supportPhone),
             new LabelValue("Telangana Grievance Redressal Officer", "Link added when the state portal opens"));
         return new Terms(card.version(), card.effectiveFrom(), summary(card, language), rateCardLines(card, detour), grievance,
-            card.fullTextUrl(), card.draft(), change == null ? null : upcoming(change, language));
+            card.fullTextUrl(), card.draft(), change == null ? null : upcoming(change, language, upcomingRules), offerRules);
     }
 
-    /** The terms riders will have then: the card's summary if it starts then, and a line when the pickup detour changes. */
-    private static UpcomingTerms upcoming(TermsChange change, String language) {
+    /**
+     * The terms riders will have then: the card's summary if it starts then, a line when the pickup detour changes, and one
+     * when how orders are offered changes (the app words the rules in the rider's language; this line is English).
+     */
+    private static UpcomingTerms upcoming(TermsChange change, String language, OfferRules upcomingRules) {
         List<String> summary = new ArrayList<>(change.cardStarts() ? summary(change.card(), language) : List.of());
         if (!Objects.equals(change.detourBefore(), change.detourAfter())) {
             summary.add("Pickup distance changes from straight line × " + factor(change.detourBefore()) + " to × "
                 + factor(change.detourAfter()) + ".");
         }
-        return new UpcomingTerms(change.card().version(), change.at(), summary, rateCardLines(change.card(), change.detourAfter()));
+        if (!Objects.equals(change.rulesBefore(), change.rulesAfter())) {
+            summary.add("How orders are offered changes: " + offerRulesLine(change.rulesAfter()));
+        }
+        return new UpcomingTerms(change.card().version(), change.at(), summary, rateCardLines(change.card(), change.detourAfter()),
+            upcomingRules);
+    }
+
+    /** How orders are offered, in one English line. */
+    static String offerRulesLine(DispatchRules rules) {
+        int n = rules.offersAtOnce();
+        String who = rules.fairBandM() > 0
+            ? "Among the free riders within " + km(rules.fairBandM()) + " km of the nearest, " + (n == 1 ? "the one who has" : "the " + n
+                + " who have") + " earned the least per online hour today"
+            : n == 1 ? "The nearest free rider" : "The " + n + " nearest free riders";
+        return who + (n == 1 ? " hears first, one rider at a time" : " hear at once, and the first to accept gets it")
+            + (rules.offerRounds() > 1 ? ", in up to " + rules.offerRounds() + " rounds" : "") + ". Declining is free.";
     }
 
     private static List<String> summary(RateCard card, String language) {

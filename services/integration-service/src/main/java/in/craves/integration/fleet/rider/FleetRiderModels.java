@@ -75,10 +75,21 @@ public final class FleetRiderModels {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Terms(String version, Instant effectiveFrom, List<String> summaryOfChanges, List<LabelValue> rateCardLines,
-                        List<LabelValue> grievanceLines, String fullTextUrl, boolean draft, UpcomingTerms upcoming) {
+                        List<LabelValue> grievanceLines, String fullTextUrl, boolean draft, UpcomingTerms upcoming,
+                        OfferRules offerRules) {
     }
 
-    public record UpcomingTerms(String version, Instant effectiveFrom, List<String> summaryOfChanges, List<LabelValue> rateCardLines) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record UpcomingTerms(String version, Instant effectiveFrom, List<String> summaryOfChanges, List<LabelValue> rateCardLines,
+                                OfferRules offerRules) {
+    }
+
+    /**
+     * How orders are offered (Phase 4, docs/riders/DISPATCH.md), as numbers the app words in the rider's language (Telangana
+     * Act s.12): offersAtOnce riders at a time for offerSeconds each, up to offerRounds rounds, within radiusM of the kitchen;
+     * fairBandM 0 is nearest first, above 0 fair turns within that band.
+     */
+    public record OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM) {
     }
 
     public record LabelValue(String label, String value) {

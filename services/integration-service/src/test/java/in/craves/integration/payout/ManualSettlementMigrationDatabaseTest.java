@@ -38,10 +38,10 @@ class ManualSettlementMigrationDatabaseTest {
     void upgrade() {
         Flyway flyway=Flyway.configure().dataSource(ds).defaultSchema("payment_schema").schemas("payment_schema").locations("classpath:db/migration").load();
         assertEquals("133",flyway.info().current().getVersion().getVersion());
-        assertEquals(List.of("134","136","137","138","139","140","141","142","143","144","145","146","147","148","149","150","151","152","153","154","155","156","157","158","159","160","161","162","163","164","165","166","167","168","169"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
+        assertEquals(List.of("134","136","137","138","139","140","141","142","143","144","145","146","147","148","149","150","151","152","153","154","155","156","157","158","159","160","161","162","163","164","165","166","167","168","169","170"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
                 "The combined release must test every exact source migration; this checkout has no V135");
-        assertEquals(35,flyway.migrate().migrationsExecuted);
-        assertEquals("169",flyway.info().current().getVersion().getVersion());
+        assertEquals(36,flyway.migrate().migrationsExecuted);
+        assertEquals("170",flyway.info().current().getVersion().getVersion());
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM payment_schema.refund_sandbox_context_review",Integer.class),
                 "New review storage must not classify or release any existing financial record");
         flyway.validate();

@@ -2,9 +2,11 @@ package in.craves.integration.fleet.rider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
 import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.rider.FleetRiderModels.LabelValue;
+import in.craves.integration.fleet.rider.FleetRiderModels.OfferRules;
 import in.craves.integration.fleet.rider.FleetRiderModels.Terms;
 import java.time.Instant;
 import java.util.List;
@@ -63,6 +65,31 @@ class FleetRiderServiceTest {
         assertThat(both.upcoming().summaryOfChanges()).containsExactly(
             "First version of the Craves rider terms. Draft pricing, not final.", "Pickup distance changes from straight line × 1.3 to × 1.25.");
         assertThat(FleetRiderService.factor(100)).isEqualTo("1");
+    }
+
+    /** Phase 4: how orders are offered is part of the terms, and a change to it is an upcoming change with its own line. */
+    @Test
+    void howOrdersAreOfferedIsInTheTermsAndAChangeToItHasItsOwnLine() {
+        assertThat(FleetRiderService.offerRulesLine(DispatchRules.TODAY))
+            .isEqualTo("The 3 nearest free riders hear at once, and the first to accept gets it. Declining is free.");
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 3, 0)))
+            .isEqualTo("The nearest free rider hears first, one rider at a time, in up to 3 rounds. Declining is free.");
+        String fair = "Among the free riders within 1.5 km of the nearest, the one who has earned the least per online hour today hears "
+            + "first, one rider at a time, in up to 3 rounds. Declining is free.";
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 3, 1500))).isEqualTo(fair);
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(2, 1, 1000))).isEqualTo("Among the free riders within 1 km of the "
+            + "nearest, the 2 who have earned the least per online hour today hear at once, and the first to accept gets it. Declining is free.");
+
+        OfferRules now = new OfferRules(3, 1, 40, 5000, 0);
+        OfferRules then = new OfferRules(1, 3, 30, 5000, 1500);
+        Instant at = Instant.parse("2026-11-20T00:00:00Z");
+        Terms terms = FleetRiderService.terms(DRAFT, 130, new TermsChange(at, DRAFT, false, 130, 130, DispatchRules.TODAY,
+            new DispatchRules(1, 3, 1500)), "en", "", now, then);
+        assertThat(terms.offerRules()).isEqualTo(now);
+        assertThat(terms.upcoming().offerRules()).isEqualTo(then);
+        assertThat(terms.upcoming().summaryOfChanges()).containsExactly("How orders are offered changes: " + fair);
+        assertThat(FleetRiderService.terms(DRAFT, 130, new TermsChange(at, DRAFT, false, 130, 150), "en", "").upcoming()
+            .summaryOfChanges()).as("the same rules: no line").hasSize(1);
     }
 
     @Test

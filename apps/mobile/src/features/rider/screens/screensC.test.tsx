@@ -573,9 +573,9 @@ describe('Help (21)', () => {
 
   it('opens one answer at a time and says which is expanded', async () => {
     await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week([])]]);
-    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([true, false, false, false]);
+    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([true, false, false, false, false]);
     await act(async () => questions()[3].props.onPress());
-    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([false, false, false, true]);
+    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([false, false, false, true, false]);
     expect(allText()).toContain('Every Monday by 3 pm');
     await act(async () => questions()[3].props.onPress());
     expect(questions().every(node => !node.props.accessibilityState.expanded)).toBe(true);

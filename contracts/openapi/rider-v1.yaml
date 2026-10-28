@@ -313,15 +313,41 @@ components:
         grievanceLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
         fullTextUrl: {type: string}
         draft: {type: boolean, description: 'The rate card is draft pricing, not final; the app shows a "Draft pricing, not final" badge'}
+        offerRules: {$ref: '#/components/schemas/OfferRules'}
         upcoming:
           type: object
-          description: 'The next change to the terms while a rate card is in force, during its 14 days'' notice: the earlier of the next published rate card and the next change of the pickup detour. version is the rate card in force then, rateCardLines the lines riders will have then (same wording and language fallback), summaryOfChanges the card''s summary if it starts then plus a line when the pickup distance changes. Left out when there is none.'
+          description: 'The next change to the terms while a rate card is in force, during its 14 days'' notice: the earliest of the next published rate card, the next change of the pickup detour and the next change to how orders are offered. version is the rate card in force then, rateCardLines the lines riders will have then (same wording and language fallback), summaryOfChanges the card''s summary if it starts then plus a line when the pickup distance changes and one (English) when how orders are offered changes, offerRules the rules then. Left out when there is none.'
           required: [version, effectiveFrom, summaryOfChanges, rateCardLines]
           properties:
             version: {type: string}
             effectiveFrom: {type: string, format: date-time}
             summaryOfChanges: {type: array, items: {type: string}}
             rateCardLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
+            offerRules: {$ref: '#/components/schemas/OfferRules'}
+    OfferRules:
+      type: object
+      description: 'How orders are offered (Phase 4, docs/riders/DISPATCH.md), from the dispatch policy riders are shown; the app words it in the rider''s language on "How you get orders". Left out before any dispatch policy exists. Declining or missing an offer is always free.'
+      required: [offersAtOnce, offerRounds, offerSeconds, radiusM, fairBandM]
+      properties:
+        offersAtOnce: {type: integer, minimum: 1, maximum: 3, description: 'Riders who see an order at the same time; the first to accept gets it'}
+        offerRounds: {type: integer, minimum: 1, maximum: 5, description: 'Rounds while the fleet stage lasts: when everyone asked passes or the time runs out, the next riders not yet asked hear'}
+        offerSeconds: {type: integer, description: 'Time a rider has to accept'}
+        radiusM: {type: integer, description: 'Only riders this close to the kitchen (straight line) hear of an order'}
+        fairBandM: {type: integer, minimum: 0, maximum: 5000, description: '0: the nearest free rider hears first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)'}
+    OfferReason:
+      type: object
+      description: 'Why this rider heard of this order (Phase 4): stored with the offer, so the rider and ops see the same reason. Each round ranks the riders not yet asked.'
+      required: [rule, place, riders, atOnce, round]
+      properties:
+        rule: {type: string, enum: [NEAREST, FAIR], description: 'FAIR: the rider was inside the fair band and ranked by earnings per online hour today'}
+        place: {type: integer, minimum: 1, description: 'The rider''s place in this round''s order'}
+        riders: {type: integer, minimum: 1, description: 'Free riders considered in this round'}
+        atOnce: {type: integer, minimum: 1, maximum: 3}
+        round: {type: integer, minimum: 1, maximum: 5, description: 'Above 1: the riders asked before passed or did not answer'}
+        bandM: {type: integer, description: 'FAIR only'}
+        bandRiders: {type: integer, description: 'FAIR only: riders inside the band'}
+        earnedPerHourPaise: {type: integer, description: 'FAIR only: the rider''s pay today per online hour (at least 30 minutes counted)'}
+        freeMinutes: {type: integer, description: 'FAIR only: minutes since the rider''s last trip ended or the shift started'}
     HomeSummary:
       type: object
       required: [online, todayEarningsPaise, todayTrips]
@@ -353,6 +379,7 @@ components:
         estMinutes: {type: integer}
         itemsCount: {type: integer, minimum: 1, description: 'Items in the sealed bag ("About 28 min in total, 2 items")'}
         payLines: {type: array, description: 'How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance")', items: {$ref: '#/components/schemas/PayLine'}}
+        reason: {$ref: '#/components/schemas/OfferReason'}
     Place:
       type: object
       required: [area, address, lat, lng]

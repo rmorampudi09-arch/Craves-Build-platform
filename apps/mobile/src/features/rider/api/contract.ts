@@ -97,7 +97,44 @@ export interface Terms {
   /** The rate card is draft pricing, not final; the app shows a badge saying so. */
   draft?: boolean;
   /** Newer published terms that start later; riders see changes 14 days ahead. */
-  upcoming?: {version: string; effectiveFrom: string; summaryOfChanges: string[]; rateCardLines: LabelValue[]};
+  upcoming?: {
+    version: string;
+    effectiveFrom: string;
+    summaryOfChanges: string[];
+    rateCardLines: LabelValue[];
+    /** How orders are offered then (Phase 4); left out by older servers. */
+    offerRules?: OfferRules;
+  };
+  /** How orders are offered (Phase 4, docs/riders/DISPATCH.md); left out by older servers and before any dispatch policy. */
+  offerRules?: OfferRules;
+}
+
+/** How orders are offered. Declining or missing an offer is always free. */
+export interface OfferRules {
+  /** Riders who see an order at the same time; the first to accept gets it. */
+  offersAtOnce: number;
+  /** When everyone asked passes or the time runs out, the next riders not yet asked hear, in up to this many rounds. */
+  offerRounds: number;
+  offerSeconds: number;
+  /** Only riders this close to the kitchen hear of an order. */
+  radiusM: number;
+  /** 0: nearest first. Above 0: among the free riders this close to the nearest, the one who has earned least per online hour today. */
+  fairBandM: number;
+}
+
+/** Why this rider heard of this order, stored with the offer: the rider and ops see the same reason. */
+export interface OfferReason {
+  rule: 'NEAREST' | 'FAIR';
+  /** The rider's place in this round's order. */
+  place: number;
+  /** Free riders considered in this round (each round ranks the riders not yet asked). */
+  riders: number;
+  atOnce: number;
+  round: number;
+  bandM?: number;
+  bandRiders?: number;
+  earnedPerHourPaise?: Paise;
+  freeMinutes?: number;
 }
 
 export interface HomeSummary {
@@ -134,6 +171,8 @@ export interface Offer {
   itemsCount?: number;
   /** How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance"). */
   payLines: PayLine[];
+  /** Why this offer came to this rider (Phase 4); left out by older servers. */
+  reason?: OfferReason;
 }
 
 export type TripStep =

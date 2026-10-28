@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { matchFleetRoute } from "./fleet-common";
 import {
-  detourChanges, dispatchForm, dispatchFromForm, dispatchPolicySchema, draftFromForm, fleetSetupSchema, fromUnitText, isScheduled, noticeStart, pilotKitchenSchema,
-  pilotNoteSchema, pilotRiderSchema, rateCardDraftSchema, rateCardForm, rateCardSchema, SETUP_ROUTES, toUnitText, versionState,
+  detourChanges, dispatchForm, dispatchFromForm, dispatchPolicySchema, draftFromForm, fleetSetupSchema, fromUnitText, isScheduled, noticeFor, noticeHelp, noticeStart,
+  pilotKitchenSchema, pilotNoteSchema, pilotRiderSchema, rateCardDraftSchema, rateCardForm, rateCardSchema, rulesText, SETUP_ROUTES, toUnitText, versionState,
 } from "./setup-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
@@ -32,7 +32,7 @@ describe("pilot setup parsers", () => {
   it("accept the contract shape and drop unknown fields", () => {
     const parsed = fleetSetupSchema.parse({ ...setup, zone: "Madhapur", rateCards: [{ ...card, published_by: "x" }] });
     expect(parsed.rateCards[0]).toEqual(card);
-    expect(parsed.dispatchPolicy).toEqual(policy);
+    expect(parsed.dispatchPolicy).toEqual({ ...policy, offersAtOnce: 3, offerRounds: 1, fairBandM: 0 });
     expect(parsed.pilotKitchens).toEqual([{ chefId: CHEF, addedAt: at }]);
     expect(rateCardSchema.parse({ ...card, status: "PUBLISHED", publishedAt: at, summaryOfChanges: { en: ["a"], te: ["b"], hi: null }, fullTextUrl: "https://craves.in/terms" }).summaryOfChanges.te).toEqual(["b"]);
     expect(pilotRiderSchema.parse({ riderId: RIDER, name: "Ravi", status: "SUSPENDED", addedAt: at }).note).toBeUndefined();
@@ -84,6 +84,7 @@ describe("dispatch form", () => {
     expect(noticeStart(NOW)).toBe("2026-11-05T11:00");
     expect(dispatchFromForm({ ...form, mode: "live", radiusM: "4.5", costGuardPremiumPaise: "12.5" }, dispatchPolicySchema.parse(policy), NOW)).toEqual({
       mode: "live", offerSeconds: 40, fleetStageSeconds: 60, radiusM: 4500, pickupDetourPercent: 130, perOrderOverheadPaise: 500, costGuardPremiumPaise: 1250, pidgeStageSeconds: 600,
+      offersAtOnce: 3, offerRounds: 1, fairBandM: 0,
     });
     expect(dispatchFromForm({ ...form, offerSeconds: "40.5" }, null, NOW)).toBe("Enter a number for “Time a rider has to accept, seconds”.");
     expect(dispatchFromForm({ ...form, perOrderOverheadPaise: "five" }, null, NOW)).toBe("Enter a number for “Overhead per order, ₹”, like 40 or 40.50.");
@@ -103,6 +104,28 @@ describe("dispatch form", () => {
     expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T10:00" }, reference, NOW)).toBe(tooSoon);
     expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T10:59" }, reference, NOW)).toBe(tooSoon);
     expect(dispatchFromForm({ ...changed, effectiveFrom: "2026-11-05T11:00" }, reference, NOW)).toMatchObject({ pickupDetourPercent: 140, effectiveFrom: "2026-11-05T05:30:00.000Z" });
+  });
+
+  it("offers today's rules until set, checks them like the server and gives notice when they change for riders", () => {
+    expect(form).toMatchObject({ offersAtOnce: "3", offerRounds: "1", fairBandM: "0" });
+    expect(dispatchForm(null, NOW)).toMatchObject({ offersAtOnce: "3", offerRounds: "1", fairBandM: "0", offerSeconds: "" });
+    const fair = { ...form, offerSeconds: "30", fleetStageSeconds: "90", offersAtOnce: "1", offerRounds: "3", fairBandM: "1.5" };
+    expect(dispatchFromForm(fair, null, NOW)).toMatchObject({ offersAtOnce: 1, offerRounds: 3, fairBandM: 1500 });
+    expect(dispatchFromForm({ ...fair, offerRounds: "4" }, null, NOW)).toMatch(/^Each round needs its full time to accept/);
+    expect(dispatchFromForm({ ...fair, offersAtOnce: "4" }, null, NOW)).toBe("Offer each order to 1, 2 or 3 riders at a time.");
+    expect(dispatchFromForm({ ...fair, offerRounds: "0" }, null, NOW)).toBe("Run 1 to 5 rounds of offers.");
+    expect(dispatchFromForm({ ...fair, fairBandM: "5.5" }, null, NOW)).toBe("Set the fair band from 0 (nearest first) to 5 km.");
+    expect(dispatchFromForm({ ...fair, offerRounds: "two" }, null, NOW)).toBe("Enter a number for “Rounds of offers, 1 to 5”.");
+
+    const reference = dispatchPolicySchema.parse(policy);
+    expect(noticeFor(fair, reference)).toBe("offer rules");
+    expect(noticeFor({ ...fair, pickupDetourPercent: "140" }, reference)).toBe("detour and offer rules");
+    expect(noticeFor(fair, null)).toBe("");
+    expect(dispatchFromForm({ ...fair, effectiveFrom: "" }, reference, NOW)).toBe("Pick a start for the new offer rules at least 14 days and 1 hour from now.");
+    expect(dispatchFromForm(fair, reference, NOW)).toMatchObject({ offerRounds: 3, effectiveFrom: "2026-11-05T05:30:00.000Z" });
+    expect(rulesText(reference)).toBe("3 at once, 1 round, nearest first");
+    expect(rulesText({ offersAtOnce: 1, offerRounds: 3, fairBandM: 1500 })).toBe("1 at once, 3 rounds, fair band 1.5 km");
+    expect(noticeHelp("detour and offer rules", reference)).toBe("The detour changes rider pay (pickup km = straight line × detour) and how orders are offered is part of riders' terms, so riders get 14 days' notice. This whole version, mode included, starts at this time, at least 14 days and 1 hour from now. To change anything sooner, keep the detour at 130% and the offer rules at 3 at once, 1 round, nearest first.");
   });
 });
 

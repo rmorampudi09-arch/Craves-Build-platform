@@ -161,7 +161,7 @@ public final class FleetReplay {
             boolean anyPassed = false;
             int offered = 0;
             for (Candidate candidate : near) {
-                if (offered == FleetDispatcher.OFFERS_AT_ONCE) {
+                if (offered == policy.offersAtOnce()) {
                     break;
                 }
                 PayQuote pay = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(candidate.metres(), policy.pickupDetourPercent()));

@@ -514,6 +514,21 @@ describe('Terms', () => {
     expect(allText()).toContain('Each drop km after 2 km | ₹10');
     await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
     expect(allText()).not.toContain('New terms from');
+    expect(allText()).not.toContain('How you get orders');
+  });
+
+  it('says how orders are offered, and how they will be when that changes', async () => {
+    const today = {offersAtOnce: 3, offerRounds: 1, offerSeconds: 40, radiusM: 5000, fairBandM: 0};
+    const fair = {offersAtOnce: 1, offerRounds: 3, offerSeconds: 30, radiusM: 5000, fairBandM: 1500};
+    const upcoming = {version: '2026-10-v1', effectiveFrom: '2026-11-05T12:00:00Z', summaryOfChanges: [], rateCardLines: [], offerRules: fair};
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, {...terms, offerRules: today, upcoming}], [riderKeys.me, me]]);
+    expect(allText()).toContain('How you get orders | Each order goes to 3 riders at once.');
+    expect(allText()).toContain('Your acceptance rate and ratings never decide who gets an order.');
+    expect(allText()).toContain('How you get orders then | Each order goes to one rider at a time. You get 30 seconds to decide.');
+    // The same rules then: nothing new to read.
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, {...terms, offerRules: today, upcoming: {...upcoming, offerRules: today}}], [riderKeys.me, me]]);
+    expect(allText()).toContain('How you get orders |');
+    expect(allText()).not.toContain('How you get orders then');
   });
 
   it("says why accepting failed and reloads the terms", async () => {
@@ -850,6 +865,17 @@ describe('Offer', () => {
     expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 72, fontWeight: '900'});
     expect(pay.props.adjustsFontSizeToFit).toBe(true);
     expect(tree.root.findByProps({accessibilityLabel: 'Madhapur to Kondapur'})).toBeTruthy();
+  });
+
+  it('says why the offer came to this rider, when the server says', async () => {
+    const withReason = {...props(), route: {...props().route, params: {offer: {...offer, reason: {rule: 'FAIR' as const, place: 1, riders: 3, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 0, freeMinutes: 40}}, receivedAtMs: Date.now()}}};
+    await render(<OfferScreen {...withReason} />);
+    expect(allText()).toContain(
+      "Madhapur | Kondapur | About 28 min in total, 2 items | Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn. | Declining is free",
+    );
+    await render(<OfferScreen {...props()} />);
+    expect(allText()).not.toContain('Fair turns');
+    expect(allText()).toContain('About 28 min in total, 2 items | Declining is free');
   });
 
   it('leaves the item count off when the server sends none, and says "1 item"', async () => {

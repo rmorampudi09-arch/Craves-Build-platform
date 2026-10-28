@@ -141,6 +141,19 @@ export const en = {
     grievance: 'Complaints and appeals',
     fullText: 'Read the full terms',
     accept: 'I accept these terms',
+    // How you get orders (Phase 4, OfferRules).
+    rulesTitle: 'How you get orders',
+    rulesOneAtATime: (seconds: number) => `Each order goes to one rider at a time. You get ${seconds} seconds to decide.`,
+    rulesAtOnce: (count: number, seconds: number) =>
+      `Each order goes to ${count} riders at once. You get ${seconds} seconds, and the first to accept gets it.`,
+    rulesNearest: 'Nearest first: the free riders closest to the kitchen hear first.',
+    rulesFair: (km: string) =>
+      `Fair turns: among the free riders within ${km} of the nearest, the one who has earned the least per online hour today hears first. If two have earned the same, the one who has waited longest goes first.`,
+    rulesRounds: (rounds: number) => `If a rider passes or the time runs out, the next rider hears, in up to ${rounds} rounds.`,
+    rulesRadius: (km: string) => `Only riders within ${km} of the kitchen hear of an order.`,
+    rulesFree: 'Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.',
+    rulesWhy: 'Each offer says why it came to you.',
+    rulesThen: 'How you get orders then',
   },
   setup: {
     title: 'Phone setup',
@@ -249,6 +262,14 @@ export const en = {
     taken: 'Taken by another rider',
     secondsLeft: (seconds: number) => `${seconds}s left`,
     freeDecline: 'Declining is free and never affects your future offers.',
+    // Why this offer came to you (Phase 4, OfferReason): the rule, never anyone else's choice.
+    whyNearest: "You're the nearest free rider.",
+    whyNextNearest: "You're the next nearest free rider.",
+    whyNearestGroup: (count: number) => `You're one of the ${count} nearest free riders. The first to accept gets it.`,
+    whyNextGroup: (count: number) => `You're one of the next ${count} nearest free riders. The first to accept gets it.`,
+    whyFair: "Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn.",
+    whyFairGroup: (count: number) =>
+      `Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn: ${count} riders hear at once, and the first to accept gets it.`,
   },
   trip: {
     titles: {
@@ -465,6 +486,10 @@ export const en = {
       {
         q: 'When am I paid?',
         a: 'Every Monday by 3 pm, for the week before. You can also withdraw once a day, free, 24 hours after a trip.',
+      },
+      {
+        q: 'Who gets an order first?',
+        a: 'See "How you get orders" in Terms and rate card. Each offer also says why it came to you. Your acceptance rate and ratings never count.',
       },
     ],
     reportTitle: 'Problem with a recent trip?',

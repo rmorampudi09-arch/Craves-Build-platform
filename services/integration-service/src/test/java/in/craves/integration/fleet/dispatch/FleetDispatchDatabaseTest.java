@@ -141,7 +141,10 @@ class FleetDispatchDatabaseTest {
         // The push carries the rider-v1 Offer from the same mapping as /locations.
         JsonNode rung = json.readTree(pushed.getValue());
         assertThat(rung.fieldNames()).toIterable().containsExactlyInAnyOrder("offerId", "tripId", "expiresAt", "expiresInSec", "payPaise",
-            "pickupDistanceM", "dropDistanceM", "kitchenArea", "customerLocality", "estMinutes", "itemsCount", "payLines");
+            "pickupDistanceM", "dropDistanceM", "kitchenArea", "customerLocality", "estMinutes", "itemsCount", "payLines", "reason");
+        // Why this rider (Phase 4): today's rules, nearest first, three at once, in one round; four free riders were considered.
+        assertThat(json.treeToValue(rung.get("reason"), Map.class))
+            .isEqualTo(Map.of("rule", "NEAREST", "place", 1, "riders", 4, "atOnce", 3, "round", 1));
         assertThat(rung.get("tripId").asText()).isEqualTo(trip.get("id").toString());
         assertThat(rung.get("expiresInSec").asLong()).isBetween(35L, 40L);
         assertThat(rung.get("payPaise").asLong()).isEqualTo(5350L);
@@ -329,6 +332,124 @@ class FleetDispatchDatabaseTest {
     void theOrderCodeIsTheFirstEightCharactersTheChefAndCustomerSee() {
         assertThat(FleetDispatcher.orderCode(UUID.fromString("0bde0101-aaaa-4bbb-8ccc-dddddddddddd"))).isEqualTo("#0BDE0101");
         assertThat(FleetTripModels.estMinutes(1800, 3500)).isEqualTo(21);
+    }
+
+    /** Phase 4: one rider at a time, in rounds while the stage lasts; nobody is offered twice; rounds stop at the policy's. */
+    @Test
+    void oneRiderAtATimeHearsOfTheOrderInRoundsUntilTheRoundsRunOut() {
+        fairPolicy(0);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID third = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.010, KITCHEN_LNG, 5, false);
+        UUID fourth = FleetDispatchFixtures.riderOnShift(fleet, "+919800000004", KITCHEN_LAT + 0.015, KITCHEN_LNG, 5, false);
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("looks again soon, to send the next round").isBefore(Instant.now().plusSeconds(6)));
+        assertThat(activeOffers()).containsExactly(nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true)).as("still deciding: no second round yet")
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(count("fleet_schema.trip_offer")).isOne();
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("a decline costs nothing; the next rider hears").containsExactly(second);
+        // Each round ranks the riders not yet asked: the second-nearest is now first of the three left.
+        assertThat(reason(second)).containsEntry("place", 1).containsEntry("riders", 3).containsEntry("round", 2).containsEntry("atOnce", 1);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET offered_at = now() - INTERVAL '30 seconds', expires_at = now() - INTERVAL '1 second' "
+            + "WHERE rider_id = ?", second);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(third);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", third);
+        assertThat(dispatcher.run(command, () -> OptionalLong.of(9000), true)).as("three rounds, then Borzo").isEmpty();
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer", UUID.class)).doesNotContain(fourth).hasSize(3);
+        assertThat(fleet.db.queryForObject("SELECT provider FROM fleet_schema.trip WHERE chef_sub_order_id = ?", String.class, chefSubOrderId))
+            .isEqualTo("BORZO");
+    }
+
+    /**
+     * Phase 4 fair turns: within the band, the rider who has earned the least per online hour today hears first, then the
+     * next; a rider outside the band waits for the riders inside it. Declines change nothing.
+     */
+    @Test
+    void fairTurnsGoFirstToTheRiderWhoHasEarnedLeastPerOnlineHourToday() {
+        fairPolicy(1500);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID behind = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID outside = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.020, KITCHEN_LNG, 5, false);
+        day(nearest, 30000, 60);  // ₹300 in an hour online
+        day(behind, 0, 120);      // nothing in two hours
+        day(outside, 0, 180);
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(behind);
+        assertThat(reason(behind)).containsEntry("rule", "FAIR").containsEntry("place", 1).containsEntry("riders", 3)
+            .containsEntry("bandM", 1500).containsEntry("bandRiders", 2).containsEntry("earnedPerHourPaise", 0);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", behind);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("the band before the rider outside it").containsExactly(nearest);
+        assertThat(reason(nearest)).containsEntry("rule", "FAIR").containsEntry("place", 1).containsEntry("round", 2);
+        assertThat(((Number) reason(nearest).get("earnedPerHourPaise")).longValue()).as("₹300 over an hour and a few seconds").isBetween(29_900L, 30_000L);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(outside);
+        // Each round draws the band again around the nearest rider not yet asked: the last rider is now its only one.
+        assertThat(reason(outside)).containsEntry("place", 1).containsEntry("riders", 1).containsEntry("bandRiders", 1).containsEntry("round", 3);
+    }
+
+    @Test
+    void equalEarningsGoToTheRiderFreeTheLongest() {
+        fairPolicy(1500);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID waiting = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        day(nearest, 0, 20);
+        day(waiting, 0, 50);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(waiting);
+        assertThat((Integer) reason(waiting).get("freeMinutes")).isBetween(49, 50);
+    }
+
+    /** A live policy that offers to one rider at a time, 20 s each, up to three rounds in a 90 s stage, with this fair band. */
+    private void fairPolicy(int bandM) {
+        FleetDispatchFixtures.policy(fleet.db, "live", 20, 90, 1, 3, bandM);
+    }
+
+    /** A rider's day so far: online since minutesOnline ago (their shift started then) and paise credited today. */
+    private void day(UUID rider, long paise, int minutesOnline) {
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - make_interval(mins => ?) WHERE rider_id = ? "
+            + "AND ended_at IS NULL", minutesOnline, rider);
+        if (paise > 0) {
+            UUID trip = fleet.trip(UUID.randomUUID());
+            fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'DELIVERED', finished_at = now() - INTERVAL '30 minutes', "
+                + "pay_finalized_at = now() - INTERVAL '30 minutes' WHERE id = ?", rider, trip);
+            fleet.db.update("INSERT INTO fleet_schema.rider_earning (id, rider_id, trip_id, component, revision, business_key, gross_paise, "
+                + "withheld_paise, net_paise, rate_card_version, withdrawable_at) VALUES (?, ?, ?, 'base', 1, ?, ?, 0, ?, '2026-10-v1', now())",
+                UUID.randomUUID(), rider, trip, "fleet-trip-pay/" + trip + "/base/1", paise, paise);
+        }
+    }
+
+    private List<UUID> activeOffers() {
+        return fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE state = 'ACTIVE' AND expires_at > now()", UUID.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> reason(UUID rider) {
+        try {
+            return json.readValue(fleet.db.queryForObject("SELECT reason::text FROM fleet_schema.trip_offer WHERE rider_id = ? "
+                + "ORDER BY offered_at DESC LIMIT 1", String.class, rider), Map.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private int count(String table) {

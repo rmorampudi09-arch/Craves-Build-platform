@@ -10,6 +10,7 @@ import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatDay} from '../domain/format';
+import {offerRulesLines} from '../domain/offerRules';
 import type {RiderScreenProps} from '../navigation';
 import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
 import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
@@ -74,7 +75,11 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       </RiderScreen>
     );
   }
-  const {version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines, fullTextUrl, draft, upcoming} = terms.data;
+  const {version, effectiveFrom, summaryOfChanges, rateCardLines, grievanceLines, fullTextUrl, draft, upcoming, offerRules} = terms.data;
+  const rulesNow = offerRules ? offerRulesLines(offerRules, t) : [];
+  // The rules then, only when a rider would read something different.
+  const rulesThen = upcoming?.offerRules ? offerRulesLines(upcoming.offerRules, t) : [];
+  const rulesChange = rulesThen.length > 0 && rulesThen.join('\n') !== rulesNow.join('\n');
   // Someone who accepted an older version sees what changed; a first acceptance reads the whole card.
   const changed = accepting && Boolean(me.data?.acceptedTermsVersion) && summaryOfChanges.length > 0;
 
@@ -134,6 +139,16 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
         ))}
         <Text style={[styles.small, styles.footnote]}>{t.notice}</Text>
       </Card>
+      {rulesNow.length > 0 ? (
+        <Card>
+          <CardTitle>{t.rulesTitle}</CardTitle>
+          {rulesNow.map(line => (
+            <Text key={line} style={styles.body}>
+              {line}
+            </Text>
+          ))}
+        </Card>
+      ) : null}
       {upcoming ? (
         <Card>
           <CardTitle>{t.upcomingTitle(formatDay(upcoming.effectiveFrom))}</CardTitle>
@@ -145,6 +160,16 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
           {upcoming.rateCardLines.map((line, index) => (
             <RateRow key={`${index}-${line.label}`} label={line.label} value={line.value} divider={index > 0} />
           ))}
+          {rulesChange ? (
+            <View style={styles.rulesThen} testID="rider-terms-rules-then">
+              <Text style={styles.subTitle}>{t.rulesThen}</Text>
+              {rulesThen.map(line => (
+                <Text key={line} style={styles.body}>
+                  {line}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </Card>
       ) : null}
       <Card>
@@ -182,4 +207,6 @@ const styles = StyleSheet.create({
   body: {fontSize: typography.body, color: colors.textPrimary},
   small: {fontSize: typography.small, color: colors.textSecondary},
   footnote: {marginTop: spacing.xs},
+  rulesThen: {gap: spacing.xs, marginTop: spacing.sm},
+  subTitle: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
 });

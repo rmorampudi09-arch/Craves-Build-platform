@@ -24,13 +24,21 @@ public final class FleetDispatchFixtures {
      * so for live the seeded rate card is published first, in force since yesterday too.
      */
     public static void policy(JdbcTemplate db, String mode) {
+        policy(db, mode, 40, 60, 3, 1, 0);
+    }
+
+    /**
+     * The same, with these offer rules (Phase 4): seconds per offer, stage seconds, riders at once, rounds, fair band. The
+     * policy goes in before the rate card: once riders have terms, new rules need 14 days' notice (V170's trigger).
+     */
+    public static void policy(JdbcTemplate db, String mode, int offerSeconds, int stageSeconds, int atOnce, int rounds, int fairBandM) {
+        db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, ranges, offers_at_once, offer_rounds, fair_band_m) VALUES ('2026-09-v9', 'PUBLISHED', "
+            + "now() - INTERVAL '1 day', now(), ?, ?, ?, 5000, '{}', ?, ?, ?)", mode, offerSeconds, stageSeconds, atOnce, rounds, fairBandM);
         if ("live".equals(mode)) {
             db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() - INTERVAL '1 day' "
                 + "WHERE version = '2026-10-v1' AND status = 'DRAFT'");
         }
-        db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
-            + "fleet_stage_seconds, radius_m, ranges) VALUES ('2026-09-v9', 'PUBLISHED', now() - INTERVAL '1 day', now(), ?, 40, 60, 5000, '{}')",
-            mode);
     }
 
     /**

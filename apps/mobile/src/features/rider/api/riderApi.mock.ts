@@ -7,6 +7,7 @@ import type {
   DeliverBody,
   FailBody,
   Offer,
+  OfferRules,
   PayLine,
   Payout,
   RiderMe,
@@ -33,6 +34,9 @@ const MAX_OTP_TRIES = 5;
 const PAGE_SIZE = 20;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+/** How orders are offered: today's rules, and the demo's announced change to fair turns, one rider at a time. */
+const DEMO_RULES_TODAY: OfferRules = { offersAtOnce: 3, offerRounds: 1, offerSeconds: 40, radiusM: 5000, fairBandM: 0 };
+const DEMO_RULES: OfferRules = { offersAtOnce: 1, offerRounds: 3, offerSeconds: 40, radiusM: 5000, fairBandM: 1500 };
 
 const KITCHENS = [
   {
@@ -294,6 +298,11 @@ export function createMockRiderApi(options: MockOptions = {}) {
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
       itemsCount: 1 + (n % 3),
+      // Today's rules until the demo's new terms are accepted, then fair turns, one rider at a time (DEMO_RULES).
+      reason:
+        state.me.termsVersion === '2026-10-v1'
+          ? { rule: 'NEAREST', place: 1, riders: 3, atOnce: 3, round: 1 }
+          : { rule: 'FAIR', place: 1, riders: 4, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12 },
     };
   }
 
@@ -586,14 +595,19 @@ export function createMockRiderApi(options: MockOptions = {}) {
             },
           ],
           draft: true,
+          offerRules: state.me.termsVersion === '2026-10-v1' ? DEMO_RULES_TODAY : DEMO_RULES,
           // Demo of the 14-day notice; once new terms are "published" they are in force instead.
           upcoming:
             state.me.termsVersion === '2026-10-v1'
               ? {
                   version: '2026-11-v1',
                   effectiveFrom: iso(now() + 14 * DAY),
-                  summaryOfChanges: ['Waiting pay starts after 6 free minutes instead of 8.'],
+                  summaryOfChanges: [
+                    'Waiting pay starts after 6 free minutes instead of 8.',
+                    'How orders are offered changes: Among the free riders within 1.5 km of the nearest, the one who has earned the least per online hour today hears first, one rider at a time, in up to 3 rounds. Declining is free.',
+                  ],
                   rateCardLines: [{ label: 'Waiting at the kitchen, after 6 free minutes', value: '₹1.50 a minute' }],
+                  offerRules: DEMO_RULES,
                 }
               : undefined,
         }),

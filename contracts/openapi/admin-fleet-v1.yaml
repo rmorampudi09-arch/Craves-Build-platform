@@ -1061,6 +1061,10 @@ paths:
         detour): once a rate card is published, a detour other than the one riders are shown (the policy in force, else
         the seeded draft's) needs effectiveFrom at least 14 days away, and riders see it as upcoming in their terms. Values
         must lie inside the declared ranges: the newest published policy's, or before any is published, the seeded draft's.
+        How orders are offered (offersAtOnce, offerRounds, fairBandM; Phase 4, docs/riders/DISPATCH.md) goes with the
+        policy: each one left out keeps the rules riders are shown (today's: 3 at once, 1 round, nearest first, before any
+        policy), the emergency stop never changes them, rounds x offerSeconds must fit in fleetStageSeconds, and once a rate
+        card is published a change needs effectiveFrom at least 14 days away, as for the detour; riders see it as upcoming.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -1079,8 +1083,9 @@ paths:
         '422':
           description: >-
             VERSION_REFUSED (a value is outside the declared ranges), NOTICE_TOO_SHORT (effectiveFrom is less than 14 days
-            away), DETOUR_NEEDS_NOTICE (the detour changes and no effectiveFrom was sent) or RATE_CARD_REQUIRED (live needs
-            a published rate card in force).
+            away), DETOUR_NEEDS_NOTICE (the detour changes and no effectiveFrom was sent), RULES_NEED_NOTICE (how orders
+            are offered changes and no effectiveFrom was sent) or RATE_CARD_REQUIRED (live needs a published rate card in
+            force).
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
   /api/v1/admin/fleet/pilot/riders/{riderId}:
     put:
@@ -1628,9 +1633,17 @@ components:
         perOrderOverheadPaise: { type: integer, format: int64, minimum: 0 }
         costGuardPremiumPaise: { type: integer, format: int64, minimum: 0 }
         pidgeStageSeconds: { type: integer, minimum: 60, maximum: 3600 }
+    OfferRulesValues:
+      type: object
+      description: How orders are offered (Phase 4). Riders see these words in their terms; declining is always free.
+      properties:
+        offersAtOnce: { type: integer, minimum: 1, maximum: 3, description: Riders who see an order at the same time. 1 is calm, one rider at a time; 3 is today's. }
+        offerRounds: { type: integer, minimum: 1, maximum: 5, description: "Rounds while the fleet stage lasts: when everyone asked passes or the time runs out, the next riders not yet asked hear. Rounds x offerSeconds must fit in fleetStageSeconds." }
+        fairBandM: { type: integer, minimum: 0, maximum: 5000, description: "0: nearest first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)." }
     DispatchPolicyInput:
       allOf:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }
+        - { $ref: '#/components/schemas/OfferRulesValues' }
         - type: object
           required: [mode]
           properties:
@@ -1639,6 +1652,7 @@ components:
     DispatchPolicy:
       allOf:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }
+        - { $ref: '#/components/schemas/OfferRulesValues' }
         - type: object
           required: [version, status, effectiveFrom, mode, ranges]
           properties:

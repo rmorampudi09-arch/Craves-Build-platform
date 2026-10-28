@@ -314,19 +314,24 @@ public class FleetDispatcher implements FleetStage {
 
     /**
      * Each rider's day so far (IST): pay credited today (as Home shows it), available minutes online today (shifts less
-     * breaks), and when they last became free (shift start or last trip end).
+     * breaks), and when they last became free to take an order: the latest of their shift's start, their last trip's end
+     * and the end of a break on this shift (a break is not time spent waiting for an order).
      */
     private Map<UUID, Standing> standings(List<UUID> riderIds) {
         FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
         Timestamp from = Timestamp.from(today.from());
         Timestamp to = Timestamp.from(today.to());
         Map<UUID, Standing> standings = new HashMap<>();
+        // shortcut: 3 queries per rider in the band, fine for the tens a band holds; one batched query past ~50 riders a band.
         for (UUID riderId : riderIds) {
             long earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> row.getLong("paise"), riderId, from, to);
             long online = jdbc.queryForObject(FleetEarnings.ONLINE_SECONDS_SQL, Long.class, from, to, riderId);
             Timestamp freeSince = jdbc.queryForObject("""
                 SELECT GREATEST((SELECT MAX(s.started_at) FROM fleet_schema.rider_shift s WHERE s.rider_id = ? AND s.ended_at IS NULL),
-                                (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = ?))""", Timestamp.class, riderId, riderId);
+                                (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = ?),
+                                (SELECT MAX(b.ends_at) FROM fleet_schema.rider_break b JOIN fleet_schema.rider_shift s ON s.id = b.shift_id
+                                 WHERE s.rider_id = ? AND s.ended_at IS NULL AND b.ends_at <= now()))""",
+                Timestamp.class, riderId, riderId, riderId);
             standings.put(riderId, new Standing(earned, online, freeSince == null ? Instant.EPOCH : freeSince.toInstant()));
         }
         return standings;
@@ -380,6 +385,7 @@ public class FleetDispatcher implements FleetStage {
         if (riders.isEmpty() || card == null) {
             return List.of();
         }
+        // shortcut: a fresh courier quote each round (at most 5 an order); keep the first on the trip if couriers limit quotes.
         Choice choice = choose(riders, policy, card, dropM, courierQuotePaise.get(), rounds + 1);
         if (choice.offers().isEmpty()) {
             return List.of();
@@ -641,7 +647,7 @@ public class FleetDispatcher implements FleetStage {
         }
     }
 
-    /** A rider's day so far: pay credited today, seconds online today, and when they last became free. */
+    /** A rider's day so far: pay credited today, seconds online today (breaks left out), and when they last became free. */
     record Standing(long earnedPaise, long onlineSeconds, Instant freeSince) {
         long perHourPaise() {
             return FleetEarnings.perOnlineHourPaise(earnedPaise, onlineSeconds);

@@ -305,6 +305,23 @@ SELECT (SELECT count(DISTINCT b.rider_id) FROM fleet_schema.rider_break b WHERE 
        (SELECT count(*) FROM fleet_schema.rider r WHERE r.status = 'ACTIVE' AND r.max_pickup_m IS NOT NULL) AS with_farthest_pickup,
        (SELECT count(*) FROM fleet_schema.rider r WHERE r.status = 'ACTIVE' AND r.max_drop_m IS NOT NULL) AS with_farthest_drop;
 
+-- name: kitchen_wait
+-- Phase 4: how long riders wait at each kitchen, from the "arrived" tap to pickup, over the last 14 days: trips, the
+-- middle (p50) and p90 minutes, and on how many the food was ready before the rider arrived (the chef's ready tap first).
+-- The rate card pays waiting after its free minutes. A kitchen whose middle wait is past them keeps riders waiting on
+-- most trips: ask its chef to tap ready when the food is packed. Most kitchens over 10 minutes for two weeks: design
+-- offers timed to the food (DISPATCH.md). Food mostly ready first: riders come late for it, so narrow any fair band.
+SELECT max(t.kitchen_name) AS kitchen, count(*) AS trips,
+       round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM t.picked_up_at - t.arrived_kitchen_at) / 60))::numeric, 1)
+           AS p50_wait_min,
+       round((percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM t.picked_up_at - t.arrived_kitchen_at) / 60))::numeric, 1)
+           AS p90_wait_min,
+       count(*) FILTER (WHERE t.chef_ready_at <= t.arrived_kitchen_at) AS food_ready_first
+FROM fleet_schema.trip t
+WHERE t.picked_up_at > now() - INTERVAL '14 days' AND t.arrived_kitchen_at IS NOT NULL AND t.picked_up_at >= t.arrived_kitchen_at
+GROUP BY t.chef_id
+ORDER BY p50_wait_min DESC, trips DESC;
+
 -- name: track_size
 -- trip_track on disk: its day partitions and the default one. Thinning old tracks (P2-11) is worth doing past about 5 GB.
 SELECT count(*) AS partitions,

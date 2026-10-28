@@ -102,7 +102,7 @@ class FleetPilotHealthDatabaseTest {
             + "chef_ready_at = now() - INTERVAL '5 minutes' WHERE id = ?", first, second);
         fleet.db.update("UPDATE fleet_schema.trip SET chef_ready_at = now() - INTERVAL '10 minutes', rider_id = ?, "
             + "accepted_at = now() - INTERVAL '60 minutes', arrived_kitchen_at = now() - INTERVAL '45 minutes', "
-            + "finished_at = now() - INTERVAL '30 minutes' WHERE id = ?", rider, first);
+            + "picked_up_at = now() - INTERVAL '38 minutes', finished_at = now() - INTERVAL '30 minutes' WHERE id = ?", rider, first);
         // Ops gave the second order to another rider (V166, after the contract migration drops the old constraint): it still
         // counts once, by its current trip.
         fleet.db.execute("ALTER TABLE fleet_schema.trip DROP CONSTRAINT IF EXISTS trip_chef_sub_order_id_key");
@@ -121,7 +121,7 @@ class FleetPilotHealthDatabaseTest {
         Map<String, String> queries = queries();
         assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
             "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes", "batching_candidates", "rider_busy_share",
-            "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "track_size");
+            "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "kitchen_wait", "track_size");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
 
         assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
@@ -173,6 +173,10 @@ class FleetPilotHealthDatabaseTest {
             .containsExactly(tuple(20.0, 4.0, 20.0));
         assertThat(fleet.db.queryForList(queries.get("offer_outcomes"))).extracting(row -> row.get("state"), row -> number(row, "offers"),
             row -> number(row, "pct")).containsExactly(tuple("DECLINED", 21.0, 100.0));
+        Map<String, Object> wait = fleet.db.queryForList(queries.get("kitchen_wait")).get(0);
+        assertThat(number(wait, "trips")).as("only the trip picked up").isEqualTo(1);
+        assertThat(number(wait, "p50_wait_min")).as("arrived 45 and picked up 38 minutes ago").isEqualTo(7.0);
+        assertThat(number(wait, "food_ready_first")).as("the chef tapped ready after the rider arrived").isZero();
         Map<String, Object> track = fleet.db.queryForList(queries.get("track_size")).get(0);
         assertThat(number(track, "partitions")).isGreaterThanOrEqualTo(1);
         assertThat(number(track, "total_bytes")).isGreaterThan(0);

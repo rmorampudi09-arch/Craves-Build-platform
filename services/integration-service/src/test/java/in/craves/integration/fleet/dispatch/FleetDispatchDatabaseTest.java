@@ -407,17 +407,21 @@ class FleetDispatchDatabaseTest {
         assertThat(reason(outside)).containsEntry("place", 1).containsEntry("riders", 1).containsEntry("bandRiders", 1).containsEntry("round", 3);
     }
 
+    /** Equal earnings go to the rider who has waited longest for an order; a break is not waiting. */
     @Test
     void equalEarningsGoToTheRiderFreeTheLongest() {
         FleetDatabase.assumeTodayIsHoursOld(2);
         fairPolicy(1500);
         UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
         UUID waiting = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID rested = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.008, KITCHEN_LNG, 5, false);
         day(nearest, 0, 20);
         day(waiting, 0, 50);
+        day(rested, 0, 80);
+        FleetDispatchFixtures.onBreak(fleet.db, rested, 40, -1);
         assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
             .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
-        assertThat(activeOffers()).containsExactly(waiting);
+        assertThat(activeOffers()).as("online 80 minutes, but back from a break a minute ago").containsExactly(waiting);
         assertThat((Integer) reason(waiting).get("freeMinutes")).isBetween(49, 50);
     }
 

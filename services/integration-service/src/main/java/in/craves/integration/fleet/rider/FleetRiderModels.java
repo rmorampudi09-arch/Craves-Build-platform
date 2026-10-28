@@ -26,8 +26,11 @@ public final class FleetRiderModels {
     public record AcceptPrivacyNotice(String version, String language) {
     }
 
-    /** nativeTripOutbox (P2-02): the app sends trip steps from its native outbox, as trip steps take the shift credential. */
-    public record Features(boolean payoutsEnabled, boolean withdrawEnabled, boolean nativeTripOutbox) {
+    /**
+     * nativeTripOutbox (P2-02): the app sends trip steps from its native outbox, as trip steps take the shift credential.
+     * riderChoices (Phase 4): the app offers a break while online and the farthest pickup and drop (order preferences).
+     */
+    public record Features(boolean payoutsEnabled, boolean withdrawEnabled, boolean nativeTripOutbox, boolean riderChoices) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -38,7 +41,22 @@ public final class FleetRiderModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     /** payoutAccountSubmitted: the account the rider sent from the app, masked, until ops confirms it. */
     public record RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
-                               @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted) {
+                               @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted, OrderPreferences preferences) {
+    }
+
+    /**
+     * Phase 4 order preferences: the farthest pickup (as the offer shows it) and drop the rider wants to hear of; null is any
+     * distance. On the profile only while rider choices are on.
+     */
+    public record OrderPreferences(Integer maxPickupM, Integer maxDropM) {
+    }
+
+    /** Phase 4: a break of 5 to 60 minutes while online. */
+    public record PauseRequest(Integer minutes) {
+    }
+
+    /** No offers until offersPausedUntil, unless the rider ends the break sooner. */
+    public record ShiftPause(Instant offersPausedUntil) {
     }
 
     /** kind: PETROL, ELECTRIC or BICYCLE as the rider signed up; absent for a rider ops added before sign-up existed. */
@@ -57,7 +75,7 @@ public final class FleetRiderModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record HomeSummary(boolean online, Instant shiftStartedAt, String zoneName, Instant slotEndsAt, long todayEarningsPaise,
                               int todayTrips, String activeTripId, NextSlot nextSlot, Long guaranteedPerHourPaise, RestPoint restPoint,
-                              Banner banner) {
+                              Banner banner, Instant offersPausedUntil) {
     }
 
     public record NextSlot(Instant startsAt, Instant endsAt, String zoneName) {

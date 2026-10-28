@@ -721,6 +721,33 @@ describe('Home', () => {
     expect(riderApi.endShift).toHaveBeenCalled();
   });
 
+  it('takes a break of the chosen minutes, only when rider choices are on', async () => {
+    await render(<HomeScreen />, seed(onlineHome));
+    expect(press('rider-break-start')).toBeUndefined();
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    (riderApi.pauseShift as jest.Mock).mockResolvedValueOnce({offersPausedUntil: at(23)});
+    await render(<HomeScreen />, seed(onlineHome, choosing));
+    await act(async () => press('rider-break-start').props.onPress());
+    expect(allText()).toContain('How long? You stay online, and no offers come. | 10 min | 20 min | 30 min');
+    expect(allText()).toContain("Break time doesn't count toward a slot's guaranteed minimum.");
+    await act(async () => press('rider-break-20').props.onPress());
+    expect(riderApi.pauseShift).toHaveBeenCalledWith(20);
+    expect(press('rider-break-20')).toBeUndefined();
+  });
+
+  it('shows a running break and comes back from it, even with rider choices off', async () => {
+    const until = new Date(Date.now() + 15 * 60_000);
+    (riderApi.resumeShift as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<HomeScreen />, seed({...onlineHome, offersPausedUntil: until.toISOString()}));
+    expect(tree.root.findByProps({testID: 'rider-on-break'}).props.children).toMatch(/^On a break until \d{1,2}:\d\d [ap]m$/);
+    expect(allText()).toContain('No offers until then. Come back any time.');
+    await act(async () => press('rider-break-end').props.onPress());
+    expect(riderApi.resumeShift).toHaveBeenCalled();
+    // A break that has ended shows nothing, until Home reloads.
+    await render(<HomeScreen />, seed({...onlineHome, offersPausedUntil: new Date(Date.now() - 1000).toISOString()}));
+    expect(allText()).not.toContain('On a break');
+  });
+
   it('opens the notice on its own screen', async () => {
     const notice = {title: 'Review of a delivery', reason: 'A customer says it did not arrive.', appealPhone: '+910000000000'};
     await render(<HomeScreen />, seed(offlineHome, {...me, notice}));

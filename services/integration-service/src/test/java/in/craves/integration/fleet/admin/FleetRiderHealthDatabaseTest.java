@@ -16,6 +16,7 @@ import in.craves.integration.fleet.admin.FleetAdminModels.RiderDetail;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderOffer;
 import in.craves.integration.fleet.admin.FleetAdminModels.Shift;
 import in.craves.integration.fleet.dispatch.FleetDispatchFixtures;
+import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import in.craves.integration.payout.bank.BankDataCipher;
 import java.time.Instant;
 import java.util.UUID;
@@ -72,6 +73,32 @@ class FleetRiderHealthDatabaseTest {
         assertThat(heard.rangAt()).isEqualTo(heard.offeredAt().plusSeconds(2));
         assertThat(heard.pushedAt()).isEqualTo(heard.offeredAt());
         assertThat(detail.recentOffers().get(0).rangAt()).isNull();
+    }
+
+    /** Phase 4: ops sees a running break on the open shift, and why each offer went to the rider, as the rider saw it. */
+    @Test
+    void theRiderPageShowsABreakAndWhyEachOfferCame() {
+        UUID rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.onBreak(fleet.db, rider, 0, 15);
+        UUID trip = fleet.trip(UUID.randomUUID());
+        UUID offer = UUID.randomUUID();
+        fleet.db.update(OFFER.formatted("NULL"), offer, trip, rider, "DECLINED", 3, 3, 3, 3, "SENT", null);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET round = 2, reason = '{\"rule\": \"FAIR\", \"place\": 1, \"riders\": 3, "
+            + "\"atOnce\": 1, \"round\": 2, \"bandM\": 1500, \"bandRiders\": 2, \"earnedPerHourPaise\": 9000, \"freeMinutes\": 12}' "
+            + "WHERE id = ?", offer);
+        RiderDetail detail = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
+            mock(BankDataCipher.class)).getRider(rider);
+        assertThat(detail.shifts().get(0).onBreakUntil()).isBetween(Instant.now().plusSeconds(14 * 60), Instant.now().plusSeconds(15 * 60));
+        assertThat(detail.recentOffers().get(0).reason())
+            .isEqualTo(new OfferReason("FAIR", 1, 3, 1, 2, 1500, 2, 9000L, 12));
+
+        fleet.db.update("UPDATE fleet_schema.rider_break SET started_at = now() - INTERVAL '20 minutes', ends_at = now() - INTERVAL '1 minute' "
+            + "WHERE rider_id = ?", rider);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET reason = NULL WHERE id = ?", offer);
+        detail = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class), mock(BankDataCipher.class))
+            .getRider(rider);
+        assertThat(detail.shifts().get(0).onBreakUntil()).as("the break is over").isNull();
+        assertThat(detail.recentOffers().get(0).reason()).isNull();
     }
 
     @Test

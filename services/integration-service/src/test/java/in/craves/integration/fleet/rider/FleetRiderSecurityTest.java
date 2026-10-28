@@ -67,7 +67,7 @@ class FleetRiderSecurityTest {
         UUID pending = UUID.randomUUID();
         when(verifier.verify("pending")).thenReturn(new CravesPrincipal(pending, "+919000000000", Set.of("CUSTOMER")));
         when(service.profile(pending)).thenReturn(new FleetRiderModels.RiderProfile(new FleetRiderModels.Vehicle("Two-wheeler", null, null),
-            List.of(), null, null, null));
+            List.of(), null, null, null, null));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer pending")).andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicle.label").value("Two-wheeler"));
         mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", new byte[] {1})).param("type", "DL")
@@ -91,7 +91,7 @@ class FleetRiderSecurityTest {
     void meNeedsOnlyASignIn() throws Exception {
         when(verifier.verify("customer")).thenReturn(new CravesPrincipal(UUID.randomUUID(), "+919000000000", Set.of("CUSTOMER")));
         when(service.me(any())).thenReturn(new FleetRiderModels.RiderMe("", "", "+91 90xxxxx000", null, "NOT_RIDER", null, null, null,
-            "2026-10-v1", null, "en", "1.0.0", "+914012345678", null, new FleetRiderModels.Features(false, false, false), null));
+            "2026-10-v1", null, "en", "1.0.0", "+914012345678", null, new FleetRiderModels.Features(false, false, false, false), null));
         mvc.perform(get("/api/v1/rider/me").header("Authorization", "Bearer customer")).andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("NOT_RIDER")).andExpect(jsonPath("$.notice").doesNotExist());
         mvc.perform(get("/api/v1/rider/me")).andExpect(status().is4xxClientError());

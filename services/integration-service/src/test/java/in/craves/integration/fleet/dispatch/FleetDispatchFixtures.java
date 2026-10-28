@@ -58,6 +58,13 @@ public final class FleetDispatchFixtures {
         return rider;
     }
 
+    /** Phase 4: a break on the rider's open shift, from startedMinutesAgo until endsInMinutes from now (negative: it ended). */
+    public static void onBreak(JdbcTemplate db, UUID rider, int startedMinutesAgo, int endsInMinutes) {
+        db.update("INSERT INTO fleet_schema.rider_break (id, rider_id, shift_id, started_at, ends_at) SELECT ?, rider_id, id, "
+            + "now() - make_interval(mins => ?), now() + make_interval(mins => ?) FROM fleet_schema.rider_shift WHERE rider_id = ? "
+            + "AND ended_at IS NULL", UUID.randomUUID(), startedMinutesAgo, endsInMinutes, rider);
+    }
+
     public static void fix(JdbcTemplate db, UUID rider, double lat, double lng, int secondsAgo, boolean mock) {
         db.update("INSERT INTO fleet_schema.rider_position_latest (rider_id, lat, lng, accuracy_m, mock, recorded_at, received_at) "
             + "VALUES (?, ?, ?, 8, ?, now() - make_interval(secs => ?), now() - make_interval(secs => ?)) "

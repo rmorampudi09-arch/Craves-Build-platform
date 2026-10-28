@@ -94,6 +94,7 @@ public class FleetDispatcher implements FleetStage {
     private final RiderPushClient push;
     private final ObjectMapper json;
     private final boolean roadRanking;
+    private final boolean riderChoices;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
 
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
@@ -101,10 +102,17 @@ public class FleetDispatcher implements FleetStage {
         this(jdbc, transactions, policies, testMode, roads, push, json, false);
     }
 
+    public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
+                           RoadDistanceClient roads, RiderPushClient push, ObjectMapper json, boolean roadRanking) {
+        this(jdbc, transactions, policies, testMode, roads, push, json, roadRanking, false);
+    }
+
+    /** riderChoices (Phase 4, CRAVES_FLEET_RIDER_CHOICES_ENABLED): honour each rider's farthest pickup and drop. */
     @Autowired
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json,
-                           @Value("${craves.fleet.road-ranking-enabled:false}") boolean roadRanking) {
+                           @Value("${craves.fleet.road-ranking-enabled:false}") boolean roadRanking,
+                           @Value("${craves.fleet.rider-choices-enabled:false}") boolean riderChoices) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.policies = policies;
@@ -113,6 +121,7 @@ public class FleetDispatcher implements FleetStage {
         this.push = push;
         this.json = json;
         this.roadRanking = roadRanking;
+        this.riderChoices = riderChoices;
     }
 
     @Override
@@ -265,8 +274,8 @@ public class FleetDispatcher implements FleetStage {
         double kitchenLat = request.pickup().latitude().doubleValue();
         double kitchenLng = request.pickup().longitude().doubleValue();
         int dropM = roads.meters(kitchenLat, kitchenLng, request.dropoff().latitude().doubleValue(), request.dropoff().longitude().doubleValue());
-        List<Candidate> riders = ranked(nearbyRiders(kitchenLat, kitchenLng, policy.radiusM()), policy, kitchenLat, kitchenLng,
-            command.chefSubOrderId());
+        List<Candidate> riders = ranked(nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent()), policy,
+            kitchenLat, kitchenLng, command.chefSubOrderId());
         OptionalLong courier = riders.isEmpty() ? OptionalLong.empty() : courierQuotePaise.get();
         Choice choice = choose(riders, policy, card, dropM, courier, 1);
         return new Plan(chefId, card.version(), dropM, choice.offers(), choice.outcome(), courier.isPresent() ? courier.getAsLong() : null);
@@ -368,14 +377,14 @@ public class FleetDispatcher implements FleetStage {
         Set<UUID> offered = Set.copyOf(jdbc.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE trip_id = ?", UUID.class, tripId));
         double lat = ((Number) trip.get("kitchen_lat")).doubleValue();
         double lng = ((Number) trip.get("kitchen_lng")).doubleValue();
-        List<Candidate> riders = ranked(nearbyRiders(lat, lng, policy.radiusM()).stream().filter(rider -> !offered.contains(rider.riderId()))
-            .toList(), policy, lat, lng, (UUID) trip.get("chef_sub_order_id"));
+        int dropM = trip.get("drop_distance_m") == null ? 0 : ((Number) trip.get("drop_distance_m")).intValue();
+        List<Candidate> riders = ranked(nearbyRiders(lat, lng, policy.radiusM(), dropM, policy.pickupDetourPercent()).stream()
+            .filter(rider -> !offered.contains(rider.riderId())).toList(), policy, lat, lng, (UUID) trip.get("chef_sub_order_id"));
         RateCard card = policies.rateCard((String) trip.get("rate_card_version")).filter(own -> !own.draft())
             .or(() -> policies.rateCardInForce(null)).orElse(null);
         if (riders.isEmpty() || card == null) {
             return List.of();
         }
-        int dropM = trip.get("drop_distance_m") == null ? 0 : ((Number) trip.get("drop_distance_m")).intValue();
         Choice choice = choose(riders, policy, card, dropM, courierQuotePaise.get(), rounds + 1);
         if (choice.offers().isEmpty()) {
             return List.of();
@@ -429,31 +438,44 @@ public class FleetDispatcher implements FleetStage {
         return ranked;
     }
 
-    /**
-     * Eligible riders, nearest first: ACTIVE, on an open shift, idle (no active trip or open offer), heard from (HEARD_FROM:
-     * a call in the last 45 s, a real fix under 3 minutes old, a phone that can ring), inside the policy radius. Declines
-     * play no part.
-     */
+    /** Riders who could take an order at this kitchen, whatever its drop (ridersNear). */
     private List<Candidate> nearbyRiders(double lat, double lng, int radiusM) {
+        return nearbyRiders(lat, lng, radiusM, -1, 100);
+    }
+
+    /**
+     * Eligible riders, nearest first: ACTIVE, on an open shift and not on a break (Phase 4), idle (no active trip or open
+     * offer), heard from (HEARD_FROM: a call in the last 45 s, a real fix under 3 minutes old, a phone that can ring),
+     * inside the policy radius. With rider choices on and an order's drop (dropM >= 0), also within each rider's farthest
+     * drop and pickup (the pickup as the offer shows it, at this detour). Declines play no part.
+     */
+    private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent) {
         double dLat = radiusM / 111_320.0;
         double dLng = radiusM / (111_320.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));
+        boolean choices = riderChoices && dropM >= 0;
         return jdbc.query("""
-                SELECT r.id, p.lat, p.lng FROM fleet_schema.rider r
+                SELECT r.id, p.lat, p.lng, r.max_pickup_m FROM fleet_schema.rider r
                 JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
-                  AND s.credential_expires_at > now()
+                  AND s.credential_expires_at > now() AND\s""" + FleetShiftService.BREAK_ENDS.formatted("s.id") + """
+                 IS NULL
                 JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
                 WHERE r.status = 'ACTIVE' AND\s""" + HEARD_FROM + """
 
                   AND p.lat BETWEEN ? AND ? AND p.lng BETWEEN ? AND ?
+                  AND (NOT ? OR r.max_drop_m IS NULL OR r.max_drop_m >= ?)
                   AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = r.id
                                   AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
                   AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())""",
                 (row, n) -> {
                     double metres = RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng"));
-                    return new Candidate(row.getObject("id", UUID.class), metres, row.getDouble("lat"), row.getDouble("lng"), metres, null);
+                    Integer maxPickupM = choices ? (Integer) row.getObject("max_pickup_m") : null;
+                    // A rider who chose a nearer pickup is left out (null), as if out of range.
+                    return maxPickupM != null && FleetPay.pickupDistanceM(metres, detourPercent) > maxPickupM ? null
+                        : new Candidate(row.getObject("id", UUID.class), metres, row.getDouble("lat"), row.getDouble("lng"), metres, null);
                 },
-                lat - dLat, lat + dLat, lng - dLng, lng + dLng)
-            .stream().filter(rider -> rider.straightLineM() <= radiusM).sorted(Comparator.comparingDouble(Candidate::straightLineM)).toList();
+                lat - dLat, lat + dLat, lng - dLng, lng + dLng, choices, Math.max(dropM, 0))
+            .stream().filter(rider -> rider != null && rider.straightLineM() <= radiusM).sorted(Comparator.comparingDouble(Candidate::straightLineM))
+            .toList();
     }
 
     /** The trip, its fleet stage and the offers, in one transaction. Null when another worker already opened this order. */

@@ -16,6 +16,9 @@ route|rider|rider-post-privacy-notice-accept|POST|/privacy-notice/accept|json
 route|rider|rider-get-home|GET|/home|json
 route|rider|rider-post-shift-start|POST|/shift/start|upload
 route|rider|rider-post-shift-end|POST|/shift/end|json
+route|rider|rider-post-shift-pause|POST|/shift/pause|json
+route|rider|rider-post-shift-resume|POST|/shift/resume|json
+route|rider|rider-put-preferences|PUT|/preferences|json
 route|rider|rider-post-documents|POST|/documents|upload
 route|rider|rider-post-devices|POST|/devices|location
 route|rider|rider-post-locations|POST|/locations|location

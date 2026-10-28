@@ -40,12 +40,20 @@ export const shiftSchema = z.object({
   // The heartbeat and phone health (server and app 1.1.0); optional so the page still reads an older server.
   lastSeenAt: instant.nullable().optional(), maxSilenceSeconds: z.number().int().nonnegative().optional(),
   silencesOver60s: z.number().int().nonnegative().optional(), phone: phoneHealthSchema.nullable().optional(),
+  // Phase 4: on a break, with no offers, until then (an open shift only).
+  onBreakUntil: instant.nullable().optional(),
 });
 export const OFFER_STATES = ["ACTIVE", "ACCEPTED", "DECLINED", "EXPIRED", "LOST", "WITHDRAWN"] as const;
+const count = z.number().int().nonnegative();
+/** Why the rider got the offer (Phase 4), as the rider saw it. */
+export const offerReasonSchema = z.object({
+  rule: z.enum(["NEAREST", "FAIR"]), place: count, riders: count, atOnce: count, round: count,
+  bandM: count.optional(), bandRiders: count.optional(), earnedPerHourPaise: count.optional(), freeMinutes: count.optional(),
+});
 export const riderOfferSchema = z.object({
   offerId: id, tripId: id, orderCode: z.string().max(9), state: z.enum(OFFER_STATES), offeredAt: instant,
   pushedAt: instant.nullable(), pushResult: z.string().max(40).nullable(), rangAt: instant.nullable(),
-  rangChannel: z.enum(["fcm", "locations"]).nullable(),
+  rangChannel: z.enum(["fcm", "locations"]).nullable(), reason: offerReasonSchema.nullable().optional(),
 });
 export const STATUS_EVENT_KINDS = ["SAFETY_PAUSE", "NOTICE", "RESTORE", "DEACTIVATE"] as const;
 export const statusEventSchema = z.object({

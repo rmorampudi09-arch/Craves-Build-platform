@@ -5,6 +5,7 @@ import type {
   HomeSummary,
   Language,
   LocationBatchResponse,
+  OrderPreferences,
   Paise,
   PayoutAccountInput,
   PayoutsPage,
@@ -51,6 +52,12 @@ export interface RiderApi {
    */
   startShift(selfieUri: string, installationId: string | null): Promise<ShiftStart>;
   endShift(): Promise<void>;
+  /** Phase 4: no offers for minutes (5 to 60) while staying online; answers when the break ends. */
+  pauseShift(minutes: number): Promise<{offersPausedUntil: string}>;
+  /** Ends a break now; harmless without one. */
+  resumeShift(): Promise<void>;
+  /** Phase 4: the farthest pickup and drop to hear of (null: any); answers what was saved. */
+  setPreferences(preferences: OrderPreferences): Promise<OrderPreferences>;
   /** After sign-in and whenever the FCM token changes. Rejects with 409 DEVICE_NOT_BOUND on an unapproved phone. */
   registerDevice(device: DeviceRegistration): Promise<void>;
   /** A new photo of one document (multipart "photo"); ops reviews it by hand. */

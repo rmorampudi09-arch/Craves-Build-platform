@@ -69,11 +69,72 @@ function OfflineCards({home}: {home: HomeSummary}) {
   );
 }
 
+/**
+ * Phase 4: a break while online. While one runs the rider can come back sooner (always, so a break never strands them);
+ * with rider choices on they can take one of 10, 20 or 30 minutes.
+ */
+function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
+  const {strings} = useStrings();
+  const h = strings.home;
+  const [choosing, setChoosing] = useState(false);
+
+  async function run(work: () => Promise<unknown>) {
+    try {
+      await work();
+      setChoosing(false);
+      onChange();
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    }
+  }
+
+  if (home.offersPausedUntil && Date.parse(home.offersPausedUntil) > Date.now()) {
+    return (
+      <Card style={styles.slot}>
+        <View style={styles.tight}>
+          <Text style={styles.strong} testID="rider-on-break">
+            {h.onBreak(formatClock(home.offersPausedUntil))}
+          </Text>
+          <Text style={styles.secondary}>{h.onBreakBody}</Text>
+        </View>
+        <BottomAction label={h.backNow} size="compact" onPress={() => run(() => riderApi.resumeShift())} testID="rider-break-end" />
+      </Card>
+    );
+  }
+  if (!choices) {
+    return null;
+  }
+  if (!choosing) {
+    return <BottomAction label={h.takeBreak} variant="outline" size="compact" onPress={() => setChoosing(true)} testID="rider-break-start" />;
+  }
+  return (
+    <Card style={styles.slot}>
+      <Text style={styles.strong}>{h.breakHowLong}</Text>
+      <View style={styles.choices}>
+        {[10, 20, 30].map(minutes => (
+          <BottomAction
+            key={minutes}
+            label={h.breakMinutes(minutes)}
+            variant="outline"
+            size="compact"
+            onPress={() => run(() => riderApi.pauseShift(minutes))}
+            style={styles.flex}
+            testID={`rider-break-${minutes}`}
+          />
+        ))}
+      </View>
+      <Text style={styles.small}>{h.breakNote}</Text>
+      <BottomAction label={strings.common.cancel} variant="ghost" size="compact" onPress={() => setChoosing(false)} />
+    </Card>
+  );
+}
+
 /** Online (07-HomeOnline.png): the shift, today, where to rest, and that offers ring with the screen off. */
-function OnlineCards({home}: {home: HomeSummary}) {
+function OnlineCards({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
   const h = useStrings().strings.home;
   return (
     <>
+      <BreakCard home={home} choices={choices} onChange={onChange} />
       <Card style={styles.slot}>
         <View style={styles.tight}>
           <View style={styles.spread}>
@@ -209,7 +270,11 @@ export function HomeScreen() {
       {banner ? <Banner tone={banner.tone} text={banner.text} testID="rider-home-banner" /> : null}
       {home.data ? (
         online ? (
-          <OnlineCards home={home.data} />
+          <OnlineCards
+            home={home.data}
+            choices={Boolean(me.data?.features.riderChoices)}
+            onChange={() => queryClient.invalidateQueries({queryKey: riderKeys.home})}
+          />
         ) : (
           <OfflineCards home={home.data} />
         )
@@ -225,6 +290,7 @@ const styles = StyleSheet.create({
   tight: {gap: spacing.xxs},
   slot: {gap: spacing.md},
   spread: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
+  choices: {flexDirection: 'row', gap: spacing.xs},
   iconCard: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
   center: {textAlign: 'center'},
   small: {fontSize: typography.small, color: colors.textSecondary},

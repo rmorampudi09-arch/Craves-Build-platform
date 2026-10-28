@@ -243,6 +243,13 @@ export const te: RiderStrings = {
     confirmOfflineBody: 'ట్రిప్ మీదే ఉంటుంది. దాన్ని సరిచేయడానికి ఆప్స్ టీమ్ మీకు కాల్ చేస్తుంది.',
     noticeTitle: 'మీకు ఒక నోటీసు ఉంది',
     openNotice: 'చదవండి',
+    takeBreak: 'బ్రేక్ తీసుకోండి',
+    breakHowLong: 'ఎంతసేపు? మీరు ఆన్‌లైన్‌లోనే ఉంటారు, ఆఫర్లు రావు.',
+    breakMinutes: (minutes: number) => `${minutes} నిమి`,
+    breakNote: 'బ్రేక్ సమయం స్లాట్ కనీస హామీలో లెక్కకు రాదు.',
+    onBreak: (time: string) => `${time} వరకు బ్రేక్‌లో ఉన్నారు`,
+    onBreakBody: 'అప్పటి వరకు ఆఫర్లు రావు. ఎప్పుడైనా తిరిగి రావచ్చు.',
+    backNow: 'నేను తిరిగి వచ్చాను',
   },
   goOnline: {
     title: 'ఆన్‌లైన్ కావడానికి ఒక సెల్ఫీ',
@@ -454,6 +461,13 @@ export const te: RiderStrings = {
   },
   profile: {
     title: 'ప్రొఫైల్',
+    ordersTitle: 'మీకు వచ్చే ఆర్డర్లు',
+    ordersBody:
+      'ఈ దూరాల లోపల ఉన్న ఆర్డర్ల గురించి మాత్రమే మీకు తెలుస్తుంది. తక్కువ ఆర్డర్లు రావచ్చు, మీ ఎంపిక మీకు ఎప్పుడూ వ్యతిరేకంగా లెక్కకు రాదు.',
+    pickupLimit: 'కిచెన్‌కి, గరిష్ఠంగా',
+    dropLimit: 'కిచెన్ నుండి కస్టమర్‌కి, గరిష్ఠంగా',
+    anyDistance: 'ఎంతైనా',
+    km: (km: string) => `${km} కి.మీ`,
     vehicle: 'వాహనం',
     documents: 'డాక్యుమెంట్లు',
     docStatus: {

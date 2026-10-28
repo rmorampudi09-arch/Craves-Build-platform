@@ -16,6 +16,7 @@ import in.craves.integration.fleet.rider.FleetRiderModels.Insurance;
 import in.craves.integration.fleet.rider.FleetRiderModels.LabelValue;
 import in.craves.integration.fleet.rider.FleetRiderModels.NextSlot;
 import in.craves.integration.fleet.rider.FleetRiderModels.OfferRules;
+import in.craves.integration.fleet.rider.FleetRiderModels.OrderPreferences;
 import in.craves.integration.fleet.rider.FleetRiderModels.PrivacyNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.ProfileDocument;
 import in.craves.integration.fleet.rider.FleetRiderModels.RestPoint;
@@ -71,7 +72,7 @@ public class FleetRiderService {
         "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF"),
         "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
         "BICYCLE", List.of("PAN", "BANK_PROOF"));
-    private static final Features NO_FEATURES = new Features(false, false, false);
+    private static final Features NO_FEATURES = new Features(false, false, false, false);
     private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
 
     private final JdbcTemplate jdbc;
@@ -170,7 +171,7 @@ public class FleetRiderService {
     private Features features(UUID riderId) {
         boolean verified = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
             + "WHERE rider_id = ? AND state = 'ACTIVE' AND payouts_paused_at IS NULL)", Boolean.class, riderId));
-        return new Features(verified, verified, properties.tripShiftCredentialEnabled());
+        return new Features(verified, verified, properties.tripShiftCredentialEnabled(), properties.riderChoicesEnabled());
     }
 
     /** Any rider ops added, before activation too (no RIDER role yet), so they can see what ops is still checking. */
@@ -203,7 +204,38 @@ public class FleetRiderService {
             ? new Insurance(properties.insuranceLabel(), properties.supportPhone() == null ? "" : properties.supportPhone(), null) : null;
         return new RiderProfile(new Vehicle(rider.vehicleLabel(),
             rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber()), kind), documents, payoutAccount,
-            insurance, submitted);
+            insurance, submitted, properties.riderChoicesEnabled() ? preferences(rider.id()) : null);
+    }
+
+    /**
+     * Phase 4: the farthest pickup and drop the rider wants to hear of (null: any distance), within the table's bounds.
+     * Dispatch honours them while rider choices are on; 503 RIDER_CHOICES_OFF otherwise.
+     */
+    @Transactional
+    public OrderPreferences setPreferences(UUID identityId, OrderPreferences body) {
+        if (!properties.riderChoicesEnabled()) {
+            throw choicesOff();
+        }
+        Integer pickup = body == null ? null : body.maxPickupM();
+        Integer drop = body == null ? null : body.maxDropM();
+        if (pickup != null && (pickup < 500 || pickup > 10_000)) {
+            throw FleetApiException.invalid("Choose a pickup distance from 0.5 to 10 km, or any.");
+        }
+        if (drop != null && (drop < 1_000 || drop > 20_000)) {
+            throw FleetApiException.invalid("Choose a drop distance from 1 to 20 km, or any.");
+        }
+        UUID riderId = rider(identityId).id();
+        jdbc.update("UPDATE fleet_schema.rider SET max_pickup_m = ?, max_drop_m = ?, updated_at = now() WHERE id = ?", pickup, drop, riderId);
+        return preferences(riderId);
+    }
+
+    private OrderPreferences preferences(UUID riderId) {
+        return jdbc.queryForObject("SELECT max_pickup_m, max_drop_m FROM fleet_schema.rider WHERE id = ?",
+            (row, n) -> new OrderPreferences((Integer) row.getObject("max_pickup_m"), (Integer) row.getObject("max_drop_m")), riderId);
+    }
+
+    static FleetApiException choicesOff() {
+        return new FleetApiException(503, "RIDER_CHOICES_OFF", "Breaks and order preferences aren't switched on yet.");
     }
 
     /**
@@ -238,16 +270,18 @@ public class FleetRiderService {
         Banner banner = jdbc.query("SELECT tone, text FROM fleet_schema.ops_banner WHERE starts_at <= now() AND ends_at > now() "
             + "ORDER BY starts_at DESC LIMIT 1", (row, n) -> new Banner(row.getString("tone"), row.getString("text")))
             .stream().findFirst().orElse(null);
-        Instant shiftStartedAt = jdbc.queryForList("SELECT started_at FROM fleet_schema.rider_shift WHERE rider_id = ? AND ended_at IS NULL "
-            + "AND credential_revoked_at IS NULL AND credential_expires_at > now()", Timestamp.class, rider.id()).stream().findFirst()
-            .map(Timestamp::toInstant).orElse(null);
+        Map<String, Object> shift = jdbc.queryForList("SELECT started_at, " + FleetShiftService.BREAK_ENDS.formatted("rider_shift.id")
+            + " AS paused_until FROM fleet_schema.rider_shift WHERE rider_id = ? AND ended_at IS NULL AND credential_revoked_at IS NULL "
+            + "AND credential_expires_at > now()", rider.id()).stream().findFirst().orElse(Map.of());
+        Instant shiftStartedAt = shift.get("started_at") == null ? null : ((Timestamp) shift.get("started_at")).toInstant();
+        Instant pausedUntil = shift.get("paused_until") == null ? null : ((Timestamp) shift.get("paused_until")).toInstant();
         String activeTripId = jdbc.queryForList("SELECT id::text FROM fleet_schema.trip WHERE rider_id = ? "
             + "AND state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')", String.class, rider.id()).stream().findFirst().orElse(null);
         FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
         long[] earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> new long[] {row.getLong("paise"), row.getLong("trips")},
             rider.id(), Timestamp.from(today.from()), Timestamp.from(today.to()));
         return new HomeSummary(shiftStartedAt != null, shiftStartedAt, zoneName, slotEndsAt, earned[0], (int) earned[1], activeTripId, next,
-            guaranteed, restPoint, banner);
+            guaranteed, restPoint, banner, pausedUntil);
     }
 
     /** A new photo of one document, from any rider ops added (before activation too); PENDING until ops reviews it by hand. */

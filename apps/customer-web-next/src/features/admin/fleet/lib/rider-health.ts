@@ -1,4 +1,5 @@
 import { readableFleetValue } from "./fleet-common";
+import { formatPaise } from "./payout-contract";
 import type { RiderOffer, RiderShift } from "./rider-contract";
 
 /** An open shift's phone silent this long has probably stopped; the server then sends it "You're offline" (PILOT-HEALTH.md). */
@@ -42,6 +43,26 @@ export function rang(offer: RiderOffer): string {
   if (!offer.rangAt) return "Didn't ring";
   const seconds = Math.max(0, (Date.parse(offer.rangAt) - Date.parse(offer.offeredAt)) / 1000);
   return `${seconds.toFixed(1)} s, by ${offer.rangChannel === "locations" ? "the location call" : "push"}`;
+}
+
+/**
+ * Why the offer went to this rider (Phase 4), as the rider was told: "Nearest: 1 of 4 free riders" or "Fair turn: 1 of 2
+ * within 1.5 km, ₹90.00 an hour today, free 12 min". "—" on older offers and trips given by hand.
+ */
+export function offerWhy(offer: RiderOffer): string {
+  const reason = offer.reason;
+  if (!reason) return "—";
+  const extra = `${reason.round > 1 ? `, round ${reason.round}` : ""}${reason.atOnce > 1 ? `, ${reason.atOnce} at once` : ""}`;
+  if (reason.rule === "FAIR") {
+    return `Fair turn: ${reason.place} of ${reason.bandRiders ?? reason.riders} within ${(reason.bandM ?? 0) / 1000} km, `
+      + `${formatPaise(reason.earnedPerHourPaise ?? 0)} an hour today, free ${reason.freeMinutes ?? 0} min${extra}`;
+  }
+  return `Nearest: ${reason.place} of ${reason.riders} free riders${extra}`;
+}
+
+/** An open shift's state: on shift, or on a break until a time (Phase 4). */
+export function onShift(shift: RiderShift, when: (value: string) => string): string {
+  return shift.onBreakUntil ? `On a break until ${when(shift.onBreakUntil)}` : "On shift";
 }
 
 /** What notification-service said to the offer's push. */

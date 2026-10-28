@@ -16,6 +16,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * callbackUploadsEnabled (P2-10, off) tells phones to upload on location callbacks with short wake locks instead of holding
  * one wake lock for the whole shift (/locations callbackUploads). privacyNoticeVersion and privacyNoticeUrl (P2-09) are
  * the privacy notice in force and where its text is; riders accept a new version before they continue. Unset: no notice.
+ * riderChoicesEnabled (Phase 4, off) lets riders take a break while online and choose the farthest pickup and drop they
+ * hear of (features.riderChoices); dispatch honours the distances only while it is on.
  */
 @ConfigurationProperties("craves.fleet")
 public record FleetProperties(
@@ -36,7 +38,8 @@ public record FleetProperties(
     @DefaultValue("10") int idlePollSeconds,
     boolean callbackUploadsEnabled,
     String privacyNoticeVersion,
-    String privacyNoticeUrl
+    String privacyNoticeUrl,
+    boolean riderChoicesEnabled
 ) {
     public FleetProperties {
         // rider_privacy_acceptance.version is VARCHAR(40): a longer version could never be accepted and would hold every rider.

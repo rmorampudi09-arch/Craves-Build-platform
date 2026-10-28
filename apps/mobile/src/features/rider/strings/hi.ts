@@ -241,6 +241,13 @@ export const hi: RiderStrings = {
     confirmOfflineBody: 'ट्रिप आपकी ही रहेगी। इसे सुलझाने के लिए ऑप्स टीम आपको कॉल करेगी।',
     noticeTitle: 'आपके लिए एक नोटिस है',
     openNotice: 'पढ़ें',
+    takeBreak: 'ब्रेक लें',
+    breakHowLong: 'कितनी देर? आप ऑनलाइन रहेंगे, और कोई ऑफ़र नहीं आएगा।',
+    breakMinutes: (minutes: number) => `${minutes} मिनट`,
+    breakNote: 'ब्रेक का समय स्लॉट की गारंटीड न्यूनतम कमाई में नहीं गिना जाता।',
+    onBreak: (time: string) => `${time} तक ब्रेक पर`,
+    onBreakBody: 'तब तक कोई ऑफ़र नहीं आएगा। कभी भी वापस आ सकते हैं।',
+    backNow: 'मैं तैयार हूँ',
   },
   goOnline: {
     title: 'ऑनलाइन जाने के लिए एक सेल्फ़ी',
@@ -450,6 +457,13 @@ export const hi: RiderStrings = {
   },
   profile: {
     title: 'प्रोफ़ाइल',
+    ordersTitle: 'आपको मिलने वाले ऑर्डर',
+    ordersBody:
+      'सिर्फ़ इन दूरियों के अंदर के ऑर्डर की खबर मिलेगी। ऑर्डर कम आ सकते हैं, और आपका यह चुनाव कभी आपके ख़िलाफ़ नहीं गिना जाता।',
+    pickupLimit: 'किचन तक, ज़्यादा से ज़्यादा',
+    dropLimit: 'किचन से कस्टमर तक, ज़्यादा से ज़्यादा',
+    anyDistance: 'कितनी भी',
+    km: (km: string) => `${km} कि.मी.`,
     vehicle: 'गाड़ी',
     documents: 'डॉक्यूमेंट',
     docStatus: {

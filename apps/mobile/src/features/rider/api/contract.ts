@@ -35,8 +35,11 @@ export interface RiderMe {
   supportPhone: string;
   /** The riders' WhatsApp group, opened from Help. */
   supportWhatsappUrl?: string;
-  /** nativeTripOutbox (P2-02): trip steps go through the phone's native outbox, which sends them after a kill or reboot. */
-  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean};
+  /**
+   * nativeTripOutbox (P2-02): trip steps go through the phone's native outbox, which sends them after a kill or reboot.
+   * riderChoices (Phase 4): the rider can take a break while online and choose the farthest pickup and drop.
+   */
+  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean; riderChoices?: boolean};
   /** P2-09: the privacy notice in force, absent while none is set; url may hold {language}. */
   privacyNotice?: {version: string; url: string; accepted: boolean};
 }
@@ -59,6 +62,14 @@ export interface RiderProfile {
   /** An account the rider sent that ops has not confirmed yet; nothing is paid to it until then. */
   payoutAccountSubmitted?: string;
   insurance?: {label: string; claimPhone: string; claimStatus?: string};
+  /** Phase 4, while rider choices are on: the farthest pickup and drop the rider wants to hear of. */
+  preferences?: OrderPreferences;
+}
+
+/** The farthest pickup (as offers show it) and drop, in metres; null or absent is any distance. */
+export interface OrderPreferences {
+  maxPickupM?: number | null;
+  maxDropM?: number | null;
 }
 
 export type VehicleKind = 'PETROL' | 'ELECTRIC' | 'BICYCLE';
@@ -152,6 +163,8 @@ export interface HomeSummary {
   restPoint?: {name: string; area: string};
   /** A message from ops, e.g. a rain warning. */
   banner?: {tone: 'info' | 'warning'; text: string};
+  /** Phase 4: on a break, with no offers, until then. */
+  offersPausedUntil?: string;
 }
 
 export interface Offer {

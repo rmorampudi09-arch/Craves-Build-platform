@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.admin;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -57,7 +58,7 @@ public final class FleetAdminModels {
      */
     public record Shift(UUID shiftId, Instant startedAt, Instant endedAt, String selfieState, String selfieReason,
                         String selfieReviewedBy, int inZoneSeconds, Instant lastSeenAt, int maxSilenceSeconds, int silencesOver60s,
-                        PhoneHealth phone) {
+                        PhoneHealth phone, Instant onBreakUntil) {
     }
 
     /**
@@ -70,8 +71,9 @@ public final class FleetAdminModels {
     }
 
     /** An offer made to the rider, with what the push did and when and how the phone first had it (BACKEND.md "Offer receipts"). */
+    /** reason: why the rider got it (Phase 4), the same the rider saw; null on older offers and ops-assigned trips. */
     public record RiderOffer(UUID offerId, UUID tripId, String orderCode, String state, Instant offeredAt, Instant pushedAt,
-                             String pushResult, Instant rangAt, String rangChannel) {
+                             String pushResult, Instant rangAt, String rangChannel, OfferReason reason) {
     }
 
     public record StatusEvent(UUID eventId, String kind, String reason, String evidenceSummary, Instant deadline, Instant reviewBy,

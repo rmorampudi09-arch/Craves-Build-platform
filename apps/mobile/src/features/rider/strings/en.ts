@@ -230,6 +230,14 @@ export const en = {
     confirmOfflineBody: 'The trip stays yours. Ops will call you to sort it out.',
     noticeTitle: 'You have a notice',
     openNotice: 'Read it',
+    // A break while online (Phase 4).
+    takeBreak: 'Take a break',
+    breakHowLong: 'How long? You stay online, and no offers come.',
+    breakMinutes: (minutes: number) => `${minutes} min`,
+    breakNote: "Break time doesn't count toward a slot's guaranteed minimum.",
+    onBreak: (time: string) => `On a break until ${time}`,
+    onBreakBody: 'No offers until then. Come back any time.',
+    backNow: "I'm back",
   },
   goOnline: {
     title: 'Quick selfie to go online',
@@ -438,6 +446,13 @@ export const en = {
   },
   profile: {
     title: 'Profile',
+    // Order preferences (Phase 4).
+    ordersTitle: 'Orders you hear of',
+    ordersBody: 'Only hear of orders within these distances. Fewer orders may reach you, and your choice never counts against you.',
+    pickupLimit: 'Ride to the kitchen, at most',
+    dropLimit: 'Kitchen to customer, at most',
+    anyDistance: 'Any',
+    km: (km: string) => `${km} km`,
     vehicle: 'Vehicle',
     documents: 'Documents',
     docStatus: {VERIFIED: 'Verified', PENDING: 'Checking', REJECTED: 'Not accepted', EXPIRED: 'Expired', MISSING: 'Not sent'},

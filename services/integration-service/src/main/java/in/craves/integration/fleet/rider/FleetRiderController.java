@@ -5,8 +5,11 @@ import in.craves.integration.fleet.rider.FleetRiderModels.AcceptPrivacyNotice;
 import in.craves.integration.fleet.rider.FleetRiderModels.AcceptTerms;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.HomeSummary;
+import in.craves.integration.fleet.rider.FleetRiderModels.OrderPreferences;
+import in.craves.integration.fleet.rider.FleetRiderModels.PauseRequest;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderMe;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderProfile;
+import in.craves.integration.fleet.rider.FleetRiderModels.ShiftPause;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import in.craves.integration.fleet.rider.FleetRiderModels.Terms;
 import in.craves.integration.security.CravesPrincipal;
@@ -18,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -80,6 +84,26 @@ public class FleetRiderController {
     public ResponseEntity<Void> endShift(@AuthenticationPrincipal CravesPrincipal principal) {
         shifts.end(identity(principal));
         return ResponseEntity.noContent().build();
+    }
+
+    /** Phase 4: a break while online, 5 to 60 minutes. 409 NOT_ONLINE; 503 RIDER_CHOICES_OFF. */
+    @PostMapping("/shift/pause")
+    public ResponseEntity<ShiftPause> pause(@AuthenticationPrincipal CravesPrincipal principal, @RequestBody PauseRequest body) {
+        return noStore(shifts.pause(identity(principal), body == null ? null : body.minutes()));
+    }
+
+    /** Ends a break now; harmless when there is none. */
+    @PostMapping("/shift/resume")
+    public ResponseEntity<Void> resume(@AuthenticationPrincipal CravesPrincipal principal) {
+        shifts.resume(identity(principal));
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Phase 4: the farthest pickup and drop the rider wants to hear of (null: any). 503 RIDER_CHOICES_OFF. */
+    @PutMapping("/preferences")
+    public ResponseEntity<OrderPreferences> preferences(@AuthenticationPrincipal CravesPrincipal principal,
+                                                        @RequestBody OrderPreferences body) {
+        return noStore(service.setPreferences(identity(principal), body));
     }
 
     /**

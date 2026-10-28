@@ -300,6 +300,27 @@ describe('mock rider server', () => {
     expect((await mock.api.getMe()).privacyNotice?.accepted).toBe(true);
   });
 
+  it('takes a break with no offers, comes back sooner, and keeps offers within the chosen distances', async () => {
+    const mock = setup();
+    await expect(mock.api.pauseShift(10)).rejects.toMatchObject({ code: 'NOT_ONLINE', status: 409 });
+    await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
+    await expect(mock.api.pauseShift(4)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    const { offersPausedUntil } = await mock.api.pauseShift(10);
+    expect((await mock.api.getHome()).offersPausedUntil).toBe(offersPausedUntil);
+    mock.advance(5 * 60_000);
+    expect((await mock.api.postLocations([])).offers).toHaveLength(0);
+    await mock.api.resumeShift();
+    expect((await mock.api.getHome()).offersPausedUntil).toBeUndefined();
+
+    expect(await mock.api.setPreferences({ maxPickupM: 1000, maxDropM: 3000 })).toEqual({ maxPickupM: 1000, maxDropM: 3000 });
+    expect((await mock.api.getProfile()).preferences).toEqual({ maxPickupM: 1000, maxDropM: 3000 });
+    mock.advance(13_000);
+    const [offer] = (await mock.api.postLocations([])).offers;
+    expect(offer.pickupDistanceM).toBeLessThanOrEqual(1000);
+    expect(offer.dropDistanceM).toBeLessThanOrEqual(3000);
+    expect(offer.reason).toMatchObject({ rule: 'NEAREST', atOnce: 3 });
+  });
+
   it('stops the shift when ops ends it', async () => {
     const mock = setup();
     await mock.api.startShift('file:///selfie.jpg', 'android-id-1');

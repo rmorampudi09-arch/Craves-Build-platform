@@ -84,6 +84,20 @@ paths:
       responses: {'200': {description: Online, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftStart'}}}}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}}
   /shift/end:
     post: {summary: Go offline; revokes the shift credential, description: 204 even when no shift is open., responses: {'204': {description: Offline}}}
+  /shift/pause:
+    post:
+      summary: Take a break while online (Phase 4, features.riderChoices)
+      description: No offers until offersPausedUntil, staying online; a new break replaces the one running. Break time does not count toward a booked slot's guaranteed minimum. 400 VALIDATION_FAILED (not 5 to 60 minutes); 409 NOT_ONLINE (no open shift); 503 RIDER_CHOICES_OFF.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PauseRequest'}}}}
+      responses: {'200': {description: On a break, content: {application/json: {schema: {$ref: '#/components/schemas/ShiftPause'}}}}, '400': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+  /shift/resume:
+    post: {summary: End a break now, description: '204 also when there is none, and while rider choices are off, so a rider can always come back.', responses: {'204': {description: Back for offers}}}
+  /preferences:
+    put:
+      summary: The farthest pickup and drop the rider wants to hear of (Phase 4, features.riderChoices)
+      description: Each null is any distance; the pickup is as offers show it. Dispatch leaves the rider out of an order beyond either while rider choices are on. 400 VALIDATION_FAILED (pickup 500 to 10000 m, drop 1000 to 20000 m); 503 RIDER_CHOICES_OFF.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OrderPreferences'}}}}
+      responses: {'200': {description: Saved, content: {application/json: {schema: {$ref: '#/components/schemas/OrderPreferences'}}}}, '400': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /documents:
     post:
       summary: A new photo of one document; ops reviews it by hand and the document shows as PENDING until then
@@ -242,7 +256,7 @@ components:
             RIDER_NOT_ACTIVE, DEVICE_NOT_BOUND, APP_UPDATE_REQUIRED, DOCUMENTS_EXPIRED, SELFIE_INVALID, SHIFT_OPEN, SHIFT_CREDENTIAL_INVALID,
             OFFER_TAKEN, OFFER_EXPIRED, OFFER_NOT_FOUND, ORDER_CANCELLED, TRIP_IN_PROGRESS, TRIP_NOT_FOUND, TRIP_NOT_ACTIVE, STEP_CONFLICT,
             OTP_INVALID, OTP_LOCKED, OTP_UNAVAILABLE, CALLS_REQUIRED, WAIT_NOT_OVER, PHOTO_REQUIRED,
-            WITHDRAWAL_LIMIT, AMOUNT_OVER_BALANCE, PAYOUT_ACCOUNT_REQUIRED, PAYOUTS_PAUSED, PAYOUT_NOT_FOUND]
+            WITHDRAWAL_LIMIT, AMOUNT_OVER_BALANCE, PAYOUT_ACCOUNT_REQUIRED, PAYOUTS_PAUSED, PAYOUT_NOT_FOUND, NOT_ONLINE, RIDER_CHOICES_OFF]
         message: {type: string}
         attemptsLeft: {type: integer, minimum: 1, description: Only on 422 OTP_INVALID}
     Paise: {type: integer, description: Indian rupees x 100}
@@ -271,7 +285,7 @@ components:
         minAppVersion: {type: string, description: 'Blocks going online between shifts only, never mid-shift'}
         supportPhone: {type: string}
         supportWhatsappUrl: {type: string, description: The riders' WhatsApp group}
-        features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}, nativeTripOutbox: {type: boolean, description: 'P2-02: send trip steps from the native outbox (trip steps take the shift credential); absent or false: the JS queue'}}}
+        features: {type: object, required: [payoutsEnabled, withdrawEnabled], properties: {payoutsEnabled: {type: boolean}, withdrawEnabled: {type: boolean}, nativeTripOutbox: {type: boolean, description: 'P2-02: send trip steps from the native outbox (trip steps take the shift credential); absent or false: the JS queue'}, riderChoices: {type: boolean, description: 'Phase 4: offer a break while online (/shift/pause) and order preferences (/preferences); absent or false: neither'}}}
         privacyNotice: {type: object, required: [version, url, accepted], description: 'P2-09: the privacy notice in force, absent while none is set; the app asks the rider to accept a version not yet accepted, never mid-shift', properties: {version: {type: string}, url: {type: string, description: 'Where the text is; {language} stands for en, te or hi'}, accepted: {type: boolean}}}
     RiderProfile:
       type: object
@@ -282,6 +296,7 @@ components:
           type: array
           items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED, MISSING]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
         payoutAccountMasked: {type: string, description: The account payouts go to (ops set or confirmed it)}
+        preferences: {$ref: '#/components/schemas/OrderPreferences'}
         payoutAccountSubmitted: {type: string, description: An account the rider sent that ops has not confirmed yet}
         insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
     SignUp:
@@ -324,6 +339,14 @@ components:
             summaryOfChanges: {type: array, items: {type: string}}
             rateCardLines: {type: array, items: {$ref: '#/components/schemas/LabelValue'}}
             offerRules: {$ref: '#/components/schemas/OfferRules'}
+    PauseRequest: {type: object, required: [minutes], properties: {minutes: {type: integer, minimum: 5, maximum: 60}}}
+    ShiftPause: {type: object, required: [offersPausedUntil], properties: {offersPausedUntil: {type: string, format: date-time}}}
+    OrderPreferences:
+      type: object
+      description: 'Phase 4: the farthest pickup (as offers show it) and drop the rider wants to hear of; null or absent is any distance. On RiderProfile only while rider choices are on.'
+      properties:
+        maxPickupM: {type: integer, minimum: 500, maximum: 10000, nullable: true}
+        maxDropM: {type: integer, minimum: 1000, maximum: 20000, nullable: true}
     OfferRules:
       type: object
       description: 'How orders are offered (Phase 4, docs/riders/DISPATCH.md), from the dispatch policy riders are shown; the app words it in the rider''s language on "How you get orders". Left out before any dispatch policy exists. Declining or missing an offer is always free.'
@@ -363,6 +386,7 @@ components:
         guaranteedPerHourPaise: {$ref: '#/components/schemas/Paise'}
         restPoint: {type: object, required: [name, area], properties: {name: {type: string}, area: {type: string}}}
         banner: {type: object, description: 'A message from ops, e.g. a rain warning', required: [tone, text], properties: {tone: {type: string, enum: [info, warning]}, text: {type: string}}}
+        offersPausedUntil: {type: string, format: date-time, description: 'Phase 4: the rider is on a break, with no offers, until then; absent otherwise'}
     Offer:
       type: object
       required: [offerId, tripId, expiresAt, expiresInSec, payPaise, pickupDistanceM, dropDistanceM, kitchenArea, customerLocality, estMinutes, payLines]

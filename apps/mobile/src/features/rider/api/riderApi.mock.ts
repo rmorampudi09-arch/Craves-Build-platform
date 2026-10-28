@@ -8,6 +8,7 @@ import type {
   FailBody,
   Offer,
   OfferRules,
+  OrderPreferences,
   PayLine,
   Payout,
   RiderMe,
@@ -181,7 +182,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       minAppVersion: '1.0.0',
       supportPhone: DEMO_PHONE,
       supportWhatsappUrl: 'https://chat.whatsapp.com/demo',
-      features: { payoutsEnabled: true, withdrawEnabled: false },
+      features: { payoutsEnabled: true, withdrawEnabled: false, riderChoices: true },
     };
   }
 
@@ -253,6 +254,9 @@ export function createMockRiderApi(options: MockOptions = {}) {
     stopReason: null as string | null,
     tripCounter: 0,
     seen: new Map<string, unknown>(),
+    /** Phase 4: a break while online ends then (0: none); the farthest pickup and drop the rider chose. */
+    pausedUntil: 0,
+    preferences: { maxPickupM: null, maxDropM: null } as OrderPreferences,
   };
 
   async function respond<T>(work: () => T): Promise<T> {
@@ -283,8 +287,9 @@ export function createMockRiderApi(options: MockOptions = {}) {
     const n = state.tripCounter;
     const kitchen = KITCHENS[n % KITCHENS.length];
     const customer = CUSTOMERS[n % CUSTOMERS.length];
-    const pickupDistanceM = 400 + ((n * 523) % 1600);
-    const dropDistanceM = 1800 + ((n * 977) % 4200);
+    // Like dispatch with rider choices on: only orders within the rider's farthest pickup and drop reach them.
+    const pickupDistanceM = Math.min(400 + ((n * 523) % 1600), state.preferences.maxPickupM ?? Infinity);
+    const dropDistanceM = Math.min(1800 + ((n * 977) % 4200), state.preferences.maxDropM ?? Infinity);
     return {
       offerId: `offer-${n}`,
       tripId: `trip-${n}`,
@@ -546,6 +551,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
           ),
           payoutAccountMasked: state.me.status === 'PENDING' ? state.payoutConfirmed ?? undefined : 'UPI ••••@okhdfc',
           payoutAccountSubmitted: state.payoutSubmitted ?? undefined,
+          preferences: state.me.features.riderChoices ? { ...state.preferences } : undefined,
           insurance: {
             label: 'Group accident cover, ₹10 lakh, 24×7',
             claimPhone: DEMO_PHONE,
@@ -657,6 +663,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
             tone: 'warning' as const,
             text: 'Heavy rain expected after 8 pm. Stop whenever you need to. It never affects your offers.',
           },
+          offersPausedUntil: state.online && state.pausedUntil > now() ? iso(state.pausedUntil) : undefined,
         };
       }),
     startShift: () =>
@@ -686,6 +693,34 @@ export function createMockRiderApi(options: MockOptions = {}) {
       respond(() => {
         state.online = false;
         state.offer = null;
+        state.pausedUntil = 0;
+      }),
+    pauseShift: minutes =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks and order preferences aren't switched on yet.", 503);
+        }
+        if (minutes < 5 || minutes > 60) {
+          throw apiError('VALIDATION_FAILED', 'Choose a break of 5 to 60 minutes.', 400);
+        }
+        if (!state.online) {
+          throw apiError('NOT_ONLINE', 'Go online first.', 409);
+        }
+        state.pausedUntil = now() + minutes * 60_000;
+        return { offersPausedUntil: iso(state.pausedUntil) };
+      }),
+    resumeShift: () =>
+      respond(() => {
+        state.pausedUntil = 0;
+        state.nextOfferAt = now() + 12_000;
+      }),
+    setPreferences: preferences =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks and order preferences aren't switched on yet.", 503);
+        }
+        state.preferences = { maxPickupM: preferences.maxPickupM ?? null, maxDropM: preferences.maxDropM ?? null };
+        return { ...state.preferences };
       }),
     signUp: input =>
       respond(() => {
@@ -752,7 +787,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
           state.online &&
           !state.activeTrip &&
           !state.offer &&
-          now() >= state.nextOfferAt
+          now() >= state.nextOfferAt &&
+          now() >= state.pausedUntil
         ) {
           state.offer = { offer: makeOffer(), createdAt: now() };
         }

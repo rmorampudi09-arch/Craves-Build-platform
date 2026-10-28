@@ -5,7 +5,7 @@ import { formatAdminTimestamp } from "@/features/admin/shell/lib/admin-navigatio
 import { readableFleetValue } from "@/features/admin/fleet/lib/fleet-common";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { istDay } from "@/features/admin/fleet/lib/payout-contract";
-import { lastHeard, phoneReport, pushed, rang, silence } from "@/features/admin/fleet/lib/rider-health";
+import { lastHeard, offerWhy, onShift, phoneReport, pushed, rang, silence } from "@/features/admin/fleet/lib/rider-health";
 import {
   auditPageSchema, EXPIRING_DOCUMENTS, expiryProblem, payoutAccountInputSchema, payoutAccountSchema, riderDetailSchema, riderDeviceSchema,
   riderDocumentSchema, riderVehicleInputSchema, riderVehicleSchema, statusEventProblem, statusEventSchema, STATUS_EVENT_KINDS,
@@ -114,7 +114,7 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
       {detail.shifts.length === 0 ? <p className="cr-empty">No shifts yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
         <thead><tr><th scope="col">Started</th><th scope="col">Ended</th><th scope="col">Selfie</th><th scope="col">Reviewed by</th><th scope="col">Minutes in zone</th><th scope="col">Last heard</th><th scope="col">Longest silence</th><th scope="col">Phone</th></tr></thead>
         <tbody>{detail.shifts.map(shift => <tr key={shift.shiftId}>
-          <td>{when(shift.startedAt)}</td><td>{shift.endedAt ? when(shift.endedAt) : "On shift"}</td>
+          <td>{when(shift.startedAt)}</td><td>{shift.endedAt ? when(shift.endedAt) : onShift(shift, when)}</td>
           <td>{readableFleetValue(shift.selfieState)}{shift.selfieReason ? ` · ${shift.selfieReason}` : ""}</td>
           <td>{shift.selfieReviewedBy ?? "—"}</td><td>{Math.floor(shift.inZoneSeconds / 60)}</td>
           <td>{lastHeard(shift)}</td><td>{silence(shift)}</td><td>{phoneReport(shift.phone)}</td>
@@ -126,9 +126,9 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
       <h2 className="text-lg font-bold">Recent offers</h2>
       <p className="cr-muted">The last 20 offers, newest first: what the push did and how soon the phone rang. Most should ring by push within 5 seconds; a trip ops gave the rider by hand is accepted at once and never pushed. A pay hold or adjustment asks for the trip ID.</p>
       {detail.recentOffers.length === 0 ? <p className="cr-empty">No offers yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
-        <thead><tr><th scope="col">Offered</th><th scope="col">Order</th><th scope="col">Outcome</th><th scope="col">Push</th><th scope="col">Rang</th><th scope="col">Trip ID</th></tr></thead>
+        <thead><tr><th scope="col">Offered</th><th scope="col">Order</th><th scope="col">Outcome</th><th scope="col">Why this rider</th><th scope="col">Push</th><th scope="col">Rang</th><th scope="col">Trip ID</th></tr></thead>
         <tbody>{detail.recentOffers.map(offer => <tr key={offer.offerId}>
-          <td>{when(offer.offeredAt)}</td><td>{offer.orderCode}</td><td>{readableFleetValue(offer.state)}</td>
+          <td>{when(offer.offeredAt)}</td><td>{offer.orderCode}</td><td>{readableFleetValue(offer.state)}</td><td>{offerWhy(offer)}</td>
           <td>{pushed(offer)}</td><td>{rang(offer)}</td><td><span className="select-all font-mono text-xs">{offer.tripId}</span></td>
         </tr>)}</tbody>
       </table></div>}

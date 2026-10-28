@@ -77,7 +77,9 @@ public class FleetLocationService {
                r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
                p.trip_id AS last_trip_id, a.id AS trip_id, a.state AS trip_state, a.version AS trip_version,
                e.rider_id AS last_trip_rider_id, e.state AS last_trip_state, e.version AS last_trip_version,
-               z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now
+               z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now,
+               """ + FleetShiftService.BREAK_ENDS.formatted("s.id") + """
+         IS NOT NULL AS paused
         FROM fleet_schema.rider_shift s
         JOIN fleet_schema.rider r ON r.id = s.rider_id
         LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = s.rider_id
@@ -105,7 +107,8 @@ public class FleetLocationService {
     /**
      * The shift row on every call: the heartbeat (dispatch and the watchdog read last_seen_at), the longest gap between
      * calls and the gaps over 60 s (the first gap counts from started_at), and the in-zone seconds of the shift and its
-     * slot. The slot's settle the guarantee; a slot that settled meanwhile is COMPLETED and keeps its settled seconds.
+     * slot. The slot's settle the guarantee, so a break (Phase 4) adds none to it; a slot that settled meanwhile is
+     * COMPLETED and keeps its settled seconds.
      * The same statement records the offer receipts: the first arrival of each of this rider's offers, never earlier than
      * the offer itself; and the phone's health, each key keeping its latest value, with can_ring for dispatch.
      */
@@ -193,8 +196,9 @@ public class FleetLocationService {
             seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
         }
         String health = health(batch.health());
-        jdbc.update(HEARTBEAT, seconds, seconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(), seconds,
-            health, health, batch.health() == null ? null : batch.health().canRing(), shift.shiftId());
+        long slotSeconds = shift.paused() ? 0 : seconds;
+        jdbc.update(HEARTBEAT, slotSeconds, slotSeconds > 0 ? shift.slotId() : null, receipts(batch.offerReceipts()), shift.riderId(),
+            seconds, health, health, batch.health() == null ? null : batch.health().canRing(), shift.shiftId());
         if (batch.health() != null && batch.health().lastExitReason() != null) {
             LOGGER.info("FLEET_APP_EXIT rider={} reason={}", shift.riderId(), oneLine(batch.health().lastExitReason()));
         }
@@ -417,7 +421,7 @@ public class FleetLocationService {
             row.getObject("last_trip_id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("trip_state"),
             (Integer) row.getObject("trip_version"), row.getObject("last_trip_rider_id", UUID.class), row.getString("last_trip_state"),
             (Integer) row.getObject("last_trip_version"), row.getObject("slot_id", UUID.class), instant(row, "slot_starts_at"),
-            instant(row, "slot_ends_at"), instant(row, "db_now"));
+            instant(row, "slot_ends_at"), instant(row, "db_now"), row.getBoolean("paused"));
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
@@ -428,6 +432,6 @@ public class FleetLocationService {
     record Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
                    UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
                    UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, UUID slotId, Instant slotStart, Instant slotEnd,
-                   Instant now) {
+                   Instant now, boolean paused) {
     }
 }

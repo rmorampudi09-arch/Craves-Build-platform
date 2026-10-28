@@ -419,6 +419,51 @@ class FleetDispatchDatabaseTest {
         assertThat((Integer) reason(waiting).get("freeMinutes")).isBetween(49, 50);
     }
 
+    /** Phase 4: a rider on a break hears of no order until it ends; the riders working hear as usual. */
+    @Test
+    void aRiderOnABreakHearsOfNoOrderUntilItEnds() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID resting = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID working = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.onBreak(fleet.db, resting, 0, 10);
+        assertThat(dispatcher.ridersNear(KITCHEN_LAT, KITCHEN_LNG)).isOne();
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(working);
+
+        fleet.db.update("UPDATE fleet_schema.rider_break SET started_at = now() - INTERVAL '10 minutes', ends_at = now() - INTERVAL '1 second' "
+            + "WHERE rider_id = ?", resting);
+        assertThat(dispatcher.ridersNear(KITCHEN_LAT, KITCHEN_LNG)).as("the break is over").isEqualTo(1);
+    }
+
+    /**
+     * Phase 4 rider choices: with CRAVES_FLEET_RIDER_CHOICES_ENABLED, a rider who chose a nearer pickup (as the offer shows it,
+     * straight line x 1.3) or a shorter drop than the order's hears nothing of it; with the switch off their choices are ignored.
+     */
+    @Test
+    void withRiderChoicesOnEachRidersFarthestPickupAndDropCount() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID shortDrops = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.003, KITCHEN_LNG, 5, false);
+        UUID nearKitchens = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID anything = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.010, KITCHEN_LNG, 5, false);
+        fleet.db.update("UPDATE fleet_schema.rider SET max_drop_m = 3000 WHERE id = ?", shortDrops);       // the drop is 3.5 km
+        fleet.db.update("UPDATE fleet_schema.rider SET max_pickup_m = 500 WHERE id = ?", nearKitchens);    // 556 m x 1.3 = 723 m
+        FleetDispatcher choices = new FleetDispatcher(fleet.db, fleet.transactions, new FleetPolicyStore(fleet.db, json),
+            new FleetTestMode(fleet.db, FleetDatabase.properties(true)), roads, push, json, false, true);
+        assertThatThrownBy(() -> choices.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(anything);
+        assertThat(choices.ridersNear(KITCHEN_LAT, KITCHEN_LNG)).as("the rider deciding is busy; without an order, distances rule "
+            + "nobody out").isEqualTo(2);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now()");
+        UUID other = UUID.fromString("0bde0202-2222-4222-8222-222222222222");
+        FleetDispatchFixtures.kitchen(fleet.db, other, true);
+        assertThatThrownBy(() -> dispatcher.run(FleetDispatchFixtures.command(other), () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("switched off: every nearby rider hears").containsExactlyInAnyOrder(shortDrops, nearKitchens, anything);
+    }
+
     /** A live policy that offers to one rider at a time, 20 s each, up to three rounds in a 90 s stage, with this fair band. */
     private void fairPolicy(int bandM) {
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 90, 1, 3, bandM);

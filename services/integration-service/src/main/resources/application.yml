@@ -54,6 +54,9 @@ craves:
     road-ranking-enabled: ${CRAVES_FLEET_ROAD_RANKING_ENABLED:false}
     privacy-notice-version: ${CRAVES_FLEET_PRIVACY_NOTICE_VERSION:}
     privacy-notice-url: ${CRAVES_FLEET_PRIVACY_NOTICE_URL:}
+    # Riders may take a break while online and choose the farthest pickup and drop they hear of (Phase 4). Switch on once
+    # the APIM routes for /shift/pause, /shift/resume and /preferences are published and the app that shows them is out.
+    rider-choices-enabled: ${CRAVES_FLEET_RIDER_CHOICES_ENABLED:false}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

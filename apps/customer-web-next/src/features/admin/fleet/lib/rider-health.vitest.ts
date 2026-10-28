@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RiderOffer, RiderShift } from "./rider-contract";
-import { lastHeard, phoneReport, pushed, rang, silence } from "./rider-health";
+import { lastHeard, offerWhy, onShift, phoneReport, pushed, rang, silence } from "./rider-health";
 
 const at = "2026-10-20T06:30:00Z";
 const now = Date.parse(at);
@@ -59,5 +59,20 @@ describe("offer delivery in words", () => {
     expect(pushed(offer)).toBe("Sent");
     expect(pushed({ ...offer, pushResult: "NO_TOKEN" })).toBe("No token");
     expect(pushed({ ...offer, pushedAt: null, pushResult: null })).toBe("Not pushed");
+  });
+});
+
+describe("Phase 4 in words", () => {
+  it("says why the offer went to this rider, as the rider was told", () => {
+    expect(offerWhy(offer)).toBe("—");
+    expect(offerWhy({ ...offer, reason: { rule: "NEAREST", place: 1, riders: 4, atOnce: 3, round: 1 } })).toBe("Nearest: 1 of 4 free riders, 3 at once");
+    expect(offerWhy({ ...offer, reason: { rule: "NEAREST", place: 1, riders: 2, atOnce: 1, round: 2 } })).toBe("Nearest: 1 of 2 free riders, round 2");
+    expect(offerWhy({ ...offer, reason: { rule: "FAIR", place: 1, riders: 3, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12 } }))
+      .toBe("Fair turn: 1 of 2 within 1.5 km, ₹90.00 an hour today, free 12 min");
+  });
+
+  it("shows a break on an open shift", () => {
+    expect(onShift(shift, value => value)).toBe("On shift");
+    expect(onShift({ ...shift, onBreakUntil: at }, () => "12:00 pm")).toBe("On a break until 12:00 pm");
   });
 });

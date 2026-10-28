@@ -44,9 +44,14 @@ public final class FleetDatabase {
 
     /** privacyNotice: the version in force (P2-09), its text at https://craves.in/riders/privacy/{language}; null for none. */
     public static FleetProperties properties(boolean testMode, boolean callbackUploads, String privacyNotice) {
+        return properties(testMode, callbackUploads, privacyNotice, false);
+    }
+
+    /** riderChoices: breaks while online and distance choices (Phase 4, CRAVES_FLEET_RIDER_CHOICES_ENABLED). */
+    public static FleetProperties properties(boolean testMode, boolean callbackUploads, String privacyNotice, boolean riderChoices) {
         return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents", "+914012345678",
             "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false, 10, callbackUploads,
-            privacyNotice, privacyNotice == null ? null : "https://craves.in/riders/privacy/{language}");
+            privacyNotice, privacyNotice == null ? null : "https://craves.in/riders/privacy/{language}", riderChoices);
     }
 
     public UUID rider(String name, String phone) {

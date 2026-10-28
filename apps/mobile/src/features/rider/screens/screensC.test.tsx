@@ -507,6 +507,21 @@ describe('Profile (20)', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
   });
 
+  it('lets the rider choose the farthest pickup and drop, saved on tap, only when the server offers it', async () => {
+    await render(screen(), seed);
+    expect(allText()).not.toContain('Orders you hear of');
+    (riderApi.setPreferences as jest.Mock).mockResolvedValueOnce({maxPickupM: 2000, maxDropM: null});
+    await render(screen(), [[riderKeys.me, me], [riderKeys.profile, {...full, preferences: {maxPickupM: null, maxDropM: null}}]]);
+    expect(allText()).toContain('Orders you hear of | Only hear of orders within these distances.');
+    expect(allText()).toContain('Ride to the kitchen, at most | Any | 1 km | 2 km | 3 km | 5 km');
+    expect(allText()).toContain('Kitchen to customer, at most | Any | 3 km | 5 km | 8 km | 12 km');
+    expect(tree.root.findByProps({testID: 'rider-pickup-limit-any'}).props.accessibilityState).toEqual({checked: true});
+    await press('rider-pickup-limit-2000');
+    expect(riderApi.setPreferences).toHaveBeenCalledWith({maxPickupM: 2000, maxDropM: null});
+    await settle();
+    expect(tree.root.findByProps({testID: 'rider-pickup-limit-2000'}).props.accessibilityState).toEqual({checked: true});
+  });
+
   it('uploads a new photo of a document from the back camera and refreshes', async () => {
     (riderApi.uploadDocument as jest.Mock).mockResolvedValueOnce(undefined);
     (riderApi.getProfile as jest.Mock).mockResolvedValueOnce(full);

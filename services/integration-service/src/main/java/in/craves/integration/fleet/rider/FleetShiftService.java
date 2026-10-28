@@ -4,6 +4,7 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
+import in.craves.integration.fleet.rider.FleetRiderModels.ShiftPause;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,6 +45,9 @@ public class FleetShiftService {
     /** The rider (a SQL expression, formatted in) has a shift whose credential still works: only such a rider gets or takes an order. */
     public static final String ON_SHIFT = "EXISTS (SELECT 1 FROM fleet_schema.rider_shift h WHERE h.rider_id = %s AND h.ended_at IS NULL "
         + "AND h.credential_revoked_at IS NULL AND h.credential_expires_at > now())";
+    /** Phase 4: when the break running on the shift %s ends; NULL when none runs. */
+    public static final String BREAK_ENDS = "(SELECT max(b.ends_at) FROM fleet_schema.rider_break b WHERE b.shift_id = %s "
+        + "AND b.started_at <= now() AND b.ends_at > now())";
     // Riding a petrol two-wheeler needs these four, each verified by ops with an expiry date (IST) that has not passed;
     // an electric one needs no PUC and a bicycle none of them (FleetRiderService.REQUIRED_DOCUMENTS).
     private static final String MISSING_DOCUMENTS = """
@@ -129,6 +133,45 @@ public class FleetShiftService {
     @Transactional
     public void end(UUID identityId) {
         jdbc.update(endShifts("rider_id = (SELECT id FROM fleet_schema.rider WHERE identity_id = ?)"), identityId);
+    }
+
+    /**
+     * Phase 4: a break of 5 to 60 minutes while staying online. No offers until it ends (a new break replaces the old one),
+     * and the time does not count toward a booked slot's guaranteed minimum. 409 NOT_ONLINE without an open shift; 503
+     * RIDER_CHOICES_OFF while rider choices are off.
+     */
+    @Transactional
+    public ShiftPause pause(UUID identityId, Integer minutes) {
+        if (!properties.riderChoicesEnabled()) {
+            throw FleetRiderService.choicesOff();
+        }
+        if (minutes == null || minutes < 5 || minutes > 60) {
+            throw FleetApiException.invalid("Choose a break of 5 to 60 minutes.");
+        }
+        List<Map<String, Object>> shift = jdbc.queryForList("SELECT s.id, s.rider_id FROM fleet_schema.rider_shift s "
+            + "JOIN fleet_schema.rider r ON r.id = s.rider_id WHERE r.identity_id = ? AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL "
+            + "AND s.credential_expires_at > now() FOR UPDATE OF s", identityId);
+        if (shift.isEmpty()) {
+            throw FleetApiException.conflict("NOT_ONLINE", "Go online first.");
+        }
+        Object shiftId = shift.get(0).get("id");
+        endBreak(shiftId);
+        return new ShiftPause(jdbc.queryForObject("INSERT INTO fleet_schema.rider_break (id, rider_id, shift_id, ends_at) "
+            + "VALUES (?, ?, ?, now() + make_interval(mins => ?)) RETURNING ends_at", Timestamp.class, UUID.randomUUID(),
+            shift.get(0).get("rider_id"), shiftId, minutes).toInstant());
+    }
+
+    /** Ends a break now. Always allowed, so a rider can come back even after rider choices are switched off; repeating is harmless. */
+    @Transactional
+    public void resume(UUID identityId) {
+        jdbc.queryForList("SELECT s.id FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id "
+            + "WHERE r.identity_id = ? AND s.ended_at IS NULL", UUID.class, identityId).forEach(this::endBreak);
+    }
+
+    /** Ends the break running on this shift now, if one is. */
+    private void endBreak(Object shiftId) {
+        jdbc.update("UPDATE fleet_schema.rider_break SET ends_at = now() WHERE shift_id = ? AND started_at <= now() AND ends_at > now()",
+            shiftId);
     }
 
     /** Ends the open shifts that match the condition and withdraws their riders' open offers, so the next courier is not kept waiting. */

@@ -5,7 +5,8 @@ import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Icon, SectionSkeleton} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
-import type {RiderProfile} from '../api/contract';
+import {AppApiError} from '../../../core/http/apiError';
+import type {OrderPreferences, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -20,6 +21,9 @@ import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 import {LoadFailed} from './TripDetailScreen';
 
 const SOON_MS = 30 * 24 * 3_600_000;
+/** Phase 4 order preferences, in metres; null is any distance. */
+const PICKUP_LIMITS = [null, 1000, 2000, 3000, 5000];
+const DROP_LIMITS = [null, 3000, 5000, 8000, 12000];
 
 type Doc = RiderProfile['documents'][number];
 
@@ -49,6 +53,39 @@ const initials = (name: string) =>
     .map(part => part[0].toUpperCase())
     .join('');
 
+/** One farthest distance as chips, saved on tap; a value set elsewhere selects no chip. */
+function LimitChips({label, limits, value, onPick, testID}: {
+  label: string;
+  limits: (number | null)[];
+  value?: number | null;
+  onPick: (limit: number | null) => void;
+  testID: string;
+}) {
+  const p = useStrings().strings.profile;
+  return (
+    <View style={styles.language}>
+      <Label>{label}</Label>
+      <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.chips}>
+        {limits.map(limit => {
+          const on = (value ?? null) === limit;
+          return (
+            <Pressable
+              key={limit ?? 'any'}
+              accessibilityRole="radio"
+              accessibilityState={{checked: on}}
+              hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
+              onPress={() => onPick(limit)}
+              style={[styles.chip, on && styles.chipOn]}
+              testID={`${testID}-${limit ?? 'any'}`}>
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{limit === null ? p.anyDistance : p.km(String(limit / 1000))}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export function ProfileScreen() {
   const {strings, language, setLanguage} = useStrings();
   const p = strings.profile;
@@ -59,6 +96,16 @@ export function ProfileScreen() {
   const profile = useProfile();
   const pending = usePendingActions(shell.riderId);
   const [docProblem, setDocProblem] = useState<{type: string; text: string; settings?: boolean} | null>(null);
+
+  /** Phase 4: saves the rider's farthest pickup and drop; the profile shows what the server kept. */
+  async function choose(next: OrderPreferences) {
+    try {
+      const saved = await riderApi.setPreferences(next);
+      queryClient.setQueryData<RiderProfile>(riderKeys.profile, old => (old ? {...old, preferences: saved} : old));
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    }
+  }
 
   function signOut() {
     if (pending > 0) {
@@ -174,6 +221,26 @@ export function ProfileScreen() {
               <Label>{p.payoutAccount}</Label>
               <Value>{profile.data.payoutAccountMasked}</Value>
               <Label>{p.payoutChange}</Label>
+            </Card>
+          ) : null}
+          {profile.data.preferences ? (
+            <Card>
+              <Label>{p.ordersTitle}</Label>
+              <Body>{p.ordersBody}</Body>
+              <LimitChips
+                label={p.pickupLimit}
+                limits={PICKUP_LIMITS}
+                value={profile.data.preferences.maxPickupM}
+                onPick={limit => choose({...profile.data?.preferences, maxPickupM: limit})}
+                testID="rider-pickup-limit"
+              />
+              <LimitChips
+                label={p.dropLimit}
+                limits={DROP_LIMITS}
+                value={profile.data.preferences.maxDropM}
+                onPick={limit => choose({...profile.data?.preferences, maxDropM: limit})}
+                testID="rider-drop-limit"
+              />
             </Card>
           ) : null}
           {profile.data.insurance ? (

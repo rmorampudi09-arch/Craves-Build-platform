@@ -29,6 +29,8 @@ import in.craves.integration.fleet.admin.FleetAdminModels.StatusEvent;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.VehicleInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.ZoneBanner;
+import in.craves.integration.fleet.rider.FleetShiftService;
+import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import in.craves.integration.payout.bank.BankDataCipher;
 import in.craves.integration.payout.bank.BankOnboardingModels;
 import java.nio.charset.StandardCharsets;
@@ -187,12 +189,13 @@ public class FleetAdminService {
         List<StatusEvent> events = jdbc.query(EVENT + "WHERE rider_id = ? ORDER BY created_at DESC LIMIT 100",
             (row, n) -> statusEvent(row), riderId);
         List<RiderOffer> offers = jdbc.query("""
-            SELECT o.id, o.trip_id, t.order_code, o.state, o.offered_at, o.pushed_at, o.push_result, o.rang_at, o.rang_channel
+            SELECT o.id, o.trip_id, t.order_code, o.state, o.offered_at, o.pushed_at, o.push_result, o.rang_at, o.rang_channel,
+                   o.reason::text AS reason
             FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
             WHERE o.rider_id = ? ORDER BY o.offered_at DESC, o.id LIMIT 20""",
             (row, n) -> new RiderOffer(row.getObject("id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("order_code"),
                 row.getString("state"), instant(row, "offered_at"), instant(row, "pushed_at"), row.getString("push_result"),
-                instant(row, "rang_at"), row.getString("rang_channel")), riderId);
+                instant(row, "rang_at"), row.getString("rang_channel"), offerReason(row.getString("reason"))), riderId);
         return new RiderDetail(rider, documents, devices, account, submitted, shifts, events, offers);
     }
 
@@ -208,9 +211,20 @@ public class FleetAdminService {
                (health ->> 'queuePending')::numeric::int AS queue_pending,
                (health ->> 'queueOldestAgeS')::numeric::int AS queue_oldest_age_s,
                CASE WHEN (health ->> 'unpluggedMin')::numeric >= 30
-                    THEN round((health ->> 'drainPct')::numeric * 60 / (health ->> 'unpluggedMin')::numeric, 1) END AS battery_per_hour
+                    THEN round((health ->> 'drainPct')::numeric * 60 / (health ->> 'unpluggedMin')::numeric, 1) END AS battery_per_hour,
+               CASE WHEN ended_at IS NULL THEN\s""" + FleetShiftService.BREAK_ENDS.formatted("rider_shift.id") + """
+         END AS on_break_until
         FROM fleet_schema.rider_shift
         """;
+
+    /** trip_offer.reason as written by the dispatcher; null when absent. */
+    private OfferReason offerReason(String text) {
+        try {
+            return text == null ? null : json.readValue(text, OfferReason.class);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("trip_offer.reason must be an OfferReason", exception);
+        }
+    }
 
     private static Shift shift(ResultSet row) throws SQLException {
         Boolean canRing = (Boolean) row.getObject("can_ring");
@@ -222,7 +236,7 @@ public class FleetAdminService {
         return new Shift(row.getObject("id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
             row.getString("selfie_state"), row.getString("selfie_reason"), row.getString("selfie_reviewed_by_name"),
             row.getInt("in_zone_seconds"), instant(row, "last_seen_at"), row.getInt("max_silence_seconds"),
-            row.getInt("silences_over_60s"), phone);
+            row.getInt("silences_over_60s"), phone, instant(row, "on_break_until"));
     }
 
     @Transactional

@@ -85,6 +85,15 @@ export const liveRiderApi: RiderApi = {
   async endShift() {
     await apiClient.post(`${BASE}/shift/end`);
   },
+  async pauseShift(minutes) {
+    return (await apiClient.post(`${BASE}/shift/pause`, {minutes})).data;
+  },
+  async resumeShift() {
+    await apiClient.post(`${BASE}/shift/resume`);
+  },
+  async setPreferences(preferences) {
+    return (await apiClient.put(`${BASE}/preferences`, preferences)).data;
+  },
   async registerDevice(device) {
     await apiClient.post(`${BASE}/devices`, device);
   },

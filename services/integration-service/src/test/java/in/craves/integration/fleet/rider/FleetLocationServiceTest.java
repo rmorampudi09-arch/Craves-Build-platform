@@ -108,11 +108,11 @@ class FleetLocationServiceTest {
 
     static Context context(String status, Instant ended, Instant revoked, boolean expired) {
         return new Context(SHIFT, T, ended, revoked, expired, RIDER, status, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, T);
+            null, null, T, false);
     }
 
     static Context trip(UUID tripId, String state, Integer version, UUID lastTripRider, String lastState, UUID lastShift) {
         return new Context(SHIFT, T, null, null, false, RIDER, "ACTIVE", lastShift, T, false, lastTripRider == null ? null : TRIP, tripId, state,
-            version, lastTripRider, lastState, lastTripRider == null ? null : 4, null, null, null, T);
+            version, lastTripRider, lastState, lastTripRider == null ? null : 4, null, null, null, T, false);
     }
 }

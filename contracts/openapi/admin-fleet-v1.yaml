@@ -1241,6 +1241,21 @@ components:
         pushResult: { type: string, maxLength: 40, nullable: true, description: 'SENT, NO_TOKEN, ERROR, or notification-service''s code.' }
         rangAt: { type: string, format: date-time, nullable: true, description: When the phone first had the offer (app 1.1.0). }
         rangChannel: { type: string, enum: [fcm, locations], nullable: true }
+        reason:
+          nullable: true
+          description: "Why the rider got the offer (Phase 4), as the rider saw it; null on older offers and trips ops gave by hand. rule NEAREST or FAIR, the rider's place among riders free riders in round round, atOnce riders together; FAIR also bandM, bandRiders, earnedPerHourPaise and freeMinutes."
+          type: object
+          required: [rule, place, riders, atOnce, round]
+          properties:
+            rule: { type: string, enum: [NEAREST, FAIR] }
+            place: { type: integer, minimum: 1 }
+            riders: { type: integer, minimum: 1 }
+            atOnce: { type: integer, minimum: 1, maximum: 3 }
+            round: { type: integer, minimum: 1, maximum: 5 }
+            bandM: { type: integer }
+            bandRiders: { type: integer }
+            earnedPerHourPaise: { type: integer, format: int64 }
+            freeMinutes: { type: integer }
     RiderDocument:
       type: object
       required: [documentId, type, status, expiresOn, reason, reviewedBy, reviewedAt, uploadedAt]
@@ -1317,6 +1332,7 @@ components:
         maxSilenceSeconds: { type: integer, minimum: 0, description: The longest gap between two /locations calls so far. }
         silencesOver60s: { type: integer, minimum: 0 }
         phone: { allOf: [{ $ref: '#/components/schemas/PhoneHealth' }], nullable: true }
+        onBreakUntil: { type: string, format: date-time, nullable: true, description: "Phase 4: the rider is on a break, with no offers, until then (shift open only)." }
     PhoneHealth:
       type: object
       description: The phone's latest report on the shift (app 1.1.0), about once a minute.

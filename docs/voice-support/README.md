@@ -49,11 +49,15 @@ call; 3 per number per day, 200 a day in total), `end_call`.
    no runtime change. Until order-service is released, the agent still identifies callers but says order lookups are down.
 2. **Azure.** Run `Craves-Voice-Support` with `operation=create`, `confirmProductionChange=true`. It creates the Foundry
    resource `ais-craves-voice-prodlow` (Central India, S0), stores its key in Key Vault as `voice-live-api-key`,
-   generates and stores `exotel-stream-password`, builds the gateway image from `main` and creates
-   `ca-craves-voice-prodlow` (external ingress, 1–2 replicas, Key Vault-backed secrets through the identity User/Chef
-   already uses). The run prints the Exotel URL to configure, without the password.
-   - If the service connection cannot write Key Vault secrets, the run says which secret to add in the portal and is
-     rerun afterwards.
+   generates and stores `exotel-stream-password`, creates the gateway's identity `id-craves-voice-prodlow`, builds the
+   gateway image from `main` and creates `ca-craves-voice-prodlow` (external ingress, 1–2 replicas, Key Vault-backed
+   secrets through that identity). The run prints the Exotel URL to configure, without the password.
+   - Done once on 28 Oct 2026: the subscription had to be registered for `Microsoft.CognitiveServices` (portal →
+     subscription → Resource providers → Register) before the Foundry resource could be created.
+   - The pipeline's service principal is a Contributor, so it cannot grant roles. An Owner gives
+     `id-craves-voice-prodlow` **AcrPull** on registry `cravesrm09prodlow6bf632` and **Key Vault Secrets User** on
+     `kvcravesprodlowkmqgfy` (resource → Access control (IAM) → Add role assignment → Managed identity), the same two
+     roles every other app's identity has. Until then `create` stops and names what is missing; rerun it afterwards.
    - `operation=status` is read-only and safe any time.
 3. **Exotel.** Sign up at exotel.com with the Craves business KYC (company PAN/GST or proprietor PAN, address proof,
    signatory ID), ask for **AgentStream** to be enabled on the account, and buy a virtual number (a Hyderabad or

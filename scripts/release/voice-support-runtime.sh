@@ -26,6 +26,7 @@ VAULT="${KEY_VAULT_NAME:-kvcravesprodlowkmqgfy}"
 CHEF_APP="${CHEF_APP:-ca-craves-user-chef-service-prod}"
 APP="${VOICE_APP:-ca-craves-voice-prodlow}"
 FOUNDRY="${FOUNDRY_NAME:-ais-craves-voice-prodlow}"
+IDENTITY_NAME="${VOICE_IDENTITY_NAME:-id-craves-voice-prodlow}"
 MODEL="${VOICE_LIVE_MODEL:-gpt-4.1}"
 REPOSITORY=craves/voice-support-gateway
 DOCKERFILE=services/voice-support-gateway/Dockerfile
@@ -89,9 +90,29 @@ store_secret_from_file() {
   fi
 }
 
-identity_ref() {
-  # The identity User/Chef reads this vault with; the gateway reuses it, so no new Key Vault grant is needed.
-  secret_meta "$CHEF_APP" | jq -r --arg host "$KV_HOST/" '[.[] | select((.keyVaultUrl // "") | startswith($host)) | .identity // empty][0] // ""'
+ensure_identity() {
+  # The gateway's own user-assigned identity: it pulls the image and reads Key Vault. Contributor can create it, but
+  # only an Owner can grant it roles (the other apps' identities were granted the same two roles in the portal).
+  local id principal acr_id kv_id missing=()
+  id=$(az identity show -g "$RG" -n "$IDENTITY_NAME" --query id -o tsv --only-show-errors 2>/dev/null || true)
+  if [[ -z "$id" ]]; then
+    echo "Creating identity $IDENTITY_NAME..." >&2
+    id=$(az identity create -g "$RG" -n "$IDENTITY_NAME" -l "$LOCATION" --query id -o tsv --only-show-errors)
+  fi
+  principal=$(az identity show -g "$RG" -n "$IDENTITY_NAME" --query principalId -o tsv --only-show-errors)
+  acr_id=$(az acr show -n "$REGISTRY" --query id -o tsv --only-show-errors)
+  kv_id=$(az keyvault show -n "$VAULT" --query id -o tsv --only-show-errors)
+  has_role() {
+    [[ "$(az role assignment list --assignee "$principal" --scope "$2" --include-inherited \
+        --query "[?roleDefinitionName=='$1'] | length(@)" -o tsv --only-show-errors)" != 0 ]]
+  }
+  has_role AcrPull "$acr_id" || missing+=("AcrPull on container registry $REGISTRY")
+  has_role "Key Vault Secrets User" "$kv_id" || missing+=("Key Vault Secrets User on key vault $VAULT")
+  if (( ${#missing[@]} )); then
+    fail "Identity $IDENTITY_NAME (principal $principal) still needs: ${missing[*]}. An Owner adds each in the portal" \
+      "(resource > Access control (IAM) > Add role assignment > Managed identity > $IDENTITY_NAME); then run create again."
+  fi
+  printf '%s\n' "$id"
 }
 
 create_foundry() {
@@ -141,9 +162,7 @@ voice_endpoint() {
 
 create_app() {
   local image identity chef_fqdn
-  identity=$(identity_ref)
-  [[ -n "$identity" ]] || fail "$CHEF_APP has no Key Vault-backed secret from $VAULT to copy an identity from"
-  [[ "$identity" != system ]] || fail "$CHEF_APP uses its system identity; give the gateway its own Key Vault grant and bind by hand"
+  identity=$(ensure_identity)
   chef_fqdn=$(fqdn_of "$CHEF_APP")
   [[ "$chef_fqdn" =~ ^[a-z0-9.-]+$ ]] || fail "$CHEF_APP has no ingress FQDN"
   [[ "$(vault_has "$SECRET_INTERNAL")" == 1 ]] || fail "Key Vault has no $SECRET_INTERNAL"
@@ -187,6 +206,7 @@ deploy() {
 case "$OPERATION" in
   status)
     echo "Foundry $FOUNDRY: $(foundry_json | jq -r 'if .name then "exists, " + (.properties.provisioningState // "?") + ", endpoint " + (.properties.endpoint // "?") else "missing" end')"
+    echo "Identity $IDENTITY_NAME: $(az identity show -g "$RG" -n "$IDENTITY_NAME" --query principalId -o tsv --only-show-errors 2>/dev/null || echo missing)"
     for s in "$SECRET_VOICE" "$SECRET_EXOTEL" "$SECRET_INTERNAL"; do
       echo "Key Vault $VAULT has $s: $([[ "$(vault_has "$s")" == 1 ]] && echo yes || echo no)"
     done

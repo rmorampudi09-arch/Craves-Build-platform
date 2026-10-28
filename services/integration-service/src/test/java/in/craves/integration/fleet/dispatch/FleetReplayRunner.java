@@ -9,6 +9,8 @@ import in.craves.integration.fleet.dispatch.FleetReplay.Settings;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
@@ -38,12 +40,13 @@ public final class FleetReplayRunner {
             // The policy in force; before one is published, the newest draft. Its mode does not matter: a replay is shadow.
             DispatchPolicy policy = store.currentDispatchPolicy().orElseGet(() -> jdbc.queryForObject("""
                 SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
-                       per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds
+                       per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m
                 FROM fleet_schema.dispatch_policy ORDER BY created_at DESC LIMIT 1""", (row, n) -> new DispatchPolicy(row.getString("version"),
                 row.getTimestamp("effective_from").toInstant(), row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"),
                 row.getInt("radius_m"), row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"),
-                row.getLong("cost_guard_premium_paise"), row.getInt("pidge_stage_seconds"))));
-            Report report = FleetReplay.run(FleetReplay.load(jdbc, settings), card, policy, settings);
+                row.getLong("cost_guard_premium_paise"), row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"),
+                row.getInt("offer_rounds"), row.getInt("fair_band_m"))));
+            Report report = FleetReplay.run(FleetReplay.load(jdbc, settings), card, withRules(policy), settings);
             Path out = Path.of(env("FLEET_REPLAY_OUT", "target/fleet-replay"));
             Files.createDirectories(out);
             String name = "fleet-replay-" + settings.from() + "-" + settings.to();
@@ -54,6 +57,27 @@ public final class FleetReplayRunner {
         } finally {
             source.destroy();
         }
+    }
+
+    /**
+     * The policy with FLEET_REPLAY_OFFERS_AT_ONCE, FLEET_REPLAY_OFFER_ROUNDS and FLEET_REPLAY_FAIR_BAND_M (metres) in place
+     * of its offer rules where set, inside the bounds a policy may have, to compare rules on the same orders.
+     */
+    static DispatchPolicy withRules(DispatchPolicy policy) {
+        Map<String, Long> rules = Map.of(
+            "offers_at_once", Long.parseLong(env("FLEET_REPLAY_OFFERS_AT_ONCE", String.valueOf(policy.offersAtOnce()))),
+            "offer_rounds", Long.parseLong(env("FLEET_REPLAY_OFFER_ROUNDS", String.valueOf(policy.offerRounds()))),
+            "fair_band_m", Long.parseLong(env("FLEET_REPLAY_FAIR_BAND_M", String.valueOf(policy.fairBandM()))));
+        rules.forEach((rule, value) -> {
+            List<Long> bounds = FleetPolicyStore.DISPATCH_RULE_BOUNDS.get(rule);
+            if (value < bounds.get(0) || value > bounds.get(1)) {
+                throw new IllegalArgumentException(rule + " must be " + bounds.get(0) + " to " + bounds.get(1) + " (docs/riders/REPLAY.md)");
+            }
+        });
+        return new DispatchPolicy(policy.version(), policy.effectiveFrom(), policy.mode(), policy.offerSeconds(), policy.fleetStageSeconds(),
+            policy.radiusM(), policy.pickupDetourPercent(), policy.perOrderOverheadPaise(), policy.costGuardPremiumPaise(),
+            policy.pidgeStageSeconds(), rules.get("offers_at_once").intValue(), rules.get("offer_rounds").intValue(),
+            rules.get("fair_band_m").intValue());
     }
 
     private static String env(String name, String fallback) {

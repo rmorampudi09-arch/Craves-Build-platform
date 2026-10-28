@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /** The replay's shadow decisions, money and break-even line on hand-made orders (no database). */
@@ -89,6 +90,34 @@ class FleetReplayTest {
         assertThat(markdown).contains("# Fleet replay 2026-10-19 to 2026-10-19", "| OFFERED | 3 |", "| COST_GUARD | 1 |", "| NO_RIDERS | 2 |",
             "| Paid rider-hours x C_h | 8.0 h x ₹40.00 = ₹320.00 |", "| P_eff | ₹100.00 |", "Nothing was offered, pushed or booked.");
         assertThat(FleetReplay.rupees(-12_345)).isEqualTo("-₹123.45");
+    }
+
+    /**
+     * Phase 4 offer rules on the same orders: nearest first gives every order to the rider whose drops end next to the
+     * kitchen; fair turns (one at a time, a 1.5 km band) share them, and the report says so.
+     */
+    @Test
+    void fairTurnsShareOrdersThatNearestFirstGivesToOneRider() {
+        List<Order> backAtTheKitchen = Stream.of("12:00", "12:10", "12:20", "12:30").map(time -> new Order(UUID.randomUUID(),
+            LocalDateTime.parse("2026-10-19T" + time).atZone(FleetReplay.IST).toInstant(), "Madhapur", KITCHEN_LAT, KITCHEN_LNG, KITCHEN_LAT,
+            KITCHEN_LNG, 10_000L, "borzo", 10_000L)).toList();
+        Report nearest = FleetReplay.run(backAtTheKitchen, CARD, POLICY, settings(1.0));
+        assertThat(nearest.riderPayPaise()).containsExactlyInAnyOrder(16_000L, 0L);
+        assertThat(nearest.gini()).as("one of two riders earns it all").isEqualTo(0.5);
+        assertThat(FleetReplay.markdown(nearest)).contains("| Offer rules | 3 at once, 1 round, nearest first |",
+            "| Pay per paid rider-hour: lowest / middle / highest rider | ₹0.00 / ₹40.00 / ₹40.00 |");
+
+        DispatchPolicy fair = new DispatchPolicy("2026-10-v2", POLICY.effectiveFrom(), "off", 30, 90, 5000, 130, 500, 1000, 600, 1, 3, 1500);
+        Report fairTurns = FleetReplay.run(backAtTheKitchen, CARD, fair, settings(1.0));
+        assertThat(fairTurns.riderPayPaise()).as("₹40 four times, two each").containsExactly(8_000L, 8_000L);
+        assertThat(fairTurns.gini()).isZero();
+        assertThat(fairTurns.rows()).extracting(Row::round).containsOnly(1);
+        assertThat(FleetReplay.markdown(fairTurns)).contains("| Offer rules | 1 at once, 3 rounds, fair band 1.5 km |",
+            "| Pay per paid rider-hour: lowest / middle / highest rider | ₹20.00 / ₹20.00 / ₹20.00 |",
+            "| Gini of rider pay (0: all equal; 1: one rider earns it all) | 0.000 |", "| Orders riders took after the first round | 0 of 4 |");
+        assertThat(FleetReplay.csv(fairTurns).lines().skip(1)).allSatisfy(line -> assertThat(line).endsWith(",1"));
+        assertThat(FleetReplay.onlineSecondsToday(LocalDateTime.parse("2026-10-19T20:00").atZone(FleetReplay.IST).toInstant(),
+            FleetReplay.parseHours("11-15,19-23"))).as("4 hours, then 1 of the evening's").isEqualTo(5 * 3600);
     }
 
     @Test

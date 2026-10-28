@@ -2,6 +2,8 @@
 
 27 Oct 2026 · for Gopi · baseline `main` at `4c3e579` (#547)
 
+**Status, 28 Oct:** Phase 1, the agent parts of Phase 2, and P3-03, P3-04 and P3-06's road-ranking switch are built; new behaviour is behind settings that are off. What was built, where it differs from this design, and what each person still does are in `WORKPLAN.md`'s Done notes and `GO-LIVE.md` §8. Code citations below are to the baseline.
+
 A staff-engineer review of the rider app and fleet backend, with a plan in small PRs. Not a rewrite. Code claims cite `path:line` at the baseline; other claims are marked **[inference]**, **[estimate]** or **[unverified]**. Not legal advice: the lawyer and CA confirm items marked *legal*.
 
 **Checked:** the rider JS and Kotlin code, the fleet package (`services/integration-service/src/main/java/in/craves/integration/fleet`), notification-service's push sender, both contracts, `docs/riders/*`, infra, CI, PR #545, and the project docs R4, R8 and RIDER-PLAYBOOK. The 17 rider Jest suites pass (269 tests). Two throwaway Jest tests reproduce two of A2's loss paths (not committed). The installed React Native 0.85.3 source was read for timers. **Not checked:** phones, a Gradle build, a local Java run (CI covers it, A10), production logs and data. Section 2 of the brief was empty and the phone-result tables are blank (`docs/riders/PHONE-TESTS.md:60-77`, `docs/riders/PERF.md:87-120`), so the findings come from the code.
@@ -22,7 +24,7 @@ The watchdog hands back any trip the server still has as ASSIGNED or AT_PICKUP o
 
 The OTP and missing-photo paths were reproduced with the throwaway tests; the others are read from the code. Fix: P1-05, P1-07, P1-08, with P1-04 removing the false `WAIT_NOT_OVER`.
 
-**A3. Queued steps sync only while the app is on screen.** The queue flushes on a 15 s `setInterval`, on foreground and at mount (`RiderRuntime.tsx:15,83-85`). React Native stops JS timers while the activity is paused: in react-native 0.85.3 `JavaTimerManager.kt` drops its frame callback in `onHostPause`, and the New Architecture runtime uses the same class (`ReactInstance.kt:139`). So with the screen off, the app swiped away, or Google Maps in front during navigation, nothing replays, though the Kotlin service keeps the process alive. Backoff can hold an entry 60 s after signal returns (`offlineQueue.ts:48-49`). After a restart the screen shows the server's older step, because the optimistic step lives in component state (`TripScreen.tsx:30,95`). Fix: P1-06, P1-08; P2-01 later.
+**A3. Queued steps sync only while the app is on screen.** The queue flushes on a 15 s `setInterval`, on foreground and at mount (`RiderRuntime.tsx:15,83-85`). React Native stops JS timers while the activity is paused: in react-native 0.85.3 `JavaTimerManager.kt` drops its frame callback in `onHostPause`, and the New Architecture runtime uses the same class (`ReactInstance.kt:139`). So with the screen off, the app swiped away, or Google Maps in front during navigation, nothing replays, though the Kotlin service keeps the process alive. Backoff can hold an entry 60 s after signal returns (`offlineQueue.ts:48-49`). After a restart the screen shows the server's older step, because the optimistic step lives in component state (`TripScreen.tsx:30,95`). Fix: P1-06, P1-08; P2-01 and P2-02 later.
 
 **A4. Step times and places come from the sync, not the rider, and that changes pay.** The server stamps `arrived_kitchen_at`, `picked_up_at` and `arrived_drop_at` with `now()` (`FleetTripService.java:171-174`), checks the kitchen zone against the latest position at sync time (`FleetTripService.java:427-432`), and drops the `fix` the app sends with a delivery, since `StepBody` has no `fix` field (`FleetTripController.java:96-97`). Waiting pay runs from arrival (or chef-ready, if later) to pickup (`FleetTripPay.java:43-52`), so a pickup synced 20 minutes late overpays waiting, and a late "arrived" can lose the kitchen-zone credit. Fix: P1-04.
 
@@ -317,6 +319,7 @@ All additions are optional, so installed APKs keep working; the server ships fir
 - **Two orders per trip.** Trigger: for two weeks in one zone, at least 15% of orders have a second order from the same kitchen ready within 10 minutes with drops within 2 km, while riders are busy over 60% of their online time; below that, the next free rider or a 3PL is cheaper [inference]. Smallest design: an add-on offer to a rider already AT_PICKUP there, as a second trip row with its own pay (a trip row is one rider's pay record).
 - **Road-ETA ranking.** Trigger: for over 20% of trips, the real pickup leg (from `trip_track`) is over 1.5 times the straight-line estimate. Smallest design: rank only the 3 nearest with the existing Ola client (`RoadDistanceClient.java`), 3 calls per order.
 - Changing dispatch rules after go-live is an automated-system change: plan 14 days' notice (Act 21) (*legal*).
+- **Built ahead, off (28 Oct):** road ranking behind `CRAVES_FLEET_ROAD_RANKING_ENABLED`, so the switch needs no release when its trigger fires. It ranks the 5 nearest by straight line and offers the 3 nearest by road: ranking only the 3 nearest would reorder riders who all get the offer at once (`WORKPLAN.md` P3-06).
 
 ### C8. Observability (question 7)
 
@@ -383,8 +386,8 @@ Each row is one PR with tests and any flag off by default. Customer and chef app
 
 | ID | Change |
 |---|---|
-| P2-01 | Native outbox (C2): `AtomicFile` store, sealed OTP, photos in app storage, flush on signal and after each upload, a persisted job after a kill or reboot (photos via a user-initiated data-transfer job, R4 S55), one-time move of the AsyncStorage queue. |
-| P2-02 | Shift credential on `/trips/{tripId}/{action}` for its own active trip: a Spring rule, an APIM policy for that route, updated `FleetShiftCredentialSecurityTest` and `test_rider_fleet_apim.py`. Security review. |
+| P2-01 | Shift credential on `/trips/{tripId}/{action}` for its own active trip: a Spring rule, an APIM policy for that route, updated `FleetShiftCredentialSecurityTest` and `test_rider_fleet_apim.py`. Security review. |
+| P2-02 | Native outbox (C2): `AtomicFile` store, sealed OTP, photos in app storage, flush on signal and after each upload, a persisted job after a kill or reboot (photos via a user-initiated data-transfer job, R4 S55), one-time move of the AsyncStorage queue. |
 | P2-03 | Unsent fixes on disk, thinned to one per 30 s for up to an hour; `maxItems` raised to 20. |
 | P2-04 | Server-driven idle cadence (`nextPollSec`), only if C1's trigger fires. |
 | P2-05 | Chef "handed over" (`order-service` `markHandedOver`) sent to integration-service. The watchdog never fires after it. |
@@ -393,6 +396,8 @@ Each row is one PR with tests and any flag off by default. Customer and chef app
 | P2-08 | Telugu and Hindi for JS and native text, signed off by native speakers. |
 | P2-09 | Blob retention (selfies 30 days, photos 90 days) and the DPDP notice, before 13 May 2027. |
 | P2-10 | Replace the 12-hour wake lock with uploads driven by location callbacks and short timed locks, before any Play rollout. Compare battery on the same phones. |
+| P2-11 | Thin `trip_track` to one fix per 10 s per trip after 7 days, only if it passes about 5 GB. |
+| P2-12 | Open the trip after a restart without signal (found while writing P1-15). |
 
 **Definition of done:**
 - 50 riders online with zero lost actions over a week of receipts.

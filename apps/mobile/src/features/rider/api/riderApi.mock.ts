@@ -916,6 +916,13 @@ export function createMockRiderApi(options: MockOptions = {}) {
     publishNewTerms() {
       state.me = { ...state.me, termsVersion: `2026-11-v${now()}` };
     },
+    /** A privacy notice to accept (P2-09), so reviewers see its screen; the demo links the customer privacy page. */
+    publishPrivacyNotice() {
+      state.me = {
+        ...state.me,
+        privacyNotice: { version: '1.0-demo', url: 'https://craves.in/privacy', accepted: false },
+      };
+    },
     cancelActiveTrip() {
       if (state.activeTrip) {
         endTrip('CANCELLED', {

@@ -10,7 +10,7 @@ Nothing here changes what production does until a person turns it on: every flag
 2. **notification-service**: V8 (the device's `app`), `/internal/v1/push/realtime` and `/internal/v1/ops-alerts`.
 3. **user-chef-service**: V20 (road-distance cache) and `/internal/v1/maps/road-distance`.
 4. **auth-service**: V20 (the RIDER role) and `/internal/v1/roles/rider/grant` and `/revoke`.
-5. **integration-service**: V152 to V167 and the fleet package, all flags off.
+5. **integration-service**: V152 to V169 and the fleet package, all flags off.
 6. **APIM** (`scripts/apim/configure-rider-fleet-apim.sh`), once integration-service answers: the gateway probes every route.
 
 The first four only add code that nothing calls until integration-service does. Each service's controllers are in its `live-runtime-lock.txt`.

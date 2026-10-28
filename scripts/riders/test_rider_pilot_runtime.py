@@ -119,6 +119,10 @@ class RiderPilotRuntimeTest(unittest.TestCase):
         self.assertNotIn("AccountKey", out + json.dumps(report))
         self.assertEqual("<secret internal>", report["apps"]["integration"]["settings"]["CRAVES_INTERNAL_SERVICE_KEY"])
         self.assertEqual("<missing>", report["apps"]["integration"]["settings"]["CRAVES_FLEET_ENABLED"])
+        # The switches that stay off until their check are listed too (GO-LIVE.md §8).
+        for later in runtime.LATER:
+            self.assertEqual("<missing>", report["apps"]["integration"]["settings"][later])
+        self.assertEqual("<missing>", report["apps"]["order"]["settings"]["CRAVES_DOMAIN_EVENT_ENABLED_TYPES"])
         self.assertEqual([], report["problems"])
 
     def test_status_needs_the_msg91_otp_for_rider_sign_in(self):

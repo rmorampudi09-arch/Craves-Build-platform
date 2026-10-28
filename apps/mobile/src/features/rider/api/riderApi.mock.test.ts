@@ -286,6 +286,20 @@ describe('mock rider server', () => {
     }
   });
 
+  it("the dev panel's privacy notice waits for the rider, who accepts only the version shown", async () => {
+    const mock = setup();
+    expect((await mock.api.getMe()).privacyNotice).toBeUndefined();
+    mock.controls.publishPrivacyNotice();
+    expect((await mock.api.getMe()).privacyNotice).toEqual({
+      version: '1.0-demo',
+      url: 'https://craves.in/privacy',
+      accepted: false,
+    });
+    await expect(mock.api.acceptPrivacyNotice('0.9', 'en')).rejects.toMatchObject({ status: 409 });
+    await mock.api.acceptPrivacyNotice('1.0-demo', 'te');
+    expect((await mock.api.getMe()).privacyNotice?.accepted).toBe(true);
+  });
+
   it('stops the shift when ops ends it', async () => {
     const mock = setup();
     await mock.api.startShift('file:///selfie.jpg', 'android-id-1');

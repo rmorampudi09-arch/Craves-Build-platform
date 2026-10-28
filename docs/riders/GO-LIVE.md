@@ -25,7 +25,7 @@ From `main` at the merged commit, run each pipeline by hand in this order. Befor
 2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
 3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
 4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V167 and the fleet package. All flags stay off, so no fleet bean or job starts.
+5. `azure-pipelines-integration-service.yml`: V152 to V169 and the fleet package. All flags stay off, so no fleet bean or job starts.
 
 ## 2. Gateway
 
@@ -104,6 +104,25 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
 5. Drill SOS and support once with a pilot rider: press SOS in the app, check the ops lead gets the email with the full phone and a map link, and that the console's Rider support page shows the press as emailed. Then report a problem from the app, and acknowledge and fix it on the same page.
 
 A mock APK, from a pull request or a manual run with `mock`, shows "Demo data" on every screen and never talks to Craves.
+
+## 8. Switches that stay off until their check
+
+The pilot goes live without these. Each is off and waits for a check that a person makes; turn one on only after its check passes. Details are in the plan item.
+
+| Switch | When it is on | Turn it on when | Plan |
+|---|---|---|---|
+| `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` | Trip steps may use the shift credential, so the app (this release) keeps them in its native outbox, which sends them after a swipe, a kill or a reboot. | The security review is done and the rider APIM runs this release (step 2, again if it was published before), which adds the `trip` policy. Then run PHONE-TESTS §3's native-outbox rows. | P2-01, P2-02 |
+| `CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED` | Phones drop the shift-long wake lock and upload when a location batch arrives. | PHONE-TESTS §1 has run both ways on the same phones and battery per hour is no worse. Before any Play rollout beyond internal testing. | P2-10 |
+| `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_PRIVACY_NOTICE_URL` | Riders read and accept the privacy notice before anything else, never mid-shift. `{language}` in the URL becomes `en`, `te` or `hi`. | The lawyer's text is published at the URL and the rider APIM runs this release (the accept route). Then PHONE-TESTS §5. Before 13 May 2027. | P2-09 |
+| `CRAVES_FLEET_PHOTO_RETENTION_ENABLED` | The daily job deletes selfies after 30 days and delivery photos after 90, except flagged or disputed ones. | The lawyer agrees the periods, and a week of `FLEET_PHOTO_RETENTION` log lines shows the due counts you expect. Before 13 May 2027. | P2-09 |
+| `ORDER_HANDED_OVER` in order-service's `CRAVES_DOMAIN_EVENT_ENABLED_TYPES` | The chef's "handed over" keeps the trip with its rider: the watchdog never hands it back. | integration-service and then order-service run this release, and the `integration-service-chef-accepted` subscription lets the event through. **Add** it to the list and keep every type already there; unset means `CHEF_ACCEPTED_ORDER`, so then set `CHEF_ACCEPTED_ORDER,ORDER_HANDED_OVER`. | P2-05 |
+| `CRAVES_FLEET_RIDER_HANDOVER_ENABLED` | Ops can give a trip before pickup to another rider. | Step 6.6. | P2-06 (f) |
+| `CRAVES_FLEET_ROAD_RANKING_ENABLED` | Of the 5 nearest riders by straight line, the 3 nearest by road get the offer. Pickup pay still uses the straight line, as the terms say. | The `pickup_detour` query on Rider pilot health fires. | P3-06 |
+| `CRAVES_FLEET_IDLE_POLL_SECONDS` (default 10, kept within 5 to 30) | How often an idle online phone calls in, which also rings offers FCM missed. | Lower it only if the offer receipts show late rings on a brand. | P2-04 |
+| Telugu and Hindi (`REVIEWED_LANGUAGES` in the app: a new APK) | Riders can pick the language, and notifications follow it. | PHONE-TESTS §4 signs the language off. | P2-08 |
+
+- **Notice first.** Once dispatch is live, road ranking changes who gets offers and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before either (*legal*; WORKPLAN rule 9).
+- **How to set one:** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars NAME=value` (order-service: `-n ca-craves-order-service-prodlow`). Wait for the new revision to be healthy, then run the runtime pipeline's **status** stage: it lists every switch above. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
 
 ## Stopping
 

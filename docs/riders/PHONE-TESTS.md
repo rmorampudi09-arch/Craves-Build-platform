@@ -100,14 +100,27 @@ Live builds show riders English until a language is signed off (WORKPLAN P2-08).
    - an offer;
    - every trip step: food not ready, the customer not answering, the photo, the OTP, and marking a trip failed;
    - trip complete, earnings, a trip's pay and payouts;
-   - Profile, Help, SOS and a notice.
+   - Profile, Help, SOS and a notice;
+   - the privacy notice screen (Demo controls → Publish a privacy notice; its link opens the customer privacy page, as a stand-in for the lawyer's text).
 
-   The **Demo controls** screen makes offers and notices. Small screens: check that no button or banner cuts its words off.
+   The **Demo controls** screen makes offers, notices and the privacy notice. Small screens: check that no button or banner cuts its words off.
 2. The notification words (an offer, "You're online", trip cancelled, "You're offline", the test ring) don't show in a demo build. Read them in `apps/mobile/android/app/src/rider/res/values-te/strings.xml` (or `values-hi`) against `values/strings.xml`, about 20 lines.
 3. Write each correction with its screen and the English line; an agent changes `strings/te.ts` or `hi.ts` and the strings file, and the speaker checks the next build.
 4. The lawyer reads the terms screen and the appeal, grievance and notice lines in each language.
 
 **Pass:** the speaker signs off every screen and notification line, and the lawyer the terms words. An agent then adds the language to `REVIEWED_LANGUAGES` in `apps/mobile/src/features/rider/strings/StringsProvider.tsx`. After that release, on a live build: pick the language, go online and let an offer ring; the notification reads in that language.
+
+## 5. Privacy notice (once the lawyer's text is published, WORKPLAN P2-09)
+
+On a live build, after `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_PRIVACY_NOTICE_URL` are set and the rider APIM is republished:
+
+1. Open the app as an active rider who is offline. "Your privacy" shows before Home, with the version.
+2. Tap **Read the privacy notice**: the browser opens the text in the language on screen (English, and Telugu or Hindi once they are signed off).
+3. Tap **I have read it and agree**: Home opens. Close and reopen the app: the notice doesn't come back.
+4. With a rider who is online, set a new version: nothing interrupts the shift or the trip. After the rider goes offline and reopens the app, the new notice shows.
+5. Sign up a new rider: the notice comes before the documents.
+
+**Pass:** every step as written, and each acceptance is in `fleet_schema.rider_privacy_acceptance` with its version and language.
 
 ## Results
 
@@ -151,5 +164,11 @@ Live builds show riders English until a language is signed off (WORKPLAN P2-08).
 |---|---|---|---|---|---|---|---|
 | Telugu | | | | | | | |
 | Hindi | | | | | | | |
+
+### Privacy notice
+
+| Phone (model, Android) | Date | Tester | Notice version | Steps 1–5 as written | Acceptances recorded | Pass |
+|---|---|---|---|---|---|---|
+| | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

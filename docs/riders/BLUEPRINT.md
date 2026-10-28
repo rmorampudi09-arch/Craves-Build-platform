@@ -412,6 +412,10 @@ Each row is one PR with tests and any flag off by default. Customer and chef app
 
 Set a battery-per-online-hour target from Phase 1–2 data and meet it on a 4 GB and a 3 GB phone; keep cold start within 2 s and add a CI alert on APK growth (DoorDash, R8 E5); build a "Pilot health" console page on the P1-15 queries; batching and road-ETA ranking only if C7's triggers fire. **Done when** the battery target is met and the page replaces the manual queries.
 
+### Phase 4: riders' freedom and fair offers (28 Oct)
+
+The offer rules (riders at once, rounds, fair turns), why each offer came, breaks while online, distance choices, pay per online hour, and a rider's copy of their data. All of it is built; it waits behind the dispatch policy and one switch. Design and evidence: `DISPATCH.md`. Tasks and people steps: WORKPLAN Phase 4.
+
 ## E. Risks and open decisions for Gopi
 
 1. **The OTP at rest.** **Recommended:** keep it encrypted with a Keystore key until the server answers, at most 24 hours (this reverses an earlier review fix). Alternative: memory only, and the rider waits at the door for signal.

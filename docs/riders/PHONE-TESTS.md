@@ -122,6 +122,33 @@ On a live build, after `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_P
 
 **Pass:** every step as written, and each acceptance is in `fleet_schema.rider_privacy_acceptance` with its version and language.
 
+## 6. Offer rules, breaks, distances and the data copy (Phase 4)
+
+Set-up:
+- Two pilot riders, A and B, online near one pilot kitchen, on a live build, in test mode.
+- A dispatch policy in `live` with the rules from `DISPATCH.md` §7: one rider at a time, 30 s to accept, 3 rounds.
+- For steps 3 and 4, `CRAVES_FLEET_RIDER_CHOICES_ENABLED` on, after the gateway runs this release (`GO-LIVE.md` §8).
+
+1. **Why this offer.** Place a test order at the kitchen.
+   - Only one phone rings, and its offer says why, for example "You're the nearest free rider." or the fair-turns line.
+   - Terms → "How you get orders" lists the same rules as the console.
+2. **The next round.** On that phone, tap **Decline**.
+   - Within about 10 s the other phone rings, with "You're the next nearest free rider." or the fair-turns line.
+   - Let it run out: the order goes to Borzo at the stage's end, and neither rider sees a warning or a count.
+3. **A break.** On A, Home → **Take a break** → 10 min.
+   - Home shows "On a break until …".
+   - Place a test order: only B rings.
+   - On A, tap **I'm back**, then place another: A can ring again.
+4. **Distances.** On A, Profile → "Orders you hear of" → kitchen at most 1 km, then stand about 2 km from the kitchen.
+   - A test order rings only B.
+   - Set it back to **Any**.
+5. **The data copy.** On A, Profile → Your data → **Share a copy of my data**, and share it to yourself.
+   - The JSON holds A's offers, each with `whyThisOffer`, and A's break.
+   - Ops downloads A's data from the rider's page in the console.
+   - A's next copy lists that download under `opsActions`.
+
+**Pass:** every step as written; on Rider pilot health, `offer_rules` shows round 2, and `rider_choices` counts the break and the limit.
+
 ## Results
 
 ### Service survival
@@ -170,5 +197,11 @@ On a live build, after `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_P
 | Phone (model, Android) | Date | Tester | Notice version | Steps 1–5 as written | Acceptances recorded | Pass |
 |---|---|---|---|---|---|---|
 | | | | | | | |
+
+### Offer rules, breaks, distances and the data copy
+
+| Phones (A, B) | Date | Tester | Policy version | Why lines (1) | Next round (2) | Break (3) | Distances (4) | Data copy (5) | Pass |
+|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

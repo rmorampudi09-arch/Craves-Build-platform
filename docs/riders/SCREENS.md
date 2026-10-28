@@ -673,6 +673,36 @@ If the notice changed while the rider read it, an alert says "The notice changed
 
 ---
 
+## 23. Phase 4 additions (no PNG)
+
+Built with the shared pieces above. The copy is in `strings/en.ts`, with Telugu and Hindi waiting for review. The rules behind it are in `DISPATCH.md`.
+
+- **08 Offer.** Above "Declining is free…", one secondary line saying why the offer came. Examples: "You're the nearest free rider." or "Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn." There is no line when the server sends no reason.
+- **03 Terms.** A card titled "How you get orders", one line per rule:
+  - how many riders hear at once, and the seconds to decide;
+  - nearest first, or fair turns within the band;
+  - the rounds;
+  - the radius;
+  - "Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.";
+  - "Each offer says why it came to you."
+
+  While a change is coming, the card also shows "How you get orders then", with the new lines.
+- **05 and 07 Home, the "today" card.** Pay per online hour, once the rider has been online 30 minutes today: "₹X an hour online today", with "Half of today's riders made ₹Y an hour or more." under it when five or more riders are online.
+- **07 Home, break card** (with rider choices on):
+  - **Offering a break:** an outline button "Take a break". Tapping it opens a card with "How long? You stay online, and no offers come.", outline buttons for 10, 20 and 30 min, "Break time doesn't count toward a slot's guaranteed minimum." and Cancel.
+  - **During a break:** a card with "On a break until 12:42", "No offers until then. Come back any time." and a button "I'm back". It shows even with rider choices off, so a rider can always come back.
+
+  There is no countdown: it shows the end time, not the minutes left.
+- **20 Profile, "Orders you hear of"** (with rider choices on): the line "Only hear of orders within these distances. Fewer orders may reach you, and your choice never counts against you." Under it, two rows of chips:
+  - "Ride to the kitchen, at most": Any, 1, 2, 3 or 5 km;
+  - "Kitchen to customer, at most": Any, 3, 5, 8 or 12 km.
+
+  The chosen chip is filled.
+- **20 Profile, "Your data".** The line "Get a copy of everything Craves keeps about you: trips, offers and why they came to you, pay, shifts and more." and an outline button "Share a copy of my data", which opens the phone's share sheet. If the copy is too big for the phone, it says to call rider support.
+- **21 Help.** A fifth question, "Who gets an order first?", pointing to "How you get orders".
+
+---
+
 ## Differences between the PNGs and the spec list
 
 **PNG order matches the spec order; no page/name mismatches.**

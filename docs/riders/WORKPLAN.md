@@ -1,6 +1,6 @@
 # Craves Rider: work plan by phase
 
-27 Oct 2026 · for Gopi · goes with `docs/riders/BLUEPRINT.md` (the why). This file is the what: every task, who does it, what to change, and how to prove it. Task IDs match the blueprint. Finding IDs (A1–A9) and decisions (E1–E8) refer to the blueprint.
+27 Oct 2026 · for Gopi · goes with `docs/riders/BLUEPRINT.md` (the why). This file is the what: every task, who does it, what to change, and how to prove it. Task IDs match the blueprint. Finding IDs (A1–A9) and decisions (E1–E8) refer to the blueprint. Phase 4 (28 Oct) goes with `docs/riders/DISPATCH.md`.
 
 ## How to use this
 
@@ -408,7 +408,7 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 - Or use the Cloud Shell route from the project doc `rider-app/DEPLOY-NOW-2026-10-24.md` §1.
 
 **S2. Deploy the server PRs.**
-1. Deploy integration-service from `main` once P1-01 to P1-16's server parts have merged (delivered as one patch, that is its merge). V161 to V169 apply on start, and nothing changes for riders until the new APK: every setting added since is off (`GO-LIVE.md` §8).
+1. Deploy integration-service from `main` once P1-01 to P1-16's server parts have merged (delivered as one patch, that is its merge). V161 to V171 apply on start, and nothing changes for riders until the new APK: every setting added since is off (`GO-LIVE.md` §8).
 2. Check:
    - `/api/v1/rider/locations` answers 401 when signed out;
    - the console's rider pages load;
@@ -723,3 +723,96 @@ Live before 13 May 2027.
 **Road ranking: the switch is built, off** (`CRAVES_FLEET_ROAD_RANKING_ENABLED`), so turning it on when `pickup_detour` fires needs no release. Among the 5 nearest by straight line, offers go to the 3 nearest by road. The blueprint's 3 calls would only reorder the same 3 riders, who all get the offer at once. Pickup pay keeps the straight line, as the terms say. Once dispatch is live, switching it on changes who gets offers: give riders 14 days' notice first (rule 9). Proved by `FleetDispatchDatabaseTest.roadRankingOffersTheRidersNearestByRoadAndPaysByTheStraightLine`. Batching stays unbuilt until its trigger fires.
 
 **Phase 3 done when:** the battery target is met on both phones, cold start is ≤ 2 s, the size alert is live, and the health page replaces the manual queries.
+
+---
+
+## Phase 4: riders' freedom and fair offers
+
+**Why.** Gopi's brief of 28 Oct: build the rider app to be the best in everything, how orders reach riders above all, and to help riders be free. The research (project doc `rider-app/research/R13-dispatch-fairness-freedom.md`) looked at how leading platforms assign orders, at fairness research, at what riders ask for, and at the law. `DISPATCH.md` is the design: what riders can count on, the rules, and what Craves won't build.
+
+**Entry:** none; it builds on Phase 1–3 code.
+**Rule for every item:** nothing changes for riders until a person acts. New dispatch columns default to the old rules (3 at once, one round, nearest first), and the rider choices switch is off.
+
+### P4-01 Fair, calm offers, and why each offer came (done)
+- **Migration V170.**
+  - `dispatch_policy` gains `offers_at_once` (1 to 3), `offer_rounds` (1 to 5) and `fair_band_m` (0 to 5000), with defaults 3, 1 and 0.
+  - `trip_offer` gains `round` and `reason`.
+  - The V159 notice trigger now also refuses a change to the rules sooner than 14 days once a rate card is published.
+- **`FleetDispatcher`.**
+  - `offers_at_once` riders hear at a time.
+  - Up to `offer_rounds` rounds while the stage lasts (`nextRound`). Each ranks the riders not yet asked; the stage row is locked so a round goes out once.
+  - Fair turns within the band (`fair`, `standings`): the least pay per online hour today first, in ₹10 steps, then the one who has waited longest.
+  - Each offer stores why its rider got it.
+  - Declines play no part (Telangana s.13(3)(b)).
+- **`FleetPolicyStore`.** It refuses a rules change without notice (422 `RULES_NEED_NOTICE`), and riders' upcoming terms carry the new rules.
+- **Console.** Rider pilot setup → Dispatch → "How orders are offered"; the rider page's "Why this rider".
+- **App.**
+  - The offer's why line.
+  - Terms → "How you get orders", with "How you get orders then" before a change.
+  - A Help question.
+- **Proved by** `FleetDispatchDatabaseTest` (rounds, fair turns, equal earnings), `FleetSetupDatabaseTest`, `FleetRiderServiceTest`, the migration tests, `offerRules.test.ts`, `screensA.test.tsx` (the offer's why line and the Terms rules), `setup-contract.vitest.ts`, `setup.vitest.ts` and `rider-health.vitest.ts`.
+
+### P4-02 Breaks while online, and how far a rider will go (done; switch off)
+- **Migration V171.** `rider_break`, plus `rider.max_pickup_m` and `max_drop_m`.
+- **Rider routes,** behind `CRAVES_FLEET_RIDER_CHOICES_ENABLED`:
+  - `POST /shift/pause` (5 to 60 minutes);
+  - `POST /shift/resume` (always works);
+  - `PUT /preferences`.
+- **Dispatch.**
+  - It skips a rider on a break.
+  - With the switch on, it also skips a rider whose farthest pickup or drop the order is beyond.
+- **Slot guarantee.** A break adds no in-zone seconds to a slot.
+- **Ops.** The rider page shows a break running.
+- **App.**
+  - The Home break card, with "I'm back".
+  - The Profile "Orders you hear of" chips.
+- **Proved by** `FleetRiderChoicesDatabaseTest`, the dispatch break and choices tests, `FleetLocationServiceTest`, `FleetRiderSecurityTest` (the routes need RIDER), `screensA.test.tsx` (the break card), `screensC.test.tsx` (the chips), `riderApi.mock.test.ts`, `rider-health.vitest.ts`, and the APIM test that the gateway's routes match the contract.
+
+### P4-03 Pay per online hour, and fairness numbers for ops (done)
+- **`FleetEarnings`.** Available online time (shift time less breaks) and the fleet median, over riders online 30 minutes or more, only with 5 or more of them.
+- **Home.**
+  - `todayOnlineMinutes`;
+  - `todayPerHourPaise`;
+  - `fleetPerHourPaise`, cached 60 s.
+- **`pilot_health.sql`.** `earnings_per_online_hour` (p10, p50, p90 and the Gini), `offer_rules` and `rider_choices`.
+- **Proved by** `FleetRiderChoicesDatabaseTest`, `FleetPilotHealthDatabaseTest` and `screensA.test.tsx`.
+
+### P4-04 A rider's copy of their data (done)
+- **`RiderDataExport`,** behind two routes:
+  - `GET /my-data` for the rider;
+  - `GET /admin/fleet/riders/{id}/data-export` for ops, audited as `RIDER_DATA_EXPORTED`, which the rider sees in their copy.
+- **What's in it.** Everything Craves keeps about the rider, in one JSON document, with no customer details. Files and GPS points are counted, not included.
+- **App.** Profile → "Your data" → share.
+- **Console.** "Download the rider's data (JSON)".
+- **Proved by** `FleetRiderDataExportDatabaseTest`, `FleetRiderSecurityTest`, `FleetAdminSecurityTest` (file readers only), `screensC.test.tsx` and `fleet-bff.vitest.ts`.
+
+### P4-05 The design, a replay of offer rules, and kitchen waits (done)
+- **`DISPATCH.md`.**
+- **The replay** runs the offer rules on recorded orders and reports fairness between riders. Rules can be overridden to compare them (`REPLAY.md`, "Comparing offer rules"); proved by `FleetReplayTest`.
+- **`kitchen_wait`** on Rider pilot health: per kitchen, how long riders wait and how often the food was ready first.
+- **A fair-turn tie** goes to the rider who has waited longest *for an order*: a break isn't waiting.
+- **Docs.** BACKEND, GO-LIVE, PILOT-HEALTH, PHONE-TESTS §6 and SCREENS §23 are brought up to date.
+
+### People steps for Phase 4
+
+**S1. Deploy.** Deploy integration-service from `main`: V170 and V171 apply, and nothing changes for riders.
+
+**S2. Gateway.** Run the rider APIM pipeline again (`GO-LIVE.md` §2). It adds `/shift/pause`, `/shift/resume`, `/preferences`, `/my-data` and the admin data export.
+
+**S3. Offer rules.**
+1. Run the replay twice on the pilot area's recorded orders (`REPLAY.md`, "Comparing offer rules").
+2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). Recommended: one rider at a time, 30 s, 3 rounds, 90 s before Borzo, fair band 1.5 km.
+3. After the first rate card, every change to the rules needs a start 14 days away.
+
+**S4. Rider choices.** Once the lawyer has read the wording, set `CRAVES_FLEET_RIDER_CHOICES_ENABLED=true` and run `PHONE-TESTS.md` §6.
+
+**S5. Every week:** read `earnings_per_online_hour`, `offer_rules`, `rider_choices` and `kitchen_wait`, and act as `DISPATCH.md` §7 says.
+
+**S6. Every month:** publish a short fleet summary to riders (`DISPATCH.md` §8).
+
+**S7. The lawyer's questions:** `DISPATCH.md` §11.
+
+### Phase 4 done when
+- `PHONE-TESTS.md` §6 passes on two phones.
+- The pilot has run four weeks with the chosen rules, with the fairness queries read every week and one fleet summary sent to riders.
+- Rider choices are on, and no rider has been refused anything for a decline, a break or a distance choice.

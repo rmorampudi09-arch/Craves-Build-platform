@@ -46,6 +46,17 @@ Some work waits until pilot data shows it is needed (blueprint C1, C5 and C7; WO
 | `offer_outcomes` | How offers ended, per day: accepted, declined, expired unanswered, lost to another rider, withdrawn. | **Expired over 20%:** riders aren't hearing offers; make the offer sound repeat until it is opened (blueprint C5). |
 | `track_size` | `trip_track` on disk, all partitions. | **Past about 5 GB:** thin tracks older than 7 days to one fix per 10 s per trip (P2-11). |
 
+## Fairness and rider choices (Phase 4)
+
+How evenly riders earn for their time, what the offer rules cost, what riders choose, and where they wait. Read them weekly with the triggers. `DISPATCH.md` §7 says what to change when one fires, and every change to the offer rules needs 14 days' notice.
+
+| Query | What it shows | What to look for |
+|---|---|---|
+| `earnings_per_online_hour` | Each IST day of the last 14: riders online 30 minutes or more, and their pay per available online hour. Available time is shift time less breaks; pay is as Home shows it, by when it was finalised. Gives the p10, middle (p50) and p90 in rupees an hour, and the Gini coefficient (0: everyone equal; 1: one rider earns it all). | **Gini over 0.3 for a week with 5 or more riders a day, under nearest first:** fair turns are worth trying. With fewer than 10 riders, one rider moves the Gini a lot: read p10 against p90. A falling p50 means too many riders for the orders: stop adding riders. |
+| `offer_rules` | How offers went out, per day: by rule (`NEAREST`, `FAIR`, or "before Phase 4" for offers without a reason) and round, with offers, accepted, and the mean pickup distance. | **Fair-turn pickups over 30% longer than nearest-first ones for a week:** narrow the band. Many later rounds mean riders passed or missed offers; read with `offer_outcomes`. |
+| `rider_choices` | Breaks over the last 7 days (riders who took one, how many, their minutes and the longest), and active riders who chose a farthest pickup or drop now. | Many riders narrowing their distances means offers ask too much: look at the radius and the pay per km. Choices never count against a rider. |
+| `kitchen_wait` | Per kitchen over 14 days: trips, the p50 and p90 minutes from "arrived" to pickup, and on how many trips the chef's ready tap came first. | **A kitchen whose p50 is past the rate card's free minutes:** ask that chef to tap ready when the food is packed. **Most kitchens over 10 minutes for two weeks:** design offers timed to the food (`DISPATCH.md` §9). Food mostly ready first means riders arrive late for it, so narrow any fair band. |
+
 ### Weekly: FCM delivery data
 
 Google's own numbers for the rider app's pushes, a few days behind and only from phones that share usage data. Read them once a week with an account that can see the Firebase project:
@@ -73,3 +84,6 @@ Press **Stop dispatch now** in the console (Rider pilot setup → Dispatch) if a
 - `rider_shift.health`: the phone's report about once a minute (battery, charging, power saver, whether an offer can ring, drain and unplugged minutes since the service started, queued steps, the last exit reason).
 - `trip_event.detail.ageMs`: the tap's age on each step.
 - `trip_stage`: the dispatch chain, one stage per courier tried.
+- `trip_offer.round` and `reason` (V170): the round each offer went out in, and why its rider got it (`DISPATCH.md` §2).
+- `rider_break` (V171): breaks while online. `rider.max_pickup_m` and `max_drop_m` (V171): riders' farthest pickup and drop.
+- `trip.arrived_kitchen_at`, `picked_up_at` and `chef_ready_at`: the rider's "arrived" and "picked up" taps (timed from the tap, P1-04) and the chef's ready tap.

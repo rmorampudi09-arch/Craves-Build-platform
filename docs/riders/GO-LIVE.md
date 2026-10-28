@@ -25,11 +25,13 @@ From `main` at the merged commit, run each pipeline by hand in this order. Befor
 2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
 3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
 4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V169 and the fleet package. All flags stay off, so no fleet bean or job starts.
+5. `azure-pipelines-integration-service.yml`: V152 to V171 and the fleet package. All flags stay off, so no fleet bean or job starts.
 
 ## 2. Gateway
 
 Run `azure-pipelines-rider-fleet-apim.yml` on `main` with `confirmProductionChange` ticked. It publishes `api/v1/rider` and `api/v1/admin/fleet` on `api.craves.in` and probes every route for 401. Check the result with `azure-pipelines-rider-fleet-apim-status.yml`. To undo it, run `azure-pipelines-rider-fleet-apim-rollback.yml`.
+
+If the gateway was published from an older `main`, run it again after step 1: each release that adds routes needs it. Phase 4 adds `POST /shift/pause`, `POST /shift/resume`, `PUT /preferences` and `GET /my-data` for riders, and `GET /riders/{riderId}/data-export` for ops. Until then they answer 404: "Share a copy of my data" in the app shows an error, and so does the console's data download.
 
 ## 3. Ops console
 
@@ -76,9 +78,20 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
 
 ## 6. Set up the pilot in the console
 
-1. **Rate card.**
-   1. Under Rate card → New draft, enter the real numbers, their allowed ranges and the English summary. Telugu and Hindi lines wait for a native speaker's sign-off.
-   2. Publish it. The first card takes effect at once; every later card needs its start at least 14 days after publishing, and riders see it in the app as "New terms from …" until then.
+1. **Offer rules, then the rate card.**
+   1. **How orders are offered.** Under Dispatch, choose `shadow`, keep the other values, and under "How orders are offered" enter the rules. The recommended rules are in `DISPATCH.md` §7: run the replay on the pilot area first (`REPLAY.md`, "Comparing offer rules").
+
+      | Field | Recommended |
+      |---|---|
+      | Riders who see an order at once | 1 |
+      | Rounds of offers | 3 |
+      | Fair band | 1.5 km |
+      | Time a rider has to accept | 30 seconds |
+      | Time Craves riders get before Borzo | 90 seconds |
+
+      Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing, and with no pilot kitchens yet it plans nothing. To keep the old rules (3 at once, nearest first), skip this step.
+   2. **The rate card.** Under Rate card → New draft, enter the real numbers, their allowed ranges and the English summary. Telugu and Hindi lines wait for a native speaker's sign-off.
+   3. **Publish it.** The first card takes effect at once. Every later card needs its start at least 14 days after publishing, and riders see it in the app as "New terms from …" until then.
 2. **Riders.**
    1. In Riders → New rider, add each pilot rider.
    2. The rider installs the live APK (step 7), signs in with their phone and sends their documents.
@@ -89,9 +102,9 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
    - add each pilot kitchen by its chef ID.
 
    Only orders from these kitchens are offered, and only to these riders.
-4. **Shadow.** Under Dispatch, choose `shadow` and save. Dispatch now only logs `FLEET_SHADOW` lines saying who would have been offered and at what pay. Read those lines for a day of real orders.
-5. **Live.** Choose `live` and confirm. A published rate card must be in force.
-   - Offers ring on the pilot riders' phones.
+4. **Shadow.** Dispatch is already `shadow` from step 1.1; if you skipped that, choose `shadow` now and save, keeping the rules. Dispatch only logs `FLEET_SHADOW` lines saying who would have been offered and at what pay. Read those lines for a day of real orders.
+5. **Live.** Choose `live` and confirm. A published rate card must be in force. Keep the rules from step 1.1: changing them now needs a start 14 days away.
+   - Offers ring on the pilot riders' phones. Each offer says why it came to the rider (`DISPATCH.md` §2).
    - An order no rider accepts within the fleet stage goes to Borzo, then Pidge, then the ops queue, exactly as before.
 6. **Moving a rider's trip to another rider (optional).** Ops can give a trip before pickup to another rider only once order-service from the same release is live and the contract migration's PR (the one that drops `trip_chef_sub_order_id_key`) is merged and deployed. Then set `CRAVES_FLEET_RIDER_HANDOVER_ENABLED=true` on integration-service (an app setting, like the flags in step 5). Until then, Reassign offers Borzo, Pidge or cancel for a rider's trip, as before.
 
@@ -120,8 +133,10 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | `CRAVES_FLEET_ROAD_RANKING_ENABLED` | Of the 5 nearest riders by straight line, the 3 nearest by road get the offer. Pickup pay still uses the straight line, as the terms say. | The `pickup_detour` query on Rider pilot health fires. | P3-06 |
 | `CRAVES_FLEET_IDLE_POLL_SECONDS` (default 10, kept within 5 to 30) | How often an idle online phone calls in, which also rings offers FCM missed. | Lower it only if the offer receipts show late rings on a brand. | P2-04 |
 | Telugu and Hindi (`REVIEWED_LANGUAGES` in the app: a new APK) | Riders can pick the language, and notifications follow it. | PHONE-TESTS §4 signs the language off. | P2-08 |
+| `CRAVES_FLEET_RIDER_CHOICES_ENABLED` | Riders can take a 5 to 60 minute break while online, and set the farthest ride to a kitchen and to a customer they want offers for (`DISPATCH.md` §4). | The gateway runs this release (step 2 again: it adds `/shift/pause`, `/shift/resume` and `/preferences`), and the lawyer has read the wording. Then PHONE-TESTS §6, steps 3 and 4. | P4-02 |
+| Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, and fair turns (`DISPATCH.md` §2 and §3). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
 
-- **Notice first.** Once dispatch is live, road ranking changes who gets offers and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before either (*legal*; WORKPLAN rule 9).
+- **Notice first.** Once dispatch is live, road ranking changes who gets offers and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before either (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
 - **How to set one:** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars NAME=value` (order-service: `-n ca-craves-order-service-prodlow`). Wait for the new revision to be healthy, then run the runtime pipeline's **status** stage: it lists every switch above. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
 
 ## Stopping

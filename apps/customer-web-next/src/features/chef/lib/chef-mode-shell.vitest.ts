@@ -121,6 +121,16 @@ describe("Chef Mode guard", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
   });
 
+  it("lets an owner (ADMIN) keep customer screens while customers wait, so they can check them", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    me = { ...chef, roles: ["CUSTOMER", "CHEF", "ADMIN"] };
+    setSessionIdentity(me);
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   it("shows an applicant who used Chef Mode on this device the launching-soon note in a new tab", async () => {
     launch.soon = true;
     vi.mocked(usePathname).mockReturnValue("/chef/application");
@@ -232,6 +242,17 @@ describe("More hub", () => {
     expect(isChefModeTab(chef.id)).toBe(true);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?from=chef");
     expect(isOpenInChefMode("/sign-in")).toBe(true);
+  });
+
+  it("opens the customer app for an owner (ADMIN) while customers wait", async () => {
+    launch.soon = true;
+    me = { ...chef, roles: ["CUSTOMER", "CHEF", "ADMIN"] };
+    setSessionIdentity(me);
+    render(createElement(ChefMorePage));
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Switch" }));
+    expect(isChefModeTab(chef.id)).toBe(false);
+    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
   });
 
   it("asks before signing out, then signs out of Craves and makes this device forget Chef Mode", async () => {

@@ -137,10 +137,11 @@ public final class FleetRiderModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     /**
      * maxFixes: the most fixes the next call may carry (P2-03; a phone that doesn't see it sends at most 5). nextPollSec: how
-     * often to upload while waiting for offers (P2-04). Neither comes with a stop.
+     * often to upload while waiting for offers (P2-04). callbackUploads: drop the shift-long wake lock and upload on location
+     * callbacks (P2-10), sent only while CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED is on. None comes with a stop.
      */
     public record LocationBatchResponse(List<FleetTripModels.Offer> offers, ActiveTrip activeTrip, Boolean stop, String stopReason,
-                                        Integer maxFixes, Integer nextPollSec) {
+                                        Integer maxFixes, Integer nextPollSec, Boolean callbackUploads) {
     }
 
     public record ActiveTrip(String tripId, String step, int version) {

@@ -38,6 +38,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
 import okhttp3.Callback
@@ -117,7 +118,12 @@ class RiderOnlineService : Service() {
 
   private lateinit var executor: ScheduledExecutorService
   private lateinit var fused: FusedLocationProviderClient
+  /** The shift-long lock (until P2-10 is switched on) and the short one that covers each upload. */
   private var wakeLock: PowerManager.WakeLock? = null
+  private var uploadLock: PowerManager.WakeLock? = null
+  // On the executor thread: when the last upload started (elapsedRealtime) and the backup timer for the next one.
+  private var lastUploadAt = 0L
+  private var nextTick: ScheduledFuture<*>? = null
   @Volatile private var shift: Shift? = null
   @Volatile private var stopMessage: String? = null
   /** Set under the callback's lock in onDestroy, so the executor can't re-register location updates or report after it. */
@@ -146,6 +152,8 @@ class RiderOnlineService : Service() {
     object : LocationCallback() {
       override fun onLocationResult(result: LocationResult) {
         result.locations.forEach { add(it) }
+        // The fused provider wakes the phone for each batch, so uploads keep going with the screen off (P2-10).
+        maybeUpload(force = false)
       }
     }
 
@@ -190,13 +198,15 @@ class RiderOnlineService : Service() {
       // Back online, from the notice or from the launcher: "You're offline" no longer holds.
       RiderOffers.cancelNotice(this, RiderMessagingService.GO_ONLINE_TAG)
       holdWakeLock(saved)
+      uploadLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CravesRider:upload")
+        .apply { setReferenceCounted(false) }
       watchNetwork()
       executor.execute {
         exitReason = lastExitReason()
         // Fixes kept from before the phone killed the service, this shift's only, go first (P2-03).
         loadFixes(saved)
         requestLocations()
-        tick()
+        maybeUpload(force = true)
       }
     }
     return START_STICKY
@@ -217,6 +227,7 @@ class RiderOnlineService : Service() {
       }
     }
     wakeLock?.takeIf { it.isHeld }?.release()
+    uploadLock?.takeIf { it.isHeld }?.release()
     val message = stopMessage
     RiderEvents.emit("riderStatus") {
       Arguments.createMap().apply {
@@ -245,7 +256,8 @@ class RiderOnlineService : Service() {
     val request =
       LocationRequest.Builder(
         if (onTrip) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-        if (onTrip) TRIP_FIX_MS else IDLE_FIX_MS,
+        // Idle fixes come at least as often as uploads are due, since each batch is what wakes the phone to upload.
+        if (onTrip) TRIP_FIX_MS else minOf(IDLE_FIX_MS, idleUploadMs),
       )
         .setMaxUpdateDelayMillis(uploadEveryMs())
         .build()
@@ -260,8 +272,25 @@ class RiderOnlineService : Service() {
 
   private fun uploadEveryMs() = if (onTrip) TRIP_UPLOAD_MS else idleUploadMs
 
+  /**
+   * Uploads when one is due: after a location batch, and on the timer as a backup (which stalls while the phone sleeps,
+   * unless the shift-long lock is held). A short wake lock covers the call so the phone can't sleep mid-upload (P2-10).
+   */
+  private fun maybeUpload(force: Boolean) {
+    if (shift == null || destroyed) return
+    if (!force && SystemClock.elapsedRealtime() - lastUploadAt < uploadEveryMs() - DUE_SLACK_MS) return
+    val lock = uploadLock
+    lock?.acquire(UPLOAD_LOCK_MS)
+    try {
+      tick()
+    } finally {
+      if (lock?.isHeld == true) lock.release()
+    }
+  }
+
   private fun tick() {
     val current = shift ?: return
+    lastUploadAt = SystemClock.elapsedRealtime()
     if (System.currentTimeMillis() >= current.expiresAtMs) {
       end(ENDED_MESSAGE)
       return
@@ -312,7 +341,9 @@ class RiderOnlineService : Service() {
       Log.w(TAG, "bad /locations call", error)
     }
     saveFixes()
-    if (!executor.isShutdown) executor.schedule({ tick() }, uploadEveryMs(), TimeUnit.MILLISECONDS)
+    // One backup timer at a time: an upload on a location batch moves it on.
+    nextTick?.cancel(false)
+    if (!executor.isShutdown) nextTick = executor.schedule({ maybeUpload(force = true) }, uploadEveryMs(), TimeUnit.MILLISECONDS)
   }
 
   /** Applies a LocationBatchResponse; returns false when the server stopped the shift. */
@@ -332,6 +363,12 @@ class RiderOnlineService : Service() {
 
     fixesPerCall = RiderOutboxCore.fixesPerCall(response.intOrNull("maxFixes"))
     val idle = RiderOutboxCore.idleUploadMs(response.intOrNull("nextPollSec"))
+    // P2-10: while the server says so, uploads ride on location batches with short locks, not one lock for the whole shift.
+    if (response.optBoolean("callbackUploads")) {
+      wakeLock?.takeIf { it.isHeld }?.release()
+    } else if (wakeLock?.isHeld != true) {
+      shift?.let { holdWakeLock(it) }
+    }
 
     val trip = response.optJSONObject("activeTrip")
     val step = trip?.optString("step").orEmpty()
@@ -498,7 +535,10 @@ class RiderOnlineService : Service() {
     }
   }
 
-  /** Without it the upload timer stalls while the screen is off; held until the credential expires at most. */
+  /**
+   * Without it the backup timer stalls while the screen is off; held until the credential expires at most, unless the server
+   * switches phones to uploads on location batches (P2-10, callbackUploads).
+   */
   private fun holdWakeLock(shift: Shift) {
     val power = getSystemService(Context.POWER_SERVICE) as PowerManager
     wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CravesRider:online").apply {
@@ -523,6 +563,10 @@ class RiderOnlineService : Service() {
     private const val PREFS = "craves_rider_shift"
     private const val CREDENTIAL_HEADER = "X-Craves-Shift-Credential"
     private const val TRIP_UPLOAD_MS = 15_000L
+    /** A batch a little early still uploads. */
+    private const val DUE_SLACK_MS = 2_000L
+    /** The most one upload keeps the phone awake: the call's own 15 s timeout and its answer. */
+    private const val UPLOAD_LOCK_MS = 20_000L
     private const val IDLE_FIX_MS = 10_000L
     private const val TRIP_FIX_MS = 3_000L
     private const val HEALTH_EVERY_MS = 60_000L

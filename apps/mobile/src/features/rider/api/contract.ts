@@ -287,6 +287,8 @@ export interface LocationBatchResponse {
   /** P2-03 and P2-04, read by the native service: the most fixes per call, and the idle upload period. */
   maxFixes?: number;
   nextPollSec?: number;
+  /** P2-10: upload on location callbacks with short wake locks instead of one for the whole shift. */
+  callbackUploads?: boolean;
 }
 
 export type TripAction =

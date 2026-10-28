@@ -26,6 +26,7 @@ JS side: `src/features/rider/native/riderOnlineService.ts` uses the module in li
 - `offerReceipts` (app 1.1.0): every offer's first arrival, from either channel, as `{offerId, channel, ageMs}` with `ageMs` from `SystemClock.elapsedRealtime()` worked out when the call is built. At most 10 are kept; they are forgotten after a 2xx, so a failed call sends them again. The server keeps the first arrival of each of the rider's own offers (`trip_offer.rang_at`, `rang_channel`).
 - Response `LocationBatchResponse` `{offers: Offer[], activeTrip?: {tripId, step, version}, stop?: boolean, stopReason?: string, maxFixes?: number, nextPollSec?: number}`:
   - `maxFixes` (1 to 20) is how many fixes the next call carries; `nextPollSec` (5 to 30, P2-04) is the idle upload period, 10 s when absent;
+  - `callbackUploads: true` (P2-10) drops the shift-long wake lock; absent, the phone holds it (and takes it again if it had dropped it);
   - every offer goes through the offer dedupe (channel `locations`); offers the server no longer lists stop ringing;
   - a new `activeTrip` (tripId or version changed) emits `riderTripChanged`; a trip whose step isn't DELIVERED, FAILED or CANCELLED switches to trip mode;
   - `stop: true` ends the shift with `stopReason` as the message.
@@ -113,7 +114,7 @@ The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the ca
 - **Countdown:** `expiresInSec` from the offer plus the receive time on the phone, never the phone clock against `expiresAt`. An offer with `expiresInSec <= 0` is dropped; the notification times out with the offer.
 - **Ringing comes from the channel, not JS,** so it works with the screen off and the app closed. The notification tap opens the launcher activity with the offer in its extras.
 - **No background-location permission.** The service starts from the Go Online tap (the app is in the foreground). After the phone kills it, a sticky restart may be refused on Android 12+; the shift stays saved and resumes the next time the app opens.
-- **Wake lock.** A partial wake lock is held while online (until the credential expires at most); without it the upload timer stalls with the screen off.
+- **Wake lock.** Uploads go when a location batch arrives (the fused provider wakes the phone for each) and on a timer as a backup, each under a short partial wake lock (released after the call, 20 s at most). Until the server says `callbackUploads` (P2-10, `CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED`, off), a partial wake lock is also held for the whole shift (until the credential expires at most), as before; turn it on only once PHONE-TESTS §1 passes both ways, and before any Play rollout (Play flags wake locks held 2 hours or more with the screen off).
 
 ## Permissions (rider manifest only)
 

@@ -12,6 +12,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * the group accident cover on the rider's profile; claims go to the support line. tripShiftCredentialEnabled (P2-01, off)
  * lets trip steps carry the shift credential, and tells the app to send them from its native outbox (features).
  * idlePollSeconds (P2-04, 5 to 30, default 10) is how often a phone waiting for offers uploads (/locations nextPollSec).
+ * callbackUploadsEnabled (P2-10, off) tells phones to upload on location callbacks with short wake locks instead of holding
+ * one wake lock for the whole shift (/locations callbackUploads).
  */
 @ConfigurationProperties("craves.fleet")
 public record FleetProperties(
@@ -29,6 +31,7 @@ public record FleetProperties(
     @DefaultValue("1.0.0") String minAppVersion,
     String insuranceLabel,
     boolean tripShiftCredentialEnabled,
-    @DefaultValue("10") int idlePollSeconds
+    @DefaultValue("10") int idlePollSeconds,
+    boolean callbackUploadsEnabled
 ) {
 }

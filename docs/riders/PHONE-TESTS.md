@@ -25,6 +25,8 @@ The server records what these tests measure: when each offer rang and by which c
 
 **Pass:** `silences_over_60s` is 0 (no gap over 60 s between location calls during the 4 hours), and the notification survived the swipe and battery saver. **Fail:** write down when uploads stopped, what the phone was doing and the `last_exit_reason`.
 
+**Then again with uploads on location batches (P2-10; required before any Play rollout).** Ask the backend owner to set `CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED=true` (phones then drop the shift-long wake lock and upload on each location batch under a short lock), and run this section once more on the same phones with the same APK. **Pass:** the same pass as above, and battery per hour no worse than the run with it off. Write both runs in the table (mode: wake lock / location batches). If either phone fails, set it back to false.
+
 Also try once per phone (record, not pass/fail):
 
 - Reboot while online: the service doesn't come back on its own (no background location by design). Opening the app resumes it without a new selfie while the shift is valid.
@@ -92,10 +94,12 @@ A phone that has never been online with this app, or that was offline for more t
 
 ### Service survival
 
-| Phone (model, RAM, Android, skin) | Date | Tester | Longest silence (s) | Gaps over 60 s | Last exit reason | Battery %/h | Survived swipe | Survived battery saver | Trip cancelled notice | Pass |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 4 GB phone | | | | | | | | | | |
-| 3 GB phone | | | | | | | | | | |
+| Phone (model, RAM, Android, skin) | Mode (wake lock / location batches) | Date | Tester | Longest silence (s) | Gaps over 60 s | Last exit reason | Battery %/h | Survived swipe | Survived battery saver | Trip cancelled notice | Pass |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 4 GB phone | wake lock | | | | | | | | | | |
+| 3 GB phone | wake lock | | | | | | | | | | |
+| 4 GB phone | location batches | | | | | | | | | | |
+| 3 GB phone | location batches | | | | | | | | | | |
 
 ### Offer to ring
 

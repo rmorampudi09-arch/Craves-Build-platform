@@ -621,6 +621,8 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 
 **Prove it:** PHONE-TESTS §1 still passes, battery per hour is no worse, and Play vitals show no excessive wake locks.
 
+**Done (agent part), behind `CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED`, off:** uploads now go when a location batch arrives (the fused provider wakes the phone for each; idle fixes come at least as often as uploads are due) and on the timer as a backup, one timer at a time, each upload under a short wake lock released after the call (20 s at most: the call's own 15 s timeout and its answer, not the plan's 10 s). While the server's `/locations` answer says `callbackUploads: true`, phones release the shift-long lock; when it doesn't, they hold it (taking it again if it had been dropped), so the same APK runs both ways for the battery comparison on the same phones, and old APKs keep their lock. Proved by `FleetLocationIngestDatabaseTest` (the answer both ways) and the Kotlin type check. **Still open (people):** PHONE-TESTS §1 run both ways on the same phones, then switch it on before any Play rollout.
+
 ### P2-11 Thin the trip track (only if needed)
 **Who:** agent. **Only if:** `trip_track` passes about 5 GB.
 

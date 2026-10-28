@@ -34,8 +34,13 @@ public final class FleetDatabase {
 
     /** Fleet on, with the given test mode and nothing configured outside this service. */
     public static FleetProperties properties(boolean testMode) {
+        return properties(testMode, false);
+    }
+
+    /** callbackUploads: phones are told to upload on location callbacks (P2-10). */
+    public static FleetProperties properties(boolean testMode, boolean callbackUploads) {
         return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents", "+914012345678",
-            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false, 10);
+            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false, 10, callbackUploads);
     }
 
     public UUID rider(String name, String phone) {

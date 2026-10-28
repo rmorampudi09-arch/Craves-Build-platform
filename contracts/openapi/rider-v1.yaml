@@ -482,6 +482,7 @@ components:
         stopReason: {type: string}
         maxFixes: {type: integer, minimum: 1, maximum: 20, description: 'P2-03: the most fixes the next call may carry; absent with a stop and from servers before it (send at most 5)'}
         nextPollSec: {type: integer, minimum: 5, maximum: 30, description: 'P2-04: how often to upload while waiting for offers (CRAVES_FLEET_IDLE_POLL_SECONDS); absent: 10'}
+        callbackUploads: {type: boolean, description: 'P2-10: true while CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED is on: drop the shift-long wake lock and upload on location callbacks with short wake locks; absent: keep the wake lock'}
     SupportIssue:
       type: object
       required: [category]

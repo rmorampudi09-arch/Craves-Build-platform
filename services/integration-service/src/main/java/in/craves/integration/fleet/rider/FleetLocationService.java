@@ -132,11 +132,14 @@ public class FleetLocationService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final int nextPollSec;
+    /** True or left out: an app that doesn't see it keeps its shift-long wake lock (P2-10). */
+    private final Boolean callbackUploads;
 
     public FleetLocationService(JdbcTemplate jdbc, ObjectMapper json, FleetProperties properties) {
         this.jdbc = jdbc;
         this.json = json;
         this.nextPollSec = pollSeconds(properties.idlePollSeconds());
+        this.callbackUploads = properties.callbackUploadsEnabled() ? Boolean.TRUE : null;
     }
 
     /** CRAVES_FLEET_IDLE_POLL_SECONDS kept within 5 to 30 seconds: faster drains batteries, slower rings offers late. */
@@ -196,7 +199,7 @@ public class FleetLocationService {
             LOGGER.info("FLEET_APP_EXIT rider={} reason={}", shift.riderId(), oneLine(batch.health().lastExitReason()));
         }
         List<Offer> offers = jdbc.query(OFFERS, (row, n) -> FleetTripModels.offer(row, json), shift.riderId());
-        return new LocationBatchResponse(offers, activeTrip(shift), null, null, MAX_FIXES, nextPollSec);
+        return new LocationBatchResponse(offers, activeTrip(shift), null, null, MAX_FIXES, nextPollSec, callbackUploads);
     }
 
     /**
@@ -404,7 +407,7 @@ public class FleetLocationService {
     }
 
     private static LocationBatchResponse stop(String reason) {
-        return new LocationBatchResponse(List.of(), null, true, reason, null, null);
+        return new LocationBatchResponse(List.of(), null, true, reason, null, null, null);
     }
 
     private static Context context(ResultSet row) throws SQLException {

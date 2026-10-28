@@ -41,6 +41,9 @@ craves:
     trip-shift-credential-enabled: ${CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED:false}
     # How often a phone waiting for offers uploads (P2-04), 5 to 30 s; lower it only if offer receipts show pushes ring late.
     idle-poll-seconds: ${CRAVES_FLEET_IDLE_POLL_SECONDS:10}
+    # Phones upload on location callbacks with short wake locks instead of one for the whole shift (P2-10). Keep false
+    # until PHONE-TESTS section 1 passes with it on and battery per hour is no worse; needed before a Play rollout.
+    callback-uploads-enabled: ${CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED:false}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

@@ -42,6 +42,7 @@ class FleetLocationIngestDatabaseTest {
         assertThat(answer.stop()).isNull();
         assertThat(answer.maxFixes()).isEqualTo(20);
         assertThat(answer.nextPollSec()).isEqualTo(10);
+        assertThat(answer.callbackUploads()).as("phones keep the shift-long wake lock until P2-10 is switched on").isNull();
         assertThat(answer.activeTrip().tripId()).isEqualTo(trip.toString());
         assertThat(fleet.db.queryForList("SELECT recorded_at FROM fleet_schema.trip_track WHERE trip_id = ? ORDER BY recorded_at", Timestamp.class, trip))
             .hasSize(20).first().isEqualTo(Timestamp.from(t));
@@ -52,5 +53,9 @@ class FleetLocationIngestDatabaseTest {
         assertThatThrownBy(() -> service.ingest(null, credential, new LocationBatch(tooMany))).isInstanceOfSatisfying(FleetApiException.class,
             error -> assertThat(error.status()).isEqualTo(400));
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE trip_id = ?", Integer.class, trip)).isEqualTo(20);
+
+        // P2-10 switched on: every answer tells the phone to drop its shift-long wake lock.
+        FleetLocationService callbacks = new FleetLocationService(fleet.db, new ObjectMapper(), FleetDatabase.properties(true, true));
+        assertThat(callbacks.ingest(null, credential, new LocationBatch(List.of())).callbackUploads()).isTrue();
     }
 }

@@ -59,9 +59,11 @@ public final class RiderDataExport {
                    arrived_kitchen_at AS "arrivedKitchenAt", picked_up_at AS "pickedUpAt", arrived_drop_at AS "arrivedDropAt",
                    finished_at AS "finishedAt", cancel_reason AS "cancelReason"
             FROM fleet_schema.trip WHERE rider_id = ? ORDER BY created_at DESC"""),
+        // No step coordinates: the drop steps would place the customer's door.
         new Section("tripSteps", """
-            SELECT trip_id AS "tripId", kind, created_at AS "at", lat, lng, mock
-            FROM fleet_schema.trip_event WHERE actor_type = 'RIDER' AND actor_id = ? ORDER BY created_at DESC"""),
+            SELECT e.trip_id AS "tripId", e.kind, e.created_at AS "at"
+            FROM fleet_schema.trip t JOIN fleet_schema.trip_event e ON e.trip_id = t.id AND e.actor_type = 'RIDER' AND e.actor_id = t.rider_id
+            WHERE t.rider_id = ? ORDER BY e.created_at DESC"""),
         new Section("earnings", """
             SELECT trip_id AS "tripId", slot_id AS "slotId", component, label, revision, gross_paise AS "grossPaise",
                    withheld_paise AS "withheldPaise", net_paise AS "netPaise", rate_card_version AS "rateCardVersion", reason,
@@ -110,20 +112,25 @@ public final class RiderDataExport {
         new Section("privacyNoticesAccepted", """
             SELECT version, language, accepted_at AS "acceptedAt"
             FROM fleet_schema.rider_privacy_acceptance WHERE rider_id = ? ORDER BY accepted_at DESC"""),
+        // No summaries: some name another rider or quote an ops note about someone else.
         new Section("opsActions", """
-            SELECT action, summary, actor_name AS "by", at
+            SELECT action, actor_name AS "by", at
             FROM fleet_schema.admin_audit WHERE rider_id = ? ORDER BY at DESC"""));
 
     private RiderDataExport() {
     }
 
-    /** The rider's data, newest first in each list; at, when it was put together. */
+    /**
+     * The rider's data, newest first in each list; at, when it was put together. shortcut: trip has no full rider_id index,
+     * so each export scans it once a section; add one if exports get slow.
+     */
     public static Map<String, Object> build(JdbcTemplate jdbc, UUID riderId, Instant at) {
         Map<String, Object> export = new LinkedHashMap<>();
         export.put("about", Map.of(
             "generatedAt", at.toString(),
             "eachListHoldsAtMost", LIMIT,
-            "tripGpsPoints", jdbc.queryForObject("SELECT count(*) FROM fleet_schema.trip_track WHERE rider_id = ?", Long.class, riderId),
+            "tripGpsPoints", jdbc.queryForObject("SELECT count(*) FROM fleet_schema.trip_track k JOIN fleet_schema.trip t ON t.id = k.trip_id "
+                + "AND t.rider_id = k.rider_id WHERE t.rider_id = ?", Long.class, riderId),
             "notIncluded", List.of(
                 "Photos of your documents, shift selfies and delivery photos: ask rider support to see one.",
                 "GPS points on your trips (counted in tripGpsPoints), kept 90 days: ask rider support for a copy.",

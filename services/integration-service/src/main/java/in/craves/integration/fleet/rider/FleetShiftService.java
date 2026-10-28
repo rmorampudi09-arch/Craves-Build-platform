@@ -137,8 +137,8 @@ public class FleetShiftService {
 
     /**
      * Phase 4: a break of 5 to 60 minutes while staying online. No offers until it ends (a new break replaces the old one),
-     * and the time does not count toward a booked slot's guaranteed minimum. 409 NOT_ONLINE without an open shift; 503
-     * RIDER_CHOICES_OFF while rider choices are off.
+     * and the time does not count toward a booked slot's guaranteed minimum. An offer still ringing goes to the next rider
+     * now, at no cost to this one. 409 NOT_ONLINE without an open shift; 503 RIDER_CHOICES_OFF while rider choices are off.
      */
     @Transactional
     public ShiftPause pause(UUID identityId, Integer minutes) {
@@ -156,6 +156,8 @@ public class FleetShiftService {
         }
         Object shiftId = shift.get(0).get("id");
         endBreak(shiftId);
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE rider_id = ? AND state = 'ACTIVE'",
+            shift.get(0).get("rider_id"));
         return new ShiftPause(jdbc.queryForObject("INSERT INTO fleet_schema.rider_break (id, rider_id, shift_id, ends_at) "
             + "VALUES (?, ?, ?, now() + make_interval(mins => ?)) RETURNING ends_at", Timestamp.class, UUID.randomUUID(),
             shift.get(0).get("rider_id"), shiftId, minutes).toInstant());

@@ -42,6 +42,10 @@ public final class FleetTripModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record OfferReason(String rule, int place, int riders, int atOnce, int round, Integer bandM, Integer bandRiders,
                               Long earnedPerHourPaise, Integer freeMinutes) {
+        /** The same reason with atOnce the riders asked together, which the cost guard can make fewer than the policy's. */
+        public OfferReason together(int count) {
+            return new OfferReason(rule, place, riders, count, round, bandM, bandRiders, earnedPerHourPaise, freeMinutes);
+        }
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -98,18 +98,25 @@ public class FleetEarnings {
         LEFT JOIN fleet_schema.rider_slot sl ON sl.id = e.slot_id
         WHERE e.rider_id = ? AND COALESCE(t.pay_finalized_at, sl.ends_at) >= ? AND COALESCE(t.pay_finalized_at, sl.ends_at) < ?""";
     /**
-     * Phase 4: each rider's available online time in a window (from, to): every shift cut to the window (an open one to
-     * now), less its breaks there. The CTEs win, w and available; the queries below add to them.
+     * When a shift (alias s) stopped being available for offers: its end, its credential's end, or 3 minutes after the phone
+     * last called, whichever came first, so a phone that died mid-shift doesn't count as online for the rest of it. The
+     * pilot-health query earnings_per_online_hour repeats this.
+     */
+    static final String SHIFT_END = "LEAST(COALESCE(s.ended_at, now()), s.credential_expires_at, "
+        + "COALESCE(s.credential_revoked_at, 'infinity'::timestamptz), COALESCE(s.last_seen_at, s.started_at) + INTERVAL '3 minutes')";
+    /**
+     * Phase 4: each rider's available online time in a window (from, to): every shift cut to the window and to SHIFT_END,
+     * less its breaks there. The CTEs win, w and available; the queries below add to them.
      */
     private static final String AVAILABLE = """
         WITH win AS (SELECT CAST(? AS timestamptz) AS from_at, LEAST(CAST(? AS timestamptz), now()) AS to_at),
-        w AS (SELECT s.id, s.rider_id, GREATEST(s.started_at, win.from_at) AS from_at, LEAST(COALESCE(s.ended_at, now()), win.to_at) AS to_at
-              FROM fleet_schema.rider_shift s CROSS JOIN win WHERE s.started_at < win.to_at AND COALESCE(s.ended_at, now()) > win.from_at),
+        w AS (SELECT s.id, s.rider_id, GREATEST(s.started_at, win.from_at) AS from_at, LEAST(%1$s, win.to_at) AS to_at
+              FROM fleet_schema.rider_shift s CROSS JOIN win WHERE s.started_at < win.to_at AND %1$s > win.from_at),
         available AS (SELECT w.rider_id, EXTRACT(EPOCH FROM w.to_at - w.from_at) - COALESCE((
                         SELECT SUM(EXTRACT(EPOCH FROM LEAST(b.ends_at, w.to_at) - GREATEST(b.started_at, w.from_at)))
                         FROM fleet_schema.rider_break b WHERE b.shift_id = w.id AND b.started_at < w.to_at AND b.ends_at > w.from_at), 0) AS seconds
                       FROM w)
-        """;
+        """.formatted(SHIFT_END);
     /** A rider's available online seconds in (from, to); parameters from, to, rider. */
     public static final String ONLINE_SECONDS_SQL = AVAILABLE + "SELECT COALESCE(SUM(seconds), 0)::bigint FROM available WHERE rider_id = ?";
     /**

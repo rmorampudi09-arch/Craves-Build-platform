@@ -45,8 +45,9 @@ class FleetRiderChoicesDatabaseTest {
         rider = fleet.rider("Ravi Kumar", "+919876543210");
         fleet.db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE', identity_id = ? WHERE id = ?", identity, rider);
         credential = FleetShiftService.newCredential();
-        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at) "
-            + "VALUES (?, ?, ?, now() + INTERVAL '11 hours', now() - INTERVAL '1 hour')", UUID.randomUUID(), rider, FleetShiftService.hash(credential));
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, last_seen_at) "
+            + "VALUES (?, ?, ?, now() + INTERVAL '11 hours', now() - INTERVAL '1 hour', now())", UUID.randomUUID(), rider,
+            FleetShiftService.hash(credential));
     }
 
     @Test
@@ -56,8 +57,14 @@ class FleetRiderChoicesDatabaseTest {
         refused(() -> shifts.pause(identity, 61), 400, "VALIDATION_FAILED");
         refused(() -> shifts.pause(identity, null), 400, "VALIDATION_FAILED");
         refused(() -> shifts.pause(UUID.randomUUID(), 10), 409, "NOT_ONLINE");
+        UUID ringing = UUID.randomUUID();
+        fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, pickup_distance_m, "
+            + "drop_distance_m, expires_at) VALUES (?, ?, ?, 6800, '[]', '2026-10-v1', 1200, 3400, now() + INTERVAL '30 seconds')", ringing,
+            fleet.trip(UUID.randomUUID()), rider);
 
         ShiftPause pause = shifts.pause(identity, 10);
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_offer WHERE id = ?", String.class, ringing))
+            .as("an offer still ringing goes to the next rider").isEqualTo("WITHDRAWN");
         assertThat(Duration.between(Instant.now(), pause.offersPausedUntil()).toSeconds()).isBetween(590L, 600L);
         assertThat(riders.home(identity).offersPausedUntil()).isEqualTo(pause.offersPausedUntil());
         ShiftPause longer = shifts.pause(identity, 30);
@@ -140,12 +147,21 @@ class FleetRiderChoicesDatabaseTest {
         assertThat(alone.todayPerHourPaise()).isNotNull();
     }
 
+    /** A phone that stops calling stops counting as online 3 minutes after its last call, though its shift is still open. */
+    @Test
+    void aPhoneThatStoppedCallingStopsCountingAsOnline() {
+        FleetDatabase.assumeTodayIsHoursOld(3);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - INTERVAL '2 hours', credential_expires_at = now() + INTERVAL '9 hours', "
+            + "last_seen_at = now() - INTERVAL '60 minutes' WHERE rider_id = ?", rider);
+        assertThat(riders.home(identity).todayOnlineMinutes()).as("an hour until the last call, and 3 minutes after").isBetween(62, 63);
+    }
+
     /** Another rider, online for the last minutes on an open shift. */
     private UUID online(int minutes) {
         UUID other = fleet.rider("Rider " + minutes, String.format("+9198%08d", Math.floorMod(UUID.randomUUID().getLeastSignificantBits(),
             100_000_000L)));
-        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at) "
-            + "VALUES (?, ?, ?, now() + INTERVAL '11 hours', now() - make_interval(mins => ?))", UUID.randomUUID(), other,
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, last_seen_at) "
+            + "VALUES (?, ?, ?, now() + INTERVAL '11 hours', now() - make_interval(mins => ?), now())", UUID.randomUUID(), other,
             FleetShiftService.hash(FleetShiftService.newCredential()), minutes);
         return other;
     }

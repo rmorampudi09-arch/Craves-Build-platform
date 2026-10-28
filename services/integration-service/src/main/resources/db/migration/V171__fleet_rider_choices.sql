@@ -3,6 +3,8 @@
 -- break ends the one running first, so a shift's breaks never overlap. Break time adds nothing to a booked slot's
 -- guaranteed minimum and is not online time in earnings per online hour (fair turns compare riders by it). Dispatch
 -- always honours a break that is running, so one that started stays whole if the switch goes off.
+SET LOCAL lock_timeout = '5s';
+
 CREATE TABLE IF NOT EXISTS fleet_schema.rider_break (
     id         UUID        PRIMARY KEY,
     rider_id   UUID        NOT NULL REFERENCES fleet_schema.rider (id),

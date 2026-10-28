@@ -50,7 +50,11 @@ A rider hears of an order only if all of these hold:
 | Time Craves riders get before Borzo | 45 to 120 s | 60 s | Rounds × time to accept must fit inside it. After it, the order goes to Borzo, then Pidge, then the ops queue, as before. |
 | Fair band, km | 0 to 5 | 0 | 0 means nearest first. Above 0 means fair turns among riders within that distance of the nearest. |
 
-A new round starts soon after the last one is decided. While a policy runs rounds, the delivery command checks every 5 s (every 10 s otherwise). The cost guard works per rider, as before: a rider is skipped if their pay plus the overhead would cost more than the next courier plus the premium.
+A new round starts soon after the last one is decided. While a policy runs rounds, the delivery command checks every 5 s (every 10 s otherwise).
+- **A round always gets its full time.** It goes out only if the stage still has the full time to decide left. If not, the order moves on to Borzo at once, so no rider's time is cut short.
+- **A round is never withdrawn by mistake.** The stage closes only under a lock on its row, the same lock a round is sent under. So a round another worker has just sent never disappears from a rider's phone while it rings.
+- **If the rider chosen first becomes busy** a moment before their offer goes out, the stage stays open, and the next check offers the order to the riders free then.
+- **The cost guard** works per rider, as before: a rider is skipped if their pay plus the overhead would cost more than the next courier plus the premium.
 
 ### What the offer card tells the rider
 
@@ -117,6 +121,7 @@ Behind `CRAVES_FLEET_RIDER_CHOICES_ENABLED` (off). `GET /me` reports it as `feat
 - **Length.** The app offers 10, 20 or 30 minutes; the server accepts 5 to 60.
 - **During it.** No offers arrive. The rider stays online and can come back any time with "I'm back", which always works, even after the switch goes off. A new break replaces the one running.
 - **Pay.** A break is not online time. It doesn't count toward a booked slot's guaranteed minimum, and it doesn't lower pay per online hour.
+- **An offer still ringing** when the break starts goes to the next rider at once, at no cost to this one.
 - **Fair turns.** Waiting counts again from the break's end.
 
 **Farthest pickup and drop** (Profile → "Orders you hear of").
@@ -131,16 +136,18 @@ Behind `CRAVES_FLEET_RIDER_CHOICES_ENABLED` (off). `GET /me` reports it as `feat
 - **The fleet's middle figure.** Once five or more riders have been online for 30 minutes today, Home adds the median: "Half of today's riders made ₹Y an hour or more."
 - **Fewer than five riders: no fleet figure,** so nobody can work out another rider's pay. Each server caches the figure for 60 s.
 
+**Online time** runs until the shift ends, or 3 minutes after the phone last called if it stopped calling (a phone that died mid-shift isn't counted as online), less breaks.
+
 This is the figure fair turns compare. It is also what the Telangana union and Fairwork ask for: pay for all the time riders give, waiting included [30]. Ops sees the spread across riders in `earnings_per_online_hour`.
 
 ## 6. Your data
 
 `GET /my-data` (Profile → Your data → "Share a copy of my data") returns one JSON document. It holds, newest first, at most 5,000 rows per list:
 - **About you:** profile; documents (no files); phones; payout accounts (masked).
-- **Your work:** shifts with phone health; breaks; offers with why each came; trips (kitchen and drop areas only); trip steps; slots.
+- **Your work:** shifts with phone health; breaks; offers with why each came; trips (kitchen and drop areas only); trip steps (times only: a step's location at the drop would place the customer); slots.
 - **Your money:** pay lines; holds; payouts; withdrawals; recoveries.
 - **Your record:** status changes; support issues; SOS presses; terms and privacy notices accepted.
-- **Ops's actions** on the account, including every download of this copy.
+- **Ops's actions** on the account, including every download of this copy: what was done, by whom and when. Ops's notes are left out, as they can name other people.
 
 **Left out:** photos (documents, selfies, delivery); on-trip GPS points, which are counted, not included, and kept 90 days; and customers' names, phone numbers and addresses. Support sends the photos and GPS points on request. A copy too big to share from the phone (over 400 KB) asks the rider to call support.
 
@@ -158,7 +165,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 | Riders who see an order at once | 1 | **No race:** each rider decides alone, at their own pace. Three riders racing to tap is speed pressure, and the nearest usually wins [18]. DoorDash, Wolt, Gojek and Uber's normal requests go to one rider at a time [19][21][22][34]. |
 | Time a rider has to accept | 30 s | Wolt gives 30–60 s and DoorDash 50 s [20][21]. 30 s is the lowest the declared range allows. |
 | Rounds of offers | 3 | Three riders still hear of each order, one after another. |
-| Time Craves riders get before Borzo | 90 s | 3 rounds × 30 s. Home-cooked food takes far longer than 30 s, so Borzo starting 30 s later rarely delays the customer. |
+| Time Craves riders get before Borzo | 120 s | **3 rounds of 30 s, with a few seconds between them.** A round starts only when its full 30 s still fit, so 90 s would allow only 2 rounds. Home-cooked food takes far longer than a minute, so Borzo starting a minute later rarely delays the customer. |
 | Fair band | 1.5 km | **About 5 minutes' extra ride at most,** paid beyond the free kilometre. The research publishes no band size, so start here and tune with data. |
 
 **Setting them with no notice.** Until the first rate card is published, riders have no terms, so any rules may start at once. `GO-LIVE.md` §6 step 1 sets them in shadow first, then publishes the rate card. After that, every change to the rules, wider or narrower, needs a start 14 days away, and riders see the new rules under Terms in the meantime.
@@ -216,7 +223,8 @@ New York's regulator publishes figures like these every quarter [29]. No Indian 
 
 Known shortcuts in today's code, each marked `shortcut:` in the code:
 - `FleetDispatcher.standings` runs 3 queries per rider in the band. That is fine for tens of riders; batch them past about 50 in a band.
-- Each round asks the couriers for a fresh quote, at most 5 per order. Keep the first one on the trip if couriers start limiting quotes.
+- Each round asks the couriers for a fresh quote: about one per round, and a few more when two workers race. Keep the first one on the trip if couriers start limiting quotes.
+- A rider's data copy reads `trip` by rider, and `trip` has no full index on `rider_id`. Add one if copies get slow.
 
 ## 10. Not built, on purpose
 

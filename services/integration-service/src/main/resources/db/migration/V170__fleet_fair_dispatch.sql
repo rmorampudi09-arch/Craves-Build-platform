@@ -3,6 +3,8 @@
 -- nearest, it goes first to the one who has earned the least per online hour today. The defaults are today's rules
 -- (3 at once, one round, nearest first), so nothing changes until ops publishes a policy that sets them; once a rate card
 -- is published, riders get 14 days' notice of a change (FleetPolicyStore.publishDispatchPolicy).
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE fleet_schema.dispatch_policy
     ADD COLUMN IF NOT EXISTS offers_at_once INTEGER NOT NULL DEFAULT 3 CHECK (offers_at_once BETWEEN 1 AND 3),
     ADD COLUMN IF NOT EXISTS offer_rounds   INTEGER NOT NULL DEFAULT 1 CHECK (offer_rounds BETWEEN 1 AND 5),

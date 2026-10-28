@@ -792,6 +792,17 @@ Live before 13 May 2027.
 - **`kitchen_wait`** on Rider pilot health: per kitchen, how long riders wait and how often the food was ready first.
 - **A fair-turn tie** goes to the rider who has waited longest *for an order*: a break isn't waiting.
 - **Docs.** BACKEND, GO-LIVE, PILOT-HEALTH, PHONE-TESTS §6 and SCREENS §23 are brought up to date.
+- **Fixes from an independent review of Phase 4:**
+  - a stage closes only under its row lock, so a round another worker just sent is never withdrawn;
+  - a round goes out only with its full time before the stage ends;
+  - with rounds, a chosen rider who turns busy doesn't skip the fleet;
+  - an offer counts only the riders asked together;
+  - no offer goes to a rider who has just started a break, and a break withdraws an offer still ringing;
+  - online time ends 3 minutes after a phone's last call;
+  - a rider's data copy leaves out step coordinates (they would place customers) and ops's notes, and no longer scans the whole GPS table;
+  - V170 and V171 wait at most 5 s for a lock.
+  
+  Proved by `FleetDispatchDatabaseTest`, `FleetRiderChoicesDatabaseTest`, `FleetRiderDataExportDatabaseTest` and `FleetPilotHealthDatabaseTest`.
 
 ### People steps for Phase 4
 
@@ -801,7 +812,7 @@ Live before 13 May 2027.
 
 **S3. Offer rules.**
 1. Run the replay twice on the pilot area's recorded orders (`REPLAY.md`, "Comparing offer rules").
-2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). Recommended: one rider at a time, 30 s, 3 rounds, 90 s before Borzo, fair band 1.5 km.
+2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). Recommended: one rider at a time, 30 s, 3 rounds, 120 s before Borzo, fair band 1.5 km.
 3. After the first rate card, every change to the rules needs a start 14 days away.
 
 **S4. Rider choices.** Once the lawyer has read the wording, set `CRAVES_FLEET_RIDER_CHOICES_ENABLED=true` and run `PHONE-TESTS.md` §6.

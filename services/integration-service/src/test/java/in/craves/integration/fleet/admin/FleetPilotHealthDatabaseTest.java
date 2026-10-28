@@ -228,8 +228,9 @@ class FleetPilotHealthDatabaseTest {
     /** A closed shift yesterday (IST) from one time to another, for a new rider. */
     private UUID shift(String phone, String from, String to) {
         UUID rider = fleet.rider("Rider " + phone, phone);
-        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, ended_at) "
-            + "VALUES (?, ?, ?, " + YESTERDAY.formatted(to) + ", " + YESTERDAY.formatted(from) + ", " + YESTERDAY.formatted(to) + ")",
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, ended_at, "
+            + "last_seen_at) VALUES (?, ?, ?, " + YESTERDAY.formatted(to) + ", " + YESTERDAY.formatted(from) + ", " + YESTERDAY.formatted(to)
+            + ", " + YESTERDAY.formatted(to) + ")",
             UUID.randomUUID(), rider, phone.substring(1).repeat(6).substring(0, 64));
         return rider;
     }

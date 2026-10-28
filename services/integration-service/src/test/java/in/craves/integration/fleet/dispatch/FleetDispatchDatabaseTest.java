@@ -22,6 +22,7 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
 import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
@@ -423,6 +424,108 @@ class FleetDispatchDatabaseTest {
             .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
         assertThat(activeOffers()).as("online 80 minutes, but back from a break a minute ago").containsExactly(waiting);
         assertThat((Integer) reason(waiting).get("freeMinutes")).isBetween(49, 50);
+    }
+
+    /** A worker that found no offer open never withdraws a round another worker sent meanwhile: it closes under the stage lock. */
+    @Test
+    void theStageIsNeverClosedUnderARoundJustSent() {
+        fairPolicy(0);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        UUID trip = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip WHERE chef_sub_order_id = ?", UUID.class, chefSubOrderId);
+        DispatchPolicy policy = new FleetPolicyStore(fleet.db, json).currentDispatchPolicy().orElseThrow();
+
+        assertThatThrownBy(() -> dispatcher.closeUnlessDeciding(trip, "ALL_DECLINED_OR_EXPIRED", true, policy))
+            .as("the round is ringing").isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(nearest);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", nearest);
+        assertThat(dispatcher.closeUnlessDeciding(trip, "ALL_DECLINED_OR_EXPIRED", true, policy)).isTrue();
+        assertThat(fleet.db.queryForList("SELECT provider || ':' || state || ':' || COALESCE(outcome, '') FROM fleet_schema.trip_stage "
+            + "WHERE trip_id = ? ORDER BY seq", String.class, trip)).containsExactly("CRAVES_FLEET:CLOSED:ALL_DECLINED_OR_EXPIRED", "BORZO:OPEN:");
+    }
+
+    /** A round goes out only with its riders' full time to decide before the stage ends: nobody is cut short, and Borzo is next. */
+    @Test
+    void aRoundThatCannotRunItsFullTimeIsNotSent() {
+        fairPolicy(0);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", nearest);
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET deadline_at = now() + INTERVAL '15 seconds' WHERE provider = 'CRAVES_FLEET'");
+
+        assertThat(dispatcher.run(command, () -> OptionalLong.of(9000), true)).as("15 s left, 20 s to decide: Borzo now").isEmpty();
+        assertThat(count("fleet_schema.trip_offer")).isOne();
+        assertThat(fleet.db.queryForList("SELECT provider || ':' || state || ':' || COALESCE(outcome, '') FROM fleet_schema.trip_stage "
+            + "ORDER BY seq", String.class)).containsExactly("CRAVES_FLEET:CLOSED:ALL_DECLINED_OR_EXPIRED", "BORZO:OPEN:");
+    }
+
+    /** With rounds, a chosen rider who goes offline while the quotes come back doesn't send the order to Borzo: the next look asks the next rider. */
+    @Test
+    void withRoundsTheOrderWaitsForTheNextRiderWhenTheOneChosenGoesOffline() {
+        fairPolicy(0);
+        UUID leaving = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID staying = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> {
+            fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now(), credential_revoked_at = now() WHERE rider_id = ?", leaving);
+            return OptionalLong.of(9000);
+        }, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(count("fleet_schema.trip_offer")).isZero();
+        assertThat(fleet.db.queryForList("SELECT provider || ':' || state FROM fleet_schema.trip_stage", String.class))
+            .containsExactly("CRAVES_FLEET:OPEN");
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(staying);
+        assertThat(reason(staying)).containsEntry("round", 1).containsEntry("place", 1);
+    }
+
+    /** The cost guard can leave riders out: an offer counts only the riders asked together, never the policy's three. */
+    @Test
+    void anOfferCountsOnlyTheRidersAskedTogether() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID near = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        // 2.2 km x 1.3 to the kitchen: 7052 pay + 500 overhead > 5000 quote + 1000 premium; the near rider's 5850 fits.
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.02, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(5000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(near);
+        assertThat(reason(near)).containsEntry("atOnce", 1).containsEntry("riders", 2);
+    }
+
+    /** A rider another order reached while the quotes came back isn't counted among the riders asked together. */
+    @Test
+    void aRiderTakenByAnotherOrderMeanwhileIsNotCounted() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID first = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID taken = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID third = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.010, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> {
+            fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, pay_lines, rate_card_version, "
+                + "pickup_distance_m, drop_distance_m, expires_at) VALUES (?, ?, ?, 5000, '[]', '2026-10-v1', 500, 2000, now() + INTERVAL '40 seconds')",
+                UUID.randomUUID(), fleet.trip(UUID.randomUUID()), taken);
+            return OptionalLong.of(9000);
+        }, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        UUID trip = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip WHERE chef_sub_order_id = ?", UUID.class, chefSubOrderId);
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE trip_id = ?", UUID.class, trip))
+            .containsExactlyInAnyOrder(first, third);
+        assertThat(reason(first)).containsEntry("atOnce", 2).containsEntry("place", 1);
+        assertThat(reason(third)).containsEntry("atOnce", 2).containsEntry("place", 3);
+    }
+
+    /** A rider who starts a break while the plan fetches quotes gets no offer; the others do. */
+    @Test
+    void aRiderWhoStartsABreakWhileTheQuotesComeBackGetsNoOffer() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID resting = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID working = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> {
+            FleetDispatchFixtures.onBreak(fleet.db, resting, 0, 10);
+            return OptionalLong.of(9000);
+        }, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(working);
     }
 
     /** Phase 4: a rider on a break hears of no order until it ends; the riders working hear as usual. */

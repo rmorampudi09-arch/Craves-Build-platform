@@ -87,7 +87,7 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
       | Rounds of offers | 3 |
       | Fair band | 1.5 km |
       | Time a rider has to accept | 30 seconds |
-      | Time Craves riders get before Borzo | 90 seconds |
+      | Time Craves riders get before Borzo | 120 seconds |
 
       Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing, and with no pilot kitchens yet it plans nothing. To keep the old rules (3 at once, nearest first), skip this step.
    2. **The rate card.** Under Rate card → New draft, enter the real numbers, their allowed ranges and the English summary. Telugu and Hindi lines wait for a native speaker's sign-off.

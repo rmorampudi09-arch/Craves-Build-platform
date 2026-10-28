@@ -239,19 +239,27 @@ ORDER BY d.day_ist DESC, d.offers DESC, d.state;
 -- online hour (shift time less breaks; pay as Home shows it, by when it was finalized): the middle (p50), p10, p90 and the
 -- Gini coefficient (0: everyone equal; 1: one rider earns it all). Fair turns (a fair band in the dispatch policy) are
 -- worth trying when the Gini stays over 0.3 for a week with 5 or more riders a day; read offer_rules for their cost.
+-- A shift ends at the earliest of its end, its credential's end and 3 minutes after the phone last called (as Home
+-- counts it, FleetEarnings.SHIFT_END), so a phone that died mid-shift doesn't count as online.
 WITH win AS (
     SELECT d::date AS day_ist, (d::date::timestamp AT TIME ZONE 'Asia/Kolkata') AS from_at,
            LEAST(((d::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'), now()) AS to_at
     FROM generate_series((now() AT TIME ZONE 'Asia/Kolkata')::date - 13, (now() AT TIME ZONE 'Asia/Kolkata')::date, INTERVAL '1 day') d
+), shifts AS (
+    SELECT s.id, s.rider_id, s.started_at,
+           LEAST(COALESCE(s.ended_at, now()), s.credential_expires_at, COALESCE(s.credential_revoked_at, 'infinity'::timestamptz),
+                 COALESCE(s.last_seen_at, s.started_at) + INTERVAL '3 minutes') AS ended_at
+    FROM fleet_schema.rider_shift s
+    WHERE s.started_at > now() - INTERVAL '15 days'
 ), online AS (
     SELECT win.day_ist, s.rider_id,
-           sum(extract(epoch FROM LEAST(COALESCE(s.ended_at, now()), win.to_at) - GREATEST(s.started_at, win.from_at))
-               - COALESCE((SELECT sum(extract(epoch FROM LEAST(b.ends_at, COALESCE(s.ended_at, now()), win.to_at)
+           sum(extract(epoch FROM LEAST(s.ended_at, win.to_at) - GREATEST(s.started_at, win.from_at))
+               - COALESCE((SELECT sum(extract(epoch FROM LEAST(b.ends_at, s.ended_at, win.to_at)
                                                      - GREATEST(b.started_at, s.started_at, win.from_at)))
                            FROM fleet_schema.rider_break b
-                           WHERE b.shift_id = s.id AND b.started_at < LEAST(COALESCE(s.ended_at, now()), win.to_at)
+                           WHERE b.shift_id = s.id AND b.started_at < LEAST(s.ended_at, win.to_at)
                              AND b.ends_at > GREATEST(s.started_at, win.from_at)), 0)) AS seconds
-    FROM win JOIN fleet_schema.rider_shift s ON s.started_at < win.to_at AND COALESCE(s.ended_at, now()) > win.from_at
+    FROM win JOIN shifts s ON s.started_at < win.to_at AND s.ended_at > win.from_at
     GROUP BY 1, 2
 ), earned AS (
     SELECT (COALESCE(t.pay_finalized_at, sl.ends_at) AT TIME ZONE 'Asia/Kolkata')::date AS day_ist, e.rider_id,

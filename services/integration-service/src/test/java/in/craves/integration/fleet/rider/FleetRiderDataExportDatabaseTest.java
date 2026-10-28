@@ -37,6 +37,11 @@ class FleetRiderDataExportDatabaseTest {
         UUID trip = fleet.trip(UUID.randomUUID());
         fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'DELIVERED', final_pay_paise = 6800, "
             + "final_pay_lines = '[{\"label\": \"base\", \"amountPaise\": 6800}]' WHERE id = ?", rider, trip);
+        // The tap at the customer's door: its fix places the customer, so it never leaves in the export.
+        fleet.db.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, lat, lng, mock) "
+            + "VALUES (?, ?, 'DELIVERED', 'RIDER', ?, 17.4512345, 78.3812345, false)", UUID.randomUUID(), trip, rider);
+        fleet.db.update("INSERT INTO fleet_schema.trip_track (trip_id, rider_id, recorded_at, lat, lng, accuracy_m, mock) "
+            + "VALUES (?, ?, now(), 17.4498765, 78.3798765, 8, false)", trip, rider);
         fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, state, pay_paise, pay_lines, rate_card_version, "
             + "pickup_distance_m, drop_distance_m, expires_at, decided_at, round, reason) VALUES (?, ?, ?, 'ACCEPTED', 6800, "
             + "'[{\"label\": \"base\", \"amountPaise\": 6800}]', '2026-10-v1', 1200, 3400, now() + INTERVAL '40 seconds', now(), 1, "
@@ -69,6 +74,11 @@ class FleetRiderDataExportDatabaseTest {
         assertThat(tree.path("trips").get(0).path("dropArea").asText()).isEqualTo("Kondapur");
         assertThat(tree.path("statusChanges").get(0).path("decidedBy").asText()).isEqualTo("Admin +91 98xxxxx210");
         assertThat(tree.path("phones").get(0).has("fcmToken")).isFalse();
+        assertThat(tree.path("tripSteps")).hasSize(1);
+        assertThat(tree.path("tripSteps").get(0).path("kind").asText()).isEqualTo("DELIVERED");
+        assertThat(tree.path("tripSteps").get(0).has("lat")).as("no step coordinates").isFalse();
+        assertThat(text).as("the door and the track stay out").doesNotContain("17.4512345", "78.3812345", "17.4498765");
+        assertThat(tree.path("about").path("tripGpsPoints").asLong()).isOne();
         assertThat(text).as("customers' data stays out").doesNotContain("Priya", "+919000000001", "Flat 2");
         assertThat(text).as("so does other riders'").doesNotContain("#99999999", "+919800000002", other.toString());
         assertThat(tree.path("about").path("notIncluded")).hasSize(3);
@@ -79,8 +89,10 @@ class FleetRiderDataExportDatabaseTest {
         assertThat(json.valueToTree(admin.dataExport(ops, rider)).path("trips")).hasSize(1);
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'RIDER_DATA_EXPORTED' AND rider_id = ?",
             Integer.class, rider)).isOne();
-        assertThat(json.valueToTree(riders.myData(identity)).path("opsActions").get(0).path("action").asText())
+        JsonNode again = json.valueToTree(riders.myData(identity));
+        assertThat(again.path("opsActions").get(0).path("action").asText())
             .as("the rider sees that ops downloaded their data").isEqualTo("RIDER_DATA_EXPORTED");
+        assertThat(again.path("opsActions").get(0).has("summary")).as("summaries can name other people").isFalse();
         assertThatThrownBy(() -> admin.dataExport(ops, UUID.randomUUID())).isInstanceOfSatisfying(FleetApiException.class,
             error -> assertThat(error.code()).isEqualTo("RIDER_NOT_FOUND"));
     }

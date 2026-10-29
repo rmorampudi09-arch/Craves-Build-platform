@@ -25,7 +25,8 @@ class Backend:
             response.raise_for_status()
             return response.json()
         except (httpx.HTTPError, ValueError) as error:
-            log.warning("caller context unavailable: %s", type(error).__name__)
+            status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else "-"
+            log.warning("caller context unavailable: %s status=%s", type(error).__name__, status)
             return None
 
     async def open_ticket(

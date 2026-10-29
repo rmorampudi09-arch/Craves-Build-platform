@@ -1,12 +1,10 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
-import {SectionSkeleton} from '../../../shared/components';
-import {AppApiError} from '../../../core/http/apiError';
 import type {DeliverBody, FailBody, Trip, TripAction} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
-import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {RiderScreen, Title} from '../components/ui';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderOnlineService} from '../native/riderOnlineService';
@@ -78,18 +76,15 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     if (active.isLoading) {
       return (
         <RiderScreen header={<RiderHeader />} testID="rider-trip-loading">
-          <SectionSkeleton />
+          <CardsSkeleton cards={3} />
         </RiderScreen>
       );
     }
     if (active.isError) {
-      const offline = active.error instanceof AppApiError && (active.error.retriable || !active.error.status);
+      // Steps already tapped stay queued on the phone and go when it reaches Craves; the trip just can't be shown yet.
       return (
-        <RiderScreen
-          header={<RiderHeader />}
-          testID="rider-trip-error"
-          footer={<BottomAction label={strings.common.retry} onPress={() => active.refetch()} testID="rider-trip-retry" />}>
-          <Banner tone="warning" text={offline ? strings.common.offline : t.loadFailed} />
+        <RiderScreen header={<RiderHeader />} testID="rider-trip-error">
+          <ProblemCard error={active.error} onRetry={() => active.refetch()} testID="rider-trip-problem" />
         </RiderScreen>
       );
     }

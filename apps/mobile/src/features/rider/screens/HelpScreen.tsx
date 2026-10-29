@@ -1,12 +1,13 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Animated, Easing, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Icon, SectionSkeleton} from '../../../shared/components';
+import {Icon} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
 import {motionDuration} from '../../../design/motion';
 import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, StateCard} from '../components/StateCard';
 import {Card, HeroCard, RiderScreen} from '../components/ui';
 import {formatDay, formatRupees} from '../domain/format';
 import type {RiderNav} from '../navigation';
@@ -108,7 +109,7 @@ export function HelpScreen() {
         {h.reportTitle}
       </Text>
       {recent.isLoading ? (
-        <SectionSkeleton showTitle={false} testID="rider-help-loading" />
+        <CardsSkeleton cards={1} testID="rider-help-loading" />
       ) : recent.isError ? (
         <LoadFailed error={recent.error} onRetry={recent.refetch} />
       ) : trips.length ? (
@@ -133,7 +134,7 @@ export function HelpScreen() {
           })}
         </Card>
       ) : (
-        <Text style={styles.note}>{h.noTrips}</Text>
+        <StateCard icon="inbox-outline" title={h.noTrips} body={h.noTripsHint} testID="rider-help-no-trips" />
       )}
     </RiderScreen>
   );

@@ -105,14 +105,18 @@ const BASE_POSITION = { lat: 17.4483, lng: 78.3915 };
 const wholeRupees = (paise: number) => Math.round(paise / 100) * 100;
 
 /** The draft rate card: ₹40 for the first 2 km of the drop, then ₹9 a km; the ride to the kitchen after 1 km at ₹9 a km. */
+// Components and labels as the server sends them (FleetPay OFFER_LABELS and FINAL_LABELS): the app names a line in the
+// rider's language by its component, so demo builds show the translated lines the reviewer must check.
 function offerPayLines(dropM: number, pickupM: number): PayLine[] {
   return [
-    { label: 'base', amountPaise: 4000 },
+    { component: 'base', label: 'base', amountPaise: 4000 },
     {
+      component: 'drop-km',
       label: 'drop distance',
       amountPaise: wholeRupees(900 * Math.max(0, dropM / 1000 - 2)),
     },
     {
+      component: 'pickup-km',
       label: 'ride to the kitchen',
       amountPaise: wholeRupees(900 * Math.max(0, pickupM / 1000 - 1)),
     },
@@ -129,10 +133,10 @@ function payFor(dropM: number, pickupM: number): number {
 function payLines(trip: { payPaise: number }, extraWaitPaise = 0) {
   const base = 4000;
   return [
-    { label: 'Base pay (first 2 km)', amountPaise: base },
-    { label: 'Distance pay', amountPaise: trip.payPaise - base },
+    { component: 'base', label: 'Base pay (first 2 km)', amountPaise: base },
+    { component: 'drop-km', label: 'Distance pay', amountPaise: trip.payPaise - base },
     ...(extraWaitPaise
-      ? [{ label: 'Waiting pay', amountPaise: extraWaitPaise }]
+      ? [{ component: 'waiting', label: 'Waiting pay', amountPaise: extraWaitPaise }]
       : []),
   ];
 }

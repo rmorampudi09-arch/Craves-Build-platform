@@ -10,11 +10,17 @@ import {AppApiError} from '../../../core/http/apiError';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {registerPhone} from '../components/RiderRuntime';
+import {riderMessage} from '../domain/problem';
 import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import type {RiderScreenProps} from '../navigation';
-import {riderKeys} from '../state/riderQueries';
+import {riderApiMode} from '../riderConfig';
+import {riderKeys, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
+
+/** The server takes a selfie of at most 5 MB (FleetShiftService); a bigger one would only be refused after the upload. */
+const SELFIE_MAX_BYTES = 5_000_000;
 
 /** Where to put your face: a dashed oval with a head-and-shoulders shape (white tints of the espresso ground). */
 function FaceGuide() {
@@ -51,18 +57,25 @@ function FaceGuide() {
  * The selfie starts the shift; the shift credential goes straight to the online service and is never kept in JS.
  */
 export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const g = strings.goOnline;
   const queryClient = useQueryClient();
+  const supportPhone = useRiderMe().data?.supportPhone;
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<{text: string; settings?: boolean} | null>(null);
+  const [problem, setProblem] = useState<{text: string; action?: 'settings' | 'setup' | 'support'} | null>(null);
 
   async function takeSelfie() {
     setProblem(null);
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        setProblem({text: g.cameraDenied, settings: true});
+        setProblem({text: g.cameraDenied, action: 'settings'});
+        return;
+      }
+      // A shift needs this phone bound, and binding needs its push token: register first, so a phone that can't get
+      // offers says why here instead of a misleading "not approved" after the selfie (mock builds bind nothing).
+      if (riderApiMode === 'live' && !(await registerPhone())) {
+        setProblem({text: g.noAlerts, action: 'setup'});
         return;
       }
       const shot = await ImagePicker.launchCameraAsync({
@@ -70,12 +83,16 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         mediaTypes: ['images'],
         quality: 0.5,
       });
-      const uri = shot.canceled ? undefined : shot.assets[0]?.uri;
-      if (!uri) {
+      const photo = shot.canceled ? undefined : shot.assets[0];
+      if (!photo?.uri) {
+        return;
+      }
+      if (photo.fileSize && photo.fileSize > SELFIE_MAX_BYTES) {
+        setProblem({text: g.photoTooBig});
         return;
       }
       setBusy(true);
-      const shift = await riderApi.startShift(uri, await riderDevice.installationId());
+      const shift = await riderApi.startShift(photo.uri, await riderDevice.installationId());
       await riderOnlineService.start(shift).catch(error => {
         // The server's shift is open now: close it, or ops sees a rider online whose phone sends nothing.
         riderApi.endShift().catch(() => undefined);
@@ -84,9 +101,15 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
       queryClient.invalidateQueries({queryKey: riderKeys.all});
       navigation.goBack();
     } catch (error) {
-      // The server's own words (a phone ops hasn't approved, a bad selfie); 403s arrive without them, so by code.
-      const refused = error instanceof AppApiError && error.status === 403 ? g.refused[error.code] : undefined;
-      setProblem({text: refused ?? (error instanceof Error && error.message ? error.message : strings.common.error)});
+      // A phone ops hasn't approved, a bad selfie, an expired document: in the rider's language, with the way out. The
+      // online service's own refusals (no location, shift over) arrive already in the rider's language (RiderText.kt).
+      const unbound = error instanceof AppApiError && error.code === 'DEVICE_NOT_BOUND';
+      const nativeCode = error instanceof Error ? (error as Error & {code?: unknown}).code : undefined;
+      const native = nativeCode === 'LOCATION_PERMISSION' || nativeCode === 'NO_SHIFT' ? (error as Error).message : undefined;
+      setProblem({
+        text: native || riderMessage(error, strings, language),
+        action: nativeCode === 'LOCATION_PERMISSION' ? 'setup' : unbound && supportPhone ? 'support' : undefined,
+      });
       setBusy(false);
       // A refusal may mean the account changed; /me decides where the rider lands.
       queryClient.invalidateQueries({queryKey: riderKeys.all});
@@ -118,12 +141,29 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         {problem ? (
           <View style={styles.problem}>
             <Banner tone="warning" text={problem.text} testID="rider-go-online-problem" />
-            {problem.settings ? (
+            {problem.action === 'settings' ? (
               <BottomAction
                 label={g.openSettings}
                 variant="outline"
                 size="compact"
                 onPress={() => Linking.openSettings().catch(() => undefined)}
+              />
+            ) : problem.action === 'setup' ? (
+              <BottomAction
+                label={strings.home.openSetup}
+                variant="outline"
+                size="compact"
+                onPress={() => navigation.replace('PhoneSetup')}
+                testID="rider-go-online-setup"
+              />
+            ) : problem.action === 'support' && supportPhone ? (
+              <BottomAction
+                label={strings.common.callSupport}
+                variant="outline"
+                size="compact"
+                leftIcon="phone-outline"
+                onPress={() => Linking.openURL(`tel:${supportPhone}`).catch(() => undefined)}
+                testID="rider-go-online-support"
               />
             ) : null}
           </View>

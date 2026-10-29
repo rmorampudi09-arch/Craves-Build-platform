@@ -217,7 +217,8 @@ describe('mock rider server', () => {
     await mock.api.startShift('file:///selfie.jpg', 'android-id-1');
     mock.advance(13_000);
     const [offer] = (await mock.api.postLocations([])).offers;
-    expect(offer.payLines[0]).toEqual({ label: 'base', amountPaise: 4000 });
+    // As the server sends it (FleetPay.quote): the component names the line in the rider's language.
+    expect(offer.payLines[0]).toEqual({ component: 'base', label: 'base', amountPaise: 4000 });
     // The server's lines make up its locked pay; the app never adds them up itself.
     expect(
       offer.payLines.reduce((sum, line) => sum + line.amountPaise, 0),

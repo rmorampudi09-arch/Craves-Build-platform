@@ -259,7 +259,9 @@ describe('Account status', () => {
     (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
     await render(<AccountStatusScreen />, [[riderKeys.me, pending]]);
     await flush();
-    expect(allText()).toContain("Couldn't load your documents.");
+    expect(allText()).toContain("Craves isn't answering | The problem is on our side. Try again in a minute. | Try again");
+    await act(async () => press('rider-retry').props.onPress());
+    expect(riderApi.getProfile).toHaveBeenCalledTimes(2);
     expect(press('rider-call-support')).toBeTruthy();
   });
 
@@ -553,9 +555,11 @@ describe('Terms', () => {
       </RiderStringsProvider>,
       [[riderKeys.terms, terms], [riderKeys.me, me]],
     );
-    const chip = (code: string) => press(`rider-language-${code}`);
+    // The Pressable inside the chip, which carries what TalkBack reads.
+    const chip = (code: string) =>
+      tree.root.findAll(node => node.props.testID === `rider-language-${code}` && node.props.accessibilityState)[0];
     expect(chip('en').props.accessibilityState).toEqual({checked: true});
-    expect(allText()).toContain('తెలుగు');
+    expect(allText()).toContain('తెలుగు | हिन्दी | ಕನ್ನಡ');
     await act(async () => chip('te').props.onPress());
     expect(chip('te').props.accessibilityState).toEqual({checked: true});
     expect(chip('en').props.accessibilityState).toEqual({checked: false});
@@ -564,11 +568,14 @@ describe('Terms', () => {
   });
 
   it('offers a retry when the terms cannot load', async () => {
-    (riderApi.getTerms as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
+    (riderApi.getTerms as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500)).mockResolvedValueOnce(terms);
     await render(<TermsScreen {...props('accept')} />, [[riderKeys.me, firstTime]]);
     await flush();
-    expect(allText()).toContain('Something went wrong. Try again.');
-    expect(allText()).toContain('Try again');
+    expect(allText()).toContain("Craves isn't answering | The problem is on our side. Try again in a minute. | Try again");
+    expect(press('rider-terms-accept')).toBeUndefined();
+    await act(async () => press('rider-retry').props.onPress());
+    await flush();
+    expect(press('rider-terms-accept')).toBeTruthy();
   });
 });
 
@@ -704,7 +711,7 @@ describe('Home', () => {
     await render(<HomeScreen />, seed(onlineHome));
     expect(allText()).not.toContain('an hour online today');
     await render(<HomeScreen />, seed({...onlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253}));
-    expect(allText()).toContain('Today | ₹347 | 5 trips | ₹92.53 an hour online today');
+    expect(allText()).toContain('Today | ₹347 | 5 trips | Online today: 3 h 45 min | ₹92.53 an hour online today');
     expect(allText()).not.toContain("today's riders");
     await render(<HomeScreen />, seed({...offlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253, fleetPerHourPaise: 8500}));
     expect(allText()).toContain("₹92.53 an hour online today | Half of today's riders made ₹85 an hour or more.");
@@ -729,6 +736,17 @@ describe('Home', () => {
     await act(async () => press('rider-go-offline').props.onPress());
     expect(riderOnlineService.stop).toHaveBeenCalled();
     expect(riderApi.endShift).toHaveBeenCalled();
+  });
+
+  // The server sends slotEndsAt and zoneName only while a slot runs; nextSlot is then the running one.
+  it('never promises paid waiting before the slot starts, and calls a running slot "now"', async () => {
+    const count = (testID: string) => tree.root.findAll(node => node.props.testID === testID).length;
+    await render(<HomeScreen />, seed({...onlineHome, slotEndsAt: undefined, zoneName: undefined}));
+    expect(count('rider-waiting-paid')).toBe(0);
+    expect(allText()).toContain('Your slot starts at 7:00 pm. From then, waiting is paid: at least ₹80 an hour.');
+    await render(<HomeScreen />, seed({...offlineHome, slotEndsAt: at(22), zoneName: 'Madhapur and Kondapur'}));
+    expect(allText()).toContain('Your slot now | 7:00 pm to 10:00 pm');
+    expect(allText()).not.toContain('Your next slot');
   });
 
   it('takes a break of the chosen minutes, only when rider choices are on', async () => {
@@ -795,8 +813,8 @@ describe('Home', () => {
     (riderApi.getHome as jest.Mock).mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'No internet', undefined, undefined, true));
     await render(<HomeScreen />, [[riderKeys.me, me], [riderKeys.activeTrip, null]]);
     await flush();
-    expect(allText()).toContain("You're offline. Changes sync when you're back online.");
-    expect(press('rider-home-retry')).toBeTruthy();
+    expect(allText()).toContain("No internet | Check mobile data or Wi-Fi. This loads when you're back online. | Try again");
+    expect(press('rider-retry')).toBeTruthy();
     expect(press('rider-go-online').props.disabled).toBe(true);
   });
 });
@@ -826,6 +844,18 @@ describe('Go online', () => {
     expect(riderApi.startShift).not.toHaveBeenCalled();
   });
 
+  // The server takes a selfie of 5 MB at most (FleetShiftService): say so before a long upload is refused.
+  it('asks for the selfie again when the photo is too large to send', async () => {
+    (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValueOnce({
+      canceled: false,
+      assets: [{uri: 'file:///selfie.jpg', fileSize: 6_000_000}],
+    });
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(allText()).toContain('That photo is too large to send. Take it again.');
+    expect(riderApi.startShift).not.toHaveBeenCalled();
+  });
+
   it('stays put when the rider backs out of the camera', async () => {
     (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValueOnce({canceled: true, assets: null});
     await render(<GoOnlineScreen {...props} />);
@@ -841,7 +871,7 @@ describe('Go online', () => {
   it.each([
     ['DOCUMENTS_EXPIRED', 'A document has expired. Upload the new one in Profile, then go online.'],
     ['APP_UPDATE_REQUIRED', 'Update the Craves Rider app to go online.'],
-    ['RIDER_NOT_ACTIVE', "Your account can't go online right now. Open your account page to see why."],
+    ['RIDER_NOT_ACTIVE', "Your account can't do this right now. Open your account page to see why."],
   ])('says why the server refused the shift (403 %s)', async (code, text) => {
     (riderApi.startShift as jest.Mock).mockRejectedValueOnce(refusal(403, code, 'Renew these before going online: Insurance'));
     await render(<GoOnlineScreen {...props} />);
@@ -861,12 +891,26 @@ describe('Go online', () => {
 
   it("ends the server's shift when the online service can't start on this phone", async () => {
     (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
-    (riderOnlineService.start as jest.Mock).mockRejectedValueOnce(new Error('Allow location to go online.'));
+    // As the native module rejects: its code, and words already in the rider's language (RiderText.kt).
+    const noLocation = Object.assign(new Error('Allow location to go online.'), {code: 'LOCATION_PERMISSION'});
+    (riderOnlineService.start as jest.Mock).mockRejectedValueOnce(noLocation);
     await render(<GoOnlineScreen {...props} />);
     await act(async () => press('rider-selfie-shutter').props.onPress());
     expect(riderApi.endShift).toHaveBeenCalled();
     expect(allText()).toContain('Allow location to go online.');
+    await act(async () => press('rider-go-online-setup').props.onPress());
+    expect(mockNavigation.replace).toHaveBeenCalledWith('PhoneSetup');
     expect(mockNavigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it('never shows a crash text: a native failure without a known code gets the plain words', async () => {
+    (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
+    const crash = Object.assign(new Error('startForegroundService() not allowed due to mAllowStartForeground false'), {code: 'START_FAILED'});
+    (riderOnlineService.start as jest.Mock).mockRejectedValueOnce(crash);
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(allText()).toContain('Something went wrong. Try again.');
+    expect(allText()).not.toContain('mAllowStartForeground');
   });
 
   it("shows the server's message when this phone isn't the rider's bound phone", async () => {

@@ -1,7 +1,8 @@
-// WORKPLAN P2-08: Telugu and Hindi keep every key, list and placeholder English has, and are written in their own script.
+// WORKPLAN P2-08: Telugu, Hindi and Kannada keep every key, list and placeholder English has, in their own script.
 import {en} from './en';
 import {hi} from './hi';
-import {languagesFor} from './StringsProvider';
+import {kn} from './kn';
+import {languagesFor, serverLanguage} from './StringsProvider';
 import {te} from './te';
 
 type Leaf = string | ((...args: unknown[]) => unknown);
@@ -35,6 +36,7 @@ const SAME = new Set([
   'languages.en',
   'languages.te',
   'languages.hi',
+  'languages.kn',
   'earnings.dated',
   'help.tripRow',
 ]);
@@ -42,6 +44,7 @@ const SAME = new Set([
 describe.each([
   ['te', te, /[ఀ-౿]/],
   ['hi', hi, /[ऀ-ॿ]/],
+  ['kn', kn, /[ಀ-೿]/],
 ])('%s', (_code, strings, script) => {
   const translated = leaves(strings);
 
@@ -78,6 +81,11 @@ describe('languagesFor', () => {
   it('offers riders English plus each signed-off language, and demo builds every language', () => {
     expect(languagesFor(false, [])).toEqual(['en']);
     expect(languagesFor(false, ['hi'])).toEqual(['en', 'hi']);
-    expect(languagesFor(true, [])).toEqual(['en', 'te', 'hi']);
+    expect(languagesFor(false, ['kn'])).toEqual(['en', 'kn']);
+    expect(languagesFor(true, [])).toEqual(['en', 'te', 'hi', 'kn']);
+  });
+
+  it('keeps a Kannada reader in English on the server, which stores only en, te and hi', () => {
+    expect([serverLanguage('kn'), serverLanguage('te'), serverLanguage('hi'), serverLanguage('en')]).toEqual(['en', 'te', 'hi', 'en']);
   });
 });

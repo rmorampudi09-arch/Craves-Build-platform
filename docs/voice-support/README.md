@@ -97,7 +97,12 @@ call; 3 per number per day, 200 a day in total), `end_call`.
   per token of audio in, audio out and text (Standard tier for gpt-4.1-mini, Pro for gpt-4.1). Budget on the order of a few rupees per minute of
   conversation; check the Azure pricing calculator for the current Voice Live Pro rates and set a cost alert on the
   resource group. Idle time costs the one running replica only.
-- **Where to look:** Container Apps console logs of `ca-craves-voice-prodlow` (`call=<id> started|ended ...` lines);
+- **Where to look:** `Craves-Voice-Support` with `operation=logs` (read-only, no confirm) prints the recent console lines of
+  every replica. Each call logs `started ... lookup_ms`, `greeting first_audio_ms`, one line per caller turn and `ended`.
+  A turn line is in ms from Voice Live's "caller stopped talking" event: `vad_lag_ms` (how late that event came, including
+  the 500 ms silence wait), `transcript_ms`, `response_ms` (model started), `first_audio_ms` (first sound sent to Exotel),
+  `responses` (2 or more means tool round trips), `tools=name:ms`; a `response cancelled` line means the caller (or line
+  noise or echo) talked over the agent. Only timings and counts, never what was said. Also the Container Apps console logs of `ca-craves-voice-prodlow`;
   Foundry portal → the resource → metrics for token usage; Exotel dashboard for call records; admin Support inbox for
   tickets (subject starts with `Call:`; the first message says it was opened from a phone call and gives the number).
 

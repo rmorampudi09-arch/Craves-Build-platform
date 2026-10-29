@@ -73,6 +73,7 @@ class CallSession:
         self.turn_tools: list[str] = []
         self.barge_ins = 0
         self.t_greet = 0.0
+        self.answer_owed = False  # the last answer was cut off by a new turn; owed if that turn was only noise
 
     # ---- lifecycle -------------------------------------------------------------------------------------------
 
@@ -88,9 +89,9 @@ class CallSession:
         self.context = await self.backend.context(self.phone)
         self.lookups_down = self.context is None
         caller = (self.context or {}).get("caller")
-        log.info("call=%s started caller=%s role=%s orders=%d lookup_ms=%d", self.call_id,
+        log.info("call=%s started caller=%s role=%s orders=%d from_digits=%d lookup_ms=%d", self.call_id,
                  "known" if caller else "unknown", (caller or {}).get("role", "-"), len((self.context or {}).get("orders") or []),
-                 _ms(lookup_started))
+                 sum(c.isdigit() for c in self.phone), _ms(lookup_started))
         uri = (re.sub(r"^http", "ws", self.settings.voice_live_endpoint)  # https -> wss (plain ws only in tests)
                + f"/voice-live/realtime?api-version={self.settings.voice_live_api_version}&model={self.settings.voice_live_model}")
         try:
@@ -196,9 +197,15 @@ class CallSession:
                 self.turn_responses = 0
                 self.turn_tools = []
             elif kind == "conversation.item.input_audio_transcription.completed":
+                heard = len(str(event.get("transcript") or "").strip())
                 if self.turn_open and not self.t_text:
                     self.t_text = time.monotonic()
-                    self.heard_chars = len(str(event.get("transcript") or "").strip())
+                    self.heard_chars = heard
+                if heard == 0 and self.answer_owed and self.active_response is None:
+                    # Line noise cut the last answer off and Voice Live does not answer an empty turn: answer again.
+                    self.answer_owed = False
+                    log.info("call=%s turn=%d answering again after noise", self.call_id, self.turn)
+                    await self._send_vl({"type": "response.create"})
             elif kind == "input_audio_buffer.speech_started":
                 # Barge-in: Voice Live cancels the response itself (interrupt_response); drop what has not played yet
                 # and ignore the audio of that response still in flight.
@@ -209,6 +216,7 @@ class CallSession:
                     self.barge_ins += 1
             elif kind == "response.created":
                 self.active_response = (event.get("response") or {}).get("id")
+                self.answer_owed = False
                 if self.turn_open:
                     self.turn_responses += 1
                     if not self.t_resp:
@@ -256,6 +264,7 @@ class CallSession:
                 self._count_usage(response.get("usage") or {})
                 if response.get("status") not in (None, "completed"):
                     details = response.get("status_details") or {}
+                    self.answer_owed = details.get("reason") == "turn_detected"
                     log.info("call=%s turn=%d response %s reason=%s", self.call_id, self.turn, response.get("status"),
                              details.get("reason") or (details.get("error") or {}).get("code") or "-")
                 self.active_response = None
@@ -339,8 +348,9 @@ class CallSession:
             # talking and cuts the agent off mid-sentence.
             "input_audio_echo_cancellation": {"type": "server_echo_cancellation"},
             # 0.6 ignores line hiss that 0.5 took for speech; 500 ms of silence ends the caller's turn sooner.
+            # A sound must last 300 ms (default 200) to count as speech: in test calls clicks and noise cut answers off.
             "turn_detection": {"type": self.settings.voice_live_turn_detection, "threshold": 0.6,
-                               "prefix_padding_ms": 300, "silence_duration_ms": 500,
+                               "prefix_padding_ms": 300, "silence_duration_ms": 500, "speech_duration_ms": 300,
                                "create_response": True, "interrupt_response": True},
             "tools": TOOLS,
             "tool_choice": "auto",

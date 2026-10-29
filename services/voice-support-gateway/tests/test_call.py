@@ -45,6 +45,7 @@ class FakeVoiceLive:
         self.query = ""
         self.server = None
         self.counter = 0
+        self.held = ""
 
     async def __aenter__(self):
         self.server = await serve(self.handle, "127.0.0.1", 0, process_request=self.capture)
@@ -78,6 +79,14 @@ class FakeVoiceLive:
                 await ws.send(json.dumps({"type": "input_audio_buffer.speech_started", "audio_start_ms": 10}))
                 await ws.send(json.dumps({"type": "input_audio_buffer.speech_stopped", "audio_end_ms": 900}))
                 await self.play_next(ws)
+            elif message["type"] == "input_audio_buffer.append" and message["audio"] == base64.b64encode(b"NOISE").decode():
+                # A click on the line: VAD cancels the answer being prepared, the transcript is empty, and Voice Live
+                # does not answer an empty turn by itself.
+                await ws.send(json.dumps({"type": "input_audio_buffer.speech_started", "audio_start_ms": 10}))
+                await ws.send(json.dumps({"type": "response.done", "response": {
+                    "id": self.held, "status": "cancelled", "status_details": {"reason": "turn_detected"}, "usage": {}}}))
+                await ws.send(json.dumps({"type": "input_audio_buffer.speech_stopped", "audio_end_ms": 400}))
+                await ws.send(json.dumps({"type": "conversation.item.input_audio_transcription.completed", "transcript": ""}))
 
     async def play_next(self, ws):
         if not self.scenes:
@@ -86,6 +95,9 @@ class FakeVoiceLive:
         self.counter += 1
         rid = f"resp_{self.counter}"
         await ws.send(json.dumps({"type": "response.created", "response": {"id": rid}}))
+        if scene[0] == "hold":
+            self.held = rid  # the model is still thinking; NOISE cancels it
+            return
         if scene[0] == "audio":
             await ws.send(json.dumps({"type": "response.audio.delta", "response_id": rid,
                                       "delta": base64.b64encode(scene[1]).decode()}))
@@ -261,7 +273,7 @@ async def test_a_whole_call_from_greeting_to_hangup(caplog):
                      r"responses=2 tools=set_language:\d+$", turns[0]), turns[0]
     assert "tools=open_support_ticket:" in turns[1] and "responses=2" in turns[1]
     assert any(re.search(r"greeting first_audio_ms=\d+$", line) for line in lines)
-    assert any(re.search(r"started caller=known role=CUSTOMER orders=\d+ lookup_ms=\d+$", line) for line in lines)
+    assert any(re.search(r"started caller=known role=CUSTOMER orders=\d+ from_digits=11 lookup_ms=\d+$", line) for line in lines)
     assert any("turns=3 barge_ins=" in line for line in lines)
 
 
@@ -332,3 +344,23 @@ async def test_barge_in_stops_the_model_and_drops_its_remaining_audio():
     session = next(m for m in voice_live.received if m["type"] == "session.update")["session"]
     assert session["turn_detection"]["interrupt_response"] is True  # Voice Live stops the model; we only drop audio
     assert session["input_audio_echo_cancellation"] == {"type": "server_echo_cancellation"}
+    assert session["turn_detection"]["speech_duration_ms"] == 300
+
+
+@pytest.mark.asyncio
+async def test_an_answer_cut_off_by_line_noise_is_given_again(caplog):
+    caplog.set_level(logging.INFO, logger="voice")
+    scenes = [("audio", b"\x01" * 3200), ("hold",), ("audio", b"\x02" * 3200)]
+    async with FakeVoiceLive(scenes) as voice_live, GatewayUnderTest(voice_live.endpoint, fake_backend([])) as gateway:
+        async with connect(gateway.url()) as exotel:
+            await exotel.send(start_event())
+            await collect(exotel, lambda m: any(x["event"] == "mark" for x in m))  # greeting
+            await exotel.send(media(b"TALK"))   # the caller asks; the model starts on an answer
+            await exotel.send(media(b"NOISE"))  # a click cancels it before any audio
+            out = await collect(exotel, lambda m: any(x["event"] == "mark" and x["mark"]["name"] == "audio:resp_3" for x in m))
+            assert base64.b64decode(next(x for x in out if x["event"] == "media")["media"]["payload"]) == b"\x02" * 3200
+            await exotel.send(json.dumps({"event": "stop", "stream_sid": "stream1", "stop": {"reason": "callended"}}))
+            with pytest.raises(Exception):
+                await asyncio.wait_for(exotel.recv(), 5)
+    assert sum(m["type"] == "response.create" for m in voice_live.received) == 2  # greeting + the answer given again
+    assert any("answering again after noise" in r.getMessage() for r in caplog.records)

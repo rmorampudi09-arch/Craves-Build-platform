@@ -2,6 +2,7 @@
 # GitHub main at this run's commit. See docs/voice-support/README.md.
 #
 #   status   read-only report
+#   logs     read-only: recent gateway console lines (per-turn timings, call ids; never what was said)
 #   create   first time: Foundry resource + Key Vault secrets + gateway image + container app ca-craves-voice-prodlow
 #   deploy   new gateway image from this commit (rolls back on failure)
 #   disable  kill switch (ingress off); enable turns it back on
@@ -13,7 +14,7 @@ parameters:
   - name: operation
     type: string
     default: status
-    values: [status, create, deploy, disable, enable]
+    values: [status, logs, create, deploy, disable, enable]
   - name: confirmProductionChange
     type: boolean
     default: false
@@ -33,13 +34,13 @@ steps:
   - script: |
       set -euo pipefail
       bash -n scripts/release/voice-support-runtime.sh
-      if [[ "${{ parameters.operation }}" != status ]]; then
+      if [[ "${{ parameters.operation }}" != status && "${{ parameters.operation }}" != logs ]]; then
         [[ "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'ERROR: production changes are made only from main.' >&2; exit 1; }
       fi
     displayName: Validate
 
   - task: UsePythonVersion@0
-    condition: and(succeeded(), ne('${{ parameters.operation }}', 'status'))
+    condition: and(succeeded(), not(in('${{ parameters.operation }}', 'status', 'logs')))
     inputs:
       versionSpec: '3.12'
 
@@ -48,7 +49,7 @@ steps:
       cd services/voice-support-gateway
       python -m pip install --quiet -r requirements-dev.txt
       python -m pytest -q
-    condition: and(succeeded(), ne('${{ parameters.operation }}', 'status'))
+    condition: and(succeeded(), not(in('${{ parameters.operation }}', 'status', 'logs')))
     displayName: Gateway tests
 
   - task: AzureCLI@2

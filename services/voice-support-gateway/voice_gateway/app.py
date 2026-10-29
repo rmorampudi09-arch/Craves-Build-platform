@@ -62,6 +62,17 @@ class CallSession:
         self.usage = {"responses": 0, "input_tokens": 0, "output_tokens": 0, "audio_input_tokens": 0, "audio_output_tokens": 0}
         self.started = time.monotonic()
         self.closed = asyncio.Event()
+        # Per-turn stopwatch (timings and counts only, never what was said): see _log_turn.
+        self.audio_in_bytes = 0
+        self.turn = 0
+        self.turn_open = False
+        self.t_stop = self.t_text = self.t_resp = 0.0
+        self.vad_lag_ms = 0
+        self.heard_chars = -1
+        self.turn_responses = 0
+        self.turn_tools: list[str] = []
+        self.barge_ins = 0
+        self.t_greet = 0.0
 
     # ---- lifecycle -------------------------------------------------------------------------------------------
 
@@ -73,11 +84,13 @@ class CallSession:
             return
         if start is None:
             return
+        lookup_started = time.monotonic()
         self.context = await self.backend.context(self.phone)
         self.lookups_down = self.context is None
         caller = (self.context or {}).get("caller")
-        log.info("call=%s started caller=%s role=%s orders=%d", self.call_id,
-                 "known" if caller else "unknown", (caller or {}).get("role", "-"), len((self.context or {}).get("orders") or []))
+        log.info("call=%s started caller=%s role=%s orders=%d lookup_ms=%d", self.call_id,
+                 "known" if caller else "unknown", (caller or {}).get("role", "-"), len((self.context or {}).get("orders") or []),
+                 _ms(lookup_started))
         uri = (re.sub(r"^http", "ws", self.settings.voice_live_endpoint)  # https -> wss (plain ws only in tests)
                + f"/voice-live/realtime?api-version={self.settings.voice_live_api_version}&model={self.settings.voice_live_model}")
         try:
@@ -101,10 +114,11 @@ class CallSession:
             log.error("call=%s voice live failed: %s", self.call_id, type(error).__name__)
         finally:
             seconds = int(time.monotonic() - self.started)
-            log.info("call=%s ended seconds=%d responses=%d tokens_in=%d tokens_out=%d audio_in=%d audio_out=%d tools=%s ticket=%s",
+            log.info("call=%s ended seconds=%d responses=%d tokens_in=%d tokens_out=%d audio_in=%d audio_out=%d tools=%s ticket=%s "
+                     "turns=%d barge_ins=%d caller_audio_s=%d",
                      self.call_id, seconds, self.usage["responses"], self.usage["input_tokens"], self.usage["output_tokens"],
                      self.usage["audio_input_tokens"], self.usage["audio_output_tokens"], ",".join(self.tool_names) or "-",
-                     self.ticket_opened)
+                     self.ticket_opened, self.turn, self.barge_ins, self.audio_in_bytes // 32000)
             await self._close_exotel()
 
     async def _await_start(self) -> dict[str, Any] | None:
@@ -147,6 +161,7 @@ class CallSession:
             if event == "media":
                 payload = (message.get("media") or {}).get("payload")
                 if payload:
+                    self.audio_in_bytes += len(payload) * 3 // 4  # base64 -> PCM bytes; 32 bytes per ms at 16 kHz
                     await self._send_vl({"type": "input_audio_buffer.append", "audio": payload})
             elif event == "mark":
                 if self.final_mark and (message.get("mark") or {}).get("name") == self.final_mark:
@@ -166,7 +181,24 @@ class CallSession:
             if kind == "session.updated":
                 if not greeted:
                     greeted = True
+                    self.t_greet = time.monotonic()
                     await self._say(greeting_prompt(self.context))
+            elif kind == "input_audio_buffer.speech_stopped":
+                if self.turn_open:
+                    self._log_turn(None)  # the previous turn never got an answer
+                self.turn += 1
+                self.turn_open = True
+                self.t_stop = time.monotonic()
+                self.t_text = self.t_resp = 0.0
+                # How far Voice Live's end-of-speech point is behind the audio already sent (includes the silence wait).
+                self.vad_lag_ms = self.audio_in_bytes // 32 - int(event.get("audio_end_ms") or 0)
+                self.heard_chars = -1
+                self.turn_responses = 0
+                self.turn_tools = []
+            elif kind == "conversation.item.input_audio_transcription.completed":
+                if self.turn_open and not self.t_text:
+                    self.t_text = time.monotonic()
+                    self.heard_chars = len(str(event.get("transcript") or "").strip())
             elif kind == "input_audio_buffer.speech_started":
                 # Barge-in: Voice Live cancels the response itself (interrupt_response); drop what has not played yet
                 # and ignore the audio of that response still in flight.
@@ -174,14 +206,24 @@ class CallSession:
                 await self._send_exotel({"event": "clear", "stream_sid": self.stream_sid})
                 if self.active_response:
                     self.interrupted_response = self.active_response
+                    self.barge_ins += 1
             elif kind == "response.created":
                 self.active_response = (event.get("response") or {}).get("id")
+                if self.turn_open:
+                    self.turn_responses += 1
+                    if not self.t_resp:
+                        self.t_resp = time.monotonic()
                 if self.await_goodbye:
                     self.await_goodbye = False
                     self.ending_response = self.active_response
             elif kind == "response.audio.delta":
                 if event.get("response_id") == self.interrupted_response:
                     continue
+                if self.t_greet:
+                    log.info("call=%s greeting first_audio_ms=%d", self.call_id, _ms(self.t_greet))
+                    self.t_greet = 0.0
+                if self.turn_open:
+                    self._log_turn(time.monotonic())
                 try:
                     pcm = base64.b64decode(event.get("delta") or "")
                 except (binascii.Error, ValueError):
@@ -212,6 +254,10 @@ class CallSession:
             elif kind == "response.done":
                 response = event.get("response") or {}
                 self._count_usage(response.get("usage") or {})
+                if response.get("status") not in (None, "completed"):
+                    details = response.get("status_details") or {}
+                    log.info("call=%s turn=%d response %s reason=%s", self.call_id, self.turn, response.get("status"),
+                             details.get("reason") or (details.get("error") or {}).get("code") or "-")
                 self.active_response = None
                 if self.ending_response and response.get("id") == self.ending_response and self.final_mark is None:
                     self.closed.set()  # The goodbye had no audio; nothing to wait for.
@@ -234,6 +280,7 @@ class CallSession:
             return  # Already handled from the other event that announced the same call.
         self.calls_run.add(call_id)
         self.tool_names.append(name)
+        tool_started = time.monotonic()
         try:
             args = json.loads(arguments) if arguments else {}
         except ValueError:
@@ -269,6 +316,8 @@ class CallSession:
             result = {"ok": True, "note": "Say a short goodbye now; the line closes after it."}
         else:
             result = {"error": f"unknown tool {name}"}
+        if self.turn_open:
+            self.turn_tools.append(f"{name}:{_ms(tool_started)}")
         self.pending_outputs.append({"type": "function_call_output", "call_id": call_id, "output": json.dumps(result, ensure_ascii=False)})
 
     # ---- messages -------------------------------------------------------------------------------------------------
@@ -327,12 +376,25 @@ class CallSession:
         except Exception:  # noqa: BLE001 - already gone
             pass
 
+    def _log_turn(self, first_audio: float | None) -> None:
+        """One line per caller turn, all in ms from Voice Live's end-of-speech event; '-' means it never happened."""
+        def since(moment: float) -> str:
+            return str(int((moment - self.t_stop) * 1000)) if moment else "-"
+        log.info("call=%s turn=%d vad_lag_ms=%d transcript_ms=%s heard_chars=%d response_ms=%s first_audio_ms=%s responses=%d tools=%s",
+                 self.call_id, self.turn, self.vad_lag_ms, since(self.t_text), self.heard_chars, since(self.t_resp),
+                 since(first_audio or 0.0), self.turn_responses, ",".join(self.turn_tools) or "-")
+        self.turn_open = False
+
     def _count_usage(self, usage: dict[str, Any]) -> None:
         self.usage["responses"] += 1
         self.usage["input_tokens"] += int(usage.get("input_tokens") or 0)
         self.usage["output_tokens"] += int(usage.get("output_tokens") or 0)
         self.usage["audio_input_tokens"] += int((usage.get("input_token_details") or {}).get("audio_tokens") or 0)
         self.usage["audio_output_tokens"] += int((usage.get("output_token_details") or {}).get("audio_tokens") or 0)
+
+
+def _ms(since: float) -> int:
+    return int((time.monotonic() - since) * 1000)
 
 
 def _json(raw: str | bytes) -> dict[str, Any]:

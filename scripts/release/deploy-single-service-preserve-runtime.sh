@@ -17,7 +17,8 @@ STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
 DEPLOY_PREFLIGHT_ONLY=${DEPLOY_PREFLIGHT_ONLY:-false}
 # Exact names of plain (non Key Vault) app secrets this service already runs with and that the release
 # leaves untouched (the secret metadata hash is still compared before and after). Empty for every
-# service except order-service (finance-internal, referral-source-hmac; see azure-pipelines-order-service.yml).
+# service except order-service (finance-internal, referral-source-hmac) and integration-service
+# (referral-source-hmac); see their azure-pipelines-*.yml.
 ALLOW_PLAIN_SECRET_REFS=${ALLOW_PLAIN_SECRET_REFS:-}
 
 fail() {

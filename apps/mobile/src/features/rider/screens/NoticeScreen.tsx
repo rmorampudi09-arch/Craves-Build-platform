@@ -1,13 +1,15 @@
 import React, {useState} from 'react';
 import {Linking, StyleSheet, Text, View} from 'react-native';
-import {InputField, SectionSkeleton} from '../../../shared/components';
+import {InputField} from '../../../shared/components';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, StateCard} from '../components/StateCard';
 import {Body, Card, RiderScreen, Title} from '../components/ui';
 import {formatClock, formatDay} from '../domain/format';
+import {riderMessage} from '../domain/problem';
 import {useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {LoadFailed} from './TripDetailScreen';
@@ -29,13 +31,13 @@ function Step({n, label, children}: {n: number; label: string; children: React.R
  * The rider can give their side in writing; a person decides, never the app.
  */
 export function NoticeScreen() {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const n = strings.notice;
   const me = useRiderMe();
   const notice = me.data?.notice;
   const [writing, setWriting] = useState(false);
   const [side, setSide] = useState('');
-  const [result, setResult] = useState<'sent' | 'failed' | null>(null);
+  const [result, setResult] = useState<'sent' | {failed: string} | null>(null);
   const withWeekday = (value: string) => `${strings.earnings.weekdays[new Date(value).getDay()]} ${formatDay(value)}`;
   const phone = notice?.appealPhone ?? me.data?.supportPhone;
   const sideBy = notice?.deadline ? n.sideBy(withWeekday(notice.deadline)) : null;
@@ -45,8 +47,8 @@ export function NoticeScreen() {
       await riderApi.reportIssue({category: 'OTHER', tripId: notice?.tripId, note: side.trim()});
       setResult('sent');
       setWriting(false);
-    } catch {
-      setResult('failed');
+    } catch (error) {
+      setResult({failed: riderMessage(error, strings, language)});
     }
   }
 
@@ -76,13 +78,10 @@ export function NoticeScreen() {
         me.isError ? (
           <LoadFailed error={me.error} onRetry={me.refetch} />
         ) : (
-          <SectionSkeleton lines={6} />
+          <CardsSkeleton cards={2} testID="rider-notice-loading" />
         )
       ) : !notice ? (
-        <View style={styles.intro} testID="rider-notice-empty">
-          <Title>{n.emptyTitle}</Title>
-          <Text style={styles.note}>{n.emptyBody}</Text>
-        </View>
+        <StateCard icon="shield-check-outline" title={n.emptyTitle} body={n.emptyBody} testID="rider-notice-empty" />
       ) : (
         <>
           <View style={styles.intro}>
@@ -144,7 +143,7 @@ export function NoticeScreen() {
                 inputStyle={styles.input}
                 testID="rider-notice-side"
               />
-              {result === 'failed' ? <Banner tone="warning" inset text={strings.common.error} /> : null}
+              {result && result !== 'sent' ? <Banner tone="warning" inset text={result.failed} testID="rider-notice-failed" /> : null}
             </Card>
           ) : null}
         </>
@@ -156,7 +155,6 @@ export function NoticeScreen() {
 const styles = StyleSheet.create({
   intro: {gap: spacing.xxs},
   meta: {fontSize: typography.small, color: colors.textSecondary},
-  note: {fontSize: typography.body, color: colors.textSecondary},
   heading: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
   next: {marginTop: spacing.xs},
   steps: {gap: spacing.sm},

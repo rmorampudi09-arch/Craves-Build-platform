@@ -216,11 +216,11 @@ describe('rider app in live mode', () => {
         }
         return online(config);
       });
-      expect(texts()).toContain('Something went wrong. Try again.');
+      expect(texts()).toContain("Couldn't check your sign-in | Check mobile data or Wi-Fi, then try again. You stay signed in.");
       expect(secure.has('craves_refresh_session_v1')).toBe(true);
       signal = true;
-      const tryAgain = tree.root.findAll(node => node.props.label === 'Try again' && typeof node.props.onRetry === 'function')[0];
-      await act(async () => tryAgain.props.onRetry());
+      const tryAgain = tree.root.findAll(node => node.props.testID === 'rider-retry' && typeof node.props.onPress === 'function')[0];
+      await act(async () => tryAgain.props.onPress());
       await settle();
       expect(has('rider-home')).toBe(true);
     });
@@ -329,7 +329,8 @@ describe('rider app in live mode', () => {
       await start({me, home}, config => {
         throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config);
       });
-      expect(texts()).toContain('Something went wrong. Try again.');
+      expect(texts()).toContain("Couldn't check your sign-in");
+      expect(has('rider-retry')).toBe(true);
       expect(has('rider-home')).toBe(false);
     });
   });

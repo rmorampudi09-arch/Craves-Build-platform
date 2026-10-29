@@ -10,6 +10,7 @@ import {Card, Label, Money, RateRow, RiderScreen} from '../../components/ui';
 import {formatClock, formatRupees} from '../../domain/format';
 import {useRiderHome} from '../../state/riderQueries';
 import {useStrings} from '../../strings/StringsProvider';
+import {payLabel} from '../TripDetailScreen';
 import {SyncNote, text, TripHeader} from './parts';
 
 export function TripEnd({
@@ -30,7 +31,8 @@ export function TripEnd({
   onReport: () => void;
   onBack: () => Promise<unknown> | void;
 }) {
-  const t = useStrings().strings.trip;
+  const {strings, language} = useStrings();
+  const t = strings.trip;
   const home = useRiderHome().data;
   // shortcut: the contract has no delivery time, so this is when the phone showed the end; use the server's once Trip has one.
   const [endedAt] = useState(Date.now);
@@ -64,7 +66,12 @@ export function TripEnd({
           {/* A cancelled trip shows only the lines the server paid; the app never adds them up. */}
           {step === 'CANCELLED' ? null : <Money paise={trip.payPaise} testID="rider-earned" />}
           {lines.map((line, i) => (
-            <RateRow key={line.label} label={line.label} value={formatRupees(line.amountPaise)} divider={i === 0} />
+            <RateRow
+              key={`${i}-${line.label}`}
+              label={payLabel(line, strings.pay.final, language)}
+              value={formatRupees(line.amountPaise)}
+              divider={i === 0}
+            />
           ))}
           {trip.payLines === undefined ? <Text style={text.small}>{t.linesPending}</Text> : null}
           {note ? <Text style={text.small}>{note}</Text> : null}

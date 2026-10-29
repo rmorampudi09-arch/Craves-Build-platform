@@ -3,18 +3,20 @@ import {Alert, Image, Linking, Pressable, Share, StyleSheet, Text, View} from 'r
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
-import {Icon, SectionSkeleton} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
-import {AppApiError} from '../../../core/http/apiError';
+import {Icon} from '../../../shared/components';
+import {borderWidth, colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
 import type {OrderPreferences, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {ChoiceChip, ChoiceRow} from '../components/Choices';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton} from '../components/StateCard';
 import {StatusBadge} from '../components/StatusBadge';
 import {Body, Card, Label, RiderScreen, Title, Value} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {roundToSpot} from '../domain/homeSpot';
+import {problemOf, riderMessage} from '../domain/problem';
 import {riderDevice} from '../native/riderDevice';
 import {useRiderShell, type RiderNav} from '../navigation';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
@@ -69,23 +71,17 @@ function LimitChips({label, limits, value, onPick, testID}: {
   return (
     <View style={styles.language}>
       <Label>{label}</Label>
-      <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.chips}>
-        {limits.map(limit => {
-          const on = (value ?? null) === limit;
-          return (
-            <Pressable
-              key={limit ?? 'any'}
-              accessibilityRole="radio"
-              accessibilityState={{checked: on}}
-              hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
-              onPress={() => onPick(limit)}
-              style={[styles.chip, on && styles.chipOn]}
-              testID={`${testID}-${limit ?? 'any'}`}>
-              <Text style={[styles.chipText, on && styles.chipTextOn]}>{limit === null ? p.anyDistance : p.km(String(limit / 1000))}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <ChoiceRow label={label}>
+        {limits.map(limit => (
+          <ChoiceChip
+            key={limit ?? 'any'}
+            label={limit === null ? p.anyDistance : p.km(String(limit / 1000))}
+            selected={(value ?? null) === limit}
+            onPress={() => onPick(limit)}
+            testID={`${testID}-${limit ?? 'any'}`}
+          />
+        ))}
+      </ChoiceRow>
     </View>
   );
 }
@@ -95,7 +91,7 @@ function LimitChips({label, limits, value, onPick, testID}: {
  * shown while rider choices are on, and whenever one is saved, so the rider can always delete it.
  */
 function HomeSpotCard({savedAt, choices, onChange}: {savedAt?: string; choices: boolean; onChange: () => void}) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const p = strings.profile;
   const [busy, setBusy] = useState(false);
 
@@ -105,7 +101,7 @@ function HomeSpotCard({savedAt, choices, onChange}: {savedAt?: string; choices: 
       await work();
       onChange();
     } catch (error) {
-      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+      Alert.alert(riderMessage(error, strings, language));
     } finally {
       setBusy(false);
     }
@@ -170,7 +166,7 @@ export function ProfileScreen() {
       const saved = await riderApi.setPreferences(next);
       queryClient.setQueryData<RiderProfile>(riderKeys.profile, old => (old ? {...old, preferences: saved} : old));
     } catch (error) {
-      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+      Alert.alert(riderMessage(error, strings, language));
     }
   }
 
@@ -184,7 +180,7 @@ export function ProfileScreen() {
       }
       await Share.share({title: p.dataTitle, message: text});
     } catch (error) {
-      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+      Alert.alert(riderMessage(error, strings, language));
     }
   }
 
@@ -212,8 +208,9 @@ export function ProfileScreen() {
       }
       await riderApi.uploadDocument(type, uri);
       await queryClient.invalidateQueries({queryKey: riderKeys.profile});
-    } catch {
-      setDocProblem({type, text: p.uploadFailed});
+    } catch (error) {
+      // The server's reason (a file it can't read, storage down), or "check your internet" when it never got there.
+      setDocProblem({type, text: problemOf(error) === 'offline' ? p.uploadFailed : riderMessage(error, strings, language)});
     }
   }
 
@@ -353,25 +350,22 @@ export function ProfileScreen() {
       ) : profile.isError ? (
         <LoadFailed error={profile.error} onRetry={profile.refetch} />
       ) : (
-        <SectionSkeleton lines={6} testID="rider-profile-loading" />
+        <CardsSkeleton cards={3} testID="rider-profile-loading" />
       )}
       {RIDER_LANGUAGES.length > 1 ? (
         <View style={styles.language}>
           <Label>{p.language}</Label>
-          <View accessibilityRole="radiogroup" accessibilityLabel={p.language} style={styles.chips}>
+          <ChoiceRow label={p.language}>
             {RIDER_LANGUAGES.map(code => (
-              <Pressable
+              <ChoiceChip
                 key={code}
-                accessibilityRole="radio"
-                accessibilityState={{checked: language === code}}
-                hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
+                label={strings.languages[code]}
+                selected={language === code}
                 onPress={() => setLanguage(code)}
-                style={[styles.chip, language === code && styles.chipOn]}
-                testID={`rider-language-${code}`}>
-                <Text style={[styles.chipText, language === code && styles.chipTextOn]}>{strings.languages[code]}</Text>
-              </Pressable>
+                testID={`rider-language-${code}`}
+              />
             ))}
-          </View>
+          </ChoiceRow>
         </View>
       ) : null}
       <Card style={styles.links}>
@@ -417,19 +411,6 @@ const styles = StyleSheet.create({
   problem: {gap: spacing.xxs},
   link: {alignSelf: 'flex-start', marginLeft: -spacing.xs},
   language: {gap: spacing.xs},
-  chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
-  chip: {
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.white,
-  },
-  chipOn: {borderColor: colors.textPrimary, backgroundColor: colors.textPrimary},
-  chipText: {fontSize: typography.body, color: colors.textPrimary},
-  chipTextOn: {fontWeight: fontWeight.bold, color: colors.white},
   links: {padding: 0, gap: 0, overflow: 'hidden'},
   linkRow: {minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md},
   linkText: {flex: 1, fontSize: typography.body, color: colors.textPrimary},

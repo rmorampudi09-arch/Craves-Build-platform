@@ -117,12 +117,15 @@ const styles = StyleSheet.create({
   left: {flex: 1, gap: spacing.xxs},
   title: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
   chips: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs},
+  // Long statuses (Telugu, Kannada) wrap inside the chip instead of running past the header.
   chip: {
     minHeight: 24,
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
     borderRadius: radius.pill,
     borderWidth: borderWidth.standard,
     borderColor: colors.border,
@@ -131,7 +134,7 @@ const styles = StyleSheet.create({
   chipLive: {borderColor: colors.success, backgroundColor: colors.successSoft},
   dot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textSecondary},
   dotLive: {backgroundColor: colors.success},
-  chipText: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  chipText: {flexShrink: 1, fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
   sos: {
     width: 56,
     height: touchTarget.minimum,

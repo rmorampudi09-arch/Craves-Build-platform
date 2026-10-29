@@ -12,13 +12,15 @@ import {riderDevice} from '../native/riderDevice';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
+import {en} from '../strings/en';
+import {te} from '../strings/te';
 import {EarningsScreen} from './EarningsScreen';
 import {HelpScreen} from './HelpScreen';
 import {PayoutsScreen} from './PayoutsScreen';
 import {NoticeScreen} from './NoticeScreen';
 import {ProfileScreen} from './ProfileScreen';
 import {SosScreen} from './SosScreen';
-import {TripDetailScreen} from './TripDetailScreen';
+import {payLabel, TripDetailScreen} from './TripDetailScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn()};
 
@@ -118,6 +120,8 @@ let tree: renderer.ReactTestRenderer;
 
 async function render(node: React.ReactElement, seed: Array<[readonly unknown[], unknown]> = []) {
   const client = new QueryClient({defaultOptions: {queries: {retry: false, staleTime: Infinity}}});
+  // The app shows these screens only once /me has answered for a rider (RiderNavigator); the rider role gates their queries.
+  client.setQueryData(riderKeys.me, me);
   seed.forEach(([key, data]) => client.setQueryData(key, data));
   await act(async () => {
     tree = renderer.create(
@@ -135,6 +139,9 @@ const allText = () =>
     .map(node => [node.props.children].flat().join(''))
     .join(' | ');
 const has = (testID: string) => tree.root.findAll(node => node.props.testID === testID).length > 0;
+/** What TalkBack reads for a chip or segment: the Pressable inside it carries the state. */
+const a11y = (testID: string) =>
+  tree.root.findAll(node => node.props.testID === testID && node.props.accessibilityState)[0]?.props.accessibilityState;
 // Lets a rejected query reach the screen (React Query notifies on a timer).
 const settle = () => act(() => new Promise<void>(resolve => setTimeout(resolve, 0)));
 const press = (testID: string) =>
@@ -190,11 +197,34 @@ describe('Earnings (15)', () => {
     expect(has('rider-earnings-loading')).toBe(true);
   });
 
+  // A sign-in token from before activation lacks the rider role; "Check again" gets a fresh one and reloads.
+  it('offers to check the account again, not a plain retry, when the server refuses for the role', async () => {
+    (riderApi.getEarnings as jest.Mock)
+      .mockRejectedValueOnce(new AppApiError('HTTP_403', 'This action is not available for your account.', 403))
+      .mockResolvedValueOnce(page([credited]).pages[0]);
+    // "Check again" waits for every rider query to reload, /me included.
+    const getMe = riderApi.getMe as jest.Mock;
+    getMe.mockResolvedValue(me);
+    try {
+      await render(<EarningsScreen />);
+      await settle();
+      expect(allText()).toContain("Not open to your account | Your account can't use this yet.");
+      expect(has('rider-retry')).toBe(false);
+      // Showing it asks for the account once by itself: it may have changed.
+      expect(getMe).toHaveBeenCalled();
+      await press('rider-check-again');
+      await settle();
+      expect(allText()).toContain('Madhapur to Kondapur');
+    } finally {
+      getMe.mockImplementation(() => new Promise(() => undefined));
+    }
+  });
+
   it('says when the phone is offline and retries', async () => {
     (riderApi.getEarnings as jest.Mock).mockRejectedValueOnce(offline()).mockResolvedValueOnce(page([credited]).pages[0]);
     await render(<EarningsScreen />);
     await settle();
-    expect(allText()).toContain("You're offline. Connect to the internet, then try again.");
+    expect(allText()).toContain("No internet | Check mobile data or Wi-Fi. This loads when you're back online. | Try again");
     await press('rider-retry');
     await settle();
     expect(riderApi.getEarnings).toHaveBeenCalledTimes(2);
@@ -203,7 +233,7 @@ describe('Earnings (15)', () => {
 
   it('shows an empty state', async () => {
     await render(<EarningsScreen />, [[riderKeys.earnings('today'), page([], {totalPaise: 0})]]);
-    expect(allText()).toContain('No trips yet in this period.');
+    expect(allText()).toContain('No trips yet in this period');
     expect(allText()).toContain('0 trips');
   });
 });
@@ -241,13 +271,21 @@ describe('Trip pay (16)', () => {
     expect(allText()).toContain('Sent. Support replies within 24 hours.');
   });
 
+  // Offer lines carry a component; trip-pay lines only the server's English label (FleetPay.FINAL_LABELS).
+  it('names each pay line in the rider’s language when the app knows it, otherwise in the server’s words', () => {
+    expect(payLabel({component: 'base', label: 'Base pay', amountPaise: 4000}, te.pay.final, 'te')).toBe(te.pay.final.base);
+    expect(payLabel({label: en.pay.final.waiting, amountPaise: 300}, te.pay.final, 'te')).toBe(te.pay.final.waiting);
+    expect(payLabel({label: 'TDS, section 194-O', amountPaise: -100}, te.pay.final, 'te')).toBe('TDS, section 194-O');
+    expect(payLabel({component: 'base', label: 'Base pay, first 2 km', amountPaise: 4000}, en.pay.final, 'en')).toBe('Base pay, first 2 km');
+  });
+
   it('keeps the report open when sending fails', async () => {
     (riderApi.reportIssue as jest.Mock).mockRejectedValueOnce(offline());
     await render(screen('t4'), [[riderKeys.tripEarning('t4'), held]]);
     await press('rider-report');
     await press('rider-report-OTHER');
     await press('rider-report-send');
-    expect(allText()).toContain('Something went wrong. Try again.');
+    expect(allText()).toContain('No internet. Check your connection and try again.');
     expect(has('rider-report-send')).toBe(true);
   });
 
@@ -260,7 +298,8 @@ describe('Trip pay (16)', () => {
       .mockResolvedValueOnce(credited);
     await render(screen('t9'));
     await settle();
-    expect(allText()).toContain('Something went wrong. Try again.');
+    // A refusal with a code reads the server's own words in English.
+    expect(allText()).toContain("This didn't load | missing | Try again");
     await press('rider-retry');
     await settle();
     expect(riderApi.getTripEarning).toHaveBeenCalledTimes(3);
@@ -302,7 +341,8 @@ describe('Payouts (17)', () => {
     await press('rider-withdraw');
     await settle();
     const day = istDay();
-    expect(riderApi.requestWithdrawal).toHaveBeenCalledWith(82200, `rider-withdraw-${day}-r1`);
+    // Kept by the server only once accepted: a retry after a lost answer is the same request (FleetPayouts.withdraw).
+    expect(riderApi.requestWithdrawal).toHaveBeenCalledWith(82200, `rider-withdraw-${day}-82200-r1`);
     expect(allText()).toContain('Withdrawal requested. It reaches you by 1 pm tomorrow.');
     expect(has('rider-withdraw')).toBe(false);
   });
@@ -340,7 +380,7 @@ describe('Payouts (17)', () => {
     const processing = {payoutId: 'w1', periodLabel: 'Withdrawal', amountPaise: 82200, status: 'PROCESSING' as const};
     await render(<PayoutsScreen />, seed({}, {withdrawablePaise: 0, payouts: [processing]}));
     expect(allText()).toContain('On the way | Withdrawal | ₹822 | Processing');
-    expect(allText()).toContain('Paid | No payouts yet.');
+    expect(allText()).toContain('Paid | No payouts yet |');
     expect(has('rider-withdraw')).toBe(false);
   });
 
@@ -351,7 +391,7 @@ describe('Payouts (17)', () => {
     (riderApi.getPayouts as jest.Mock).mockRejectedValueOnce(offline());
     await render(<PayoutsScreen />, [[riderKeys.me, me]]);
     await settle();
-    expect(allText()).toContain("You're offline.");
+    expect(allText()).toContain("No internet | Check mobile data or Wi-Fi. This loads when you're back online.");
     expect(has('rider-retry')).toBe(true);
   });
 });
@@ -392,6 +432,29 @@ describe('SOS (18)', () => {
     expect(allText()).toContain("Couldn't send your location. Call ops and tell them where you are.");
     await press('rider-sos-again');
     expect(riderApi.sendSos).toHaveBeenCalledTimes(2);
+    expect(has('rider-sos-shared')).toBe(true);
+  });
+
+  // Signing up or closed: no rider role, so the server would refuse the location. The calls never depend on Craves.
+  it('gives someone without the rider role both calls, without sending a location that would be refused', async () => {
+    await render(screen(), [[riderKeys.me, {...me, status: 'PENDING'}]]);
+    await settle();
+    expect(riderApi.sendSos).not.toHaveBeenCalled();
+    expect(allText()).toContain('Calls work any time. Your location goes to ops once your rider account is active.');
+    expect(has('rider-sos-again')).toBe(false);
+    await press('rider-sos-112');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:112');
+  });
+
+  it('tells an active rider the location did not go, with Send again, when the server refuses it', async () => {
+    (riderApi.sendSos as jest.Mock)
+      .mockRejectedValueOnce(new AppApiError('HTTP_403', 'This action is not available for your account.', 403))
+      .mockResolvedValueOnce(undefined);
+    await render(screen(), [[riderKeys.me, me]]);
+    await settle();
+    expect(has('rider-sos-failed')).toBe(true);
+    expect(has('rider-sos-calls-only')).toBe(false);
+    await press('rider-sos-again');
     expect(has('rider-sos-shared')).toBe(true);
   });
 });
@@ -444,7 +507,7 @@ describe('Notice (19)', () => {
     await press('rider-notice-give');
     await act(async () => side().props.onChangeText('My side'));
     await press('rider-notice-send');
-    expect(allText()).toContain('Something went wrong. Try again.');
+    expect(allText()).toContain('No internet. Check your connection and try again.');
     expect(side().props.value).toBe('My side');
   });
 
@@ -503,8 +566,8 @@ describe('Profile (20)', () => {
     await press('rider-claim-call');
     expect(Linking.openURL).toHaveBeenCalledWith('tel:+912222222222');
     await press('rider-language-te');
-    expect(tree.root.findByProps({testID: 'rider-language-te'}).props.accessibilityState).toEqual({checked: true});
-    expect(tree.root.findByProps({testID: 'rider-language-en'}).props.accessibilityState).toEqual({checked: false});
+    expect(a11y('rider-language-te')).toEqual({checked: true});
+    expect(a11y('rider-language-en')).toEqual({checked: false});
     await press('rider-open-setup');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
   });
@@ -517,11 +580,11 @@ describe('Profile (20)', () => {
     expect(allText()).toContain('Orders you hear of | Only hear of orders within these distances.');
     expect(allText()).toContain('Ride to the kitchen, at most | Any | 1 km | 2 km | 3 km | 5 km');
     expect(allText()).toContain('Kitchen to customer, at most | Any | 3 km | 5 km | 8 km | 12 km');
-    expect(tree.root.findByProps({testID: 'rider-pickup-limit-any'}).props.accessibilityState).toEqual({checked: true});
+    expect(a11y('rider-pickup-limit-any')).toEqual({checked: true});
     await press('rider-pickup-limit-2000');
     expect(riderApi.setPreferences).toHaveBeenCalledWith({maxPickupM: 2000, maxDropM: null});
     await settle();
-    expect(tree.root.findByProps({testID: 'rider-pickup-limit-2000'}).props.accessibilityState).toEqual({checked: true});
+    expect(a11y('rider-pickup-limit-2000')).toEqual({checked: true});
   });
 
   it('saves the home spot rounded on the phone to about a kilometre, only while the server offers rider choices', async () => {
@@ -639,7 +702,7 @@ describe('Help (21)', () => {
     expect(allText()).toContain('Every Monday by 3 pm');
     await act(async () => questions()[3].props.onPress());
     expect(questions().every(node => !node.props.accessibilityState.expanded)).toBe(true);
-    expect(allText()).toContain('No recent trips.');
+    expect(allText()).toContain('No recent trips');
   });
 
   it('animates only opacity and transform, natively, in 200 ms or less, unless reduce motion is on', async () => {
@@ -671,7 +734,7 @@ describe('Help (21)', () => {
     (riderApi.getEarnings as jest.Mock).mockRejectedValueOnce(offline());
     await render(<HelpScreen />, [[riderKeys.me, me]]);
     await settle();
-    expect(allText()).toContain("You're offline.");
+    expect(allText()).toContain("No internet | Check mobile data or Wi-Fi. This loads when you're back online.");
     expect(has('rider-retry')).toBe(true);
   });
 });

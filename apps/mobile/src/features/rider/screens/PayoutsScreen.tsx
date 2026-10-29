@@ -1,23 +1,25 @@
 import React, {useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Icon, SectionSkeleton} from '../../../shared/components';
+import {Icon} from '../../../shared/components';
 import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
 import type {Payout} from '../api/contract';
 import {idempotencyKey, riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, StateCard} from '../components/StateCard';
 import {StatusBadge} from '../components/StatusBadge';
 import {Card, HeroCard, Money, RiderScreen} from '../components/ui';
 import {formatClock, formatDay, formatRupees, istDay} from '../domain/format';
+import {riderMessage} from '../domain/problem';
 import {useRiderShell} from '../navigation';
 import {riderKeys, usePayouts, useProfile, useRiderHome, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {LoadFailed, ReportProblem} from './TripDetailScreen';
 
 export function PayoutsScreen() {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const p = strings.payouts;
   const {riderId} = useRiderShell();
   const queryClient = useQueryClient();
@@ -31,13 +33,13 @@ export function PayoutsScreen() {
 
   async function request() {
     try {
-      // One withdrawal a day: the key repeats within a day, so a double tap can't pay twice.
-      // One withdrawal per Indian day: the key must turn over at IST midnight, not UTC.
-      const day = istDay();
-      await riderApi.requestWithdrawal(withdrawable, idempotencyKey('withdraw', day, riderId));
+      // One key per IST day and amount. The server keeps it only for a withdrawal it accepted: a retry after a lost answer
+      // gets "requested" again instead of "once a day", a refusal can be tried again, and another amount that day is
+      // refused as WITHDRAWAL_LIMIT rather than as a reused key.
+      await riderApi.requestWithdrawal(withdrawable, idempotencyKey('withdraw', `${istDay()}-${withdrawable}`, riderId));
       setWithdrawal({done: true});
     } catch (error) {
-      setWithdrawal({error: error instanceof Error ? error.message : strings.common.error});
+      setWithdrawal({error: riderMessage(error, strings, language)});
     } finally {
       queryClient.invalidateQueries({queryKey: riderKeys.payouts});
     }
@@ -72,7 +74,7 @@ export function PayoutsScreen() {
   return (
     <RiderScreen header={<RiderHeader title={p.title} back />} testID="rider-payouts">
       {features && !features.payoutsEnabled ? (
-        <Banner tone="info" icon={null} text={p.notStarted} testID="rider-payouts-off" />
+        <StateCard icon="progress-clock" title={strings.states.notYetTitle} body={p.notStarted} testID="rider-payouts-off" />
       ) : payouts.data ? (
         <>
           <HeroCard>
@@ -105,13 +107,13 @@ export function PayoutsScreen() {
           <Text accessibilityRole="header" style={styles.heading}>
             {p.paid}
           </Text>
-          {paid.length ? paid.map(card) : <Text style={styles.note}>{p.empty}</Text>}
+          {paid.length ? paid.map(card) : <StateCard icon="wallet" title={p.empty} body={p.emptyHint} testID="rider-payouts-empty" />}
           <Text style={[styles.meta, styles.centred]}>{p.noFees}</Text>
         </>
       ) : payouts.isError ? (
         <LoadFailed error={payouts.error} onRetry={payouts.refetch} />
       ) : (
-        <SectionSkeleton lines={5} testID="rider-payouts-loading" />
+        <CardsSkeleton cards={3} testID="rider-payouts-loading" />
       )}
     </RiderScreen>
   );

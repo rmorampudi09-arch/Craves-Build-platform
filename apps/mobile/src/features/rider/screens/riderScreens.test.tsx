@@ -199,7 +199,7 @@ describe('Home', () => {
   it("keeps a code typed offline that didn't match as a notice to call support (P1-05)", async () => {
     mockRefusals.list = [{tripId: 't7', code: 'OTP_INVALID', message: 'Wrong code. 4 tries left.'}];
     await render(<HomeScreen />, [[riderKeys.home, home], [riderKeys.me, me], [riderKeys.activeTrip, null]]);
-    expect(allText()).toContain("A trip step didn't go through | Order code didn't match. Call support.");
+    expect(allText()).toContain("A trip step didn't go through | The customer's OTP entered offline didn't match. Call support.");
     expect(allText()).not.toContain('tries left');
     expect(byId('rider-refusal-call')).toBeTruthy();
   });
@@ -307,7 +307,7 @@ describe('Earnings', () => {
     await render(<EarningsScreen />, [
       [riderKeys.earnings('today'), {pages: [{rangeLabel: 'Today', totalPaise: 0, trips: []}], pageParams: [undefined]}],
     ]);
-    expect(allText()).toContain('No trips yet in this period.');
+    expect(allText()).toContain('No trips yet in this period');
     expect(allText()).toContain('₹0');
   });
 });

@@ -2,17 +2,18 @@ import React, {memo, useEffect, useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Icon, SectionSkeleton} from '../../../shared/components';
+import {Icon} from '../../../shared/components';
 import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
-import {AppApiError} from '../../../core/http/apiError';
 import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RefusalNotices} from '../components/RefusalNotices';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {Card, Money, RiderScreen} from '../components/ui';
 import {formatClock, formatRupees} from '../domain/format';
+import {riderMessage} from '../domain/problem';
 import {riderOnlineService} from '../native/riderOnlineService';
 import type {RiderNav} from '../navigation';
 import {riderKeys, useActiveTrip, useRiderHome, useRiderMe} from '../state/riderQueries';
@@ -48,20 +49,30 @@ const ShiftTimer = memo(function ShiftTimerView({startedAt}: {startedAt: string}
  */
 function PerHour({home}: {home: HomeSummary}) {
   const h = useStrings().strings.home;
-  if (home.todayPerHourPaise === undefined) {
-    return null;
-  }
+  const minutes = home.todayOnlineMinutes ?? 0;
   return (
     <>
-      <Text style={styles.body} testID="rider-per-hour">
-        {h.perHour(formatRupees(home.todayPerHourPaise))}
-      </Text>
-      {home.fleetPerHourPaise !== undefined ? <Text style={styles.small}>{h.fleetPerHour(formatRupees(home.fleetPerHourPaise))}</Text> : null}
+      {minutes > 0 ? (
+        <Text style={styles.small} testID="rider-online-today">
+          {h.onlineToday(Math.floor(minutes / 60), minutes % 60)}
+        </Text>
+      ) : null}
+      {home.todayPerHourPaise !== undefined ? (
+        <Text style={styles.body} testID="rider-per-hour">
+          {h.perHour(formatRupees(home.todayPerHourPaise))}
+        </Text>
+      ) : null}
+      {home.todayPerHourPaise !== undefined && home.fleetPerHourPaise !== undefined ? (
+        <Text style={styles.small}>{h.fleetPerHour(formatRupees(home.fleetPerHourPaise))}</Text>
+      ) : null}
     </>
   );
 }
 
-/** Offline (05-HomeOffline.png): today so far, then the next slot and its guaranteed hourly pay from the server. */
+/**
+ * Offline (05-HomeOffline.png): today so far, then the booked slot and its guaranteed hourly pay from the server.
+ * nextSlot is the running slot or the next one; slotEndsAt is sent only while one runs.
+ */
 function OfflineCards({home}: {home: HomeSummary}) {
   const h = useStrings().strings.home;
   const slot = home.nextSlot;
@@ -76,7 +87,7 @@ function OfflineCards({home}: {home: HomeSummary}) {
       {slot ? (
         <Card style={styles.slot}>
           <View style={styles.tight}>
-            <Text style={styles.small}>{h.nextSlot}</Text>
+            <Text style={styles.small}>{home.slotEndsAt ? h.slotNow : h.nextSlot}</Text>
             <Text style={styles.heading}>{h.slotTime(formatClock(slot.startsAt), formatClock(slot.endsAt))}</Text>
             <Text style={styles.body}>{slot.zoneName}</Text>
           </View>
@@ -94,7 +105,7 @@ function OfflineCards({home}: {home: HomeSummary}) {
  * with rider choices on they can take one of 10, 20 or 30 minutes.
  */
 function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const h = strings.home;
   const [choosing, setChoosing] = useState(false);
 
@@ -104,7 +115,7 @@ function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boole
       setChoosing(false);
       onChange();
     } catch (error) {
-      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+      Alert.alert(riderMessage(error, strings, language));
     }
   }
 
@@ -154,7 +165,7 @@ function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boole
  * turn it on for an hour. Ending it near home is the server's job.
  */
 function HeadingHomeCard({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const h = strings.home;
 
   async function run(work: () => Promise<unknown>) {
@@ -162,7 +173,7 @@ function HeadingHomeCard({home, choices, onChange}: {home: HomeSummary; choices:
       await work();
       onChange();
     } catch (error) {
-      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+      Alert.alert(riderMessage(error, strings, language));
     }
   }
 
@@ -212,8 +223,17 @@ function OnlineCards({home, choices, onChange}: {home: HomeSummary; choices: boo
           {home.shiftStartedAt ? <ShiftTimer startedAt={home.shiftStartedAt} /> : null}
           {home.zoneName ? <Text style={styles.body}>{home.zoneName}</Text> : null}
         </View>
-        {home.guaranteedPerHourPaise ? (
-          <Banner tone="success" inset text={h.waitingPaid(formatRupees(home.guaranteedPerHourPaise))} />
+        {/* The guarantee is the running slot's or the next one's: promise waiting pay only while a slot runs. */}
+        {home.guaranteedPerHourPaise && home.slotEndsAt ? (
+          <Banner tone="success" inset text={h.waitingPaid(formatRupees(home.guaranteedPerHourPaise))} testID="rider-waiting-paid" />
+        ) : home.guaranteedPerHourPaise && home.nextSlot ? (
+          <Banner
+            tone="info"
+            icon="clock-outline"
+            inset
+            text={h.slotStarts(formatClock(home.nextSlot.startsAt), formatRupees(home.guaranteedPerHourPaise))}
+            testID="rider-slot-starts"
+          />
         ) : null}
       </Card>
       <Card>
@@ -283,7 +303,6 @@ export function HomeScreen() {
     await stop();
   }
 
-  const offline = home.error instanceof AppApiError && (home.error.retriable || !home.error.status);
   const warnings = [
     phone.device && !phone.device.locationEnabled ? h.gpsOff : null,
     phone.device?.powerSaveMode ? h.batterySaver : null,
@@ -303,12 +322,7 @@ export function HomeScreen() {
           <BottomAction label={h.goOnline} onPress={goOnline} disabled={!home.data} testID="rider-go-online" />
         )
       }>
-      {home.isError ? (
-        <View>
-          <Banner tone="warning" icon={offline ? 'wifi-off' : 'alert'} text={offline ? strings.common.offline : strings.common.error} />
-          <BottomAction label={strings.common.retry} variant="ghost" size="compact" onPress={refresh} testID="rider-home-retry" />
-        </View>
-      ) : null}
+      {home.isError ? <ProblemCard error={home.error} onRetry={refresh} testID="rider-home-problem" /> : null}
       <RefusalNotices />
       {tripInProgress ? (
         <Card>
@@ -350,7 +364,7 @@ export function HomeScreen() {
           <OfflineCards home={home.data} />
         )
       ) : home.isLoading ? (
-        <SectionSkeleton />
+        <CardsSkeleton testID="rider-home-loading" />
       ) : null}
     </RiderScreen>
   );

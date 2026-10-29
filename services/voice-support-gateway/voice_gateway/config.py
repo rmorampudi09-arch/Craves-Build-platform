@@ -54,7 +54,7 @@ class Settings:
             exotel_account_sid=os.environ.get("EXOTEL_ACCOUNT_SID", "").strip(),
             voice_live_endpoint=os.environ.get("VOICE_LIVE_ENDPOINT", "").strip().rstrip("/"),
             voice_live_key=os.environ.get("VOICE_LIVE_API_KEY", "").strip(),
-            voice_live_model=os.environ.get("VOICE_LIVE_MODEL", "gpt-4.1").strip(),
+            voice_live_model=os.environ.get("VOICE_LIVE_MODEL", "gpt-4.1-mini").strip(),
             voice_live_api_version=os.environ.get("VOICE_LIVE_API_VERSION", "2026-04-10").strip(),
             voice_live_turn_detection=os.environ.get("VOICE_LIVE_TURN_DETECTION", "server_vad").strip(),
             stt_model=os.environ.get("VOICE_STT_MODEL", "azure-speech").strip(),

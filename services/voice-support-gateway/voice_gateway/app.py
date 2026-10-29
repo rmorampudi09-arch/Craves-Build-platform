@@ -286,8 +286,12 @@ class CallSession:
             "output_audio_format": "pcm16_16000hz",
             "input_audio_transcription": transcription,
             "input_audio_noise_reduction": {"type": "azure_deep_noise_suppression"},
-            "turn_detection": {"type": self.settings.voice_live_turn_detection, "threshold": 0.5,
-                               "prefix_padding_ms": 300, "silence_duration_ms": 700,
+            # Phones play the agent back into the caller's microphone; without this the echo counts as the caller
+            # talking and cuts the agent off mid-sentence.
+            "input_audio_echo_cancellation": {"type": "server_echo_cancellation"},
+            # 0.6 ignores line hiss that 0.5 took for speech; 500 ms of silence ends the caller's turn sooner.
+            "turn_detection": {"type": self.settings.voice_live_turn_detection, "threshold": 0.6,
+                               "prefix_padding_ms": 300, "silence_duration_ms": 500,
                                "create_response": True, "interrupt_response": True},
             "tools": TOOLS,
             "tool_choice": "auto",

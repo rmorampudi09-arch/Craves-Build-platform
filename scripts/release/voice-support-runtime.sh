@@ -27,7 +27,7 @@ CHEF_APP="${CHEF_APP:-ca-craves-user-chef-service-prod}"
 APP="${VOICE_APP:-ca-craves-voice-prodlow}"
 FOUNDRY="${FOUNDRY_NAME:-ais-craves-voice-prodlow}"
 IDENTITY_NAME="${VOICE_IDENTITY_NAME:-id-craves-voice-prodlow}"
-MODEL="${VOICE_LIVE_MODEL:-gpt-4.1}"
+MODEL="${VOICE_LIVE_MODEL:-gpt-4.1-mini}"
 REPOSITORY=craves/voice-support-gateway
 DOCKERFILE=services/voice-support-gateway/Dockerfile
 SECRET_VOICE=voice-live-api-key
@@ -189,16 +189,20 @@ create_app() {
 }
 
 deploy() {
-  local image previous
+  local image previous previous_model
   [[ "$(app_json "$APP" | jq -r '.name // ""')" == "$APP" ]] || fail "$APP does not exist; run OPERATION=create first"
   previous=$(app_json "$APP" | jq -r '.properties.template.containers[0].image')
   echo "Rollback image: $previous"
   image=$(build_image)
-  if az containerapp update -g "$RG" -n "$APP" --image "$image" -o none --only-show-errors && wait_ready; then
+  # The model is part of the release: the same update sets VOICE_LIVE_MODEL, so a rollback restores both.
+  previous_model=$(app_json "$APP" | jq -r '[.properties.template.containers[0].env[]? | select(.name == "VOICE_LIVE_MODEL") | .value][0] // "gpt-4.1"')
+  echo "Model: $previous_model -> $MODEL"
+  if az containerapp update -g "$RG" -n "$APP" --image "$image" --set-env-vars "VOICE_LIVE_MODEL=$MODEL" -o none --only-show-errors \
+      && wait_ready; then
     echo "Deployed $image"
   else
     echo "ERROR: release failed; restoring $previous" >&2
-    az containerapp update -g "$RG" -n "$APP" --image "$previous" -o none --only-show-errors || true
+    az containerapp update -g "$RG" -n "$APP" --image "$previous" --set-env-vars "VOICE_LIVE_MODEL=$previous_model" -o none --only-show-errors || true
     wait_ready || true
     exit 1
   fi

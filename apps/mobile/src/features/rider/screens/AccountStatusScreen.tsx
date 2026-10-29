@@ -2,18 +2,18 @@ import React from 'react';
 import {Alert, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
-import {Icon, SectionSkeleton, type IconName} from '../../../shared/components';
+import {Icon, type IconName} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
-import {AppApiError} from '../../../core/http/apiError';
 import type {RiderMe, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
-import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {StatusBadge} from '../components/StatusBadge';
 import {Card, RiderScreen, Title} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {resolveGate} from '../domain/gate';
+import {riderMessage} from '../domain/problem';
 import {useRiderShell} from '../navigation';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
@@ -23,7 +23,10 @@ import {DetailsCard, JoinForm, PayoutAccountCard} from './SignUpForms';
 type RiderDocument = RiderProfile['documents'][number];
 
 /** Takes a new photo with the back camera and sends it for ops to check by hand. */
-async function uploadAgain(doc: RiderDocument, messages: {denied: string; openSettings: string; cancel: string; error: string}) {
+async function uploadAgain(
+  doc: RiderDocument,
+  messages: {denied: string; openSettings: string; cancel: string; describe: (error: unknown) => string},
+) {
   try {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -43,7 +46,7 @@ async function uploadAgain(doc: RiderDocument, messages: {denied: string; openSe
       await riderApi.uploadDocument(doc.type, uri);
     }
   } catch (error) {
-    Alert.alert(error instanceof AppApiError ? error.message : messages.error);
+    Alert.alert(messages.describe(error));
   }
 }
 
@@ -61,7 +64,7 @@ function IconCard({icon, title, body}: {icon: IconName; title: string; body: str
 
 /** One row per document from GET /profile; a missing one asks for a photo, a rejected or expired one shows why. */
 function Documents() {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const a = strings.account;
   const queryClient = useQueryClient();
   const profile = useProfile();
@@ -69,19 +72,14 @@ function Documents() {
     denied: a.cameraDenied,
     openSettings: a.openSettings,
     cancel: strings.common.cancel,
-    error: strings.common.error,
+    describe: (error: unknown) => riderMessage(error, strings, language),
   };
 
   if (!profile.data) {
     return profile.isError ? (
-      <>
-        <Banner tone="warning" text={a.documentsError} />
-        <BottomAction label={strings.common.retry} variant="outline" size="compact" onPress={() => profile.refetch()} />
-      </>
+      <ProblemCard error={profile.error} onRetry={() => profile.refetch()} testID="rider-documents-problem" />
     ) : (
-      <Card>
-        <SectionSkeleton showTitle={false} lines={4} />
-      </Card>
+      <CardsSkeleton cards={1} testID="rider-documents-loading" />
     );
   }
   const documents = profile.data.documents;
@@ -150,14 +148,7 @@ export function AccountStatusScreen() {
   if (!me.data) {
     return (
       <RiderScreen header={<RiderHeader title={a.headerBlocked} inactive />} testID="rider-account-status">
-        {me.isError ? (
-          <>
-            <Banner tone="warning" text={strings.common.error} />
-            <BottomAction label={strings.common.retry} variant="outline" onPress={() => me.refetch()} />
-          </>
-        ) : (
-          <SectionSkeleton />
-        )}
+        {me.isError ? <ProblemCard error={me.error} onRetry={() => me.refetch()} /> : <CardsSkeleton />}
       </RiderScreen>
     );
   }
@@ -176,6 +167,8 @@ export function AccountStatusScreen() {
         <>
           <BottomAction
             label={strings.common.callSupport}
+            // Signing up, the form's Sign up is the one red action on the screen; support is the way out beside it.
+            variant={block === 'NOT_RIDER' ? 'outline' : 'primary'}
             leftIcon="phone-outline"
             onPress={() => call(me.data.supportPhone)}
             testID="rider-call-support"
@@ -195,6 +188,17 @@ export function AccountStatusScreen() {
         <View style={styles.intro}>
           <Title>{a.titles[block]}</Title>
           <Text style={styles.secondary}>{a.bodies[block]}</Text>
+          {block === 'PENDING' || block === 'RATES_PENDING' ? (
+            // Waiting on ops or on the rate card: one tap asks the server again, no restart needed.
+            <BottomAction
+              label={a.checkAgain}
+              variant="outline"
+              size="compact"
+              onPress={() => me.refetch()}
+              style={styles.checkAgain}
+              testID="rider-account-check-again"
+            />
+          ) : null}
         </View>
       ) : null}
       {block === 'NOT_RIDER' ? <JoinForm /> : null}
@@ -242,6 +246,7 @@ export function AccountStatusScreen() {
 const styles = StyleSheet.create({
   flex: {flex: 1},
   intro: {gap: spacing.xs},
+  checkAgain: {marginTop: spacing.xxs},
   body: {fontSize: typography.body, color: colors.textPrimary},
   secondary: {fontSize: typography.body, color: colors.textSecondary},
   strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},

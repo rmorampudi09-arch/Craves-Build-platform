@@ -956,3 +956,22 @@ Matching to the industry's standard: DoorDash, Uber Eats and Swiggy rank riders 
 - Live has run two weeks with `FLEET_ENGINE_FOUND_NOBODY` at none and `replyP99Ms` under 50.
 - The cache stayed under 50% used memory throughout.
 - A travel-time version has passed its shadow week, once 500 legs exist.
+
+## Phase 6: the app on the live server
+
+### P6-01 Every screen against the real API, its states, and Kannada (done; app only)
+The app had been checked mostly against its own demo server. This pass walked every flow against the controllers it calls and fixed what a live build would hit. No server, contract or migration change; every rule below is in the app.
+- **Sign-in and the role.** A token issued before a rider's activation lacks the RIDER role, so the server answers 403 until it expires. `riderApi.live.ts` refreshes once and repeats the call; "Not open to your account" offers Check again (a fresh token, then `/me`), and Home stops polling meanwhile. Queries that need the role wait for `/me` to grant it (`hasRiderRole`), so someone signing up never meets a 403.
+- **Gates.** An approved rider with no rate card published (`termsVersion` empty, `GET /terms` 503) waits on "Pay rates are on the way" with Check again (`RATES_PENDING`), not on an error. Pending riders get Check again too.
+- **Going online.** The phone is bound (`POST /devices`) before the selfie, so a phone that can't get offers says why first; a selfie over 5 MB is retaken before the upload; the online service's own refusals (location, shift over) show in the rider's language, and its crash text never does.
+- **Money.** The withdrawal key is the IST day and the amount, as `FleetPayouts.withdraw` keeps it: a retry after a lost answer reads "requested", not "once a day".
+- **Home.** "Your slot now" while a slot runs; online before it, the screen says when paid waiting starts instead of promising it; time online today.
+- **SOS.** Someone without the rider role gets both calls and "Calls work any time…"; the location is never shown as failed for them.
+- **States** (`components/StateCard.tsx`, `domain/problem.ts`, `DESIGN.md` "States"): loading skeletons, empty, offline, Craves not answering, not switched on yet, not allowed and refused, in the rider theme, on every screen. Failed actions say why in one line, in the rider's language (`riderMessage`).
+- **Languages.** Kannada joins English, Telugu and Hindi (`strings/kn.ts`, `res/values-kn`), hidden from riders until a native speaker signs it off like the others. The server stores en, te or hi, so a Kannada reader is English there (`serverLanguage`). Pay lines, refusals and errors are named in the rider's language by code or component. Labels wrap instead of overflowing: choice chips, segments and the check row (`components/Choices.tsx`), buttons, the header's status chip; the two-up trip buttons stack in te, hi and kn.
+- **Proved by** the app's Jest suite (186 suites), `problem.test.ts`, the new cases in `gate.test.ts`, `riderApi.live.test.ts` (the 403 refresh), `screensA`, `screensC`, `trip` and `RiderApp.live` tests; screenshots of every screen in all four languages at 360 dp and font scale 1.3; an independent review.
+
+### People steps for Phase 6
+**S1. Native speakers.** One each for Telugu, Hindi and Kannada reads every screen in a demo build (Profile, language) and the native notifications; the lawyer reads the terms and notice words. Add each signed-off language to `REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`. `help.talkBody` promises support in Telugu, Hindi or English: decide whether support answers in Kannada before Kannada goes live.
+
+**S2. Phone tests.** Run `PHONE-TESTS.md` on a live build, including a rider activated while the app is open (Check again, then Terms) and a phone with no Google Play services (Go online says phone setup).

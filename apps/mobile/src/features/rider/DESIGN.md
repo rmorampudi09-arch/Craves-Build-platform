@@ -351,6 +351,22 @@ components:
     typography: "{typography.hero}"
     rounded: "{rounded.pill}"
     size: 64px
+  state-card:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.textPrimary}"
+    typography: "{typography.bodyStrong}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.md}"
+  state-card-body:
+    textColor: "{colors.textSecondary}"
+    typography: "{typography.body}"
+  skeleton-block:
+    backgroundColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+  check-row:
+    textColor: "{colors.textPrimary}"
+    typography: "{typography.body}"
+    height: 48px
 ---
 
 ## Overview
@@ -427,7 +443,7 @@ Roboto, the Android system face, loaded by the platform with no custom font file
 - **Three steps of weight:** 400 for reading, 700 for anything to act on or compare, and 900 only for the two numbers the rider must read from arm's length (offer pay, order code).
 - **Map to tokens.ts.** `title` 30, `hero` 24, `heading` 19, `button` 16, `body` 15 and `small` 13 already exist in tokens.ts. 72, 60, 36 and 12 are rider-only constants; keep them in one rider type file, not inline per screen. tokens.ts has no weight '900': add `black: '900'` beside `fontWeight`, or define it in the rider file.
 - **Line height.** Multi-line body reads at about 1.45× in the designs. tokens.ts deliberately sets no fixed line heights so scaled text is not clipped. If a component sets one, derive it from fontSize and check at font scale 1.3.
-- **Scripts.** Telugu and Hindi strings need the same sizes. Check that Telugu glyphs, which are taller, are not clipped in fixed-height chips and badges; use minHeight, never height.
+- **Scripts.** Telugu, Hindi and Kannada use the same sizes as English. Their glyphs are taller and their words longer, so nothing that holds text has a fixed height (minHeight only), and every label may wrap: buttons centre their lines with 8 dp above and below, chips and segments wrap inside the pill, the status chip wraps inside the header. Never truncate or shrink a label to fit.
 
 ## Layout
 
@@ -603,9 +619,32 @@ The real code is the 8-character short order number (e.g. "#0BDE0101"). Keep it 
 - When a document needs action, the row grows: the reason or instruction in `{typography.body}`, then a full-width `button-outline-compact`.
 - Rows are divided by inset 1 dp `{colors.border}` lines.
 
-**Language chips.** `language-chip-selected` is espresso-filled; `language-chip` is white with a 1 dp `{colors.borderStrong}` line. Each label is in its own script: "English", "తెలుగు", "हिन्दी". The visual chip is 40 dp; extend the hit area to 48.
+**Language chips.** `language-chip-selected` is espresso-filled; `language-chip` is white with a 1 dp `{colors.borderStrong}` line. Each label is in its own script: "English", "తెలుగు", "हिन्दी", "ಕನ್ನಡ". The visual chip is 40 dp minimum; extend the hit area to 48. The same chip (`ChoiceChip` in `components/Choices.tsx`) picks the vehicle, the distance limits and a report category; TalkBack reads it as a radio button, checked or not.
 
-**Segmented control.** `segmented-track` is muted, `{rounded.md}`, with 4 dp padding. `segmented-selected` is a white segment with a 1 dp `{colors.border}` line at `{rounded.sm}`. The unselected label is `{colors.textSecondary}`. The shared `SegmentedControl` fills the selected segment red; restyle it.
+**Segmented control.** `segmented-track` is muted, `{rounded.md}`, with 4 dp padding. `segmented-selected` is a white segment with a 1 dp `{colors.border}` line at `{rounded.sm}`. The unselected label is `{colors.textSecondary}`. Labels wrap inside their segment. Built as `Segmented` in `components/Choices.tsx` (Today / This week, UPI / Bank); the shared `SegmentedControl` fills the selected segment red, so it is not used.
+
+**Check row (`check-row`).** A 24 dp outline box (ticked: espresso) with its sentence 10 dp after it; the whole row is one 48 dp target and the sentence wraps. Used for "I am 18 or older".
+
+### States
+
+Every screen that loads something shows one of these, never a blank screen, a spinner in the middle of nothing, or a raw error. They live in `components/StateCard.tsx`; `domain/problem.ts` decides which problem a failure is.
+
+**`state-card`.** A card: a 24 dp outline glyph in `{colors.textSecondary}`, then 10 dp later a bold title and one or two lines of `{colors.textSecondary}` body; at most one `button-outline-compact` across the card. Left-aligned like every card. It never uses red, never pulses and never shows an illustration.
+
+| State | Glyph | Title, then body | Action |
+|---|---|---|---|
+| Loading | none | Skeleton cards shaped like what will arrive (a label, a big figure, a line); TalkBack hears "Loading" once | none |
+| Empty | the subject's own glyph (moped for trips, wallet for payouts, inbox for recent trips, shield for notices) | what is missing, then what makes it appear ("Each trip shows here with its pay as soon as you deliver it.") | none, or the one thing that fills it |
+| Offline (no answer from Craves) | wifi-off | "No internet", then "This loads when you're back online." | Try again |
+| Not available (5xx, 429, storage not ready) | cloud-off | "Craves isn't answering", then "The problem is on our side." | Try again |
+| Not yet (switched off, no rate card, route not deployed: TERMS_UNAVAILABLE, RIDER_CHOICES_OFF, a 404 with no code) | progress-clock | "Not switched on yet", then "Check again later." | Try again |
+| Not allowed (403 for the rider role) | lock-outline | "Not open to your account", then "Call rider support if that seems wrong." | Check again: a fresh sign-in token, then the account read again (a token from before activation lacks the role). Showing it asks for the account once by itself; Home stops polling meanwhile |
+| Refused (the server said no, with a code) | alert | "This didn't load", then the server's own words in English, the app's words for the code in Telugu, Hindi and Kannada | Try again |
+
+- **Failed actions** (accept, withdraw, report, send your side) say the same thing in one line, in a warning banner by the button or an alert, from `riderMessage`. The rider's words stay in the field.
+- **The start of the app** shows the name "Craves Rider" and an espresso spinner while it checks the sign-in; when that fails, the offline state with "You stay signed in" and Sign out as a `button-ghost-neutral` below, never a forced sign-out (unsynced trip steps stay on the phone).
+- **SOS without the rider role** (signing up, closed) shows "Calls work any time…" instead of a failure: both calls always work, and the location goes to ops only for a rider the server knows.
+- **Waiting for the rate card** (`RATES_PENDING`): an approved rider whose city has no published rate card yet sees why they can't accept terms, with "Check again", instead of an error.
 
 ## Do's and Don'ts
 
@@ -652,8 +691,8 @@ There is no tablet layout; the rider app is phone-only.
   - The chip grows with its text (minHeight, not height).
   - SOS stays 56 × 48 and keeps its label on one line.
 - **Offer pay** grows to about 94 sp, which still fits. The **order code** scales down to fit its card on one line (`adjustsFontSizeToFit`).
-- **Two-up buttons** stack vertically when their labels no longer fit side by side.
-- **Badges and chips** use minHeight so Telugu and Hindi glyphs are not clipped.
+- **Two-up buttons** stack vertically when their labels no longer fit side by side. In Telugu, Hindi and Kannada they always stack, each full width, so the pair never sits side by side at two different heights.
+- **Badges and chips** use minHeight so Telugu, Hindi and Kannada glyphs are not clipped.
 - **The bottom bar grows.** The scroll content gets enough bottom padding that the last block clears it.
 - **Verify** on a device with `adb shell settings put system font_scale 1.3`, then reset to 1.0.
 
@@ -687,7 +726,7 @@ There is no tablet layout; the rider app is phone-only.
 ## Known Gaps
 
 - **Dark mode** is not designed. Ship light only and hold the theme fixed.
-- **States not designed:** phone-number entry, app update required, suspended account, selfie rejected, permission denied on going online, offer taken or expired, decline reasons, wrong OTP and lockout, photo-taken confirmation, mark-failed reasons, the "This week" earnings tab, and empty earnings. See SCREENS.md.
-- **Telugu and Hindi** strings are not designed. Sizes are assumed to hold; verify glyph height in chips and badges.
+- **States now built from "States" above,** not from a PNG: app update required, suspended account, selfie refused or too large, permission denied on going online, offer taken or expired, wrong OTP and lockout, the "This week" earnings tab, empty earnings and payouts, offline and server-down on every screen. Still without a design: decline reasons, the photo-taken confirmation and mark-failed reasons (built from SCREENS.md prose).
+- **Telugu, Hindi and Kannada** are translated but hidden from riders until a native speaker signs each off (`REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`); demo builds show all four. The server stores only en, te or hi, so a Kannada reader is English there (`serverLanguage`): its own messages (terms summary, refusals the app has no words for) arrive in English.
 - **Some values are estimates.** The OTP digit size (36) and the SOS label weight (800) were read from pixels, not from a source file.
 - **Not in Stitch's 8-prop component schema.** Borders and the selfie screen's dashed oval guide and shutter are described in prose only, because the schema has no line or stroke property.

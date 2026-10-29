@@ -1,16 +1,17 @@
 import React from 'react';
-import {Alert, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Alert, Linking, StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Badge, SectionSkeleton} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
-import {AppApiError} from '../../../core/http/apiError';
+import {Badge} from '../../../shared/components';
+import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import {riderApi} from '../api/riderApi';
-import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {ChoiceChip, ChoiceRow} from '../components/Choices';
 import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {offerRulesLines} from '../domain/offerRules';
+import {riderMessage} from '../domain/problem';
 import type {RiderScreenProps} from '../navigation';
 import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
 import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
@@ -22,23 +23,17 @@ function LanguageChips() {
     return null;
   }
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={strings.terms.language} style={styles.chips}>
-      {RIDER_LANGUAGES.map(code => {
-        const selected = code === language;
-        return (
-          <Pressable
-            key={code}
-            accessibilityRole="radio"
-            accessibilityState={{checked: selected}}
-            hitSlop={{top: 4, bottom: 4}}
-            onPress={() => setLanguage(code)}
-            style={[styles.chip, selected && styles.chipSelected]}
-            testID={`rider-language-${code}`}>
-            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{strings.languages[code]}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <ChoiceRow label={strings.terms.language}>
+      {RIDER_LANGUAGES.map(code => (
+        <ChoiceChip
+          key={code}
+          label={strings.languages[code]}
+          selected={code === language}
+          onPress={() => setLanguage(code)}
+          testID={`rider-language-${code}`}
+        />
+      ))}
+    </ChoiceRow>
   );
 }
 
@@ -52,7 +47,7 @@ function CardTitle({children}: {children: string}) {
 
 /** The published terms (03-Terms.png). The rider accepts exactly the version on screen. */
 export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const t = strings.terms;
   const queryClient = useQueryClient();
   const terms = useTerms();
@@ -65,12 +60,9 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       <RiderScreen header={header} testID="rider-terms">
         <LanguageChips />
         {terms.isError ? (
-          <>
-            <Banner tone="warning" text={strings.common.error} />
-            <BottomAction label={strings.common.retry} variant="outline" onPress={() => terms.refetch()} />
-          </>
+          <ProblemCard error={terms.error} onRetry={() => terms.refetch()} testID="rider-terms-problem" />
         ) : (
-          <SectionSkeleton lines={6} />
+          <CardsSkeleton cards={3} testID="rider-terms-loading" />
         )}
       </RiderScreen>
     );
@@ -89,7 +81,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       await riderApi.acceptTerms(version);
       await queryClient.invalidateQueries({queryKey: riderKeys.me});
     } catch (error) {
-      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+      Alert.alert(riderMessage(error, strings, language));
       await queryClient.invalidateQueries({queryKey: riderKeys.terms});
     }
   }
@@ -188,19 +180,6 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
 }
 
 const styles = StyleSheet.create({
-  chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
-  chip: {
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.white,
-  },
-  chipSelected: {borderColor: colors.textPrimary, backgroundColor: colors.textPrimary},
-  chipText: {fontSize: typography.body, color: colors.textPrimary},
-  chipTextSelected: {fontWeight: fontWeight.bold, color: colors.white},
   meta: {gap: spacing.xs, alignItems: 'flex-start'},
   badge: {minHeight: 24, paddingHorizontal: 10, paddingVertical: 2},
   cardTitle: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},

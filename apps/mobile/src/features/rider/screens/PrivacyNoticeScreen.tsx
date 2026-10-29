@@ -6,8 +6,9 @@ import {riderApi} from '../api/riderApi';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Body, Card, Label, RiderScreen} from '../components/ui';
+import {riderMessage} from '../domain/problem';
 import {riderKeys, useRiderMe} from '../state/riderQueries';
-import {useStrings} from '../strings/StringsProvider';
+import {serverLanguage, useStrings} from '../strings/StringsProvider';
 
 /**
  * The privacy notice in force (WORKPLAN P2-09): the lawyer's text opens on the web in the language on screen, and the
@@ -22,13 +23,15 @@ export function PrivacyNoticeScreen() {
     return null;
   }
   const {version} = notice;
-  const url = notice.url.replace('{language}', language);
+  // The lawyer's text exists in the server's languages; a Kannada reader opens and accepts the English one.
+  const shownIn = serverLanguage(language);
+  const url = notice.url.replace('{language}', shownIn);
 
   async function accept() {
     try {
-      await riderApi.acceptPrivacyNotice(version, language);
+      await riderApi.acceptPrivacyNotice(version, shownIn);
     } catch (error) {
-      Alert.alert(error instanceof AppApiError && error.code === 'NOTICE_CHANGED' ? p.changed : strings.common.error);
+      Alert.alert(error instanceof AppApiError && error.code === 'NOTICE_CHANGED' ? p.changed : riderMessage(error, strings, language));
     }
     await queryClient.invalidateQueries({queryKey: riderKeys.me});
   }

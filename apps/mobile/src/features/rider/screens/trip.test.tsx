@@ -193,9 +193,9 @@ describe('Trip: loading, error and ended', () => {
   it('says it could not load the trip and retries', async () => {
     (riderApi.getActiveTrip as jest.Mock).mockRejectedValueOnce(new AppApiError('BOOM', 'Server error', 500));
     await render(undefined);
-    expect(allText()).toContain("Couldn't load your trip");
+    expect(allText()).toContain("Craves isn't answering | The problem is on our side. Try again in a minute. | Try again");
     (riderApi.getActiveTrip as jest.Mock).mockResolvedValueOnce(trip);
-    await press('rider-trip-retry');
+    await press('rider-retry');
     await settle();
     expect(has('rider-to-kitchen')).toBe(true);
   });
@@ -203,7 +203,7 @@ describe('Trip: loading, error and ended', () => {
   it('says the rider is offline when the network is down', async () => {
     (riderApi.getActiveTrip as jest.Mock).mockRejectedValueOnce(new AppApiError('NETWORK', 'offline', undefined, undefined, true));
     await render(undefined);
-    expect(allText()).toContain("You're offline");
+    expect(allText()).toContain("No internet | Check mobile data or Wi-Fi. This loads when you're back online.");
   });
 
   it('says the trip has ended when there is none', async () => {

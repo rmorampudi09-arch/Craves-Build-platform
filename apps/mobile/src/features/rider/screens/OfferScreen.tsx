@@ -13,6 +13,8 @@ import {Card} from '../components/ui';
 import {formatKm, formatRupees} from '../domain/format';
 import {whyHome, whyOffer} from '../domain/offerRules';
 import {offerDeadlineMs, secondsLeft} from '../domain/offerTiming';
+import {riderMessage} from '../domain/problem';
+import {payLabel} from './TripDetailScreen';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
@@ -44,7 +46,7 @@ const SecondsLeft = memo(function SecondsLeftView({deadline, label}: {deadline: 
 
 /** The ringing offer (08-Offer.png): locked pay first, distances, route, and a free decline. */
 export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const o = strings.offer;
   const {riderId} = useRiderShell();
   const queryClient = useQueryClient();
@@ -80,17 +82,17 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
       queryClient.invalidateQueries({queryKey: riderKeys.home});
       navigation.replace('Trip');
     } catch (error) {
-      const status = error instanceof AppApiError ? error.status : undefined;
-      if (status === 409) {
-        // Other 409s (e.g. TRIP_IN_PROGRESS) carry the server's own words.
-        setEnded(error instanceof AppApiError && error.code !== 'OFFER_TAKEN' ? error.message : o.taken);
-      } else if (status === 410) {
+      const code = error instanceof AppApiError ? error.code : undefined;
+      if (code === 'OFFER_TAKEN') {
+        setEnded(o.taken);
+      } else if (code === 'OFFER_EXPIRED' || code === 'OFFER_NOT_FOUND' || (error instanceof AppApiError && error.status === 410)) {
         setEnded(o.expired);
       } else {
-        // No answer: the server may have assigned the trip anyway, so Home re-checks.
+        // No answer, or another refusal (a trip in progress, an inactive account): the server may have assigned the
+        // trip anyway, so Home re-checks; the rider reads why in their own language.
         queryClient.invalidateQueries({queryKey: riderKeys.activeTrip});
         queryClient.invalidateQueries({queryKey: riderKeys.home});
-        setEnded(strings.common.error);
+        setEnded(riderMessage(error, strings, language));
       }
     }
   }
@@ -102,7 +104,7 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
 
   const pay = formatRupees(offer.payPaise);
   // The server's own breakdown, joined into one sentence; the app adds nothing up.
-  const parts = offer.payLines.map(line => `${formatRupees(line.amountPaise)} ${line.label}`).join(' + ');
+  const parts = offer.payLines.map(line => `${formatRupees(line.amountPaise)} ${payLabel(line, strings.pay.offer, language)}`).join(' + ');
   const breakdown = parts ? `${parts}. ${o.locked}` : o.locked;
   const why = whyOffer(offer.reason, o);
   const home = whyHome(offer.reason, o);

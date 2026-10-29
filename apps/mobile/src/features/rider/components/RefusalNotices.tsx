@@ -15,17 +15,18 @@ import {Card} from './ui';
  * stay until the rider dismisses them or a later step of that trip goes through. Every refusal, or one trip's.
  */
 export function RefusalNotices({tripId}: {tripId?: string}) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const {riderId} = useRiderShell();
   const supportPhone = useRiderMe().data?.supportPhone;
   const refusals = useRefusals(riderId, tripId);
   // Only an OTP typed offline is kept refused (tripQueue keepRefusal): the rider has left the door, so support sorts it out.
+  // The server's own words in English; the app's words for the codes it knows in the other languages.
   const message = (refusal: Refusal) =>
     refusal.code === 'OTP_INVALID' || refusal.code === 'OTP_LOCKED'
       ? strings.trip.offlineOtpRefused
       : refusal.code === 'PHOTO_MISSING'
         ? strings.trip.photoMissing
-        : refusal.message;
+        : (language !== 'en' && strings.errors[refusal.code]) || refusal.message;
   return (
     <>
       {refusals.map(refusal => (

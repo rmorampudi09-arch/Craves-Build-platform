@@ -49,10 +49,15 @@ export function SyncNote({show}: {show: boolean}) {
   return show ? <Badge label={strings.common.savedWillSync} tone="info" testID="rider-sync-note" /> : null;
 }
 
-/** Two outline buttons 12 dp apart; they stack once large text makes each narrower than its label needs. */
+/**
+ * Two outline buttons 12 dp apart; they stack once large text makes each narrower than its label needs. Telugu, Hindi
+ * and Kannada labels are longer and their script taller, so there they always stack, each full width, rather than sit
+ * side by side at different heights.
+ */
 export function TwoUp({left, right}: {left: ReactNode; right: ReactNode}) {
   const {fontScale} = useWindowDimensions();
-  const cell = {flexGrow: 1, flexBasis: 150 * fontScale};
+  const {language} = useStrings();
+  const cell = {flexGrow: 1, flexBasis: language === 'en' ? 150 * fontScale : ('100%' as const)};
   return (
     <View style={styles.twoUp}>
       <View style={cell}>{left}</View>

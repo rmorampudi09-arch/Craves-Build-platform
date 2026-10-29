@@ -1,7 +1,8 @@
 import type {RiderMe} from '../api/contract';
 import {compareVersions} from './format';
 
-export type AccountBlock = 'NOT_RIDER' | 'PENDING' | 'SUSPENDED' | 'DEACTIVATED' | 'UPDATE_REQUIRED';
+/** RATES_PENDING: an active rider while Craves has published no rate card yet, so there are no terms to accept. */
+export type AccountBlock = 'NOT_RIDER' | 'PENDING' | 'SUSPENDED' | 'DEACTIVATED' | 'UPDATE_REQUIRED' | 'RATES_PENDING';
 
 export type GateOutcome =
   | {kind: 'privacy'}
@@ -23,6 +24,10 @@ export function resolveGate(me: RiderMe, appVersion: string, busy: boolean): Gat
   }
   if (!busy && compareVersions(appVersion, me.minAppVersion) < 0) {
     return {kind: 'account', block: 'UPDATE_REQUIRED'};
+  }
+  // No rate card yet: GET /terms would answer 503, so say plainly that rates come first, and never stop a shift for it.
+  if (!me.termsVersion) {
+    return busy ? {kind: 'ready'} : {kind: 'account', block: 'RATES_PENDING'};
   }
   if (me.acceptedTermsVersion !== me.termsVersion) {
     return {kind: 'terms'};

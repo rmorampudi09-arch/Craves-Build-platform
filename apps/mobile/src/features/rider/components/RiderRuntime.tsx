@@ -18,6 +18,22 @@ const SIGNAL_FLUSH_GAP_MS = 5_000;
 const model = Platform.OS === 'android' ? Platform.constants.Model : Platform.OS;
 
 /**
+ * Registers this phone for offer pushes (POST /devices binds the rider's first phone). False when the phone has no FCM
+ * token or installation id yet, so it can't be bound; the server's refusal (409 DEVICE_NOT_BOUND) is thrown.
+ */
+export async function registerPhone(fcmToken?: string | null): Promise<boolean> {
+  const [installationId, token] = await Promise.all([
+    riderDevice.installationId(),
+    fcmToken === undefined ? riderOnlineService.fcmToken() : Promise.resolve(fcmToken),
+  ]);
+  if (!token || !installationId) {
+    return false;
+  }
+  await riderApi.registerDevice({installationId, fcmToken: token, appVersion: RIDER_APP_VERSION, model});
+  return true;
+}
+
+/**
  * Listens while the rider is signed in: registers the phone for offer pushes, rings offers (including the one whose
  * notification opened the app), refreshes trips and replays queued trip steps. nativeOutbox: the server's
  * features.nativeTripOutbox (P2-02b), which sends trip steps through the phone's native outbox.
@@ -40,18 +56,14 @@ export function RiderRuntime({
   }, [nativeOutbox]);
 
   useEffect(() => {
-    const register = async (fcmToken: string | null) => {
-      const installationId = await riderDevice.installationId();
-      if (!fcmToken || !installationId) {
-        return;
-      }
-      riderApi.registerDevice({installationId, fcmToken, appVersion: RIDER_APP_VERSION, model}).catch(error => {
-        // 409 DEVICE_NOT_BOUND: ops must approve this phone. Other failures retry on the next start or token change.
+    const register = (fcmToken: string | null) =>
+      registerPhone(fcmToken).catch(error => {
+        // 409 DEVICE_NOT_BOUND: ops must approve this phone. Other failures retry on the next start, token change, or
+        // Go online (which registers again before it starts a shift).
         if (error instanceof AppApiError && error.status === 409) {
           Alert.alert(device.notApprovedTitle, device.notApprovedBody);
         }
       });
-    };
     riderOnlineService.fcmToken().then(register);
     return riderOnlineService.onFcmToken(register);
   }, [device]);

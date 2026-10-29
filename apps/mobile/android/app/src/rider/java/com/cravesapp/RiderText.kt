@@ -13,7 +13,7 @@ import java.util.Locale
 object RiderText {
   private const val PREFS = "craves_rider_text"
   private const val LANGUAGE = "language"
-  private val LANGUAGES = setOf("en", "te", "hi")
+  private val LANGUAGES = setOf("en", "te", "hi", "kn")
 
   fun setLanguage(context: Context, language: String) {
     if (language in LANGUAGES) prefs(context).edit().putString(LANGUAGE, language).apply()

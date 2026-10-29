@@ -49,10 +49,14 @@ export type IconName =
   | 'calendar-blank-outline'
   | 'camera-outline'
   | 'check-circle'
+  | 'checkbox-blank-outline'
+  | 'checkbox-marked'
   | 'chevron-left'
   | 'clock-outline'
   | 'close'
+  | 'cloud-off-outline'
   | 'home-outline'
+  | 'inbox-outline'
   | 'lock-outline'
   | 'map-marker-outline'
   | 'menu-down'
@@ -60,6 +64,7 @@ export type IconName =
   | 'moped'
   | 'navigation-variant-outline'
   | 'phone-outline'
+  | 'progress-clock'
   | 'shield-alert-outline'
   | 'shield-check-outline'
   | 'weather-pouring';
@@ -117,10 +122,14 @@ const GLYPHS: Record<IconName, string> = {
   'calendar-blank-outline': 'calendar-blank-outline',
   'camera-outline': 'camera-outline',
   'check-circle': 'check-circle',
+  'checkbox-blank-outline': 'checkbox-blank-outline',
+  'checkbox-marked': 'checkbox-marked',
   'chevron-left': 'chevron-left',
   'clock-outline': 'clock-outline',
   'close': 'close',
+  'cloud-off-outline': 'cloud-off-outline',
   'home-outline': 'home-outline',
+  'inbox-outline': 'inbox-outline',
   'lock-outline': 'lock-outline',
   'map-marker-outline': 'map-marker-outline',
   'menu-down': 'menu-down',
@@ -128,6 +137,7 @@ const GLYPHS: Record<IconName, string> = {
   'moped': 'moped',
   'navigation-variant-outline': 'navigation-variant-outline',
   'phone-outline': 'phone-outline',
+  'progress-clock': 'progress-clock',
   'shield-alert-outline': 'shield-alert-outline',
   'shield-check-outline': 'shield-check-outline',
   'weather-pouring': 'weather-pouring',

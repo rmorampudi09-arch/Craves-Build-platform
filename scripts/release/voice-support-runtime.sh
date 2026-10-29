@@ -8,6 +8,7 @@
 #   deploy   build the gateway image from this commit and roll the app to it; restores the previous image on failure
 #   disable  kill switch: turn the app's ingress off, so Exotel cannot reach the agent (its flow then hangs up)
 #   enable   turn ingress back on
+#   logs     read-only: the gateway's recent console lines per replica (call ids, timings, counts; never speech)
 #
 # Secret values are never printed. The Foundry key is copied straight from Azure into Key Vault; the Exotel stream
 # password is generated here and stored in Key Vault, where an operator reads it once to put it in the Exotel applet URL.
@@ -37,8 +38,8 @@ KV_HOST="https://$VAULT.vault.azure.net"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 for tool in az jq; do command -v "$tool" >/dev/null || fail "$tool is required"; done
-case "$OPERATION" in status|create|deploy|disable|enable) ;; *) fail "Unknown OPERATION $OPERATION" ;; esac
-[[ "$OPERATION" == status || "${CONFIRM,,}" == true ]] || fail "OPERATION=$OPERATION changes production; set CONFIRM=true"
+case "$OPERATION" in status|logs|create|deploy|disable|enable) ;; *) fail "Unknown OPERATION $OPERATION" ;; esac
+[[ "$OPERATION" == status || "$OPERATION" == logs || "${CONFIRM,,}" == true ]] || fail "OPERATION=$OPERATION changes production; set CONFIRM=true"
 [[ "$OPERATION" != create && "$OPERATION" != deploy || "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "SOURCE_SHA must be the 40-character commit being released"
 
 az account set --subscription "$SUBSCRIPTION"
@@ -224,6 +225,14 @@ case "$OPERATION" in
     else
       echo "$APP: missing (run OPERATION=create)"
     fi
+    ;;
+  logs)
+    # The log stream keeps the last 300 lines of each running replica; a new revision starts empty.
+    for replica in $(az containerapp replica list -g "$RG" -n "$APP" --query "[].name" -o tsv --only-show-errors); do
+      echo "== replica $replica"
+      az containerapp logs show -g "$RG" -n "$APP" --replica "$replica" --type console --tail 300 --format text --only-show-errors \
+        | grep -E 'call=|listening|ERROR|WARNING' || echo "(no call lines yet)"
+    done
     ;;
   create)
     create_foundry

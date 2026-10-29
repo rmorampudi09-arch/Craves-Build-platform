@@ -103,9 +103,7 @@ class FleetPilotHealthDatabaseTest {
         fleet.db.update("UPDATE fleet_schema.trip SET chef_ready_at = now() - INTERVAL '10 minutes', rider_id = ?, "
             + "accepted_at = now() - INTERVAL '60 minutes', arrived_kitchen_at = now() - INTERVAL '45 minutes', "
             + "picked_up_at = now() - INTERVAL '38 minutes', finished_at = now() - INTERVAL '30 minutes' WHERE id = ?", rider, first);
-        // Ops gave the second order to another rider (V166, after the contract migration drops the old constraint): it still
-        // counts once, by its current trip.
-        fleet.db.execute("ALTER TABLE fleet_schema.trip DROP CONSTRAINT IF EXISTS trip_chef_sub_order_id_key");
+        // Ops gave the second order to another rider (V166, V175): it still counts once, by its current trip.
         fleet.db.update("UPDATE fleet_schema.trip SET replaced_at = now() WHERE id = ?", second);
         fleet.db.update("INSERT INTO fleet_schema.trip (id, chef_sub_order_id, order_id, chef_id, order_code, items_count, kitchen_name, "
             + "kitchen_area, kitchen_address, kitchen_lat, kitchen_lng, chef_phone, customer_first_name, customer_phone, drop_area, drop_address, "

@@ -226,8 +226,6 @@ class FleetOpsDatabaseTest {
     void aHeldTripGoesToAnotherRiderOnANewTripAndTheFirstRiderIsPaidForTheTripSoFar() throws Exception {
         UUID first = accept(other);
         fleet.db.update("UPDATE fleet_schema.trip SET state = 'AT_PICKUP', arrived_kitchen_at = now() WHERE id = ?", first);
-        refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(near, null, "Too early")), 409, "TRIP_NOT_REASSIGNABLE");
-        contractMigration();
         events.clear();
         UUID key = UUID.randomUUID();
         OpsTrip moved = (OpsTrip) handover.reassign(ops, key, first, new ReassignInput(near, null, "Ravi's bike broke down"));
@@ -289,7 +287,6 @@ class FleetOpsDatabaseTest {
     /** P2-05: the chef handed this rider the food, so another rider or a courier would find an empty kitchen. */
     @Test
     void aTripTheChefHandedOverIsNotMovedToAnotherRiderOrACourier() {
-        contractMigration();
         UUID first = accept(near);
         FleetDispatchFixtures.seen(fleet.db, other, 5);
         fleet.db.update("UPDATE fleet_schema.trip SET chef_handed_over_at = now() WHERE id = ?", first);
@@ -303,7 +300,6 @@ class FleetOpsDatabaseTest {
 
     @Test
     void aHeldTripStaysWithItsRiderWhenTheOtherRiderCannotTakeItOrTheFoodIsPickedUp() {
-        contractMigration();
         UUID first = accept(near);
         FleetDispatchFixtures.seen(fleet.db, other, 50);
         refused(() -> handover.reassign(ops, UUID.randomUUID(), first, new ReassignInput(other, null, "Swap riders")), 409, "RIDER_NOT_AVAILABLE");
@@ -503,11 +499,6 @@ class FleetOpsDatabaseTest {
         fleet.db.update("UPDATE fleet_schema.trip SET provider = 'OPS_QUEUE' WHERE id = ? AND rider_id IS NULL", tripId);
         fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, opened_at, deadline_at) VALUES (?, ?, ?, 'OPS_QUEUE', "
             + "now() - make_interval(mins => ?) - make_interval(secs => ?), now() + INTERVAL '1 day')", UUID.randomUUID(), tripId, seq, minutesAgo, seq);
-    }
-
-    /** What the contract migration after V166 does once no older image can run: one trip per order is no longer a constraint. */
-    private void contractMigration() {
-        fleet.db.execute("ALTER TABLE fleet_schema.trip DROP CONSTRAINT IF EXISTS trip_chef_sub_order_id_key");
     }
 
     /** near's trip at the drop with one code order-service refused; alerted: it was typed offline (alertIfTypedOffline). */

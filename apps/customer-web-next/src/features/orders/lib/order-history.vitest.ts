@@ -151,7 +151,7 @@ describe("My Orders", () => {
     serve({ [PAGE]: { orders: [], nextCursor: null, hasMore: false } });
     render(createElement(OrdersPage));
     expect(await screen.findByRole("heading", { name: "No orders yet" })).toBeTruthy();
-    expect(screen.getByTestId("empty-illustration-orders")).toBeTruthy();
+    expect(screen.getByTestId("empty-illustration-ordersLamp")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Find something to eat" }).getAttribute("href")).toBe("/home");
   });
 

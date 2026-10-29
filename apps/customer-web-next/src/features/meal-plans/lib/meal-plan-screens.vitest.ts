@@ -307,7 +307,7 @@ describe("meal plans list", () => {
     render(createElement(SubscriptionManager));
     fireEvent.mouseDown(await screen.findByRole("tab", { name: "My plans" }));
     expect(await screen.findByRole("heading", { name: "No meal plans yet" })).toBeTruthy();
-    expect(screen.getByTestId("empty-illustration-mealPlans")).toBeTruthy();
+    expect(screen.getByTestId("empty-illustration-mealPlansLeaf")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Explore plans" }));
     expect(screen.getByRole("tab", { name: "Explore plans" }).getAttribute("aria-selected")).toBe("true");
     await settle();

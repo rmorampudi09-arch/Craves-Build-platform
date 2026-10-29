@@ -33,10 +33,11 @@ test("cart and checkout do not block first render on prep-time enrichment", () =
   const cart = source("../screens/Cart.tsx");
   const checkout = source("../../checkout/screens/Checkout.tsx");
 
-  assert.match(cart, /async function resolveLeadMinutes/);
+  // The cart reads each dish for its prep time, course and veg mark after the first render.
+  assert.match(cart, /async function resolveDishDetails/);
   assert.match(
     cart,
-    /setItems\(nextItems\)[\s\S]{0,420}setLoading\(false\)[\s\S]{0,220}void resolveLeadMinutes\(nextItems\)/,
+    /setItems\(nextItems\)[\s\S]{0,420}setLoading\(false\)[\s\S]{0,220}void resolveDishDetails\(nextItems\)/,
   );
   assert.match(checkout, /async function resolveLeadMinutes/);
   assert.match(

@@ -91,12 +91,12 @@ describe("order status after payment", () => {
     expect(await screen.findByRole("heading", { name: "Waiting for the chef" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: "Order details" })).toBeTruthy();
     expect(screen.getByText("The chef will confirm your order shortly.")).toBeTruthy();
-    // Before pickup the map is a blurred backdrop under the three kitchen steps.
-    expect(screen.getByTestId("order-map").dataset.label).toBe("Map, hidden until your order is picked up");
-    const progress = screen.getByRole("list", { name: "Order progress" });
-    expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
-    expect(progress.querySelector('[aria-current="step"]')?.textContent).toBe("Awaiting chef");
-    expect(screen.getByText("Live map opens once your order is picked up")).toBeTruthy();
+    // A paid order is the Kitchen Calendar's day sheet: each step by its time, now marked, the rest still to come.
+    const steps = screen.getByRole("list", { name: "Order steps" });
+    expect(within(steps).getAllByRole("listitem")).toHaveLength(6);
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Waiting for Ammi");
+    // The sheet lists the kitchen steps, so there is no blurred map under them.
+    expect(screen.queryByTestId("order-map")).toBeNull();
     expect(screen.getByText("₹1,125.30")).toBeTruthy();
     expect(screen.getByText("₹51.30")).toBeTruthy();
     // Each dish reads like the app: the name, then "2 × ₹329 · Biryani".
@@ -111,23 +111,29 @@ describe("order status after payment", () => {
   it("shows the chef's cooking time and note once accepted", async () => {
     serve(order("PREPARING", { prepTimeMinutes: 25, chefResponseNote: "Preparing fresh" }));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByText("The chef is cooking now. Ready in about 25 min.")).toBeTruthy();
+    const steps = await screen.findByRole("list", { name: "Order steps" });
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Cooking now");
+    expect(within(steps).getByText("Ready in about 25 min")).toBeTruthy();
     expect(screen.getByText("“Preparing fresh”").closest("figure")?.textContent).toContain("Note from the chef");
   });
 
-  it("marks the kitchen step that is actually in progress", async () => {
-    for (const [status, current, done] of [
-      ["PAYMENT_PENDING", undefined, 0],
-      ["CHEF_ACCEPTED", "Chef accepted", 1],
-      ["PREPARING", "Chef accepted", 1],
-      ["READY_FOR_PICKUP", "Ready for pickup", 2],
+  it("marks the step that is actually in progress", async () => {
+    // Recent, so an unpaid order is still waiting for its payment: the kitchen steps wait with it.
+    serve(order("PAYMENT_PENDING", { createdAt: new Date().toISOString() }));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    const progress = await screen.findByRole("list", { name: "Order progress" });
+    expect(progress.querySelector('[aria-current="step"]')).toBeNull();
+    expect(within(progress).queryAllByText("(done)")).toHaveLength(0);
+    cleanup();
+    for (const [status, current] of [
+      ["CHEF_ACCEPTED", "Ammi accepted"],
+      ["PREPARING", "Cooking now"],
+      ["READY_FOR_PICKUP", "Packed"],
     ] as const) {
-      // Recent, so an unpaid order is still waiting for its payment.
-      serve(order(status, { createdAt: new Date().toISOString() }));
+      serve(order(status));
       render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-      const progress = await screen.findByRole("list", { name: "Order progress" });
-      expect(progress.querySelector('[aria-current="step"]')?.textContent, status).toBe(current);
-      expect(within(progress).queryAllByText("(done)"), status).toHaveLength(done);
+      const steps = await screen.findByRole("list", { name: "Order steps" });
+      expect(steps.querySelector('[aria-current="step"]')?.textContent, status).toContain(current);
       cleanup();
     }
   });
@@ -258,11 +264,12 @@ describe("order map, chef and bill", () => {
     expect(fetch).toHaveBeenCalledWith(`/api/orders/${fixture.id}/delivery-status`, expect.anything());
   });
 
-  it("keeps the kitchen steps while the partner is still on the way to the kitchen", async () => {
+  it("stays at Packed while the partner is still on the way to the kitchen", async () => {
     serve(order("READY_FOR_PICKUP"), 200, { "/delivery-status": delivery("COURIER_TO_PICKUP") });
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     expect(await screen.findByRole("heading", { name: "Ready for pickup" })).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Order progress" })).toBeTruthy();
+    const steps = screen.getByRole("list", { name: "Order steps" });
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Packed");
   });
 
   it("asks nothing about delivery before the food is ready, and shows no map once the order is closed", async () => {

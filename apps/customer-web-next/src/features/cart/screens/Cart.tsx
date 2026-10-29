@@ -3,7 +3,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Clock3, Plus, RefreshCw, Store, Undo2 } from "lucide-react";
+import { AlertTriangle, ChevronRight, Clock3, House, Plus, RefreshCw, Undo2 } from "lucide-react";
 import { loadSelectedAddress, loadSession, type CravesAddress } from "@/features/auth/api/cravesAuth";
 import { CartAddressAvailabilityBanner } from "@/features/home/components/CartAddressAvailabilityBanner";
 import {
@@ -27,6 +27,11 @@ import { CartHeader } from "@/features/cart/components/CartHeader";
 import { EmptyCartState } from "@/features/cart/components/EmptyCartState";
 import { CartItemList } from "@/features/cart/components/CartItemList";
 import { CartCheckoutBar } from "@/features/cart/components/CartCheckoutBar";
+import type { FoodType } from "@/features/cart/components/CartItemRow";
+import { LeafPlate } from "@/features/cart/components/LeafPlate";
+import { courseOf } from "@/features/cart/lib/leaf-plate";
+import { leafSerif } from "@/shared/fonts/theme-fonts";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { ease } from "@/shared/lib/motion";
 
@@ -47,18 +52,36 @@ export const routeMeta = {
   }),
 };
 
-async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
-  const dishResults = await Promise.allSettled(
-    items.map((item) => loadDish(item.menuItemId)),
-  );
-  const minutes = dishResults
-    .flatMap((result) => {
-      if (result.status !== "fulfilled") return [];
-      const match = /^(\d+)\s*min$/i.exec(result.value.time);
-      return match ? [Number(match[1])] : [];
-    })
-    .filter((value) => Number.isFinite(value) && value > 0);
-  return minutes.length ? Math.max(...minutes) : null;
+/** What the leaf and the lines need from each dish: its course, its veg mark, where the kitchen is. */
+type DishDetail = { category?: string; foodType?: FoodType; areaName?: string; distanceMeters?: number };
+
+async function resolveDishDetails(items: CartItem[]): Promise<{ leadMinutes: number | null; details: Record<string, DishDetail> }> {
+  const dishResults = await Promise.allSettled(items.map((item) => loadDish(item.menuItemId)));
+  const details: Record<string, DishDetail> = {};
+  const minutes: number[] = [];
+  dishResults.forEach((result, index) => {
+    if (result.status !== "fulfilled") return;
+    const dish = result.value;
+    details[items[index].menuItemId] = {
+      category: dish.category,
+      foodType: dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG"),
+      areaName: dish.areaName,
+      distanceMeters: dish.distanceMeters,
+    };
+    const match = /^(\d+)\s*min$/i.exec(dish.time);
+    if (match && Number(match[1]) > 0) minutes.push(Number(match[1]));
+  });
+  return { leadMinutes: minutes.length ? Math.max(...minutes) : null, details };
+}
+
+/** "0.65 km", "12.4 km". */
+function kilometres(meters: number): string {
+  return `${(meters / 1000).toLocaleString("en-IN", { maximumFractionDigits: meters < 10_000 ? 2 : 1 })} km`;
+}
+
+/** "Lakshmi" from "Lakshmi's Kitchen"; otherwise the kitchen. */
+function noteFor(kitchenName: string | undefined): string {
+  return (kitchenName && /^(.+?)['’]s\b/.exec(kitchenName)?.[1]) || "the kitchen";
 }
 
 function CartPage() {
@@ -75,6 +98,7 @@ function CartPage() {
   const [validating, setValidating] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [leadMinutes, setLeadMinutes] = useState<number | null>(null);
+  const [dishDetails, setDishDetails] = useState<Record<string, DishDetail>>({});
   const [undoItem, setUndoItem] = useState<CartItem | null>(null);
   // The default delivery address, the one Home browses and checkout starts with.
   const [address, setAddress] = useState<CravesAddress | null>(null);
@@ -95,8 +119,11 @@ function CartPage() {
       }
 
       setLoading(false);
-      void resolveLeadMinutes(nextItems)
-        .then(setLeadMinutes)
+      void resolveDishDetails(nextItems)
+        .then(({ leadMinutes: minutes, details }) => {
+          setLeadMinutes(minutes);
+          setDishDetails(details);
+        })
         .catch(() => setLeadMinutes(null));
     } catch (error) {
       setItems([]);
@@ -270,13 +297,28 @@ function CartPage() {
   const itemCount = items.reduce((total, item) => total + item.qty, 0);
   const kitchenName = items[0]?.chef;
   const kitchenId = items[0]?.kitchenId;
+  const kitchenDetail = items[0] ? dishDetails[items[0].menuItemId] : undefined;
+  const kitchenWhere = [
+    kitchenDetail?.areaName,
+    kitchenDetail?.distanceMeters != null ? `${kilometres(kitchenDetail.distanceMeters)} away` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const foodTypes = Object.fromEntries(Object.entries(dishDetails).map(([id, detail]) => [id, detail.foodType]));
+  const plate = items.map((item) => ({
+    key: item.menuItemId,
+    course: courseOf(dishDetails[item.menuItemId]?.category),
+    img: item.img,
+    qty: item.qty,
+  }));
+  const addressLine = address ? [address.hno, address.street, address.mandal, address.city].filter(Boolean).join(", ") : "";
 
   if (loading) {
     return <CustomerPageSkeleton variant="cart" label="Loading your Craves cart" />;
   }
 
   return (
-    <div className="min-h-screen bg-white pb-36 text-[#1A1A1A]">
+    <div className={`${leafSerif.variable} min-h-screen bg-[#F1F6EC] pb-44 text-[#1C2420]`}>
       <CartHeader onBack={() => navigate({ to: "/home" })} />
       <CartAddressAvailabilityBanner
         className="mx-auto max-w-2xl px-4 md:px-6"
@@ -307,20 +349,39 @@ function CartPage() {
         ) : items.length === 0 ? (
           <EmptyCartState onBrowseMenu={() => navigate({ to: "/home" })} />
         ) : (
-          <div className="space-y-4">
-            <section className="overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-white px-4 shadow-[0_4px_18px_rgba(26,26,26,0.05)]">
-              <div className="flex items-center gap-3 border-b border-[#F1F3F5] py-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
-                  <Store className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-base font-semibold">{kitchenName}</h1>
-                  <p className="mt-0.5 text-xs text-[#6B6B6B]">Cooks to order</p>
-                </div>
-              </div>
+          <div className="space-y-5">
+            {kitchenName ? (
+              (() => {
+                const from = (
+                  <>
+                    <ChefFace size={56} className="bg-[#EAF3E2] text-[#22553A]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-semibold text-[#1C2420]">From {kitchenName}</span>
+                      {kitchenWhere ? <span className="mt-0.5 block truncate text-sm text-[#59645C]">{kitchenWhere}</span> : null}
+                    </span>
+                    {kitchenId ? <ChevronRight className="h-5 w-5 shrink-0 text-[#22553A]" aria-hidden="true" /> : null}
+                  </>
+                );
+                return kitchenId ? (
+                  <Link
+                    to="/kitchen/$id"
+                    params={{ id: kitchenId }}
+                    className="flex min-h-14 items-center gap-3 rounded-2xl transition-opacity duration-(--dur-micro) active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22553A]/40"
+                  >
+                    {from}
+                  </Link>
+                ) : (
+                  <div className="flex min-h-14 items-center gap-3">{from}</div>
+                );
+              })()
+            ) : null}
 
+            <LeafPlate dishes={plate} />
+
+            <section aria-label="Dishes in your cart" className="rounded-[1.25rem] border border-[#E1EAD8] bg-white px-4">
               <CartItemList
                 items={items}
+                foodTypes={foodTypes}
                 onRemove={(id) => {
                   const item = items.find((candidate) => candidate.id === id);
                   if (item) removeItem(item);
@@ -330,12 +391,11 @@ function CartPage() {
                   if (item) changeQuantity(item, quantity);
                 }}
               />
-
               {kitchenId ? (
                 <Link
                   to="/kitchen/$id"
                   params={{ id: kitchenId }}
-                  className="flex min-h-12 items-center gap-2 border-t border-[#F1F3F5] py-3 text-sm font-semibold text-[#C4200F] transition-opacity duration-(--dur-micro) active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
+                  className="flex min-h-12 items-center gap-2 border-t border-[#E1EAD8] py-3 text-sm font-semibold text-[#CF1F1A] transition-opacity duration-(--dur-micro) active:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22553A]/40"
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Add more from this kitchen
@@ -344,30 +404,46 @@ function CartPage() {
             </section>
 
             <section>
-              <label htmlFor="cooking-instructions" className="text-sm font-semibold">
-                Cooking instructions <span className="font-normal text-[#6B6B6B]">(optional)</span>
+              <label htmlFor="cooking-instructions" className="text-[0.9375rem] font-semibold text-[#1C2420]">
+                Add a note for {noteFor(kitchenName)}
               </label>
               <textarea
                 id="cooking-instructions"
                 value={instructions}
                 maxLength={200}
-                rows={3}
+                rows={2}
                 onChange={(event) => persistInstructions(event.target.value)}
-                placeholder="Any special requests for the chef?"
-                className="mt-2 w-full resize-none rounded-[8px] border border-[#E5E7EB] bg-white px-3.5 py-3 text-sm outline-none placeholder:text-[#9A9A9A] focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10"
+                placeholder="Less oil, no onions, ring the bell twice"
+                className="mt-2 w-full resize-none rounded-[1.25rem] border border-[#C9D9BD] bg-white px-4 py-3 text-base outline-none placeholder:text-[#59645C] focus:border-[#22553A] focus:ring-1 focus:ring-[#22553A]"
               />
-              <p className="mt-1 text-right text-xs tabular-nums text-[#6B6B6B]">
-                {instructions.length}/200
-              </p>
+              <p className="mt-1 text-right text-xs tabular-nums text-[#59645C]">{instructions.length}/200</p>
             </section>
 
-            <section className="flex items-start gap-3 rounded-[8px] border border-[#E5E7EB] bg-[#F1F3F5] p-4">
-              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[#F62E18]" aria-hidden="true" />
+            {address ? (
+              <section aria-labelledby="deliver-to-title">
+                <h2 id="deliver-to-title" className="font-[family-name:var(--font-leaf)] text-[1.625rem] leading-tight text-[#22553A]">
+                  Deliver to
+                </h2>
+                <div className="mt-2 flex items-start gap-3 rounded-[1.25rem] border border-[#E1EAD8] bg-white px-4 py-3">
+                  <House className="mt-2.5 h-5 w-5 shrink-0 text-[#22553A]" aria-hidden="true" />
+                  <p className="min-w-0 flex-1 py-2 text-sm leading-5 text-[#59645C]">
+                    <b className="block text-base font-semibold text-[#1C2420]">{address.label || "Delivery address"}</b>
+                    {addressLine}
+                  </p>
+                  <Link to="/addresses" className="inline-flex min-h-11 items-center text-sm font-semibold text-[#CF1F1A]">
+                    Change
+                  </Link>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="flex items-start gap-3 rounded-[1.25rem] bg-[#EAF3E2] p-4">
+              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[#22553A]" aria-hidden="true" />
               <div>
-                <p className="text-sm font-semibold text-[#1A1A1A]">
+                <p className="text-sm font-semibold text-[#1C2420]">
                   This kitchen cooks your order fresh.
                 </p>
-                <p className="mt-1 text-xs leading-5 text-[#6B6B6B]">
+                <p className="mt-1 text-xs leading-5 text-[#59645C]">
                   {leadMinutes
                     ? `Preparation usually takes about ${leadMinutes} min. Craves will arrange the earliest available delivery after checkout.`
                     : "Craves will use the chef's current preparation time and arrange the earliest available delivery after checkout."}

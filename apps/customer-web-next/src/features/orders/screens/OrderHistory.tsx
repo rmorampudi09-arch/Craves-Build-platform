@@ -376,7 +376,7 @@ export default function OrdersPage() {
   } else if (orders.length === 0) {
     body = (
       <EmptyState
-        illustration="orders"
+        illustration="ordersLamp"
         title="No orders yet"
         message="When you order from a home chef, you can follow it live from the kitchen to your door here."
       >
@@ -401,7 +401,7 @@ export default function OrdersPage() {
         </TabsList>
         <TabsContent value={tab} className="mt-4">
           {visible.length === 0 && tab !== "ALL" ? (
-            <EmptyState illustration="orders" title={EMPTY_TAB[tab][0]} message={EMPTY_TAB[tab][1]} heading="h2" compact />
+            <EmptyState illustration="ordersLamp" title={EMPTY_TAB[tab][0]} message={EMPTY_TAB[tab][1]} heading="h2" compact />
           ) : (
             <ul className="grid gap-3.5 lg:grid-cols-2">
               {visible.map((order) => (

@@ -1,5 +1,4 @@
 import { LoaderCircle } from "lucide-react";
-import { FaArrowRight } from "react-icons/fa6";
 import { AnimateCount } from "@/shared/ui/AnimateCount";
 
 interface CartCheckoutBarProps {
@@ -18,6 +17,7 @@ function money(amount: number, currency: string): string {
   }).format(amount);
 }
 
+/** The Banana Leaf cart's one action: "Proceed to checkout · ₹587", with what that amount is said above it. */
 export function CartCheckoutBar({
   total,
   currency,
@@ -26,30 +26,33 @@ export function CartCheckoutBar({
   onContinue,
 }: CartCheckoutBarProps) {
   return (
-    <div data-craves-action-bar className="fixed inset-x-0 bottom-0 z-50 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)]">
-      <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6">
-        <div className="shrink-0">
-          <p className="flex items-center gap-1 text-[11px] font-medium text-[#6B6B6B]">
-            <AnimateCount className="min-w-[1.25ch]">{itemCount}</AnimateCount>
-            <span>{itemCount === 1 ? "item" : "items"}</span>
-          </p>
-          <p className="text-xl font-bold tabular-nums text-[#1A1A1A]">
-            <AnimateCount format={(value) => money(value, currency)}>{total}</AnimateCount>
-          </p>
-          <p className="text-[10px] text-[#6B6B6B]">Food subtotal</p>
-        </div>
+    <div data-craves-action-bar className="fixed inset-x-0 bottom-0 z-50 border-t border-[#E1EAD8] bg-white">
+      <div className="mx-auto max-w-2xl px-4 pt-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6">
+        {/* One sentence that wraps as text, the count rolling inside it. */}
+        <p className="text-center text-xs leading-5 text-[#59645C]">
+          <AnimateCount className="min-w-[1.25ch]">{itemCount}</AnimateCount>{" "}
+          {itemCount === 1 ? "item" : "items"}, food subtotal. Delivery, fees and taxes are added at checkout.
+        </p>
         <button
           type="button"
           onClick={onContinue}
           disabled={disabled}
           aria-busy={disabled}
-          className="craves-primary-action ml-auto flex-1 !px-4 sm:flex-none sm:min-w-52 sm:!px-6"
+          className="craves-primary-action mt-2 w-full"
         >
           {disabled ? (
-            <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
-          ) : null}
-          <span>{disabled ? "Checking…" : "Continue"}</span>
-          {!disabled ? <FaArrowRight className="text-base" aria-hidden="true" /> : null}
+            <>
+              <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+              <span>Checking…</span>
+            </>
+          ) : (
+            <span>
+              Proceed to checkout ·{" "}
+              <span className="tabular-nums">
+                <AnimateCount format={(value) => money(value, currency)}>{total}</AnimateCount>
+              </span>
+            </span>
+          )}
         </button>
       </div>
     </div>

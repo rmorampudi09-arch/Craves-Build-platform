@@ -85,11 +85,13 @@ export function BottomAction({
 }
 
 const styles = StyleSheet.create({
+  // The vertical padding only shows when a label wraps (Telugu, Hindi, Kannada or large text): the lines keep off the edge.
   base: {
     minHeight: touchTarget.comfortable,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
     borderRadius: radius.md,
   },
   primary: {backgroundColor: colors.flameRedAccessible},

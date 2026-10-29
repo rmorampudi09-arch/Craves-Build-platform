@@ -1,17 +1,18 @@
 import React, {useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Chip, InputField, SegmentedControl} from '../../../shared/components';
+import {InputField} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, spacing, typography} from '../../../design/tokens';
-import {AppApiError} from '../../../core/http/apiError';
 import type {PayoutAccountInput, RiderMe, RiderProfile, VehicleKind} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {CheckRow, ChoiceChip, ChoiceRow, Segmented} from '../components/Choices';
 import {StatusBadge} from '../components/StatusBadge';
 import {Card} from '../components/ui';
+import {riderMessage} from '../domain/problem';
 import {riderKeys} from '../state/riderQueries';
-import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
+import {RIDER_LANGUAGES, serverLanguage, useStrings} from '../strings/StringsProvider';
 
 /** The same checks the server makes (FleetRules), so most mistakes never leave the phone. */
 const PLATE = /^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/;
@@ -19,7 +20,6 @@ const UPI = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$/;
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const VEHICLES: VehicleKind[] = ['PETROL', 'ELECTRIC', 'BICYCLE'];
 
-const message = (error: unknown, fallback: string) => (error instanceof AppApiError ? error.message : fallback);
 /** The words of a name in any order or case: "Gopi K" is still "K Gopi" (the server's FleetRules.sameName). */
 const nameWords = (name: string) => name.toLowerCase().split(/[\s.,'-]+/).filter(Boolean).sort().join(' ');
 
@@ -60,7 +60,7 @@ export function JoinForm({edit}: {edit?: Correction}) {
     try {
       const me = await riderApi.signUp({
         name: fullName,
-        language,
+        language: serverLanguage(language),
         vehicleKind: vehicle,
         ...(vehicle === 'BICYCLE' ? {} : {vehicleRegNumber: regNumber}),
         adult,
@@ -69,7 +69,7 @@ export function JoinForm({edit}: {edit?: Correction}) {
       await queryClient.invalidateQueries({queryKey: riderKeys.profile});
       edit?.onClose(true);
     } catch (caught) {
-      setError(message(caught, strings.common.error));
+      setError(riderMessage(caught, strings, language));
     }
   }
 
@@ -93,21 +93,25 @@ export function JoinForm({edit}: {edit?: Correction}) {
       {RIDER_LANGUAGES.length > 1 ? (
         <>
           <Text style={styles.label}>{j.language}</Text>
-          <SegmentedControl
-            value={language}
-            options={RIDER_LANGUAGES.map(value => ({value, label: strings.languages[value]}))}
-            onChange={setLanguage}
-            accessibilityOptionRole="radio"
-            testID="rider-join-language"
-          />
+          <ChoiceRow label={j.language}>
+            {RIDER_LANGUAGES.map(code => (
+              <ChoiceChip
+                key={code}
+                label={strings.languages[code]}
+                selected={language === code}
+                onPress={() => setLanguage(code)}
+                testID={`rider-join-language-${code}`}
+              />
+            ))}
+          </ChoiceRow>
         </>
       ) : null}
       <Text style={styles.label}>{j.vehicle}</Text>
-      <View style={styles.chips}>
+      <ChoiceRow label={j.vehicle}>
         {VEHICLES.map(kind => (
-          <Chip key={kind} label={j.vehicles[kind]} selected={vehicle === kind} onPress={() => setVehicle(kind)} testID={`rider-join-${kind}`} />
+          <ChoiceChip key={kind} label={j.vehicles[kind]} selected={vehicle === kind} onPress={() => setVehicle(kind)} testID={`rider-join-${kind}`} />
         ))}
-      </View>
+      </ChoiceRow>
       {vehicle === 'BICYCLE' ? null : (
         <InputField
           label={j.plate}
@@ -121,11 +125,7 @@ export function JoinForm({edit}: {edit?: Correction}) {
           testID="rider-join-plate"
         />
       )}
-      {edit ? null : (
-        <View style={styles.chips}>
-          <Chip label={j.adult} selected={adult} onPress={() => setAdult(!adult)} testID="rider-join-adult" />
-        </View>
-      )}
+      {edit ? null : <CheckRow label={j.adult} checked={adult} onChange={setAdult} testID="rider-join-adult" />}
       {error ? <Banner tone="warning" inset text={error} testID="rider-join-error" /> : null}
       {edit ? (
         <>
@@ -150,7 +150,7 @@ export function JoinForm({edit}: {edit?: Correction}) {
 
 /** What a PENDING rider signed up with, which they can correct until ops activates them. */
 export function DetailsCard({me, profile}: {me: RiderMe; profile: RiderProfile}) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const d = strings.account.details;
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -174,7 +174,8 @@ export function DetailsCard({me, profile}: {me: RiderMe; profile: RiderProfile})
   }
   const rows: Array<[string, string]> = [
     [d.name, me.name],
-    [d.language, strings.languages[me.language]],
+    // The language the app shows; the server keeps English for a Kannada reader (serverLanguage).
+    [d.language, strings.languages[language]],
     [d.vehicle, vehicle.kind ? strings.account.join.vehicles[vehicle.kind] : vehicle.label],
   ];
   if (vehicle.regNumberMasked) {
@@ -213,7 +214,7 @@ export function DetailsCard({me, profile}: {me: RiderMe; profile: RiderProfile})
  * anything is paid. Remount it (key) when the name changes, so the holder name follows.
  */
 export function PayoutAccountCard({profile, kycName}: {profile: RiderProfile; kycName: string}) {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const a = strings.account;
   const p = a.payout;
   const queryClient = useQueryClient();
@@ -244,7 +245,7 @@ export function PayoutAccountCard({profile, kycName}: {profile: RiderProfile; ky
       setChanging(false);
       await queryClient.invalidateQueries({queryKey: riderKeys.profile});
     } catch (caught) {
-      setError(message(caught, strings.common.error));
+      setError(riderMessage(caught, strings, language));
     }
   }
 
@@ -271,11 +272,11 @@ export function PayoutAccountCard({profile, kycName}: {profile: RiderProfile; ky
       {editing ? (
         <>
           <Text style={styles.secondary}>{p.body(kycName)}</Text>
-          <SegmentedControl
+          <Segmented
             value={method}
             options={(['UPI', 'BANK'] as const).map(value => ({value, label: p.methods[value]}))}
             onChange={setMethod}
-            accessibilityOptionRole="radio"
+            label={p.title}
             testID="rider-payout-method"
           />
           {method === 'UPI' ? (
@@ -322,13 +323,13 @@ export function PayoutAccountCard({profile, kycName}: {profile: RiderProfile; ky
 
 const styles = StyleSheet.create({
   form: {gap: spacing.sm},
-  chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
   row: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   detail: {paddingVertical: spacing.xs},
   divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
   flex: {flex: 1},
   value: {flexShrink: 1, textAlign: 'right'},
-  label: {fontSize: typography.small, color: colors.textSecondary},
+  // Names a group of choices as InputField names a field (shared/components/InputField.tsx), so the form reads as one.
+  label: {fontSize: typography.small, fontWeight: fontWeight.semibold, color: colors.textPrimary},
   body: {fontSize: typography.body, color: colors.textPrimary},
   secondary: {fontSize: typography.body, color: colors.textSecondary},
   strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},

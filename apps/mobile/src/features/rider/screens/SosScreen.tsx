@@ -6,10 +6,11 @@ import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {Body, Card, RiderScreen} from '../components/ui';
+import {problemOf} from '../domain/problem';
 import {riderOnlineService} from '../native/riderOnlineService';
 import type {RiderScreenProps} from '../navigation';
 import {EMERGENCY_NUMBER} from '../riderConfig';
-import {useRiderMe} from '../state/riderQueries';
+import {hasRiderRole, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 
 const dial = (phone: string) => Linking.openURL(`tel:${phone}`).catch(() => undefined);
@@ -18,21 +19,32 @@ const dial = (phone: string) => Linking.openURL(`tel:${phone}`).catch(() => unde
 export function SosScreen({route, navigation}: RiderScreenProps<'Sos'>) {
   const {strings} = useStrings();
   const s = strings.sos;
-  const supportPhone = useRiderMe().data?.supportPhone;
+  const me = useRiderMe().data;
+  const supportPhone = me?.supportPhone;
   const tripId = route.params?.tripId;
-  const [state, setState] = useState<'sharing' | 'shared' | 'failed'>('sharing');
+  // Sharing the location needs the rider role (an active or paused rider); someone signing up or closed still gets
+  // the calls, which never depend on Craves answering. Before /me answers, try anyway: the server decides.
+  const canShare = !me || hasRiderRole(me);
+  const [state, setState] = useState<'sharing' | 'shared' | 'failed' | 'callsOnly'>(canShare ? 'sharing' : 'callsOnly');
 
   const share = useCallback(() => {
+    if (!canShare) {
+      setState('callsOnly');
+      return Promise.resolve();
+    }
     setState('sharing');
     return riderApi.sendSos({tripId, fix: riderOnlineService.lastFix()}).then(
       () => setState('shared'),
-      () => setState('failed'),
+      error => setState(problemOf(error) === 'notAllowed' ? 'callsOnly' : 'failed'),
     );
-  }, [tripId]);
+  }, [tripId, canShare]);
 
   useEffect(() => {
     share();
   }, [share]);
+
+  // A 403 means "no rider role" only for someone /me doesn't know as a rider; for a rider it is a failed send, to retry.
+  const shown = state === 'callsOnly' && hasRiderRole(me) ? 'failed' : state;
 
   return (
     <RiderScreen
@@ -45,9 +57,11 @@ export function SosScreen({route, navigation}: RiderScreenProps<'Sos'>) {
         <Text style={styles.note}>{s.note}</Text>
       </View>
       <View accessibilityLiveRegion="polite" style={styles.status}>
-        {state === 'shared' ? (
+        {shown === 'shared' ? (
           <Banner tone="success" icon="check-circle" title={s.shared} testID="rider-sos-shared" />
-        ) : state === 'failed' ? (
+        ) : shown === 'callsOnly' ? (
+          <Banner tone="info" icon="phone-outline" text={s.callsOnly} testID="rider-sos-calls-only" />
+        ) : shown === 'failed' ? (
           <>
             <Banner tone="warning" text={s.failed} testID="rider-sos-failed" />
             <BottomAction label={s.sendAgain} variant="ghost" onPress={share} style={styles.again} testID="rider-sos-again" />

@@ -5,10 +5,12 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {useQueryClient} from '@tanstack/react-query';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Icon, TerminalState} from '../../shared/components';
+import {Icon} from '../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
-import {SplashScreen} from '../../features/auth/screens/SplashScreen';
+import {BottomAction} from '../../features/rider/components/BottomAction';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
+import {ProblemCard, RiderSplash, StateCard} from '../../features/rider/components/StateCard';
+import {RiderScreen, Title} from '../../features/rider/components/ui';
 import {resolveGate} from '../../features/rider/domain/gate';
 import type {ReceivedOffer} from '../../features/rider/domain/offerTiming';
 import {RiderShellContext, type RiderStackParamList, type RiderTabParamList} from '../../features/rider/navigation';
@@ -129,9 +131,13 @@ function SignedIn() {
 
   if (!me.data) {
     return me.isError ? (
-      <TerminalState title={strings.common.error} actionLabel={strings.common.retry} onAction={() => me.refetch()} />
+      // No sign-out here: without the rider the app can't check for trip steps still waiting to sync (shell.signOut).
+      <RiderScreen testID="rider-me-error">
+        <Title>{strings.signIn.brand}</Title>
+        <ProblemCard error={me.error} onRetry={() => me.refetch()} testID="rider-me-problem" />
+      </RiderScreen>
     ) : (
-      <SplashScreen />
+      <RiderSplash />
     );
   }
 
@@ -188,18 +194,25 @@ export function RiderNavigator() {
   return (
     <NavigationContainer ref={navigationRef}>
       {session.status === 'restoring' ? (
-        <SplashScreen />
+        <RiderSplash />
       ) : session.status === 'authenticated' ? (
         <SignedIn />
       ) : session.status === 'error' ? (
         // A rider with no signal at start keeps the session (and any unsynced trip steps); signing out is the second choice.
-        <TerminalState
-          title={strings.common.error}
-          actionLabel={strings.common.retry}
-          onAction={session.retry}
-          secondaryActionLabel={strings.account.signOut}
-          onSecondaryAction={() => session.signOut()}
-        />
+        <RiderScreen
+          testID="rider-session-error"
+          footer={
+            <BottomAction label={strings.account.signOut} variant="neutral" onPress={() => session.signOut()} testID="rider-session-sign-out" />
+          }>
+          <Title>{strings.signIn.brand}</Title>
+          <StateCard
+            icon="wifi-off"
+            title={strings.states.sessionTitle}
+            body={strings.states.sessionBody}
+            action={{label: strings.common.retry, onPress: session.retry, testID: 'rider-retry'}}
+            testID="rider-session-problem"
+          />
+        </RiderScreen>
       ) : (
         <Stack.Navigator screenOptions={{headerShown: false}}>
           <Stack.Screen name="Phone" component={RiderPhoneScreen} />

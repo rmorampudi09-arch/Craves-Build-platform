@@ -7,7 +7,9 @@ import {Icon, LoadingIndicator, SkeletonBlock} from '../../../shared/components'
 import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
 import type {EarningsRange, TripEarning} from '../api/contract';
 import {BottomAction} from '../components/BottomAction';
+import {Segmented} from '../components/Choices';
 import {RiderHeader} from '../components/RiderHeader';
+import {StateCard} from '../components/StateCard';
 import {StatusBadge} from '../components/StatusBadge';
 import {Money} from '../components/ui';
 import {formatClock, formatDay, formatRupees} from '../domain/format';
@@ -57,24 +59,18 @@ const TripRow = memo(function TripRowView({
 
 /** Today / This week, drawn to the design: a muted track with a white selected segment. */
 function RangeSwitch({value, onChange, e}: {value: EarningsRange; onChange: (range: EarningsRange) => void; e: EarningsStrings}) {
-  const options: [EarningsRange, string][] = [
-    ['today', e.today],
-    ['week', e.week],
-  ];
   return (
-    <View accessibilityRole="tablist" accessibilityLabel={e.range} style={styles.track}>
-      {options.map(([range, label]) => (
-        <Pressable
-          key={range}
-          accessibilityRole="tab"
-          accessibilityState={{selected: value === range}}
-          onPress={() => onChange(range)}
-          style={[styles.segment, value === range && styles.segmentOn]}
-          testID={`rider-range-${range}`}>
-          <Text style={[styles.segmentText, value === range && styles.segmentTextOn]}>{label}</Text>
-        </Pressable>
-      ))}
-    </View>
+    <Segmented
+      value={value}
+      options={[
+        {value: 'today', label: e.today},
+        {value: 'week', label: e.week},
+      ]}
+      onChange={onChange}
+      label={e.range}
+      role="tab"
+      testID="rider-range"
+    />
   );
 }
 
@@ -150,8 +146,7 @@ export function EarningsScreen() {
             </View>
           ) : (
             <View style={styles.pad}>
-              <Text style={styles.emptyTitle}>{e.empty}</Text>
-              <Text style={styles.meta}>{e.emptyHint}</Text>
+              <StateCard icon="moped" title={e.empty} body={e.emptyHint} testID="rider-earnings-empty" />
             </View>
           )
         }
@@ -183,19 +178,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: borderWidth.standard,
     borderBottomColor: colors.border,
   },
-  track: {flexDirection: 'row', padding: spacing.xxs, borderRadius: radius.md, backgroundColor: colors.muted},
-  segment: {
-    flex: 1,
-    minHeight: touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.sm,
-    borderWidth: borderWidth.standard,
-    borderColor: 'transparent',
-  },
-  segmentOn: {backgroundColor: colors.white, borderColor: colors.border},
-  segmentText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textSecondary},
-  segmentTextOn: {color: colors.textPrimary},
   totalRow: {flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm},
   trips: {fontSize: typography.body, color: colors.textSecondary},
   navRow: {
@@ -228,5 +210,4 @@ const styles = StyleSheet.create({
   rowEnd: {alignItems: 'flex-end', gap: spacing.xxs},
   amount: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
   pad: {padding: spacing.md, gap: spacing.xxs},
-  emptyTitle: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
 });

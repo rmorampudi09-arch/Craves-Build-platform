@@ -37,7 +37,7 @@ Owner's call (14 Oct): recruit Hyderabad home chefs as fast as possible, with po
 | Thu 22 to Wed 28, 11:23 and 20:23 | Team reels, plus any LEARN graphics | One story sequence per slot, rotating ST6, ST7, ST8, ST1, ST2, ST3 |
 | Sun 25, 20:23 | Full LEARN | |
 
-The routine turns itself off after the last catch-up run (Wed 28 Oct, 22:23).
+The routine turned itself off on Thu 29 Oct after the last catch-up run (Wed 28 Oct, 22:23). From Fri 23 Oct, almost every story publish stopped at a permission prompt nobody answered, so most stories that week were skipped (see published.csv).
 
 ## What the team must do
 

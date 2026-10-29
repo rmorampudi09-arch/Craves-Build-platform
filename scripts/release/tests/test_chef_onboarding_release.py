@@ -1,5 +1,6 @@
 import copy
 import sys
+import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import Mock,patch
@@ -153,6 +154,16 @@ class ChefReleaseGuardTests(unittest.TestCase):
         self.assertEqual(update.call_args_list,[unittest.mock.call('containerapp','update','-g',release.RG,'-n',release.CATALOG,'--image','craves/catalog-service@sha256:new','--no-wait')])
         self.assertEqual(cli.call_args_list[0].args,('az','acr','login','-n',release.ACR,'--only-show-errors'))
         self.assertEqual(len(cli.call_args_list),1)
+
+    def test_web_logs_docker_into_the_registry_before_pushing_web_and_admin_images(self):
+        calls=Mock()
+        with tempfile.TemporaryDirectory() as out,\
+             patch.object(sys,'argv',['chef_onboarding_release.py','--operation','web','--sha','a'*40,'--regression-run','1','--confirm','--output',out]),\
+             patch.object(release,'source_guard'),patch.object(release,'preflight',return_value={}),patch.object(release,'applied'),\
+             patch.object(release,'run',calls.run),patch.object(release,'deploy_web',calls.deploy_web),patch.object(release,'deploy_admin',calls.deploy_admin):
+            release.main()
+        self.assertEqual([name for name,_,_ in calls.mock_calls],['run','deploy_web','deploy_admin'])
+        self.assertEqual(calls.run.call_args.args,('az','acr','login','-n',release.ACR,'--only-show-errors'))
 
     def test_media_creates_public_photo_storage_and_points_catalog_at_it(self):
         before=self.settled_app(release.CATALOG);after=copy.deepcopy(before)

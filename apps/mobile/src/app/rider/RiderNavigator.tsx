@@ -3,6 +3,7 @@ import {Alert} from 'react-native';
 import {createNavigationContainerRef, NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useQueryClient} from '@tanstack/react-query';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Icon, TerminalState} from '../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
@@ -13,6 +14,7 @@ import type {ReceivedOffer} from '../../features/rider/domain/offerTiming';
 import {RiderShellContext, type RiderStackParamList, type RiderTabParamList} from '../../features/rider/navigation';
 import {RIDER_APP_VERSION} from '../../features/rider/riderConfig';
 import {useActiveTrip, useRiderHome, useRiderMe} from '../../features/rider/state/riderQueries';
+import {riderSnapshot} from '../../features/rider/state/riderSnapshot';
 import {tripQueue} from '../../features/rider/state/tripQueue';
 import {useStrings} from '../../features/rider/strings/StringsProvider';
 import {AccountStatusScreen} from '../../features/rider/screens/AccountStatusScreen';
@@ -25,6 +27,7 @@ import {NoticeScreen} from '../../features/rider/screens/NoticeScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
 import {PayoutsScreen} from '../../features/rider/screens/PayoutsScreen';
 import {PhoneSetupScreen} from '../../features/rider/screens/PhoneSetupScreen';
+import {PrivacyNoticeScreen} from '../../features/rider/screens/PrivacyNoticeScreen';
 import {ProfileScreen} from '../../features/rider/screens/ProfileScreen';
 import {SosScreen} from '../../features/rider/screens/SosScreen';
 import {TermsScreen} from '../../features/rider/screens/TermsScreen';
@@ -83,13 +86,14 @@ function RiderTabs() {
   );
 }
 
-/** GET /me decides where a signed-in rider lands: account status, new terms, or work. */
+/** GET /me decides where a signed-in rider lands: the privacy notice, account status, new terms, or work. */
 function SignedIn() {
   const {strings, adoptServerLanguage} = useStrings();
   const session = useRiderSession();
   const me = useRiderMe();
   const home = useRiderHome();
   const trip = useActiveTrip();
+  const queryClient = useQueryClient();
   const language = me.data?.language;
 
   useEffect(() => {
@@ -97,6 +101,9 @@ function SignedIn() {
       adoptServerLanguage(language);
     }
   }, [language, adoptServerLanguage]);
+
+  // What a start without signal opens from (useRiderSession, WORKPLAN P2-12).
+  useEffect(() => riderSnapshot.watch(queryClient), [queryClient]);
 
   const riderId = me.data?.riderId ?? '';
   const blockedMessage = strings.profile.signOutBlocked;
@@ -140,6 +147,8 @@ function SignedIn() {
           <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
         ) : gate.kind === 'terms' ? (
           <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'accept'}} navigationKey={gate.kind} />
+        ) : gate.kind === 'privacy' ? (
+          <Stack.Screen name="Privacy" component={PrivacyNoticeScreen} navigationKey={gate.kind} />
         ) : (
           <>
             <Stack.Screen name="Tabs" component={RiderTabs} />
@@ -158,14 +167,16 @@ function SignedIn() {
           </>
         )}
         {gate.kind !== 'ready' ? (
-          // The account and terms screens show SOS and the demo chip too.
+          // The account, terms and privacy screens show SOS and the demo chip too.
           <>
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
             <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
           </>
         ) : null}
       </Stack.Navigator>
-      {gate.kind === 'ready' ? <RiderRuntime riderId={riderId} openOffer={openOffer} /> : null}
+      {gate.kind === 'ready' ? (
+        <RiderRuntime riderId={riderId} nativeOutbox={me.data.features?.nativeTripOutbox === true} openOffer={openOffer} />
+      ) : null}
     </RiderShellContext.Provider>
   );
 }

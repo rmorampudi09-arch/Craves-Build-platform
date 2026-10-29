@@ -6,7 +6,7 @@ import {useReducedMotionPreference} from '../../../design/reducedMotion';
 /**
  * A timer bar drawn with a native-driver scaleX, so nothing re-renders while it runs.
  * - countdown (offer): 8 dp red, the time left, shrinking to empty at `deadlineMs`.
- * - wait (free wait, door wait): 6 dp dark, the time passed, full at `deadlineMs`.
+ * - wait (the kitchen's free wait): 6 dp dark, the time passed, full at `deadlineMs`.
  * It runs for the time left, never longer than `totalMs`. With reduce motion on it steps once a second.
  * The bar is decorative: put the time in text next to it for TalkBack.
  */

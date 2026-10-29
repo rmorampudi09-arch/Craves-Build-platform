@@ -1,0 +1,23 @@
+<resources>
+    <!-- Telugu (WORKPLAN P2-08): shown only once JS passes "te", which it does after a native speaker signs it off. -->
+    <string name="rider_channel_offers">ఆర్డర్ ఆఫర్లు</string>
+    <string name="rider_channel_online">ఆన్‌లైన్ స్థితి</string>
+    <string name="rider_channel_trip">ట్రిప్ అప్‌డేట్లు</string>
+    <string name="rider_offer_title">కొత్త ఆర్డర్</string>
+    <string name="rider_offer_title_pay">కొత్త ఆర్డర్: %1$s</string>
+    <string name="rider_offer_route">%1$s నుండి %2$s</string>
+    <string name="rider_offer_body">ఆఫర్ చూడటానికి నొక్కండి.</string>
+    <string name="rider_test_ring_title">టెస్ట్ రింగ్</string>
+    <string name="rider_test_ring_body">ఆర్డర్ ఆఫర్ వచ్చినప్పుడు ఇలాగే రింగ్ అవుతుంది.</string>
+    <string name="rider_online_title">మీరు ఆన్‌లైన్‌లో ఉన్నారు</string>
+    <string name="rider_online_body">మీరు ఆన్‌లైన్‌లో ఉన్నంతసేపు Craves Rider మీ లొకేషన్‌ని పంపుతుంది.</string>
+    <string name="rider_shift_ended">మీ షిఫ్ట్ ముగిసింది. ఆర్డర్లు రావాలంటే మళ్లీ ఆన్‌లైన్‌కి వెళ్లండి.</string>
+    <string name="rider_closed_by_phone">ఫోన్ Craves Riderని మూసేసింది. మళ్లీ ఆర్డర్లు రావాలంటే ఆప్ తెరవండి.</string>
+    <string name="rider_allow_location">ఆన్‌లైన్ కావడానికి లొకేషన్‌కి అనుమతి ఇవ్వండి.</string>
+    <string name="rider_no_internet">ఇంటర్నెట్ లేదు. మళ్లీ ప్రయత్నిస్తున్నాం.</string>
+    <string name="rider_notifications_off">ఆర్డర్లు రావాలంటే నోటిఫికేషన్లు ఆన్ చేయండి.</string>
+    <string name="rider_trip_cancelled_title">ట్రిప్ రద్దయింది</string>
+    <string name="rider_trip_cancelled_body">తర్వాత ఏం చేయాలో చూడటానికి Craves Rider తెరవండి.</string>
+    <string name="rider_go_online_title">మీరు ఆఫ్‌లైన్‌లో ఉన్నారు</string>
+    <string name="rider_go_online_body">మళ్లీ ఆన్‌లైన్‌కి వచ్చి ఆర్డర్లు పొందడానికి నొక్కండి.</string>
+</resources>

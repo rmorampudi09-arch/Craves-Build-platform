@@ -6,9 +6,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,7 +20,9 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -55,6 +59,18 @@ class FleetRiderSecurityTest {
         mvc.perform(multipart("/api/v1/rider/shift/start").file(new MockMultipartFile("selfie", new byte[] {1}))
             .header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/rider/shift/end").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/pause").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"minutes\":10}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/resume").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(put("/api/v1/rider/preferences").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"maxPickupM\":2000}")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/rider/my-data").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/rider/my-data")).andExpect(status().is4xxClientError());
+        mvc.perform(put("/api/v1/rider/home-spot").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"lat\":17.47,\"lng\":78.35}")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/rider/home-spot").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer CUSTOMER")).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/rider/devices").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
             .content("{\"installationId\":\"9774d56d682e549c\",\"fcmToken\":\"t\",\"appVersion\":\"1.0.0\",\"model\":\"Redmi\"}"))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -67,7 +83,7 @@ class FleetRiderSecurityTest {
         UUID pending = UUID.randomUUID();
         when(verifier.verify("pending")).thenReturn(new CravesPrincipal(pending, "+919000000000", Set.of("CUSTOMER")));
         when(service.profile(pending)).thenReturn(new FleetRiderModels.RiderProfile(new FleetRiderModels.Vehicle("Two-wheeler", null, null),
-            List.of(), null, null, null));
+            List.of(), null, null, null, null));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer pending")).andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicle.label").value("Two-wheeler"));
         mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", new byte[] {1})).param("type", "DL")
@@ -87,11 +103,47 @@ class FleetRiderSecurityTest {
         verifyNoMoreInteractions(service);
     }
 
+    /** Phase 4: with a RIDER token, the rider's own data copy, a break and coming back reach the services as that identity. */
+    @Test
+    void aRiderReachesTheirDataCopyAndTheirBreaks() throws Exception {
+        UUID identity = UUID.randomUUID();
+        when(verifier.verify("rider")).thenReturn(new CravesPrincipal(identity, "+919000000000", Set.of("RIDER")));
+        when(service.myData(identity)).thenReturn(Map.of("about", Map.of("eachListHoldsAtMost", 5000)));
+        mvc.perform(get("/api/v1/rider/my-data").header("Authorization", "Bearer rider")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.about.eachListHoldsAtMost").value(5000));
+        when(shifts.pause(identity, 10)).thenReturn(new FleetRiderModels.ShiftPause(Instant.parse("2026-10-28T07:12:00Z")));
+        mvc.perform(post("/api/v1/rider/shift/pause").header("Authorization", "Bearer rider").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"minutes\":10}")).andExpect(status().isOk()).andExpect(jsonPath("$.offersPausedUntil").value("2026-10-28T07:12:00Z"));
+        mvc.perform(post("/api/v1/rider/shift/resume").header("Authorization", "Bearer rider")).andExpect(status().isNoContent());
+        verify(service).myData(identity);
+        verify(shifts).pause(identity, 10);
+        verify(shifts).resume(identity);
+    }
+
+    /** Phase 5: with a RIDER token, the home spot and heading home reach the services as that identity. */
+    @Test
+    void aRiderSavesAndDeletesTheirHomeSpotAndHeadsHome() throws Exception {
+        UUID identity = UUID.randomUUID();
+        when(verifier.verify("rider")).thenReturn(new CravesPrincipal(identity, "+919000000000", Set.of("RIDER")));
+        when(service.saveHome(eq(identity), any())).thenReturn(new FleetRiderModels.HomeSpot(Instant.parse("2026-10-28T07:00:00Z")));
+        mvc.perform(put("/api/v1/rider/home-spot").header("Authorization", "Bearer rider").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"lat\":17.47,\"lng\":78.35}")).andExpect(status().isOk()).andExpect(jsonPath("$.savedAt").value("2026-10-28T07:00:00Z"));
+        mvc.perform(delete("/api/v1/rider/home-spot").header("Authorization", "Bearer rider")).andExpect(status().isNoContent());
+        when(shifts.headHome(identity)).thenReturn(new FleetRiderModels.HeadingHome(Instant.parse("2026-10-28T08:00:00Z")));
+        mvc.perform(post("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer rider")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.until").value("2026-10-28T08:00:00Z"));
+        mvc.perform(delete("/api/v1/rider/shift/heading-home").header("Authorization", "Bearer rider")).andExpect(status().isNoContent());
+        verify(service).saveHome(eq(identity), eq(new FleetRiderModels.HomeSpotRequest(17.47, 78.35)));
+        verify(service).forgetHome(identity);
+        verify(shifts).headHome(identity);
+        verify(shifts).stopHeadingHome(identity);
+    }
+
     @Test
     void meNeedsOnlyASignIn() throws Exception {
         when(verifier.verify("customer")).thenReturn(new CravesPrincipal(UUID.randomUUID(), "+919000000000", Set.of("CUSTOMER")));
         when(service.me(any())).thenReturn(new FleetRiderModels.RiderMe("", "", "+91 90xxxxx000", null, "NOT_RIDER", null, null, null,
-            "2026-10-v1", null, "en", "1.0.0", "+914012345678", null, new FleetRiderModels.Features(false, false)));
+            "2026-10-v1", null, "en", "1.0.0", "+914012345678", null, new FleetRiderModels.Features(false, false, false, false), null));
         mvc.perform(get("/api/v1/rider/me").header("Authorization", "Bearer customer")).andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("NOT_RIDER")).andExpect(jsonPath("$.notice").doesNotExist());
         mvc.perform(get("/api/v1/rider/me")).andExpect(status().is4xxClientError());

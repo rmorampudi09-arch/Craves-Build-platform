@@ -50,6 +50,7 @@ Every pipeline you may run builds from GitHub `main`. All are manual (no trigger
 | 22 | `Craves-Production-Health-Check` | `azure-pipelines-production-stabilization.yml` | read-only health check, every 6 hours |
 | 23 | `Craves-Chef-Onboarding-Release` | `azure-pipelines-chef-onboarding-release.yml` | chef onboarding release: backend, apim, web (also redeploys admin), catalog, media |
 | 24 | `Craves-Referral-Chef-Release` | `azure-pipelines-referral-chef.yml` | chef referral programme: inspect, test, release, activate, verify |
+| (create once) | `Craves-Fleet-Engine` | `azure-pipelines-fleet-engine.yml` | rider fleet engine: tests, image and container app, all manual; deploys only with `confirmProductionChange` and a what-if that changes nothing but the engine's app (`infra/fleet-engine/README.md`) |
 | (create once) | `Craves-Web-Certificate` | `azure-pipelines-web-letsencrypt-certificate.yml` | craves.in/www certificate: weekly renewal check, renews when fewer than 35 days remain (`infra/certificates/web-letsencrypt/README.md`) |
 | (create once) | `Craves-Voice-Support` | `azure-pipelines-voice-support.yml` | voice support line: Foundry Voice Live resource, gateway `ca-craves-voice-prodlow`, kill switch (`docs/voice-support/README.md`) |
 | (create once) | `Craves-Order-Service-Release` | `azure-pipelines-order-service.yml` | order-service image from `main` (`imageTag` = the commit); no runtime change |

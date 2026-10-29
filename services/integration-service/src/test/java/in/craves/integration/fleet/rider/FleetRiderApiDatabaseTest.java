@@ -298,8 +298,15 @@ class FleetRiderApiDatabaseTest {
         for (String path : java.util.List.of("/api/v1/rider/home", "/api/v1/rider/terms")) {
             mvc.perform(get(path).header("Authorization", "Bearer pending")).andExpect(status().isForbidden());
         }
+        // The privacy notice comes before documents (P2-09): the route lets a PENDING rider through to the service, which
+        // refuses here only because no notice is set.
+        String notice = "{\"version\":\"2027-05-v1\",\"language\":\"en\"}";
+        mvc.perform(post("/api/v1/rider/privacy-notice/accept").header("Authorization", "Bearer pending").contentType(MediaType.APPLICATION_JSON)
+            .content(notice)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NOTICE_CHANGED"));
 
         when(verifier.verify("stranger")).thenReturn(new CravesPrincipal(UUID.randomUUID(), "+919000000007", Set.of("CUSTOMER")));
+        mvc.perform(post("/api/v1/rider/privacy-notice/accept").header("Authorization", "Bearer stranger").contentType(MediaType.APPLICATION_JSON)
+            .content(notice)).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer stranger")).andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("NOT_A_RIDER"));
         mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", "dl.jpg", "image/jpeg", jpeg)).param("type", "AADHAAR")

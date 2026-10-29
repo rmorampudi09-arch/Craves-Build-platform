@@ -11,6 +11,7 @@ import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetOpsController;
+import in.craves.integration.fleet.admin.FleetPilotHealth;
 import in.craves.integration.fleet.admin.FleetSlotController;
 import in.craves.integration.fleet.admin.FleetSlotService;
 import in.craves.integration.fleet.admin.RiderJoinsExitsExport;
@@ -71,10 +72,20 @@ class FleetShiftCredentialSecurityTest {
     @MockBean FleetPayouts payouts;
     @MockBean FleetSupportService support;
     @MockBean FleetOpsService ops;
+    @MockBean FleetPilotHealth health;
     @MockBean JwtVerifier verifier;
 
     @Test
     void theShiftCredentialOpensOnlyTheRoutesThatTakeIt() throws Exception {
+        assertThat(walk()).containsExactly("POST /api/v1/rider/devices", "POST /api/v1/rider/locations");
+        verify(locations).ingest(null, CREDENTIAL, new LocationBatch(List.of()));
+        verify(shifts).registerDevice(null, CREDENTIAL, new DeviceRegistration(null, null, null, null));
+        verifyNoMoreInteractions(shifts);
+        verifyNoInteractions(riders, admin, joinsExits, trips, slots, earnings, payouts, support, ops);
+    }
+
+    /** Every rider and admin fleet route called with only the shift credential; the ones that answered (not 401 or 403). */
+    Set<String> walk() throws Exception {
         Set<String> walked = new TreeSet<>();
         Set<String> answered = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
@@ -100,10 +111,6 @@ class FleetShiftCredentialSecurityTest {
             "GET /api/v1/rider/earnings", "POST /api/v1/rider/withdrawals", "POST /api/v1/rider/sos", "GET /api/v1/admin/fleet/payout-batches",
             "GET /api/v1/admin/fleet/support-issues", "GET /api/v1/admin/fleet/dispatch-queue", "POST /api/v1/admin/fleet/trips/{tripId}/reassign")
             .hasSizeGreaterThan(20);
-        assertThat(answered).containsExactly("POST /api/v1/rider/devices", "POST /api/v1/rider/locations");
-        verify(locations).ingest(null, CREDENTIAL, new LocationBatch(List.of()));
-        verify(shifts).registerDevice(null, CREDENTIAL, new DeviceRegistration(null, null, null, null));
-        verifyNoMoreInteractions(shifts);
-        verifyNoInteractions(riders, admin, joinsExits, trips, slots, earnings, payouts, support, ops);
+        return answered;
     }
 }

@@ -7,12 +7,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Keeps the 10 s upload timer running with the screen off while online. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The trip-step outbox (P2-02): its job is persisted, so it runs after a reboot, and it waits for a network
+         (Android 14+ requires ACCESS_NETWORK_STATE for that, and for the online service's network callback). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application>
         <service
             android:name=".RiderOnlineService"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <service
+            android:name=".RiderOutboxJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <service
             android:name=".RiderMessagingService"
             android:exported="false">

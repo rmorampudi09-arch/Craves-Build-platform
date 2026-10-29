@@ -6,6 +6,9 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import type {HomeSummary, RiderMe, Trip} from '../api/contract';
 import {riderApi} from '../api/riderApi';
+import {riderDevice} from '../native/riderDevice';
+import {CountdownBar} from '../components/CountdownBar';
+import {formatClock} from '../domain/format';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
@@ -13,7 +16,13 @@ import {RiderRuntime} from '../components/RiderRuntime';
 import {TripScreen} from './TripScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
-const mockPending = {count: 0};
+// Offline, the queue keeps what the screen sends; the screen shows the step those entries lead to (P1-06).
+const mockPending = {offline: false, entries: [] as MockEntry[], listeners: new Set<() => void>()};
+type MockEntry = {action: string; tripId: string; deferred?: boolean; body?: unknown};
+function mockSetEntries(entries: MockEntry[]) {
+  mockPending.entries = entries;
+  mockPending.listeners.forEach(listener => listener());
+}
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/native', () => ({
@@ -33,18 +42,36 @@ jest.mock('../api/riderApi', () => {
 });
 type RejectListener = (entry: unknown, info: unknown) => void;
 const mockRejected = new Set<RejectListener>();
-jest.mock('../state/tripQueue', () => ({
-  tripQueue: {
-    enqueue: jest.fn(async () => ({kind: 'queued'})),
-    onRejected: jest.fn((listener: RejectListener) => {
-      mockRejected.add(listener);
-      return () => mockRejected.delete(listener);
-    }),
-    onSent: () => () => undefined,
-    flush: jest.fn(async () => new Map()),
-  },
-  usePendingActions: () => mockPending.count,
-}));
+const mockRefusals: {list: {tripId: string; code: string; message: string}[]} = {list: []};
+jest.mock('../state/tripQueue', () => {
+  const {useSyncExternalStore} = require('react');
+  const subscribe = (listener: () => void) => {
+    mockPending.listeners.add(listener);
+    return () => mockPending.listeners.delete(listener);
+  };
+  return {
+    tripQueue: {
+      // Offline, the entry stays once its first try is over (deferred): the screen shows where it leads.
+      enqueue: jest.fn(async (entry: MockEntry) => {
+        if (mockPending.offline) {
+          mockSetEntries([...mockPending.entries, {...entry, deferred: true}]);
+        }
+        return {kind: 'queued'};
+      }),
+      onRejected: jest.fn((listener: RejectListener) => {
+        mockRejected.add(listener);
+        return () => mockRejected.delete(listener);
+      }),
+      onSent: () => () => undefined,
+      flush: jest.fn(async () => new Map()),
+      dismissRefusal: jest.fn(async () => undefined),
+      setNativeOutbox: jest.fn(async () => undefined),
+    },
+    useRefusals: (_riderId: string, tripId?: string) => mockRefusals.list.filter(r => tripId === undefined || r.tripId === tripId),
+    usePendingEntries: () => useSyncExternalStore(subscribe, () => mockPending.entries),
+    usePendingActions: () => useSyncExternalStore(subscribe, () => mockPending.entries.length),
+  };
+});
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {
     lastFix: () => mockFix.value,
@@ -144,7 +171,9 @@ const press = (testID: string) => act(async () => byId(testID).props.onPress());
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockPending.count = 0;
+  mockPending.offline = false;
+  mockPending.entries = [];
+  mockRefusals.list = [];
   mockFix.value = null;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
@@ -212,9 +241,34 @@ describe('Trip: to the kitchen (step 1)', () => {
     expect(allText()).not.toContain('sealed bag');
   });
 
+  it('opens on the step the queued steps lead to, after a restart while offline (blueprint A3)', async () => {
+    // What the queue loads at start counts as deferred: it outlived its tap.
+    mockSetEntries([
+      {action: 'arrived-pickup', tripId: 't1', deferred: true},
+      {action: 'picked-up', tripId: 't1', deferred: true},
+    ]);
+    await render(trip);
+    expect(has('rider-reached-customer')).toBe(true);
+    expect(allText()).toContain('Saved · will sync');
+  });
+
+  it("keeps this trip's refused step on screen with the server's reason until dismissed (P1-08)", async () => {
+    mockRefusals.list = [
+      {tripId: 't1', code: 'STEP_CONFLICT', message: 'Ops moved this trip on. Check the step below.'},
+      {tripId: 't9', code: 'TRIP_NOT_ACTIVE', message: 'Another trip ended.'},
+    ];
+    await render(trip);
+    expect(allText()).toContain("A trip step didn't go through | Ops moved this trip on. Check the step below.");
+    expect(allText()).not.toContain('Another trip ended.');
+    await press('rider-refusal-call');
+    expect(Linking.openURL).toHaveBeenCalledWith('tel:+911111111111');
+    await press('rider-refusal-dismiss');
+    expect(tripQueue.dismissRefusal).toHaveBeenCalledWith('t1');
+  });
+
   it('moves to the kitchen step at once and says it will sync when offline', async () => {
     await render(trip);
-    mockPending.count = 1;
+    mockPending.offline = true;
     await press('rider-reached-kitchen');
     expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
     expect(allText()).toContain('At the kitchen');
@@ -408,13 +462,35 @@ describe('Trip: deliver with the OTP (step 4)', () => {
     expect(allText()).toContain('Wrong code. 2 tries left.');
   });
 
-  it('completes at once and says it will sync when offline', async () => {
+  it('keeps the code boxes while the server checks the OTP, and never says "saved" for it', async () => {
     await render(atDrop);
-    mockPending.count = 1;
+    let answer: (outcome: unknown) => void = () => undefined;
+    (tripQueue.enqueue as jest.Mock).mockImplementationOnce((entry: MockEntry) => {
+      mockSetEntries([...mockPending.entries, entry]); // queued, on its first try
+      return new Promise(resolve => (answer = resolve));
+    });
+    await typeOtp('4719');
+    act(() => {
+      byId('rider-delivered').props.onPress();
+    });
+    expect(has('rider-deliver')).toBe(true);
+    expect(allText()).not.toContain('Delivery saved');
+    expect(allText()).not.toContain('Saved · will sync');
+    await act(async () => {
+      mockSetEntries([]);
+      answer({kind: 'sent', trip: {...atDrop, step: 'DELIVERED', version: 5}});
+    });
+    expect(allText()).toContain('Trip complete');
+  });
+
+  it('says the delivery is saved and the rider can go when the OTP waits offline (P1-05)', async () => {
+    await render(atDrop);
+    mockPending.offline = true;
     await typeOtp('4719');
     await press('rider-delivered');
-    expect(allText()).toContain('Trip complete');
+    expect(allText()).toContain("Delivery saved | We'll check the code when you're back online. You can go.");
     expect(allText()).toContain('Saved · will sync');
+    expect(allText()).not.toContain('Trip complete');
   });
 
   it('calls the customer from the door', async () => {
@@ -425,7 +501,7 @@ describe('Trip: deliver with the OTP (step 4)', () => {
 });
 
 describe('RiderRuntime', () => {
-  it('leaves wrong and locked OTPs to the trip screen and alerts other refusals', async () => {
+  it('never alerts a refusal: the trip refreshes and the screens keep the notice (P1-08)', async () => {
     await act(async () => {
       tree = renderer.create(
         <QueryClientProvider client={new QueryClient()}>
@@ -437,7 +513,7 @@ describe('RiderRuntime', () => {
     act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'OTP_LOCKED', message: 'Locked'})));
     expect(Alert.alert).not.toHaveBeenCalled();
     act(() => mockRejected.forEach(listener => listener({tripId: 't1'}, {code: 'TRIP_NOT_ACTIVE', message: 'Ended'})));
-    expect(Alert.alert).toHaveBeenCalledWith('Ended');
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
 
@@ -479,24 +555,33 @@ describe('Trip: customer not answering', () => {
       jest.advanceTimersByTime(2 * 60_000);
     });
     await press('rider-call-2');
-    expect(tree.root.findByProps({testID: 'rider-door-wait-left'}).props.children).toBe('8:00');
+    // A time, not a countdown: the 8-minute wait from the second call (decision E5).
+    const leaveAt = `You can leave at ${formatClock(NOW + 2 * 60_000 + 8 * 60_000)}`;
+    expect(tree.root.findByProps({testID: 'rider-leave-at'}).props.children).toBe(leaveAt);
+    expect(tree.root.findAllByType(CountdownBar)).toHaveLength(0);
     expect(byId('rider-leave-photo').props.disabled).toBe(true);
     await act(async () => {
       jest.advanceTimersByTime(5 * 60_000 + 42_000);
     });
-    expect(tree.root.findByProps({testID: 'rider-door-wait-left'}).props.children).toBe('2:18');
+    expect(tree.root.findByProps({testID: 'rider-leave-at'}).props.children).toBe(leaveAt);
+    expect(byId('rider-leave-photo').props.disabled).toBe(true);
     await act(async () => {
       jest.advanceTimersByTime(2 * 60_000 + 18_000);
     });
+    expect(has('rider-leave-at')).toBe(false);
     expect(byId('rider-leave-photo').props.disabled).toBe(false);
     expect(allText()).toContain('You can leave the order now');
+    // The queue gets the copy kept in the app's files, not the camera's cache file (P1-07).
+    const keep = jest.spyOn(riderDevice, 'keepPhoto').mockResolvedValue('file:///files/rider-photos/kept.jpg');
     await press('rider-leave-photo');
+    expect(keep).toHaveBeenCalledWith('file:///photo.jpg');
     expect(tripQueue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'delivered',
-        body: expect.objectContaining({method: 'PHOTO', photoUri: 'file:///photo.jpg', callsMade: 2}),
+        body: expect.objectContaining({method: 'PHOTO', photoUri: 'file:///files/rider-photos/kept.jpg', callsMade: 2}),
       }),
     );
+    keep.mockRestore();
   });
 
   it('counts a call made from the OTP screen as the first call', async () => {
@@ -616,11 +701,11 @@ describe('Trip: complete, failed and cancelled', () => {
 
   it('while offline says it will sync and holds the credited note and today', async () => {
     await render({...trip, step: 'AT_DROP'});
-    mockPending.count = 1;
+    mockPending.offline = true;
     await act(async () => tree.root.findByType(TextInput).props.onChangeText('4719'));
     await press('rider-delivered');
     const text = allText();
-    expect(text).toContain('Trip complete');
+    expect(text).toContain('Delivery saved');
     expect(text).toContain('Saved · will sync');
     expect(text).toContain('Pay details appear once this syncs.');
     expect(text).not.toContain('Credited now');
@@ -649,6 +734,14 @@ describe('Trip: complete, failed and cancelled', () => {
     expect(text).toContain('Wrong address');
     expect(text).toContain('₹67');
     expect(text).toContain('Ops checks what happened before this pay is released.');
+  });
+
+  it('shows a cancelled trip with the step the server refused while offline', async () => {
+    mockRefusals.list = [{tripId: 't1', code: 'TRIP_NOT_ACTIVE', message: 'This trip has ended. Check Home for your next order.'}];
+    await render({...trip, step: 'CANCELLED'});
+    expect(allText()).toContain('Trip cancelled');
+    expect(allText()).toContain("A trip step didn't go through | This trip has ended. Check Home for your next order.");
+    expect(has('rider-refusal-dismiss')).toBe(true);
   });
 
   it('shows a cancelled trip with the reason and no made-up total', async () => {

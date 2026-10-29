@@ -5,20 +5,33 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 /**
- * High-priority, data-only offer pushes from notification-service: data type=OFFER, offerId, offer (Offer JSON),
- * title, body. Every offer posts a visible notification, or FCM deprioritises later pushes.
+ * High-priority, data-only pushes from notification-service, each posting a visible notification (or FCM deprioritises
+ * later pushes): type=OFFER with offerId, offer (Offer JSON), title, body; type=GO_ONLINE (P1-13) when the shift is open
+ * but the phone stopped calling, whose tap opens the app so Home resumes the shift.
  */
 class RiderMessagingService : FirebaseMessagingService() {
 
   override fun onMessageReceived(message: RemoteMessage) {
     val data = message.data
-    if (data["type"] != "OFFER") return
-    val offer = data["offer"] ?: return
-    RiderOffers.receive(this, offer, "fcm", data["title"], data["body"])
+    when (data["type"]) {
+      "OFFER" -> RiderOffers.receive(this, data["offer"] ?: return, "fcm", data["title"], data["body"])
+      // A push that arrives after the service came back by itself is stale.
+      "GO_ONLINE" -> if (!RiderOnlineService.running) {
+        RiderOffers.notice(this, GO_ONLINE_TAG,
+          RiderText.fromServer(this, data["title"]) ?: RiderText.get(this, R.string.rider_go_online_title),
+          RiderText.fromServer(this, data["body"]) ?: RiderText.get(this, R.string.rider_go_online_body))
+      }
+    }
   }
 
   override fun onNewToken(token: String) {
     // FirebaseMessaging keeps the token itself, so getFcmToken() returns it even when JS missed this event.
     RiderEvents.emit("riderFcmToken") { Arguments.createMap().apply { putString("token", token) } }
+    // On a shift the server must have the new token even if JS isn't running, or offers stop ringing (blueprint A9).
+    RiderOnlineService.registerToken(this, token)
+  }
+
+  companion object {
+    const val GO_ONLINE_TAG = "go-online"
   }
 }

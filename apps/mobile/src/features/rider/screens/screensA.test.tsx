@@ -1,7 +1,7 @@
 // Screens 1–8 of "Rider app P1: screens to the design": every state of sign-in, account status, terms,
 // phone setup, home, go online and the offer.
 import React from 'react';
-import {AccessibilityInfo, Alert, Keyboard, StyleSheet, Text} from 'react-native';
+import {AccessibilityInfo, Alert, Keyboard, Linking, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AxiosError} from 'axios';
@@ -21,6 +21,7 @@ import {GoOnlineScreen} from './GoOnlineScreen';
 import {HomeScreen} from './HomeScreen';
 import {OfferScreen} from './OfferScreen';
 import {phoneBrand, PhoneSetupScreen} from './PhoneSetupScreen';
+import {PrivacyNoticeScreen} from './PrivacyNoticeScreen';
 import {TermsScreen} from './TermsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
@@ -513,6 +514,21 @@ describe('Terms', () => {
     expect(allText()).toContain('Each drop km after 2 km | ₹10');
     await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
     expect(allText()).not.toContain('New terms from');
+    expect(allText()).not.toContain('How you get orders');
+  });
+
+  it('says how orders are offered, and how they will be when that changes', async () => {
+    const today = {offersAtOnce: 3, offerRounds: 1, offerSeconds: 40, radiusM: 5000, fairBandM: 0};
+    const fair = {offersAtOnce: 1, offerRounds: 3, offerSeconds: 30, radiusM: 5000, fairBandM: 1500};
+    const upcoming = {version: '2026-10-v1', effectiveFrom: '2026-11-05T12:00:00Z', summaryOfChanges: [], rateCardLines: [], offerRules: fair};
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, {...terms, offerRules: today, upcoming}], [riderKeys.me, me]]);
+    expect(allText()).toContain('How you get orders | Each order goes to 3 riders at once.');
+    expect(allText()).toContain('Your acceptance rate and ratings never decide who gets an order.');
+    expect(allText()).toContain('How you get orders then | Each order goes to one rider at a time. You get 30 seconds to decide.');
+    // The same rules then: nothing new to read.
+    await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, {...terms, offerRules: today, upcoming: {...upcoming, offerRules: today}}], [riderKeys.me, me]]);
+    expect(allText()).toContain('How you get orders |');
+    expect(allText()).not.toContain('How you get orders then');
   });
 
   it("says why accepting failed and reloads the terms", async () => {
@@ -543,6 +559,8 @@ describe('Terms', () => {
     await act(async () => chip('te').props.onPress());
     expect(chip('te').props.accessibilityState).toEqual({checked: true});
     expect(chip('en').props.accessibilityState).toEqual({checked: false});
+    // Demo builds show every translation, for the native speaker's review (P2-08).
+    expect(allText()).toContain('నిబంధనలు, రేట్ కార్డ్');
   });
 
   it('offers a retry when the terms cannot load', async () => {
@@ -551,6 +569,33 @@ describe('Terms', () => {
     await flush();
     expect(allText()).toContain('Something went wrong. Try again.');
     expect(allText()).toContain('Try again');
+  });
+});
+
+describe('Privacy notice (P2-09)', () => {
+  const privacyNotice = {version: '2027-05-v1', url: 'https://craves.in/riders/privacy/{language}', accepted: false};
+  beforeEach(() => jest.spyOn(Linking, 'openURL').mockResolvedValue(true));
+
+  it('opens the text in the language on screen, then accepts that version', async () => {
+    const client = await render(<PrivacyNoticeScreen />, [[riderKeys.me, {...me, status: 'PENDING', privacyNotice}]]);
+    expect(allText()).toContain('Your privacy');
+    expect(allText()).toContain('Version 2027-05-v1');
+    await act(async () => press('rider-privacy-read').props.onPress());
+    expect(Linking.openURL).toHaveBeenCalledWith('https://craves.in/riders/privacy/en');
+    (riderApi.acceptPrivacyNotice as jest.Mock).mockResolvedValueOnce(undefined);
+    const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    await act(async () => press('rider-privacy-accept').props.onPress());
+    expect(riderApi.acceptPrivacyNotice).toHaveBeenCalledWith('2027-05-v1', 'en');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+  });
+
+  it('says so when the notice changed while the rider read it, and reads it again', async () => {
+    (riderApi.acceptPrivacyNotice as jest.Mock).mockRejectedValueOnce(new AppApiError('NOTICE_CHANGED', 'changed', 409));
+    const client = await render(<PrivacyNoticeScreen />, [[riderKeys.me, {...me, privacyNotice}]]);
+    const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+    await act(async () => press('rider-privacy-accept').props.onPress());
+    expect(Alert.alert).toHaveBeenCalledWith('The notice changed. Read the new one.');
+    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
   });
 });
 
@@ -655,6 +700,16 @@ describe('Home', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
   });
 
+  it("shows today's pay per online hour once there is one, and the riders' middle only when the server sends it", async () => {
+    await render(<HomeScreen />, seed(onlineHome));
+    expect(allText()).not.toContain('an hour online today');
+    await render(<HomeScreen />, seed({...onlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253}));
+    expect(allText()).toContain('Today | ₹347 | 5 trips | ₹92.53 an hour online today');
+    expect(allText()).not.toContain("today's riders");
+    await render(<HomeScreen />, seed({...offlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253, fleetPerHourPaise: 8500}));
+    expect(allText()).toContain("₹92.53 an hour online today | Half of today's riders made ₹85 an hour or more.");
+  });
+
   it('never makes up a guaranteed rate the server did not send', async () => {
     await render(<HomeScreen />, seed({...offlineHome, guaranteedPerHourPaise: undefined}));
     expect(allText()).toContain('Your next slot');
@@ -674,6 +729,58 @@ describe('Home', () => {
     await act(async () => press('rider-go-offline').props.onPress());
     expect(riderOnlineService.stop).toHaveBeenCalled();
     expect(riderApi.endShift).toHaveBeenCalled();
+  });
+
+  it('takes a break of the chosen minutes, only when rider choices are on', async () => {
+    await render(<HomeScreen />, seed(onlineHome));
+    expect(press('rider-break-start')).toBeUndefined();
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    (riderApi.pauseShift as jest.Mock).mockResolvedValueOnce({offersPausedUntil: at(23)});
+    await render(<HomeScreen />, seed(onlineHome, choosing));
+    await act(async () => press('rider-break-start').props.onPress());
+    expect(allText()).toContain('How long? You stay online, and no offers come. | 10 min | 20 min | 30 min');
+    expect(allText()).toContain("Break time doesn't count toward a slot's guaranteed minimum.");
+    await act(async () => press('rider-break-20').props.onPress());
+    expect(riderApi.pauseShift).toHaveBeenCalledWith(20);
+    expect(press('rider-break-20')).toBeUndefined();
+  });
+
+  it('shows a running break and comes back from it, even with rider choices off', async () => {
+    const until = new Date(Date.now() + 15 * 60_000);
+    (riderApi.resumeShift as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<HomeScreen />, seed({...onlineHome, offersPausedUntil: until.toISOString()}));
+    expect(tree.root.findByProps({testID: 'rider-on-break'}).props.children).toMatch(/^On a break until \d{1,2}:\d\d [ap]m$/);
+    expect(allText()).toContain('No offers until then. Come back any time.');
+    await act(async () => press('rider-break-end').props.onPress());
+    expect(riderApi.resumeShift).toHaveBeenCalled();
+    // A break that has ended shows nothing, until Home reloads.
+    await render(<HomeScreen />, seed({...onlineHome, offersPausedUntil: new Date(Date.now() - 1000).toISOString()}));
+    expect(allText()).not.toContain('On a break');
+  });
+
+  it('heads home for an hour only with rider choices on and a home spot saved', async () => {
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    await render(<HomeScreen />, seed({...onlineHome, homeSaved: false}, choosing));
+    expect(press('rider-head-home')).toBeUndefined();
+    await render(<HomeScreen />, seed({...onlineHome, homeSaved: true}));
+    expect(press('rider-head-home')).toBeUndefined();
+    (riderApi.headHome as jest.Mock).mockResolvedValueOnce({until: at(23)});
+    await render(<HomeScreen />, seed({...onlineHome, homeSaved: true}, choosing));
+    expect(allText()).toContain('For an hour you hear only of orders that take you nearer home.');
+    await act(async () => press('rider-head-home').props.onPress());
+    expect(riderApi.headHome).toHaveBeenCalled();
+  });
+
+  it('shows heading home while it is on and stops it, even with rider choices off', async () => {
+    const until = new Date(Date.now() + 40 * 60_000);
+    (riderApi.stopHeadingHome as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<HomeScreen />, seed({...onlineHome, headingHomeUntil: until.toISOString()}));
+    expect(tree.root.findByProps({testID: 'rider-heading-home'}).props.children).toMatch(/^Heading home until \d{1,2}:\d\d [ap]m$/);
+    expect(allText()).toContain('You hear only of orders whose drop is on your way home. It ends when you get near home.');
+    await act(async () => press('rider-heading-home-stop').props.onPress());
+    expect(riderApi.stopHeadingHome).toHaveBeenCalled();
+    await render(<HomeScreen />, seed({...onlineHome, headingHomeUntil: new Date(Date.now() - 1000).toISOString()}));
+    expect(allText()).not.toContain('Heading home until');
   });
 
   it('opens the notice on its own screen', async () => {
@@ -820,6 +927,23 @@ describe('Offer', () => {
     expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 72, fontWeight: '900'});
     expect(pay.props.adjustsFontSizeToFit).toBe(true);
     expect(tree.root.findByProps({accessibilityLabel: 'Madhapur to Kondapur'})).toBeTruthy();
+  });
+
+  it('says why the offer came to this rider, when the server says', async () => {
+    const withReason = {...props(), route: {...props().route, params: {offer: {...offer, reason: {rule: 'FAIR' as const, place: 1, riders: 3, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 0, freeMinutes: 40}}, receivedAtMs: Date.now()}}};
+    await render(<OfferScreen {...withReason} />);
+    expect(allText()).toContain(
+      "Madhapur | Kondapur | About 28 min in total, 2 items | Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn. | Declining is free",
+    );
+    await render(<OfferScreen {...props()} />);
+    expect(allText()).not.toContain('Fair turns');
+    expect(allText()).toContain('About 28 min in total, 2 items | Declining is free');
+  });
+
+  it('tells a rider heading home how much nearer home the drop leaves them', async () => {
+    const homeward = {rule: 'NEAREST' as const, place: 1, riders: 2, atOnce: 1, round: 1, homeNearerM: 3240};
+    await render(<OfferScreen {...{...props(), route: {...props().route, params: {offer: {...offer, reason: homeward}, receivedAtMs: Date.now()}}}} />);
+    expect(allText()).toContain("You're the nearest free rider. | On your way home: the drop leaves you 3.2 km nearer home. | Declining is free");
   });
 
   it('leaves the item count off when the server sends none, and says "1 item"', async () => {

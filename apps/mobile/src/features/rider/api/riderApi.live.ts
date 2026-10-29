@@ -1,7 +1,7 @@
 import {apiClient} from '../../../core/http/apiClient';
 import {AppApiError} from '../../../core/http/apiError';
-import type {RiderApi} from './riderApi';
-import type {DeliverBody} from './contract';
+import type {QueuedTap, RiderApi} from './riderApi';
+import type {DeliverBody, StepTap} from './contract';
 
 const BASE = '/api/v1/rider';
 const keyed = (key: string) => ({headers: {'Idempotency-Key': key}});
@@ -22,12 +22,34 @@ async function fileExists(uri: string): Promise<boolean> {
   }
 }
 
-/** The server answers 423 once no tries are left; a 422 with attemptsLeft 0 means the same, so the rider never sees "0 tries left". */
+/**
+ * The server answers 423 once no tries are left; a 422 with attemptsLeft 0 means the same, so the rider never sees "0 tries
+ * left". Also for the native trip outbox's answers (tripQueue).
+ */
+export function lockedAtZero(error: AppApiError): AppApiError {
+  return error.code === 'OTP_INVALID' && error.attemptsLeft === 0
+    ? new AppApiError('OTP_LOCKED', error.message, 423, error.correlationId)
+    : error;
+}
+
 function lockAtZero(error: unknown): never {
-  if (error instanceof AppApiError && error.code === 'OTP_INVALID' && error.attemptsLeft === 0) {
-    throw new AppApiError('OTP_LOCKED', error.message, 423, error.correlationId);
+  throw error instanceof AppApiError ? lockedAtZero(error) : error;
+}
+
+/**
+ * The tap as sent (blueprint A4): how long ago it was, and its fix aged to now. Both ages come from the phone's own
+ * clocks read close together, so a wrong wall clock doesn't matter. A fix without ageMs (the mock loop's) is aged from
+ * its own stamp.
+ */
+export function stepTap(tap: QueuedTap | undefined, now = Date.now()): StepTap {
+  if (!tap) {
+    return {};
   }
-  throw error;
+  const sinceTap = Math.max(0, Math.round(now - tap.occurredAt));
+  const atTap = tap.fix ? tap.fix.ageMs ?? tap.occurredAt - Date.parse(tap.fix.at) : NaN;
+  return tap.fix && Number.isFinite(atTap)
+    ? {ageMs: sinceTap, fix: {...tap.fix, ageMs: Math.max(0, Math.round(atTap)) + sinceTap}}
+    : {ageMs: sinceTap};
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -44,8 +66,12 @@ export const liveRiderApi: RiderApi = {
     await apiClient.post(`${BASE}/payout-account`, input);
   },
   getTerms: () => get('/terms'),
+  getMyData: () => get('/my-data'),
   async acceptTerms(version) {
     await apiClient.post(`${BASE}/terms/accept`, {version});
+  },
+  async acceptPrivacyNotice(version, language) {
+    await apiClient.post(`${BASE}/privacy-notice/accept`, {version, language});
   },
   getHome: () => get('/home'),
   async startShift(selfieUri, installationId) {
@@ -59,6 +85,27 @@ export const liveRiderApi: RiderApi = {
   },
   async endShift() {
     await apiClient.post(`${BASE}/shift/end`);
+  },
+  async pauseShift(minutes) {
+    return (await apiClient.post(`${BASE}/shift/pause`, {minutes})).data;
+  },
+  async resumeShift() {
+    await apiClient.post(`${BASE}/shift/resume`);
+  },
+  async setPreferences(preferences) {
+    return (await apiClient.put(`${BASE}/preferences`, preferences)).data;
+  },
+  async saveHomeSpot(lat, lng) {
+    return (await apiClient.put(`${BASE}/home-spot`, {lat, lng})).data;
+  },
+  async forgetHomeSpot() {
+    await apiClient.delete(`${BASE}/home-spot`);
+  },
+  async headHome() {
+    return (await apiClient.post(`${BASE}/shift/heading-home`)).data;
+  },
+  async stopHeadingHome() {
+    await apiClient.delete(`${BASE}/shift/heading-home`);
   },
   async registerDevice(device) {
     await apiClient.post(`${BASE}/devices`, device);
@@ -83,23 +130,30 @@ export const liveRiderApi: RiderApi = {
     const response = await apiClient.get(`${BASE}/trips/active`);
     return response.status === 204 ? null : response.data;
   },
-  async tripAction(tripId, action, body, key) {
+  async tripAction(tripId, action, body, key, tap) {
     const url = `${BASE}/trips/${tripId}/${action}`;
+    const sent = stepTap(tap);
     const deliver = body as DeliverBody | undefined;
     if (action === 'delivered' && deliver?.method === 'PHOTO') {
-      const form = new FormData();
-      // A photo deleted before an offline replay is skipped; ops reviews the delivery either way.
-      if (deliver.photoUri && (await fileExists(deliver.photoUri))) {
-        form.append('photo', imagePart(deliver.photoUri, 'delivery.jpg'));
+      // Never a delivery without its photo: a refusal the queue keeps on screen asks the rider for another (P1-07).
+      if (!deliver.photoUri || !(await fileExists(deliver.photoUri))) {
+        throw new AppApiError('PHOTO_MISSING', 'The delivery photo is gone from this phone. Take the photo again.', 422);
       }
+      const form = new FormData();
+      form.append('photo', imagePart(deliver.photoUri, 'delivery.jpg'));
       form.append('method', 'PHOTO');
       form.append('callsMade', String(deliver.callsMade));
-      if (deliver.fix) {
-        form.append('fix', JSON.stringify(deliver.fix));
+      const fix = sent.fix ?? deliver.fix;
+      if (fix) {
+        form.append('fix', JSON.stringify(fix));
+      }
+      if (sent.ageMs !== undefined) {
+        form.append('ageMs', String(sent.ageMs));
       }
       return (await apiClient.post(url, form, {...multipart, headers: {...multipart.headers, 'Idempotency-Key': key}})).data;
     }
-    return (await apiClient.post(url, body, keyed(key)).catch(lockAtZero)).data;
+    const json = tap ? {...(body as object | undefined), ...sent} : body;
+    return (await apiClient.post(url, json, keyed(key)).catch(lockAtZero)).data;
   },
   getEarnings: (range, cursor) =>
     get(`/earnings?range=${range}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),

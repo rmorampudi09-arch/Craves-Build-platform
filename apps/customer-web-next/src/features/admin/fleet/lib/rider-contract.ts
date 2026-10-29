@@ -28,9 +28,34 @@ export const payoutAccountSchema = z.object({
   method: z.enum(["UPI", "BANK"]), maskedAccount: z.string().max(80), ifsc: z.string().max(11).nullable(),
   holderName: personName, setBy: personName, setAt: instant,
 });
+/** The phone's latest report on a shift (app 1.1.0). Read loosely: a strange value must not hide the whole rider page. */
+export const phoneHealthSchema = z.object({
+  batteryPct: z.number().nullable(), charging: z.boolean().nullable(), powerSave: z.boolean().nullable(),
+  canRing: z.boolean().nullable(), batteryPerHourPct: z.number().nullable(), lastExitReason: z.string().max(200).nullable(),
+  queuePending: z.number().nullable(), queueOldestAgeS: z.number().nullable(),
+});
 export const shiftSchema = z.object({
   shiftId: id, startedAt: instant, endedAt: instant.nullable(), selfieState: z.enum(["PENDING", "APPROVED", "REJECTED"]),
   selfieReason: z.string().max(1000).nullable(), selfieReviewedBy: personName.nullable(), inZoneSeconds: z.number().int().nonnegative(),
+  // The heartbeat and phone health (server and app 1.1.0); optional so the page still reads an older server.
+  lastSeenAt: instant.nullable().optional(), maxSilenceSeconds: z.number().int().nonnegative().optional(),
+  silencesOver60s: z.number().int().nonnegative().optional(), phone: phoneHealthSchema.nullable().optional(),
+  // Phase 4: on a break, with no offers, until then (an open shift only).
+  onBreakUntil: instant.nullable().optional(),
+});
+export const OFFER_STATES = ["ACTIVE", "ACCEPTED", "DECLINED", "EXPIRED", "LOST", "WITHDRAWN"] as const;
+const count = z.number().int().nonnegative();
+/** Why the rider got the offer (Phase 4), as the rider saw it; SOONEST (Phase 5) when riders were ranked by travel time. */
+export const offerReasonSchema = z.object({
+  rule: z.enum(["NEAREST", "FAIR", "SOONEST"]), place: count, riders: count, atOnce: count, round: count,
+  bandM: count.optional(), bandRiders: count.optional(), earnedPerHourPaise: count.optional(), freeMinutes: count.optional(),
+  // Phase 5: ranked by travel time, the band was counted in these minutes.
+  bandMinutes: z.number().nonnegative().optional(),
+});
+export const riderOfferSchema = z.object({
+  offerId: id, tripId: id, orderCode: z.string().max(9), state: z.enum(OFFER_STATES), offeredAt: instant,
+  pushedAt: instant.nullable(), pushResult: z.string().max(40).nullable(), rangAt: instant.nullable(),
+  rangChannel: z.enum(["fcm", "locations"]).nullable(), reason: offerReasonSchema.nullable().optional(),
 });
 export const STATUS_EVENT_KINDS = ["SAFETY_PAUSE", "NOTICE", "RESTORE", "DEACTIVATE"] as const;
 export const statusEventSchema = z.object({
@@ -48,6 +73,7 @@ export const riderDetailSchema = z.object({
   submittedPayoutAccount: payoutAccountSchema.nullable().optional(),
   shifts: z.array(shiftSchema).max(20),
   statusEvents: z.array(statusEventSchema).max(100),
+  recentOffers: z.array(riderOfferSchema).max(20).optional(),
 });
 export const selfieReviewSchema = z.object({
   shiftId: id, riderId: id, riderName: personName, startedAt: instant, state: z.enum(["PENDING", "APPROVED", "REJECTED"]),
@@ -98,6 +124,8 @@ export const statusEventInputSchema = z.object({
 export type StatusEventInput = z.infer<typeof statusEventInputSchema>;
 export type RiderSummary = z.infer<typeof riderSummarySchema>;
 export type RiderDetail = z.infer<typeof riderDetailSchema>;
+export type RiderShift = z.infer<typeof shiftSchema>;
+export type RiderOffer = z.infer<typeof riderOfferSchema>;
 export type SelfieReview = z.infer<typeof selfieReviewSchema>;
 export type AuditEntry = z.infer<typeof auditEntrySchema>;
 
@@ -122,6 +150,8 @@ export const RIDER_ROUTES: readonly FleetRoute[] = [
   { method: "POST", path: "riders", body: createRiderSchema, response: riderSummarySchema },
   { method: "GET", path: "riders/:id", response: riderDetailSchema },
   { method: "GET", path: "riders/:id/documents/:id/content", file: { types: ["application/pdf", "image/jpeg", "image/png"], maxBytes: 10 * 1024 * 1024 } },
+  // Phase 4: everything kept about the rider, for a rider who asks support for a copy (audited; the rider sees the download).
+  { method: "GET", path: "riders/:id/data-export", file: { types: ["application/json"], maxBytes: 20 * 1024 * 1024, attachment: ids => `rider-${ids[0]}-data.json` } },
   { method: "POST", path: "riders/:id/documents/:id/approve", body: approveDocumentSchema, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/documents/:id/reject", body: reasonBody, response: riderDocumentSchema },
   { method: "POST", path: "riders/:id/devices/:id/approve", response: riderDeviceSchema },

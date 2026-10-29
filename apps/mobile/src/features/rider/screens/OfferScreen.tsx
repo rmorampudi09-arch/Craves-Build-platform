@@ -11,6 +11,7 @@ import {BottomAction} from '../components/BottomAction';
 import {CountdownBar} from '../components/CountdownBar';
 import {Card} from '../components/ui';
 import {formatKm, formatRupees} from '../domain/format';
+import {whyHome, whyOffer} from '../domain/offerRules';
 import {offerDeadlineMs, secondsLeft} from '../domain/offerTiming';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
@@ -103,6 +104,8 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   // The server's own breakdown, joined into one sentence; the app adds nothing up.
   const parts = offer.payLines.map(line => `${formatRupees(line.amountPaise)} ${line.label}`).join(' + ');
   const breakdown = parts ? `${parts}. ${o.locked}` : o.locked;
+  const why = whyOffer(offer.reason, o);
+  const home = whyHome(offer.reason, o);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID="rider-offer">
@@ -141,6 +144,16 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
           <Text style={styles.secondary}>{o.total(offer.estMinutes, offer.itemsCount)}</Text>
         </Card>
         <View style={styles.push} />
+        {why ? (
+          <Text style={styles.secondary} testID="rider-offer-why">
+            {why}
+          </Text>
+        ) : null}
+        {home ? (
+          <Text style={styles.secondary} testID="rider-offer-home">
+            {home}
+          </Text>
+        ) : null}
         <Text style={styles.note}>{o.freeDecline}</Text>
       </ScrollView>
       {ended ? null : (

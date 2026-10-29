@@ -19,10 +19,14 @@ import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.trip.FleetTripModels.Customer;
 import in.craves.integration.fleet.trip.FleetTripModels.Kitchen;
+import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
+import in.craves.integration.fleet.trip.FleetTripService.Tap;
 import in.craves.integration.security.CravesJwtAuthenticationFilter;
 import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,6 +52,7 @@ class FleetTripControllerTest {
     static final UUID OFFER = UUID.fromString("44444444-4444-4444-8444-444444444444");
     @Autowired MockMvc mvc;
     @MockBean FleetTripService trips;
+    @MockBean FleetShiftService shifts;
     @MockBean JwtVerifier verifier;
     final UUID identity = UUID.randomUUID();
 
@@ -64,6 +69,18 @@ class FleetTripControllerTest {
             mvc.perform(request.header("Authorization", "Bearer customer").header("Idempotency-Key", "k1")).andExpect(status().isForbidden());
         }
         verifyNoInteractions(trips);
+    }
+
+    @Test
+    void withCredentialStepsOffTheShiftCredentialIsIgnored() throws Exception {
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/picked-up").header(FleetShiftService.SHIFT_CREDENTIAL, "live-credential")
+            .header("Idempotency-Key", "k1")).andExpect(status().is4xxClientError());
+        verifyNoInteractions(trips);
+        when(trips.step(identity, TRIP, "picked-up", "k2", Tap.NONE)).thenReturn(trip());
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/picked-up").header("Authorization", "Bearer rider")
+            .header(FleetShiftService.SHIFT_CREDENTIAL, "live-credential").header("Idempotency-Key", "k2")).andExpect(status().isOk());
+        verify(trips).step(identity, TRIP, "picked-up", "k2", Tap.NONE);
+        verifyNoInteractions(shifts);
     }
 
     @Test
@@ -107,12 +124,12 @@ class FleetTripControllerTest {
 
     @Test
     void aWrongOtpSaysHowManyTriesAreLeftAndALockSaysNone() throws Exception {
-        when(trips.deliveredByOtp(identity, TRIP, "1111", "d1")).thenThrow(FleetTripService.otpInvalid(3));
+        when(trips.deliveredByOtp(eq(identity), eq(TRIP), eq("1111"), eq("d1"), any(Tap.class))).thenThrow(FleetTripService.otpInvalid(3));
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/delivered").header("Authorization", "Bearer rider").header("Idempotency-Key", "d1")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"OTP\",\"otp\":\"1111\",\"fix\":{\"lat\":17.46,\"lng\":78.36}}"))
             .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("OTP_INVALID"))
             .andExpect(jsonPath("$.attemptsLeft").value(3));
-        when(trips.deliveredByOtp(identity, TRIP, "1111", "d2")).thenThrow(FleetTripService.otpLockedError());
+        when(trips.deliveredByOtp(eq(identity), eq(TRIP), eq("1111"), eq("d2"), any(Tap.class))).thenThrow(FleetTripService.otpLockedError());
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/delivered").header("Authorization", "Bearer rider").header("Idempotency-Key", "d2")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"OTP\",\"otp\":\"1111\"}"))
             .andExpect(status().isLocked()).andExpect(jsonPath("$.code").value("OTP_LOCKED"))
@@ -121,25 +138,55 @@ class FleetTripControllerTest {
 
     @Test
     void stepsPhotosAndFailuresReachTheirHandlers() throws Exception {
-        when(trips.step(identity, TRIP, "picked-up", "s1")).thenReturn(trip());
+        when(trips.step(identity, TRIP, "picked-up", "s1", Tap.NONE)).thenReturn(trip());
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/picked-up").header("Authorization", "Bearer rider").header("Idempotency-Key", "s1"))
             .andExpect(status().isOk());
-        when(trips.step(identity, TRIP, "arrived-drop", "s2"))
+        when(trips.step(identity, TRIP, "arrived-drop", "s2", Tap.NONE))
             .thenThrow(FleetApiException.conflict("STEP_CONFLICT", "This trip has moved on. Refreshing it now."));
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/arrived-drop").header("Authorization", "Bearer rider").header("Idempotency-Key", "s2"))
             .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("This trip has moved on. Refreshing it now."));
-        when(trips.deliveredByPhoto(eq(identity), eq(TRIP), eq(2), any(), eq("p1"))).thenReturn(trip());
+        when(trips.deliveredByPhoto(eq(identity), eq(TRIP), eq(2), any(), eq("p1"), any(Tap.class))).thenReturn(trip());
         mvc.perform(multipart("/api/v1/rider/trips/" + TRIP + "/delivered")
                 .file(new MockMultipartFile("photo", "door.jpg", "image/jpeg", new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff}))
                 .param("method", "PHOTO").param("callsMade", "2").header("Authorization", "Bearer rider").header("Idempotency-Key", "p1"))
             .andExpect(status().isOk());
-        when(trips.failed(identity, TRIP, "WRONG_ADDRESS", "Gate locked", "f1")).thenReturn(trip());
+        when(trips.failed(identity, TRIP, "WRONG_ADDRESS", "Gate locked", "f1", Tap.NONE)).thenReturn(trip());
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/failed").header("Authorization", "Bearer rider").header("Idempotency-Key", "f1")
             .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"WRONG_ADDRESS\",\"note\":\"Gate locked\"}")).andExpect(status().isOk());
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/delivered").header("Authorization", "Bearer rider").header("Idempotency-Key", "d9"))
             .andExpect(status().isBadRequest());
-        verify(trips).failed(eq(identity), eq(TRIP), eq("WRONG_ADDRESS"), eq("Gate locked"), anyString());
-        verify(trips, org.mockito.Mockito.never()).deliveredByOtp(any(), any(), isNull(), anyString());
+        verify(trips).failed(eq(identity), eq(TRIP), eq("WRONG_ADDRESS"), eq("Gate locked"), anyString(), eq(Tap.NONE));
+        verify(trips, org.mockito.Mockito.never()).deliveredByOtp(any(), any(), isNull(), anyString(), any());
+    }
+
+    /** Blueprint A4: when and where the rider tapped reaches the service, from a JSON step and from the photo form. */
+    @Test
+    void theTapsAgeAndFixReachTheService() throws Exception {
+        RiderFix fix = new RiderFix(17.46, 78.36, 9.0, Instant.parse("2026-10-27T09:00:00Z"), false, 7000L);
+        Tap tap = new Tap(5000L, fix);
+        when(trips.step(identity, TRIP, "arrived-drop", "s3", tap)).thenReturn(trip());
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/arrived-drop").header("Authorization", "Bearer rider").header("Idempotency-Key", "s3")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"ageMs\":5000,\"fix\":{\"lat\":17.46,\"lng\":78.36,\"accuracyM\":9,"
+                    + "\"at\":\"2026-10-27T09:00:00Z\",\"mock\":false,\"ageMs\":7000}}"))
+            .andExpect(status().isOk());
+        when(trips.deliveredByPhoto(eq(identity), eq(TRIP), eq(2), any(), eq("p2"), eq(tap))).thenReturn(trip());
+        mvc.perform(multipart("/api/v1/rider/trips/" + TRIP + "/delivered")
+                .file(new MockMultipartFile("photo", "door.jpg", "image/jpeg", new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff}))
+                .param("method", "PHOTO").param("callsMade", "2").param("ageMs", "5000")
+                .param("fix", "{\"lat\":17.46,\"lng\":78.36,\"accuracyM\":9,\"at\":\"2026-10-27T09:00:00Z\",\"mock\":false,\"ageMs\":7000}")
+                .header("Authorization", "Bearer rider").header("Idempotency-Key", "p2"))
+            .andExpect(status().isOk());
+        when(trips.deliveredByPhoto(eq(identity), eq(TRIP), eq(2), any(), eq("p3"), eq(Tap.NONE))).thenReturn(trip());
+        mvc.perform(multipart("/api/v1/rider/trips/" + TRIP + "/delivered")
+                .file(new MockMultipartFile("photo", "door.jpg", "image/jpeg", new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff}))
+                .param("method", "PHOTO").param("callsMade", "2").param("ageMs", "soon").param("fix", "not json")
+                .header("Authorization", "Bearer rider").header("Idempotency-Key", "p3"))
+            .andExpect(status().isOk());
+        // A code the app typed offline says so (P1-05).
+        when(trips.deliveredByOtp(identity, TRIP, "4821", "d9", new Tap(90000L, null, true))).thenReturn(trip());
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/delivered").header("Authorization", "Bearer rider").header("Idempotency-Key", "d9")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"OTP\",\"otp\":\"4821\",\"ageMs\":90000,\"capturedOffline\":true}"))
+            .andExpect(status().isOk());
     }
 
     static Trip trip() {

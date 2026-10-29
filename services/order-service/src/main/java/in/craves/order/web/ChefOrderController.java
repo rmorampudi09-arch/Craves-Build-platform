@@ -95,6 +95,6 @@ public class ChefOrderController {
 
     @PostMapping("/{orderId}/handed-over")
     public OrderResponse handedOver(@AuthenticationPrincipal CravesPrincipal principal, @PathVariable UUID orderId) {
-        return orderService.markHandedOver(principal, orderId);
+        return chefReadyForPickupService.markHandedOver(principal, orderId);
     }
 }

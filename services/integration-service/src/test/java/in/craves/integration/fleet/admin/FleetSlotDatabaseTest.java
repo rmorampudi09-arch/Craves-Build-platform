@@ -84,6 +84,31 @@ class FleetSlotDatabaseTest {
     }
 
     @Test
+    void cancellingAStartedSlotEndsItNowAndTheGuaranteeCoversTheTimeWorked() {
+        Instant start = Instant.now().minus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        Instant plannedEnd = start.plus(3, ChronoUnit.HOURS);
+        UUID slot = UUID.randomUUID();
+        fleet.db.update("INSERT INTO fleet_schema.rider_slot (id, rider_id, zone_name, starts_at, ends_at, guaranteed_per_hour_paise, "
+            + "in_zone_seconds) VALUES (?, ?, 'Madhapur', ?, ?, 8000, 2700)", slot, rider, java.sql.Timestamp.from(start),
+            java.sql.Timestamp.from(plannedEnd));
+
+        Slot ended = (Slot) slots.cancel(ops, UUID.randomUUID(), slot, "Heavy rain: stopping deliveries in Madhapur");
+
+        assertThat(ended.status()).as("settled like any slot that ended").isEqualTo("BOOKED");
+        assertThat(ended.endsAt()).isAfter(start).isBefore(Instant.now().plusSeconds(1));
+        refused(() -> slots.cancel(ops, UUID.randomUUID(), slot, "Again"), 409, "SLOT_NOT_BOOKED");
+        assertThat(fleet.db.queryForObject("SELECT summary FROM fleet_schema.admin_audit WHERE action = 'SLOT_CANCELLED'", String.class))
+            .startsWith("Ended the slot early");
+        assertThat(slots.settleDue()).isEqualTo(1);
+        var settlement = fleet.db.queryForMap("SELECT * FROM fleet_schema.rider_slot_settlement WHERE slot_id = ?", slot);
+        assertThat(settlement.get("guaranteed_paise")).as("45 minutes online at ₹80 an hour").isEqualTo(6000L);
+        assertThat(settlement.get("top_up_paise")).isEqualTo(6000L);
+        Slot later = (Slot) slots.create(ops, UUID.randomUUID(), new SlotInput(rider, "Kondapur", Instant.now().plus(5, ChronoUnit.MINUTES),
+            plannedEnd, 8000L));
+        assertThat(later.status()).as("the rest of the window is free again").isEqualTo("BOOKED");
+    }
+
+    @Test
     void theTopUpIsTheGuaranteeForOnlineInZoneTimeLessTripPayAndDeclinesChangeNothing() {
         Instant start = Instant.now().minus(3, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
         Instant end = start.plus(2, ChronoUnit.HOURS);

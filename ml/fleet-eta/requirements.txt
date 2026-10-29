@@ -1,0 +1,7 @@
+# ml/fleet-eta: the versions the golden file (testdata/golden.json) and the tests were made with. A model is exported as
+# plain JSON trees, so production (Java) never loads Python; these are needed only to train and to run the tests.
+numpy==2.5.3
+scikit-learn==1.9.1
+scipy==1.18.1
+joblib==1.6.0
+threadpoolctl==3.7.0

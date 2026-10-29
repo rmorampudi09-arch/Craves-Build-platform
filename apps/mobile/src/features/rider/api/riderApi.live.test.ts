@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import {AppApiError} from '../../../core/http/apiError';
 import {tokenMemory} from '../../../core/security/tokenMemory';
 import {fakeHttp, type FakeReply} from './fakeHttp';
-import {liveRiderApi} from './riderApi.live';
+import {liveRiderApi, stepTap} from './riderApi.live';
 
 /** Records parts like React Native's FormData does; Node's FormData turns the {uri, name, type} file parts into text. */
 class PartsForm {
@@ -79,8 +79,29 @@ describe('live rider API: every path in rider-v1.yaml', () => {
     ['getProfile', () => liveRiderApi.getProfile(), 'get', '/api/v1/rider/profile', undefined],
     ['getTerms', () => liveRiderApi.getTerms(), 'get', '/api/v1/rider/terms', undefined],
     ['acceptTerms', () => liveRiderApi.acceptTerms('v2'), 'post', '/api/v1/rider/terms/accept', {version: 'v2'}],
+    [
+      'acceptPrivacyNotice',
+      () => liveRiderApi.acceptPrivacyNotice('2027-05-v1', 'te'),
+      'post',
+      '/api/v1/rider/privacy-notice/accept',
+      {version: '2027-05-v1', language: 'te'},
+    ],
     ['getHome', () => liveRiderApi.getHome(), 'get', '/api/v1/rider/home', undefined],
+    ['getMyData', () => liveRiderApi.getMyData(), 'get', '/api/v1/rider/my-data', undefined],
     ['endShift', () => liveRiderApi.endShift(), 'post', '/api/v1/rider/shift/end', undefined],
+    ['pauseShift', () => liveRiderApi.pauseShift(10), 'post', '/api/v1/rider/shift/pause', {minutes: 10}],
+    ['resumeShift', () => liveRiderApi.resumeShift(), 'post', '/api/v1/rider/shift/resume', undefined],
+    [
+      'setPreferences',
+      () => liveRiderApi.setPreferences({maxPickupM: 1000, maxDropM: null}),
+      'put',
+      '/api/v1/rider/preferences',
+      {maxPickupM: 1000, maxDropM: null},
+    ],
+    ['saveHomeSpot', () => liveRiderApi.saveHomeSpot(17.46, 78.39), 'put', '/api/v1/rider/home-spot', {lat: 17.46, lng: 78.39}],
+    ['forgetHomeSpot', () => liveRiderApi.forgetHomeSpot(), 'delete', '/api/v1/rider/home-spot', undefined],
+    ['headHome', () => liveRiderApi.headHome(), 'post', '/api/v1/rider/shift/heading-home', undefined],
+    ['stopHeadingHome', () => liveRiderApi.stopHeadingHome(), 'delete', '/api/v1/rider/shift/heading-home', undefined],
     ['postLocations', () => liveRiderApi.postLocations([fix]), 'post', '/api/v1/rider/locations', {fixes: [fix]}],
     ['getTripEarning', () => liveRiderApi.getTripEarning('t1'), 'get', '/api/v1/rider/earnings/trips/t1', undefined],
     ['getPayouts', () => liveRiderApi.getPayouts(), 'get', '/api/v1/rider/payouts', undefined],
@@ -132,6 +153,29 @@ describe('live rider API: every path in rider-v1.yaml', () => {
     ]);
   });
 
+  it('sends when and where each queued step was tapped: ageMs and the fix aged to now (blueprint A4)', async () => {
+    reply = () => ({status: 200, data: trip});
+    const tap = {occurredAt: Date.now() - 60_000, fix: {...fix, ageMs: 2_000}};
+    await liveRiderApi.tripAction('t1', 'arrived-drop', undefined, 'k1', tap);
+    await liveRiderApi.tripAction('t1', 'failed', {reason: 'CUSTOMER_UNREACHABLE'}, 'k2', tap);
+    await liveRiderApi.tripAction('t1', 'delivered', {method: 'OTP', otp: '4821'}, 'k3', tap);
+    for (const call of calls) {
+      const body = JSON.parse(call.data);
+      expect(body.ageMs).toBeGreaterThanOrEqual(60_000);
+      expect(body.ageMs).toBeLessThan(65_000);
+      expect(body.fix).toEqual({...fix, ageMs: 2_000 + body.ageMs});
+    }
+    expect(JSON.parse(calls[1].data).reason).toBe('CUSTOMER_UNREACHABLE');
+    expect(JSON.parse(calls[2].data)).toMatchObject({method: 'OTP', otp: '4821'});
+  });
+
+  it('ages a fix without ageMs from its own stamp, and drops one whose stamp is unreadable', () => {
+    const occurredAt = Date.parse(fix.at) + 5_000;
+    expect(stepTap({occurredAt, fix}, occurredAt + 1_000)).toEqual({ageMs: 1_000, fix: {...fix, ageMs: 6_000}});
+    expect(stepTap({occurredAt, fix: {...fix, at: 'later'}}, occurredAt)).toEqual({ageMs: 0});
+    expect(stepTap(undefined)).toEqual({});
+  });
+
   describe('photo delivery', () => {
     const realFetch = globalThis.fetch;
     afterEach(() => {
@@ -155,16 +199,27 @@ describe('live rider API: every path in rider-v1.yaml', () => {
       ]);
     });
 
-    it('still sends the delivery when the camera file is gone before an offline replay', async () => {
+    it('carries the tap as ageMs and the fix parts', async () => {
+      globalThis.fetch = jest.fn(async () => ({}) as Response);
+      reply = () => ({status: 200, data: {...trip, step: 'DELIVERED'}});
+      const body = {method: 'PHOTO', photoUri: 'file:///door.jpg', callsMade: 2} as const;
+      await liveRiderApi.tripAction('t1', 'delivered', body, 'k', {occurredAt: Date.now() - 30_000, fix: {...fix, ageMs: 1_000}});
+      const sent = Object.fromEntries(parts(calls[0]));
+      expect(Number(sent.ageMs)).toBeGreaterThanOrEqual(30_000);
+      expect(JSON.parse(sent.fix as string)).toEqual({...fix, ageMs: 1_000 + Number(sent.ageMs)});
+    });
+
+    it('never sends a delivery without its photo: a missing file is a refusal that asks for another (P1-07)', async () => {
       globalThis.fetch = jest.fn(async () => {
         throw new TypeError('Network request failed');
       });
       reply = () => ({status: 200, data: trip});
-      await liveRiderApi.tripAction('t1', 'delivered', {method: 'PHOTO', photoUri: 'file:///gone.jpg', callsMade: 2}, 'k');
-      expect(parts(calls[0])).toEqual([
-        ['method', 'PHOTO'],
-        ['callsMade', '2'],
-      ]);
+      const sent = liveRiderApi.tripAction('t1', 'delivered', {method: 'PHOTO', photoUri: 'file:///gone.jpg', callsMade: 2}, 'k');
+      await expect(sent).rejects.toMatchObject({code: 'PHOTO_MISSING', status: 422, retriable: false});
+      await expect(
+        liveRiderApi.tripAction('t1', 'delivered', {method: 'PHOTO', callsMade: 2}, 'k2'),
+      ).rejects.toMatchObject({code: 'PHOTO_MISSING'});
+      expect(calls).toHaveLength(0);
     });
   });
 

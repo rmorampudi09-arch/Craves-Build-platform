@@ -9,6 +9,9 @@ import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetAdminService.Cursor;
 import in.craves.integration.fleet.admin.FleetAdminService.Done;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
+import in.craves.integration.fleet.money.FleetMoneyModels.Adjustment;
+import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.EarningsPage;
 import in.craves.integration.fleet.money.FleetMoneyModels.Hold;
 import in.craves.integration.fleet.money.FleetMoneyModels.HoldInput;
@@ -42,6 +45,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -72,6 +76,8 @@ public class FleetEarnings {
     static final Duration PENDING = Duration.ofHours(24);
     static final int MAX_HOLD_DAYS = 7;
     static final int PAGE = 20;
+    /** A correction is at most ₹10,000 either way: a bigger one is a mistake to look into, not a typo to post. */
+    static final long MAX_ADJUSTMENT_PAISE = 1_000_000;
     static final String AUTOMATIC = "Craves (automatic)";
     static final String DISPUTE_REASON = "You reported a problem with this trip. Its pay waits until support fixes it, for up to 7 days.";
     private static final String PROVIDER = "craves_fleet";
@@ -93,6 +99,50 @@ public class FleetEarnings {
         LEFT JOIN fleet_schema.trip t ON t.id = e.trip_id
         LEFT JOIN fleet_schema.rider_slot sl ON sl.id = e.slot_id
         WHERE e.rider_id = ? AND COALESCE(t.pay_finalized_at, sl.ends_at) >= ? AND COALESCE(t.pay_finalized_at, sl.ends_at) < ?""";
+    /**
+     * When a shift (alias s) stopped being available for offers: its end, its credential's end, or 3 minutes after the phone
+     * last called, whichever came first, so a phone that died mid-shift doesn't count as online for the rest of it. The
+     * pilot-health query earnings_per_online_hour repeats this.
+     */
+    static final String SHIFT_END = "LEAST(COALESCE(s.ended_at, now()), s.credential_expires_at, "
+        + "COALESCE(s.credential_revoked_at, 'infinity'::timestamptz), COALESCE(s.last_seen_at, s.started_at) + INTERVAL '3 minutes')";
+    /**
+     * Phase 4: each rider's available online time in a window (from, to): every shift cut to the window and to SHIFT_END,
+     * less its breaks there. The CTEs win, w and available; the queries below add to them.
+     */
+    private static final String AVAILABLE = """
+        WITH win AS (SELECT CAST(? AS timestamptz) AS from_at, LEAST(CAST(? AS timestamptz), now()) AS to_at),
+        w AS (SELECT s.id, s.rider_id, GREATEST(s.started_at, win.from_at) AS from_at, LEAST(%1$s, win.to_at) AS to_at
+              FROM fleet_schema.rider_shift s CROSS JOIN win WHERE s.started_at < win.to_at AND %1$s > win.from_at),
+        available AS (SELECT w.rider_id, EXTRACT(EPOCH FROM w.to_at - w.from_at) - COALESCE((
+                        SELECT SUM(EXTRACT(EPOCH FROM LEAST(b.ends_at, w.to_at) - GREATEST(b.started_at, w.from_at)))
+                        FROM fleet_schema.rider_break b WHERE b.shift_id = w.id AND b.started_at < w.to_at AND b.ends_at > w.from_at), 0) AS seconds
+                      FROM w)
+        """.formatted(SHIFT_END);
+    /** A rider's available online seconds in (from, to); parameters from, to, rider. */
+    public static final String ONLINE_SECONDS_SQL = AVAILABLE + "SELECT COALESCE(SUM(seconds), 0)::bigint FROM available WHERE rider_id = ?";
+    /**
+     * The middle (median) pay per available online hour in (from, to) over riders online 30 minutes or more then, in paise;
+     * NULL with fewer than 5 such riders, so no one rider's pay can be worked out. Parameters from, to.
+     */
+    public static final String FLEET_PER_HOUR_SQL = AVAILABLE + """
+        , online AS (SELECT rider_id, SUM(seconds) AS seconds FROM available GROUP BY rider_id),
+        earned AS (SELECT e.rider_id, SUM(e.net_paise) AS paise FROM fleet_schema.rider_earning e
+                   LEFT JOIN fleet_schema.trip t ON t.id = e.trip_id LEFT JOIN fleet_schema.rider_slot sl ON sl.id = e.slot_id
+                   CROSS JOIN win
+                   WHERE COALESCE(t.pay_finalized_at, sl.ends_at) >= win.from_at AND COALESCE(t.pay_finalized_at, sl.ends_at) < win.to_at
+                   GROUP BY e.rider_id)
+        SELECT CASE WHEN count(*) >= 5 THEN round(percentile_cont(0.5) WITHIN GROUP (ORDER BY COALESCE(earned.paise, 0) * 3600.0
+               / online.seconds))::bigint END
+        FROM online LEFT JOIN earned USING (rider_id) WHERE online.seconds >= 1800""";
+    /** Under half an hour online, pay per hour says little: fair turns count at least this much, Home shows nothing. */
+    public static final long MIN_ONLINE_SECONDS = 1_800;
+
+    /** Pay per available online hour, as fair turns compare riders and Home shows them: at least 30 minutes counted. */
+    public static long perOnlineHourPaise(long paise, long onlineSeconds) {
+        return paise * 3600 / Math.max(onlineSeconds, MIN_ONLINE_SECONDS);
+    }
+
     /** The current Indian financial year (from 1 April, IST) as a timestamptz. */
     static final String FINANCIAL_YEAR_START =
         "((date_trunc('year', (now() AT TIME ZONE 'Asia/Kolkata') - interval '3 months') + interval '3 months') AT TIME ZONE 'Asia/Kolkata')";
@@ -135,6 +185,14 @@ public class FleetEarnings {
         this.background = background;
         this.tds = new Tds(tdsEnabled, tdsSection, tdsRateBasisPoints, tdsAnnualThresholdPaise);
         this.ledgerOn = ledgerOn;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
     }
 
     /**
@@ -204,6 +262,10 @@ public class FleetEarnings {
                     UUID.randomUUID(), tripId, rider, reason, finalized, AUTOMATIC);
             }
             jdbc.update("UPDATE fleet_schema.trip SET pay_credited_at = now() WHERE id = ?", tripId);
+            if (engineFeed != null) {
+                // The day's pay for fair turns counts credited rows: read the rider again once these are committed.
+                engineFeed.refresh(rider);
+            }
             return true;
         }));
     }
@@ -231,33 +293,40 @@ public class FleetEarnings {
     }
 
     /**
-     * A signed correction to one pay component of a credited trip, as its next revision (2 or later) with the reason the
-     * rider sees. A negative amount is debt, recovered only from future pay at the weekly cap. admin-fleet-v1 has no
-     * adjustment endpoint yet, so this is service code only, audited like every ops action.
+     * A signed correction to one pay component of a credited trip (admin-fleet-v1 POST /trips/{tripId}/pay-adjustments), as
+     * its next revision (2 or later) with the reason the rider sees. A negative amount is debt, recovered only from future
+     * pay at the weekly cap; a positive one is pay like any other, pending 24 hours, with TDS withheld. At most
+     * MAX_ADJUSTMENT_PAISE either way. Audited and idempotent; 409 TRIP_NOT_CREDITED before the trip's pay is credited.
      */
     @Transactional
-    public void adjustTrip(Admin by, UUID tripId, String component, long amountPaise, String reason) {
-        String text = FleetAdminService.reason(reason);
-        if (component == null || !component.matches("^[a-z][a-z0-9-]{1,31}$") || "tds".equals(component) || amountPaise == 0) {
-            throw FleetApiException.invalid("Choose a pay component other than tds and a non-zero amount.");
+    public Object adjustTrip(Admin by, UUID key, UUID tripId, AdjustmentInput input) {
+        String text = FleetAdminService.reason(input == null ? null : input.reason());
+        String component = input.component();
+        long amountPaise = input.amountPaise() == null ? 0 : input.amountPaise();
+        if (component == null || !component.matches("^[a-z][a-z0-9-]{1,31}$") || "tds".equals(component) || amountPaise == 0
+            || Math.abs(amountPaise) > MAX_ADJUSTMENT_PAISE) {
+            throw FleetApiException.invalid("Choose a pay component other than tds and an amount other than zero, at most ₹10,000 either way.");
         }
-        List<Map<String, Object>> found = jdbc.queryForList("SELECT rider_id, chef_sub_order_id, rate_card_version, order_code "
-            + "FROM fleet_schema.trip WHERE id = ? AND pay_credited_at IS NOT NULL FOR UPDATE", tripId);
-        if (found.isEmpty()) {
-            throw FleetApiException.notFound("TRIP_NOT_FOUND", "No credited trip with this id.");
-        }
-        UUID rider = (UUID) found.get(0).get("rider_id");
-        lockRider(rider);
-        Source source = new Source(tripId, null, (UUID) found.get(0).get("chef_sub_order_id"), (String) found.get(0).get("rate_card_version"));
-        Instant now = Instant.now();
-        Instant withdrawable = amountPaise > 0 ? now.plus(PENDING) : now;
-        earn(rider, source, component, nextRevision(tripId, component, 2), amountPaise, cut("Adjustment: " + text, 160), text,
-            withdrawable, now, by);
-        if (amountPaise > 0) {
-            withhold(rider, source, nextRevision(tripId, "tds", 1), amountPaise, withdrawable, now, by);
-        }
-        admin.audit(by, "PAY_ADJUSTED", rider, tripId.toString(), "Adjusted " + component + " of trip " + found.get(0).get("order_code")
-            + " by " + amountPaise + " paise: " + text);
+        return admin.once(by, key, "PAY_ADJUSTED", tripId + "\n" + component + "\n" + amountPaise + "\n" + text, () -> {
+            Map<String, Object> trip = jdbc.queryForList("SELECT rider_id, chef_sub_order_id, rate_card_version, order_code, pay_credited_at "
+                    + "FROM fleet_schema.trip WHERE id = ? AND rider_id IS NOT NULL FOR UPDATE", tripId).stream().findFirst()
+                .orElseThrow(() -> FleetApiException.notFound("TRIP_NOT_FOUND", "No rider trip with this id."));
+            if (trip.get("pay_credited_at") == null) {
+                throw FleetApiException.conflict("TRIP_NOT_CREDITED", "This trip's pay isn't credited yet. Adjust it once it is, or hold it.");
+            }
+            UUID rider = (UUID) trip.get("rider_id");
+            lockRider(rider);
+            Source source = new Source(tripId, null, (UUID) trip.get("chef_sub_order_id"), (String) trip.get("rate_card_version"));
+            Instant now = Instant.now();
+            Instant withdrawable = amountPaise > 0 ? now.plus(PENDING) : now;
+            int revision = nextRevision(tripId, component, 2);
+            earn(rider, source, component, revision, amountPaise, cut("Adjustment: " + text, 160), text, withdrawable, now, by);
+            if (amountPaise > 0) {
+                withhold(rider, source, nextRevision(tripId, "tds", 1), amountPaise, withdrawable, now, by);
+            }
+            return new Done(new Adjustment(tripId, (String) trip.get("order_code"), rider, component, revision, amountPaise, text), rider,
+                tripId.toString(), "Adjusted " + component + " of trip " + trip.get("order_code") + " by " + amountPaise + " paise: " + text);
+        });
     }
 
     // ---- Holds (admin-fleet-v1 /holds) ----

@@ -25,4 +25,8 @@ public interface FleetStage {
 
     /** The chef marked the food ready; the rider's free wait starts no earlier than this. */
     void chefReady(UUID chefSubOrderId, Instant readyAt);
+
+    /** The chef handed the food to the order's rider (P2-05): the watchdog never hands that trip back after it. */
+    default void chefHandedOver(UUID chefSubOrderId, Instant handedOverAt) {
+    }
 }

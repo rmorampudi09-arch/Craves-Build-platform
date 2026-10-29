@@ -9,13 +9,20 @@ import type {ReceivedOffer} from '../domain/offerTiming';
 import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
+import {tripQueue} from '../state/tripQueue';
 import {RiderRuntime} from './RiderRuntime';
 
 const mockTokenListeners: ((token: string) => void)[] = [];
+const mockStatusListeners: ((status: {state: string; connected?: boolean}) => void)[] = [];
 
 jest.mock('../api/riderApi', () => ({riderApi: {registerDevice: jest.fn(async () => undefined)}}));
 jest.mock('../state/tripQueue', () => ({
-  tripQueue: {flush: jest.fn(async () => undefined), onSent: () => () => undefined, onRejected: () => () => undefined},
+  tripQueue: {
+    flush: jest.fn(async () => undefined),
+    onSent: () => () => undefined,
+    onRejected: () => () => undefined,
+    setNativeOutbox: jest.fn(async () => undefined),
+  },
 }));
 jest.mock('../native/riderDevice', () => ({riderDevice: {installationId: jest.fn(async () => 'android-id-1')}}));
 jest.mock('../native/riderOnlineService', () => ({
@@ -28,7 +35,10 @@ jest.mock('../native/riderOnlineService', () => ({
     pendingOffer: jest.fn(async () => null),
     onOffer: () => () => undefined,
     onTripChanged: () => () => undefined,
-    onStatus: () => () => undefined,
+    onStatus: (cb: (status: {state: string; connected?: boolean}) => void) => {
+      mockStatusListeners.push(cb);
+      return () => undefined;
+    },
   },
 }));
 
@@ -50,13 +60,13 @@ const registerDevice = riderApi.registerDevice as jest.Mock;
 const installationId = riderDevice.installationId as jest.Mock;
 const pendingOffer = riderOnlineService.pendingOffer as jest.Mock;
 
-async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn()) {
+async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn(), nativeOutbox?: boolean) {
   const client = new QueryClient();
   let tree: renderer.ReactTestRenderer | undefined;
   await act(async () => {
     tree = renderer.create(
       <QueryClientProvider client={client}>
-        <RiderRuntime riderId="r1" openOffer={openOffer} />
+        <RiderRuntime riderId="r1" nativeOutbox={nativeOutbox} openOffer={openOffer} />
       </QueryClientProvider>,
     );
   });
@@ -66,6 +76,7 @@ async function mount(openOffer: (offer: ReceivedOffer) => void = jest.fn()) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockTokenListeners.length = 0;
+  mockStatusListeners.length = 0;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
@@ -126,5 +137,40 @@ describe('RiderRuntime pending offer', () => {
     const tree = await mount(openOffer);
     expect(openOffer).not.toHaveBeenCalled();
     act(() => tree.unmount());
+  });
+});
+
+describe('RiderRuntime native outbox (P2-02b)', () => {
+  it("switches trip steps to the phone's native outbox only when the server says so", async () => {
+    const setNativeOutbox = tripQueue.setNativeOutbox as jest.Mock;
+    let tree = await mount();
+    expect(setNativeOutbox).toHaveBeenLastCalledWith(false);
+    act(() => tree.unmount());
+    tree = await mount(jest.fn(), true);
+    expect(setNativeOutbox).toHaveBeenLastCalledWith(true);
+    act(() => tree.unmount());
+  });
+});
+
+describe('RiderRuntime queue', () => {
+  const status = (state: string, connected?: boolean) => act(() => mockStatusListeners.forEach(cb => cb({state, connected})));
+  const flushedNow = () => (tripQueue.flush as jest.Mock).mock.calls.filter(([, options]) => options?.now).length;
+
+  it('sends the queue, backoff or not, when an upload reaches the server, at most every 5 s (P1-08)', async () => {
+    jest.useFakeTimers();
+    const tree = await mount();
+    expect(tripQueue.flush).toHaveBeenCalledWith('r1'); // on start, respecting backoff
+    status('ERROR'); // no signal: nothing
+    expect(flushedNow()).toBe(0);
+    status('ONLINE');
+    expect(tripQueue.flush).toHaveBeenLastCalledWith('r1', {now: true});
+    status('ONLINE');
+    status('ERROR', true); // connected, only offers can't ring
+    expect(flushedNow()).toBe(1);
+    act(() => jest.advanceTimersByTime(5_000));
+    status('ERROR', true);
+    expect(flushedNow()).toBe(2);
+    act(() => tree.unmount());
+    jest.useRealTimers();
   });
 });

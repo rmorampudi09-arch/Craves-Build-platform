@@ -13,10 +13,12 @@ import in.craves.integration.fleet.admin.FleetAdminModels.FileContent;
 import in.craves.integration.fleet.admin.FleetAdminModels.NewRider;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccount;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccountInput;
+import in.craves.integration.fleet.admin.FleetAdminModels.PhoneHealth;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDetail;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDevice;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDocument;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderHeader;
+import in.craves.integration.fleet.admin.FleetAdminModels.RiderOffer;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderPage;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderSummary;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderVehicle;
@@ -27,6 +29,10 @@ import in.craves.integration.fleet.admin.FleetAdminModels.StatusEvent;
 import in.craves.integration.fleet.admin.FleetAdminModels.StatusEventInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.VehicleInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.ZoneBanner;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
+import in.craves.integration.fleet.rider.FleetShiftService;
+import in.craves.integration.fleet.rider.RiderDataExport;
+import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import in.craves.integration.payout.bank.BankDataCipher;
 import in.craves.integration.payout.bank.BankOnboardingModels;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -101,6 +108,14 @@ public class FleetAdminService {
         this.storage = storage;
         this.roles = roles;
         this.cipher = cipher;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
     }
 
     @Transactional(readOnly = true)
@@ -168,6 +183,18 @@ public class FleetAdminService {
         });
     }
 
+    /**
+     * Phase 4: everything kept about a rider (RiderDataExport), for a rider who asked support for a copy (DPDP Act s.11).
+     * Audited as RIDER_DATA_EXPORTED; 404 RIDER_NOT_FOUND.
+     */
+    @Transactional
+    public Map<String, Object> dataExport(Admin admin, UUID riderId) {
+        header(riderId);
+        Map<String, Object> export = RiderDataExport.build(jdbc, riderId, Instant.now(), false);
+        audit(admin, "RIDER_DATA_EXPORTED", riderId, riderId.toString(), "Downloaded the rider's data export.");
+        return export;
+    }
+
     @Transactional(readOnly = true)
     public RiderDetail getRider(UUID riderId) {
         RiderHeader rider = header(riderId);
@@ -181,14 +208,58 @@ public class FleetAdminService {
         PayoutAccount submitted = jdbc.query("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
             + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'", (row, n) -> payoutAccount(row), riderId)
             .stream().findFirst().orElse(null);
-        List<Shift> shifts = jdbc.query("SELECT id, started_at, ended_at, selfie_state, selfie_reason, selfie_reviewed_by_name, "
-            + "in_zone_seconds FROM fleet_schema.rider_shift WHERE rider_id = ? ORDER BY started_at DESC LIMIT 20",
-            (row, n) -> new Shift(row.getObject("id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
-                row.getString("selfie_state"), row.getString("selfie_reason"), row.getString("selfie_reviewed_by_name"),
-                row.getInt("in_zone_seconds")), riderId);
+        List<Shift> shifts = jdbc.query(SHIFT + "WHERE rider_id = ? ORDER BY started_at DESC LIMIT 20", (row, n) -> shift(row), riderId);
         List<StatusEvent> events = jdbc.query(EVENT + "WHERE rider_id = ? ORDER BY created_at DESC LIMIT 100",
             (row, n) -> statusEvent(row), riderId);
-        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events);
+        List<RiderOffer> offers = jdbc.query("""
+            SELECT o.id, o.trip_id, t.order_code, o.state, o.offered_at, o.pushed_at, o.push_result, o.rang_at, o.rang_channel,
+                   o.reason::text AS reason
+            FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
+            WHERE o.rider_id = ? ORDER BY o.offered_at DESC, o.id LIMIT 20""",
+            (row, n) -> new RiderOffer(row.getObject("id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("order_code"),
+                row.getString("state"), instant(row, "offered_at"), instant(row, "pushed_at"), row.getString("push_result"),
+                instant(row, "rang_at"), row.getString("rang_channel"), offerReason(row.getString("reason"))), riderId);
+        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events, offers);
+    }
+
+    /**
+     * A shift with its heartbeat and the phone's latest health (stored by FleetLocationService from typed values). Battery
+     * per hour counts only unplugged time, from 30 minutes on, as pilot_health.sql's battery_per_hour does.
+     */
+    private static final String SHIFT = """
+        SELECT id, started_at, ended_at, selfie_state, selfie_reason, selfie_reviewed_by_name, in_zone_seconds, last_seen_at,
+               max_silence_seconds, silences_over_60s, can_ring, health IS NOT NULL AS has_health,
+               (health ->> 'batteryPct')::numeric::int AS battery_pct, (health ->> 'charging')::boolean AS charging,
+               (health ->> 'powerSave')::boolean AS power_save, health ->> 'lastExitReason' AS last_exit_reason,
+               (health ->> 'queuePending')::numeric::int AS queue_pending,
+               (health ->> 'queueOldestAgeS')::numeric::int AS queue_oldest_age_s,
+               CASE WHEN (health ->> 'unpluggedMin')::numeric >= 30
+                    THEN round((health ->> 'drainPct')::numeric * 60 / (health ->> 'unpluggedMin')::numeric, 1) END AS battery_per_hour,
+               CASE WHEN ended_at IS NULL THEN\s""" + FleetShiftService.BREAK_ENDS.formatted("rider_shift.id") + """
+         END AS on_break_until
+        FROM fleet_schema.rider_shift
+        """;
+
+    /** trip_offer.reason as written by the dispatcher; null when absent. */
+    private OfferReason offerReason(String text) {
+        try {
+            return text == null ? null : json.readValue(text, OfferReason.class);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("trip_offer.reason must be an OfferReason", exception);
+        }
+    }
+
+    private static Shift shift(ResultSet row) throws SQLException {
+        Boolean canRing = (Boolean) row.getObject("can_ring");
+        java.math.BigDecimal perHour = row.getBigDecimal("battery_per_hour");
+        PhoneHealth phone = !row.getBoolean("has_health") && canRing == null ? null : new PhoneHealth(
+            (Integer) row.getObject("battery_pct"), (Boolean) row.getObject("charging"), (Boolean) row.getObject("power_save"), canRing,
+            perHour == null ? null : perHour.doubleValue(), row.getString("last_exit_reason"), (Integer) row.getObject("queue_pending"),
+            (Integer) row.getObject("queue_oldest_age_s"));
+        return new Shift(row.getObject("id", UUID.class), instant(row, "started_at"), instant(row, "ended_at"),
+            row.getString("selfie_state"), row.getString("selfie_reason"), row.getString("selfie_reviewed_by_name"),
+            row.getInt("in_zone_seconds"), instant(row, "last_seen_at"), row.getInt("max_silence_seconds"),
+            row.getInt("silences_over_60s"), phone, instant(row, "on_break_until"));
     }
 
     @Transactional
@@ -424,6 +495,9 @@ public class FleetAdminService {
                 admin.id(), admin.name(), rider.status(), after, Timestamp.from(now));
             if (!after.equals(rider.status())) {
                 jdbc.update("UPDATE fleet_schema.rider SET status = ?, updated_at = now() WHERE id = ?", after, riderId);
+                if (engineFeed != null) {
+                    engineFeed.refresh(riderId); // a paused or deactivated rider leaves the engine's ranking at once
+                }
             }
             // The remote role change comes last, so its failure rolls the whole decision back.
             if (activates) {

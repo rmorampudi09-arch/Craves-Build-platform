@@ -1,6 +1,6 @@
 // Screens 15–21: Earnings, Trip pay, Payouts, SOS, Notice, Profile and Help, in every state.
 import React from 'react';
-import {AccessibilityInfo, Alert, Animated, Linking, Text} from 'react-native';
+import {AccessibilityInfo, Alert, Animated, Linking, Share, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,6 +8,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import type {EarningsPage, HomeSummary, PayoutsPage, RiderMe, RiderNotice, RiderProfile, TripEarning} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {istDay} from '../domain/format';
+import {riderDevice} from '../native/riderDevice';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
@@ -37,6 +38,7 @@ jest.mock('../state/tripQueue', () => ({usePendingActions: () => 0}));
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {lastFix: () => ({lat: 17.4615, lng: 78.3657, accuracyM: 10, at: '2026-10-21T10:00:00Z'})},
 }));
+jest.mock('../native/riderDevice', () => ({riderDevice: {currentPosition: jest.fn(async () => ({lat: 17.45678, lng: 78.39123}))}}));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
   return {
@@ -507,6 +509,64 @@ describe('Profile (20)', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
   });
 
+  it('lets the rider choose the farthest pickup and drop, saved on tap, only when the server offers it', async () => {
+    await render(screen(), seed);
+    expect(allText()).not.toContain('Orders you hear of');
+    (riderApi.setPreferences as jest.Mock).mockResolvedValueOnce({maxPickupM: 2000, maxDropM: null});
+    await render(screen(), [[riderKeys.me, me], [riderKeys.profile, {...full, preferences: {maxPickupM: null, maxDropM: null}}]]);
+    expect(allText()).toContain('Orders you hear of | Only hear of orders within these distances.');
+    expect(allText()).toContain('Ride to the kitchen, at most | Any | 1 km | 2 km | 3 km | 5 km');
+    expect(allText()).toContain('Kitchen to customer, at most | Any | 3 km | 5 km | 8 km | 12 km');
+    expect(tree.root.findByProps({testID: 'rider-pickup-limit-any'}).props.accessibilityState).toEqual({checked: true});
+    await press('rider-pickup-limit-2000');
+    expect(riderApi.setPreferences).toHaveBeenCalledWith({maxPickupM: 2000, maxDropM: null});
+    await settle();
+    expect(tree.root.findByProps({testID: 'rider-pickup-limit-2000'}).props.accessibilityState).toEqual({checked: true});
+  });
+
+  it('saves the home spot rounded on the phone to about a kilometre, only while the server offers rider choices', async () => {
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    await render(screen(), seed);
+    expect(has('rider-home-spot-save')).toBe(false);
+    (riderApi.saveHomeSpot as jest.Mock).mockResolvedValueOnce({savedAt: '2026-10-28T07:00:00Z'});
+    await render(screen(), [[riderKeys.me, choosing], [riderKeys.profile, full]]);
+    expect(allText()).toContain('Home spot for heading home | At home? Save this spot. Craves keeps only an area about 1 km across, never your address.');
+    await press('rider-home-spot-save');
+    expect(riderDevice.currentPosition).toHaveBeenCalled();
+    expect(riderApi.saveHomeSpot).toHaveBeenCalledWith(17.46, 78.39);
+  });
+
+  it('says when the phone cannot tell where it is, and sends nothing', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    (riderDevice.currentPosition as jest.Mock).mockResolvedValueOnce(null);
+    await render(screen(), [[riderKeys.me, {...me, features: {...me.features, riderChoices: true}}], [riderKeys.profile, full]]);
+    await press('rider-home-spot-save');
+    expect(alert).toHaveBeenCalledWith("We couldn't find where you are. Turn on location and try again.");
+    expect(riderApi.saveHomeSpot).not.toHaveBeenCalled();
+  });
+
+  it('always lets the rider delete a saved home spot, even with rider choices off', async () => {
+    (riderApi.forgetHomeSpot as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(screen(), [[riderKeys.me, me], [riderKeys.profile, {...full, homeSavedAt: '2026-10-20T07:00:00Z'}]]);
+    expect(allText()).toContain('Saved on 20 Oct. Craves keeps only an area about 1 km across, never your address, and staff never see it.');
+    await press('rider-home-spot-delete');
+    expect(riderApi.forgetHomeSpot).toHaveBeenCalled();
+  });
+
+  it('shares a copy of the rider data from the phone, or sends a big one through rider support', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({action: 'sharedAction'});
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    (riderApi.getMyData as jest.Mock).mockResolvedValueOnce({about: {generatedAt: '2026-10-28T04:41:02Z'}, profile: {name: 'Ravi Kumar'}});
+    await render(screen(), seed);
+    expect(allText()).toContain('Your data | Get a copy of everything Craves keeps about you');
+    await press('rider-share-data');
+    expect(share).toHaveBeenCalledWith({title: 'Your data', message: expect.stringContaining('"name": "Ravi Kumar"')});
+    (riderApi.getMyData as jest.Mock).mockResolvedValueOnce({trips: 'x'.repeat(400_001)});
+    await press('rider-share-data');
+    expect(alert).toHaveBeenCalledWith('Your copy is too big to share from the phone. Call rider support and they will send it to you.');
+    expect(share).toHaveBeenCalledTimes(1);
+  });
+
   it('uploads a new photo of a document from the back camera and refreshes', async () => {
     (riderApi.uploadDocument as jest.Mock).mockResolvedValueOnce(undefined);
     (riderApi.getProfile as jest.Mock).mockResolvedValueOnce(full);
@@ -573,9 +633,9 @@ describe('Help (21)', () => {
 
   it('opens one answer at a time and says which is expanded', async () => {
     await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week([])]]);
-    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([true, false, false, false]);
+    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([true, false, false, false, false]);
     await act(async () => questions()[3].props.onPress());
-    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([false, false, false, true]);
+    expect(questions().map(node => node.props.accessibilityState.expanded)).toEqual([false, false, false, true, false]);
     expect(allText()).toContain('Every Monday by 3 pm');
     await act(async () => questions()[3].props.onPress());
     expect(questions().every(node => !node.props.accessibilityState.expanded)).toBe(true);

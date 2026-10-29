@@ -2,6 +2,7 @@ package in.craves.integration.fleet.admin;
 
 import static in.craves.integration.fleet.FleetPolicyStore.DISPATCH_POLICY;
 import static in.craves.integration.fleet.FleetPolicyStore.DISPATCH_POLICY_FIELDS;
+import static in.craves.integration.fleet.FleetPolicyStore.DISPATCH_RULE_FIELDS;
 import static in.craves.integration.fleet.FleetPolicyStore.RATE_CARD;
 import static in.craves.integration.fleet.FleetPolicyStore.RATE_CARD_FIELDS;
 import static in.craves.integration.fleet.admin.FleetAdminService.instant;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyInput;
@@ -176,6 +178,10 @@ public class FleetSetupService {
             for (int i = 0; i < DISPATCH_POLICY_FIELDS.size(); i++) {
                 values.put(DISPATCH_POLICY_FIELDS.get(i), given.get(i).longValue());
             }
+            DispatchPolicyInput asked = stop ? new DispatchPolicyInput(input.mode(), null, null, null, null, null, null, null, null) : input;
+            List<Integer> rules = offerRules(asked, values);
+            // Phase 5: the travel-time rule, as riders are shown it unless sent (an emergency stop never changes it).
+            boolean byTravelTime = asked.rankByTravelTime() != null ? asked.rankByTravelTime() : policies.dispatchRules(null).byTravelTime();
             // Before any policy is published, the seeded draft's ranges are the declared ones.
             Map<String, List<Long>> ranges = policies.publishedRanges(DISPATCH_POLICY).orElseGet(() -> jdbc.queryForList(
                 "SELECT ranges::text FROM fleet_schema.dispatch_policy WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1", String.class)
@@ -185,15 +191,43 @@ public class FleetSetupService {
             List<Object> args = new ArrayList<>(List.of(version, Timestamp.from(input.effectiveFrom() == null ? now
                 : input.effectiveFrom().truncatedTo(ChronoUnit.MICROS)), input.mode()));
             args.addAll(given);
+            args.addAll(rules);
+            args.add(byTravelTime);
             args.add(admin.write(ranges));
             jdbc.update("INSERT INTO fleet_schema.dispatch_policy (version, effective_from, mode, " + String.join(", ", DISPATCH_POLICY_FIELDS)
-                + ", ranges) VALUES (?, ?, ?, " + "?, ".repeat(DISPATCH_POLICY_FIELDS.size()) + "CAST(? AS jsonb))", args.toArray());
+                + ", " + String.join(", ", DISPATCH_RULE_FIELDS) + ", rank_by_travel_time, ranges) VALUES (?, ?, ?, "
+                + "?, ".repeat(DISPATCH_POLICY_FIELDS.size() + DISPATCH_RULE_FIELDS.size() + 1) + "CAST(? AS jsonb))", args.toArray());
             List<String> withdrawn = policies.publishDispatchPolicy(version, by.id());
             DispatchPolicyVersion policy = jdbc.queryForObject("SELECT * FROM fleet_schema.dispatch_policy WHERE version = ?",
                 (row, n) -> dispatchPolicy(row), version);
             return new Done(policy, null, version, "Set dispatch to " + input.mode() + " (version " + version + "), in force from "
                 + policy.effectiveFrom() + (withdrawn.isEmpty() ? "." : "; withdrew " + String.join(", ", withdrawn) + "."));
         });
+    }
+
+    /**
+     * How the new version offers orders (Phase 4): the values sent, else those riders are shown now (today's rules before any
+     * policy). An emergency stop sends none, so it never changes them. Each within its bounds, and rounds must fit the stage.
+     */
+    private List<Integer> offerRules(DispatchPolicyInput input, Map<String, Long> values) {
+        DispatchRules shown = policies.dispatchRules(null);
+        int atOnce = input.offersAtOnce() != null ? input.offersAtOnce() : shown.offersAtOnce();
+        int rounds = input.offerRounds() != null ? input.offerRounds() : shown.offerRounds();
+        int band = input.fairBandM() != null ? input.fairBandM() : shown.fairBandM();
+        if (atOnce < 1 || atOnce > 3) {
+            throw FleetApiException.invalid("Offer each order to 1, 2 or 3 riders at a time.");
+        }
+        if (rounds < 1 || rounds > 5) {
+            throw FleetApiException.invalid("Run 1 to 5 rounds of offers.");
+        }
+        if (band < 0 || band > 5000) {
+            throw FleetApiException.invalid("Set the fair band from 0 (nearest first) to 5 km.");
+        }
+        if (rounds > 1 && rounds * values.get("offer_seconds") > values.get("fleet_stage_seconds")) {
+            throw FleetApiException.invalid("Each round needs its full time to accept: make “Time Craves riders get before Borzo” at "
+                + "least the rounds × “Time a rider has to accept”, or run fewer rounds.");
+        }
+        return List.of(atOnce, rounds, band);
     }
 
     /** Adds the rider to the test-mode allow-list; adding again only changes the note. */
@@ -336,7 +370,8 @@ public class FleetSetupService {
             instant(row, "published_at"), row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"),
             row.getInt("radius_m"), row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"),
             row.getLong("cost_guard_premium_paise"), row.getInt("pidge_stage_seconds"), camel(read(row.getString("ranges"), RANGES)),
-            instant(row, "withdrawn_at"));
+            instant(row, "withdrawn_at"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"),
+            row.getBoolean("rank_by_travel_time"));
     }
 
     private static PilotRider pilotRider(ResultSet row) throws SQLException {

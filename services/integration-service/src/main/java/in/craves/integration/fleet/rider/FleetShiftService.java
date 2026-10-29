@@ -3,7 +3,10 @@ package in.craves.integration.fleet.rider;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
+import in.craves.integration.fleet.rider.FleetRiderModels.HeadingHome;
+import in.craves.integration.fleet.rider.FleetRiderModels.ShiftPause;
 import in.craves.integration.fleet.rider.FleetRiderModels.ShiftStart;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,7 +32,8 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Going online and offline. A shift hands out an opaque shift credential (32 random bytes, base64url) that the native
  * location service sends instead of a JWT. Only its SHA-256 is stored; it ends with the shift's 12 hours, at
- * /shift/end, or when ops approves another phone, and it works only on POST /locations and POST /devices.
+ * /shift/end, or when ops approves another phone, and it works only on POST /locations and POST /devices, and on trip
+ * steps once craves.fleet.trip-shift-credential-enabled is on (tripIdentity).
  */
 @Service
 @ConditionalOnProperty(name = {"craves.fleet.enabled", "craves.fleet.rider-api-enabled"}, havingValue = "true")
@@ -43,6 +48,11 @@ public class FleetShiftService {
     /** The rider (a SQL expression, formatted in) has a shift whose credential still works: only such a rider gets or takes an order. */
     public static final String ON_SHIFT = "EXISTS (SELECT 1 FROM fleet_schema.rider_shift h WHERE h.rider_id = %s AND h.ended_at IS NULL "
         + "AND h.credential_revoked_at IS NULL AND h.credential_expires_at > now())";
+    /** Phase 4: when the break running on the shift %s ends; NULL when none runs. */
+    public static final String BREAK_ENDS = "(SELECT max(b.ends_at) FROM fleet_schema.rider_break b WHERE b.shift_id = %s "
+        + "AND b.started_at <= now() AND b.ends_at > now())";
+    /** Phase 5: how long heading home lasts once turned on (research R14: an hour; turning it on again extends it). */
+    static final int HEADING_HOME_MINUTES = 60;
     // Riding a petrol two-wheeler needs these four, each verified by ops with an expiry date (IST) that has not passed;
     // an electric one needs no PUC and a bicycle none of them (FleetRiderService.REQUIRED_DOCUMENTS).
     private static final String MISSING_DOCUMENTS = """
@@ -63,6 +73,21 @@ public class FleetShiftService {
         this.jdbc = jdbc;
         this.properties = properties;
         this.storage = storage;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
+    }
+
+    /** The fleet engine reads the rider again once this transaction commits (FleetEngineFeed.refresh). */
+    private void engineRefresh(UUID identityId) {
+        if (engineFeed != null) {
+            engineFeed.refreshIdentity(identityId);
+        }
     }
 
     /**
@@ -118,6 +143,7 @@ public class FleetShiftService {
                 INSERT INTO fleet_schema.rider_shift (id, rider_id, device_id, credential_hash, credential_expires_at, selfie_blob,
                   selfie_size_bytes) VALUES (?, ?, ?, ?, now() + INTERVAL '12 hours', ?, ?) RETURNING credential_expires_at""",
                 Timestamp.class, shiftId, rider.id(), rider.deviceId(), hash(credential), blob, bytes.length);
+            engineRefresh(identityId);
             return new ShiftStart(credential, expires.toInstant());
         } catch (DuplicateKeyException exception) {
             throw shiftOpen(); // a parallel start opened the shift first
@@ -128,6 +154,84 @@ public class FleetShiftService {
     @Transactional
     public void end(UUID identityId) {
         jdbc.update(endShifts("rider_id = (SELECT id FROM fleet_schema.rider WHERE identity_id = ?)"), identityId);
+        engineRefresh(identityId);
+    }
+
+    /**
+     * Phase 4: a break of 5 to 60 minutes while staying online. No offers until it ends (a new break replaces the old one),
+     * and the time does not count toward a booked slot's guaranteed minimum. An offer still ringing goes to the next rider
+     * now, at no cost to this one. 409 NOT_ONLINE without an open shift; 503 RIDER_CHOICES_OFF while rider choices are off.
+     */
+    @Transactional
+    public ShiftPause pause(UUID identityId, Integer minutes) {
+        if (!properties.riderChoicesEnabled()) {
+            throw FleetRiderService.choicesOff();
+        }
+        if (minutes == null || minutes < 5 || minutes > 60) {
+            throw FleetApiException.invalid("Choose a break of 5 to 60 minutes.");
+        }
+        List<Map<String, Object>> shift = jdbc.queryForList("SELECT s.id, s.rider_id FROM fleet_schema.rider_shift s "
+            + "JOIN fleet_schema.rider r ON r.id = s.rider_id WHERE r.identity_id = ? AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL "
+            + "AND s.credential_expires_at > now() FOR UPDATE OF s", identityId);
+        if (shift.isEmpty()) {
+            throw FleetApiException.conflict("NOT_ONLINE", "Go online first.");
+        }
+        Object shiftId = shift.get(0).get("id");
+        endBreak(shiftId);
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE rider_id = ? AND state = 'ACTIVE'",
+            shift.get(0).get("rider_id"));
+        engineRefresh(identityId);
+        return new ShiftPause(jdbc.queryForObject("INSERT INTO fleet_schema.rider_break (id, rider_id, shift_id, ends_at) "
+            + "VALUES (?, ?, ?, now() + make_interval(mins => ?)) RETURNING ends_at", Timestamp.class, UUID.randomUUID(),
+            shift.get(0).get("rider_id"), shiftId, minutes).toInstant());
+    }
+
+    /** Ends a break now. Always allowed, so a rider can come back even after rider choices are switched off; repeating is harmless. */
+    @Transactional
+    public void resume(UUID identityId) {
+        jdbc.queryForList("SELECT s.id FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id "
+            + "WHERE r.identity_id = ? AND s.ended_at IS NULL", UUID.class, identityId).forEach(this::endBreak);
+        engineRefresh(identityId);
+    }
+
+    /**
+     * Phase 5: heading home for the next HEADING_HOME_MINUTES (turning it on again starts the hour again). Offers then come
+     * only for orders that take the rider home (FleetDispatcher.homeNearerM); there is no daily limit, and declining stays
+     * free. It ends sooner when the rider turns it off, goes offline or gets within 1 km of home (FleetLocationService).
+     * 409 NOT_ONLINE without an open shift; 409 HOME_NOT_SAVED; 503 RIDER_CHOICES_OFF.
+     */
+    @Transactional
+    public HeadingHome headHome(UUID identityId) {
+        if (!properties.riderChoicesEnabled()) {
+            throw FleetRiderService.choicesOff();
+        }
+        List<Map<String, Object>> shift = jdbc.queryForList("SELECT s.id, r.id AS rider_id, r.home_saved_at FROM fleet_schema.rider_shift s "
+            + "JOIN fleet_schema.rider r ON r.id = s.rider_id WHERE r.identity_id = ? AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL "
+            + "AND s.credential_expires_at > now() FOR UPDATE OF s", identityId);
+        if (shift.isEmpty()) {
+            throw FleetApiException.conflict("NOT_ONLINE", "Go online first.");
+        }
+        if (shift.get(0).get("home_saved_at") == null) {
+            throw FleetApiException.conflict("HOME_NOT_SAVED", "Save your home spot in Profile first.");
+        }
+        jdbc.update("UPDATE fleet_schema.rider SET home_used_at = now() WHERE id = ?", shift.get(0).get("rider_id"));
+        engineRefresh(identityId);
+        return new HeadingHome(jdbc.queryForObject("UPDATE fleet_schema.rider_shift SET heading_home_until = now() + make_interval(mins => ?) "
+            + "WHERE id = ? RETURNING heading_home_until", Timestamp.class, HEADING_HOME_MINUTES, shift.get(0).get("id")).toInstant());
+    }
+
+    /** Ends heading home now. Always allowed, also with rider choices off; repeating is harmless. */
+    @Transactional
+    public void stopHeadingHome(UUID identityId) {
+        jdbc.update("UPDATE fleet_schema.rider_shift s SET heading_home_until = NULL FROM fleet_schema.rider r WHERE r.id = s.rider_id "
+            + "AND r.identity_id = ? AND s.ended_at IS NULL AND s.heading_home_until IS NOT NULL", identityId);
+        engineRefresh(identityId);
+    }
+
+    /** Ends the break running on this shift now, if one is. */
+    private void endBreak(Object shiftId) {
+        jdbc.update("UPDATE fleet_schema.rider_break SET ends_at = now() WHERE shift_id = ? AND started_at <= now() AND ends_at > now()",
+            shiftId);
     }
 
     /** Ends the open shifts that match the condition and withdraws their riders' open offers, so the next courier is not kept waiting. */
@@ -170,6 +274,28 @@ public class FleetShiftService {
         return "BOUND".equals(state);
     }
 
+    /**
+     * The identity of the rider whose live shift this credential is, for a step on tripId from the phone's native outbox
+     * (P2-01, craves.fleet.trip-shift-credential-enabled): only that rider's trip in progress, or one that ended during this
+     * shift, so a retried step still gets its first answer. A deactivated rider's credential moves nothing, as their JWT
+     * has lost the RIDER role. 401 SHIFT_CREDENTIAL_INVALID; 404 TRIP_NOT_FOUND for any other trip.
+     */
+    @Transactional(readOnly = true)
+    public UUID tripIdentity(String credential, UUID tripId) {
+        Map<String, Object> shift = jdbc.queryForList("SELECT r.identity_id, s.started_at FROM fleet_schema.rider_shift s "
+                + "JOIN fleet_schema.rider r ON r.id = s.rider_id WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL "
+                + "AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now() AND r.status <> 'DEACTIVATED' "
+                + "AND r.identity_id IS NOT NULL", hash(credential))
+            .stream().findFirst().orElseThrow(FleetShiftService::credentialInvalid);
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip t JOIN fleet_schema.rider r "
+            + "ON r.id = t.rider_id WHERE t.id = ? AND r.identity_id = ? AND t.provider = 'CRAVES_FLEET' "
+            + "AND (t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP') OR t.finished_at >= ?))", Boolean.class, tripId,
+            shift.get("identity_id"), shift.get("started_at")))) {
+            throw FleetApiException.notFound("TRIP_NOT_FOUND", "This trip is not yours.");
+        }
+        return (UUID) shift.get("identity_id");
+    }
+
     static FleetApiException credentialInvalid() {
         return new FleetApiException(401, "SHIFT_CREDENTIAL_INVALID", "Your shift has ended. Go online again.");
     }
@@ -180,7 +306,7 @@ public class FleetShiftService {
     }
 
     /** True when the dotted version is below the minimum, compared part by part as the app does ("1.9" < "1.10"). */
-    static boolean versionBelow(String version, String minimum) {
+    public static boolean versionBelow(String version, String minimum) {
         if (version == null || !version.matches(VERSION)) {
             return true;
         }

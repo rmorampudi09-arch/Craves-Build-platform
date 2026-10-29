@@ -1,0 +1,134 @@
+// Craves fleet engine events (docs/riders/SCALE.md). Protobuf (proto3) on Redis Streams, one event per stream
+// entry in the field "e". integration-service (FleetEngineWire) and services/fleet-engine (wire/Wire.java)
+// encode and decode it by hand, and both are tested against testdata/*.hex, which this file decodes.
+//
+// Partitions: hash32 over the 16 bytes of an id, modulo the partition count (16 unless both sides are
+// configured otherwise); hash32 is FNV-1a 32-bit finished with MurmurHash3's fmix32. Blocks: row =
+// floor((lat + 90) / 0.05), col = floor((lng + 180) / 0.05), block = row * 7200 + col; a block's partition is
+// hash32 over its 8 big-endian bytes.
+syntax = "proto3";
+
+package craves.fleet.v1;
+
+// One fact about one rider. Stream craves:fleet:rq:{rq<p>}, p = partition of rider_id. The engine keeps the
+// newest of each part per rider: the position by fix time, the state by at_ms, the standing by at_ms.
+message RiderEvent {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    // A /locations call: its usable fixes, the heartbeat, and the state read in the same call.
+    PING = 1;
+    // The state read again after a change (offer, trip, break, shift, choices), with the day's standing.
+    REFRESH = 2;
+    // The shift ended: the rider hears of nothing until the next shift.
+    OFFLINE = 3;
+  }
+  bytes rider_id = 1;      // UUID, 16 bytes
+  Kind kind = 2;
+  int64 at_ms = 3;         // database time of the facts below, epoch milliseconds
+  repeated Fix fixes = 4;  // PING: the call's usable fixes, oldest first
+  RiderState state = 5;    // PING and REFRESH
+  Standing standing = 6;   // REFRESH, when it was read
+}
+
+message Fix {
+  double lat = 1;
+  double lng = 2;
+  int64 at_ms = 3;         // when the fix was taken, by the database clock
+  bool mock = 4;
+  float accuracy_m = 5;
+}
+
+// What dispatch needs about a rider (FleetDispatcher.nearbyRiders), as of RiderEvent.at_ms.
+message RiderState {
+  bytes shift_id = 1;               // the open shift; empty: none
+  int64 shift_ends_ms = 2;          // the shift credential's expiry
+  bool active = 3;                  // rider status ACTIVE
+  bool on_trip = 4;                 // a trip ASSIGNED, AT_PICKUP, PICKED_UP or AT_DROP
+  int64 offered_until_ms = 5;       // an open offer until then; 0: none
+  int64 break_until_ms = 6;         // on a break until then; 0: none
+  bool cannot_ring = 7;             // the phone said it can't ring (unknown counts as able)
+  int32 max_pickup_m = 8;           // 0: any distance
+  int32 max_drop_m = 9;             // 0: any distance
+  bool has_home = 10;
+  double home_lat = 11;
+  double home_lng = 12;
+  int64 heading_home_until_ms = 13; // 0: not heading home
+  bool test_allowed = 14;           // test mode allows the rider (always true with test mode off)
+  int64 seen_ms = 15;               // the last /locations call: the heartbeat
+  Fix last_fix = 16;                // REFRESH: the newest stored fix
+  int64 offered_from_ms = 17;       // when that open offer was made; 0: unknown
+}
+
+// The rider's IST day so far, for fair turns (FleetDispatcher.standings).
+message Standing {
+  int32 ist_day = 1;                // yyyymmdd (IST) the figures are for
+  int64 earned_paise = 2;           // pay finalised that day (FleetEarnings.RANGE_TOTAL_SQL)
+  int64 online_seconds = 3;         // available online seconds that day at RiderEvent.at_ms (ONLINE_SECONDS_SQL)
+  bool accruing = 4;                // online time grows: a working shift, no break (counted to 3 minutes after the last call)
+  int64 free_since_ms = 5;          // latest of the shift's start, the last trip's end, a break's end this shift
+}
+
+// Rank riders for one order. Stream craves:fleet:dq:{dq<p>}, p = partition of the kitchen's block, so one
+// engine instance owns each block and ranks the orders waiting there together.
+message DispatchRequest {
+  enum Mode {
+    MODE_UNSPECIFIED = 0;
+    SHADOW = 1;  // compare with java_ranked and log; no holds, no reply
+    LIVE = 2;    // hold the riders chosen for a few seconds and reply
+  }
+  bytes request_id = 1;                // 16 bytes; a LIVE reply goes to craves:fleet:reply:{<32 hex>}
+  Mode mode = 2;
+  bytes order_id = 3;                  // the chef sub-order id
+  int64 at_ms = 4;
+  int64 deadline_ms = 5;               // LIVE: integration-service stops waiting then
+  double kitchen_lat = 6;
+  double kitchen_lng = 7;
+  double drop_lat = 8;
+  double drop_lng = 9;
+  int32 drop_m = 10;                   // road metres kitchen to drop, for each rider's farthest drop
+  Policy policy = 11;
+  repeated bytes exclude = 12;         // riders already offered this order
+  repeated Candidate java_ranked = 13; // SHADOW: integration-service's own order, compared, never used
+  int32 round = 14;
+}
+
+message Policy {
+  int32 radius_m = 1;
+  int32 detour_percent = 2;
+  int32 offers_at_once = 3;
+  int32 fair_band_m = 4;
+  int32 offer_seconds = 5;
+  bool rider_choices = 6;              // CRAVES_FLEET_RIDER_CHOICES_ENABLED
+  bool joint = 7;                      // share out orders asked at once (needs 14 days' notice to riders)
+  // Rank by the travel-time model (ml/fleet-eta): predicted minutes to the kitchen instead of straight metres (a
+  // dispatch-policy rule riders get 14 days' notice of). The engine loads eta_model from craves:fleet:model:eta:<eta_model>;
+  // when it can't, the request is left to integration-service: no reply, no shadow comparison.
+  bool eta = 8;
+  string eta_model = 9;                // the model's version
+}
+
+message Candidate {
+  bytes rider_id = 1;
+  double straight_line_m = 2;
+  double lat = 3;
+  double lng = 4;
+  bool in_band = 5;                    // fair turns: inside the band
+  int64 per_hour_paise = 6;            // with in_band
+  int64 free_since_ms = 7;             // with in_band
+  int32 home_nearer_m = 8;             // heading home: metres nearer home; 0: not heading home
+  bool held = 9;                       // LIVE: held for this order for a few seconds
+}
+
+message DispatchReply {
+  enum Solver {
+    SOLVER_UNSPECIFIED = 0;
+    SINGLE = 1;  // the only order in its batch
+    EXACT = 2;   // orders ranked together, optimally
+    GREEDY = 3;  // orders ranked together, greedily (load)
+  }
+  bytes request_id = 1;
+  repeated Candidate riders = 2;       // in the order they hear of the order
+  int32 batch_orders = 3;              // orders ranked together
+  Solver solver = 4;
+  int64 solved_at_ms = 5;
+}

@@ -3,7 +3,9 @@ import type {
   EarningsPage,
   EarningsRange,
   HomeSummary,
+  Language,
   LocationBatchResponse,
+  OrderPreferences,
   Paise,
   PayoutAccountInput,
   PayoutsPage,
@@ -22,6 +24,15 @@ import {riderApiMode} from '../riderConfig';
 import {liveRiderApi} from './riderApi.live';
 import {mockRider} from './riderApi.mock';
 
+/**
+ * A queued step's tap (blueprint A4): Date.now() when the rider tapped, and the phone's fix at that moment, whose
+ * ageMs (when the native service gave one) is its age at the tap.
+ */
+export interface QueuedTap {
+  occurredAt: number;
+  fix?: RiderFix;
+}
+
 /** Every call the rider app makes, under /api/v1/rider. Mock and live builds implement the same interface. */
 export interface RiderApi {
   getMe(): Promise<RiderMe>;
@@ -31,7 +42,11 @@ export interface RiderApi {
   /** The UPI ID or bank account to be paid into; ops confirms it. 409 PAYOUT_ACCOUNT_NOT_UNIQUE, 422 HOLDER_NAME_MISMATCH. */
   submitPayoutAccount(input: PayoutAccountInput): Promise<void>;
   getTerms(): Promise<Terms>;
+  /** Phase 4: a copy of everything Craves keeps about the rider (GET /my-data), as the server's JSON. */
+  getMyData(): Promise<Record<string, unknown>>;
   acceptTerms(version: string): Promise<void>;
+  /** The notice in RiderMe.privacyNotice, read in language; 409 NOTICE_CHANGED when another version is in force (P2-09). */
+  acceptPrivacyNotice(version: string, language: Language): Promise<void>;
   getHome(): Promise<HomeSummary>;
   /**
    * The Go Online selfie is checked by ops in the pilot. installationId goes in the X-Craves-Installation-Id header;
@@ -39,6 +54,20 @@ export interface RiderApi {
    */
   startShift(selfieUri: string, installationId: string | null): Promise<ShiftStart>;
   endShift(): Promise<void>;
+  /** Phase 4: no offers for minutes (5 to 60) while staying online; answers when the break ends. */
+  pauseShift(minutes: number): Promise<{offersPausedUntil: string}>;
+  /** Ends a break now; harmless without one. */
+  resumeShift(): Promise<void>;
+  /** Phase 4: the farthest pickup and drop to hear of (null: any); answers what was saved. */
+  setPreferences(preferences: OrderPreferences): Promise<OrderPreferences>;
+  /** Phase 5: the home spot for heading home, already rounded to 2 decimal places (about a kilometre). */
+  saveHomeSpot(lat: number, lng: number): Promise<{savedAt: string}>;
+  /** Forgets the home spot and ends heading home; always allowed. */
+  forgetHomeSpot(): Promise<void>;
+  /** Phase 5: heading home for an hour. 409 NOT_ONLINE or HOME_NOT_SAVED. */
+  headHome(): Promise<{until: string}>;
+  /** Ends heading home now; always allowed. */
+  stopHeadingHome(): Promise<void>;
   /** After sign-in and whenever the FCM token changes. Rejects with 409 DEVICE_NOT_BOUND on an unapproved phone. */
   registerDevice(device: DeviceRegistration): Promise<void>;
   /** A new photo of one document (multipart "photo"); ops reviews it by hand. */
@@ -48,7 +77,8 @@ export interface RiderApi {
   declineOffer(offerId: string, key: string): Promise<void>;
   /** null when no trip is in progress (HTTP 204). */
   getActiveTrip(): Promise<Trip | null>;
-  tripAction(tripId: string, action: TripAction, body: unknown, key: string): Promise<Trip>;
+  /** tap: when the rider tapped and the fix then, for a step the queue sends later (live builds send it as ageMs and fix). */
+  tripAction(tripId: string, action: TripAction, body: unknown, key: string, tap?: QueuedTap): Promise<Trip>;
   getEarnings(range: EarningsRange, cursor?: string): Promise<EarningsPage>;
   getTripEarning(tripId: string): Promise<TripEarning>;
   getPayouts(): Promise<PayoutsPage>;

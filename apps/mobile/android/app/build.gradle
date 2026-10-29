@@ -63,8 +63,8 @@ react {
 def enableProguardInReleaseBuilds = false
 
 /**
- * Rider CI only: .github/workflows/rider-apk.yml runs assembleRiderRelease with -PcravesRiderMinify=true (R8) and
- * -PcravesVersionCode=<run number>. Nothing else passes them, so the customer build is unchanged.
+ * Rider CI only: .github/workflows/rider-apk.yml runs assembleRiderRelease with -PcravesRiderMinify=true (R8, and every
+ * language in the Play bundle) and -PcravesVersionCode=<run number>. Nothing else passes them, so the customer build is unchanged.
  */
 def cravesRiderMinify = project.findProperty('cravesRiderMinify')?.toString() == 'true'
 def cravesVersionCode = project.findProperty('cravesVersionCode')?.toString()
@@ -117,6 +117,13 @@ android {
     buildFeatures {
         buildConfig true
     }
+    // A rider Play bundle keeps every language: RiderText shows the language the rider picked in the app (P2-08), and Play
+    // would deliver only the phone's. Rider CI builds only (cravesRiderMinify), so the customer bundle keeps its splits.
+    bundle {
+        language {
+            enableSplit = !cravesRiderMinify
+        }
+    }
     // One codebase, two apps: the customer app keeps com.cravesapp; the rider app installs side by side.
     flavorDimensions "app"
     productFlavors {
@@ -128,6 +135,8 @@ android {
         rider {
             dimension "app"
             applicationId "com.cravesapp.rider"
+            // Keep in step with RIDER_APP_VERSION in src/features/rider/riderConfig.ts; rider-apk.yml fails the build otherwise.
+            versionName "1.1.0"
             buildConfigField "String", "CRAVES_APP", "\"rider\""
             // react-native-config looks up BuildConfig by applicationId unless told the namespace.
             resValue "string", "build_config_package", "com.cravesapp"
@@ -182,4 +191,6 @@ dependencies {
     // The Firebase BOM @react-native-firebase/app uses, so both resolve one set of Firebase libraries.
     riderImplementation(platform("com.google.firebase:firebase-bom:${rnfbAndroidSdk.firebase}"))
     riderImplementation("com.google.firebase:firebase-messaging")
+    // Tests only, never in the APK: the native trip outbox's rules (src/testRider, RiderOutboxCoreTest).
+    testRiderImplementation("junit:junit:4.13.2")
 }

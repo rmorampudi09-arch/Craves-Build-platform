@@ -6,8 +6,8 @@ import { formatAdminTimestamp } from "@/features/admin/shell/lib/admin-navigatio
 import { readableFleetValue } from "@/features/admin/fleet/lib/fleet-common";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import {
-  dispatchQueueSchema, formatAge, positionsSchema, reassignSchema, tripSchema, tripsSchema,
-  type DispatchQueueItem, type RiderPosition, type Trip,
+  codeChecksSchema, dispatchQueueSchema, formatAge, positionsSchema, reassignSchema, tripSchema, tripsSchema,
+  type CodeCheck, type DispatchQueueItem, type RiderPosition, type Trip,
 } from "@/features/admin/fleet/lib/trip-contract";
 import { ActionMessage, fieldClass, labelClass, ReasonAction, useFleetAction } from "./fleet-action";
 
@@ -21,18 +21,24 @@ export function FleetTrips() {
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [positionsError, setPositionsError] = useState("");
+  const [checks, setChecks] = useState<CodeCheck[]>([]);
+  const [checksError, setChecksError] = useState("");
 
   const load = useCallback(async () => {
+    const failed = (fallback: string) => (error: unknown) => error instanceof Error ? error : new Error(fallback);
     try {
-      const [nextTrips, nextQueue, nextPositions] = await Promise.all([
+      const [nextTrips, nextQueue, nextPositions, nextChecks] = await Promise.all([
         fleetGet("trips", tripsSchema), fleetGet("dispatch-queue", dispatchQueueSchema),
         // Positions are for operations admins only; support and audit admins still get trips and the queue.
-        fleetGet("positions", positionsSchema).catch((error: unknown) => error instanceof Error ? error : new Error("Rider positions are unavailable.")),
+        fleetGet("positions", positionsSchema).catch(failed("Rider positions are unavailable.")),
+        fleetGet("code-checks", codeChecksSchema).catch(failed("Delivery codes to check are unavailable.")),
       ]);
       setTrips(nextTrips.trips);
       setQueue([...nextQueue.items].sort((a, b) => LEVEL_ORDER[a.alertLevel] - LEVEL_ORDER[b.alertLevel] || a.queuedAt.localeCompare(b.queuedAt)));
       setPositions(nextPositions instanceof Error ? [] : nextPositions.positions);
       setPositionsError(nextPositions instanceof Error ? nextPositions.message : "");
+      setChecks(nextChecks instanceof Error ? [] : nextChecks.items);
+      setChecksError(nextChecks instanceof Error ? nextChecks.message : "");
       setLoadedAt(new Date().toISOString());
       setMessage("");
     } catch (error) {
@@ -76,6 +82,13 @@ export function FleetTrips() {
       </article>)}
     </section>
 
+    <section className="cr-panel space-y-3" aria-labelledby="fleet-code-checks-title">
+      <h2 id="fleet-code-checks-title" className="text-lg font-bold">Delivery codes to check</h2>
+      <p className="cr-muted">The rider typed the customer&apos;s code without signal and was told they could go, but the code didn&apos;t match. Call the customer: do they have the food? The rider gets no new orders until you record the answer.</p>
+      {checksError ? <p className="cr-empty" role="status">{checksError}</p> : checks.length === 0 ? <p className="cr-empty">No delivery codes to check.</p>
+        : checks.map(check => <CodeCheckItem key={check.tripId} check={check} onDone={done} />)}
+    </section>
+
     <section className="cr-panel" aria-labelledby="fleet-trips-title">
       <h2 id="fleet-trips-title" className="text-lg font-bold">Active trips</h2>
       {trips.length === 0 ? <p className="cr-empty">No active trips.</p> : <div className="mt-3 space-y-3">{trips.map(trip => <article key={trip.tripId} className="rounded-xl border border-slate-200 p-3 text-sm">
@@ -102,6 +115,31 @@ export function FleetTrips() {
       </table></div>}
     </section>
   </div>;
+}
+
+function CodeCheckItem({ check, onDone }: { check: CodeCheck; onDone: (notice: string) => Promise<void> }) {
+  const action = useFleetAction();
+  async function record(outcome: "DELIVERED" | "NOT_DELIVERED", reason: string) {
+    const question = outcome === "DELIVERED"
+      ? `Record that the customer has ${check.orderCode}? The trip is delivered and ${check.riderName} is paid in full.`
+      : `Record that the customer didn't get ${check.orderCode}? The trip fails and ${check.riderName}'s pay is held while you check with them.`;
+    if (!window.confirm(question)) return;
+    if (await action.run("POST", `trips/${check.tripId}/code-check`, tripSchema, { outcome, reason }, "")) {
+      await onDone(`${check.orderCode}: ${outcome === "DELIVERED" ? "delivered" : "failed, pay held"}.`);
+    }
+  }
+  return <article className="rounded-xl border border-slate-200 p-3 text-sm">
+    <div className="flex flex-wrap items-center gap-3">
+      <strong>{check.orderCode}</strong><span>{check.kitchenName} → {check.dropArea}</span>
+      <span>Rider: <Link className="underline" href={`/admin/riders/${check.riderId}`}>{check.riderName}</Link></span>
+      <span className="cr-muted">alerted {formatAdminTimestamp(check.alertedAt)} · {check.wrongCodes} wrong code{check.wrongCodes === 1 ? "" : "s"}</span>
+    </div>
+    <div className="mt-2 flex flex-wrap items-start gap-2">
+      <ReasonAction label="Customer has the food" action={action} onSubmit={reason => void record("DELIVERED", reason)} />
+      <ReasonAction label="Customer didn't get it" action={action} onSubmit={reason => void record("NOT_DELIVERED", reason)} />
+    </div>
+    <ActionMessage state={action.state} />
+  </article>;
 }
 
 function TripActions({ tripId, orderCode, idleRiders, onDone }: { tripId: string; orderCode: string; idleRiders: RiderPosition[]; onDone: (notice: string) => Promise<void> }) {

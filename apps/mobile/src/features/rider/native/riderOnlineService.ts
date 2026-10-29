@@ -10,6 +10,8 @@ export interface RiderOnlineStatus {
   state: 'OFFLINE' | 'ONLINE' | 'ERROR';
   lastFix?: RiderFix;
   message?: string;
+  /** The upload reached the server (ONLINE, or ERROR only because offers can't ring): a good moment to send the queue. */
+  connected?: boolean;
 }
 
 export interface TripChange {
@@ -33,6 +35,8 @@ export interface RiderOnlineService {
   onFcmToken(cb: (token: string) => void): () => void;
   /** The offer whose notification opened the app, or one that rang while JS wasn't running. */
   pendingOffer(): Promise<ReceivedOffer | null>;
+  /** Trip actions waiting to sync and the oldest one's Date.now(), for the native health report (blueprint A5). */
+  setQueueStats(pending: number, oldestAt: number): void;
 }
 
 const UPLOAD_EVERY_MS = 10_000;
@@ -124,6 +128,7 @@ function createJsOnlineService() {
     fcmToken: async () => 'mock-fcm-token',
     onFcmToken: (_cb: (token: string) => void) => () => undefined,
     pendingOffer: async (): Promise<ReceivedOffer | null> => null,
+    setQueueStats: (_pending: number, _oldestAt: number) => undefined,
     /** Dev panel: poll now instead of waiting up to 10 seconds. */
     pollNow: poll,
     isRunning: () => timer !== null,
@@ -139,6 +144,7 @@ interface NativeRiderOnline {
   lastFix(): Promise<RiderFix | null>;
   getFcmToken(): Promise<string>;
   getPendingOffer(): Promise<NativeOffer | null>;
+  setQueueStats?(pending: number, oldestAtMs: number): void;
 }
 
 /** A riderOffer event: the Offer JSON exactly as FCM or /locations delivered it, and which came first. */
@@ -163,17 +169,25 @@ function parseOffer(event: NativeOffer): ReceivedOffer | null {
 /** Live mode: the Kotlin foreground service uploads and rings; JS only listens. The credential never touches JS storage. */
 function createNativeOnlineService(native: NativeRiderOnline) {
   let fix: RiderFix | undefined;
+  // Date.now() when fix arrived: native's ageMs is the fix's age then, so lastFix() adds the time since.
+  let fixArrivedAt = 0;
+  const keep = (next: RiderFix | null | undefined) => {
+    if (next) {
+      fix = next;
+      fixArrivedAt = Date.now();
+    }
+  };
   const on = <T>(event: string, cb: (payload: T) => void) => {
     const subscription = DeviceEventEmitter.addListener(event, cb);
     return () => subscription.remove();
   };
-  on<RiderOnlineStatus>('riderStatus', status => {
-    fix = status.lastFix ?? fix;
-  });
+  on<RiderOnlineStatus>('riderStatus', status => keep(status.lastFix));
   native
     .lastFix()
     .then(saved => {
-      fix = fix ?? saved ?? undefined;
+      if (!fix) {
+        keep(saved);
+      }
     })
     .catch(() => undefined);
   // Native counts an offer as delivered once JS runs, but with the activity gone (swiped away while online) nothing
@@ -191,7 +205,8 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       native.start(shift?.shiftCredential ?? null, shift ? Date.parse(shift.expiresAt) : 0, getRuntimeConfig().apiBaseUrl),
     stop: () => native.stop(),
     testRing: () => native.testRing(),
-    lastFix: () => fix,
+    lastFix: () =>
+      fix && fix.ageMs !== undefined ? {...fix, ageMs: fix.ageMs + Math.max(0, Date.now() - fixArrivedAt)} : fix,
     onOffer(cb: (offer: Offer, receivedAtMs: number) => void) {
       listening += 1;
       const off = on<NativeOffer>('riderOffer', event => {
@@ -217,6 +232,7 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       // The newer of the two; RiderRuntime drops it if it has expired.
       return tapped && held ? (held.receivedAtMs > tapped.receivedAtMs ? held : tapped) : tapped ?? held;
     },
+    setQueueStats: (pending: number, oldestAt: number) => native.setQueueStats?.(pending, oldestAt),
     /** The dev panel exists only in mock builds, which use the JS loop. */
     pollNow: async () => undefined,
   };

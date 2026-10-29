@@ -1,0 +1,147 @@
+# Craves fleet engine (services/fleet-engine, Java 21; docs/riders/SCALE.md): tests, image and container app, from GitHub main only.
+# Manual. operation:
+#   status: read only. Shows the app, its revision and its last start line (redisShards).
+#   build:  the engine's tests (as its GitHub CI runs them), then the image from this clean checkout, tagged with the commit.
+#   deploy: build, then the template's what-if, which must change nothing but the engine's own app, then the deployment
+#           itself, only with confirmProductionChange ticked.
+# The engine makes no dispatch decision until integration-service's CRAVES_FLEET_ENGINE_MODE leaves off (GO-LIVE.md §9).
+# Before the first deploy, a person creates the identity and the Key Vault secret (infra/fleet-engine/README.md).
+
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    type: string
+    default: status
+    values:
+      - status
+      - build
+      - deploy
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+  - name: identityName
+    type: string
+    default: id-craves-fleet-engine-prodlow
+  - name: replicas
+    type: number
+    default: 1
+    values:
+      - 1
+      - 2
+      - 3
+      - 4
+
+variables:
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
+  RG: rg-craves-prodlow-centralindia
+  ACR: cravesrm09prodlow6bf632
+  APP: ca-craves-fleet-engine-prodlow
+  ENVIRONMENT: cae-craves-prodlow-kmqgfy
+  KEY_VAULT: kvcravesprodlowkmqgfy
+  SECRET: fleet-engine-redis-url
+  modulePath: services/fleet-engine
+  imageRepository: craves/fleet-engine
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+
+  - script: |
+      set -euo pipefail
+      echo "Source commit: $(Build.SourceVersion)"
+      echo "Source branch: $(Build.SourceBranch)"
+      [[ "$(Build.SourceBranch)" == 'refs/heads/main' ]] || { echo 'ERROR: the engine is built from GitHub main only (AGENTS.md).' >&2; exit 1; }
+      [[ -z "$(git status --porcelain)" ]] || { echo 'ERROR: the checkout is not clean.' >&2; exit 1; }
+    displayName: Built from main only
+
+  - ${{ if ne(parameters.operation, 'status') }}:
+    - task: JavaToolInstaller@0
+      displayName: Use Java 21
+      inputs:
+        versionSpec: '21'
+        jdkArchitectureOption: x64
+        jdkSourceOption: PreInstalled
+
+    - script: |
+        set -euo pipefail
+        sudo apt-get update -q && sudo apt-get install -y -q redis-server # without it the Redis tests would skip
+        cd $(modulePath)
+        mvn -B -ntp clean verify
+        cd "$(Build.SourcesDirectory)"
+        python3 scripts/release/verify-platform-copies.py # the travel-time model's evaluator, identical in both services
+      displayName: Engine tests, as its GitHub CI runs them
+
+    - task: AzureCLI@2
+      displayName: Build the image from this checkout, tagged with the commit
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          # The clean checkout of main is what ACR builds: nothing from anyone's machine.
+          az acr build -r "$(ACR)" -t "$(imageRepository):$(Build.SourceVersion)" "$(modulePath)" --only-show-errors -o none
+          DIGEST=$(az acr repository show -n "$(ACR)" --image "$(imageRepository):$(Build.SourceVersion)" --query digest -o tsv --only-show-errors)
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'ERROR: no image digest.' >&2; exit 1; }
+          echo "Image: $(ACR).azurecr.io/$(imageRepository)@$DIGEST"
+          echo "##vso[task.setvariable variable=IMAGE_DIGEST]$DIGEST"
+
+  - ${{ if eq(parameters.operation, 'deploy') }}:
+    - task: AzureCLI@2
+      displayName: What-if, then deploy (only the engine's own app)
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          CONFIRM='${{ parameters.confirmProductionChange }}'
+          ENV_ID=$(az containerapp env show -g "$(RG)" -n "$(ENVIRONMENT)" --query id -o tsv --only-show-errors)
+          IDENTITY_ID=$(az identity show -g "$(RG)" -n '${{ parameters.identityName }}' --query id -o tsv --only-show-errors) || {
+            echo 'ERROR: create the identity first (infra/fleet-engine/README.md, "Before you start").' >&2; exit 1; }
+          # Versionless: after a Redis key rotation the app reads the new value (README, "After a Redis key rotation").
+          SECRET_URL="https://$(KEY_VAULT).vault.azure.net/secrets/$(SECRET)"
+          az keyvault secret show --vault-name "$(KEY_VAULT)" -n "$(SECRET)" --query id -o none --only-show-errors || {
+            echo 'ERROR: create the Key Vault secret first (infra/fleet-engine/README.md, step 2).' >&2; exit 1; }
+          PARAMS=(deployEngine=true managedEnvironmentId="$ENV_ID" userAssignedIdentityId="$IDENTITY_ID"
+            image="$(ACR).azurecr.io/$(imageRepository)@$(IMAGE_DIGEST)" redisUrlSecretUrl="$SECRET_URL" replicas=${{ parameters.replicas }})
+          az deployment group what-if -g "$(RG)" -n "fleet-engine-$(Build.BuildId)" -f infra/fleet-engine/main.bicep -p "${PARAMS[@]}" \
+            --result-format ResourceIdOnly --no-pretty-print -o json --only-show-errors > whatif.json
+          python3 - "$(APP)" whatif.json <<'PY'
+          import json, sys
+          app, changes = sys.argv[1], json.load(open(sys.argv[2]))["changes"]
+          bad = [c for c in changes if c["changeType"] not in ("NoChange", "Ignore") and not c["resourceId"].lower().endswith(
+              "/providers/microsoft.app/containerapps/" + app.lower())]
+          for c in changes:
+              print(c["changeType"], c["resourceId"])
+          if bad:
+              sys.exit("ERROR: the what-if changes more than the engine's own app; nothing was deployed.")
+          PY
+          if [[ "${CONFIRM,,}" != true ]]; then
+            echo 'confirmProductionChange is not ticked: the what-if ran, nothing was deployed.'
+            exit 0
+          fi
+          az deployment group create -g "$(RG)" -n "fleet-engine-$(Build.BuildId)" -f infra/fleet-engine/main.bicep -p "${PARAMS[@]}" \
+            --only-show-errors -o none
+          echo "Deployed $(Build.SourceVersion) as $(IMAGE_DIGEST)."
+
+  - task: AzureCLI@2
+    displayName: Status (read only)
+    inputs:
+      azureSubscription: $(AZURE_SERVICE_CONNECTION)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -uo pipefail
+        if ! az containerapp show -g "$(RG)" -n "$(APP)" --query '{image:properties.template.containers[0].image, revision:properties.latestReadyRevisionName, running:properties.runningStatus}' -o table --only-show-errors; then
+          echo 'The engine is not deployed.'
+          exit 0
+        fi
+        # Its start line carries redisShards=1 while the cache has one shard.
+        az containerapp logs show -g "$(RG)" -n "$(APP)" --tail 300 --format text --only-show-errors 2>/dev/null \
+          | grep -E 'FLEET_ENGINE_(STARTED|REDIS_SHARDS|REDIS_UNREACHABLE)' | tail -5 || echo 'No start line in the recent log.'

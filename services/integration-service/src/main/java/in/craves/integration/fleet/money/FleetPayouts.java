@@ -8,6 +8,8 @@ import in.craves.integration.fleet.admin.FleetAdminService;
 import in.craves.integration.fleet.admin.FleetAdminService.Done;
 import in.craves.integration.fleet.admin.RiderJoinsExitsExport;
 import in.craves.integration.fleet.money.FleetMoneyModels.BatchInput;
+import in.craves.integration.fleet.money.FleetMoneyModels.CancelBatchInput;
+import in.craves.integration.fleet.money.FleetMoneyModels.CancelledBatch;
 import in.craves.integration.fleet.money.FleetMoneyModels.BatchPage;
 import in.craves.integration.fleet.money.FleetMoneyModels.Payout;
 import in.craves.integration.fleet.money.FleetMoneyModels.PayoutBatch;
@@ -334,6 +336,82 @@ public class FleetPayouts {
     }
 
     /**
+     * The bank returned a payout it had paid (a reversal after the UTR): the payout reads FAILED to the rider with the bank's
+     * reason and keeps its UTR, the money is back in the rider's balance, the journal fully reverses the paid one (BANK back
+     * to RIDER_PAYABLE), and the rider's payouts pause until ops checks the account. 409 PAYOUT_NOT_PAID otherwise.
+     */
+    @Transactional
+    public Object reverse(Admin by, UUID key, UUID batchId, UUID payoutId, String reason) {
+        String text = FleetAdminService.reason(reason);
+        if (!ledgerOn) {
+            throw new FleetApiException(503, "LEDGER_POSTING_OFF", "Reversals are recorded in the financial journal, which is off. "
+                + "Turn on CRAVES_LEDGER_POSTING_ENABLED, then record the reversal.");
+        }
+        return admin.once(by, key, "PAYOUT_REVERSED", batchId + "/" + payoutId + "\n" + text, () -> {
+            lockBatch(batchId);
+            Map<String, Object> payout = jdbc.queryForList("SELECT rider_id, amount_paise, state, payout_account_id, utr FROM "
+                    + "fleet_schema.rider_payout_instruction WHERE id = ? AND batch_id = ? FOR UPDATE", payoutId, batchId).stream().findFirst()
+                .orElseThrow(() -> FleetApiException.notFound("PAYOUT_NOT_FOUND", "No such payout in this file."));
+            if (!"PAID".equals(payout.get("state"))) {
+                throw FleetApiException.conflict("PAYOUT_NOT_PAID", "Only a paid payout can be reversed. Mark a pending one failed instead.");
+            }
+            UUID rider = (UUID) payout.get("rider_id");
+            earnings.lockRider(rider);
+            String why = cut("Returned by the bank: " + text, 1000);
+            jdbc.update("UPDATE fleet_schema.rider_payout_instruction SET state = 'FAILED', failure_reason = ?, marked_by = ?, marked_by_name = ?, "
+                + "marked_at = now() WHERE id = ?", why, by.id(), by.name(), payoutId);
+            jdbc.update("UPDATE fleet_schema.rider_payout_account SET payouts_paused_at = now(), paused_reason = ? WHERE id = ? AND state = 'ACTIVE' "
+                + "AND payouts_paused_at IS NULL", why, payout.get("payout_account_id"));
+            String paidKey = "fleet-payout/" + payoutId + "/paid";
+            UUID paidJournal = jdbc.queryForList("SELECT id FROM payment_schema.ledger_transaction WHERE business_event_key = ?", UUID.class,
+                paidKey).stream().findFirst().orElseThrow(() -> new IllegalStateException("FLEET_LEDGER_MISSING " + paidKey));
+            String money = LedgerMoney.text(BigDecimal.valueOf(((Number) payout.get("amount_paise")).longValue(), 2));
+            String ledgerKey = "fleet-payout/" + payoutId + "/reversed";
+            var receipt = ledger.post(new LedgerJournal.Entry(ledgerKey, UUID.nameUUIDFromBytes(ledgerKey.getBytes(StandardCharsets.UTF_8)),
+                "craves-fleet", "RIDER_PAYOUT_REVERSED", null, null, "INR", Instant.now(), "utr/" + payout.get("utr") + "/reversed", paidJournal,
+                "HUMAN", by.id().toString(),
+                List.of(new LedgerJournal.Line("RIDER_PAYABLE", "INR", "0.00", money, null, null, "craves_fleet", null, null, payoutId),
+                    new LedgerJournal.Line("BANK", "INR", money, "0.00", null, null, "craves_fleet", null, null, payoutId))));
+            if (receipt.outcome() == LedgerJournal.Outcome.CONFLICT) {
+                throw new IllegalStateException("FLEET_LEDGER_CONFLICT " + ledgerKey);
+            }
+            return new Done(payout(payoutId), rider, payoutId.toString(), "Recorded the bank's reversal of "
+                + FleetRiderService.rupees(((Number) payout.get("amount_paise")).longValue()) + " (UTR " + payout.get("utr") + "): " + text
+                + ". The money is back in the rider's balance; their payouts pause until the account is checked.");
+        });
+    }
+
+    /**
+     * Withdraws a payout file that was never sent (CREATED or APPROVED), for a mistake found before upload. A weekly file's
+     * payouts and this week's recoveries go, so the next weekly file pays and recovers them; a daily file's withdrawals wait
+     * for the next daily file. Nothing reached a bank, so no journal changes. The admin confirms the file was not uploaded;
+     * the file's totals stay in the audit trail. 409 BATCH_ALREADY_SENT.
+     */
+    @Transactional
+    public Object cancelBatch(Admin by, UUID key, UUID batchId, CancelBatchInput input) {
+        String text = FleetAdminService.reason(input == null ? null : input.reason());
+        if (!Boolean.TRUE.equals(input.notUploaded())) {
+            throw FleetApiException.invalid("Confirm that this file was not uploaded to the bank.");
+        }
+        return admin.once(by, key, "PAYOUT_BATCH_CANCELLED", batchId + "\n" + text, () -> {
+            if (!Set.of("CREATED", "APPROVED").contains(lockBatch(batchId).get("status"))) {
+                throw FleetApiException.conflict("BATCH_ALREADY_SENT", "This payout file was sent to the bank. Mark each payout paid or failed instead.");
+            }
+            PayoutBatch batch = batch(by, batchId);
+            if ("WEEKLY".equals(batch.kind())) {
+                jdbc.update("DELETE FROM fleet_schema.rider_recovery WHERE batch_id = ?", batchId);
+                jdbc.update("DELETE FROM fleet_schema.rider_payout_instruction WHERE batch_id = ?", batchId);
+            } else {
+                jdbc.update("UPDATE fleet_schema.rider_payout_instruction SET batch_id = NULL WHERE batch_id = ?", batchId);
+            }
+            jdbc.update("DELETE FROM fleet_schema.rider_payout_batch WHERE id = ?", batchId);
+            return new Done(new CancelledBatch(batchId, batch.kind(), batch.payoutDate(), batch.payoutCount(), batch.totalPaise()), null,
+                batchId.toString(), "Cancelled the unsent " + batch.kind() + " payout file for " + batch.payoutDate() + " (" + batch.status()
+                    + ", " + batch.payoutCount() + " payouts, " + FleetRiderService.rupees(batch.totalPaise()) + "): " + text);
+        });
+    }
+
+    /**
      * The bank's IMPS bulk file: one row per payout with the full account number or UPI ID, decrypted only here. Cells a
      * spreadsheet would read as a formula start with an apostrophe. Every download is audited.
      */
@@ -429,6 +507,10 @@ public class FleetPayouts {
             row.getString("status"), row.getLong("total"), row.getInt("payouts"), row.getString("created_by_name"),
             creator.equals(viewer.id()), row.getTimestamp("created_at").toInstant(), row.getString("approved_by_name"),
             approved == null ? null : approved.toInstant(), sent == null ? null : sent.toInstant(), payouts);
+    }
+
+    private static String cut(String text, int max) {
+        return text.length() > max ? text.substring(0, max) : text;
     }
 
     private static FleetApiException batchNotFound() {

@@ -14,7 +14,7 @@ export const reasonBody = z.object({ reason: reasonText });
 export type FleetFile = {
   types: readonly string[];
   maxBytes: number;
-  /** Download name for CSV files; images and PDFs open inline. */
+  /** Download name for CSV and JSON files; images and PDFs open inline. */
   attachment?: (ids: string[], query: URLSearchParams) => string;
 };
 
@@ -58,6 +58,12 @@ export function fleetError(status: number, body: unknown): { code: string; messa
   const message = status === 403 && code !== "SAME_APPROVER" ? ""
     : typeof raw.message === "string" ? raw.message.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 500) : "";
   return { code, message: message || (DEFAULT_MESSAGES[status] ?? "The fleet service is unavailable. Try again shortly.") };
+}
+
+/** Rupees as typed ("80", "80.5", "80.50") to integer paise, without floating point; null if it isn't an amount. */
+export function rupeesToPaise(text: string): number | null {
+  const match = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(text.trim());
+  return match ? Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0")) : null;
 }
 
 export function readableFleetValue(value: string): string {

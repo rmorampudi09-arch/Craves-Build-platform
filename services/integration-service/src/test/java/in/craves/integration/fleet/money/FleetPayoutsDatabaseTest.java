@@ -13,7 +13,10 @@ import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccountInput;
 import in.craves.integration.fleet.admin.FleetAdminService;
+import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.BatchInput;
+import in.craves.integration.fleet.money.FleetMoneyModels.CancelBatchInput;
+import in.craves.integration.fleet.money.FleetMoneyModels.CancelledBatch;
 import in.craves.integration.fleet.money.FleetMoneyModels.Payout;
 import in.craves.integration.fleet.money.FleetMoneyModels.PayoutBatch;
 import in.craves.integration.fleet.money.FleetMoneyModels.PayoutsPage;
@@ -250,6 +253,94 @@ class FleetPayoutsDatabaseTest {
     }
 
     @Test
+    void anUnsentWeeklyFileIsCancelledWithItsRecoveriesAndCanBeMadeAgain() {
+        bank(ravi, "Ravi Kumar");
+        UUID trip = earned(ravi);
+        earned(ravi);
+        tx(() -> earnings.adjustTrip(maker, UUID.randomUUID(), trip, new AdjustmentInput("drop-km", -300L, "The drop was 3.6 km")));
+        PayoutBatch weekly = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("WEEKLY", monday)));
+        payouts.approve(checker, UUID.randomUUID(), weekly.batchId());
+        assertThat(sum("SELECT count(*) FROM fleet_schema.rider_recovery WHERE batch_id = ?", weekly.batchId())).isOne();
+        assertThat(payouts.payouts(ravi).withdrawablePaise()).as("in the file").isZero();
+        refused(() -> tx(() -> payouts.cancelBatch(maker, UUID.randomUUID(), weekly.batchId(), new CancelBatchInput("Wrong account", false))),
+            400, "VALIDATION_FAILED");
+
+        UUID key = UUID.randomUUID();
+        CancelledBatch cancelled = (CancelledBatch) tx(() -> payouts.cancelBatch(maker, key, weekly.batchId(),
+            new CancelBatchInput("Ravi's account changed before upload", true)));
+
+        assertThat(cancelled.payoutCount()).isOne();
+        assertThat(cancelled.totalPaise()).isEqualTo(weekly.totalPaise());
+        assertThat(sum("SELECT count(*) FROM fleet_schema.rider_payout_batch WHERE id = ?", weekly.batchId())).isZero();
+        assertThat(sum("SELECT count(*) FROM fleet_schema.rider_payout_instruction WHERE rider_id = ?", ravi)).isZero();
+        assertThat(sum("SELECT count(*) FROM fleet_schema.rider_recovery WHERE rider_id = ?", ravi)).as("recovered by the next file").isZero();
+        assertThat(sum("SELECT count(*) FROM payment_schema.ledger_transaction WHERE event_type = 'RIDER_PAYOUT_PAID'")).isZero();
+        assertThat(sum("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'PAYOUT_BATCH_CANCELLED'")).isOne();
+        assertThat(json.valueToTree(tx(() -> payouts.cancelBatch(maker, key, weekly.batchId(),
+            new CancelBatchInput("Ravi's account changed before upload", true)))).get("payoutCount").asInt()).as("the same key").isOne();
+        PayoutBatch again = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("WEEKLY", monday)));
+        assertThat(again.totalPaise()).isEqualTo(weekly.totalPaise());
+        assertThat(sum("SELECT count(*) FROM fleet_schema.rider_recovery WHERE batch_id = ?", again.batchId())).isOne();
+
+        payouts.approve(checker, UUID.randomUUID(), again.batchId());
+        payouts.markSent(checker, UUID.randomUUID(), again.batchId());
+        refused(() -> tx(() -> payouts.cancelBatch(maker, UUID.randomUUID(), again.batchId(), new CancelBatchInput("Too late", true))), 409,
+            "BATCH_ALREADY_SENT");
+        refused(() -> tx(() -> payouts.cancelBatch(maker, UUID.randomUUID(), UUID.randomUUID(), new CancelBatchInput("Missing", true))), 404,
+            "BATCH_NOT_FOUND");
+    }
+
+    @Test
+    void anUnsentDailyFilesWithdrawalsWaitForTheNextDailyFile() {
+        bank(ravi, "Ravi Kumar");
+        earned(ravi);
+        payouts.withdraw(ravi, "k1", 6000L);
+        LocalDate today = LocalDate.now(IST);
+        fleet.db.update("UPDATE fleet_schema.rider_payout_instruction SET payout_date = ? WHERE rider_id = ?", today, ravi);
+        PayoutBatch daily = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", today)));
+
+        tx(() -> payouts.cancelBatch(checker, UUID.randomUUID(), daily.batchId(), new CancelBatchInput("Made for the wrong day", true)));
+
+        RiderPayout waiting = payouts.payouts(ravi).payouts().get(0);
+        assertThat(waiting.status()).as("the rider's withdrawal stands").isEqualTo("SCHEDULED");
+        assertThat(waiting.amountPaise()).isEqualTo(6000);
+        assertThat(payouts.payouts(ravi).withdrawablePaise()).isEqualTo(700);
+        PayoutBatch next = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("DAILY_WITHDRAWAL", today)));
+        assertThat(next.payouts()).extracting(Payout::payoutId).containsExactly(UUID.fromString(waiting.payoutId()));
+    }
+
+    @Test
+    void aBankReversalPutsTheMoneyBackReversesTheJournalAndPausesPayouts() {
+        bank(ravi, "Ravi Kumar");
+        earned(ravi);
+        PayoutBatch weekly = (PayoutBatch) tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("WEEKLY", monday)));
+        payouts.approve(checker, UUID.randomUUID(), weekly.batchId());
+        payouts.markSent(checker, UUID.randomUUID(), weekly.batchId());
+        UUID payout = weekly.payouts().get(0).payoutId();
+        refused(() -> tx(() -> payouts.reverse(checker, UUID.randomUUID(), weekly.batchId(), payout, "Bank returned it")), 409, "PAYOUT_NOT_PAID");
+        tx(() -> payouts.markPaid(checker, UUID.randomUUID(), weekly.batchId(), payout, "HDFCN52026102600009"));
+        assertThat(payouts.payouts(ravi).withdrawablePaise()).isZero();
+
+        Payout reversed = (Payout) tx(() -> payouts.reverse(checker, UUID.randomUUID(), weekly.batchId(), payout, "Account closed, IMPS returned"));
+
+        assertThat(reversed.status()).isEqualTo("FAILED");
+        assertThat(reversed.utr()).as("kept for the bank statement").isEqualTo("HDFCN52026102600009");
+        assertThat(reversed.failureReason()).isEqualTo("Returned by the bank: Account closed, IMPS returned");
+        assertThat(payouts.payouts(ravi).withdrawablePaise()).as("back in the balance").isEqualTo(6700);
+        assertThat(payouts.payouts(ravi).payouts().get(0).status()).isEqualTo("FAILED");
+        refused(() -> payouts.withdraw(ravi, "k1", 100L), 409, "PAYOUTS_PAUSED");
+        assertThat(fleet.db.queryForObject("SELECT reversal_of = (SELECT id FROM payment_schema.ledger_transaction WHERE business_event_key = ?) "
+            + "FROM payment_schema.ledger_transaction WHERE business_event_key = ?", Boolean.class, "fleet-payout/" + payout + "/paid",
+            "fleet-payout/" + payout + "/reversed")).isTrue();
+        assertThat(sum("SELECT count(*) FROM payment_schema.ledger_line l JOIN payment_schema.ledger_transaction x ON x.id = l.transaction_id "
+            + "WHERE l.payout_instruction_id = ? AND l.account_code = 'BANK' AND x.event_type IN ('RIDER_PAYOUT_PAID', 'RIDER_PAYOUT_REVERSED')",
+            payout)).isEqualTo(2);
+        assertThat(fleet.db.queryForObject("SELECT sum(debit_amount) - sum(credit_amount) FROM payment_schema.ledger_line "
+            + "WHERE payout_instruction_id = ? AND account_code = 'BANK'", BigDecimal.class, payout)).isEqualByComparingTo("0.00");
+        refused(() -> tx(() -> payouts.reverse(checker, UUID.randomUUID(), weekly.batchId(), payout, "Again")), 409, "PAYOUT_NOT_PAID");
+    }
+
+    @Test
     void debtIsRecoveredOnlyFromFuturePayAtTheWeeklyCap() {
         bank(ravi, "Ravi Kumar");
         UUID trip = earned(ravi);
@@ -259,10 +350,7 @@ class FleetPayoutsDatabaseTest {
         tx(() -> payouts.markPaid(checker, UUID.randomUUID(), first.batchId(), first.payouts().get(0).payoutId(), "HDFCN52026102600001"));
 
         // ₹12 overpaid, found after the payout: the rider owes it, but nothing is taken from their bank.
-        tx(() -> {
-            earnings.adjustTrip(maker, trip, "drop-km", -1200, "The drop was 2.9 km, not 4.2 km");
-            return null;
-        });
+        tx(() -> earnings.adjustTrip(maker, UUID.randomUUID(), trip, new AdjustmentInput("drop-km", -1200L, "The drop was 2.9 km, not 4.2 km")));
         assertThat(payouts.payouts(ravi).withdrawablePaise()).isZero();
         refused(() -> tx(() -> payouts.createBatch(maker, UUID.randomUUID(), new BatchInput("WEEKLY", monday.plusWeeks(1)))), 422, "NOTHING_TO_PAY");
 

@@ -9,8 +9,9 @@ import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { formatPaise } from "@/features/admin/fleet/lib/payout-contract";
 import { riderPageSchema, type RiderSummary } from "@/features/admin/fleet/lib/rider-contract";
 import {
-  detourChanges, DISPATCH_INPUTS, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicyInputSchema, dispatchPolicySchema, draftFromForm,
-  fleetSetupSchema, isScheduled, noticeStart, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema, toUnitText, versionState,
+  DISPATCH_INPUTS, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicyInputSchema, dispatchPolicySchema, draftFromForm,
+  fleetSetupSchema, isScheduled, noticeFor, noticeHelp, noticeStart, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema,
+  RULE_INPUTS, rulesText, toUnitText, versionState,
   type DispatchMode, type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RateCard, type Unit, type UnitInput,
 } from "@/features/admin/fleet/lib/setup-contract";
 import { ActionMessage, fieldClass, labelClass, useFleetAction, type FleetAction } from "./fleet-action";
@@ -18,7 +19,7 @@ import { ActionMessage, fieldClass, labelClass, useFleetAction, type FleetAction
 const MODE_LABEL = { off: "Off", shadow: "Shadow — logs only", live: "Live" } as const;
 const LIVE_WARNING = "Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time.";
 const STOP_WARNING = "Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.";
-const STEP: Record<Unit, string> = { rupees: "0.01", km: "0.1", minutes: "1", seconds: "1", percent: "1" };
+const STEP: Record<Unit, string> = { rupees: "0.01", km: "0.1", minutes: "1", seconds: "1", percent: "1", count: "1" };
 const DAY = 86_400_000;
 const noteBody = (note: string) => note.trim() ? { note: note.trim() } : undefined;
 
@@ -95,7 +96,10 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
   const save = useFleetAction();
   const stop = useFleetAction();
   const off = form.mode === "off";
-  const notice = !off && detourChanges(form, reference);
+  // Off shows the values it keeps in force, read-only.
+  const visible = off && shown ? dispatchForm(shown) : form;
+  // The detour and how orders are offered are rider terms: a change to either needs 14 days' notice.
+  const notice = off ? "" : noticeFor(form, reference);
 
   /** An off starting now withdraws every scheduled version; any other change now leaves the next one to take over on its date. */
   function scheduledNote(mode: DispatchMode) {
@@ -142,20 +146,31 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
         </label>)}</div>
       </fieldset>
       {off && <p className="cr-muted">Off stops dispatch now and keeps today&apos;s values.</p>}
-      <NumberInputs inputs={DISPATCH_INPUTS} values={off && shown ? dispatchForm(shown) : form} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+      <NumberInputs inputs={DISPATCH_INPUTS} values={visible} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
       <p className="cr-muted">The cost guard offers a trip to riders only when rider pay plus the overhead is at most the Borzo or Pidge quote plus the premium.</p>
+      <fieldset className="space-y-2">
+        <legend className="font-bold">How orders are offered</legend>
+        <p className="cr-muted">One rider at a time is calm: each rider gets the full time to decide, and the next rider not yet asked hears in the next round. A fair band above 0 gives the order first to the rider who has earned the least per online hour today among the free riders that close to the nearest. Declining is always free.</p>
+        <NumberInputs inputs={RULE_INPUTS} values={visible} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={visible.rankByTravelTime} disabled={off} aria-describedby="setup-travel-help"
+            onChange={event => setForm(current => ({ ...current, rankByTravelTime: event.target.checked }))} />
+          Rank by travel time: soonest at the kitchen first
+        </label>
+        <p id="setup-travel-help" className="cr-muted text-xs">The travel-time model decides who hears first, and a fair band counts its distance as minutes at 20 km/h. It applies only while the model is live and passed its ranking check; until then riders are ranked by distance and ops get an alert.</p>
+      </fieldset>
       {notice && reference && <div>
-        <label className={labelClass}>New detour starts (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-detour-help" value={form.effectiveFrom} onChange={event => setForm(current => ({ ...current, effectiveFrom: event.target.value }))} /></label>
-        <p id="setup-detour-help" className="cr-muted mt-1 text-xs">The detour changes rider pay (pickup km = straight line × detour), so riders get 14 days&apos; notice. This whole version, mode included, starts at this time, at least 14 days and 1 hour from now. To change anything sooner, keep the detour at {reference.pickupDetourPercent}%.</p>
+        <label className={labelClass}>New {notice} start{notice === "detour" ? "s" : ""} (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-detour-help" value={form.effectiveFrom} onChange={event => setForm(current => ({ ...current, effectiveFrom: event.target.value }))} /></label>
+        <p id="setup-detour-help" className="cr-muted mt-1 text-xs">{noticeHelp(notice, reference)}</p>
       </div>}
       <button type="submit" className="cr-button cr-primary" disabled={save.busy}>Save dispatch policy</button>
       <ActionMessage state={save.state} />
     </form>
     {setup.dispatchPolicies.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
       <caption className="text-left font-bold">Latest versions</caption>
-      <thead><tr><th scope="col">Version</th><th scope="col">Mode</th><th scope="col">From</th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th scope="col">Version</th><th scope="col">Mode</th><th scope="col">Offers</th><th scope="col">From</th><th scope="col">Status</th></tr></thead>
       <tbody>{setup.dispatchPolicies.slice(0, 5).map(policy => <tr key={policy.version}>
-        <td>{policy.version}</td><td>{MODE_LABEL[policy.mode]}</td><td>{formatAdminTimestamp(policy.effectiveFrom)}</td>
+        <td>{policy.version}</td><td>{MODE_LABEL[policy.mode]}</td><td>{rulesText(policy)}</td><td>{formatAdminTimestamp(policy.effectiveFrom)}</td>
         <td><span className="cr-status">{versionState(policy, inForce)}{policy.withdrawnAt ? ` ${formatAdminTimestamp(policy.withdrawnAt)}` : ""}</span></td>
       </tr>)}</tbody>
     </table></div>}

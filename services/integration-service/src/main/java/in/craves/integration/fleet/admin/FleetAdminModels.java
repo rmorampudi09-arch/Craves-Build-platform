@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.admin;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -31,10 +32,13 @@ public final class FleetAdminModels {
                               boolean pendingDevice, Instant createdAt, String kycName, String language, String vehicleNumberMasked) {
     }
 
-    /** submittedPayoutAccount: what the rider typed in the app, never paid until ops confirms it. */
+    /**
+     * submittedPayoutAccount: what the rider typed in the app, never paid until ops confirms it. recentOffers: the last 20
+     * offers made to the rider, newest first, with how each reached the phone.
+     */
     public record RiderDetail(RiderHeader rider, List<RiderDocument> documents, List<RiderDevice> devices,
                               PayoutAccount payoutAccount, PayoutAccount submittedPayoutAccount, List<Shift> shifts,
-                              List<StatusEvent> statusEvents) {
+                              List<StatusEvent> statusEvents, List<RiderOffer> recentOffers) {
     }
 
     public record RiderDocument(UUID documentId, String type, String status, LocalDate expiresOn, String reason,
@@ -48,8 +52,28 @@ public final class FleetAdminModels {
     public record PayoutAccount(String method, String maskedAccount, String ifsc, String holderName, String setBy, Instant setAt) {
     }
 
+    /**
+     * A shift and how the phone kept it (app 1.1.0; empty before): its last /locations call, the longest gap between two
+     * calls and how many gaps passed 60 s (BACKEND.md "Location ingest"), and the phone's latest health report.
+     */
     public record Shift(UUID shiftId, Instant startedAt, Instant endedAt, String selfieState, String selfieReason,
-                        String selfieReviewedBy, int inZoneSeconds) {
+                        String selfieReviewedBy, int inZoneSeconds, Instant lastSeenAt, int maxSilenceSeconds, int silencesOver60s,
+                        PhoneHealth phone, Instant onBreakUntil) {
+    }
+
+    /**
+     * The phone's latest report on a shift, about once a minute: battery, charging, power saver, whether an offer can ring,
+     * battery used per unplugged hour (once 30 unplugged minutes have passed), why the app last died, and the trip steps
+     * waiting to sync.
+     */
+    public record PhoneHealth(Integer batteryPct, Boolean charging, Boolean powerSave, Boolean canRing, Double batteryPerHourPct,
+                              String lastExitReason, Integer queuePending, Integer queueOldestAgeS) {
+    }
+
+    /** An offer made to the rider, with what the push did and when and how the phone first had it (BACKEND.md "Offer receipts"). */
+    /** reason: why the rider got it (Phase 4), the same the rider saw; null on older offers and ops-assigned trips. */
+    public record RiderOffer(UUID offerId, UUID tripId, String orderCode, String state, Instant offeredAt, Instant pushedAt,
+                             String pushResult, Instant rangAt, String rangChannel, OfferReason reason) {
     }
 
     public record StatusEvent(UUID eventId, String kind, String reason, String evidenceSummary, Instant deadline, Instant reviewBy,
@@ -112,12 +136,17 @@ public final class FleetAdminModels {
                              List<PilotKitchen> pilotKitchens) {
     }
 
-    /** ranges are keyed by these camelCase field names, each [min, max]. withdrawnAt: an emergency stop withdrew it before it started. */
+    /**
+     * ranges are keyed by these camelCase field names, each [min, max]. withdrawnAt: an emergency stop withdrew it before it
+     * started. offersAtOnce, offerRounds and fairBandM are how orders are offered (Phase 4), within fixed bounds;
+     * rankByTravelTime (Phase 5): the soonest at the kitchen by the travel-time model hear first, not the nearest.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record DispatchPolicyVersion(String version, String status, Instant effectiveFrom, Instant publishedAt, String mode,
                                         int offerSeconds, int fleetStageSeconds, int radiusM, int pickupDetourPercent,
                                         long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
-                                        Map<String, List<Long>> ranges, Instant withdrawnAt) {
+                                        Map<String, List<Long>> ranges, Instant withdrawnAt, int offersAtOnce, int offerRounds,
+                                        int fairBandM, boolean rankByTravelTime) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -143,10 +172,30 @@ public final class FleetAdminModels {
                                 Map<String, List<String>> summaryOfChanges, String fullTextUrl, Map<String, List<Long>> ranges) {
     }
 
-    /** effectiveFrom counts only when it is at least 14 days away; otherwise the version starts now. */
+    /**
+     * effectiveFrom counts only when it is at least 14 days away; otherwise the version starts now. offersAtOnce, offerRounds,
+     * fairBandM (Phase 4) and rankByTravelTime (Phase 5) keep the values riders are shown when absent.
+     */
     public record DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
                                       Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
-                                      Integer pidgeStageSeconds, Instant effectiveFrom) {
+                                      Integer pidgeStageSeconds, Instant effectiveFrom, Integer offersAtOnce, Integer offerRounds,
+                                      Integer fairBandM, Boolean rankByTravelTime) {
+        /** The console of Phase 4: by distance, unless riders are shown otherwise. */
+        public DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
+                                   Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
+                                   Integer pidgeStageSeconds, Instant effectiveFrom, Integer offersAtOnce, Integer offerRounds,
+                                   Integer fairBandM) {
+            this(mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise,
+                pidgeStageSeconds, effectiveFrom, offersAtOnce, offerRounds, fairBandM, null);
+        }
+
+        /** The console before Phase 4: how orders are offered stays as riders are shown it. */
+        public DispatchPolicyInput(String mode, Integer offerSeconds, Integer fleetStageSeconds, Integer radiusM,
+                                   Integer pickupDetourPercent, Long perOrderOverheadPaise, Long costGuardPremiumPaise,
+                                   Integer pidgeStageSeconds, Instant effectiveFrom) {
+            this(mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise,
+                pidgeStageSeconds, effectiveFrom, null, null, null, null);
+        }
     }
 
     public record PilotNote(String note) {

@@ -117,7 +117,8 @@ var containerApps = [
     containerName: 'integration-service'
     external: false
     minReplicas: 0
-    maxReplicas: 2
+    // One replica with an 8-connection pool (check-db-connection-budget.py, blueprint E3).
+    maxReplicas: 1
     cpu: '0.5'
     memory: '1Gi'
   }

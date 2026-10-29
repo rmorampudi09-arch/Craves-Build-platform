@@ -33,9 +33,34 @@ public final class FleetDatabase {
     }
 
     /** Fleet on, with the given test mode and nothing configured outside this service. */
+    /**
+     * For tests that put hours of shifts and pay into "today" (IST), which only holds once today is that old: they are
+     * skipped in the first hours after IST midnight rather than fail there.
+     */
+    public static void assumeTodayIsHoursOld(int hours) {
+        org.junit.jupiter.api.Assumptions.assumeTrue(java.time.LocalTime.now(java.time.ZoneId.of("Asia/Kolkata"))
+            .isAfter(java.time.LocalTime.of(hours, 0)), "today (IST) began less than " + hours + " hours ago");
+    }
+
     public static FleetProperties properties(boolean testMode) {
+        return properties(testMode, false);
+    }
+
+    /** callbackUploads: phones are told to upload on location callbacks (P2-10). */
+    public static FleetProperties properties(boolean testMode, boolean callbackUploads) {
+        return properties(testMode, callbackUploads, null);
+    }
+
+    /** privacyNotice: the version in force (P2-09), its text at https://craves.in/riders/privacy/{language}; null for none. */
+    public static FleetProperties properties(boolean testMode, boolean callbackUploads, String privacyNotice) {
+        return properties(testMode, callbackUploads, privacyNotice, false);
+    }
+
+    /** riderChoices: breaks while online and distance choices (Phase 4, CRAVES_FLEET_RIDER_CHOICES_ENABLED). */
+    public static FleetProperties properties(boolean testMode, boolean callbackUploads, String privacyNotice, boolean riderChoices) {
         return new FleetProperties(true, true, false, false, testMode, null, null, null, "documents", "+914012345678",
-            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7");
+            "https://chat.whatsapp.com/riders", "1.0.0", "Group accident cover, ₹10 lakh, 24×7", false, 10, callbackUploads,
+            privacyNotice, privacyNotice == null ? null : "https://craves.in/riders/privacy/{language}", riderChoices);
     }
 
     public UUID rider(String name, String phone) {

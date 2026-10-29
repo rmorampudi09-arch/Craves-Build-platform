@@ -1,0 +1,39 @@
+<policies>
+  <inbound>
+    <base />
+    <!-- POST /trips/{tripId}/{action}: the app sends a Bearer token; the phone's native outbox (P2-01) may send the shift
+         credential instead. Either is enough here. The backend takes the credential only once
+         CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED is on, and only for that rider's own trip; until then it needs the token. -->
+    <choose>
+      <when condition="@(!context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; string.IsNullOrWhiteSpace(context.Request.Headers.GetValueOrDefault(&quot;X-Craves-Shift-Credential&quot;, &quot;&quot;)))">
+        <return-response>
+          <set-status code="401" reason="Unauthorized" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-header name="Cache-Control" exists-action="override"><value>private, no-store</value></set-header>
+          <set-body>{"code":"AUTHENTICATION_REQUIRED","message":"A Bearer access token or the shift credential is required."}</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <!-- A step is JSON or, for a delivery photo, multipart: no validate-content cap (it stops at 100 KB); the backend enforces
+         the photo's type and 10 MB. -->
+    <set-backend-service base-url="__BACKEND_URL__" />
+  </inbound>
+  <backend>
+    <!-- The Consumption gateway has no keyed rate limit (docs/admin/explorer/README.md): at most 2 calls in flight per rider. The
+         key is the credential's first 12 characters (never the whole secret), else the token's subject, shared with uploads. -->
+    <limit-concurrency key="@{
+      var credential = context.Request.Headers.GetValueOrDefault(&quot;X-Craves-Shift-Credential&quot;, &quot;&quot;).Trim();
+      if (credential.Length > 0) { return &quot;rider-trip-&quot; + credential.Substring(0, Math.Min(12, credential.Length)); }
+      return &quot;rider-upload-&quot; + (context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).Split(' ').Last().AsJwt()?.Subject ?? context.Request.IpAddress);
+    }" max-count="2">
+      <forward-request timeout="60" />
+    </limit-concurrency>
+  </backend>
+  <outbound>
+    <base />
+    <set-header name="Cache-Control" exists-action="override"><value>private, no-store</value></set-header>
+    <set-header name="Pragma" exists-action="override"><value>no-cache</value></set-header>
+    <set-header name="X-Content-Type-Options" exists-action="override"><value>nosniff</value></set-header>
+  </outbound>
+  <on-error><base /></on-error>
+</policies>

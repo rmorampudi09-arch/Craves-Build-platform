@@ -28,7 +28,10 @@ const lists: Record<string, unknown> = {
   trips: { trips: [trip] },
   "dispatch-queue": { items: [queueItem(QUEUED, "#0BDE0101", "WARNING"), queueItem("55555555-5555-4555-8555-555555555555", "#0BDE0102", "CRITICAL")] },
   positions: { positions: [position(RIDER, "Ravi Kumar", { onTrip: true, tripId: TRIP }), position(IDLE, "Sita Devi", {}), position("99999999-9999-4999-8999-999999999999", "Mock Rider", { mock: true })] },
+  "code-checks": { items: [] },
 };
+const CHECK = "44444444-4444-4444-8444-444444444444";
+const check = { tripId: CHECK, orderCode: "#0BDE0109", kitchenName: "Anu's Kitchen", dropArea: "Kondapur", riderId: RIDER, riderName: "Ravi Kumar", alertedAt: at, wrongCodes: 1 };
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const posts = () => calls.filter(call => call.method !== "GET");
 const button = (name: string | RegExp, scope: HTMLElement = document.body) => within(scope).getByRole("button", { name }) as HTMLButtonElement;
@@ -99,6 +102,32 @@ describe("trips and dispatch", () => {
     fireEvent.change(within(card).getByLabelText(/Reason for/), { target: { value: "Customer cancelled on the phone" } });
     fireEvent.click(button("Cancel trip", card));
     expect(posts()).toHaveLength(0);
+  });
+
+  it("records what the customer said about a refused code typed offline, with a reason and a confirmation", async () => {
+    answer = (method, path) => method === "GET" ? json(path === "code-checks" ? { items: [check] } : lists[path])
+      : json({ ...trip, tripId: CHECK, orderCode: "#0BDE0109", state: "DELIVERED" });
+    render(createElement(FleetTrips));
+    const item = (await screen.findByText("#0BDE0109")).closest("article") as HTMLElement;
+    expect(item.textContent).toContain("1 wrong code");
+    expect(within(item).getByRole("link", { name: "Ravi Kumar" }).getAttribute("href")).toBe(`/admin/riders/${RIDER}`);
+    fireEvent.click(button("Customer has the food", item));
+    fireEvent.change(within(item).getByLabelText(/Reason for/), { target: { value: "Customer confirmed on the phone" } });
+    fireEvent.click(button("Customer has the food", item));
+    expect(await screen.findByText("#0BDE0109: delivered.")).toBeTruthy();
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("paid in full"));
+    expect(posts()).toEqual([{ method: "POST", path: `trips/${CHECK}/code-check`, key: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      body: { outcome: "DELIVERED", reason: "Customer confirmed on the phone" } }]);
+  });
+
+  it("says when no code waits and keeps trips when the code checks can't be read", async () => {
+    render(createElement(FleetTrips));
+    expect(await screen.findByText("No delivery codes to check.")).toBeTruthy();
+    cleanup();
+    answer = (method, path) => path === "code-checks" ? json({ code: "UNAVAILABLE", message: "Fleet service unavailable." }, 503) : json(lists[path]);
+    render(createElement(FleetTrips));
+    expect(await screen.findByText("Fleet service unavailable.")).toBeTruthy();
+    expect(screen.getByText("#0BDE0107")).toBeTruthy();
   });
 
   it("cancels with a reason and shows the server's refusal", async () => {

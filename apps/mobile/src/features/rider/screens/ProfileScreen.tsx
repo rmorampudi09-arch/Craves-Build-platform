@@ -1,11 +1,12 @@
 import React, {useState} from 'react';
-import {Alert, Image, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Alert, Image, Linking, Pressable, Share, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Icon, SectionSkeleton} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
-import type {Language, RiderProfile} from '../api/contract';
+import {AppApiError} from '../../../core/http/apiError';
+import type {OrderPreferences, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -13,14 +14,20 @@ import {RiderHeader} from '../components/RiderHeader';
 import {StatusBadge} from '../components/StatusBadge';
 import {Body, Card, Label, RiderScreen, Title, Value} from '../components/ui';
 import {formatDay} from '../domain/format';
+import {roundToSpot} from '../domain/homeSpot';
+import {riderDevice} from '../native/riderDevice';
 import {useRiderShell, type RiderNav} from '../navigation';
 import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
 import {usePendingActions} from '../state/tripQueue';
-import {useStrings} from '../strings/StringsProvider';
+import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 import {LoadFailed} from './TripDetailScreen';
 
 const SOON_MS = 30 * 24 * 3_600_000;
-const LANGUAGES: Language[] = ['en', 'te', 'hi'];
+/** Phase 4 order preferences, in metres; null is any distance. */
+const PICKUP_LIMITS = [null, 1000, 2000, 3000, 5000];
+const DROP_LIMITS = [null, 3000, 5000, 8000, 12000];
+/** Android's share sheet carries about 1 MB: a larger copy goes through rider support. */
+const SHARE_LIMIT = 400_000;
 
 type Doc = RiderProfile['documents'][number];
 
@@ -50,6 +57,102 @@ const initials = (name: string) =>
     .map(part => part[0].toUpperCase())
     .join('');
 
+/** One farthest distance as chips, saved on tap; a value set elsewhere selects no chip. */
+function LimitChips({label, limits, value, onPick, testID}: {
+  label: string;
+  limits: (number | null)[];
+  value?: number | null;
+  onPick: (limit: number | null) => void;
+  testID: string;
+}) {
+  const p = useStrings().strings.profile;
+  return (
+    <View style={styles.language}>
+      <Label>{label}</Label>
+      <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.chips}>
+        {limits.map(limit => {
+          const on = (value ?? null) === limit;
+          return (
+            <Pressable
+              key={limit ?? 'any'}
+              accessibilityRole="radio"
+              accessibilityState={{checked: on}}
+              hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
+              onPress={() => onPick(limit)}
+              style={[styles.chip, on && styles.chipOn]}
+              testID={`${testID}-${limit ?? 'any'}`}>
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{limit === null ? p.anyDistance : p.km(String(limit / 1000))}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Phase 5: the home spot heading home leads to. Saved from where the phone is now, rounded on the phone to about a kilometre;
+ * shown while rider choices are on, and whenever one is saved, so the rider can always delete it.
+ */
+function HomeSpotCard({savedAt, choices, onChange}: {savedAt?: string; choices: boolean; onChange: () => void}) {
+  const {strings} = useStrings();
+  const p = strings.profile;
+  const [busy, setBusy] = useState(false);
+
+  async function run(work: () => Promise<unknown>) {
+    setBusy(true);
+    try {
+      await work();
+      onChange();
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save() {
+    const here = await riderDevice.currentPosition();
+    if (!here) {
+      Alert.alert(p.homeSpotNoFix);
+      return;
+    }
+    const spot = roundToSpot(here);
+    await riderApi.saveHomeSpot(spot.lat, spot.lng);
+  }
+
+  if (!savedAt && !choices) {
+    return null;
+  }
+  return (
+    <Card>
+      <Label>{p.homeSpotTitle}</Label>
+      <Body>{savedAt ? p.homeSpotSaved(formatDay(savedAt)) : p.homeSpotNone}</Body>
+      {savedAt ? (
+        <BottomAction
+          label={p.deleteHomeSpot}
+          variant="outline"
+          size="compact"
+          disabled={busy}
+          onPress={() => run(() => riderApi.forgetHomeSpot())}
+          style={styles.upload}
+          testID="rider-home-spot-delete"
+        />
+      ) : (
+        <BottomAction
+          label={p.saveHomeSpot}
+          variant="outline"
+          size="compact"
+          disabled={busy}
+          onPress={() => run(save)}
+          style={styles.upload}
+          testID="rider-home-spot-save"
+        />
+      )}
+    </Card>
+  );
+}
+
 export function ProfileScreen() {
   const {strings, language, setLanguage} = useStrings();
   const p = strings.profile;
@@ -60,6 +163,30 @@ export function ProfileScreen() {
   const profile = useProfile();
   const pending = usePendingActions(shell.riderId);
   const [docProblem, setDocProblem] = useState<{type: string; text: string; settings?: boolean} | null>(null);
+
+  /** Phase 4: saves the rider's farthest pickup and drop; the profile shows what the server kept. */
+  async function choose(next: OrderPreferences) {
+    try {
+      const saved = await riderApi.setPreferences(next);
+      queryClient.setQueryData<RiderProfile>(riderKeys.profile, old => (old ? {...old, preferences: saved} : old));
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    }
+  }
+
+  /** Phase 4: the rider's copy of their data, shared as text from the phone's share sheet. */
+  async function shareData() {
+    try {
+      const text = JSON.stringify(await riderApi.getMyData(), null, 1);
+      if (text.length > SHARE_LIMIT) {
+        Alert.alert(p.dataTooLarge);
+        return;
+      }
+      await Share.share({title: p.dataTitle, message: text});
+    } catch (error) {
+      Alert.alert(error instanceof AppApiError ? error.message : strings.common.error);
+    }
+  }
 
   function signOut() {
     if (pending > 0) {
@@ -177,6 +304,36 @@ export function ProfileScreen() {
               <Label>{p.payoutChange}</Label>
             </Card>
           ) : null}
+          {profile.data.preferences ? (
+            <Card>
+              <Label>{p.ordersTitle}</Label>
+              <Body>{p.ordersBody}</Body>
+              <LimitChips
+                label={p.pickupLimit}
+                limits={PICKUP_LIMITS}
+                value={profile.data.preferences.maxPickupM}
+                onPick={limit => choose({...profile.data?.preferences, maxPickupM: limit})}
+                testID="rider-pickup-limit"
+              />
+              <LimitChips
+                label={p.dropLimit}
+                limits={DROP_LIMITS}
+                value={profile.data.preferences.maxDropM}
+                onPick={limit => choose({...profile.data?.preferences, maxDropM: limit})}
+                testID="rider-drop-limit"
+              />
+            </Card>
+          ) : null}
+          <HomeSpotCard
+            savedAt={profile.data.homeSavedAt}
+            choices={Boolean(me.data?.features.riderChoices)}
+            onChange={() => queryClient.invalidateQueries({queryKey: riderKeys.all})}
+          />
+          <Card>
+            <Label>{p.dataTitle}</Label>
+            <Body>{p.dataBody}</Body>
+            <BottomAction label={p.dataShare} variant="outline" size="compact" onPress={shareData} style={styles.upload} testID="rider-share-data" />
+          </Card>
           {profile.data.insurance ? (
             <Card>
               <Label>{p.insurance}</Label>
@@ -198,23 +355,25 @@ export function ProfileScreen() {
       ) : (
         <SectionSkeleton lines={6} testID="rider-profile-loading" />
       )}
-      <View style={styles.language}>
-        <Label>{p.language}</Label>
-        <View accessibilityRole="radiogroup" accessibilityLabel={p.language} style={styles.chips}>
-          {LANGUAGES.map(code => (
-            <Pressable
-              key={code}
-              accessibilityRole="radio"
-              accessibilityState={{checked: language === code}}
-              hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
-              onPress={() => setLanguage(code)}
-              style={[styles.chip, language === code && styles.chipOn]}
-              testID={`rider-language-${code}`}>
-              <Text style={[styles.chipText, language === code && styles.chipTextOn]}>{strings.languages[code]}</Text>
-            </Pressable>
-          ))}
+      {RIDER_LANGUAGES.length > 1 ? (
+        <View style={styles.language}>
+          <Label>{p.language}</Label>
+          <View accessibilityRole="radiogroup" accessibilityLabel={p.language} style={styles.chips}>
+            {RIDER_LANGUAGES.map(code => (
+              <Pressable
+                key={code}
+                accessibilityRole="radio"
+                accessibilityState={{checked: language === code}}
+                hitSlop={{top: spacing.xxs, bottom: spacing.xxs}}
+                onPress={() => setLanguage(code)}
+                style={[styles.chip, language === code && styles.chipOn]}
+                testID={`rider-language-${code}`}>
+                <Text style={[styles.chipText, language === code && styles.chipTextOn]}>{strings.languages[code]}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
       <Card style={styles.links}>
         {links.map(([label, id, open], index) => (
           <Pressable

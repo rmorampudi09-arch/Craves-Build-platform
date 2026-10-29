@@ -6,8 +6,9 @@ spring:
     name: craves-integration-service
   datasource:
     hikari:
-      # Shared database budget: scripts/release/check-db-connection-budget.py
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:4}
+      # Shared database budget: scripts/release/check-db-connection-budget.py. 8 on one replica (blueprint E3): referral
+      # checkouts open a second transaction, and the fleet's location calls and jobs need room beside them.
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:8}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
   servlet:
     multipart:
@@ -32,6 +33,52 @@ craves:
     payout-execution-enabled: ${CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED:false}
     # While on, dispatch touches only riders and kitchens in fleet_schema.test_mode_rider / test_mode_kitchen.
     test-mode: ${CRAVES_FLEET_TEST_MODE:true}
+    # Ops may give a rider's trip before pickup to another rider (a new trip). Switch on only once order-service from the
+    # same release is live: an older one refuses the rider-to-rider handoff, and the order would keep the first rider.
+    rider-handover-enabled: ${CRAVES_FLEET_RIDER_HANDOVER_ENABLED:false}
+    # Trip steps may come from the phone's native outbox with the shift credential instead of a JWT (P2-01): only the
+    # rider's trip in progress or one that ended during the shift. Keep false until the security review signs it off.
+    trip-shift-credential-enabled: ${CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED:false}
+    # How often a phone waiting for offers uploads (P2-04), 5 to 30 s; lower it only if offer receipts show pushes ring late.
+    idle-poll-seconds: ${CRAVES_FLEET_IDLE_POLL_SECONDS:10}
+    # Phones upload on location callbacks with short wake locks instead of one for the whole shift (P2-10). Keep false
+    # until PHONE-TESTS section 1 passes with it on and battery per hour is no worse; needed before a Play rollout.
+    callback-uploads-enabled: ${CRAVES_FLEET_CALLBACK_UPLOADS_ENABLED:false}
+    # Daily deletion of shift selfies after 30 days and delivery photos after 90, unless flagged or disputed (P2-09,
+    # FleetPhotoRetention). While false it only logs how many are due; turn it on once the lawyer agrees the periods.
+    photo-retention-enabled: ${CRAVES_FLEET_PHOTO_RETENTION_ENABLED:false}
+    # The privacy notice in force (P2-09, DPDP) and where its text is ({language} becomes en, te or hi). Riders accept a
+    # new version before they continue; leave both empty until the lawyer's text is published at that address.
+    # Offers go to the riders nearest by road among the 5 nearest by straight line (P3-06; 5 road-distance calls an order).
+    # Turn it on only when pilot_health.sql's pickup_detour shows over 20% of pickups longer than 1.5 x the straight line.
+    road-ranking-enabled: ${CRAVES_FLEET_ROAD_RANKING_ENABLED:false}
+    privacy-notice-version: ${CRAVES_FLEET_PRIVACY_NOTICE_VERSION:}
+    privacy-notice-url: ${CRAVES_FLEET_PRIVACY_NOTICE_URL:}
+    # Riders may take a break while online and choose the farthest pickup and drop they hear of (Phase 4). Switch on once
+    # the APIM routes for /shift/pause, /shift/resume and /preferences are published and the app that shows them is out.
+    rider-choices-enabled: ${CRAVES_FLEET_RIDER_CHOICES_ENABLED:false}
+    # The fleet engine (Phase 5, services/fleet-engine, docs/riders/SCALE.md). off: nothing is written to Redis. shadow:
+    # rider events and every order's ranking go to the engine, which compares and logs (FLEET_ENGINE_SHADOW); offers stay
+    # Java's. live: dispatch asks the engine first and ranks itself after reply-timeout-ms. Partitions and key prefix must
+    # equal the engine's FLEET_ENGINE_* settings. joint shares out orders asked at once: 14 days' notice to riders first.
+    engine:
+      mode: ${CRAVES_FLEET_ENGINE_MODE:off}
+      joint: ${CRAVES_FLEET_ENGINE_JOINT:false}
+      rider-partitions: ${CRAVES_FLEET_ENGINE_RIDER_PARTITIONS:16}
+      dispatch-partitions: ${CRAVES_FLEET_ENGINE_DISPATCH_PARTITIONS:16}
+      stream-keep-seconds: ${CRAVES_FLEET_ENGINE_STREAM_KEEP_SECONDS:120}
+      reply-timeout-ms: ${CRAVES_FLEET_ENGINE_REPLY_TIMEOUT_MS:300}
+      queue-capacity: ${CRAVES_FLEET_ENGINE_QUEUE_CAPACITY:10000}
+      key-prefix: "${CRAVES_FLEET_ENGINE_KEY_PREFIX:craves:fleet:}"
+    # The travel-time model (Phase 5, ml/fleet-eta, docs/riders/DISPATCH.md §2): minutes to the kitchen and to the door
+    # predicted from Craves's own finished trips. off: today's 20 km/h rule. shadow: dispatch logs how the model would rank
+    # (FLEET_ETA_SHADOW); nothing riders see changes. live: offers and the chef's arrival time show predicted minutes, and
+    # riders are ranked by them only where the dispatch policy's rank_by_travel_time rule says so (14 days' notice) and the
+    # version's ranking passed. model-version names a row of fleet_schema.eta_model (python -m fleet_eta sql); without
+    # one, today's rule stays.
+    eta:
+      mode: ${CRAVES_FLEET_ETA_MODE:off}
+      model-version: ${CRAVES_FLEET_ETA_MODEL_VERSION:}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

@@ -8,7 +8,10 @@ export const riderApiMode: RiderApiMode =
 
 export const isDemo = riderApiMode === 'mock';
 
-/** Keep in step with versionName in android/app/build.gradle; compared with RiderMe.minAppVersion. */
-export const RIDER_APP_VERSION = '1.0.0';
+/**
+ * Keep in step with the rider flavor's versionName in android/app/build.gradle (rider-apk.yml checks); compared with
+ * RiderMe.minAppVersion, and sent as appVersion with the phone's FCM token.
+ */
+export const RIDER_APP_VERSION = '1.1.0';
 
 export const EMERGENCY_NUMBER = '112';

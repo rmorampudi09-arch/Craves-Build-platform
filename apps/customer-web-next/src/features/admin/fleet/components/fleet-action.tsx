@@ -16,7 +16,7 @@ export function useFleetAction() {
   const [state, setState] = useState<ActionState>({ phase: "idle", message: "" });
   const last = useRef<{ request: string; key: string } | null>(null);
 
-  async function run<T>(method: "POST" | "PUT" | "DELETE", path: string, schema: z.ZodType<T>, body: unknown, success: string): Promise<T | null> {
+  async function run<T>(method: "POST" | "PUT" | "DELETE", path: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>, body: unknown, success: string): Promise<T | null> {
     const request = JSON.stringify([method, path, body ?? null]);
     // Retrying the same request keeps its Idempotency-Key, so a lost answer can't repeat the action.
     if (last.current?.request !== request) last.current = { request, key: crypto.randomUUID() };

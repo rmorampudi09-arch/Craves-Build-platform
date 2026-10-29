@@ -106,6 +106,24 @@ class FleetClientsTest {
         server.verify();
     }
 
+    /** Blueprint A7: the "tap to go online" push, a GO_ONLINE data message alive 10 minutes that a newer one replaces. */
+    @Test
+    void theGoOnlinePushIsAGoOnlineDataMessage() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://notification.internal");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo("http://notification.internal/internal/v1/push/realtime"))
+            .andExpect(method(HttpMethod.POST)).andExpect(header("X-Craves-Internal-Key", "secret"))
+            .andExpect(jsonPath("$.app").value("rider")).andExpect(jsonPath("$.token").value("fcm-token"))
+            .andExpect(jsonPath("$.data.type").value("GO_ONLINE")).andExpect(jsonPath("$.ttlSeconds").value(600))
+            .andExpect(jsonPath("$.collapseKey").value("go-online")).andExpect(jsonPath("$.notification.title").value("You're offline"))
+            .andExpect(jsonPath("$.notification.body").value("Tap to go back online and get orders."))
+            .andRespond(withSuccess("{\"messageId\":\"projects/craves/messages/2\"}", MediaType.APPLICATION_JSON));
+        RiderPushClient client = new RiderPushClient(builder.build(), "secret");
+
+        assertThat(client.goOnline("fcm-token")).isEqualTo("SENT");
+        server.verify();
+    }
+
     @Test
     void opsAlertsReportWhetherAnyoneWasTold() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://notification.internal");

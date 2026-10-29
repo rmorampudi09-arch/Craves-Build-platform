@@ -40,12 +40,15 @@ class RouteTableTest(unittest.TestCase):
         self.assertEqual(len({r[1] for r in routes}), len(routes), 'operation ids are unique')
         self.assertTrue(all(len(r[1]) <= 80 for r in routes))
 
-    def test_the_shift_credential_route_policy_is_used_only_for_locations_and_devices(self):
+    def test_the_shift_credential_route_policies_are_used_only_for_locations_devices_and_trip_steps(self):
         kinds = {(r[2], r[3]): r[4] for r in table('route') if r[0] == 'rider'}
         self.assertEqual({key for key, kind in kinds.items() if kind == 'location'}, {('POST', '/locations'), ('POST', '/devices')})
+        self.assertEqual({key for key, kind in kinds.items() if kind == 'trip'}, {('POST', '/trips/{tripId}/{action}')})
         for (method, path), op in contract('rider-v1.yaml').items():
             multipart = 'multipart/form-data' in op.get('requestBody', {}).get('content', {})
-            if kinds[(method, path)] != 'location':
+            credential = {'shiftCredential': []} in op.get('security', [])
+            self.assertEqual(credential, kinds[(method, path)] in ('location', 'trip'), path)
+            if kinds[(method, path)] not in ('location', 'trip'):
                 self.assertEqual(kinds[(method, path)], 'upload' if multipart else 'json', path)
         self.assertEqual({r[4] for r in table('route') if r[0] == 'admin'}, {'admin'})
 
@@ -59,7 +62,7 @@ class PolicyTest(unittest.TestCase):
         return ET.parse(FLEET / f'{kind}-policy.xml').getroot()
 
     def test_every_policy_inherits_guards_routes_by_base_url_and_never_caches(self):
-        for kind in ('json', 'upload', 'location', 'admin'):
+        for kind in ('json', 'upload', 'location', 'trip', 'admin'):
             root, text = self.policy(kind), (FLEET / f'{kind}-policy.xml').read_text()
             self.assertEqual(root.find('inbound')[0].tag, 'base', kind)
             self.assertEqual(root.find('inbound/set-backend-service').get('base-url'), '__BACKEND_URL__', kind)
@@ -71,16 +74,19 @@ class PolicyTest(unittest.TestCase):
             # The Consumption gateway rejects keyed rate limits (docs/admin/explorer/README.md).
             self.assertNotIn('rate-limit', text)
 
-    def test_the_shift_credential_passes_only_the_location_policy(self):
+    def test_the_shift_credential_passes_only_the_location_and_trip_policies(self):
         def dropped(kind):
             return any(h.get('name') == 'X-Craves-Shift-Credential' and h.get('exists-action') == 'delete'
                        for h in self.policy(kind).iter('set-header'))
-        self.assertEqual({k: dropped(k) for k in ('json', 'upload', 'location', 'admin')},
-                         {'json': True, 'upload': True, 'location': False, 'admin': True})
-        self.assertIn('X-Craves-Shift-Credential', self.policy('location').find('inbound/choose/when').get('condition'))
+        self.assertEqual({k: dropped(k) for k in ('json', 'upload', 'location', 'trip', 'admin')},
+                         {'json': True, 'upload': True, 'location': False, 'trip': False, 'admin': True})
+        for kind in ('location', 'trip'):
+            self.assertIn('X-Craves-Shift-Credential', self.policy(kind).find('inbound/choose/when').get('condition'), kind)
+            # The concurrency key holds only the credential's first 12 characters, never the whole secret.
+            self.assertIn('Substring(0, Math.Min(12, credential.Length))', self.policy(kind).find('backend/limit-concurrency').get('key'), kind)
 
     def test_rider_calls_are_bounded_per_caller(self):
-        for kind, most in (('json', '4'), ('upload', '2'), ('location', '2')):
+        for kind, most in (('json', '4'), ('upload', '2'), ('location', '2'), ('trip', '2')):
             limit = self.policy(kind).find('backend/limit-concurrency')
             self.assertEqual(limit.get('max-count'), most, kind)
             self.assertIsNotNone(limit.find('forward-request'), kind)

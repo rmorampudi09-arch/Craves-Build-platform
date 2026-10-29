@@ -11,8 +11,8 @@ import com.facebook.react.bridge.ReactMethod
 import com.google.firebase.messaging.FirebaseMessaging
 
 /**
- * JS side of the online service and offer ringing. Events (RCTDeviceEventEmitter): riderOffer, riderTripChanged,
- * riderStatus, riderFcmToken. See docs/riders/NATIVE.md.
+ * JS side of the online service, offer ringing and the trip-step outbox. Events (RCTDeviceEventEmitter): riderOffer,
+ * riderTripChanged, riderStatus, riderFcmToken, riderOutboxChanged. See docs/riders/NATIVE.md.
  */
 class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
@@ -34,7 +34,7 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
     val fine = ContextCompat.checkSelfPermission(reactContext, Manifest.permission.ACCESS_FINE_LOCATION)
     val coarse = ContextCompat.checkSelfPermission(reactContext, Manifest.permission.ACCESS_COARSE_LOCATION)
     if (fine != PackageManager.PERMISSION_GRANTED && coarse != PackageManager.PERMISSION_GRANTED) {
-      promise.reject("LOCATION_PERMISSION", "Allow location to go online.")
+      promise.reject("LOCATION_PERMISSION", RiderText.get(reactContext, R.string.rider_allow_location))
       return
     }
     try {
@@ -42,13 +42,14 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
         promise.resolve(null)
         return
       }
+      val ended = RiderText.get(reactContext, R.string.rider_shift_ended)
       RiderEvents.emit("riderStatus") {
         Arguments.createMap().apply {
           putString("state", "OFFLINE")
-          putString("message", RiderOnlineService.ENDED_MESSAGE)
+          putString("message", ended)
         }
       }
-      promise.reject("NO_SHIFT", RiderOnlineService.ENDED_MESSAGE)
+      promise.reject("NO_SHIFT", ended)
     } catch (error: Exception) {
       // ForegroundServiceStartNotAllowedException when the app isn't in the foreground.
       promise.reject("START_FAILED", error)
@@ -65,6 +66,69 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
   fun testRing(promise: Promise) {
     RiderOffers.testRing(reactContext)
     promise.resolve(null)
+  }
+
+  /** The trip actions JS has waiting to sync, for the phone's health report; oldestAtMs is the oldest one's Date.now(). */
+  @ReactMethod
+  fun setQueueStats(pending: Double, oldestAtMs: Double) {
+    RiderOnlineService.queueStats = pending.toInt() to oldestAtMs.toLong()
+  }
+
+  /** The language the app shows the rider (en, te or hi; P2-08): notifications and the service's messages follow it. */
+  @ReactMethod
+  fun setLanguage(language: String) {
+    RiderText.setLanguage(reactContext, language)
+  }
+
+  // The native outbox of trip steps (P2-02, RiderOutbox): JSON text in and out. See docs/riders/NATIVE.md.
+
+  /** Saves a step and sends it at once (options: accessToken or null, apiBaseUrl, riderId); {entryId, results, needsAuth}. */
+  @ReactMethod
+  fun outboxEnqueue(entryJson: String, optionsJson: String, promise: Promise) {
+    RiderOutbox.enqueue(reactContext, entryJson, optionsJson, promise)
+  }
+
+  /** A pass over the waiting steps (options as outboxEnqueue, plus now and tripId); {results, needsAuth}. */
+  @ReactMethod
+  fun outboxFlush(optionsJson: String, promise: Promise) {
+    RiderOutbox.flush(reactContext, optionsJson, promise)
+  }
+
+  /** The JS queue's steps and refusals moved in ({entries, refusals}); the OTPs come in the bodies and are sealed here. */
+  @ReactMethod
+  fun outboxImport(json: String, promise: Promise) {
+    RiderOutbox.import(reactContext, json, promise)
+  }
+
+  /** {entries, refusals} as stored, never a sealed code; from memory, so it never waits for a send. */
+  @ReactMethod
+  fun outboxState(promise: Promise) {
+    try {
+      promise.resolve(RiderOutbox.state(reactContext))
+    } catch (error: Exception) {
+      promise.reject("RIDER_OUTBOX", error)
+    }
+  }
+
+  /** The step is still waiting once the rider's tap is over: it now counts as captured offline. */
+  @ReactMethod
+  fun outboxDefer(entryId: String, promise: Promise) {
+    try {
+      RiderOutbox.defer(reactContext, entryId)
+      promise.resolve(null)
+    } catch (error: Exception) {
+      promise.reject("RIDER_OUTBOX", error)
+    }
+  }
+
+  @ReactMethod
+  fun outboxDismissRefusal(tripId: String, promise: Promise) {
+    try {
+      RiderOutbox.dismissRefusal(reactContext, tripId)
+      promise.resolve(null)
+    } catch (error: Exception) {
+      promise.reject("RIDER_OUTBOX", error)
+    }
   }
 
   @ReactMethod

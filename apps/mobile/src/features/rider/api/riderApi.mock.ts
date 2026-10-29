@@ -7,6 +7,9 @@ import type {
   DeliverBody,
   FailBody,
   Offer,
+  OfferReason,
+  OfferRules,
+  OrderPreferences,
   PayLine,
   Payout,
   RiderMe,
@@ -33,6 +36,9 @@ const MAX_OTP_TRIES = 5;
 const PAGE_SIZE = 20;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+/** How orders are offered: today's rules, and the demo's announced change to fair turns by travel time, one rider at a time. */
+const DEMO_RULES_TODAY: OfferRules = { offersAtOnce: 3, offerRounds: 1, offerSeconds: 40, radiusM: 5000, fairBandM: 0 };
+const DEMO_RULES: OfferRules = { offersAtOnce: 1, offerRounds: 3, offerSeconds: 40, radiusM: 5000, fairBandM: 1500, byTravelTime: true };
 
 const KITCHENS = [
   {
@@ -177,7 +183,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
       minAppVersion: '1.0.0',
       supportPhone: DEMO_PHONE,
       supportWhatsappUrl: 'https://chat.whatsapp.com/demo',
-      features: { payoutsEnabled: true, withdrawEnabled: false },
+      features: { payoutsEnabled: true, withdrawEnabled: false, riderChoices: true },
     };
   }
 
@@ -249,6 +255,12 @@ export function createMockRiderApi(options: MockOptions = {}) {
     stopReason: null as string | null,
     tripCounter: 0,
     seen: new Map<string, unknown>(),
+    /** Phase 4: a break while online ends then (0: none); the farthest pickup and drop the rider chose. */
+    pausedUntil: 0,
+    preferences: { maxPickupM: null, maxDropM: null } as OrderPreferences,
+    /** Phase 5: when the home spot was saved (0: none), and heading home until then (0: off). */
+    homeSavedAt: 0,
+    headingHomeUntil: 0,
   };
 
   async function respond<T>(work: () => T): Promise<T> {
@@ -279,8 +291,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
     const n = state.tripCounter;
     const kitchen = KITCHENS[n % KITCHENS.length];
     const customer = CUSTOMERS[n % CUSTOMERS.length];
-    const pickupDistanceM = 400 + ((n * 523) % 1600);
-    const dropDistanceM = 1800 + ((n * 977) % 4200);
+    // Like dispatch with rider choices on: only orders within the rider's farthest pickup and drop reach them.
+    const pickupDistanceM = Math.min(400 + ((n * 523) % 1600), state.preferences.maxPickupM ?? Infinity);
+    const dropDistanceM = Math.min(1800 + ((n * 977) % 4200), state.preferences.maxDropM ?? Infinity);
+    // Today's rules until the demo's new terms are accepted, then fair turns, one rider at a time (DEMO_RULES).
+    const reason: OfferReason =
+      state.me.termsVersion === '2026-10-v1'
+        ? { rule: 'NEAREST', place: 1, riders: 3, atOnce: 3, round: 1 }
+        : { rule: 'FAIR', place: 1, riders: 4, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 9000, freeMinutes: 12 };
     return {
       offerId: `offer-${n}`,
       tripId: `trip-${n}`,
@@ -294,6 +312,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
       itemsCount: 1 + (n % 3),
+      // Phase 5: heading home, the demo's drops lie on the way.
+      reason: state.headingHomeUntil > now() ? { ...reason, homeNearerM: 3200 } : reason,
     };
   }
 
@@ -537,6 +557,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
           ),
           payoutAccountMasked: state.me.status === 'PENDING' ? state.payoutConfirmed ?? undefined : 'UPI ••••@okhdfc',
           payoutAccountSubmitted: state.payoutSubmitted ?? undefined,
+          preferences: state.me.features.riderChoices ? { ...state.preferences } : undefined,
+          homeSavedAt: state.homeSavedAt ? iso(state.homeSavedAt) : undefined,
           insurance: {
             label: 'Group accident cover, ₹10 lakh, 24×7',
             claimPhone: DEMO_PHONE,
@@ -544,6 +566,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
           },
         }),
       ),
+    getMyData: () =>
+      respond(() => ({
+        about: { generatedAt: iso(now()), eachListHoldsAtMost: 5000, notIncluded: ['Photos and GPS points: ask rider support.'] },
+        profile: { name: state.me.name, phone: DEMO_PHONE, language: state.me.language, status: state.me.status },
+        trips: state.earnings.slice(0, 10).map(e => ({ tripId: e.tripId, kitchenArea: e.kitchenArea, dropArea: e.customerLocality })),
+        breaks: [],
+        preferences: { ...state.preferences },
+      })),
     getTerms: () =>
       respond(
         (): Terms => ({
@@ -586,14 +616,19 @@ export function createMockRiderApi(options: MockOptions = {}) {
             },
           ],
           draft: true,
+          offerRules: state.me.termsVersion === '2026-10-v1' ? DEMO_RULES_TODAY : DEMO_RULES,
           // Demo of the 14-day notice; once new terms are "published" they are in force instead.
           upcoming:
             state.me.termsVersion === '2026-10-v1'
               ? {
                   version: '2026-11-v1',
                   effectiveFrom: iso(now() + 14 * DAY),
-                  summaryOfChanges: ['Waiting pay starts after 6 free minutes instead of 8.'],
+                  summaryOfChanges: [
+                    'Waiting pay starts after 6 free minutes instead of 8.',
+                    'How orders are offered changes: Among the free riders within 1.5 km of the nearest, the one who has earned the least per online hour today hears first, one rider at a time, in up to 3 rounds. Declining is free.',
+                  ],
                   rateCardLines: [{ label: 'Waiting at the kitchen, after 6 free minutes', value: '₹1.50 a minute' }],
+                  offerRules: DEMO_RULES,
                 }
               : undefined,
         }),
@@ -608,6 +643,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
           );
         }
         state.me = { ...state.me, acceptedTermsVersion: version };
+      }),
+    acceptPrivacyNotice: version =>
+      respond(() => {
+        const notice = state.me.privacyNotice;
+        if (!notice || version !== notice.version) {
+          throw apiError('NOTICE_CHANGED', 'The privacy notice changed. Please read the new one.', 409);
+        }
+        state.me = { ...state.me, privacyNotice: { ...notice, accepted: true } };
       }),
     getHome: () =>
       respond(() => {
@@ -635,6 +678,13 @@ export function createMockRiderApi(options: MockOptions = {}) {
             tone: 'warning' as const,
             text: 'Heavy rain expected after 8 pm. Stop whenever you need to. It never affects your offers.',
           },
+          offersPausedUntil: state.online && state.pausedUntil > now() ? iso(state.pausedUntil) : undefined,
+          // Demo: the hours since the demo day started stand in for time online.
+          todayOnlineMinutes: 225,
+          todayPerHourPaise: Math.round((today.reduce((sum, e) => sum + e.amountPaise, 0) * 60) / 225),
+          fleetPerHourPaise: 9000,
+          homeSaved: state.me.features.riderChoices ? state.homeSavedAt > 0 : undefined,
+          headingHomeUntil: state.online && state.headingHomeUntil > now() ? iso(state.headingHomeUntil) : undefined,
         };
       }),
     startShift: () =>
@@ -664,6 +714,69 @@ export function createMockRiderApi(options: MockOptions = {}) {
       respond(() => {
         state.online = false;
         state.offer = null;
+        state.pausedUntil = 0;
+        state.headingHomeUntil = 0;
+      }),
+    pauseShift: minutes =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
+        }
+        if (minutes < 5 || minutes > 60) {
+          throw apiError('VALIDATION_FAILED', 'Choose a break of 5 to 60 minutes.', 400);
+        }
+        if (!state.online) {
+          throw apiError('NOT_ONLINE', 'Go online first.', 409);
+        }
+        state.pausedUntil = now() + minutes * 60_000;
+        return { offersPausedUntil: iso(state.pausedUntil) };
+      }),
+    resumeShift: () =>
+      respond(() => {
+        state.pausedUntil = 0;
+        state.nextOfferAt = now() + 12_000;
+      }),
+    setPreferences: preferences =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
+        }
+        state.preferences = { maxPickupM: preferences.maxPickupM ?? null, maxDropM: preferences.maxDropM ?? null };
+        return { ...state.preferences };
+      }),
+    saveHomeSpot: (lat, lng) =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
+        }
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+          throw apiError('VALIDATION_FAILED', "We couldn't read where you are. Turn on location and try again.", 400);
+        }
+        state.homeSavedAt = now();
+        return { savedAt: iso(state.homeSavedAt) };
+      }),
+    forgetHomeSpot: () =>
+      respond(() => {
+        state.homeSavedAt = 0;
+        state.headingHomeUntil = 0;
+      }),
+    headHome: () =>
+      respond(() => {
+        if (!state.me.features.riderChoices) {
+          throw apiError('RIDER_CHOICES_OFF', "Breaks, order preferences and heading home aren't switched on yet.", 503);
+        }
+        if (!state.online) {
+          throw apiError('NOT_ONLINE', 'Go online first.', 409);
+        }
+        if (!state.homeSavedAt) {
+          throw apiError('HOME_NOT_SAVED', 'Save your home spot in Profile first.', 409);
+        }
+        state.headingHomeUntil = now() + HOUR;
+        return { until: iso(state.headingHomeUntil) };
+      }),
+    stopHeadingHome: () =>
+      respond(() => {
+        state.headingHomeUntil = 0;
       }),
     signUp: input =>
       respond(() => {
@@ -730,7 +843,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
           state.online &&
           !state.activeTrip &&
           !state.offer &&
-          now() >= state.nextOfferAt
+          now() >= state.nextOfferAt &&
+          now() >= state.pausedUntil
         ) {
           state.offer = { offer: makeOffer(), createdAt: now() };
         }
@@ -907,6 +1021,13 @@ export function createMockRiderApi(options: MockOptions = {}) {
     },
     publishNewTerms() {
       state.me = { ...state.me, termsVersion: `2026-11-v${now()}` };
+    },
+    /** A privacy notice to accept (P2-09), so reviewers see its screen; the demo links the customer privacy page. */
+    publishPrivacyNotice() {
+      state.me = {
+        ...state.me,
+        privacyNotice: { version: '1.0-demo', url: 'https://craves.in/privacy', accepted: false },
+      };
     },
     cancelActiveTrip() {
       if (state.activeTrip) {

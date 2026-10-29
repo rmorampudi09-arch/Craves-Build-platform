@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -15,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -25,22 +27,24 @@ import org.json.JSONObject
 object RiderOffers {
   const val OFFERS_CHANNEL = "rider_offers"
   const val ONLINE_CHANNEL = "rider_online"
+  /** Trip and shift notices that aren't offers: "Trip cancelled", "You're offline" (default importance, no ringtone). */
+  const val TRIP_CHANNEL = "rider_trip"
   const val EXTRA_OFFER = "craves.rider.offer"
   const val EXTRA_RECEIVED_AT = "craves.rider.offerReceivedAtMs"
   const val EXTRA_CHANNEL = "craves.rider.offerChannel"
   private const val TAG = "CravesRiderOffer"
   private const val OFFER_NOTIFICATION_ID = 2
+  private const val NOTICE_NOTIFICATION_ID = 3
   private const val TEST_TAG = "test-ring"
   private const val KEEP_SEEN_MS = 10 * 60_000L
   private val RING = longArrayOf(0, 800, 400, 800, 400, 800, 400, 800)
 
-  // shortcut: notification copy is English only; move to strings.xml with te/hi when native screens are translated.
-  private const val DEFAULT_TITLE = "New order"
-  private const val DEFAULT_BODY = "Tap to see the offer."
-
   /** offerId to when and through which channel it first arrived, for dedupe across channels. */
   private val seen = HashMap<String, Pair<Long, String>>()
   private var pending: Received? = null
+  private const val MAX_RECEIPTS = 10
+  /** First arrivals the server hasn't been told about (offer receipts, blueprint A5): offerId to channel and elapsedRealtime. */
+  private val receipts = LinkedHashMap<String, Pair<String, Long>>()
 
   class Received(val json: String, val offerId: String, val receivedAtMs: Long, val channel: String, val deadlineMs: Long) {
     fun toMap(): WritableMap =
@@ -67,16 +71,20 @@ object RiderOffers {
   }
 
   fun createChannels(context: Context) {
+    // Names in the rider's language; createNotificationChannels renames a channel that already exists.
     val offers = NotificationChannelCompat.Builder(OFFERS_CHANNEL, NotificationManagerCompat.IMPORTANCE_HIGH)
-      .setName("Order offers")
+      .setName(RiderText.get(context, R.string.rider_channel_offers))
       .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), ringAudio())
       .setVibrationEnabled(true)
       .setVibrationPattern(RING)
       .build()
     val online = NotificationChannelCompat.Builder(ONLINE_CHANNEL, NotificationManagerCompat.IMPORTANCE_LOW)
-      .setName("Online status")
+      .setName(RiderText.get(context, R.string.rider_channel_online))
       .build()
-    NotificationManagerCompat.from(context).createNotificationChannelsCompat(listOf(offers, online))
+    val trip = NotificationChannelCompat.Builder(TRIP_CHANNEL, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+      .setName(RiderText.get(context, R.string.rider_channel_trip))
+      .build()
+    NotificationManagerCompat.from(context).createNotificationChannelsCompat(listOf(offers, online, trip))
   }
 
   /** Returns true when this is the first arrival of a valid, unexpired offer. */
@@ -92,9 +100,12 @@ object RiderOffers {
         return false
       }
       seen[offer.offerId] = now to channel
+      receipts[offer.offerId] = channel to SystemClock.elapsedRealtime()
+      while (receipts.size > MAX_RECEIPTS) receipts.remove(receipts.keys.first())
     }
     Log.i(TAG, "offer ${offer.offerId} first via $channel")
-    ring(context, offer, title ?: DEFAULT_TITLE, body ?: DEFAULT_BODY)
+    val (ownTitle, ownBody) = words(context, offer.json)
+    ring(context, offer, RiderText.fromServer(context, title) ?: ownTitle, RiderText.fromServer(context, body) ?: ownBody)
     if (!RiderEvents.emit("riderOffer") { offer.toMap() }) {
       synchronized(this) { pending = offer }
     }
@@ -118,8 +129,67 @@ object RiderOffers {
     gone.forEach { manager.cancel(it, OFFER_NOTIFICATION_ID) }
   }
 
+  /**
+   * The receipts for the next /locations call: offerId, channel and ageMs, how long ago the offer arrived by the
+   * monotonic clock, worked out now so the phone's wall clock plays no part.
+   */
+  fun pendingReceipts(): JSONArray {
+    val now = SystemClock.elapsedRealtime()
+    return synchronized(this) {
+      JSONArray(receipts.map { (offerId, arrival) ->
+        JSONObject().put("offerId", offerId).put("channel", arrival.first).put("ageMs", now - arrival.second)
+      })
+    }
+  }
+
+  /** Forgets the receipts a successful /locations call carried; any that arrived meanwhile stay for the next call. */
+  fun receiptsSent(offerIds: Collection<String>) {
+    synchronized(this) { offerIds.forEach { receipts.remove(it) } }
+  }
+
+  /**
+   * A notice on rider_trip that opens the app when tapped: "Trip cancelled" (P1-12), "You're offline" (P1-13). One per
+   * tag, so a newer notice of the same kind replaces the last. Nothing is posted while notifications are off.
+   */
+  fun notice(context: Context, tag: String, title: String, body: String) {
+    if (Build.VERSION.SDK_INT >= 33 &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+      Log.w(TAG, "notifications are not allowed; $tag can't be shown")
+      return
+    }
+    createChannels(context)
+    val notification = NotificationCompat.Builder(context, TRIP_CHANNEL)
+      .setSmallIcon(context.applicationInfo.icon)
+      .setContentTitle(title)
+      .setContentText(body)
+      .setContentIntent(openAppIntent(context, null))
+      .setAutoCancel(true)
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .build()
+    NotificationManagerCompat.from(context).notify(tag, NOTICE_NOTIFICATION_ID, notification)
+  }
+
+  /** Takes a notice down: "You're offline" once the service runs again, however the rider came back. */
+  fun cancelNotice(context: Context, tag: String) {
+    NotificationManagerCompat.from(context).cancel(tag, NOTICE_NOTIFICATION_ID)
+  }
+
+  /** Whether an offer can ring now: the app's notifications are on and the offers channel is still at high importance. */
+  fun canRing(context: Context): Boolean {
+    val manager = NotificationManagerCompat.from(context)
+    if (!manager.areNotificationsEnabled()) return false
+    if (Build.VERSION.SDK_INT < 26) return true
+    // The channel is made when the service first starts; make it now so a phone that never went online can pass setup.
+    val channel = manager.getNotificationChannelCompat(OFFERS_CHANNEL)
+      ?: run { createChannels(context); manager.getNotificationChannelCompat(OFFERS_CHANNEL) } ?: return false
+    return channel.importance >= NotificationManagerCompat.IMPORTANCE_HIGH
+  }
+
   fun testRing(context: Context) {
-    post(context, TEST_TAG, "Test ring", "This is how an order offer rings.", 15_000L, openAppIntent(context, null))
+    post(context, TEST_TAG, RiderText.get(context, R.string.rider_test_ring_title), RiderText.get(context, R.string.rider_test_ring_body),
+      15_000L, openAppIntent(context, null))
   }
 
   fun openAppIntent(context: Context, offer: Received?): PendingIntent {
@@ -142,6 +212,19 @@ object RiderOffers {
   /** Rings even with the screen off: the high-importance channel plays the sound and vibration, not JS. */
   private fun ring(context: Context, offer: Received, title: String, body: String) {
     post(context, offer.offerId, title, body, offer.deadlineMs - offer.receivedAtMs, openAppIntent(context, offer))
+  }
+
+  /** The heading and line the server sends in English ("New order: ₹62", "Banjara Hills to Jubilee Hills"), from the offer itself, in the rider's language. */
+  private fun words(context: Context, json: String): Pair<String, String> {
+    val offer = JSONObject(json)
+    val pay = offer.optLong("payPaise", -1L)
+    val from = offer.optString("kitchenArea")
+    val to = offer.optString("customerLocality")
+    val title = if (pay >= 0) RiderText.get(context, R.string.rider_offer_title_pay, RiderText.rupees(pay))
+      else RiderText.get(context, R.string.rider_offer_title)
+    val body = if (from.isNotEmpty() && to.isNotEmpty()) RiderText.get(context, R.string.rider_offer_route, from, to)
+      else RiderText.get(context, R.string.rider_offer_body)
+    return title to body
   }
 
   private fun post(context: Context, tag: String, title: String, body: String, timeoutMs: Long, open: PendingIntent) {

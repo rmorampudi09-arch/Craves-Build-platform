@@ -6,8 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
+import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
+import in.craves.integration.fleet.rider.FleetRiderModels.RiderFix;
 import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Customer;
 import in.craves.integration.fleet.trip.FleetTripModels.Kitchen;
@@ -15,12 +18,14 @@ import in.craves.integration.fleet.trip.FleetTripModels.Trip;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -50,6 +55,15 @@ public class FleetTripService {
         """;
 
     static final int KITCHEN_ZONE_M = 300;
+    /** A step tapped offline counts from when it was tapped, at most this long before the request (blueprint A4). */
+    static final Duration MAX_STEP_AGE = Duration.ofMinutes(30);
+    /** The door wait reads tap ages up to a shift's length; anything older is nonsense from the phone. */
+    static final long MAX_DOOR_TAP_AGE_MS = Duration.ofHours(12).toMillis();
+    /** The tap's own fix speaks for the step when it was taken this close to the tap. */
+    static final Duration FIX_NEAR_TAP = Duration.ofMinutes(2);
+    /** An earlier arrival needs a real fix this accurate, this close to the kitchen (KITCHEN_ZONE_M) or the drop. */
+    static final double EVIDENCE_ACCURACY_M = 100;
+    static final int DROP_ZONE_M = 250;
     static final int MAX_PHOTO_BYTES = 10 * 1024 * 1024;
     static final Set<String> FAIL_REASONS = Set.of("CUSTOMER_UNREACHABLE", "WRONG_ADDRESS", "CUSTOMER_REFUSED", "UNSAFE");
     static final String PHOTO_HOLD = "Delivered with a photo. Ops checks the photo before this pay is released.";
@@ -59,6 +73,8 @@ public class FleetTripService {
     // is the signal; switch to an order-cancelled event if order-service ever cancels without a refund (meal-plan orders).
     public static final String ORDER_REFUNDED = "EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = t.chef_sub_order_id)";
     static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
+    public static final String NOT_RECEIVED = "The customer told Craves ops they didn't get the food.";
+    public static final String NOT_RECEIVED_HOLD = "The customer says they didn't get the food. Ops checks with you before this pay is released.";
     /** OTP_LOCKED reason for an order order-service has no delivery code for (accepted before codes existed). */
     static final String NO_CODE = "NO_CODE";
     /** Step: the state it needs, the state it leaves the trip in. */
@@ -73,9 +89,10 @@ public class FleetTripService {
     private final DeliveryCodeClient codes;
     private final FleetStorage storage;
     private final TransactionTemplate transaction;
+    private final RiderPushClient alerts;
 
     public FleetTripService(JdbcTemplate jdbc, FleetTripPay pay, FleetStatusBridge bridge, ObjectMapper json, DeliveryCodeClient codes,
-                            FleetStorage storage, PlatformTransactionManager transactions) {
+                            FleetStorage storage, PlatformTransactionManager transactions, RiderPushClient alerts) {
         this.jdbc = jdbc;
         this.pay = pay;
         this.bridge = bridge;
@@ -83,6 +100,15 @@ public class FleetTripService {
         this.codes = codes;
         this.storage = storage;
         this.transaction = new TransactionTemplate(transactions);
+        this.alerts = alerts;
+    }
+
+    /** Phase 5: the fleet engine's feed while craves.fleet.engine.mode is shadow or live, else null. */
+    private FleetEngineFeed engineFeed;
+
+    @Autowired(required = false)
+    public void setEngineFeed(FleetEngineFeed feed) {
+        this.engineFeed = feed.on() ? feed : null;
     }
 
     /**
@@ -115,6 +141,7 @@ public class FleetTripService {
             if (jdbc.update("""
                 UPDATE fleet_schema.trip t SET state = 'ASSIGNED', rider_id = o.rider_id, pickup_distance_m = o.pickup_distance_m,
                   drop_distance_m = o.drop_distance_m, rate_card_version = o.rate_card_version, pay_paise = o.pay_paise, accepted_at = now(),
+                  pickup_minutes = o.pickup_minutes,
                   version = t.version + 1, updated_at = now()
                 FROM fleet_schema.trip_offer o
                 WHERE o.id = ? AND t.id = o.trip_id AND t.state = 'SEARCHING' AND t.provider = 'CRAVES_FLEET'""", offerId) != 1) {
@@ -126,6 +153,10 @@ public class FleetTripService {
         event(tripId, "ACCEPTED", rider.id(), idempotencyKey, Map.of("offerId", offerId.toString()));
         if (!bridge.assigned(tripId)) {
             throw taken();
+        }
+        // On a trip now: the engine hears it at once, not with the rider's next /locations call.
+        if (engineFeed != null) {
+            engineFeed.refresh(rider.id());
         }
         return view(tripId);
     }
@@ -139,6 +170,10 @@ public class FleetTripService {
             && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE id = ? AND rider_id = ?)",
                 Boolean.class, offerId, rider.id()))) {
             throw offerNotFound();
+        }
+        // Free again at once for the next order, in the engine too (a decline costs the rider nothing).
+        if (engineFeed != null) {
+            engineFeed.refresh(rider.id());
         }
     }
 
@@ -156,6 +191,17 @@ public class FleetTripService {
      */
     @Transactional
     public Trip step(UUID identityId, UUID tripId, String action, String key) {
+        return step(identityId, tripId, action, key, Tap.NONE);
+    }
+
+    /**
+     * As above, with when and where the rider tapped (blueprint A4): the step's time is the tap's (occurred), and the
+     * kitchen zone is judged by the tap's own fix when it was taken near the tap. An arrival earlier than now counts only
+     * with a real fix, accurate to 100 m, at the kitchen (300 m) or the drop (250 m): it would raise waiting pay or shorten
+     * the door wait.
+     */
+    @Transactional
+    public Trip step(UUID identityId, UUID tripId, String action, String key, Tap tap) {
         String[] move = STEPS.get(action);
         if (move == null) {
             throw FleetApiException.invalid("Unknown trip step.");
@@ -166,18 +212,32 @@ public class FleetTripService {
             return view(tripId);
         }
         requireState(trip, move[0], "This trip has moved on. Refreshing it now.");
-        Double fromKitchen = "arrived-pickup".equals(action) || "food-not-ready".equals(action) ? metresFromKitchen(rider.id(), trip) : null;
+        Instant occurred = occurred(trip, tap);
+        RiderFix fix = fixNear(tap.fix(), tap.ageMs() == null ? 0 : Math.max(0, tap.ageMs()));
+        // food-not-ready can start the kitchen wait too, so it needs the same evidence as an arrival.
+        boolean atKitchen = "arrived-pickup".equals(action) || "food-not-ready".equals(action);
+        if ((atKitchen || "arrived-drop".equals(action)) && occurred.isBefore(trip.now()) && !(atKitchen
+            ? evidence(fix, trip.kitchenLat(), trip.kitchenLng(), KITCHEN_ZONE_M) : evidence(fix, trip.dropLat(), trip.dropLng(), DROP_ZONE_M))) {
+            occurred = trip.now();
+            fix = fixNear(tap.fix(), 0);
+        }
+        Double fromKitchen = null;
+        if (atKitchen) {
+            fromKitchen = fix == null ? metresFromKitchen(rider.id(), trip) : Boolean.TRUE.equals(fix.mock()) ? null
+                : RoadDistanceClient.straightLineMetres(fix.lat(), fix.lng(), trip.kitchenLat(), trip.kitchenLng());
+        }
         boolean inZone = fromKitchen != null && fromKitchen <= KITCHEN_ZONE_M;
+        Timestamp at = Timestamp.from(occurred);
         jdbc.update("UPDATE fleet_schema.trip SET state = ?, version = version + 1, updated_at = now(), "
-            + "arrived_kitchen_at = CASE WHEN ? THEN COALESCE(arrived_kitchen_at, now()) ELSE arrived_kitchen_at END, "
-            + "picked_up_at = CASE WHEN ? THEN now() ELSE picked_up_at END, arrived_drop_at = CASE WHEN ? THEN now() ELSE arrived_drop_at END "
-            + "WHERE id = ?", move[1], inZone, "picked-up".equals(action), "arrived-drop".equals(action), tripId);
+            + "arrived_kitchen_at = CASE WHEN ? THEN COALESCE(arrived_kitchen_at, ?) ELSE arrived_kitchen_at END, "
+            + "picked_up_at = CASE WHEN ? THEN ? ELSE picked_up_at END, arrived_drop_at = CASE WHEN ? THEN ? ELSE arrived_drop_at END "
+            + "WHERE id = ?", move[1], inZone, at, "picked-up".equals(action), at, "arrived-drop".equals(action), at, tripId);
         Map<String, Object> detail = new java.util.HashMap<>();
         if (fromKitchen != null) {
             detail.put("metresFromKitchen", Math.round(fromKitchen));
             detail.put("insideKitchenZone", inZone);
         }
-        event(tripId, action.toUpperCase(java.util.Locale.ROOT).replace('-', '_'), rider.id(), key, detail);
+        event(tripId, action.toUpperCase(java.util.Locale.ROOT).replace('-', '_'), rider.id(), key, withTap(detail, tap), tap.fix());
         if (!"food-not-ready".equals(action)) {
             bridge.publish(tripId);
         }
@@ -185,12 +245,57 @@ public class FleetTripService {
     }
 
     /**
+     * When the step happened, by the database clock (blueprint A4): now minus the tap's age (at most 30 minutes), never
+     * before the trip's previous step. Without an age (an app before 1.1.0), now.
+     */
+    static Instant occurred(Locked trip, Tap tap) {
+        if (tap.ageMs() == null) {
+            return trip.now();
+        }
+        Instant tapped = trip.now().minusMillis(Math.max(0, Math.min(MAX_STEP_AGE.toMillis(), tap.ageMs())));
+        return trip.previousAt() != null && tapped.isBefore(trip.previousAt()) ? trip.previousAt() : tapped;
+    }
+
+    /**
+     * The tap's fix if it was taken within 2 minutes of the tap, tapAgeMs ago. Both ages are by the phone's clocks at the
+     * same moment, so the phone's wall clock plays no part; a fix without ageMs (an app before 1.1.0) is never used.
+     */
+    static RiderFix fixNear(RiderFix fix, long tapAgeMs) {
+        if (fix == null || fix.lat() == null || fix.lng() == null || fix.ageMs() == null) {
+            return null;
+        }
+        return Math.abs(fix.ageMs() - tapAgeMs) <= FIX_NEAR_TAP.toMillis() ? fix : null;
+    }
+
+    /** A real fix, accurate to 100 m, within withinM of the place: what lets an earlier arrival time count. */
+    static boolean evidence(RiderFix fix, double lat, double lng, int withinM) {
+        return fix != null && !Boolean.TRUE.equals(fix.mock()) && fix.accuracyM() != null && fix.accuracyM() <= EVIDENCE_ACCURACY_M
+            && RoadDistanceClient.straightLineMetres(fix.lat(), fix.lng(), lat, lng) <= withinM;
+    }
+
+    /** The step event's detail plus the tap's age, for the sync-delay query (PILOT-HEALTH.md). */
+    private static Map<String, Object> withTap(Map<String, ?> detail, Tap tap) {
+        Map<String, Object> all = new java.util.HashMap<>(detail);
+        if (tap.ageMs() != null) {
+            all.put("ageMs", tap.ageMs());
+        }
+        return all;
+    }
+
+    /**
      * Delivered with the customer's code, checked by order-service (never retried; the code is never stored or logged).
      * Wrong: 422 OTP_INVALID with attemptsLeft (4 to 1). The fifth wrong code and every code after it: 423 OTP_LOCKED, and
      * the photo route opens; so it does at once for an order accepted before delivery codes existed (order-service 404),
      * whose customer has no code. A repeated Idempotency-Key gets the first answer without asking order-service again.
+     * A code the app sent with capturedOffline (typed without signal, the rider told to go) that is refused alerts ops once
+     * per trip (FLEET_OFFLINE_OTP_INVALID, decision E4).
      */
     public Trip deliveredByOtp(UUID identityId, UUID tripId, String otp, String key) {
+        return deliveredByOtp(identityId, tripId, otp, key, Tap.NONE);
+    }
+
+    /** As above; the tap's age and fix are kept on the DELIVERED event. */
+    public Trip deliveredByOtp(UUID identityId, UUID tripId, String otp, String key, Tap tap) {
         if (otp == null || !otp.matches("[0-9]{4}")) {
             throw FleetApiException.invalid("Enter the 4-digit OTP the customer reads out.");
         }
@@ -207,6 +312,7 @@ public class FleetTripService {
         Optional<String> lockedFor = jdbc.queryForList("SELECT COALESCE(detail ->> 'reason', '') FROM fleet_schema.trip_event WHERE trip_id = ? "
             + "AND kind = 'OTP_LOCKED' LIMIT 1", String.class, tripId).stream().findFirst();
         if (lockedFor.isPresent()) {
+            alertIfTypedOffline(tap, tripId, rider.id());
             throw otpLockedError(lockedFor.get());
         }
         DeliveryCodeClient.Result result = codes.verify(trip.chefSubOrderId(), otp);
@@ -220,7 +326,7 @@ public class FleetTripService {
             }
             requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
             if (result.outcome() == DeliveryCodeClient.Outcome.VERIFIED) {
-                deliver(tripId, rider.id(), key, Map.of("method", "OTP"), false, null);
+                deliver(tripId, rider.id(), key, withTap(Map.of("method", "OTP"), tap), tap.fix(), false, null);
                 return Optional.<FleetApiException>empty();
             }
             String reason = result.outcome() == DeliveryCodeClient.Outcome.NOT_FOUND ? NO_CODE : "";
@@ -230,9 +336,29 @@ public class FleetTripService {
             return Optional.of(lockedNow ? otpLockedError(reason) : otpInvalid(result.attemptsLeft()));
         });
         if (refusal.isPresent()) {
+            alertIfTypedOffline(tap, tripId, rider.id());
             throw refusal.get(); // after the attempt is stored, so a retried key gets the same answer
         }
         return view(tripId);
+    }
+
+    /**
+     * A code typed offline was refused: the rider has left the door, so ops sorts it out with the customer and the rider. The
+     * event's fixed key makes it once per trip; the alert goes on its own thread, so the rider's queue never waits for it.
+     */
+    private void alertIfTypedOffline(Tap tap, UUID tripId, UUID riderId) {
+        if (!tap.capturedOffline() || jdbc.update("""
+            INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key, trip_version)
+            SELECT ?, id, 'OFFLINE_OTP_ALERTED', 'SYSTEM', 'offline-otp-alert', version FROM fleet_schema.trip WHERE id = ?
+            ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING""", UUID.randomUUID(), tripId) != 1) {
+            return;
+        }
+        String orderCode = jdbc.queryForObject("SELECT order_code FROM fleet_schema.trip WHERE id = ?", String.class, tripId);
+        Map<String, String> data = Map.of("tripId", tripId.toString(), "orderCode", String.valueOf(orderCode), "riderId", riderId.toString());
+        Thread.ofVirtual().name("fleet-offline-otp-alert").start(() -> alerts.opsAlert("FLEET_OFFLINE_OTP_INVALID",
+            "Delivery code typed offline didn't match, order " + orderCode,
+            "The rider typed the customer's code without signal and was told they could leave. The code didn't match. Call the "
+                + "customer to check they have the food, then the rider.", data));
     }
 
     /**
@@ -240,7 +366,11 @@ public class FleetTripService {
      * arriving at the drop, or once the OTP is locked. The photo goes to private storage and the trip's pay is held for ops.
      */
     public Trip deliveredByPhoto(UUID identityId, UUID tripId, Integer callsMade, MultipartFile photo, String key) {
-        byte[] bytes = photoBytes(photo);
+        return deliveredByPhoto(identityId, tripId, callsMade, photo, key, Tap.NONE);
+    }
+
+    /** As above; the unreachable wait is measured to when the photo was taken (the tap), not to when it reached us. */
+    public Trip deliveredByPhoto(UUID identityId, UUID tripId, Integer callsMade, MultipartFile photo, String key, Tap tap) {
         Rider rider = rider(identityId);
         Locked trip = transaction.execute(status -> {
             Locked locked = lock(tripId, rider);
@@ -248,14 +378,16 @@ public class FleetTripService {
             return locked;
         });
         if ("DELIVERED".equals(trip.state())) {
-            return view(tripId);
+            return view(tripId); // a retry whose answer was lost gets the trip, with or without the photo it no longer has
         }
+        byte[] bytes = photoBytes(photo);
         requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
+        Map<String, Object> detail = new java.util.HashMap<>(Map.of("method", "PHOTO", "callsMade", callsMade == null ? 0 : callsMade));
         if (!otpLocked(tripId)) {
             if (callsMade == null || callsMade < 2) {
                 throw FleetApiException.unprocessable("CALLS_REQUIRED", "Call the customer twice before leaving the order.");
             }
-            requireUnreachableWaitOver(tripId);
+            detail.put("doorWaitFrom", requireUnreachableWaitOver(tripId, trip, tap).toString());
         }
         String blob = "riders/" + rider.id() + "/trips/" + tripId + "/delivery-" + UUID.randomUUID()
             + ("image/png".equals(photo.getContentType()) ? ".png" : ".jpg");
@@ -265,8 +397,8 @@ public class FleetTripService {
             Locked now = lock(tripId, rider);
             if (!"DELIVERED".equals(now.state())) {
                 requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
-                deliver(tripId, rider.id(), key, Map.of("method", "PHOTO", "photoBlob", blob, "callsMade", callsMade == null ? 0 : callsMade),
-                    true, PHOTO_HOLD);
+                detail.put("photoBlob", blob);
+                deliver(tripId, rider.id(), key, withTap(detail, tap), tap.fix(), true, PHOTO_HOLD);
             }
         });
         return view(tripId);
@@ -278,6 +410,12 @@ public class FleetTripService {
      */
     @Transactional
     public Trip failed(UUID identityId, UUID tripId, String reason, String note, String key) {
+        return failed(identityId, tripId, reason, note, key, Tap.NONE);
+    }
+
+    /** As above; CUSTOMER_UNREACHABLE's wait is measured to the tap. */
+    @Transactional
+    public Trip failed(UUID identityId, UUID tripId, String reason, String note, String key, Tap tap) {
         if (reason == null || !FAIL_REASONS.contains(reason)) {
             throw FleetApiException.invalid("Choose why the delivery failed.");
         }
@@ -290,27 +428,40 @@ public class FleetTripService {
             requireState(trip, "PICKED_UP", "You can only mark a trip failed after pickup.");
         }
         boolean unreachable = "CUSTOMER_UNREACHABLE".equals(reason);
+        Map<String, Object> detail = new java.util.HashMap<>();
         if (unreachable) {
             requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
-            requireUnreachableWaitOver(tripId);
+            detail.put("doorWaitFrom", requireUnreachableWaitOver(tripId, trip, tap).toString());
         }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'FAILED', cancel_reason = ?, finished_at = now(), version = version + 1, "
             + "updated_at = now() WHERE id = ?", reason, tripId);
-        Map<String, Object> detail = new java.util.HashMap<>();
         detail.put("reason", reason);
         if (note != null && !note.isBlank()) {
             detail.put("note", note.length() > 500 ? note.substring(0, 500) : note);
         }
-        event(tripId, "FAILED", rider.id(), key, detail);
+        event(tripId, "FAILED", rider.id(), key, withTap(detail, tap), tap.fix());
         pay.finalizePay(tripId, unreachable ? Ending.CUSTOMER_UNREACHABLE : Ending.FAILED_AFTER_PICKUP, true, FAILED_HOLD);
         bridge.publish(tripId);
         return view(tripId);
     }
 
-    private void deliver(UUID tripId, UUID riderId, String key, Map<String, ?> detail, boolean held, String holdReason) {
+    /**
+     * Ops called the customer about a delivery code typed offline that was refused (decision E4), in the caller's
+     * transaction, which holds the trip at the drop: they have the food (DELIVERED, full pay, not held) or they don't
+     * (FAILED, the same pay held while ops checks with the rider). Either reaches the order.
+     */
+    public void checkedByOps(UUID tripId, boolean delivered) {
+        jdbc.update("UPDATE fleet_schema.trip SET state = ?, cancel_reason = ?, finished_at = now(), version = version + 1, updated_at = now() "
+            + "WHERE id = ?", delivered ? "DELIVERED" : "FAILED", delivered ? null : NOT_RECEIVED, tripId);
+        event(tripId, delivered ? "DELIVERED" : "FAILED", null, null, Map.of("method", "OPS_CHECKED"));
+        pay.finalizePay(tripId, Ending.DELIVERED, !delivered, delivered ? null : NOT_RECEIVED_HOLD);
+        bridge.publish(tripId);
+    }
+
+    private void deliver(UUID tripId, UUID riderId, String key, Map<String, ?> detail, RiderFix fix, boolean held, String holdReason) {
         jdbc.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', finished_at = now(), version = version + 1, updated_at = now() "
             + "WHERE id = ?", tripId);
-        event(tripId, "DELIVERED", riderId, key, detail);
+        event(tripId, "DELIVERED", riderId, key, detail, fix);
         pay.finalizePay(tripId, Ending.DELIVERED, held, holdReason);
         bridge.publish(tripId);
     }
@@ -376,11 +527,18 @@ public class FleetTripService {
             row.getString("cancel_reason"), lines, row.getBoolean("sealed"), instant(row.getTimestamp("chef_ready_at")));
     }
 
-    /** The rider's own trip, row-locked for the step. A trip that ended or went to another courier is 409 TRIP_NOT_ACTIVE. */
+    /**
+     * The rider's own trip, row-locked for the step, with its places, its latest step time and the database clock. A trip
+     * that ended or went to another courier is 409 TRIP_NOT_ACTIVE.
+     */
     private Locked lock(UUID tripId, Rider rider) {
-        return jdbc.query("SELECT state, chef_sub_order_id, kitchen_lat, kitchen_lng FROM fleet_schema.trip WHERE id = ? AND rider_id = ? "
-                + "AND provider = 'CRAVES_FLEET' FOR UPDATE", (row, n) -> new Locked(row.getString("state"),
-                row.getObject("chef_sub_order_id", UUID.class), row.getDouble("kitchen_lat"), row.getDouble("kitchen_lng")), tripId, rider.id())
+        return jdbc.query("""
+                SELECT state, chef_sub_order_id, kitchen_lat, kitchen_lng, drop_lat, drop_lng,
+                       GREATEST(accepted_at, arrived_kitchen_at, picked_up_at, arrived_drop_at) AS previous_at, now() AS db_now
+                FROM fleet_schema.trip WHERE id = ? AND rider_id = ? AND provider = 'CRAVES_FLEET' FOR UPDATE""",
+                (row, n) -> new Locked(row.getString("state"), row.getObject("chef_sub_order_id", UUID.class), row.getDouble("kitchen_lat"),
+                    row.getDouble("kitchen_lng"), row.getDouble("drop_lat"), row.getDouble("drop_lng"), instant(row.getTimestamp("previous_at")),
+                    row.getTimestamp("db_now").toInstant()), tripId, rider.id())
             .stream().findFirst().orElseThrow(() -> FleetApiException.notFound("TRIP_NOT_FOUND", "This trip is not yours."));
     }
 
@@ -415,12 +573,33 @@ public class FleetTripService {
             + "AND kind = 'OTP_LOCKED')", Boolean.class, tripId));
     }
 
-    private void requireUnreachableWaitOver(UUID tripId) {
-        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT t.arrived_drop_at + make_interval(mins => rc.unreachable_wait_minutes) <= now() "
-            + "FROM fleet_schema.trip t JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version WHERE t.id = ?", Boolean.class,
-            tripId))) {
+    /**
+     * The unreachable wait must be over at this tap (the photo, or failed CUSTOMER_UNREACHABLE). It runs from the "I've
+     * reached the customer" tap to this one, both timed from the phone's tap ages (app 1.1.0), so a door with no signal
+     * still counts its wait when both steps sync later. The arrival's location evidence and the 30-minute cap decide
+     * arrived_drop_at, not this: a rider indoors without GPS must not lose a delivery they waited for. A tapped arrival
+     * never counts from before the accept (the server's own time). Photo and failed deliveries are held for ops either way, and
+     * the event keeps doorWaitFrom for that check. Without ages (older apps): arrived_drop_at to now, as before. Returns
+     * when the wait started.
+     */
+    private Instant requireUnreachableWaitOver(UUID tripId, Locked trip, Tap tap) {
+        Instant tapped = tap.ageMs() == null ? trip.now() : trip.now().minusMillis(Math.max(0, Math.min(MAX_DOOR_TAP_AGE_MS, tap.ageMs())));
+        Map<String, Object> wait = jdbc.queryForMap("""
+            SELECT CASE WHEN a.tapped IS NULL THEN t.arrived_drop_at ELSE GREATEST(a.tapped, t.accepted_at) END AS since,
+                   rc.unreachable_wait_minutes AS minutes
+            FROM fleet_schema.trip t
+            JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version
+            LEFT JOIN LATERAL (SELECT e.created_at - make_interval(secs => LEAST(GREATEST((e.detail ->> 'ageMs')::float8, 0), ?) / 1000.0)
+                                 AS tapped
+                               FROM fleet_schema.trip_event e
+                               WHERE e.trip_id = t.id AND e.kind = 'ARRIVED_DROP' AND (e.detail ->> 'ageMs') IS NOT NULL
+                               ORDER BY e.created_at LIMIT 1) a ON true
+            WHERE t.id = ?""", (double) MAX_DOOR_TAP_AGE_MS, tripId);
+        Instant since = ((Timestamp) wait.get("since")).toInstant();
+        if (since.plus(Duration.ofMinutes(((Number) wait.get("minutes")).longValue())).isAfter(tapped)) {
             throw FleetApiException.unprocessable("WAIT_NOT_OVER", "Wait at the door until the timer ends, then try again.");
         }
+        return since;
     }
 
     /** Metres from the kitchen by the rider's latest fix, if it is real (not mock) and under 2 minutes old; else null. */
@@ -433,7 +612,7 @@ public class FleetTripService {
 
     private static byte[] photoBytes(MultipartFile photo) {
         if (photo == null || photo.isEmpty() || photo.getSize() > MAX_PHOTO_BYTES
-            || !List.of("image/jpeg", "image/png").contains(photo.getContentType())) {
+            || photo.getContentType() == null || !List.of("image/jpeg", "image/png").contains(photo.getContentType())) {
             throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
         }
         try (java.io.InputStream input = photo.getInputStream()) {
@@ -479,11 +658,18 @@ public class FleetTripService {
     }
 
     void event(UUID tripId, String kind, UUID riderId, String idempotencyKey, Map<String, ?> detail) {
+        event(tripId, kind, riderId, idempotencyKey, detail, null);
+    }
+
+    /** With the fix the rider's phone had when they tapped, if it sent one with sane coordinates. */
+    void event(UUID tripId, String kind, UUID riderId, String idempotencyKey, Map<String, ?> detail, RiderFix fix) {
+        boolean located = fix != null && fix.lat() != null && fix.lng() != null && Math.abs(fix.lat()) <= 90 && Math.abs(fix.lng()) <= 180;
         try {
-            jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, idempotency_key, trip_version, detail) "
-                + "SELECT ?, id, ?, ?, ?, ?, version, CAST(? AS jsonb) FROM fleet_schema.trip WHERE id = ? "
+            jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, idempotency_key, trip_version, detail, "
+                + "lat, lng, mock) SELECT ?, id, ?, ?, ?, ?, version, CAST(? AS jsonb), ?, ?, ? FROM fleet_schema.trip WHERE id = ? "
                 + "ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING", UUID.randomUUID(), kind,
-                riderId == null ? "SYSTEM" : "RIDER", riderId, idempotencyKey, json.writeValueAsString(detail), tripId);
+                riderId == null ? "SYSTEM" : "RIDER", riderId, idempotencyKey, json.writeValueAsString(detail), located ? fix.lat() : null,
+                located ? fix.lng() : null, located ? Boolean.TRUE.equals(fix.mock()) : null, tripId);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Trip event could not be stored", exception);
         }
@@ -533,6 +719,21 @@ public class FleetTripService {
     record Rider(UUID id, String status) {
     }
 
-    private record Locked(String state, UUID chefSubOrderId, double kitchenLat, double kitchenLng) {
+    /**
+     * When and where the rider tapped a step (app 1.1.0, blueprint A4): ageMs, how long before the request, by the phone's
+     * own clock between two readings; fix, the phone's fix then (its own ageMs times it); capturedOffline, the app sent it
+     * after the tap, having told the rider it would sync (only a delivery code uses it). NONE for older apps.
+     */
+    public record Tap(Long ageMs, RiderFix fix, boolean capturedOffline) {
+        public static final Tap NONE = new Tap(null, null);
+
+        public Tap(Long ageMs, RiderFix fix) {
+            this(ageMs, fix, false);
+        }
+    }
+
+    /** previousAt is the trip's latest step time so far; now is the database clock of the step's transaction. */
+    record Locked(String state, UUID chefSubOrderId, double kitchenLat, double kitchenLng, double dropLat, double dropLng,
+                  Instant previousAt, Instant now) {
     }
 }

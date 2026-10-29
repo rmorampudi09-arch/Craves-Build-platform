@@ -31,6 +31,33 @@ class FleetLocationServiceTest {
             .as("clipped to the slot").isEqualTo(10);
     }
 
+    /** Blueprint A6: with ageMs the database clock times the fix, capped at an hour; without it the phone's stamp stays. */
+    @Test
+    void ageMsTimesAFixByTheServerClockAndIsCappedAtAnHour() {
+        assertThat(FleetLocationService.timed(new RiderFix(17.44, 78.39, 8.0, T.plusSeconds(600), false, 2000L), T).at())
+            .as("a phone clock 10 minutes fast").isEqualTo(T.minusMillis(2000));
+        assertThat(FleetLocationService.timed(new RiderFix(17.44, 78.39, 8.0, null, false, 99_999_999L), T).at()).isEqualTo(T.minusSeconds(3600));
+        assertThat(FleetLocationService.timed(new RiderFix(17.44, 78.39, 8.0, T.minusSeconds(9), false, -5L), T).at()).isEqualTo(T);
+        assertThat(FleetLocationService.timed(fix(10, false), T)).as("no ageMs: the phone's stamp").isEqualTo(fix(10, false));
+        assertThat(FleetLocationService.timed(null, T)).isNull();
+    }
+
+    @Test
+    void healthLeavesOutWhatThePhoneDidNotSendAndKeepsTheExitReasonToOneShortLine() {
+        FleetLocationService service = new FleetLocationService(null, new com.fasterxml.jackson.databind.ObjectMapper(),
+            in.craves.integration.fleet.FleetDatabase.properties(true));
+        assertThat(service.health(null)).isNull();
+        assertThat(service.health(new FleetRiderModels.DeviceHealth(81, null, null, true, null, null, null, null, null)))
+            .isEqualTo("{\"batteryPct\":81,\"canRing\":true}");
+        assertThat(FleetLocationService.oneLine("CRASH\nat line 2\u0000")).isEqualTo("CRASH at line 2");
+        assertThat(FleetLocationService.oneLine("x".repeat(500))).hasSize(200);
+    }
+
+    @Test
+    void thePollSettingStaysWithinFiveToThirtySeconds() {
+        assertThat(List.of(1, 5, 10, 30, 600).stream().map(FleetLocationService::pollSeconds).toList()).containsExactly(5, 5, 10, 30, 30);
+    }
+
     @Test
     void onlySaneFixesFromTheShiftAndNotFromTheFutureAreUsed() {
         Instant start = T.minusSeconds(3600);
@@ -81,11 +108,11 @@ class FleetLocationServiceTest {
 
     static Context context(String status, Instant ended, Instant revoked, boolean expired) {
         return new Context(SHIFT, T, ended, revoked, expired, RIDER, status, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, T);
+            null, null, T, false);
     }
 
     static Context trip(UUID tripId, String state, Integer version, UUID lastTripRider, String lastState, UUID lastShift) {
         return new Context(SHIFT, T, null, null, false, RIDER, "ACTIVE", lastShift, T, false, lastTripRider == null ? null : TRIP, tripId, state,
-            version, lastTripRider, lastState, lastTripRider == null ? null : 4, null, null, null, T);
+            version, lastTripRider, lastState, lastTripRider == null ? null : 4, null, null, null, T, false);
     }
 }

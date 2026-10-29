@@ -11,14 +11,13 @@ import {BottomAction} from '../components/BottomAction';
 import {StatusBadge} from '../components/StatusBadge';
 import {Card} from '../components/ui';
 import {riderKeys} from '../state/riderQueries';
-import {useStrings} from '../strings/StringsProvider';
+import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 
 /** The same checks the server makes (FleetRules), so most mistakes never leave the phone. */
 const PLATE = /^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/;
 const UPI = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$/;
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const VEHICLES: VehicleKind[] = ['PETROL', 'ELECTRIC', 'BICYCLE'];
-const LANGUAGES = ['en', 'te', 'hi'] as const;
 
 const message = (error: unknown, fallback: string) => (error instanceof AppApiError ? error.message : fallback);
 /** The words of a name in any order or case: "Gopi K" is still "K Gopi" (the server's FleetRules.sameName). */
@@ -91,14 +90,18 @@ export function JoinForm({edit}: {edit?: Correction}) {
         testID="rider-join-name"
       />
       {renamed ? <Banner tone="warning" inset text={d.resendPayout} testID="rider-join-resend-payout" /> : null}
-      <Text style={styles.label}>{j.language}</Text>
-      <SegmentedControl
-        value={language}
-        options={LANGUAGES.map(value => ({value, label: strings.languages[value]}))}
-        onChange={setLanguage}
-        accessibilityOptionRole="radio"
-        testID="rider-join-language"
-      />
+      {RIDER_LANGUAGES.length > 1 ? (
+        <>
+          <Text style={styles.label}>{j.language}</Text>
+          <SegmentedControl
+            value={language}
+            options={RIDER_LANGUAGES.map(value => ({value, label: strings.languages[value]}))}
+            onChange={setLanguage}
+            accessibilityOptionRole="radio"
+            testID="rider-join-language"
+          />
+        </>
+      ) : null}
       <Text style={styles.label}>{j.vehicle}</Text>
       <View style={styles.chips}>
         {VEHICLES.map(kind => (

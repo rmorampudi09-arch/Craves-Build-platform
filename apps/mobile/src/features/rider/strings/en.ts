@@ -1,4 +1,4 @@
-// Every word the rider sees. te.ts and hi.ts must keep the same keys.
+// Every word the rider sees. te.ts and hi.ts keep the same keys and placeholders (strings.test.ts checks).
 // Plain, short, second person; 12-hour time; Western digits.
 
 export const en = {
@@ -9,6 +9,7 @@ export const en = {
     demoData: 'Demo data',
     savedWillSync: 'Saved · will sync',
     callSupport: 'Call support',
+    dismiss: 'Dismiss',
     cancel: 'Cancel',
     error: 'Something went wrong. Try again.',
     sos: 'SOS',
@@ -140,6 +141,24 @@ export const en = {
     grievance: 'Complaints and appeals',
     fullText: 'Read the full terms',
     accept: 'I accept these terms',
+    // How you get orders (Phase 4, OfferRules).
+    rulesTitle: 'How you get orders',
+    rulesOneAtATime: (seconds: number) => `Each order goes to one rider at a time. You get ${seconds} seconds to decide.`,
+    rulesAtOnce: (count: number, seconds: number) =>
+      `Each order goes to ${count} riders at once. You get ${seconds} seconds, and the first to accept gets it.`,
+    rulesNearest: 'Nearest first: the free riders closest to the kitchen hear first.',
+    rulesFair: (km: string) =>
+      `Fair turns: among the free riders within ${km} of the nearest, the one who has earned the least per online hour today hears first. If two have earned the same, the one who has waited longest goes first.`,
+    // Ranked by travel time (Phase 5, OfferRules.byTravelTime).
+    rulesSoonest:
+      "Soonest first: the free riders who can reach the kitchen soonest hear first, by Craves's travel-time estimate. Without an estimate, the nearest hear first.",
+    rulesFairMinutes: (minutes: number) =>
+      `Fair turns: among the free riders who can reach the kitchen within ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} of the soonest (by Craves's travel-time estimate), the one who has earned the least per online hour today hears first. If two have earned the same, the one who has waited longest goes first.`,
+    rulesRounds: (rounds: number) => `If a rider passes or the time runs out, the next rider hears, in up to ${rounds} rounds.`,
+    rulesRadius: (km: string) => `Only riders within ${km} of the kitchen hear of an order.`,
+    rulesFree: 'Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.',
+    rulesWhy: 'Each offer says why it came to you.',
+    rulesThen: 'How you get orders then',
   },
   setup: {
     title: 'Phone setup',
@@ -204,6 +223,9 @@ export const en = {
     waitingPaid: (amount: string) => `Waiting is paid: at least ${amount} an hour in this slot.`,
     restPoint: (name: string, area: string) => `Rest point: ${name}, ${area}`,
     restPointBody: 'Water, washroom, shade and phone charging while you wait.',
+    // Pay per online hour (Phase 4): breaks don't count as online.
+    perHour: (amount: string) => `${amount} an hour online today`,
+    fleetPerHour: (amount: string) => `Half of today's riders made ${amount} an hour or more.`,
     ringsScreenOff: 'Offers ring even with the screen off.',
     resumeTitle: 'You have a trip in progress',
     resume: 'Open trip',
@@ -216,6 +238,20 @@ export const en = {
     confirmOfflineBody: 'The trip stays yours. Ops will call you to sort it out.',
     noticeTitle: 'You have a notice',
     openNotice: 'Read it',
+    // A break while online (Phase 4).
+    takeBreak: 'Take a break',
+    breakHowLong: 'How long? You stay online, and no offers come.',
+    breakMinutes: (minutes: number) => `${minutes} min`,
+    breakNote: "Break time doesn't count toward a slot's guaranteed minimum.",
+    onBreak: (time: string) => `On a break until ${time}`,
+    onBreakBody: 'No offers until then. Come back any time.',
+    backNow: "I'm back",
+    // Heading home (Phase 5).
+    headHome: 'Head home',
+    headHomeNote: 'For an hour you hear only of orders that take you nearer home.',
+    headingHome: (time: string) => `Heading home until ${time}`,
+    headingHomeBody: 'You hear only of orders whose drop is on your way home. It ends when you get near home.',
+    stopHeadingHome: 'Stop heading home',
   },
   goOnline: {
     title: 'Quick selfie to go online',
@@ -248,6 +284,21 @@ export const en = {
     taken: 'Taken by another rider',
     secondsLeft: (seconds: number) => `${seconds}s left`,
     freeDecline: 'Declining is free and never affects your future offers.',
+    // Why this offer came to you (Phase 4, OfferReason): the rule, never anyone else's choice.
+    whyNearest: "You're the nearest free rider.",
+    whyNextNearest: "You're the next nearest free rider.",
+    whyNearestGroup: (count: number) => `You're one of the ${count} nearest free riders. The first to accept gets it.`,
+    whyNextGroup: (count: number) => `You're one of the next ${count} nearest free riders. The first to accept gets it.`,
+    whySoonest: 'Of the free riders, you can reach the kitchen soonest.',
+    whyNextSoonest: 'Of the free riders, you can reach the kitchen next soonest.',
+    whySoonestGroup: (count: number) =>
+      `You're one of the ${count} free riders who can reach the kitchen soonest. The first to accept gets it.`,
+    whyNextSoonestGroup: (count: number) =>
+      `You're one of the next ${count} free riders who can reach the kitchen soonest. The first to accept gets it.`,
+    whyFair: "Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn.",
+    whyFairGroup: (count: number) =>
+      `Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn: ${count} riders hear at once, and the first to accept gets it.`,
+    whyHome: (km: string) => `On your way home: the drop leaves you ${km} km nearer home.`,
   },
   trip: {
     titles: {
@@ -307,7 +358,7 @@ export const en = {
     waitAtDoor: 'Wait at the door',
     stayNear: 'Stay near the drop point',
     afterSecondCall: 'Starts after the second call',
-    waitLeftA11y: (minutes: number) => `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} left`,
+    leaveAt: (time: string) => `You can leave at ${time}`,
     unlocksAfterTimer: 'Unlocks when the timer ends',
     photoNow: 'You can leave the order now',
     photoRules: (name: string) =>
@@ -330,6 +381,10 @@ export const en = {
     },
     confirmFail: 'Mark failed',
     completeTitle: 'Trip complete',
+    deliverySavedTitle: 'Delivery saved',
+    deliverySavedBody: "We'll check the code when you're back online. You can go.",
+    offlineOtpRefused: "Order code didn't match. Call support.",
+    photoMissing: 'The delivery photo is gone from this phone. Take the photo again.',
     deliveredTo: (code: string, name: string, time: string) => `${code} delivered to ${name} at ${time}`,
     youEarned: 'You earned',
     linesPending: 'Pay details appear once this syncs.',
@@ -342,6 +397,7 @@ export const en = {
     cancelledTitle: 'Trip cancelled',
     failedTitle: 'Delivery not completed',
     ended: 'This trip has ended.',
+    stepRefused: "A trip step didn't go through",
     loadFailed: "Couldn't load your trip. Check your connection and try again.",
   },
   earnings: {
@@ -411,6 +467,18 @@ export const en = {
   },
   profile: {
     title: 'Profile',
+    // Order preferences (Phase 4).
+    ordersTitle: 'Orders you hear of',
+    ordersBody: 'Only hear of orders within these distances. Fewer orders may reach you, and your choice never counts against you.',
+    pickupLimit: 'Ride to the kitchen, at most',
+    dropLimit: 'Kitchen to customer, at most',
+    anyDistance: 'Any',
+    km: (km: string) => `${km} km`,
+    // A copy of your data (Phase 4).
+    dataTitle: 'Your data',
+    dataBody: 'Get a copy of everything Craves keeps about you: trips, offers and why they came to you, pay, shifts and more.',
+    dataShare: 'Share a copy of my data',
+    dataTooLarge: 'Your copy is too big to share from the phone. Call rider support and they will send it to you.',
     vehicle: 'Vehicle',
     documents: 'Documents',
     docStatus: {VERIFIED: 'Verified', PENDING: 'Checking', REJECTED: 'Not accepted', EXPIRED: 'Expired', MISSING: 'Not sent'},
@@ -435,6 +503,13 @@ export const en = {
     help: 'Help',
     signOut: 'Sign out',
     signOutBlocked: "You have trip updates that haven't synced. Connect to the internet first.",
+    // The home spot for heading home (Phase 5).
+    homeSpotTitle: 'Home spot for heading home',
+    homeSpotNone: 'At home? Save this spot. Craves keeps only an area about 1 km across, never your address.',
+    homeSpotSaved: (day: string) => `Saved on ${day}. Craves keeps only an area about 1 km across, never your address, and staff never see it.`,
+    saveHomeSpot: "I'm home: save this spot",
+    deleteHomeSpot: 'Delete home spot',
+    homeSpotNoFix: "We couldn't find where you are. Turn on location and try again.",
   },
   help: {
     title: 'Help',
@@ -459,6 +534,10 @@ export const en = {
       {
         q: 'When am I paid?',
         a: 'Every Monday by 3 pm, for the week before. You can also withdraw once a day, free, 24 hours after a trip.',
+      },
+      {
+        q: 'Who gets an order first?',
+        a: 'See "How you get orders" in Terms and rate card. Each offer also says why it came to you. Your acceptance rate and ratings never count.',
       },
     ],
     reportTitle: 'Problem with a recent trip?',
@@ -488,7 +567,7 @@ export const en = {
     checking: "What we're checking",
     next: 'What happens next',
     // [before, the date in bold, after], so a translation can move the date.
-    sideBy: (day: string) => ['Tell us your side by ', day, '.'] as const,
+    sideBy: (day: string): readonly [string, string, string] => ['Tell us your side by ', day, '.'],
     sideNow: 'Tell us your side.',
     person: 'A person at Craves looks at everything. The app never decides on its own.',
     writing: 'You get the decision in writing, with the reasons.',
@@ -506,6 +585,16 @@ export const en = {
   device: {
     notApprovedTitle: "This phone isn't approved",
     notApprovedBody: "Call rider support to approve this phone. You won't get offers on it until then.",
+  },
+  // The privacy notice itself is the lawyer's text, on the web page; this screen only leads to it (P2-09).
+  privacy: {
+    title: 'Your privacy',
+    intro:
+      'Before you go on, read how Craves uses your details: your phone number, documents, selfies, your location while you are online, and your pay.',
+    read: 'Read the privacy notice',
+    version: (version: string) => `Version ${version}`,
+    accept: 'I have read it and agree',
+    changed: 'The notice changed. Read the new one.',
   },
   languages: {en: 'English', te: 'తెలుగు', hi: 'हिन्दी'},
 };

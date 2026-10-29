@@ -48,6 +48,15 @@ apiClient.interceptors.response.use(
 
 installSafeReadRetryInterceptor(apiClient);
 
+/** A fresh access token after a refresh, or null when signed out or offline. Features use it instead of features/auth. */
+export async function refreshAccessToken(): Promise<string | null> {
+  try {
+    return (await sessionManager.refresh())?.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
 apiClient.interceptors.response.use(
   response => response,
   error => {

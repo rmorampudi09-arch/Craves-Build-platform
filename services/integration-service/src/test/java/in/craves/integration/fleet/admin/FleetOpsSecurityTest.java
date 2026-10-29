@@ -14,6 +14,9 @@ import in.craves.integration.config.WebSecurityConfiguration;
 import in.craves.integration.fleet.FleetApiAdvice;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.dispatch.FleetOpsService;
+import in.craves.integration.fleet.dispatch.FleetOpsService.CodeCheck;
+import in.craves.integration.fleet.dispatch.FleetOpsService.CodeCheckInput;
+import in.craves.integration.fleet.dispatch.FleetOpsService.CodeCheckList;
 import in.craves.integration.fleet.dispatch.FleetOpsService.OpsTrip;
 import in.craves.integration.fleet.dispatch.FleetOpsService.PositionList;
 import in.craves.integration.fleet.dispatch.FleetOpsService.QueueList;
@@ -45,6 +48,7 @@ class FleetOpsSecurityTest {
     static final String TRIPS = "/api/v1/admin/fleet/trips";
     @Autowired MockMvc mvc;
     @MockBean FleetOpsService ops;
+    @MockBean FleetPilotHealth health;
     @MockBean JwtVerifier verifier;
     final UUID trip = UUID.randomUUID();
 
@@ -80,6 +84,21 @@ class FleetOpsSecurityTest {
     }
 
     @Test
+    void pilotHealthIsForTripReadersOnly() throws Exception {
+        when(health.report()).thenReturn(new FleetPilotHealth.Report(Instant.parse("2026-10-20T06:00:00Z"), List.of(
+            new FleetPilotHealth.Result("offer_to_ring", "Seconds from offer to ring.", List.of("channel", "p95_s"),
+                List.of(List.of("all", 4.2)), false, null))));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/pilot-health"), role)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.results[0].name").value("offer_to_ring"))
+                .andExpect(jsonPath("$.results[0].rows[0][1]").value(4.2));
+        }
+        for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "ADMIN", "RIDER")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/pilot-health"), role)).andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
     void livePositionsAreForOperationsOnly() throws Exception {
         when(ops.positions()).thenReturn(new PositionList(List.of()));
         for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN")) {
@@ -103,6 +122,32 @@ class FleetOpsSecurityTest {
         mvc.perform(as(post(TRIPS + "/" + trip + "/cancel"), "OPERATIONS_ADMIN").contentType(MediaType.APPLICATION_JSON)
             .content("{\"reason\":\"Customer cancelled\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
         verifyNoInteractions(ops);
+    }
+
+    @Test
+    void codeChecksAreReadByTripReadersAndDecidedByOperatorsWithAKey() throws Exception {
+        when(ops.codeChecks()).thenReturn(new CodeCheckList(List.of(new CodeCheck(trip, "#0A1B2C3D", "Amma's Kitchen", "Kondapur",
+            UUID.randomUUID(), "Ravi Kumar", Instant.parse("2026-10-20T06:00:00Z"), 1))));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/code-checks"), role)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.items[0].wrongCodes").value(1));
+        }
+        for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "ADMIN", "RIDER")) {
+            mvc.perform(as(get("/api/v1/admin/fleet/code-checks"), role)).andExpect(status().isForbidden());
+        }
+        String body = "{\"outcome\":\"DELIVERED\",\"reason\":\"Customer has the food\"}";
+        for (String role : List.of("SUPPORT_ADMIN", "AUDIT_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN")) {
+            mvc.perform(as(post(TRIPS + "/" + trip + "/code-check"), role).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        }
+        mvc.perform(as(post(TRIPS + "/" + trip + "/code-check"), "OPERATIONS_ADMIN").contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+        UUID key = UUID.randomUUID();
+        when(ops.checkCode(any(), eq(key), eq(trip), eq(new CodeCheckInput("DELIVERED", "Customer has the food"))))
+            .thenThrow(FleetApiException.conflict("NO_CODE_CHECK", "This delivery has no code to check now."));
+        mvc.perform(as(post(TRIPS + "/" + trip + "/code-check"), "OPERATIONS_ADMIN").header("Idempotency-Key", key.toString())
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NO_CODE_CHECK"));
     }
 
     @Test

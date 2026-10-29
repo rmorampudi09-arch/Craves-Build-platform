@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  bannerFromForm, endsNextDay, istInstant, rupeesToPaise, SLOT_ROUTES, slotFromForm, slotRangeProblem, slotsSchema, slotSchema, zoneBannerSchema,
+  bannerFromForm, endsNextDay, istInstant, SLOT_ROUTES, slotFromForm, slotRangeProblem, slotsSchema, slotSchema, zoneBannerSchema,
 } from "./slot-contract";
+import { rupeesToPaise } from "./fleet-common";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
 const SLOT = "77777777-7777-4777-8777-777777777777";

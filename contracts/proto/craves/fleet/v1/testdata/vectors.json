@@ -1,0 +1,99 @@
+{
+  "partitions": 16,
+  "riders": [
+    {
+      "id": "1f0e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+      "partition": 4
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "partition": 7
+    },
+    {
+      "id": "0b2c4d6e-8f10-4a2b-9c3d-4e5f60718293",
+      "partition": 6
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000000",
+      "partition": 11
+    },
+    {
+      "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "partition": 6
+    },
+    {
+      "id": "5d3e1a2b-3c4d-4e5f-8a6b-7c8d9e0f1a2b",
+      "partition": 3
+    },
+    {
+      "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+      "partition": 5
+    },
+    {
+      "id": "018f2c6e-7b3a-7c11-9d2e-3f4a5b6c7d8e",
+      "partition": 4
+    }
+  ],
+  "blocks": [
+    {
+      "lat": 17.4483,
+      "lng": 78.3915,
+      "block": 15470767,
+      "partition": 13
+    },
+    {
+      "lat": 17.45,
+      "lng": 78.4,
+      "block": 15477967,
+      "partition": 5
+    },
+    {
+      "lat": 17.4499999,
+      "lng": 78.3999999,
+      "block": 15470767,
+      "partition": 13
+    },
+    {
+      "lat": 17.5,
+      "lng": 78.35,
+      "block": 15485167,
+      "partition": 1
+    },
+    {
+      "lat": 12.9716,
+      "lng": 77.5946,
+      "block": 14829951,
+      "partition": 9
+    },
+    {
+      "lat": 19.076,
+      "lng": 72.8777,
+      "block": 15708257,
+      "partition": 10
+    },
+    {
+      "lat": 28.6139,
+      "lng": 77.209,
+      "block": 17083544,
+      "partition": 3
+    },
+    {
+      "lat": 0.0,
+      "lng": 0.0,
+      "block": 12963600,
+      "partition": 1
+    },
+    {
+      "lat": -33.8688,
+      "lng": 151.2093,
+      "block": 8085024,
+      "partition": 7
+    },
+    {
+      "lat": 17.0,
+      "lng": 78.0,
+      "block": 15413160,
+      "partition": 10
+    }
+  ]
+}

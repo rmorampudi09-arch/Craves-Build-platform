@@ -1,10 +1,13 @@
 package in.craves.integration.fleet.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import in.craves.integration.config.WebSecurityConfiguration;
 import in.craves.integration.fleet.FleetApiAdvice;
+import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.rider.FleetRiderService;
 import in.craves.integration.fleet.support.FleetSupportModels.Issue;
 import in.craves.integration.fleet.support.FleetSupportModels.IssueInput;
@@ -25,6 +29,7 @@ import in.craves.integration.security.CravesPrincipal;
 import in.craves.integration.security.JwtVerifier;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,18 +96,46 @@ class FleetSupportControllerTest {
     }
 
     @Test
+    void supportOperationsAndPlatformAdminsAcknowledgeAndFixIssuesWithAnIdempotencyKey() throws Exception {
+        UUID issue = UUID.fromString("55555555-5555-4555-8555-555555555555");
+        String path = "/api/v1/admin/fleet/support-issues/" + issue;
+        when(support.acknowledge(any(Admin.class), any(UUID.class), eq(issue))).thenReturn(Map.of("state", "ACKNOWLEDGED"));
+        when(support.fix(any(Admin.class), any(UUID.class), eq(issue), eq("Credited the missing pay"))).thenReturn(Map.of("state", "FIXED"));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN")) {
+            mvc.perform(post(path + "/acknowledge").header("Authorization", as(role)).header("Idempotency-Key", UUID.randomUUID().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("ACKNOWLEDGED"));
+            mvc.perform(post(path + "/fix").header("Authorization", as(role)).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"resolution\":\"Credited the missing pay\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FIXED"));
+        }
+        verify(support, times(3)).acknowledge(any(Admin.class), any(UUID.class), eq(issue));
+        verify(support, times(3)).fix(any(Admin.class), any(UUID.class), eq(issue), eq("Credited the missing pay"));
+        for (String role : List.of("AUDIT_ADMIN", "PAYMENTS_ADMIN", "COMPLIANCE_ADMIN", "ADMIN", "RIDER")) {
+            mvc.perform(post(path + "/acknowledge").header("Authorization", as(role)).header("Idempotency-Key", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+            mvc.perform(post(path + "/fix").header("Authorization", as(role)).header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"resolution\":\"Credited the missing pay\"}")).andExpect(status().isForbidden());
+        }
+        mvc.perform(post(path + "/acknowledge").header("Authorization", as("SUPPORT_ADMIN"))).andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+        verifyNoMoreInteractions(support);
+    }
+
+    @Test
     void operationsSupportAndAuditAdminsReadIssuesAndSosEvents() throws Exception {
         UUID trip = UUID.randomUUID();
         when(support.issues("OPEN")).thenReturn(new IssuePage(List.of(new Issue(UUID.randomUUID(), RIDER, "Ravi Kumar", null, "OTHER", "",
-            "OPEN", Instant.parse("2026-10-20T09:00:00Z"), Instant.parse("2026-10-21T09:00:00Z"), Instant.parse("2026-10-23T09:00:00Z")))));
+            "OPEN", Instant.parse("2026-10-20T09:00:00Z"), Instant.parse("2026-10-21T09:00:00Z"), Instant.parse("2026-10-23T09:00:00Z"), null,
+            null, null, null, null))));
         when(support.sosEvents()).thenReturn(new SosPage(List.of(new SosEvent(UUID.randomUUID(), RIDER, "Ravi Kumar", "+91 98xxxxx210",
-            Instant.parse("2026-10-20T09:00:00Z"), null, null, trip))));
+            Instant.parse("2026-10-20T09:00:00Z"), null, null, trip, null))));
         for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
             mvc.perform(get("/api/v1/admin/fleet/support-issues").header("Authorization", as(role))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.issues[0].tripId").isEmpty()).andExpect(jsonPath("$.issues[0].fixBy").value("2026-10-23T09:00:00Z"));
+                .andExpect(jsonPath("$.issues[0].tripId").isEmpty()).andExpect(jsonPath("$.issues[0].fixBy").value("2026-10-23T09:00:00Z"))
+                .andExpect(jsonPath("$.issues[0].resolution").isEmpty());
             mvc.perform(get("/api/v1/admin/fleet/sos-events").header("Authorization", as(role))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.events[0].lat").isEmpty()).andExpect(jsonPath("$.events[0].tripId").value(trip.toString()))
-                .andExpect(jsonPath("$.events[0].phoneMasked").value("+91 98xxxxx210"));
+                .andExpect(jsonPath("$.events[0].phoneMasked").value("+91 98xxxxx210")).andExpect(jsonPath("$.events[0].alertedAt").isEmpty());
         }
         for (String role : List.of("PAYMENTS_ADMIN", "COMPLIANCE_ADMIN", "ADMIN", "RIDER")) {
             mvc.perform(get("/api/v1/admin/fleet/support-issues").header("Authorization", as(role))).andExpect(status().isForbidden());

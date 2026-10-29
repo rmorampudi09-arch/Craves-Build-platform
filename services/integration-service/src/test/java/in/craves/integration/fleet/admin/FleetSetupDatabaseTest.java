@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
+import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
+import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.FleetRoleClient;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.FleetTestMode;
@@ -152,6 +154,83 @@ class FleetSetupDatabaseTest {
             live.version())).as("published versions never change").isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    /**
+     * Phase 4: how orders are offered goes with the policy. Kept unless sent (an emergency stop never changes it), within its
+     * bounds, rounds that fit the fleet stage, and once riders have terms a change needs 14 days' notice, in Java and in the table.
+     */
+    @Test
+    void offerRulesAreKeptUnlessSentMustFitTheStageAndChangeForRidersOnlyWithNotice() {
+        DispatchPolicyVersion first = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("off", 130, null)));
+        assertThat(rules(first)).as("today's rules: the three nearest at once, one round").isEqualTo(DispatchRules.TODAY);
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 4, 1, 0, null)), 400, "VALIDATION_FAILED");
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 6, 0, null)), 400, "VALIDATION_FAILED");
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 3, 5001, null)), 400, "VALIDATION_FAILED");
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 4, 0, null)), 400, "VALIDATION_FAILED");
+        DispatchPolicyVersion fair = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            offering("shadow", 1, 3, 1500, null)));
+        assertThat(rules(fair)).as("3 rounds of 30 s fit a 90 s stage").isEqualTo(new DispatchRules(1, 3, 1500));
+        DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            offering("shadow", null, null, null, null)));
+        assertThat(rules(kept)).as("not sent: the rules riders are shown are kept").isEqualTo(new DispatchRules(1, 3, 1500));
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)), 400, "VALIDATION_FAILED");
+
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 3, 1, 0, null)), 422, "RULES_NEED_NOTICE");
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
+        assertThat(rules(stop)).as("the emergency stop needs no notice: it keeps the rules").isEqualTo(new DispatchRules(1, 3, 1500));
+        Instant notice = Instant.now().plus(15, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 3, 1, 0, notice)));
+        TermsChange change = new FleetPolicyStore(fleet.db, json).nextTermsChange().orElseThrow();
+        assertThat(change.at()).isEqualTo(notice);
+        assertThat(change.rulesBefore()).isEqualTo(new DispatchRules(1, 3, 1500));
+        assertThat(change.rulesAfter()).isEqualTo(DispatchRules.TODAY);
+        assertThat(change.detourAfter()).isEqualTo(change.detourBefore());
+
+        assertThatThrownBy(() -> fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, "
+            + "mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent, ranges, offers_at_once) VALUES ('2099-01-v1', "
+            + "'PUBLISHED', now(), now(), 'off', 30, 90, 5000, 130, '{}', 2)")).as("the table holds the notice rule too")
+            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("changes how orders are offered");
+    }
+
+    /**
+     * Phase 5: ranking by travel time is a rule of how orders are offered, like the others: kept unless sent, and once riders
+     * have terms, changed only with 14 days' notice, by the service and by the table's trigger alike.
+     */
+    @Test
+    void rankingByTravelTimeIsARuleRidersGetNoticeOf() {
+        DispatchPolicyVersion first = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            travelTime("shadow", true, null)));
+        assertThat(first.rankByTravelTime()).as("before any rate card riders have no terms: at once").isTrue();
+        DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            offering("shadow", null, null, null, null)));
+        assertThat(kept.rankByTravelTime()).as("not sent: kept as riders are shown it").isTrue();
+
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), travelTime("shadow", false, null)), 422, "RULES_NEED_NOTICE");
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
+        assertThat(stop.rankByTravelTime()).as("the emergency stop keeps the rules").isTrue();
+        Instant notice = Instant.now().plus(15, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), travelTime("shadow", false, notice)));
+        TermsChange change = new FleetPolicyStore(fleet.db, json).nextTermsChange().orElseThrow();
+        assertThat(change.at()).isEqualTo(notice);
+        assertThat(change.rulesBefore().byTravelTime()).isTrue();
+        assertThat(change.rulesAfter().byTravelTime()).isFalse();
+
+        assertThatThrownBy(() -> fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, "
+            + "mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent, ranges, rank_by_travel_time) VALUES ('2099-01-v1', "
+            + "'PUBLISHED', now(), now(), 'off', 30, 90, 5000, 130, '{}', false)")).as("the table holds the notice rule too")
+            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("changes how orders are offered");
+    }
+
+    /** Offers of 30 s in a 90 s fleet stage, the three nearest at once, ranked by travel time or not. */
+    private static DispatchPolicyInput travelTime(String mode, boolean byTravelTime, Instant effectiveFrom) {
+        return new DispatchPolicyInput(mode, 30, 90, 5000, 130, 500L, 1000L, 600, effectiveFrom, null, null, null, byTravelTime);
+    }
+
     @Test
     void twoVersionsCannotStartAtTheSameMomentUnlessOneWasWithdrawn() {
         Instant start = Instant.now().plus(20, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
@@ -293,5 +372,14 @@ class FleetSetupDatabaseTest {
 
     private static DispatchPolicyInput policy(String mode, int detour, Instant effectiveFrom) {
         return new DispatchPolicyInput(mode, 40, 60, 5000, detour, 500L, 1000L, 600, effectiveFrom);
+    }
+
+    /** Offers of 30 s in a 90 s fleet stage, with these rules (null: keep). */
+    private static DispatchPolicyInput offering(String mode, Integer atOnce, Integer rounds, Integer bandM, Instant effectiveFrom) {
+        return new DispatchPolicyInput(mode, 30, 90, 5000, 130, 500L, 1000L, 600, effectiveFrom, atOnce, rounds, bandM);
+    }
+
+    private static DispatchRules rules(DispatchPolicyVersion policy) {
+        return new DispatchRules(policy.offersAtOnce(), policy.offerRounds(), policy.fairBandM());
     }
 }

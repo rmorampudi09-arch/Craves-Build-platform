@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +39,7 @@ public class FleetStatusBridge {
     public static final String PROVIDER_ID = "craves_fleet";
     private static final String TRIP = """
         SELECT t.id, t.chef_sub_order_id, t.order_id, t.state, t.order_code, t.rider_id, t.updated_at, t.picked_up_at, t.pickup_distance_m,
+               t.pickup_minutes,
                r.name AS rider_name, r.phone AS rider_phone, p.lat, p.lng, p.mock, p.received_at,
                (SELECT s.provider FROM fleet_schema.trip_stage s WHERE s.trip_id = t.id ORDER BY s.seq DESC LIMIT 1) <> 'CRAVES_FLEET' AS superseded
         FROM fleet_schema.trip t
@@ -78,8 +80,7 @@ public class FleetStatusBridge {
         }
         jdbc.update("UPDATE fleet_schema.trip SET delivery_job_id = ? WHERE id = ?", job, tripId);
         Courier courier = courier(trip);
-        // The chef sees roughly when the rider arrives: about 3 minutes a km to the kitchen.
-        Instant pickupEta = at.plus((long) Math.ceil((trip.pickupDistanceM() == null ? 0 : trip.pickupDistanceM()) / 333.0), ChronoUnit.MINUTES);
+        Instant pickupEta = pickupEta(at, trip);
         DeliveryStatusChangedData data = new DeliveryStatusChangedData(job, trip.orderId(), trip.chefSubOrderId(), PROVIDER_ID,
             tripId.toString(), DeliveryStatus.COURIER_ASSIGNED.name(), null, at, null, null, null, courier.name(), courier.phone(),
             courier.photoUrl(), pickupEta);
@@ -87,6 +88,46 @@ public class FleetStatusBridge {
             UUID.randomUUID(), DeliveryCommandModels.DELIVERY_STATUS_CHANGED, "1.0", Instant.now(), trip.orderId(), null,
             "integration-service", "delivery-job/" + job, data)));
         commands.findByChefSubOrderId(trip.chefSubOrderId()).ifPresent(command -> commands.markCompleted(command.id()));
+        return true;
+    }
+
+    /**
+     * Ops gave a rider's trip before pickup to another rider on a new trip (FleetOpsService), in that transaction: the
+     * order's delivery job follows the new trip, and its COURIER_ASSIGNED event names the first trip as the handoff source
+     * (order-service accepts a Craves rider to Craves rider handoff before pickup) and carries the new rider's card. False
+     * if the job no longer belongs to the first trip.
+     */
+    public boolean handedOver(UUID fromTripId, UUID toTripId) {
+        Snapshot trip = trip(toTripId);
+        List<Map<String, Object>> jobs = jdbc.queryForList("SELECT id, last_status_observed_at FROM delivery_schema.delivery_job "
+            + "WHERE chef_sub_order_id = ? AND provider_id = 'craves_fleet' AND provider_delivery_id = ? FOR UPDATE",
+            trip.chefSubOrderId(), fromTripId.toString());
+        if (jobs.isEmpty()) {
+            return false;
+        }
+        UUID job = (UUID) jobs.get(0).get("id");
+        // After the job's last observation, so order-service never takes the handoff for a stale report.
+        Instant at = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        if (jobs.get(0).get("last_status_observed_at") instanceof Timestamp last && !at.isAfter(last.toInstant())) {
+            at = last.toInstant().plus(1, ChronoUnit.MILLIS);
+        }
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_job
+            SET provider_delivery_id = ?, status = 'COURIER_ASSIGNED', provider_status = 'ASSIGNED', booked_at = now(),
+                quote_snapshot = jsonb_build_object('handoffFromProviderId', 'craves_fleet', 'handoffFromProviderDeliveryId', CAST(? AS text),
+                    'previousRouting', quote_snapshot),
+                last_status_observed_at = ?, last_status_source = 'RECONCILIATION', next_tracking_at = now(),
+                tracking_attempt_count = 0, tracking_processing_started_at = NULL, updated_at = now()
+            WHERE id = ?""", toTripId.toString(), fromTripId.toString(), Timestamp.from(at), job);
+        jdbc.update("UPDATE fleet_schema.trip SET delivery_job_id = ? WHERE id = ?", job, toTripId);
+        Courier courier = courier(trip);
+        Instant pickupEta = pickupEta(at, trip);
+        DeliveryStatusChangedData data = new DeliveryStatusChangedData(job, trip.orderId(), trip.chefSubOrderId(), PROVIDER_ID,
+            toTripId.toString(), DeliveryStatus.COURIER_ASSIGNED.name(), null, at, PROVIDER_ID, fromTripId.toString(), null, courier.name(),
+            courier.phone(), courier.photoUrl(), pickupEta);
+        outbox.enqueue(DeliveryCommandModels.DELIVERY_STATUS_CHANGED, job, trip.orderId(), json.valueToTree(new EventEnvelope<>(
+            UUID.randomUUID(), DeliveryCommandModels.DELIVERY_STATUS_CHANGED, "1.0", Instant.now(), trip.orderId(), null,
+            "integration-service", "delivery-job/" + job, data)));
         return true;
     }
 
@@ -147,11 +188,22 @@ public class FleetStatusBridge {
             row.getString("state"), row.getString("order_code"), row.getObject("rider_id", UUID.class),
             row.getTimestamp("updated_at").toInstant(), (Integer) row.getObject("pickup_distance_m"), row.getString("rider_name"),
             row.getString("rider_phone"), (Double) row.getObject("lat"), (Double) row.getObject("lng"), (Boolean) row.getObject("mock"),
-            moved, received == null ? null : received.toInstant(), row.getBoolean("superseded"));
+            moved, received == null ? null : received.toInstant(), row.getBoolean("superseded"),
+            row.getObject("pickup_minutes") instanceof Number n ? n.doubleValue() : null);
+    }
+
+    /**
+     * Roughly when the rider reaches the kitchen, for the chef: the travel-time model's minutes when the offer had them
+     * (CRAVES_FLEET_ETA_MODE live), else about 3 minutes a km.
+     */
+    static Instant pickupEta(Instant at, Snapshot trip) {
+        long minutes = trip.pickupMinutes() != null ? (long) Math.ceil(trip.pickupMinutes())
+            : (long) Math.ceil((trip.pickupDistanceM() == null ? 0 : trip.pickupDistanceM()) / 333.0);
+        return at.plus(minutes, ChronoUnit.MINUTES);
     }
 
     record Snapshot(UUID id, UUID chefSubOrderId, UUID orderId, String state, String orderCode, UUID riderId, Instant updatedAt,
                     Integer pickupDistanceM, String riderName, String riderPhone, Double lat, Double lng, Boolean mock,
-                    boolean movedAfterPickup, Instant positionAt, boolean superseded) {
+                    boolean movedAfterPickup, Instant positionAt, boolean superseded, Double pickupMinutes) {
     }
 }

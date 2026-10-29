@@ -146,7 +146,6 @@ Used on 09–12, not on 13.
 | offer countdown | 8 | `colors.flameRedAccessible` | remaining time (shrinks) | 08 |
 | setup progress | 8 | `colors.success` | done / total | 04 |
 | free-wait timer | 6 | `colors.textPrimary` | elapsed (grows) | 10 |
-| door-wait timer | 6 | `colors.textPrimary` | elapsed (grows) | 13 |
 
 - **Language chips (03, 20):**
   - Height 40 visual. Give a hitSlop so the target is 48, or use `Chip`'s minHeight 48.
@@ -457,8 +456,7 @@ No header, no SOS, no tab bar. Full-screen card that rings; 40 s total, shown at
    2. Done — "Call again" / "7:43 pm, no answer"
    3. Current circle "3":
       - "Wait at the door" / "Stay near the drop point".
-      - Right: "2:18" 24/700 tabular countdown.
-      - Below the row: door-wait bar (elapsed), full content width.
+      - Below the row: "You can leave at 7:53 pm" 15/700 (the second call plus the unreachable wait). Built as a time, not the designed "2:18" countdown and bar: no clock runs at the door (decision E5, P1-17).
    4. Locked circle "4" — "Leave the order with a photo" / "Unlocks when the timer ends"
 3. **Neutral banner** (y 458–574), camera-outline: "The photo must show the food and the door or house number. Use the flash at night. Anil gets it straight away, with a button to say it didn't arrive."
 4. **locked** button "Take a photo and leave the order" (y 592–646). The enabled state after the timer is not designed; it is presumably **primary**.
@@ -657,6 +655,63 @@ No header, no tab bar.
    - "21 Oct, Madhapur to Kondapur" — "₹67"
    - "21 Oct, Gachibowli to Kondapur" — "₹79"
    - "21 Oct, Ameerpet to Kukatpally" — "₹58"
+
+---
+
+## 22. Privacy notice (WORKPLAN P2-09; no PNG)
+
+Shown before every other screen while `GET /me` has a privacy notice the rider hasn't accepted, also to a PENDING rider before they send documents; never during a shift or a trip.
+
+**Header:** variant A. Title "Your privacy". No tab bar.
+
+1. **Card:** the intro, 15/400 `colors.textPrimary`: "Before you go on, read how Craves uses your details: your phone number, documents, selfies, your location while you are online, and your pay." Then "Version 2027-05-v1" as a label.
+2. **Bottom action bar:**
+   - **primary** "I have read it and agree"
+   - **outline** "Read the privacy notice" (opens the lawyer's text on the web, in the language on screen)
+
+If the notice changed while the rider read it, an alert says "The notice changed. Read the new one." and the screen shows the new version.
+
+---
+
+## 23. Phase 4 additions (no PNG)
+
+Built with the shared pieces above. The copy is in `strings/en.ts`, with Telugu and Hindi waiting for review. The rules behind it are in `DISPATCH.md`.
+
+- **08 Offer.** Above "Declining is free…", one secondary line saying why the offer came. Examples: "You're the nearest free rider." or "Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn." There is no line when the server sends no reason.
+- **03 Terms.** A card titled "How you get orders", one line per rule:
+  - how many riders hear at once, and the seconds to decide;
+  - nearest first, or fair turns within the band;
+  - the rounds;
+  - the radius;
+  - "Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.";
+  - "Each offer says why it came to you."
+
+  While a change is coming, the card also shows "How you get orders then", with the new lines.
+- **05 and 07 Home, the "today" card.** Pay per online hour, once the rider has been online 30 minutes today: "₹X an hour online today", with "Half of today's riders made ₹Y an hour or more." under it when five or more riders are online.
+- **07 Home, break card** (with rider choices on):
+  - **Offering a break:** an outline button "Take a break". Tapping it opens a card with "How long? You stay online, and no offers come.", outline buttons for 10, 20 and 30 min, "Break time doesn't count toward a slot's guaranteed minimum." and Cancel.
+  - **During a break:** a card with "On a break until 12:42", "No offers until then. Come back any time." and a button "I'm back". It shows even with rider choices off, so a rider can always come back.
+
+  There is no countdown: it shows the end time, not the minutes left.
+- **20 Profile, "Orders you hear of"** (with rider choices on): the line "Only hear of orders within these distances. Fewer orders may reach you, and your choice never counts against you." Under it, two rows of chips:
+  - "Ride to the kitchen, at most": Any, 1, 2, 3 or 5 km;
+  - "Kitchen to customer, at most": Any, 3, 5, 8 or 12 km.
+
+  The chosen chip is filled.
+- **20 Profile, "Your data".** The line "Get a copy of everything Craves keeps about you: trips, offers and why they came to you, pay, shifts and more." and an outline button "Share a copy of my data", which opens the phone's share sheet. If the copy is too big for the phone, it says to call rider support.
+- **21 Help.** A fifth question, "Who gets an order first?", pointing to "How you get orders".
+
+## 24. Phase 5 additions (no PNG)
+
+Heading home (`DISPATCH.md` §4), with rider choices on. The copy is in `strings/en.ts`, with Telugu and Hindi waiting for review.
+
+- **20 Profile, "Home spot for heading home"**, before "Your data":
+  - **None saved:** "At home? Save this spot. Craves keeps only an area about 1 km across, never your address." and an outline button "I'm home: save this spot". With no location fix, an alert says "We couldn't find where you are. Turn on location and try again." and nothing is sent.
+  - **Saved:** "Saved on 20 Oct. Craves keeps only an area about 1 km across, never your address, and staff never see it." and an outline button "Delete home spot". This shows even with rider choices off, so a rider can always delete it.
+- **07 Home, under the break card:**
+  - **Offering it** (a home spot is saved): an outline button "Head home", with "For an hour you hear only of orders that take you nearer home." under it.
+  - **While on:** a card with "Heading home until 13:40", "You hear only of orders whose drop is on your way home. It ends when you get near home." and a button "Stop heading home". It shows even with rider choices off, so a rider can always stop it. Like the break, it shows the end time, never a countdown.
+- **08 Offer.** For a rider heading home, a second line under why the offer came: "On your way home: the drop leaves you 3.2 km nearer home."
 
 ---
 

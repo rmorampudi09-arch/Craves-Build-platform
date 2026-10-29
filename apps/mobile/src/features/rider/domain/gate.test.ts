@@ -35,6 +35,14 @@ describe('rider gate', () => {
     expect(resolveGate(old, '1.0.0', true)).toEqual({kind: 'ready'});
   });
 
+  it('shows the privacy notice first, before a pending rider sends documents, never mid-shift (P2-09)', () => {
+    const privacyNotice = {version: '2027-05-v1', url: 'https://craves.in/riders/privacy/{language}', accepted: false};
+    expect(resolveGate({...me, status: 'PENDING', privacyNotice}, '1.0.0', false)).toEqual({kind: 'privacy'});
+    expect(resolveGate({...me, acceptedTermsVersion: undefined, privacyNotice}, '1.0.0', false)).toEqual({kind: 'privacy'});
+    expect(resolveGate({...me, privacyNotice}, '1.0.0', true)).toEqual({kind: 'ready'});
+    expect(resolveGate({...me, privacyNotice: {...privacyNotice, accepted: true}}, '1.0.0', false)).toEqual({kind: 'ready'});
+  });
+
   it('shows new terms until accepted', () => {
     expect(resolveGate({...me, acceptedTermsVersion: undefined}, '1.0.0', false)).toEqual({
       kind: 'terms',

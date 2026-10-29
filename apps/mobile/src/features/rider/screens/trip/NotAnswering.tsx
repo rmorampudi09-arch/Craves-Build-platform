@@ -1,14 +1,15 @@
 // The customer-not-answering steps (docs/riders/SCREENS.md 13): two calls, a wait at the door, then a photo.
-import React, {memo, useEffect, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Alert, BackHandler, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {Chip, Icon} from '../../../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../../design/tokens';
 import {Banner} from '../../components/Banner';
 import {BottomAction} from '../../components/BottomAction';
-import {CountdownBar} from '../../components/CountdownBar';
+import {RefusalNotices} from '../../components/RefusalNotices';
 import {Card, RiderScreen} from '../../components/ui';
-import {formatClock, formatTimer} from '../../domain/format';
+import {formatClock} from '../../domain/format';
+import {riderDevice} from '../../native/riderDevice';
 import {riderOnlineService} from '../../native/riderOnlineService';
 import {useStrings} from '../../strings/StringsProvider';
 import {call, SyncNote, text, TripHeader, type StepProps} from './parts';
@@ -70,9 +71,11 @@ export function NotAnswering({
         return;
       }
       onPhotoSent();
-      await run('delivered', 'DELIVERED', {
+      const taken = shot.assets[0]?.uri;
+      await run('delivered', {
         method: 'PHOTO',
-        photoUri: shot.assets[0]?.uri,
+        // Kept in the app's files until the server has it: the camera's cache may be cleared before an offline replay.
+        photoUri: taken && (await riderDevice.keepPhoto(taken)),
         callsMade: callTimes.length,
         fix: riderOnlineService.lastFix(),
       });
@@ -84,7 +87,7 @@ export function NotAnswering({
   function markFailed(reason: FailReason) {
     Alert.alert(t.markFailed, t.failReasons[reason], [
       {text: strings.common.cancel, style: 'cancel'},
-      {text: t.confirmFail, style: 'destructive', onPress: () => run('failed', 'FAILED', {reason})},
+      {text: t.confirmFail, style: 'destructive', onPress: () => run('failed', {reason})},
     ]);
   }
 
@@ -96,6 +99,7 @@ export function NotAnswering({
         otpLocked ? undefined : <BottomAction label={t.cameOut(name)} variant="outline" onPress={onBack} testID="rider-came-out" />
       }>
       <SyncNote show={syncing} />
+      <RefusalNotices tripId={trip.tripId} />
       <Banner tone="success" text={t.paidEitherWay} />
       <Card style={styles.steps}>
         <StepRow
@@ -114,13 +118,19 @@ export function NotAnswering({
           onPress={first === undefined ? undefined : onCall}
           testID="rider-call-2"
         />
+        {/* When the rider can leave, as a time: no countdown or bar runs at the door (decision E5). */}
         <StepRow
           n={3}
           state={waitOver ? 'done' : waitEnds !== null ? 'current' : 'locked'}
           title={t.waitAtDoor}
           sub={waitEnds === null ? t.afterSecondCall : t.stayNear}
-          right={waitEnds !== null && !waitOver ? <DoorWait endsAt={waitEnds} /> : null}
-          below={waitEnds !== null ? <CountdownBar deadlineMs={waitEnds} totalMs={waitMs} variant="wait" /> : null}
+          below={
+            waitEnds !== null && !waitOver ? (
+              <Text style={[text.body, text.bold]} testID="rider-leave-at">
+                {t.leaveAt(formatClock(waitEnds))}
+              </Text>
+            ) : null
+          }
           testID="rider-door-wait"
         />
         <StepRow
@@ -255,22 +265,6 @@ function StepRow({
   );
 }
 
-/** "2:18" left at the door. Only this leaf ticks, once a second. */
-const DoorWait = memo(function DoorWaitView({endsAt}: {endsAt: number}) {
-  const t = useStrings().strings.trip;
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  const left = Math.max(0, (endsAt - now) / 1000);
-  return (
-    <Text accessibilityLabel={t.waitLeftA11y(Math.ceil(left / 60))} style={styles.timer} testID="rider-door-wait-left">
-      {formatTimer(left)}
-    </Text>
-  );
-});
-
 /** True once `at` has passed; re-renders its screen once, when that happens. */
 function useHasPassed(at: number | null): boolean {
   const [passed, setPassed] = useState(false);
@@ -300,7 +294,6 @@ const styles = StyleSheet.create({
   rowLine: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   circle: {width: 28, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
   numeral: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  timer: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
   chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
   chipSelected: {backgroundColor: colors.textPrimary, borderColor: colors.textPrimary},
 });

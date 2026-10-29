@@ -19,6 +19,13 @@ export const riderPositionSchema = z.object({
   recordedAt: instant, ageSeconds: z.number().int().nonnegative(), onShift: z.boolean(), onTrip: z.boolean(),
   tripId: id.nullable(), mock: z.boolean(),
 });
+/** A delivery code typed offline that the server refused: the trip waits at the drop until ops calls the customer. */
+export const codeCheckSchema = z.object({
+  tripId: id, orderCode, kitchenName: z.string().max(160), dropArea: z.string().max(160), riderId: id, riderName: personName,
+  alertedAt: instant, wrongCodes: z.number().int().nonnegative(),
+});
+export const codeChecksSchema = z.object({ items: z.array(codeCheckSchema).max(200) });
+export const codeCheckInputSchema = z.object({ outcome: z.enum(["DELIVERED", "NOT_DELIVERED"]), reason: reasonText });
 export const tripsSchema = z.object({ trips: z.array(tripSchema).max(500) });
 export const dispatchQueueSchema = z.object({ items: z.array(dispatchQueueItemSchema).max(500) });
 export const positionsSchema = z.object({ positions: z.array(riderPositionSchema).max(1000) });
@@ -30,6 +37,7 @@ export const reassignSchema = z.object({ riderId: id.optional(), provider: z.enu
 export type Trip = z.infer<typeof tripSchema>;
 export type DispatchQueueItem = z.infer<typeof dispatchQueueItemSchema>;
 export type RiderPosition = z.infer<typeof riderPositionSchema>;
+export type CodeCheck = z.infer<typeof codeCheckSchema>;
 
 export function formatAge(seconds: number): string {
   if (seconds < 60) return `${seconds} s ago`;
@@ -43,4 +51,6 @@ export const TRIP_ROUTES: readonly FleetRoute[] = [
   { method: "POST", path: "trips/:id/cancel", body: reasonBody, response: tripSchema },
   { method: "GET", path: "dispatch-queue", response: dispatchQueueSchema },
   { method: "GET", path: "positions", response: positionsSchema },
+  { method: "GET", path: "code-checks", response: codeChecksSchema },
+  { method: "POST", path: "trips/:id/code-check", body: codeCheckInputSchema, response: tripSchema },
 ];

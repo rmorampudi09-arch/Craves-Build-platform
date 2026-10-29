@@ -4,7 +4,9 @@ import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminModels.FileContent;
 import in.craves.integration.fleet.admin.FleetAdminModels.ReasonInput;
+import in.craves.integration.fleet.money.FleetMoneyModels.AdjustmentInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.BatchInput;
+import in.craves.integration.fleet.money.FleetMoneyModels.CancelBatchInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.HoldInput;
 import in.craves.integration.fleet.money.FleetMoneyModels.UtrInput;
 import in.craves.integration.security.CravesPrincipal;
@@ -22,8 +24,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Ops console money (admin-fleet-v1 /payout-batches and /holds). Each operation checks its own scoped admin roles;
- * mutations are idempotent and audited.
+ * Ops console money (admin-fleet-v1 /payout-batches, /holds and a trip's /pay-adjustments). Each operation checks its own
+ * scoped admin roles; mutations are idempotent and audited.
  */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
@@ -80,6 +82,13 @@ public class FleetMoneyAdminController {
         return json(200, payouts.markSent(FleetAdminController.admin(principal, PAYMENTS), key, batchId));
     }
 
+    /** A file never sent to the bank is withdrawn: weekly pay goes back to the balances, daily withdrawals wait for the next file. */
+    @PostMapping(BATCH + "/cancel")
+    public ResponseEntity<Object> cancelBatch(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                              @PathVariable UUID batchId, @RequestBody CancelBatchInput body) {
+        return json(200, payouts.cancelBatch(FleetAdminController.admin(principal, PAYMENTS), key, batchId, body));
+    }
+
     @PostMapping(BATCH + "/payouts/{payoutId}/utr")
     public ResponseEntity<Object> markPaid(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
                                            @PathVariable UUID batchId, @PathVariable UUID payoutId, @RequestBody UtrInput body) {
@@ -92,6 +101,21 @@ public class FleetMoneyAdminController {
                                              @PathVariable UUID batchId, @PathVariable UUID payoutId, @RequestBody ReasonInput body) {
         Admin admin = FleetAdminController.admin(principal, PAYMENTS);
         return json(200, payouts.markFailed(admin, key, batchId, payoutId, body.reason()));
+    }
+
+    /** The bank returned a paid payout: the money is back in the rider's balance and their payouts pause. */
+    @PostMapping(BATCH + "/payouts/{payoutId}/reverse")
+    public ResponseEntity<Object> reverse(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                          @PathVariable UUID batchId, @PathVariable UUID payoutId, @RequestBody ReasonInput body) {
+        Admin admin = FleetAdminController.admin(principal, PAYMENTS);
+        return json(200, payouts.reverse(admin, key, batchId, payoutId, body.reason()));
+    }
+
+    /** A signed correction to one pay component of a credited trip, with the reason the rider sees. */
+    @PostMapping("/trips/{tripId}/pay-adjustments")
+    public ResponseEntity<Object> adjustPay(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                            @PathVariable UUID tripId, @RequestBody AdjustmentInput body) {
+        return json(201, earnings.adjustTrip(FleetAdminController.admin(principal, PAYMENTS), key, tripId, body));
     }
 
     @GetMapping("/holds")

@@ -17,6 +17,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryS
 import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
+import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripService;
 import java.sql.Connection;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -44,8 +46,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  * are no trips and nothing to do):
  * - offers expire on the server after their 40 s;
  * - a cancelled order's trip ends (cancelledOrders);
- * - the watchdog: a rider who accepted but whose locations stopped for 90 s before pickup loses the trip (pickup-leg pay,
- *   held for ops), ops is alerted and the order goes to the next stage; CANCELLED is never published for it;
+ * - the watchdog, on the heartbeat (rider_shift.last_seen_at: every /locations call, with or without a new fix): a rider
+ *   on the way to the kitchen whose phone stopped calling for 90 s loses the trip (pickup-leg pay, held for ops), ops is
+ *   alerted and the order goes to the next stage; CANCELLED is never published for it. At the kitchen the rider may
+ *   already hold the food, so 90 s silent only alerts ops (once per trip) and the trip goes back at 300 s silent, never
+ *   once the chef handed the rider the food (P2-05, trip.chef_handed_over_at);
+ * - positions of riders no longer on shift or on a trip are forgotten after 15 minutes (forgetOffShiftPositions);
+ * - a phone silent for 3 minutes on an open shift is asked to come back online (nudgeSilentShifts);
  * - Borzo and Pidge stages close when a courier is assigned, move on at their deadline, and end in the ops queue with an
  *   ops alert; a queued order closes there too once a courier is assigned after all. A watchdog order is booked with Borzo or Pidge here, through the router, and its delivery job is handed
  *   over with handoffFromProviderId craves_fleet.
@@ -55,6 +62,23 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class FleetDispatchJobs {
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetDispatchJobs.class);
     static final int WATCHDOG_SECONDS = 90;
+    /** At the kitchen the rider may hold the food (blueprint E2): ops is alerted at WATCHDOG_SECONDS, the trip goes back at this. */
+    static final int KITCHEN_HANDBACK_SECONDS = 300;
+    /** Silent long enough to lose the trip in its state: 90 s on the way to the kitchen, 300 s at it. */
+    private static final String HANDBACK_WINDOW = "make_interval(secs => CASE WHEN t.state = 'AT_PICKUP' THEN " + KITCHEN_HANDBACK_SECONDS
+        + " ELSE " + WATCHDOG_SECONDS + " END)";
+    /**
+     * Nothing from the trip's rider since the given time: no call on any of their shifts and no position received. Either
+     * counts, so a server that doesn't write last_seen_at yet (the old revision during a deploy) still keeps riders alive.
+     */
+    private static final String SILENT_SINCE = "NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = t.rider_id "
+        + "AND s.last_seen_at >= now() - %1$s) AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_position_latest p "
+        + "WHERE p.rider_id = t.rider_id AND p.received_at >= now() - %1$s)";
+    /** Silent long enough in its state, and the chef hasn't handed the rider the food (P2-05): after that the trip stays. */
+    static final String HANDS_BACK = SILENT_SINCE.formatted(HANDBACK_WINDOW) + " AND t.chef_handed_over_at IS NULL";
+    static final int NUDGES_PER_TICK = 20;
+    /** The first rider app that shows the GO_ONLINE push (P1-13). */
+    static final String NUDGE_MIN_APP_VERSION = "1.1.0";
     static final int OPS_QUEUE_SECONDS = 24 * 3600; // nominal: ops closes a queued order by hand
     static final String RIDER_LOST = "Your location stopped before pickup, so the order went to another courier.";
     static final String RIDER_LOST_HOLD = "Your location stopped before pickup. Ops checks this trip before paying it.";
@@ -97,6 +121,81 @@ public class FleetDispatchJobs {
         cancelledOrders();
         watchdog();
         courierStages();
+        forgetOffShiftPositions();
+        nudgeSilentShifts();
+        long now = System.currentTimeMillis();
+        if (now >= nextHomeSweepMs) {
+            nextHomeSweepMs = now + HOME_SWEEP_EVERY_MS;
+            forgetUnusedHomes(jdbc);
+        }
+    }
+
+    /** A home spot (Phase 5) is forgotten this many days after it was last saved or used (research R14). */
+    public static final int HOME_DAYS_KEPT = 90;
+    private static final long HOME_SWEEP_EVERY_MS = 6 * 3_600_000L;
+    private long nextHomeSweepMs; // the tick runs on one thread at a time
+
+    /**
+     * Retention (Phase 5, BACKEND.md "Data retention"): a home spot nobody saved or used for 90 days is forgotten. Here, with
+     * the fleet on, so it runs whichever rider switches are on (a spot saved while the rider API was on is still forgotten).
+     */
+    public static void forgetUnusedHomes(JdbcTemplate jdbc) {
+        try {
+            int forgotten = jdbc.update("UPDATE fleet_schema.rider SET home_lat = NULL, home_lng = NULL, home_saved_at = NULL, "
+                + "home_used_at = NULL WHERE home_saved_at < now() - make_interval(days => ?) "
+                + "AND (home_used_at IS NULL OR home_used_at < now() - make_interval(days => ?))", HOME_DAYS_KEPT, HOME_DAYS_KEPT);
+            if (forgotten > 0) {
+                LOGGER.info("FLEET_HOME_SPOTS_FORGOTTEN count={}", forgotten);
+            }
+        } catch (DataAccessException exception) {
+            LOGGER.error("CRAVES_ALERT alert=HOME_SPOT_RETENTION_FAILED reason={}", exception.getMostSpecificCause().getMessage());
+        }
+    }
+
+    /**
+     * "You're offline. Tap to go back online" (blueprint A7) to each rider whose shift is open and unexpired but whose phone
+     * has not called for 3 minutes (the app swiped away or killed): at most every 30 minutes per shift, 20 a tick, only to
+     * a bound phone with a push token on app 1.1.0 or later (older apps can't show it). The tap opens the app and Home
+     * resumes the shift. Each nudge is claimed in the database before it is sent, so two replicas never send it twice, and
+     * sent on its own thread, so a slow push never holds up this tick. A shift on an older app is claimed without a push,
+     * so it leaves the front of the list for 30 minutes instead of keeping newer apps' shifts out of it.
+     */
+    int nudgeSilentShifts() {
+        List<Map<String, Object>> silent = jdbc.queryForList("""
+            SELECT s.id, d.fcm_token, d.app_version FROM fleet_schema.rider_shift s
+            JOIN fleet_schema.rider_device d ON d.rider_id = s.rider_id AND d.state = 'BOUND' AND d.fcm_token IS NOT NULL
+            WHERE s.ended_at IS NULL AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now()
+              AND COALESCE(s.last_seen_at, s.started_at) < now() - INTERVAL '3 minutes'
+              AND (s.last_nudge_at IS NULL OR s.last_nudge_at < now() - INTERVAL '30 minutes')
+            ORDER BY COALESCE(s.last_seen_at, s.started_at) LIMIT ?""", NUDGES_PER_TICK * 2);
+        int nudged = 0;
+        for (Map<String, Object> shift : silent) {
+            if (nudged == NUDGES_PER_TICK) {
+                break;
+            }
+            if (jdbc.update("UPDATE fleet_schema.rider_shift SET last_nudge_at = now() WHERE id = ? "
+                + "AND (last_nudge_at IS NULL OR last_nudge_at < now() - INTERVAL '30 minutes')", shift.get("id")) == 1
+                && !FleetShiftService.versionBelow((String) shift.get("app_version"), NUDGE_MIN_APP_VERSION)) {
+                nudged++;
+                String token = (String) shift.get("fcm_token");
+                Thread.ofVirtual().name("fleet-go-online").start(() -> LOGGER.info("FLEET_GO_ONLINE shift={} result={}", shift.get("id"),
+                    alerts.goOnline(token)));
+            }
+        }
+        return nudged;
+    }
+
+    /**
+     * Retention (BACKEND.md "Data retention", blueprint E6): a rider's latest position is kept only while they are on an
+     * open, unexpired shift or on a trip, and is deleted 15 minutes after its last fix once neither holds.
+     */
+    int forgetOffShiftPositions() {
+        return jdbc.update("""
+            DELETE FROM fleet_schema.rider_position_latest p WHERE p.received_at < now() - INTERVAL '15 minutes'
+              AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_shift s WHERE s.rider_id = p.rider_id AND s.ended_at IS NULL
+                              AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now())
+              AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = p.rider_id
+                              AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))""");
     }
 
     /**
@@ -123,41 +222,84 @@ public class FleetDispatchJobs {
         return jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE state = 'ACTIVE' AND expires_at <= now()");
     }
 
-    /** Hands back every accepted trip whose rider sent no location for 90 s before pickup. */
+    /**
+     * Hands back every accepted trip whose rider's phone stopped calling before pickup: 90 s on the way to the kitchen,
+     * 300 s at it. A rider silent for 90 s at the kitchen is reported to ops once and keeps the trip meanwhile.
+     */
     int watchdog() {
-        List<UUID> silent = jdbc.queryForList("""
-            SELECT t.id FROM fleet_schema.trip t LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = t.rider_id
-            WHERE t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND t.accepted_at < now() - make_interval(secs => ?)
-              AND (p.received_at IS NULL OR p.received_at < now() - make_interval(secs => ?))
-            ORDER BY t.accepted_at LIMIT 20""", UUID.class, WATCHDOG_SECONDS, WATCHDOG_SECONDS);
+        List<Map<String, Object>> silent = jdbc.queryForList("""
+            SELECT t.id, t.state, t.order_code, t.rider_id, %s AS hand_back, t.chef_handed_over_at IS NOT NULL AS handed_over
+            FROM fleet_schema.trip t
+            WHERE t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND t.accepted_at < now() - make_interval(secs => %d)
+              AND %s
+              AND (%s OR NOT EXISTS (SELECT 1 FROM fleet_schema.trip_event e WHERE e.trip_id = t.id AND e.kind = 'WATCHDOG_ALERTED'))
+            ORDER BY t.accepted_at LIMIT 20""".formatted(HANDS_BACK, WATCHDOG_SECONDS,
+            SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")"), HANDS_BACK));
         int handedBack = 0;
-        for (UUID tripId : silent) {
+        for (Map<String, Object> trip : silent) {
+            UUID tripId = (UUID) trip.get("id");
+            Map<String, String> data = Map.of("tripId", tripId.toString(), "orderCode", String.valueOf(trip.get("order_code")),
+                "riderId", String.valueOf(trip.get("rider_id")));
+            if (!Boolean.TRUE.equals(trip.get("hand_back"))) {
+                if (Boolean.TRUE.equals(transaction.execute(status -> alertedAtKitchen(tripId)))) {
+                    alerts.opsAlert("FLEET_RIDER_SILENT_AT_KITCHEN", "Rider app silent at the kitchen, order " + trip.get("order_code"),
+                        Boolean.TRUE.equals(trip.get("handed_over"))
+                            ? "The rider's app has sent nothing for 90 seconds, and the chef handed them the food, so the order stays with "
+                                + "this rider. Call the rider."
+                            : "The rider reached the kitchen but their app has sent nothing for 90 seconds. They may have the food. Call "
+                                + "the rider. The order goes to the next courier only if the app stays silent for 5 minutes.", data);
+                }
+                continue;
+            }
             Map<String, Object> lost = transaction.execute(status -> handBack(tripId));
             if (lost != null) {
                 handedBack++;
                 alerts.opsAlert("FLEET_RIDER_LOST", "Rider location stopped before pickup, order " + lost.get("order_code"),
-                    "The rider's app sent no location for 90 seconds after accepting. The order goes to the next courier; the rider's pay "
-                        + "for this trip is held for your check. Call the rider.",
-                    Map.of("tripId", tripId.toString(), "orderCode", String.valueOf(lost.get("order_code")),
-                        "riderId", String.valueOf(lost.get("rider_id"))));
+                    ("AT_PICKUP".equals(lost.get("state")) ? "The rider's app sent nothing for 5 minutes at the kitchen."
+                        : "The rider's app sent nothing for 90 seconds after accepting.")
+                        + " The order goes to the next courier; the rider's pay for this trip is held for your check. Call the rider.",
+                    data);
             }
         }
         return handedBack;
     }
 
-    /** One silent rider's trip ends (pay per its state, held) and the next stage opens. Null if it changed meanwhile. */
+    /**
+     * Records the one alert of a silent trip still before pickup: at the kitchen, or with the food the chef handed over
+     * before the rider tapped "arrived" (P2-05). False if it changed or was alerted already. The event's fixed idempotency
+     * key makes it once per trip even with two replicas ticking, and takes the trip out of later ticks.
+     */
+    private boolean alertedAtKitchen(UUID tripId) {
+        return jdbc.update("""
+            INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key, trip_version)
+            SELECT ?, t.id, 'WATCHDOG_ALERTED', 'SYSTEM', 'watchdog-kitchen-alert', t.version FROM fleet_schema.trip t
+            WHERE t.id = ? AND t.state IN ('ASSIGNED', 'AT_PICKUP') AND %s
+            ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING"""
+            .formatted(SILENT_SINCE.formatted("make_interval(secs => " + WATCHDOG_SECONDS + ")")), UUID.randomUUID(), tripId) == 1;
+    }
+
+    /**
+     * One silent rider's trip ends (pay per its state, held) and the next stage opens. Null if it changed meanwhile. The trip
+     * is locked first and the silence judged after, in its own statement: when the lock waits for a step, Postgres re-checks
+     * only the trip row, so a silence test in the locking query would keep the old state's 90 s window at the kitchen.
+     * shortcut: a /locations call committing in the same few milliseconds isn't waited for. Locking the rider's shift here
+     * would deadlock with /locations, which holds the shift and then key-locks the trip (rider_position_latest's foreign
+     * key); lock the shift before the trip if that ever matters.
+     */
     private Map<String, Object> handBack(UUID tripId) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
             SELECT t.state, t.order_code, t.rider_id FROM fleet_schema.trip t
             WHERE t.id = ? AND t.provider = 'CRAVES_FLEET' AND t.state IN ('ASSIGNED', 'AT_PICKUP')
-              AND t.accepted_at < now() - make_interval(secs => ?)
-              AND NOT EXISTS (SELECT 1 FROM fleet_schema.rider_position_latest p WHERE p.rider_id = t.rider_id
-                              AND p.received_at >= now() - make_interval(secs => ?))
-            FOR UPDATE OF t""", tripId, WATCHDOG_SECONDS, WATCHDOG_SECONDS);
+              AND t.accepted_at < now() - make_interval(secs => %d)
+            FOR UPDATE OF t""".formatted(WATCHDOG_SECONDS), tripId);
         if (rows.isEmpty()) {
             return null;
         }
         Map<String, Object> trip = rows.get(0);
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("SELECT %s FROM fleet_schema.trip t WHERE t.id = ?".formatted(HANDS_BACK),
+            Boolean.class, tripId))) {
+            return null;
+        }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
             + "updated_at = now() WHERE id = ?", RIDER_LOST, tripId);
         jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, detail) VALUES (?, ?, 'WATCHDOG_HANDED_BACK', 'SYSTEM', "

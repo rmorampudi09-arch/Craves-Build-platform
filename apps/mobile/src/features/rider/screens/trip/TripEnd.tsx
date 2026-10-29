@@ -5,6 +5,7 @@ import {Icon} from '../../../../shared/components';
 import {colors, iconSize, radius, spacing} from '../../../../design/tokens';
 import type {Trip, TripStep} from '../../api/contract';
 import {BottomAction} from '../../components/BottomAction';
+import {RefusalNotices} from '../../components/RefusalNotices';
 import {Card, Label, Money, RateRow, RiderScreen} from '../../components/ui';
 import {formatClock, formatRupees} from '../../domain/format';
 import {useRiderHome} from '../../state/riderQueries';
@@ -15,6 +16,7 @@ export function TripEnd({
   trip,
   step,
   syncing,
+  otpWaiting = false,
   photoDelivery,
   onReport,
   onBack,
@@ -22,6 +24,8 @@ export function TripEnd({
   trip: Trip;
   step: Extract<TripStep, 'DELIVERED' | 'FAILED' | 'CANCELLED'>;
   syncing: boolean;
+  /** The customer's OTP is saved and not yet checked by the server: "Delivery saved", not "Trip complete" (P1-05). */
+  otpWaiting?: boolean;
   photoDelivery: boolean;
   onReport: () => void;
   onBack: () => Promise<unknown> | void;
@@ -46,13 +50,14 @@ export function TripEnd({
           <Icon name={delivered ? 'check' : 'close'} size={iconSize.xl} color={delivered ? colors.white : colors.textPrimary} surface={false} />
         </View>
         <Text accessibilityRole="header" style={[text.name, text.center]}>
-          {delivered ? t.completeTitle : step === 'FAILED' ? t.failedTitle : t.cancelledTitle}
+          {delivered ? (otpWaiting ? t.deliverySavedTitle : t.completeTitle) : step === 'FAILED' ? t.failedTitle : t.cancelledTitle}
         </Text>
         <Text style={[text.body, text.secondary, text.center]}>
-          {delivered ? t.deliveredTo(trip.orderCode, trip.customer.firstName, formatClock(endedAt)) : reason}
+          {!delivered ? reason : otpWaiting ? t.deliverySavedBody : t.deliveredTo(trip.orderCode, trip.customer.firstName, formatClock(endedAt))}
         </Text>
         <SyncNote show={syncing} />
       </View>
+      <RefusalNotices tripId={trip.tripId} />
       {step !== 'CANCELLED' || lines.length > 0 ? (
         <Card>
           <Label>{t.youEarned}</Label>

@@ -9,9 +9,12 @@ The "Craves Rider APK" workflow runs on pull requests that touch `apps/mobile/**
 - **Signed release APK**, `assembleRiderRelease`.
 - **ARM only:** `arm64-v8a` and `armeabi-v7a`. No x86 code; rider phones are ARM.
 - **R8 on**, for this build only: the workflow passes `-PcravesRiderMinify=true`. The customer build never passes it and is unchanged. Keep rules are in `android/app/proguard-rules.pro`. R8 runs in compatibility mode (`-Pandroid.enableR8.fullMode=false`) until a clean phone pass on an R8 build.
-- **versionCode = the workflow run number** (`-PcravesVersionCode`), so every build installs over the last one and Play accepts every upload. versionName stays `1.0`.
+- **versionCode = the workflow run number** (`-PcravesVersionCode`), so every build installs over the last one and Play accepts every upload.
+- **versionName** is set in the rider flavor (`1.1.0`, the customer app keeps `1.0`) and must equal `RIDER_APP_VERSION` in `src/features/rider/riderConfig.ts`: the app sends it to the server, which compares it with `minAppVersion`, and a step fails the build when the two differ. For a release, raise both in one commit; once the APK is on the phones, pin `minAppVersion` to it (`GO-LIVE.md`, stage wire). Riders below it are blocked only between shifts.
 - A check step fails the build unless the APK is signed, its versionCode is the run number, its native code is ARM only, and R8 wrote a mapping.
-- The artifact **craves-rider-apk** (kept 14 days) holds `craves-rider-<mode>-<sha>.apk` and `craves-rider-<mode>-<sha>-mapping.txt`. On a pull request, a comment gives the file name, the versionCode and the mode.
+- The artifact **craves-rider-apk** (kept 14 days) holds `craves-rider-<mode>-<sha>.apk` and `craves-rider-<mode>-<sha>-mapping.txt`. On a pull request, a comment gives the file name, the versionCode, the mode and the size.
+- **Play bundle:** a live manual run on `main` also runs `bundleRiderRelease` in the same Gradle call (same R8 output, key and versionCode). A check fails the build unless the `.aab` is signed and ARM only. The rider bundle keeps every language (no language splits), because the app shows the language the rider picked, not the phone's; the customer bundle is unchanged. The artifact **craves-rider-aab** (kept 14 days) holds `craves-rider-live-<sha>.aab` and the same mapping file.
+- **Size watch:** every run compares the APK with the size kept by the last run on `main` (in the Actions cache) and prints the change. Above 5% it raises a warning and the PR comment says to check what grew: usually a new dependency, a big asset or an extra ABI. It never fails the build. Runs on `main`, mock or live, set the size the next runs compare with; until one has run, the note says so.
 
 Keep the mapping file of every build you hand out: it turns a crash stack trace from that build back into real class names. For a Play upload, upload it in Play Console as the deobfuscation file.
 
@@ -67,8 +70,8 @@ Riders on the live pilot install from Play's internal testing track.
 
 **Each pilot release:**
 
-1. Play needs an Android App Bundle (`.aab`), not an APK. The workflow builds only the APK, so run the same build with `bundleRiderRelease` in place of `assembleRiderRelease`, with the same flags and the live `.env` (`CRAVES_RIDER_API_MODE=live`, `CRAVES_API_BASE_URL=https://api.craves.in`, `CRAVES_ENVIRONMENT=production`) and the rider keystore. Its file is `android/app/build/outputs/bundle/riderRelease/app-rider-release.aab`. Adding this to the workflow is left open.
-2. Play Console → Testing → Internal testing → Create new release → upload the `.aab` and its `mapping.txt` → release notes → roll out.
+1. Play needs an Android App Bundle (`.aab`), not an APK. Run the workflow by hand on `main` with `api_mode` `live` (the default): the run's **craves-rider-aab** artifact holds `craves-rider-live-<sha>.aab` and its mapping file. The APK from the same run is the same build, for a phone check before the upload.
+2. Play Console → Testing → Internal testing → Create new release → upload the `.aab` and its mapping file (as the deobfuscation file) → release notes → roll out.
 3. The versionCode must be higher than the last upload. The run number always grows, but it restarts at 1 if the workflow is renamed or re-created; then pass a higher number (for example the run number plus 1000).
 4. Add riders to the testers list by Google account email and send them the opt-in link. They install "Craves Rider" from Play.
 5. Before telling riders, run the checks in `PHONE-TESTS.md` and `PERF.md` on the build Play serves.

@@ -1,7 +1,8 @@
 name: Craves Rider APK
 
 # Builds the rider app (com.cravesapp.rider) as a signed release APK for phone testing: ARM only, R8 on, versionCode =
-# the run number (see docs/riders/RELEASE.md).
+# the run number (see docs/riders/RELEASE.md). A live run from main also builds the Play bundle (craves-rider-aab).
+# Every run compares the APK size with the last main build and warns above 5%.
 # Mock builds use demo data and never call Firebase or the Craves API. Live builds sign in with the MSG91 phone OTP
 # (auth-service), then Firebase, and call CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
 # Which one: a manual run picks api_mode (default live, the APK riders install; live builds run only from main);
@@ -79,10 +80,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE|WAKE_LOCK' android/app/src/main/AndroidManifest.xml; then
+          if grep -Eq 'POST_NOTIFICATIONS|android.permission.VIBRATE|FOREGROUND_SERVICE|WAKE_LOCK|RECEIVE_BOOT_COMPLETED' android/app/src/main/AndroidManifest.xml; then
             echo 'ERROR: rider-only permissions belong in android/app/src/rider/AndroidManifest.xml' >&2
             exit 1
           fi
+
+      - name: Rider version in step (build.gradle and riderConfig.ts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Native code (versionName, sent with a refreshed FCM token) and JS (RIDER_APP_VERSION, compared with
+          # minAppVersion) must report the same version to the server.
+          native=$(awk '/^[[:space:]]*rider[[:space:]]*[{]/ {rider = 1} rider && /^[[:space:]]*versionName[[:space:]]+"/ {gsub(/"/, "", $2); print $2; exit}' android/app/build.gradle)
+          js=$(sed -nE "s/^export const RIDER_APP_VERSION = '([^']+)';$/\1/p" src/features/rider/riderConfig.ts)
+          if [[ -z "$native" || "$native" != "$js" ]]; then
+            echo "ERROR: the rider versionName in android/app/build.gradle ('$native') and RIDER_APP_VERSION in src/features/rider/riderConfig.ts ('$js') must match." >&2
+            exit 1
+          fi
+          echo "Rider version: $native"
 
       - name: API mode
         id: mode
@@ -188,16 +203,21 @@ jobs:
             echo "CRAVES_ANDROID_KEY_PASSWORD=$password"
           } >> "$GITHUB_ENV"
 
-      - name: Build the rider APK (ARM phones only, R8 on)
+      - name: Build the rider APK (ARM phones only, R8 on) and run the native unit tests
         shell: bash
         env:
           RUN_NUMBER: ${{ github.run_number }}
+          PLAY_BUNDLE: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && steps.mode.outputs.mode == 'live' }}
         run: |
           set -euo pipefail
           cd android
           # cravesRiderMinify and cravesVersionCode are read only by android/app/build.gradle for this build.
           # R8 compatibility mode (not full mode) for the first R8 builds; switch after a clean phone pass.
-          ./gradlew assembleRiderRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+          # testRiderReleaseUnitTest: the trip outbox's rules (src/testRider), on the JVM; a failure stops the APK.
+          # A live build from main also makes the Play bundle (P2-07), from the same R8 output and key.
+          tasks=(assembleRiderRelease testRiderReleaseUnitTest)
+          if [[ "$PLAY_BUNDLE" == true ]]; then tasks+=(bundleRiderRelease); fi
+          ./gradlew "${tasks[@]}" -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
             -PcravesRiderMinify=true -PcravesVersionCode="$RUN_NUMBER" -Pandroid.enableR8.fullMode=false \
             --no-daemon --stacktrace 2>&1 | tee ../rider-build.log
 
@@ -232,12 +252,79 @@ jobs:
           test -s "${APK%.apk}-mapping.txt" || { echo 'ERROR: no R8 mapping: R8 did not run' >&2; exit 1; }
           echo "Signed; versionCode $code; native code for $abis; R8 mapping present."
 
+      - name: Name and check the Play bundle (signed, ARM only)
+        id: aab
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && steps.mode.outputs.mode == 'live'
+        shell: bash
+        env:
+          APK: ${{ steps.apk.outputs.name }}
+        run: |
+          set -euo pipefail
+          name="${APK%.apk}.aab"
+          cp android/app/build/outputs/bundle/riderRelease/app-rider-release.aab "$name"
+          # Captured first: grep -q closing the pipe early would fail the step under pipefail.
+          signed="$(jarsigner -verify "$name")"
+          grep -q 'jar verified' <<<"$signed" || { echo "ERROR: the bundle is not signed: $signed" >&2; exit 1; }
+          abis="$(unzip -Z1 "$name" | sed -n 's#^base/lib/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')"
+          [[ "$abis" == "arm64-v8a armeabi-v7a " ]] || { echo "ERROR: native code for: $abis" >&2; exit 1; }
+          ls -lh "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the last main APK size
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/mobile/rider-apk-size-main.txt
+          key: rider-apk-size-main-${{ github.run_id }}
+          restore-keys: rider-apk-size-main-
+
+      - name: Compare the APK size with the last main build (warn above 5%)
+        id: size
+        shell: bash
+        env:
+          APK: ${{ steps.apk.outputs.name }}
+        run: |
+          set -euo pipefail
+          size=$(stat -c %s "$APK")
+          mb=$(awk -v b="$size" 'BEGIN {printf "%.1f", b / 1048576}')
+          note="APK ${mb} MB."
+          if [[ -s rider-apk-size-main.txt ]]; then
+            base=$(cat rider-apk-size-main.txt)
+            change=$(awk -v s="$size" -v b="$base" 'BEGIN {printf "%+.1f", (s - b) * 100 / b}')
+            note="APK ${mb} MB, ${change}% on the last main build."
+            if (( size * 100 > base * 105 )); then
+              echo "::warning title=Rider APK grew more than 5%::$APK is $size bytes, ${change}% on the last main build ($base bytes). Look for a new dependency, asset or ABI."
+              note="$note **More than 5%: check what grew.**"
+            fi
+          else
+            note="$note No main build size yet: run the workflow on main to set it."
+          fi
+          echo "$note"
+          echo "note=$note" >> "$GITHUB_OUTPUT"
+          echo "$size" > rider-apk-size-main.txt
+
+      - name: Keep this size as the main baseline
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: apps/mobile/rider-apk-size-main.txt
+          key: rider-apk-size-main-${{ github.run_id }}
+
       - name: Upload the APK
         uses: actions/upload-artifact@v4
         with:
           name: craves-rider-apk
           path: |
             apps/mobile/${{ steps.apk.outputs.name }}
+            apps/mobile/${{ steps.apk.outputs.mapping }}
+          retention-days: 14
+
+      - name: Upload the Play bundle
+        if: steps.aab.outputs.name != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: craves-rider-aab
+          path: |
+            apps/mobile/${{ steps.aab.outputs.name }}
             apps/mobile/${{ steps.apk.outputs.mapping }}
           retention-days: 14
 
@@ -248,6 +335,7 @@ jobs:
           OUTCOME: ${{ job.status }}
           APK: ${{ steps.apk.outputs.name }}
           MODE: ${{ steps.mode.outputs.mode }}
+          SIZE: ${{ steps.size.outputs.note }}
         with:
           script: |
             const fs = require('fs');
@@ -255,7 +343,7 @@ jobs:
             let body;
             if (process.env.OUTCOME === 'success') {
               const mode = process.env.MODE === 'live' ? '**live** (Firebase sign-in, real Craves API)' : '**mock** (demo data, no sign-in or API calls)';
-              body = `Rider APK built: **${process.env.APK}** (versionCode ${context.runNumber}), API mode ${mode}. Download it from the "craves-rider-apk" artifact on [this run](${run}) (kept 14 days).`;
+              body = `Rider APK built: **${process.env.APK}** (versionCode ${context.runNumber}), API mode ${mode}. Download it from the "craves-rider-apk" artifact on [this run](${run}) (kept 14 days). ${process.env.SIZE || ''}`.trim();
             } else {
               let tail = '(no Gradle log: an earlier step failed; see the run)';
               try {

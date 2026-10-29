@@ -43,11 +43,11 @@ class DbConnectionBudgetTest(unittest.TestCase):
 
     def test_more_replicas_in_either_infra_template_fail(self):
         self.edit('infra/main.bicep', "name: 'integration-service'\n    containerName: 'integration-service'\n"
-                  "    external: false\n    minReplicas: 0\n    maxReplicas: 2",
+                  "    external: false\n    minReplicas: 0\n    // One replica with an 8-connection pool (check-db-connection-budget.py, blueprint E3).\n    maxReplicas: 1",
                   "name: 'integration-service'\n    containerName: 'integration-service'\n"
                   "    external: false\n    minReplicas: 0\n    maxReplicas: 5")
         lines, problems = budget.check(self.root)
-        self.assertIn('integration-service    pool  4 x max replicas 5 = 20', lines)
+        self.assertIn('integration-service    pool  8 x max replicas 5 = 40', lines)
         self.assertTrue(problems)
 
     def test_the_env_value_a_bicep_deploys_wins_over_the_default(self):
@@ -58,7 +58,7 @@ class DbConnectionBudgetTest(unittest.TestCase):
 
     def test_a_service_without_an_explicit_pool_fails(self):
         self.edit('services/integration-service/src/main/resources/application.yml',
-                  'maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:4}', '')
+                  'maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:8}', '')
         _, problems = budget.check(self.root)
         self.assertIn('integration-service: set spring.datasource.hikari.maximum-pool-size explicitly', problems)
 

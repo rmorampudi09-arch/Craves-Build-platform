@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { day, id, instant, personName, reasonBody, UUID, type FleetRoute } from "./fleet-common";
+import { day, id, instant, personName, reasonBody, rupeesToPaise, UUID, type FleetRoute } from "./fleet-common";
 import { addDays } from "./payout-contract";
 
 const paise = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -33,12 +33,6 @@ export type SlotForm = { riderId: string; zoneName: string; date: string; startT
 export function istInstant(local: string): string {
   const value = new Date(`${local}:00+05:30`);
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local) && Number.isFinite(value.getTime()) ? value.toISOString() : "";
-}
-
-/** Rupees as typed ("80", "80.5", "80.50") to integer paise, without floating point; null if it isn't an amount. */
-export function rupeesToPaise(text: string): number | null {
-  const match = /^(\d{1,6})(?:\.(\d{1,2}))?$/.exec(text.trim());
-  return match ? Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0")) : null;
 }
 
 /** An end time before the start time is on the next IST day, so a slot can run past or up to midnight (18:00 to 00:00). */

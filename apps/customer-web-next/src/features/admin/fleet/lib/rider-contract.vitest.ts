@@ -35,6 +35,20 @@ describe("rider parsers", () => {
     expect(riderPageSchema.parse({ riders: [{ ...riderDetail.rider, phone: "+919876543210" }], nextCursor: null }).riders[0]).not.toHaveProperty("phone");
   });
 
+  it("read the heartbeat, phone health and recent offers, and refuse an unknown offer state or channel", () => {
+    const offer = {
+      offerId: "55555555-5555-4555-8555-555555555555", tripId: "66666666-6666-4666-8666-666666666666", orderCode: "#0A1B2C3D", state: "ACCEPTED",
+      offeredAt: at, pushedAt: at, pushResult: "SENT", rangAt: at, rangChannel: "fcm",
+    };
+    const shift = { ...riderDetail.shifts[0], lastSeenAt: at, maxSilenceSeconds: 40, silencesOver60s: 0, phone: null };
+    const parsed = riderDetailSchema.parse({ ...riderDetail, shifts: [shift], recentOffers: [offer] });
+    expect(parsed.shifts[0].maxSilenceSeconds).toBe(40);
+    expect(parsed.recentOffers?.[0].rangChannel).toBe("fcm");
+    expect(riderDetailSchema.parse(riderDetail).recentOffers).toBeUndefined();
+    expect(riderDetailSchema.safeParse({ ...riderDetail, recentOffers: [{ ...offer, state: "PENDING" }] }).success).toBe(false);
+    expect(riderDetailSchema.safeParse({ ...riderDetail, recentOffers: [{ ...offer, rangChannel: "sms" }] }).success).toBe(false);
+  });
+
   it("refuse an unknown status, a bad id, an Aadhaar document type or a missing list", () => {
     expect(riderDetailSchema.safeParse({ ...riderDetail, rider: { ...riderDetail.rider, status: "BLOCKED" } }).success).toBe(false);
     expect(riderDetailSchema.safeParse({ ...riderDetail, rider: { ...riderDetail.rider, riderId: "R1" } }).success).toBe(false);

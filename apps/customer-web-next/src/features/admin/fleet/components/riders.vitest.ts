@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RiderDetailView } from "./rider-detail";
@@ -98,6 +98,35 @@ describe("rider detail", () => {
     expect(screen.getByRole("button", { name: "Accept document" })).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText("No admin actions recorded yet.")).toBeNull();
+  });
+
+  it("shows how each shift's phone kept in touch and how its recent offers rang", async () => {
+    const shift = {
+      shiftId: SHIFT, startedAt: at, endedAt: null, selfieState: "APPROVED", selfieReason: null, selfieReviewedBy: "Asha", inZoneSeconds: 1800,
+      lastSeenAt: new Date(Date.now() - 5 * 60_000).toISOString(), maxSilenceSeconds: 75, silencesOver60s: 1,
+      phone: { batteryPct: 54, charging: false, powerSave: true, canRing: false, batteryPerHourPct: null, lastExitReason: null, queuePending: 0, queueOldestAgeS: null },
+    };
+    const offer = {
+      offerId: "77777777-7777-4777-8777-777777777777", tripId: "88888888-8888-4888-8888-888888888888", orderCode: "#0A1B2C3D", state: "EXPIRED",
+      offeredAt: at, pushedAt: at, pushResult: "NO_TOKEN", rangAt: "2026-10-20T06:30:09Z", rangChannel: "locations",
+    };
+    answer = (_, path) => path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json({ ...detail, shifts: [shift], recentOffers: [offer] });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    expect(await screen.findByText("5 min ago: the phone may have stopped")).toBeTruthy();
+    expect(screen.getByText("75 s · 1 over 60 s")).toBeTruthy();
+    expect(screen.getByText("Battery 54% · battery saver on · offers can't ring")).toBeTruthy();
+    const offers = screen.getByRole("heading", { name: "Recent offers" }).closest("section") as HTMLElement;
+    for (const text of ["#0A1B2C3D", "Expired", "No token", "9.0 s, by the location call", "88888888-8888-4888-8888-888888888888"]) {
+      expect(within(offers).getByText(text)).toBeTruthy();
+    }
+  });
+
+  it("leaves the phone health and offers out for an older server", async () => {
+    const shift = { shiftId: SHIFT, startedAt: at, endedAt: at, selfieState: "APPROVED", selfieReason: null, selfieReviewedBy: "Asha", inZoneSeconds: 60 };
+    answer = (_, path) => path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json({ ...detail, shifts: [shift] });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    expect(await screen.findByText("No report")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Recent offers" })).toBeNull();
   });
 
   it("accepts a document with the expiry it shows and approves the new phone", async () => {

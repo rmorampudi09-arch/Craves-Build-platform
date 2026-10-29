@@ -95,10 +95,12 @@ export const kn: RiderStrings = {
     wrongCode: 'ಕೋಡ್ ತಪ್ಪಾಗಿದೆ. SMS ನೋಡಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     noFee: 'Craves ಸೇರಲು ಫೀಸ್, ಡೆಪಾಸಿಟ್ ಅಥವಾ ಕಿಟ್ ಖರ್ಚು ಎಂದಿಗೂ ಇಲ್ಲ. ಯಾರಾದರೂ ಹಣ ಕೇಳಿದರೆ ಕೊಡಬೇಡಿ.',
     demoHint: 'ಡೆಮೋ ಬಿಲ್ಡ್: ಯಾವುದೇ 10 ಅಂಕಿಯ ನಂಬರ್ ಸಾಕು, ಕೋಡ್ 123456.',
+    smsHint: 'SMS ಬಂದಾಗ ಅನುಮತಿ ಕೇಳಿದರೆ ಅನುಮತಿಸಿ. ಕೋಡ್ ತಾನಾಗಿಯೇ ತುಂಬುತ್ತದೆ.',
   },
   account: {
     headerBlocked: 'ನಿಮ್ಮ ಅಕೌಂಟ್',
     checkAgain: 'ಮತ್ತೆ ನೋಡಿ',
+    ratesChecked: (time: string) => `${time}ಕ್ಕೆ ನೋಡಲಾಯಿತು. ಪೇ ದರಗಳು ಇನ್ನೂ ಬಂದಿಲ್ಲ.`,
     titles: {
       RATES_PENDING: 'ಪಾವತಿ ದರಗಳು ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತವೆ',
       SUSPENDED: 'ನಿಮ್ಮ ಅಕೌಂಟ್ ತಾತ್ಕಾಲಿಕವಾಗಿ ನಿಂತಿದೆ',
@@ -202,6 +204,7 @@ export const kn: RiderStrings = {
       stepApprovedBody: 'ನಂತರ ಪೇ ನಿಯಮಗಳನ್ನು ಒಪ್ಪಿ, ಫೋನ್ ಸೆಟಪ್ ಮಾಡಿ, ಆನ್‌ಲೈನ್ ಆಗಿ.',
       stepRates: 'ನಿಮ್ಮ ಪ್ರದೇಶದ ಪೇ ದರಗಳು',
       checkNow: 'ಈಗ ನೋಡಿ',
+      stillChecking: (time: string) => `${time}ಕ್ಕೆ ನೋಡಲಾಯಿತು. ಆಪ್ಸ್ ಟೀಮ್ ಇನ್ನೂ ನಿಮ್ಮ ಅರ್ಜಿಯನ್ನು ಚೆಕ್ ಮಾಡುತ್ತಿದೆ.`,
       whatYouSent: 'ನೀವು ಕಳುಹಿಸಿದ್ದು',
       fixTitle: (count: number) => (count === 1 ? 'ಮುಂದುವರಿಯಲು 1 ವಿಷಯ ಸರಿಪಡಿಸಿ' : `ಮುಂದುವರಿಯಲು ${count} ವಿಷಯಗಳನ್ನು ಸರಿಪಡಿಸಿ`),
       fixBody: 'ಆಪ್ಸ್ ಟೀಮ್ ನಿಮ್ಮ ಅರ್ಜಿ ಚೆಕ್ ಮಾಡಿದೆ, ಇವು ಮತ್ತೆ ಬೇಕು. ಉಳಿದೆಲ್ಲವೂ ಸರಿಯಾಗಿದೆ.',
@@ -313,7 +316,6 @@ export const kn: RiderStrings = {
     askRing: 'ನಿಮ್ಮ ಫೋನ್ ರಿಂಗ್ ಮತ್ತು ವೈಬ್ರೇಟ್ ಆಯಿತಾ?',
     yes: 'ಹೌದು, ಆಗಿದೆ',
     notYet: 'ಇನ್ನೂ ಇಲ್ಲ',
-    backHome: 'ಹೋಮ್‌ಗೆ ಹೋಗಿ',
   },
   home: {
     slotNow: 'ಈಗಿನ ನಿಮ್ಮ ಸ್ಲಾಟ್',
@@ -351,6 +353,9 @@ export const kn: RiderStrings = {
     firstDayOnlineBody: 'ಆರ್ಡರ್‌ಗಳಿಗೆ ಸಿದ್ಧರಾದಾಗ ಕೆಳಗಿನ ಆನ್‌ಲೈನ್ ಆಗಿ ಒತ್ತಿ.',
     confirmOfflineTitle: 'ಟ್ರಿಪ್ ನಡುವೆ ಆಫ್‌ಲೈನ್ ಆಗಬೇಕಾ?',
     confirmOfflineBody: 'ಟ್ರಿಪ್ ನಿಮ್ಮದೇ ಆಗಿರುತ್ತದೆ. ಅದನ್ನು ಸರಿಪಡಿಸಲು ಆಪ್ಸ್ ಟೀಮ್ ನಿಮಗೆ ಕಾಲ್ ಮಾಡುತ್ತದೆ.',
+    confirmIdleOfflineTitle: 'ಆಫ್‌ಲೈನ್ ಆಗಬೇಕಾ?',
+    confirmIdleOfflineBody: 'ಮತ್ತೆ ಆನ್‌ಲೈನ್ ಆಗುವವರೆಗೆ ಆಫರ್‌ಗಳು ಬರುವುದಿಲ್ಲ.',
+    stayOnline: 'ಆನ್‌ಲೈನ್‌ನಲ್ಲೇ ಇರಿ',
     noticeTitle: 'ನಿಮಗೆ ಒಂದು ನೋಟಿಸ್ ಇದೆ',
     openNotice: 'ಓದಿ',
     takeBreak: 'ಬ್ರೇಕ್ ತೆಗೆದುಕೊಳ್ಳಿ',

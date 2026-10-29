@@ -993,7 +993,24 @@ and neither side was told what came next. Now one application in the app and one
   app's `screensA.test.tsx`, `application.test.ts`, `riderApi.mock.test.ts` and `riderApi.live.test.ts`; screenshots of
   each new screen in English, Telugu, Hindi and Kannada.
 
+### P6-03 Every button, every way back, and the code from the SMS (done; app 1.2.0)
+Every button on every screen state was pressed in the real app (a census of 40 screen states) and twelve whole journeys were
+tapped through, from sign-in to payouts. What a rider would have hit, fixed (`FLOWS.md` §9, `DESIGN.md`):
+- **Sign-in.** A number pasted or autofilled with +91, a 0 or spaces lost digits (Android's `maxLength` cut the paste);
+  now it keeps the ten. The code fills in from its SMS with one tap on Allow (SMS User Consent API, `RiderSmsCodeModule`;
+  no SMS permission, MSG91's template unchanged), and the sixth digit checks it, typed or pasted, without a Verify tap.
+- **Ways back.** Terms read from Profile and Phone setup had no back; Phone setup's last button went to Home whatever the
+  rider came from (now Done, back where they were). The phone's Back dropped a live offer that could never be opened
+  again; now it holds like an incoming call until Accept or Decline.
+- **Feedback.** Check now and Check again said nothing when nothing had changed; now "Checked at 4:09 pm. …", or why
+  they couldn't check. Home said Offline for a moment after the selfie; now Online at once.
+- **Mistakes.** One tap on Go offline ended the shift; now it asks, with Stay online named. Break and Head home could start
+  during a trip; now only between trips.
+- **Proved by** `screensA.test.tsx`, `RiderOtpScreen.sms.test.tsx`, `signInInput.test.ts`, `RiderSmsCodeTest.kt` and
+  `RiderApp.live.test.tsx` (each fails with its fix taken out); the census and journeys in a browser build; an
+  independent review; `PHONE-TESTS.md` §8 on a phone (People step S2).
+
 ### People steps for Phase 6
 **S1. Native speakers.** One each for Telugu, Hindi and Kannada reads every screen in a demo build (Profile, language; the application from the demo panel's "Start over as a new applicant") and the native notifications; the lawyer reads the terms and notice words. Add each signed-off language to `REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`. `help.talkBody` promises support in Telugu, Hindi or English: decide whether support answers in Kannada before Kannada goes live.
 
-**S2. Phone tests.** Run `PHONE-TESTS.md` on a live build, including a rider activated while the app is open (Check again, then Terms) and a phone with no Google Play services (Go online says phone setup).
+**S2. Phone tests.** Run `PHONE-TESTS.md` on a live build, including a rider activated while the app is open (Check again, then Terms), a phone with no Google Play services (Go online says phone setup; the code is typed), and §8 (the code from the SMS, Allow and Deny, and every way back).

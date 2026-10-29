@@ -1,14 +1,16 @@
-import React, {memo, useEffect, useState} from 'react';
+import React, {memo, useCallback, useEffect, useRef, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {colors, spacing, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
 import {BottomAction} from '../../../features/rider/components/BottomAction';
 import {Label, Title} from '../../../features/rider/components/ui';
 import type {RiderScreenProps} from '../../../features/rider/navigation';
+import {listenForSmsCode} from '../../../features/rider/native/smsCode';
 import {isDemo} from '../../../features/rider/riderConfig';
 import {useStrings} from '../../../features/rider/strings/StringsProvider';
 import {useRiderSession} from '../useRiderSession';
 import {SignInField, SignInFrame} from './SignInFrame';
+import {codeDigits} from './signInInput';
 
 const RESEND_AFTER_MS = 30_000;
 
@@ -48,17 +50,52 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string>();
   const [sentAt, setSentAt] = useState(Date.now);
+  const [busy, setBusy] = useState(false);
+  // True once Android waits for the SMS: the rider taps Allow on its sheet and the code fills in (RiderSmsCodeModule).
+  const [listening, setListening] = useState(false);
+  const tried = useRef('');
+  const {confirmOtp} = session;
+  const wrongCodeText = s.wrongCode;
 
-  async function verify() {
-    setError(undefined);
-    try {
-      await session.confirmOtp(code);
-      // Success swaps the whole navigator to the signed-in stack.
-    } catch (failure) {
-      const wrongCode = !(failure instanceof AppApiError) || failure.code === 'OTP_INVALID' || failure.code === 'INVALID_OTP';
-      setError(wrongCode ? s.wrongCode : failure.message);
+  const verify = useCallback(
+    async (value: string) => {
+      tried.current = value;
+      setBusy(true);
+      setError(undefined);
+      try {
+        await confirmOtp(value);
+        // Success swaps the whole navigator to the signed-in stack.
+      } catch (failure) {
+        const wrongCode = !(failure instanceof AppApiError) || failure.code === 'OTP_INVALID' || failure.code === 'INVALID_OTP';
+        setError(wrongCode ? wrongCodeText : failure.message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [confirmOtp, wrongCodeText],
+  );
+
+  // Six digits, however they came (typed, pasted, filled from the SMS): check them at once, once per code, one check at a
+  // time (a code changed meanwhile is checked when the first answer is in).
+  useEffect(() => {
+    if (code.length === 6 && code !== tried.current && !busy) {
+      verify(code);
     }
-  }
+  }, [code, busy, verify]);
+
+  // Each code sent (and each resend) is one SMS to wait for; demo builds send none.
+  useEffect(() => {
+    if (isDemo) {
+      return;
+    }
+    const sms = listenForSmsCode(setCode);
+    let mounted = true;
+    sms.started.then(ok => mounted && setListening(ok));
+    return () => {
+      mounted = false;
+      sms.stop();
+    };
+  }, [sentAt]);
 
   async function resend() {
     setSentAt(Date.now());
@@ -75,7 +112,7 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
       testID="rider-sign-in-otp"
       footer={
         <>
-          <BottomAction label={s.verify} onPress={verify} disabled={code.length !== 6} testID="rider-verify" />
+          <BottomAction label={s.verify} onPress={() => verify(code)} disabled={code.length !== 6 || busy} testID="rider-verify" />
           <ResendCode sentAt={sentAt} onResend={resend} />
         </>
       }>
@@ -94,17 +131,18 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
       <SignInField
         label={s.otpLabel}
         value={code}
-        onChangeText={value => setCode(value.replace(/\D/g, '').slice(0, 6))}
+        // No maxLength: Android would cut a pasted "482 615" before the app sees it.
+        onChangeText={value => setCode(codeDigits(value))}
         keyboardType="number-pad"
         autoComplete="sms-otp"
         textContentType="oneTimeCode"
-        maxLength={6}
         autoFocus
         returnKeyType="done"
-        onSubmitEditing={() => (code.length === 6 ? verify() : undefined)}
+        onSubmitEditing={() => (code.length === 6 && !busy ? verify(code) : undefined)}
         error={error}
         testID="rider-code-input"
       />
+      {listening ? <Label>{s.smsHint}</Label> : null}
       {isDemo ? <Label>{s.demoHint}</Label> : null}
     </SignInFrame>
   );

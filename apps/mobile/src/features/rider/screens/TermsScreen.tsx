@@ -54,7 +54,8 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
   const terms = useTerms();
   const me = useRiderMe();
   const accepting = route.params.mode === 'accept';
-  const header = <RiderHeader title={t.title} />;
+  // Read from Profile: the way back is on screen too (accepting, the terms are the only screen there is).
+  const header = <RiderHeader title={t.title} back={!accepting} />;
   // First terms ever: the rider was just approved, so say so and what this last step is.
   const welcome =
     accepting && me.data && !me.data.acceptedTermsVersion ? (

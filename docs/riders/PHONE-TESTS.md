@@ -177,6 +177,22 @@ payments admin.
 
 **Pass:** every step as written; the rider's page shows one audit entry for each decision.
 
+## 8. The sign-in code from the SMS, and every way back (app 1.2.0, `FLOWS.md` §9)
+
+Set-up: a live build on a phone with Google Play services and a SIM that receives SMS, signed out.
+
+1. **Paste.** Copy "+91 98480 12345" (your number) and paste it into the number field: it shows the ten digits. Send code.
+2. **Allow.** Under the code field: "When the SMS comes, tap Allow and the code fills in by itself." When the SMS comes,
+   Android asks whether Craves Rider may read that message; **Allow**: the code fills in and the app signs in, no tap.
+3. **Deny.** Sign out, sign in again, and **Deny** this time: nothing fills in. Type the code: the sixth digit signs in.
+4. **Resend.** Sign out and in again; wait for Resend, press it, and Allow on the second SMS: its code fills in.
+5. **Without Play services** (a phone without Google services, if one is at hand): no line about Allow; typing works.
+6. **The way back.** Profile → Terms, Help and Phone setup: each has ← and the phone's Back returns to Profile. On an
+   offer the phone's Back does nothing; Decline returns to Home. Online on Home, Go offline asks; Stay online keeps the
+   shift.
+
+**Pass:** every step as written, and Settings → Apps → Craves Rider → Permissions lists no SMS permission.
+
 ## Results
 
 ### Service survival
@@ -231,5 +247,11 @@ payments admin.
 | Phones (A, B) | Date | Tester | Policy version | Why lines (1) | Next round (2) | Break (3) | Distances (4) | Data copy (5) | Pass |
 |---|---|---|---|---|---|---|---|---|---|
 | | | | | | | | | | |
+
+### Sign-in code and the way back
+
+| Phone (model, Android) | Date | Tester | Paste (1) | Allow (2) | Deny (3) | Resend (4) | No Play services (5) | Back (6) | No SMS permission | Pass |
+|---|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

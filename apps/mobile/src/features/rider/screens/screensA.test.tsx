@@ -14,6 +14,7 @@ import {requiredDocuments} from '../domain/application';
 import {riderApi} from '../api/riderApi';
 import {riderDevice, type DeviceState} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
+import {listenForSmsCode} from '../native/smsCode';
 import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
@@ -34,6 +35,11 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
 }));
 jest.mock('../../../app/rider/useRiderSession', () => ({useRiderSession: () => mockSession}));
+// The real listener, watched: demo builds send no SMS, so they never wait for one.
+jest.mock('../native/smsCode', () => {
+  const actual = jest.requireActual('../native/smsCode');
+  return {...actual, listenForSmsCode: jest.fn(actual.listenForSmsCode)};
+});
 jest.mock('expo-image-picker', () => ({
   CameraType: {front: 'front', back: 'back'},
   requestCameraPermissionsAsync: jest.fn(async () => ({granted: true})),
@@ -161,6 +167,20 @@ describe('Sign in', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Otp', {phone: '+919848012345'});
   });
 
+  it('takes a number pasted or filled in with +91, 0 or spaces, and never lets Android cut it short', async () => {
+    await render(<RiderPhoneScreen {...phoneProps} />);
+    expect(input('rider-phone-input').props.maxLength).toBeUndefined();
+    for (const typed of ['+91 98480 12345', '098480-12345', '0091 9848012345']) {
+      await act(async () => input('rider-phone-input').props.onChangeText(typed));
+      expect(input('rider-phone-input').props.value).toBe('9848012345');
+    }
+    // An extra digit typed by mistake is ignored; the number never shifts.
+    await act(async () => input('rider-phone-input').props.onChangeText('91234567890'));
+    expect(input('rider-phone-input').props.value).toBe('9123456789');
+    await act(async () => press('rider-send-code').props.onPress());
+    expect(mockSession.beginPhone).toHaveBeenCalledWith('+919123456789');
+  });
+
   it("shows the server's message when the code can't be sent", async () => {
     mockSession.beginPhone.mockRejectedValueOnce(new AppApiError('RATE_LIMITED', 'Too many tries. Wait a minute.', 429));
     await render(<RiderPhoneScreen {...phoneProps} />);
@@ -170,16 +190,27 @@ describe('Sign in', () => {
     expect(mockNavigation.navigate).not.toHaveBeenCalled();
   });
 
-  it('shows the number, takes 6 digits and says when the code is wrong', async () => {
-    mockSession.confirmOtp.mockRejectedValueOnce(new Error('WRONG_CODE'));
+  it('shows the number, checks the code as soon as 6 digits are in, and says when it is wrong', async () => {
+    mockSession.confirmOtp.mockRejectedValue(new Error('WRONG_CODE'));
     await render(<RiderOtpScreen {...otpProps} />);
     expect(allText()).toContain('Sent by SMS to +91 98480 12345.');
     expect(press('rider-verify').props.disabled).toBe(true);
+    expect(input('rider-code-input').props.maxLength).toBeUndefined();
     await act(async () => input('rider-code-input').props.onChangeText('48 26 15'));
-    expect(press('rider-verify').props.disabled).toBe(false);
-    await act(async () => press('rider-verify').props.onPress());
+    expect(mockSession.confirmOtp).toHaveBeenCalledTimes(1);
     expect(mockSession.confirmOtp).toHaveBeenCalledWith('482615');
     expect(allText()).toContain('That code is wrong. Check the SMS and try again.');
+    // Verify tries the same code again; a corrected code is checked by itself.
+    expect(press('rider-verify').props.disabled).toBe(false);
+    await act(async () => press('rider-verify').props.onPress());
+    expect(mockSession.confirmOtp).toHaveBeenCalledTimes(2);
+    // A whole SMS pasted: its code, not the other numbers in it.
+    await act(async () => input('rider-code-input').props.onChangeText('Order 12 is on its way. Your Craves code is 482616.'));
+    expect(mockSession.confirmOtp).toHaveBeenLastCalledWith('482616');
+    expect(mockSession.confirmOtp).toHaveBeenCalledTimes(3);
+    // Demo build: no SMS to wait for, so no Allow sheet and no line about it.
+    expect(listenForSmsCode).not.toHaveBeenCalled();
+    expect(allText()).not.toContain('tap Allow');
     await act(async () => press('rider-change-number').props.onPress());
     expect(mockNavigation.goBack).toHaveBeenCalled();
   });
@@ -470,9 +501,17 @@ describe('Account status and the application', () => {
       expect(tree.root.findAll(node => String(node.props.testID).startsWith('rider-upload-'))).toHaveLength(0);
 
       const refetch = jest.spyOn(client, 'invalidateQueries');
+      expect(text).not.toContain('Checked at');
       await act(async () => press('rider-application-check').props.onPress());
       expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
       expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+      // A check that finds nothing new still says it looked, and when.
+      expect(allText()).toMatch(/Checked at \d{1,2}:\d\d [ap]m\. Ops is still checking your application\./);
+      // One that couldn't look says why, never that nothing changed.
+      (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'No internet'));
+      await act(async () => press('rider-application-check').props.onPress());
+      expect(allText()).toContain('No internet. Check your connection and try again.');
+      expect(allText()).not.toContain('Checked at');
       refetch.mockClear();
       const [, onChange] = appState.mock.calls.find(([event]) => event === 'change')!;
       await act(async () => (onChange as (state: string) => void)('active'));
@@ -490,9 +529,10 @@ describe('Account status and the application', () => {
       });
       await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
       expect(press('rider-call-support')).toBeTruthy();
-      act(() => listeners.keyboardDidShow());
+      // async act: the footer's buttons, mounted again, read the reduce-motion setting inside it.
+      await act(async () => listeners.keyboardDidShow());
       expect(press('rider-call-support')).toBeUndefined();
-      act(() => listeners.keyboardDidHide());
+      await act(async () => listeners.keyboardDidHide());
       expect(press('rider-call-support')).toBeTruthy();
       keyboard.mockRestore();
     });
@@ -650,8 +690,14 @@ describe('Account status and the application', () => {
       const text = allText();
       expect(text).toContain('Pay rates are on the way');
       expect(text).toContain("Application sent | You're approved | 3 | Pay rates for your area");
+      expect(text).not.toContain('Checked at');
       await act(async () => press('rider-account-check-again').props.onPress());
       expect(riderApi.getMe).toHaveBeenCalled();
+      expect(allText()).toMatch(/Checked at \d{1,2}:\d\d [ap]m\. No pay rates yet\./);
+      (riderApi.getMe as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_503', 'down', 503));
+      await act(async () => press('rider-account-check-again').props.onPress());
+      expect(allText()).toContain("Craves isn't answering right now. Try again in a minute.");
+      expect(allText()).not.toContain('Checked at');
     });
 
     it('explains a paused account with the reason and how to appeal', async () => {
@@ -745,10 +791,15 @@ describe('Terms', () => {
     expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.terms});
   });
 
-  it('only reads in view mode', async () => {
+  it('only reads in view mode, with the way back to Profile; accepting, it is the only screen', async () => {
     await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
     expect(press('rider-terms-accept')).toBeUndefined();
     expect(press('rider-terms-full')).toBeTruthy();
+    await act(async () => press('rider-back').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalled();
+    await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
+    expect(press('rider-terms-accept')).toBeTruthy();
+    expect(press('rider-back')).toBeUndefined();
   });
 
   it('switches the app language from the chips', async () => {
@@ -866,10 +917,20 @@ describe('Phone setup', () => {
     expect(riderOnlineService.testRing).toHaveBeenCalledTimes(2);
   });
 
-  it('goes back to the Home tab', async () => {
+  it('goes back to where the rider came from, with Done once the phone can get offers', async () => {
+    (riderDevice.locationGranted as jest.Mock).mockResolvedValue(false);
     await render(<PhoneSetupScreen {...props} />);
-    await act(async () => press('rider-setup-home').props.onPress());
-    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs', {screen: 'Home'});
+    await flush();
+    expect(press('rider-setup-done')).toBeUndefined();
+    await act(async () => press('rider-back').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
+
+    (riderDevice.locationGranted as jest.Mock).mockResolvedValue(true);
+    await render(<PhoneSetupScreen {...props} />);
+    await flush();
+    await act(async () => press('rider-setup-done').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalledTimes(2);
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
   });
 });
 
@@ -935,10 +996,35 @@ describe('Home', () => {
     expect(text).toContain('Waiting is paid: at least ₹80 an hour in this slot.');
     expect(text).toContain("Rest point: Lakshmi's Kitchen, Madhapur");
     expect(text).toContain('Offers ring even with the screen off.');
+    // Going offline asks once, so a pocket tap never ends the shift; Stay online keeps it.
     (riderApi.endShift as jest.Mock).mockResolvedValueOnce(undefined);
     await act(async () => press('rider-go-offline').props.onPress());
+    const [title, body, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect([title, body]).toEqual(['Go offline?', "You won't get offers until you go online again."]);
+    expect(buttons.map((b: {text: string}) => b.text)).toEqual(['Stay online', 'Go offline']);
+    expect(riderApi.endShift).not.toHaveBeenCalled();
+    await act(async () => buttons[1].onPress());
     expect(riderOnlineService.stop).toHaveBeenCalled();
     expect(riderApi.endShift).toHaveBeenCalled();
+  });
+
+  it('starts no break or heading home during a trip, and the trip is one tap away', async () => {
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    const trip = {tripId: 't1', step: 'AT_KITCHEN'};
+    await render(<HomeScreen />, [[riderKeys.home, {...onlineHome, homeSaved: true}], [riderKeys.me, choosing], [riderKeys.activeTrip, trip]]);
+    expect(press('rider-break-start')).toBeUndefined();
+    expect(press('rider-head-home')).toBeUndefined();
+    // Going offline on a trip says the trip stays theirs; the safe answer is named, like the one with no trip.
+    await act(async () => press('rider-go-offline').props.onPress());
+    const [title, body, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect([title, body]).toEqual(['Go offline during a trip?', 'The trip stays yours. Ops will call you to sort it out.']);
+    expect(buttons.map((b: {text: string}) => b.text)).toEqual(['Stay online', 'Go offline']);
+    await act(async () => press('rider-resume-trip').props.onPress());
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Trip');
+    // Between trips both start again.
+    await render(<HomeScreen />, [[riderKeys.home, {...onlineHome, homeSaved: true}], [riderKeys.me, choosing], [riderKeys.activeTrip, null]]);
+    expect(press('rider-break-start')).toBeDefined();
+    expect(press('rider-head-home')).toBeDefined();
   });
 
   // The server sends slotEndsAt and zoneName only while a slot runs; nextSlot is then the running one.
@@ -1028,7 +1114,7 @@ describe('Go online', () => {
 
   it('explains the selfie, then starts the shift with the front-camera photo', async () => {
     (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
-    await render(<GoOnlineScreen {...props} />);
+    const client = await render(<GoOnlineScreen {...props} />, [[riderKeys.home, {online: false, todayEarningsPaise: 0, todayTrips: 0}]]);
     expect(allText()).toContain('Take off your helmet and look at the camera');
     expect(allText()).toContain("Ops checks it's you. Customers never see this photo.");
     await act(async () => press('rider-selfie-shutter').props.onPress());
@@ -1036,6 +1122,8 @@ describe('Go online', () => {
     expect(riderApi.startShift).toHaveBeenCalledWith('file:///photo.jpg', 'android-id-1');
     expect(riderOnlineService.start).toHaveBeenCalledWith(shift);
     expect(mockNavigation.goBack).toHaveBeenCalled();
+    // Home reads online as soon as the rider lands there, not after its refetch.
+    expect(client.getQueryData<HomeSummary>(riderKeys.home)?.online).toBe(true);
   });
 
   it('asks for the camera when it is denied', async () => {
@@ -1208,6 +1296,30 @@ describe('Offer', () => {
     await act(async () => press('rider-offer-decline').props.onPress());
     expect(riderApi.declineOffer).toHaveBeenCalledWith('o1', 'rider-decline-o1-r1');
     expect(mockNavigation.goBack).toHaveBeenCalled();
+  });
+
+  it("holds the phone's Back while the offer is live, like an incoming call, and lets go once it ends", async () => {
+    jest.useFakeTimers();
+    const remove = jest.fn();
+    const backPress = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(() => ({remove}));
+    try {
+      await render(<OfferScreen {...props()} />);
+      expect(backPress).toHaveBeenCalledTimes(1);
+      const [event, onBack] = backPress.mock.calls[0];
+      expect(event).toBe('hardwareBackPress');
+      // Handled, so the screen stays: the offer couldn't be opened again.
+      expect((onBack as () => boolean)()).toBe(true);
+      expect(mockNavigation.goBack).not.toHaveBeenCalled();
+      expect(riderApi.declineOffer).not.toHaveBeenCalled();
+      await act(async () => {
+        jest.advanceTimersByTime(41_000);
+      });
+      expect(allText()).toContain('Offer expired');
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(backPress).toHaveBeenCalledTimes(1);
+    } finally {
+      backPress.mockRestore();
+    }
   });
 
   it('tells TalkBack the time at 30, 20, 10 and 5 seconds only', async () => {

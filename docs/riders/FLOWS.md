@@ -13,7 +13,7 @@ and what happens next; so does ops.
 
 | # | Who | Where | What happens | Next |
 |---|---|---|---|---|
-| 1 | Rider | App: phone number, then the SMS code | Signs in. `GET /me` says `NOT_RIDER` (no rider row) | The application, step 1 |
+| 1 | Rider | App: phone number, then the SMS code (filled in from the SMS with one tap on Allow) | Signs in. `GET /me` says `NOT_RIDER` (no rider row) | The application, step 1 |
 | 2 | Rider | App: Apply to ride, steps 1 to 4 | About you, the vehicle (sends the sign-up), the document photos, the payout account | "Application sent" |
 | 3 | Ops | Console: Riders → To review → the rider | Checks each photo and the payout account, then one press | Approved (5), or fixes (4) |
 | 4 | Rider | App: "Fix N things to go on" | Sends again only what ops sent back | Back to 3 ("Sent again") |
@@ -228,6 +228,33 @@ flowchart TD
 A rider online or on a trip is never stopped by a new app version, terms or notice until the shift ends. SOS is in every
 header.
 
+**Signing in.** The number field keeps the 10 digits of whatever arrives (typed, pasted, or autofilled with +91, a 0 or
+spaces), and Send code asks auth-service (`POST /api/v1/auth/otp/send`), which sends the SMS by MSG91; the code goes to
+`POST /api/v1/auth/otp/verify`. On the code screen, Android's SMS User Consent API (Google Play services,
+`RiderSmsCodeModule`) waits up to 5 minutes for the SMS: when it comes, Android asks in its own sheet whether Craves Rider
+may read that one message, and Allow fills in the code. The sixth digit checks the code by itself, also typed or pasted (a
+whole SMS works); Verify stays for a retry. Deny, a phone without Play services, or 5 minutes without the SMS: the rider
+types it, as before. Resend waits for the new SMS. The app asks for no SMS permission and MSG91's template stays as it is
+(the no-tap SMS Retriever API would need the app's hash in the message). The customer app reads its code through Firebase
+phone auth instead, which the rider app does not use.
+
+**The way back on every screen.**
+
+| Screen | Back (header and phone) | Other ways out |
+|---|---|---|
+| Phone | The phone's Back leaves the app | Send code |
+| Code | Back to Phone, as Change number does | The sixth digit verifies; Verify, for a retry; Resend |
+| Privacy notice, application, Your account, Update, Pay rates on the way, Terms to accept | None in the header: the app opens these by itself, one at a time; the phone's Back steps back through the application's steps | Each one's own button; Sign out |
+| Terms read from Profile, Help, Trip pay, Payouts, Notice | Back to where the rider came from | |
+| Phone setup | Back to where the rider came from | Done, once location and notifications are on |
+| Go online (selfie) | Back to Home | The shutter: Home, online at once |
+| Offer | None while it is live, like an incoming call: an offer can't be opened again | Accept (to the trip) or Decline (free, back to Home); an ended offer closes itself after 2 s, or with Back |
+| Trip | The phone's Back leaves the screen; the trip stays active (Home: Resume trip) | Each step's button; Customer not answering |
+| SOS | Close | Call ops, Call 112 |
+
+Going offline asks first ("Go offline?" or, on a trip, "Go offline during a trip?"), with Stay online as the safe answer.
+A break and heading home start only between trips. Check now and Check again say "Checked at 4:09 pm" when nothing changed, or why they couldn't check.
+
 ## 10. API and data map
 
 | Flow | Rider API | Admin API | Tables |
@@ -247,8 +274,10 @@ Proved by: `FleetApplicationDatabaseTest` (one-step approval, a rider with every
 application refused with nothing changed, fixes then approval, the queue's stages and counts, stale decisions refused,
 the make and model) and `FleetApplicationSecurityTest`; the console's `riders.vitest.ts` (the queue tabs, approval in one
 step, the expiry date, fixes with reasons, blockers); the app's `screensA.test.tsx` (each step, the photo chooser,
-corrections, sent, fixes, approval), `application.test.ts` (the stage rule), `riderApi.mock.test.ts` (one application
-from sign-up to approval) and `riderApi.live.test.ts` (PNG uploads).
+corrections, sent, fixes, approval, every way back, going offline, Checked at), `RiderOtpScreen.sms.test.tsx`,
+`signInInput.test.ts` and `RiderSmsCodeTest.kt` (the code from the SMS), `RiderApp.live.test.tsx` (sign-in to Home against the live wiring),
+`application.test.ts` (the stage rule), `riderApi.mock.test.ts` (one application from sign-up to approval) and
+`riderApi.live.test.ts` (PNG uploads).
 
 Limits:
 
@@ -259,3 +288,6 @@ Limits:
 - An application can't be closed from the console: there is no move from PENDING to closed, and it would count as an
   exit in the joins and exits report. It stays in Applying.
 - Telugu, Hindi and Kannada stay hidden until a native speaker signs each off (`REVIEWED_LANGUAGES`).
+- Reading the code from the SMS needs Google Play services and one tap on Allow; it is proved on a phone, not in CI
+  (`PHONE-TESTS.md`). An SMS that lands in the moment before the code screen starts waiting, or while the rider is in
+  another app, is typed.

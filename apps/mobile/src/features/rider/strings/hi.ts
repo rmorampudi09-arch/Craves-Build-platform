@@ -95,10 +95,12 @@ export const hi: RiderStrings = {
     wrongCode: 'कोड गलत है। SMS देखकर फिर से कोशिश करें।',
     noFee: 'Craves से जुड़ने के लिए कभी कोई फ़ीस, डिपॉज़िट या किट का पैसा नहीं लगता। कोई पैसे माँगे तो न दें।',
     demoHint: 'डेमो बिल्ड: कोई भी 10 अंकों का नंबर चलेगा, और कोड 123456 है।',
+    smsHint: 'SMS आने पर अनुमति माँगी जाए तो अनुमति दें। कोड अपने आप भर जाएगा।',
   },
   account: {
     headerBlocked: 'आपका अकाउंट',
     checkAgain: 'फिर से देखें',
+    ratesChecked: (time: string) => `${time} पर देखा। पे रेट अभी नहीं आए।`,
     titles: {
       RATES_PENDING: 'पेमेंट रेट जल्द आ रहे हैं',
       SUSPENDED: 'आपका अकाउंट रोका गया है',
@@ -200,6 +202,7 @@ export const hi: RiderStrings = {
       stepApprovedBody: 'फिर पे की शर्तें मानें, फ़ोन सेटअप करें और ऑनलाइन जाएँ।',
       stepRates: 'आपके इलाके के पे रेट',
       checkNow: 'अभी देखें',
+      stillChecking: (time: string) => `${time} पर देखा। ऑप्स टीम अभी आपका आवेदन जाँच रही है।`,
       whatYouSent: 'आपने क्या भेजा',
       fixTitle: (count: number) => (count === 1 ? 'आगे बढ़ने के लिए 1 चीज़ ठीक करें' : `आगे बढ़ने के लिए ${count} चीज़ें ठीक करें`),
       fixBody: 'ऑप्स टीम ने आपका आवेदन जाँचा और ये फिर से चाहिए। बाकी सब ठीक है।',
@@ -309,7 +312,6 @@ export const hi: RiderStrings = {
     askRing: 'क्या आपका फ़ोन बजा और वाइब्रेट हुआ?',
     yes: 'हाँ, हो गया',
     notYet: 'अभी नहीं',
-    backHome: 'होम पर वापस जाएँ',
   },
   home: {
     slotNow: 'आपका अभी का स्लॉट',
@@ -346,6 +348,9 @@ export const hi: RiderStrings = {
     firstDayOnlineBody: 'ऑर्डर के लिए तैयार हों तो नीचे ऑनलाइन जाएँ दबाएँ।',
     confirmOfflineTitle: 'ट्रिप के बीच में ऑफ़लाइन जाना है?',
     confirmOfflineBody: 'ट्रिप आपकी ही रहेगी। इसे सुलझाने के लिए ऑप्स टीम आपको कॉल करेगी।',
+    confirmIdleOfflineTitle: 'ऑफ़लाइन जाना है?',
+    confirmIdleOfflineBody: 'दोबारा ऑनलाइन आने तक आपको ऑफ़र नहीं मिलेंगे।',
+    stayOnline: 'ऑनलाइन रहें',
     noticeTitle: 'आपके लिए एक नोटिस है',
     openNotice: 'पढ़ें',
     takeBreak: 'ब्रेक लें',

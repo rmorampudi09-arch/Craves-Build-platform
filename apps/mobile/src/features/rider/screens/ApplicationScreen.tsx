@@ -17,6 +17,7 @@ import {StepBar} from '../components/StepBar';
 import {Timeline} from '../components/Timeline';
 import {Card, RiderScreen, Title} from '../components/ui';
 import {APPLY_STEPS, applicationOf, requiredDocuments, resumeStep, vehicleModel, type Application, type ApplyStep} from '../domain/application';
+import {formatClock} from '../domain/format';
 import {riderMessage} from '../domain/problem';
 import {useRiderShell, type RiderNav} from '../navigation';
 import {riderKeys, useProfile, useRecheck} from '../state/riderQueries';
@@ -384,9 +385,17 @@ function Sent({
   profile: RiderProfile;
   application: Application;
   again: boolean;
+  /** Asks again; resolves with the error when a request failed. */
   onCheck(): Promise<unknown>;
 }) {
-  const ap = useStrings().strings.account.apply;
+  const {strings, language} = useStrings();
+  const ap = strings.account.apply;
+  // A press that finds no decision yet still says it looked, or why it couldn't (a decision moves the screen on by itself).
+  const [checked, setChecked] = useState<{at: number; error: unknown}>();
+  const check = async () => {
+    const error = await onCheck();
+    setChecked({at: Date.now(), error});
+  };
   return (
     <RiderScreen
       header={<RiderHeader title={ap.statusHeader} inactive />}
@@ -407,7 +416,12 @@ function Sent({
             {title: ap.stepApproved, body: ap.stepApprovedBody, state: 'todo'},
           ]}
         />
-        <BottomAction label={ap.checkNow} variant="outline" size="compact" onPress={onCheck} testID="rider-application-check" />
+        <BottomAction label={ap.checkNow} variant="outline" size="compact" onPress={check} testID="rider-application-check" />
+        {checked ? (
+          <Text accessibilityLiveRegion="polite" style={styles.small} testID="rider-application-checked">
+            {checked.error ? riderMessage(checked.error, strings, language) : ap.stillChecking(formatClock(checked.at))}
+          </Text>
+        ) : null}
       </Card>
       <Card style={styles.list}>
         <Text accessibilityRole="header" style={[styles.strong, styles.listTitle]}>
@@ -498,8 +512,12 @@ export function ApplicationScreen({me}: {me: RiderMe}) {
       setAgain(false);
     }
   }
-  const recheck = () =>
-    Promise.all([queryClient.invalidateQueries({queryKey: riderKeys.me}), queryClient.invalidateQueries({queryKey: riderKeys.profile})]);
+  // invalidateQueries resolves on a failed request too: the first error, if any, comes back for Check now to show.
+  const recheck = async () => {
+    const keys = [riderKeys.me, riderKeys.profile];
+    await Promise.all(keys.map(queryKey => queryClient.invalidateQueries({queryKey})));
+    return keys.map(queryKey => queryClient.getQueryState(queryKey)?.error).find(Boolean);
+  };
   useRecheck(recheck, application?.stage === 'REVIEW');
 
   const aboutStep = (

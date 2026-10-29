@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {Linking, StyleSheet, Text, View} from 'react-native';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import {BottomAction} from '../components/BottomAction';
@@ -6,8 +6,9 @@ import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {Timeline} from '../components/Timeline';
 import {Card, RiderScreen, Title} from '../components/ui';
-import {formatDay} from '../domain/format';
+import {formatClock, formatDay} from '../domain/format';
 import {resolveGate} from '../domain/gate';
+import {riderMessage} from '../domain/problem';
 import {useRiderShell} from '../navigation';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {useRecheck, useRiderMe} from '../state/riderQueries';
@@ -19,7 +20,7 @@ import {ApplicationScreen} from './ApplicationScreen';
  * not signed up, or applied and waiting, gets the application instead (ApplicationScreen).
  */
 export function AccountStatusScreen() {
-  const {strings} = useStrings();
+  const {strings, language} = useStrings();
   const a = strings.account;
   const ap = a.apply;
   const shell = useRiderShell();
@@ -28,6 +29,8 @@ export function AccountStatusScreen() {
   const block = gate?.kind === 'account' ? gate.block : null;
   // Approved and waiting for the rate card: once Craves publishes it, the terms to accept open by themselves.
   useRecheck(() => me.refetch(), block === 'RATES_PENDING');
+  // The rider's last Check again: a press that finds nothing new still says it looked, or why it couldn't.
+  const [checked, setChecked] = useState<{at: number; error: unknown}>();
 
   if (!me.data) {
     return (
@@ -81,9 +84,18 @@ export function AccountStatusScreen() {
             label={a.checkAgain}
             variant="outline"
             size="compact"
-            onPress={() => me.refetch()}
+            onPress={async () => {
+              // refetch resolves on a failed request too; its error says why.
+              const {error} = await me.refetch();
+              setChecked({at: Date.now(), error});
+            }}
             testID="rider-account-check-again"
           />
+          {checked ? (
+            <Text accessibilityLiveRegion="polite" style={styles.label} testID="rider-account-checked">
+              {checked.error ? riderMessage(checked.error, strings, language) : a.ratesChecked(formatClock(checked.at))}
+            </Text>
+          ) : null}
         </Card>
       ) : null}
       {block && me.data.statusReason ? (

@@ -502,7 +502,7 @@ tokens.ts `elevation.card` and `elevation.primaryAction` exist for other app sur
   - Under it, the status chip.
 - **Right:** the `sos-button`.
 - **Variants:**
-  - `rider-header-back`: a chevron-left with a 48 dp hit area, the title starting at x 56, and no chip. Used on Trip pay, Payouts, Notice and Help.
+  - `rider-header-back`: a chevron-left with a 48 dp hit area, the title starting at x 56, and no chip. Used on Trip pay, Payouts, Notice, Help, Phone setup, and Terms read from Profile. A screen the app opens by itself (Terms to accept, the application, Your account) is the only screen there is and has no back.
   - Chip-only: no title. Used on Trip complete.
 - White, with a 1 dp `{colors.border}` bottom line.
 
@@ -613,6 +613,11 @@ The real code is the 8-character short order number (e.g. "#0BDE0101"). Keep it 
 - Sits in a card whose legend ("Ask Anil for the 4-digit OTP") is cut into the top line.
 - At widths under 390 the boxes flex equally (`flex: 1`, `aspectRatio: 1`, minimum 56).
 
+**Sign-in fields.** One `InputField` each, no `maxLength` (Android cuts a paste to it before the app sees it):
+- The mobile number keeps its 10 digits from whatever arrives: typed, pasted or autofilled with +91, a 0 or spaces.
+- The code takes typed digits, a pasted "482 615" or a whole SMS, and the sixth digit checks it: no Verify tap (Verify stays, for a retry).
+- With Google Play services, Android asks once per SMS, in its own sheet, whether Craves Rider may read that message; Allow fills the code in. One `{typography.small}` line under the field says so ("When the SMS comes, tap Allow and the code fills in by itself.") only where the phone can do it.
+
 **Rate-card row (`rate-card-row`).** Label in `{typography.body}` `{colors.textSecondary}` filling the row; value in `{typography.bodyStrong}` `{colors.textPrimary}` right-aligned. The value may wrap ("Link added when the state portal opens"). 1 dp `{colors.border}` dividers sit between rows inside the card padding. The same row without dividers is the trip-pay breakdown, closed by a divider and a bold "Total" row.
 
 **Document row (`document-row`).** Document name in `{typography.body}`, optional sub-line in `{typography.small}` `{colors.textSecondary}` ("Expires 8 Nov"), and a status badge right-aligned to the name.
@@ -712,6 +717,9 @@ There is no tablet layout; the rider app is phone-only.
 ### Insets and system
 - Edge-to-edge with safe-area insets: no fixed top or bottom constants.
 - System Back always works. It never cancels a trip silently: it leaves the trip screen, and the trip stays active.
+- One exception: on a live offer Back does nothing, like an incoming call. The offer can't be opened again, so only Accept or Decline decide; once it has ended, Back closes it.
+- Going offline asks first ("Go offline?", Stay online / Go offline), and on a trip says the trip stays yours. Break and Head home are hidden during a trip.
+- A check the rider asks for (Check now, Check again) that finds nothing new still answers, in `{typography.small}` under the button: "Checked at 4:09 pm. …"; one that couldn't check says why instead (`riderMessage`), never that nothing changed.
 
 ## Iteration Guide
 

@@ -209,12 +209,24 @@ function HeadingHomeCard({home, choices, onChange}: {home: HomeSummary; choices:
 }
 
 /** Online (07-HomeOnline.png): the shift, today, where to rest, and that offers ring with the screen off. */
-function OnlineCards({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
+function OnlineCards({
+  home,
+  choices,
+  onTrip,
+  onChange,
+}: {
+  home: HomeSummary;
+  choices: boolean;
+  onTrip: boolean;
+  onChange: () => void;
+}) {
   const h = useStrings().strings.home;
+  // A break or heading home starts between trips; one already running can always be ended (choices off hides the starts).
+  const startable = choices && !onTrip;
   return (
     <>
-      <BreakCard home={home} choices={choices} onChange={onChange} />
-      <HeadingHomeCard home={home} choices={choices} onChange={onChange} />
+      <BreakCard home={home} choices={startable} onChange={onChange} />
+      <HeadingHomeCard home={home} choices={startable} onChange={onChange} />
       <Card style={styles.slot}>
         <View style={styles.tight}>
           <View style={styles.spread}>
@@ -294,14 +306,18 @@ export function HomeScreen() {
       await riderApi.endShift().catch(() => undefined);
       refresh();
     };
+    // A pocket tap must not end a shift: going offline always asks once, in plain words.
     if (tripInProgress) {
       Alert.alert(h.confirmOfflineTitle, h.confirmOfflineBody, [
-        {text: strings.common.cancel, style: 'cancel'},
+        {text: h.stayOnline, style: 'cancel'},
         {text: h.goOffline, style: 'destructive', onPress: stop},
       ]);
       return;
     }
-    await stop();
+    Alert.alert(h.confirmIdleOfflineTitle, h.confirmIdleOfflineBody, [
+      {text: h.stayOnline, style: 'cancel'},
+      {text: h.goOffline, onPress: stop},
+    ]);
   }
 
   const warnings = [
@@ -382,6 +398,7 @@ export function HomeScreen() {
           <OnlineCards
             home={home.data}
             choices={Boolean(me.data?.features.riderChoices)}
+            onTrip={tripInProgress}
             onChange={() => queryClient.invalidateQueries({queryKey: riderKeys.home})}
           />
         ) : (

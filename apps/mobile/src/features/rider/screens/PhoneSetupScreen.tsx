@@ -161,11 +161,10 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
 
   return (
     <RiderScreen
-      header={<RiderHeader title={s.title} />}
+      // Back to where the rider came from (Home, Profile, or Home under a closed selfie screen).
+      header={<RiderHeader title={s.title} back />}
       testID="rider-phone-setup"
-      footer={
-        <BottomAction label={s.backHome} onPress={() => navigation.popTo('Tabs', {screen: 'Home'})} testID="rider-setup-home" />
-      }>
+      footer={phone.ready ? <BottomAction label={s.done} onPress={() => navigation.goBack()} testID="rider-setup-done" /> : undefined}>
       <Text style={styles.steps}>{s.intro}</Text>
       <View style={styles.progress}>
         <View style={styles.track}>

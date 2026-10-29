@@ -94,10 +94,12 @@ export const en = {
     wrongCode: 'That code is wrong. Check the SMS and try again.',
     noFee: "Craves never charges a fee, deposit or kit cost to join. Don't pay anyone who asks.",
     demoHint: 'Demo build: any 10-digit number works and the code is 123456.',
+    smsHint: 'When the SMS comes, tap Allow and the code fills in by itself.',
   },
   account: {
     headerBlocked: 'Your account',
     checkAgain: 'Check again',
+    ratesChecked: (time: string) => `Checked at ${time}. No pay rates yet.`,
     titles: {
       RATES_PENDING: 'Pay rates are on the way',
       SUSPENDED: 'Your account is paused',
@@ -193,6 +195,7 @@ export const en = {
       stepApprovedBody: 'Then you accept your pay terms, set up your phone and go online.',
       stepRates: 'Pay rates for your area',
       checkNow: 'Check now',
+      stillChecking: (time: string) => `Checked at ${time}. Ops is still checking your application.`,
       whatYouSent: 'What you sent',
       fixTitle: (count: number) => (count === 1 ? 'Fix 1 thing to go on' : `Fix ${count} things to go on`),
       fixBody: 'Ops checked your application and needs these again. Everything else is fine.',
@@ -302,7 +305,6 @@ export const en = {
     askRing: 'Did your phone ring and vibrate?',
     yes: "Yes, it's done",
     notYet: 'Not yet',
-    backHome: 'Back to Home',
   },
   home: {
     slotNow: 'Your slot now',
@@ -340,6 +342,9 @@ export const en = {
     firstDayOnlineBody: 'Tap Go online below when you are ready for orders.',
     confirmOfflineTitle: 'Go offline during a trip?',
     confirmOfflineBody: 'The trip stays yours. Ops will call you to sort it out.',
+    confirmIdleOfflineTitle: 'Go offline?',
+    confirmIdleOfflineBody: "You won't get offers until you go online again.",
+    stayOnline: 'Stay online',
     noticeTitle: 'You have a notice',
     openNotice: 'Read it',
     // A break while online (Phase 4).

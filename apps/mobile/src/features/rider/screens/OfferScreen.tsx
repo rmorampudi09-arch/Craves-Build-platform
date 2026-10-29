@@ -1,5 +1,5 @@
 import React, {memo, useEffect, useRef, useState} from 'react';
-import {AccessibilityInfo, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {AccessibilityInfo, BackHandler, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useQueryClient} from '@tanstack/react-query';
 import {Icon} from '../../../shared/components';
@@ -56,6 +56,16 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
 
   // A newer offer can replace this one on the same screen; start it fresh.
   useEffect(() => setEnded(null), [offer.offerId]);
+
+  // Like an incoming call: Back never drops a live offer by accident (it couldn't be opened again); Accept or Decline
+  // decide, and once the offer has ended, Back closes the screen.
+  useEffect(() => {
+    if (ended) {
+      return;
+    }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => subscription.remove();
+  }, [ended]);
 
   useEffect(() => {
     const expiry = setTimeout(() => setEnded(o.expired), Math.max(0, deadline - Date.now()));

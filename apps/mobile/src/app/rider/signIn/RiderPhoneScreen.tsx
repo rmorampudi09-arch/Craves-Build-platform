@@ -8,6 +8,7 @@ import {isDemo} from '../../../features/rider/riderConfig';
 import {useStrings} from '../../../features/rider/strings/StringsProvider';
 import {useRiderSession} from '../useRiderSession';
 import {SignInField, SignInFrame, signInStyles} from './SignInFrame';
+import {mobileDigits} from './signInInput';
 
 /** Rider wording only: no role picker and no email sign-in. Styled like the code step (01-SignIn.png). */
 export function RiderPhoneScreen({navigation}: RiderScreenProps<'Phone'>) {
@@ -43,10 +44,10 @@ export function RiderPhoneScreen({navigation}: RiderScreenProps<'Phone'>) {
         prefix="+91"
         tracking={1}
         value={digits}
-        onChangeText={value => setDigits(value.replace(/\D/g, '').slice(0, 10))}
+        // No maxLength: Android would cut a pasted "+91 98480 12345" before the app sees it.
+        onChangeText={value => setDigits(mobileDigits(value))}
         keyboardType="phone-pad"
         autoComplete="tel-national"
-        maxLength={10}
         autoFocus
         returnKeyType="next"
         onSubmitEditing={sendCode}

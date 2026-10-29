@@ -189,6 +189,42 @@ create_app() {
   echo "  wss://craves:PASSWORD@$(fqdn_of "$APP")/exotel/voice?sample-rate=16000"
 }
 
+# The secret user-chef-service checks on internal calls, as "<secret name> <Key Vault URL or ->". Never the value.
+chef_internal_secret() {
+  local ref
+  ref=$(app_json "$CHEF_APP" | jq -r '[.properties.template.containers[0].env[]? | select(.name == "CRAVES_INTERNAL_SERVICE_SECRET") | .secretRef][0] // ""')
+  [[ -n "$ref" ]] || return 0
+  printf '%s %s\n' "$ref" "$(secret_meta "$CHEF_APP" | jq -r --arg n "$ref" '[.[] | select(.name == $n) | .keyVaultUrl // "-"][0] // "-"')"
+}
+
+voice_internal_secret_url() {
+  secret_meta "$APP" | jq -r --arg n "$SECRET_INTERNAL" '[.[] | select(.name == $n) | .keyVaultUrl // "-"][0] // "-"'
+}
+
+# The gateway must send exactly what user-chef-service checks, or every caller lookup is refused (29 Oct test calls).
+align_internal_secret() {
+  local chef ref url identity value
+  chef=$(chef_internal_secret)
+  [[ -n "$chef" ]] || fail "$CHEF_APP has no CRAVES_INTERNAL_SERVICE_SECRET secret reference"
+  read -r ref url <<<"$chef"
+  if [[ "$url" != "-" ]]; then
+    if [[ "${url%/}" == "$(voice_internal_secret_url | sed 's:/*$::')" ]]; then
+      echo "Internal secret: same Key Vault secret as $CHEF_APP."
+      return
+    fi
+    identity=$(az identity show -g "$RG" -n "$IDENTITY_NAME" --query id -o tsv --only-show-errors)
+    az containerapp secret set -g "$RG" -n "$APP" --secrets "$SECRET_INTERNAL=keyvaultref:$url,identityref:$identity" -o none --only-show-errors
+    echo "Internal secret: now the same Key Vault secret as $CHEF_APP ($url)."
+  else
+    # user-chef-service keeps it as a plain app secret: copy it app to app. The value is never printed.
+    value=$(az containerapp secret show -g "$RG" -n "$CHEF_APP" --secret-name "$ref" --query value -o tsv --only-show-errors)
+    [[ -n "$value" ]] || fail "could not read $CHEF_APP secret $ref"
+    az containerapp secret set -g "$RG" -n "$APP" --secrets "$SECRET_INTERNAL=$value" -o none --only-show-errors
+    value=""
+    echo "Internal secret: copied from $CHEF_APP app secret $ref (value not shown)."
+  fi
+}
+
 deploy() {
   local image previous previous_model
   [[ "$(app_json "$APP" | jq -r '.name // ""')" == "$APP" ]] || fail "$APP does not exist; run OPERATION=create first"
@@ -198,6 +234,7 @@ deploy() {
   # The model is part of the release: the same update sets VOICE_LIVE_MODEL, so a rollback restores both.
   previous_model=$(app_json "$APP" | jq -r '[.properties.template.containers[0].env[]? | select(.name == "VOICE_LIVE_MODEL") | .value][0] // "gpt-4.1"')
   echo "Model: $previous_model -> $MODEL"
+  align_internal_secret
   if az containerapp update -g "$RG" -n "$APP" --image "$image" --set-env-vars "VOICE_LIVE_MODEL=$MODEL" -o none --only-show-errors \
       && wait_ready; then
     echo "Deployed $image"
@@ -219,6 +256,7 @@ case "$OPERATION" in
     if [[ "$(app_json "$APP" | jq -r '.name // ""')" == "$APP" ]]; then
       echo "$APP: image $(app_json "$APP" | jq -r '.properties.template.containers[0].image'), ingress $(app_json "$APP" | jq -r '.properties.configuration.ingress.fqdn // "disabled"')"
       secret_meta "$APP" | jq '[.[] | {name, keyVaultUrl, identity}]'
+      echo "Internal secret checked by $CHEF_APP: $(chef_internal_secret || true); $APP sends: $(voice_internal_secret_url)"
       env_report
       fqdn=$(fqdn_of "$APP")
       [[ -z "$fqdn" ]] || echo "/healthz: $(curl --silent --max-time 10 "https://$fqdn/healthz" || echo unreachable)"

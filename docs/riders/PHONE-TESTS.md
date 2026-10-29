@@ -157,6 +157,26 @@ Set-up:
 
 **Pass:** every step as written; on Rider pilot health, `offer_rules` shows round 2, and `rider_choices` counts the break and the limit.
 
+## 7. Apply and get approved (app 1.2.0, `FLOWS.md`)
+
+Set-up: a live build, a phone number that isn't a rider yet, and the console open as an operations admin and as a
+payments admin.
+
+1. **Apply.** Sign in. "Apply to ride", step 1 of 4. Next without a name or the box: each says what is missing. Fill
+   them, Next; on step 2 a wrong plate is refused before anything is sent. Petrol, a plate, "Honda Activa 6G", Next.
+2. **Photos.** Step 3 lists six photos. Add one with **Take a photo** and one with **Choose from gallery** (a PNG
+   screenshot works). Kill the app and open it again: it opens on step 3 with those two sent. Press the phone's back
+   button: step 2, with the plate on file. Send the rest; Next unlocks. Send a UPI ID: "Application sent".
+3. **Fixes.** In the console, Riders → To review shows the rider. Mark the licence Needs a fix with a reason and the
+   payout account Return; **Send fixes**. On the phone (open, or on returning to it) within a minute: "Fix 2 things to
+   go on" with that reason. Send both again: "Sent again".
+4. **Approve.** In the console the rider is back in To review. Mark everything Looks good (dates for the licence, RC,
+   insurance, PUC) and Confirm; **Approve and activate**. The panel says the rider is on the pilot riders. On the phone
+   within a minute: the terms with "You're approved" (or "Pay rates are on the way" with no rate card), then Home with
+   "Before you go online".
+
+**Pass:** every step as written; the rider's page shows one audit entry for each decision.
+
 ## Results
 
 ### Service survival

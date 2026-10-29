@@ -22,9 +22,13 @@ paths:
     get:
       operationId: listRiders
       x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, COMPLIANCE_ADMIN, PAYMENTS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
-      description: Riders, newest first. search matches the name or the last digits of the phone.
+      description: >-
+        Riders, newest first. search matches the name or the last digits of the phone. stage is a tab of the rider queue
+        (docs/riders/FLOWS.md): REVIEW, FIXES or APPLYING for riders still applying, or ACTIVE, SUSPENDED or DEACTIVATED.
+        counts holds every tab's size, whatever the filters.
       parameters:
         - { name: status, in: query, schema: { $ref: '#/components/schemas/RiderStatus' } }
+        - { name: stage, in: query, schema: { type: string, enum: [REVIEW, FIXES, APPLYING, ACTIVE, SUSPENDED, DEACTIVATED] } }
         - { name: search, in: query, schema: { type: string, maxLength: 80 } }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
@@ -34,10 +38,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [riders, nextCursor]
+                required: [riders, nextCursor, counts]
                 properties:
                   riders: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RiderSummary' } }
                   nextCursor: { type: string, nullable: true, maxLength: 200 }
+                  counts:
+                    type: object
+                    description: Riders in each stage (REVIEW, FIXES, APPLYING, ACTIVE, SUSPENDED, DEACTIVATED).
+                    additionalProperties: { type: integer, minimum: 0 }
         '400': { $ref: '#/components/responses/Invalid' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -265,6 +273,38 @@ paths:
         '422':
           description: NOTICE_DEADLINE_TOO_SOON, REVIEW_BY_TOO_LATE, APPEAL_PHONE_REQUIRED or NOTICE_REQUIRED.
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  /api/v1/admin/fleet/riders/{riderId}/application/decision:
+    post:
+      operationId: decideRiderApplication
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Ops's one decision on a PENDING rider's application (docs/riders/FLOWS.md), in one transaction and one audit row.
+        APPROVE: every listed document OK and nothing returned; afterwards every required document must be VERIFIED and a
+        payout account ACTIVE. It verifies the documents (expiresOn as printed, required for DRIVING_LICENCE, VEHICLE_RC,
+        VEHICLE_INSURANCE and PUC), confirms the payout account (payoutAccount CONFIRM, which also needs PLATFORM_ADMIN or
+        PAYMENTS_ADMIN), adds the rider to the pilot riders while test mode is on, and activates them with a RESTORE event
+        (counted as a join) and the RIDER role last. FIXES: at least one FIX or payoutAccount RETURN; documents marked OK
+        are verified now, FIX ones rejected with the reason the rider reads, and a returned account is set aside so the
+        rider sends it again. Each document must be the rider's latest photo of its type, still PENDING, and
+        applicationVersion the one the rider's detail showed: if the rider changed their details or sent another payout
+        account since, nothing changes (APPLICATION_CHANGED).
+      parameters: [{ $ref: '#/components/parameters/RiderId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApplicationDecision' }
+      responses:
+        '200':
+          description: What the decision did and what comes next.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { description: "The caller lacks the operation's role, or PAYMENTS_ADMIN_REQUIRED (CONFIRM without a payments role).", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: "RIDER_NOT_FOUND, DOCUMENT_NOT_FOUND or NO_SUBMITTED_PAYOUT_ACCOUNT.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: "APPLICATION_NOT_PENDING, APPLICATION_CHANGED (new details or payout account since the page loaded), DOCUMENT_NOT_PENDING, DOCUMENT_REPLACED (a newer photo came), PAYOUT_ACCOUNT_NOT_UNIQUE, INVALID_STATUS_TRANSITION (the rider never signed in) or IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: "APPLICATION_INCOMPLETE (names what is still needed), FIXES_IN_APPROVAL, NO_FIXES, EXPIRY_REQUIRED, DOCUMENT_EXPIRED or HOLDER_NAME_MISMATCH.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/selfie-reviews:
     get:
       operationId: listSelfieReviews
@@ -1207,18 +1247,30 @@ components:
     RiderStatus: { type: string, enum: [NOT_RIDER, PENDING, ACTIVE, SUSPENDED, DEACTIVATED] }
     RiderSummary:
       type: object
-      required: [riderId, name, phoneMasked, status, pendingDocuments, pendingDevice, createdAt]
+      required: [riderId, name, phoneMasked, status, pendingDocuments, pendingDevice, createdAt, stage, missingDocuments, documentsToFix,
+        payoutAccountSent, readySince]
       properties:
         riderId: { type: string, format: uuid }
         name: { type: string, maxLength: 120 }
         phoneMasked: { type: string, maxLength: 20, example: '+91 98xxxxx210' }
         status: { $ref: '#/components/schemas/RiderStatus' }
-        pendingDocuments: { type: integer, minimum: 0 }
+        pendingDocuments: { type: integer, minimum: 0, description: Documents whose latest photo waits for a check. }
         pendingDevice: { type: boolean }
         createdAt: { type: string, format: date-time }
+        stage:
+          type: string
+          enum: [REVIEW, FIXES, APPLYING, NOT_RIDER, ACTIVE, SUSPENDED, DEACTIVATED]
+          description: >-
+            Whose turn it is (docs/riders/FLOWS.md). A PENDING rider is APPLYING while a required document or the payout
+            account was never sent, FIXES while one must be sent again, REVIEW once everything is in; otherwise the status.
+        missingDocuments: { type: integer, minimum: 0, description: Required documents never sent. }
+        documentsToFix: { type: integer, minimum: 0, description: Required documents rejected or expired. }
+        payoutAccountSent: { type: boolean, description: A payout account is on file or waiting to be confirmed. }
+        readySince: { type: string, format: date-time, nullable: true, description: 'REVIEW only: when the last item arrived.' }
     RiderDetail:
       type: object
-      required: [rider, documents, devices, payoutAccount, submittedPayoutAccount, shifts, statusEvents]
+      required: [rider, documents, devices, payoutAccount, submittedPayoutAccount, shifts, statusEvents, requiredDocuments, pilotRider,
+        applicationVersion]
       properties:
         rider:
           allOf:
@@ -1229,7 +1281,13 @@ components:
                 kycName: { type: string, maxLength: 120, description: Name on the verified documents; the payout holder name must match it. }
                 language: { type: string, enum: [en, te, hi] }
                 vehicleNumberMasked: { type: string, maxLength: 20, nullable: true }
-        documents: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/RiderDocument' } }
+                vehicleKind: { type: string, enum: [PETROL, ELECTRIC, BICYCLE], nullable: true, description: As the rider applied; null for a rider ops added before sign-up. }
+                vehicleLabel: { type: string, maxLength: 80, description: The make and model the rider gave, or the kind's name. }
+        documents:
+          type: array
+          maxItems: 20
+          description: The latest photo of each type, then the newest of the rest; newest first.
+          items: { $ref: '#/components/schemas/RiderDocument' }
         devices: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/RiderDevice' } }
         payoutAccount: { allOf: [{ $ref: '#/components/schemas/PayoutAccount' }], nullable: true }
         submittedPayoutAccount:
@@ -1243,6 +1301,49 @@ components:
           maxItems: 20
           description: The last 20 offers made to the rider, newest first, with how each reached the phone.
           items: { $ref: '#/components/schemas/RiderOffer' }
+        requiredDocuments:
+          type: array
+          maxItems: 8
+          description: What this rider must send, by vehicle kind, in the order the review page shows them.
+          items: { type: string, enum: [DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE, PUC, PAN, PHOTO, ADDRESS_PROOF, BANK_PROOF] }
+        pilotRider: { type: boolean, description: On the test-mode allow-list, so dispatch may offer them trips while test mode is on. }
+        applicationVersion:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+          description: The rider's details and sent payout account as shown here; an application decision sends it back.
+    DocumentVerdict:
+      type: object
+      additionalProperties: false
+      required: [documentId, verdict]
+      properties:
+        documentId: { type: string, format: uuid }
+        verdict: { type: string, enum: [OK, FIX] }
+        expiresOn: { type: string, format: date, description: 'OK: the expiry printed on DRIVING_LICENCE, VEHICLE_RC, VEHICLE_INSURANCE or PUC (required for them).' }
+        reason: { $ref: '#/components/schemas/Reason' }
+    ApplicationDecision:
+      type: object
+      additionalProperties: false
+      required: [decision, applicationVersion]
+      properties:
+        decision: { type: string, enum: [APPROVE, FIXES] }
+        applicationVersion: { type: string, pattern: '^[0-9a-f]{32}$', description: From the rider's detail ops checked. }
+        documents: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/DocumentVerdict' } }
+        payoutAccount: { type: string, enum: [CONFIRM, RETURN], description: 'CONFIRM the account the rider sent (payments role too), or RETURN it; absent leaves it.' }
+    ApplicationResult:
+      type: object
+      required: [riderId, decision, status, stage, documentsVerified, fixesAsked, payoutAccountConfirmed, payoutAccountReturned, addedToPilot,
+        rateCardPublished]
+      properties:
+        riderId: { type: string, format: uuid }
+        decision: { type: string, enum: [APPROVE, FIXES] }
+        status: { $ref: '#/components/schemas/RiderStatus' }
+        stage: { type: string, maxLength: 20 }
+        documentsVerified: { type: integer, minimum: 0 }
+        fixesAsked: { type: integer, minimum: 0 }
+        payoutAccountConfirmed: { type: boolean }
+        payoutAccountReturned: { type: boolean }
+        addedToPilot: { type: boolean, description: On the pilot riders now (test mode on). }
+        rateCardPublished: { type: boolean, description: 'false: no rate card is in force, so the approved rider waits for pay rates.' }
     RiderOffer:
       type: object
       required: [offerId, tripId, orderCode, state, offeredAt, pushedAt, pushResult, rangAt, rangChannel]

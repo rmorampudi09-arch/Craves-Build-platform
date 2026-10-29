@@ -20,25 +20,65 @@ public final class FleetAdminModels {
     public record Admin(UUID id, String name) {
     }
 
+    /**
+     * stage (docs/riders/FLOWS.md): for a PENDING rider APPLYING (something never sent: the rider's turn), FIXES (ops asked
+     * for a new photo or the payout account again, or a checked document expired: the rider's turn) or REVIEW (all sent: ops's
+     * turn); otherwise the status. missingDocuments and documentsToFix count the required documents never sent and those to
+     * send again; payoutAccountSent: one is on file or waiting; readySince: when the last item arrived, in REVIEW only.
+     */
     public record RiderSummary(UUID riderId, String name, String phoneMasked, String status, int pendingDocuments,
-                               boolean pendingDevice, Instant createdAt) {
+                               boolean pendingDevice, Instant createdAt, String stage, int missingDocuments, int documentsToFix,
+                               boolean payoutAccountSent, Instant readySince) {
     }
 
-    public record RiderPage(List<RiderSummary> riders, String nextCursor) {
+    /** counts: riders per stage (REVIEW, FIXES, APPLYING, ACTIVE, SUSPENDED, DEACTIVATED), for the console's tabs. */
+    public record RiderPage(List<RiderSummary> riders, String nextCursor, Map<String, Integer> counts) {
     }
 
-    /** RiderSummary plus kycName, language and vehicleNumberMasked. */
+    /** RiderSummary plus kycName, language, vehicleNumberMasked, and the vehicle the rider gave (kind and make and model). */
     public record RiderHeader(UUID riderId, String name, String phoneMasked, String status, int pendingDocuments,
-                              boolean pendingDevice, Instant createdAt, String kycName, String language, String vehicleNumberMasked) {
+                              boolean pendingDevice, Instant createdAt, String kycName, String language, String vehicleNumberMasked,
+                              String stage, int missingDocuments, int documentsToFix, boolean payoutAccountSent, Instant readySince,
+                              String vehicleKind, String vehicleLabel) {
     }
 
     /**
      * submittedPayoutAccount: what the rider typed in the app, never paid until ops confirms it. recentOffers: the last 20
-     * offers made to the rider, newest first, with how each reached the phone.
+     * offers made to the rider, newest first, with how each reached the phone. requiredDocuments: what this rider must send,
+     * by vehicle kind; pilotRider: on the test-mode allow-list, so dispatch may offer them trips. documents: the latest photo
+     * of each type, then the newest of the rest, 20 at most, newest first. applicationVersion: the rider's details and sent
+     * payout account as shown, which an application decision sends back.
      */
     public record RiderDetail(RiderHeader rider, List<RiderDocument> documents, List<RiderDevice> devices,
                               PayoutAccount payoutAccount, PayoutAccount submittedPayoutAccount, List<Shift> shifts,
-                              List<StatusEvent> statusEvents, List<RiderOffer> recentOffers) {
+                              List<StatusEvent> statusEvents, List<RiderOffer> recentOffers, List<String> requiredDocuments,
+                              boolean pilotRider, String applicationVersion) {
+    }
+
+    /**
+     * Ops's verdict on one document of an application: OK verifies it, with the expiry printed on it for the four riding
+     * documents; FIX rejects it with the reason the rider reads.
+     */
+    public record DocumentVerdict(UUID documentId, String verdict, LocalDate expiresOn, String reason) {
+    }
+
+    /**
+     * Ops's one decision on a rider's application (docs/riders/FLOWS.md). APPROVE: nothing to fix, and the rider becomes
+     * ACTIVE. FIXES: at least one item to fix; documents marked OK are verified now, so the rider sends only the rest.
+     * payoutAccount: CONFIRM the account the rider sent (a payments admin too), or RETURN it so the rider sends it again;
+     * absent leaves it as it is. applicationVersion: from the rider's detail ops checked; if the rider changed their details
+     * or payout account since, the decision is refused.
+     */
+    public record ApplicationDecision(String decision, List<DocumentVerdict> documents, String payoutAccount, String applicationVersion) {
+    }
+
+    /**
+     * What the decision did and what comes next. addedToPilot: put on the test-mode allow-list (test mode on); a false
+     * rateCardPublished means the approved rider waits for pay rates before they can accept terms and go online.
+     */
+    public record ApplicationResult(UUID riderId, String decision, String status, String stage, int documentsVerified, int fixesAsked,
+                                    boolean payoutAccountConfirmed, boolean payoutAccountReturned, boolean addedToPilot,
+                                    boolean rateCardPublished) {
     }
 
     public record RiderDocument(UUID documentId, String type, String status, LocalDate expiresOn, String reason,

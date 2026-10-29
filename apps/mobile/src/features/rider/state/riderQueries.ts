@@ -1,3 +1,5 @@
+import {useEffect, useRef} from 'react';
+import {AppState} from 'react-native';
 import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
 import type {EarningsRange, RiderMe} from '../api/contract';
 import {riderApi} from '../api/riderApi';
@@ -39,8 +41,28 @@ export const useActiveTrip = () =>
 
 export const useTerms = () => useQuery({queryKey: riderKeys.terms, queryFn: riderApi.getTerms, enabled: useRiderRole()});
 
-// Any rider ops added may read their profile (documents before activation too).
-export const useProfile = () => useQuery({queryKey: riderKeys.profile, queryFn: riderApi.getProfile});
+// Any rider ops added may read their profile (documents before activation too); someone not signed up yet may not (403).
+export const useProfile = (enabled = true) => useQuery({queryKey: riderKeys.profile, queryFn: riderApi.getProfile, enabled});
+
+/**
+ * While the rider waits on ops (an application in review, no rate card yet), asks again every minute and whenever they come
+ * back to the app, so an approval or a request for fixes shows without a restart.
+ */
+export function useRecheck(recheck: () => unknown, waiting: boolean) {
+  const latest = useRef(recheck);
+  latest.current = recheck;
+  useEffect(() => {
+    if (!waiting) {
+      return undefined;
+    }
+    const timer = setInterval(() => latest.current(), 60_000);
+    const appState = AppState.addEventListener('change', state => state === 'active' && latest.current());
+    return () => {
+      clearInterval(timer);
+      appState.remove();
+    };
+  }, [waiting]);
+}
 
 export const usePayouts = () => useQuery({queryKey: riderKeys.payouts, queryFn: riderApi.getPayouts, enabled: useRiderRole()});
 

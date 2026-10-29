@@ -11,6 +11,7 @@ import {BottomAction} from '../components/BottomAction';
 import {RefusalNotices} from '../components/RefusalNotices';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
+import {Timeline} from '../components/Timeline';
 import {Card, Money, RiderScreen} from '../components/ui';
 import {formatClock, formatRupees} from '../domain/format';
 import {riderMessage} from '../domain/problem';
@@ -343,10 +344,33 @@ export function HomeScreen() {
           />
         </Card>
       ) : null}
-      {!phone.ready ? (
-        <Card>
-          <Text style={styles.body}>{h.setupNeeded}</Text>
-          <BottomAction label={h.openSetup} variant="outline" size="compact" onPress={() => navigation.navigate('PhoneSetup')} />
+      {phone.checked && !phone.ready ? (
+        // What's left before the first order, so a newly approved rider knows the next step (and anyone whose phone lost a permission).
+        <Card style={styles.slot}>
+          <Text accessibilityRole="header" style={styles.heading} testID="rider-first-day">
+            {h.firstDayTitle}
+          </Text>
+          <Timeline
+            items={[
+              {title: h.firstDayApproved, state: 'done'},
+              {title: h.firstDayTerms, state: 'done'},
+              {
+                title: h.firstDayPhone,
+                body: h.firstDayPhoneBody,
+                state: 'current',
+                action: (
+                  <BottomAction
+                    label={h.openSetup}
+                    variant="outline"
+                    size="compact"
+                    onPress={() => navigation.navigate('PhoneSetup')}
+                    testID="rider-open-setup"
+                  />
+                ),
+              },
+              {title: h.firstDayOnline, body: h.firstDayOnlineBody, state: 'todo'},
+            ]}
+          />
         </Card>
       ) : null}
       {warnings.map(warning => (

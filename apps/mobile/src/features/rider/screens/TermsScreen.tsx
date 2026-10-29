@@ -4,6 +4,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import {Badge} from '../../../shared/components';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import {riderApi} from '../api/riderApi';
+import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {ChoiceChip, ChoiceRow} from '../components/Choices';
 import {RiderHeader} from '../components/RiderHeader';
@@ -54,10 +55,16 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
   const me = useRiderMe();
   const accepting = route.params.mode === 'accept';
   const header = <RiderHeader title={t.title} />;
+  // First terms ever: the rider was just approved, so say so and what this last step is.
+  const welcome =
+    accepting && me.data && !me.data.acceptedTermsVersion ? (
+      <Banner tone="success" title={t.welcomeTitle} text={t.welcome} testID="rider-terms-welcome" />
+    ) : null;
 
   if (!terms.data) {
     return (
       <RiderScreen header={header} testID="rider-terms">
+        {welcome}
         <LanguageChips />
         {terms.isError ? (
           <ProblemCard error={terms.error} onRetry={() => terms.refetch()} testID="rider-terms-problem" />
@@ -109,6 +116,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
           readFull
         )
       }>
+      {welcome}
       <LanguageChips />
       <View style={styles.meta}>
         <Text style={styles.small}>{t.version(version, formatDay(effectiveFrom))}</Text>

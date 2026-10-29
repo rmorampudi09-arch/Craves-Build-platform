@@ -2,6 +2,7 @@
 // Rate-card lines are the draft pricing, not final.
 import { AppApiError } from '../../../core/http/apiError';
 import { shortOrderNumber } from '../../../utils/orderNumber';
+import { requiredDocuments } from '../domain/application';
 import type { RiderApi } from './riderApi';
 import type {
   DeliverBody,
@@ -167,14 +168,16 @@ export function createMockRiderApi(options: MockOptions = {}) {
   const latencyMs = options.latencyMs ?? (() => 150 + Math.random() * 450);
   const iso = (ms: number) => new Date(ms).toISOString();
 
-  const SIGN_UP_DOCUMENTS = [
-    ['DL', 'Driving licence'],
-    ['RC', 'Vehicle RC'],
-    ['INSURANCE', 'Vehicle insurance'],
-    ['PUC', 'Pollution (PUC)'],
-    ['PAN', 'PAN card'],
-    ['BANK', 'Bank proof'],
-  ] as const;
+  // The server's labels (FleetRiderService.DOCUMENT_LABELS); which ones a rider sends depends on the vehicle.
+  const DOCUMENT_LABELS: Record<string, string> = {
+    DL: 'Driving licence',
+    RC: 'Vehicle RC',
+    INSURANCE: 'Vehicle insurance',
+    PUC: 'PUC certificate',
+    PAN: 'PAN card',
+    BANK: 'Bank proof',
+  };
+  const FIX_REASON = 'The photo is blurry. Take it again in good light.';
 
   function freshMe(): RiderMe {
     return {
@@ -239,10 +242,14 @@ export function createMockRiderApi(options: MockOptions = {}) {
     uploaded: new Set<string>(),
     /** Sign-up documents ops accepted, and the payout account ops confirmed (a PENDING rider's). */
     checked: new Set<string>(),
+    /** Photos ops sent back, with ops's reason; a new upload clears it. */
+    rejected: new Map<string, string>(),
     payoutConfirmed: null as string | null,
     payoutSubmitted: null as string | null,
+    /** Ops set the sent account aside: the rider sends one again. */
+    payoutReturned: false,
     /** What the rider signed up with; null shows the demo rider's own scooter. */
-    vehicle: null as { kind: VehicleKind; plate?: string } | null,
+    vehicle: null as { kind: VehicleKind; plate?: string; model?: string } | null,
     me: freshMe(),
     online: false,
     shiftStartedAt: 0,
@@ -508,7 +515,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
         (): RiderProfile => ({
           vehicle: state.vehicle
             ? {
-                label: VEHICLE_LABELS[state.vehicle.kind],
+                label: state.vehicle.model ?? VEHICLE_LABELS[state.vehicle.kind],
                 regNumberMasked: state.vehicle.plate && `${state.vehicle.plate.slice(0, 4)}xx${state.vehicle.plate.slice(-4)}`,
                 kind: state.vehicle.kind,
               }
@@ -517,14 +524,18 @@ export function createMockRiderApi(options: MockOptions = {}) {
                 regNumberMasked: 'TS 09 •• ••12',
               },
           documents: state.me.status === 'PENDING'
-            ? SIGN_UP_DOCUMENTS.map(([type, label]) => ({
+            ? requiredDocuments(state.vehicle?.kind).map(type => ({
                 type,
-                label,
-                status: state.checked.has(type)
-                  ? ('VERIFIED' as const)
-                  : state.uploaded.has(type)
-                    ? ('PENDING' as const)
-                    : ('MISSING' as const),
+                label: DOCUMENT_LABELS[type],
+                ...(state.rejected.has(type)
+                  ? { status: 'REJECTED' as const, reason: state.rejected.get(type) }
+                  : {
+                      status: state.checked.has(type)
+                        ? ('VERIFIED' as const)
+                        : state.uploaded.has(type)
+                          ? ('PENDING' as const)
+                          : ('MISSING' as const),
+                    }),
               }))
             : (
             [
@@ -561,6 +572,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
           ),
           payoutAccountMasked: state.me.status === 'PENDING' ? state.payoutConfirmed ?? undefined : 'UPI ••••@okhdfc',
           payoutAccountSubmitted: state.payoutSubmitted ?? undefined,
+          payoutAccountReturned:
+            state.me.status === 'PENDING' && state.payoutReturned && !state.payoutSubmitted && !state.payoutConfirmed ? true : undefined,
           preferences: state.me.features.riderChoices ? { ...state.preferences } : undefined,
           homeSavedAt: state.homeSavedAt ? iso(state.homeSavedAt) : undefined,
           insurance: {
@@ -804,12 +817,16 @@ export function createMockRiderApi(options: MockOptions = {}) {
             if (vehicleChanged && state.checked.has('RC')) {
               throw apiError('VEHICLE_LOCKED', 'Ops has already accepted your RC for this vehicle. Call rider support to change it.', 422);
             }
-            if (renamed) {
+            if (renamed && state.payoutSubmitted) {
               state.payoutSubmitted = null; // sent in the old name, so ops could never confirm it
+              state.payoutReturned = true;
             }
           }
+          // Like the server: no make and model keeps the one on file, unless the kind changed.
+          const model =
+            input.vehicleModel?.trim() || (input.vehicleKind === state.vehicle?.kind ? state.vehicle?.model : undefined);
           state.me = {...state.me, name: input.name.trim(), language: input.language, status: 'PENDING'};
-          state.vehicle = {kind: input.vehicleKind, plate};
+          state.vehicle = {kind: input.vehicleKind, plate, model};
         }
         return {...state.me};
       }),
@@ -826,6 +843,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
     uploadDocument: type =>
       respond(() => {
         state.uploaded.add(type);
+        state.checked.delete(type);
+        state.rejected.delete(type);
       }),
     registerDevice: () =>
       respond(() => {
@@ -988,11 +1007,44 @@ export function createMockRiderApi(options: MockOptions = {}) {
     },
     /** Ops accepts every sign-up document sent so far and confirms the payout account sent. */
     acceptSignUp() {
-      state.uploaded.forEach(type => state.checked.add(type));
+      state.uploaded.forEach(type => {
+        if (!state.rejected.has(type)) {
+          state.checked.add(type);
+        }
+      });
       if (state.payoutSubmitted) {
         state.payoutConfirmed = state.payoutSubmitted;
         state.payoutSubmitted = null;
       }
+    },
+    /** Ops's one decision, approved: everything sent is accepted and the rider is active (FleetApplicationService). */
+    approveApplication() {
+      controls.acceptSignUp();
+      controls.setStatus('ACTIVE');
+    },
+    /**
+     * Ops's one decision, fixes asked: the first photo sent goes back with a reason, the rest are accepted, and a payout
+     * account waiting to be checked is set aside, so the rider sends it again.
+     */
+    askForFixes() {
+      const back = requiredDocuments(state.vehicle?.kind).find(type => state.uploaded.has(type) && !state.checked.has(type));
+      if (back) {
+        state.rejected.set(back, FIX_REASON);
+      }
+      state.uploaded.forEach(type => {
+        if (type !== back && !state.rejected.has(type)) {
+          state.checked.add(type);
+        }
+      });
+      if (state.payoutSubmitted) {
+        state.payoutSubmitted = null;
+        state.payoutReturned = true;
+      }
+    },
+    /** Signed in but not signed up, so a reviewer can walk the whole application. */
+    startApplication() {
+      controls.reset();
+      state.me = { ...freshMe(), name: '', status: 'NOT_RIDER', acceptedTermsVersion: undefined };
     },
     setStatus(status: RiderStatus) {
       state.me = {
@@ -1070,9 +1122,11 @@ export function createMockRiderApi(options: MockOptions = {}) {
         stopReason: null,
         payoutSubmitted: null,
         payoutConfirmed: null,
+        payoutReturned: false,
         vehicle: null,
       });
       state.checked.clear();
+      state.rejected.clear();
       state.seen.clear();
       state.uploaded.clear();
     },

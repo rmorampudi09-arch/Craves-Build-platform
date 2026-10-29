@@ -970,7 +970,30 @@ The app had been checked mostly against its own demo server. This pass walked ev
 - **Languages.** Kannada joins English, Telugu and Hindi (`strings/kn.ts`, `res/values-kn`), hidden from riders until a native speaker signs it off like the others. The server stores en, te or hi, so a Kannada reader is English there (`serverLanguage`). Pay lines, refusals and errors are named in the rider's language by code or component. Labels wrap instead of overflowing: choice chips, segments and the check row (`components/Choices.tsx`), buttons, the header's status chip; the two-up trip buttons stack in te, hi and kn.
 - **Proved by** the app's Jest suite (186 suites), `problem.test.ts`, the new cases in `gate.test.ts`, `riderApi.live.test.ts` (the 403 refresh), `screensA`, `screensC`, `trip` and `RiderApp.live` tests; screenshots of every screen in all four languages at 360 dp and font scale 1.3; an independent review.
 
+### P6-02 One application, one decision (done; app 1.2.0)
+Riders signed up on one long page, ops then approved each document, the payout account and the activation separately,
+and neither side was told what came next. Now one application in the app and one decision in the console
+(`FLOWS.md`):
+- **The app.** Four steps: about you; the vehicle with its make and model; the document photos, from the camera or the
+  gallery (a PNG stays PNG, which the server's byte check needs); the payout account. Back on every step and on the
+  phone's back button, resuming at the first step not done. Then "Application sent" with a timeline, or "Fix N things to
+  go on" with only what ops sent back and ops's reasons. The app asks again every minute and when the rider returns, so
+  an approval moves on by itself: "Pay rates are on the way", the terms with "You're approved", and Home's "Before you go
+  online" checklist. The background-check and training cards went (nothing like that exists).
+- **The console.** Riders opens on To review, with counts per stage and each rider's next step in words. The review page
+  shows every required document with what to check, its expiry date and ready-made reasons, and the payout account; one
+  button approves or sends the fixes (`POST /riders/{id}/application/decision`): one transaction, one audit row, the
+  rider added to the pilot riders while test mode is on, and a warning when no rate card is published. The page sends
+  back the version of the rider's details and payout account it showed, so a change by the rider meanwhile is refused
+  (409 `APPLICATION_CHANGED`), never approved unseen.
+- **One rule for the stage** on the server (`FleetAdminService.SUMMARY`), in the console and in the app
+  (`domain/application.ts`), so both sides always agree whose turn it is. No migration; every new contract field is
+  optional, so app 1.1.0 keeps working.
+- **Proved by** `FleetApplicationDatabaseTest` and `FleetApplicationSecurityTest`, the console's `riders.vitest.ts`, the
+  app's `screensA.test.tsx`, `application.test.ts`, `riderApi.mock.test.ts` and `riderApi.live.test.ts`; screenshots of
+  each new screen in English, Telugu, Hindi and Kannada.
+
 ### People steps for Phase 6
-**S1. Native speakers.** One each for Telugu, Hindi and Kannada reads every screen in a demo build (Profile, language) and the native notifications; the lawyer reads the terms and notice words. Add each signed-off language to `REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`. `help.talkBody` promises support in Telugu, Hindi or English: decide whether support answers in Kannada before Kannada goes live.
+**S1. Native speakers.** One each for Telugu, Hindi and Kannada reads every screen in a demo build (Profile, language; the application from the demo panel's "Start over as a new applicant") and the native notifications; the lawyer reads the terms and notice words. Add each signed-off language to `REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`. `help.talkBody` promises support in Telugu, Hindi or English: decide whether support answers in Kannada before Kannada goes live.
 
 **S2. Phone tests.** Run `PHONE-TESTS.md` on a live build, including a rider activated while the app is open (Check again, then Terms) and a phone with no Google Play services (Go online says phone setup).

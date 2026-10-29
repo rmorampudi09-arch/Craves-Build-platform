@@ -11,8 +11,8 @@ const multipart = {
   timeout: 90_000,
 };
 
-function imagePart(uri: string, name: string): Blob {
-  return { uri, name, type: 'image/jpeg' } as unknown as Blob;
+function imagePart(uri: string, name: string, type = 'image/jpeg'): Blob {
+  return { uri, name, type } as unknown as Blob;
 }
 
 // shortcut: a fetch of the local file tells us whether the camera photo still exists; replace with a file-system check if one is added.
@@ -159,7 +159,9 @@ const calls: RiderApi = {
   async uploadDocument(type, photoUri) {
     const form = new FormData();
     form.append('type', type);
-    form.append('photo', imagePart(photoUri, 'document.jpg'));
+    // A photo from the gallery that was a PNG stays PNG (DocumentPhoto); the server checks the bytes match the type.
+    const png = /\.png$/i.test(photoUri);
+    form.append('photo', png ? imagePart(photoUri, 'document.png', 'image/png') : imagePart(photoUri, 'document.jpg'));
     await apiClient.post(`${BASE}/documents`, form, multipart);
   },
   // Live builds upload fixes from the native service, which holds the shift credential; JS calls this only in mock mode.

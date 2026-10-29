@@ -64,7 +64,7 @@ class FleetAdminSecurityTest {
 
     @Test
     void readersListButOnlyOperatorsCreateRiders() throws Exception {
-        when(service.listRiders(null, null, null)).thenReturn(new FleetAdminModels.RiderPage(List.of(), null));
+        when(service.listRiders(null, null, null, null)).thenReturn(new FleetAdminModels.RiderPage(List.of(), null, java.util.Map.of()));
         // admin-fleet-v1 x-roles: payments admins read riders to set their payout accounts.
         for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
             mvc.perform(as(get(RIDERS), role)).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))

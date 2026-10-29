@@ -92,14 +92,18 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
       Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing, and with no pilot kitchens yet it plans nothing. To keep the old rules (3 at once, nearest first), skip this step.
    2. **The rate card.** Under Rate card → New draft, enter the real numbers, their allowed ranges and the English summary. Telugu and Hindi lines wait for a native speaker's sign-off.
    3. **Publish it.** The first card takes effect at once. Every later card needs its start at least 14 days after publishing, and riders see it in the app as "New terms from …" until then.
-2. **Riders.**
-   1. In Riders → New rider, add each pilot rider.
-   2. The rider installs the live APK (step 7), signs in with their phone and sends their documents.
-   3. Ops approves the documents with their expiry dates, sets the vehicle, and sets the payout account in person.
-   4. Ops activates the rider with **Restore**, which grants the RIDER role.
-3. **Pilot zone.** In Rider pilot setup → Pilot zone:
-   - add each pilot rider;
-   - add each pilot kitchen by its chef ID.
+2. **Riders.** One application, one decision (`FLOWS.md`).
+   1. The rider installs the live APK (step 7), signs in with their phone and applies in the app: about them, the
+      vehicle, the document photos, the payout account. (Riders → Add rider is only for someone at the office who can't
+      apply in the app; they still sign in and finish there.)
+   2. In Riders → To review, open the rider, mark each document Looks good (with its expiry date) or Needs a fix (with a
+      reason), and the payout account Confirm or Return. Then press **Approve and activate**, or **Send fixes**: the rider
+      sees exactly what to send again, and the application comes back to To review once they have. Confirming the payout
+      account needs a platform admin, or an operations admin who is also a payments admin.
+   3. Approval activates the rider (the RIDER role) and, while test mode is on, adds them to the pilot riders. If no rate
+      card is published yet, the page says so; the rider waits on "Pay rates are on the way" until it is.
+3. **Pilot zone.** In Rider pilot setup → Pilot zone, add each pilot kitchen by its chef ID. (Riders approved in one
+   step are already there; add a rider approved before this release by hand.)
 
    Only orders from these kitchens are offered, and only to these riders.
 4. **Shadow.** Dispatch is already `shadow` from step 1.1; if you skipped that, choose `shadow` now and save, keeping the rules. Dispatch only logs `FLEET_SHADOW` lines saying who would have been offered and at what pay. Read those lines for a day of real orders.

@@ -29,7 +29,7 @@ paths:
       summary: Sign up as a rider with the OTP-verified phone of this sign-in; the rider is PENDING until ops activates them
       description: |
         For anyone signed in with an Indian mobile number; no RIDER role. Answers /me. A PENDING rider sends it again to
-        correct their name, language, vehicle and plate; an empty vehicleRegNumber keeps the plate on file. A new name sets
+        correct their name, language, vehicle (kind, make and model) and plate; an empty vehicleRegNumber keeps the plate on file. A new name sets
         aside a payout account sent in the old one (the rider sends it again). Past PENDING, the rider gets their /me
         unchanged, so a repeat is harmless. vehicleRegNumber is required unless vehicleKind is BICYCLE (letters and digits
         as on the RC; spaces and dashes are ignored). 400 VALIDATION_FAILED (name, language, vehicle, plate, or adult not
@@ -316,6 +316,7 @@ components:
         payoutAccountMasked: {type: string, description: The account payouts go to (ops set or confirmed it)}
         preferences: {$ref: '#/components/schemas/OrderPreferences'}
         payoutAccountSubmitted: {type: string, description: An account the rider sent that ops has not confirmed yet}
+        payoutAccountReturned: {type: boolean, description: 'true: no account on file because the one sent was set aside (ops asked for it again, or the rider changed their name); the rider sends it again. Absent otherwise.'}
         homeSavedAt: {type: string, format: date-time, description: 'Phase 5: when the rider saved their home spot for heading home; absent while none is saved. Sent with rider choices off too, so the rider can delete it. The spot itself is never sent back.'}
         insurance: {type: object, required: [label, claimPhone], properties: {label: {type: string}, claimPhone: {type: string}, claimStatus: {type: string}}}
     SignUp:
@@ -326,6 +327,7 @@ components:
         language: {type: string, enum: [en, te, hi]}
         vehicleKind: {type: string, enum: [PETROL, ELECTRIC, BICYCLE]}
         vehicleRegNumber: {type: string, example: TS09EA1234}
+        vehicleModel: {type: string, maxLength: 40, example: Honda Activa 6G, description: 'Optional (app 1.2.0): the make and model, shown to ops beside the RC so they never retype it. Absent keeps the one on file (or the kind''s name when the kind changes).'}
         adult: {type: boolean, description: The rider confirms they are 18 or older}
     PayoutAccountInput:
       type: object

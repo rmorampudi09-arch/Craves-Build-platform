@@ -47,6 +47,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -71,22 +72,46 @@ public class FleetAdminService {
     static final int RIDER_PAGE = 50;
     static final int AUDIT_PAGE = 100;
     private static final Set<String> STATUSES = Set.of("NOT_RIDER", "PENDING", "ACTIVE", "SUSPENDED", "DEACTIVATED");
+    // The console's tabs, in order: ops's turn first, then the rider's, then everyone working or not.
+    static final List<String> STAGES = List.of("REVIEW", "FIXES", "APPLYING", "ACTIVE", "SUSPENDED", "DEACTIVATED");
     private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
     private static final Set<String> KINDS = Set.of("SAFETY_PAUSE", "NOTICE", "RESTORE", "DEACTIVATE");
     private static final Set<String> SELFIE_STATES = Set.of("PENDING", "APPROVED", "REJECTED");
     static final String RIDER_PHONE = FleetRules.RIDER_PHONE;
-    // The four riding documents: verified only with the expiry date printed on them (/shift/start checks it).
-    private static final Set<String> EXPIRING_DOCUMENTS = Set.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC");
     static final String VEHICLE_REGISTRATION = FleetRules.VEHICLE_REGISTRATION;
     // Ends every showing banner. The GREATEST keeps ends_at after starts_at should a banner start in the same instant.
     private static final String END_BANNERS =
         "UPDATE fleet_schema.ops_banner SET ends_at = GREATEST(now(), starts_at + INTERVAL '1 microsecond') WHERE ends_at > now()";
-    private static final String SUMMARY = """
-        SELECT r.id, r.name, r.phone, r.status, r.created_at, r.language, r.vehicle_reg_number,
-          (SELECT count(*) FROM fleet_schema.rider_document d WHERE d.rider_id = r.id AND d.status = 'PENDING') AS pending_documents,
-          EXISTS (SELECT 1 FROM fleet_schema.rider_device v WHERE v.rider_id = r.id AND v.state = 'PENDING_APPROVAL') AS pending_device
+    /**
+     * One row per rider, read as the subquery s, with the application stage worked out from what is stored
+     * (docs/riders/FLOWS.md): the latest photo of each required document (by vehicle kind) and the payout account. A rider
+     * still PENDING is APPLYING while anything was never sent, FIXES while a photo or the account must be sent again, and in
+     * REVIEW once everything is in; ready_since is when the last item arrived.
+     */
+    static final String SUMMARY = """
+        SELECT r.id, r.name, r.phone, r.status, r.created_at, r.language, r.vehicle_reg_number, r.vehicle_kind, r.vehicle_label,
+          (SELECT count(*) FROM (SELECT DISTINCT ON (d.type) d.status FROM fleet_schema.rider_document d WHERE d.rider_id = r.id
+                                 ORDER BY d.type, d.uploaded_at DESC) l WHERE l.status = 'PENDING') AS pending_documents,
+          EXISTS (SELECT 1 FROM fleet_schema.rider_device v WHERE v.rider_id = r.id AND v.state = 'PENDING_APPROVAL') AS pending_device,
+          a.missing, a.to_fix, p.sent AS payout_sent,
+          CASE WHEN r.status <> 'PENDING' THEN r.status
+               WHEN a.missing > 0 OR NOT (p.sent OR p.returned) THEN 'APPLYING'
+               WHEN a.to_fix > 0 OR p.returned THEN 'FIXES' ELSE 'REVIEW' END AS stage,
+          CASE WHEN r.status = 'PENDING' AND a.missing = 0 AND a.to_fix = 0 AND p.sent
+               THEN GREATEST(a.last_upload, p.sent_at) END AS ready_since
         FROM fleet_schema.rider r
-        """;
+        CROSS JOIN LATERAL (
+          SELECT count(*) FILTER (WHERE l.status IS NULL) AS missing,
+                 count(*) FILTER (WHERE l.status IN ('REJECTED', 'EXPIRED')) AS to_fix, max(l.uploaded_at) AS last_upload
+          FROM unnest(%s) AS q(type)
+          LEFT JOIN LATERAL (SELECT %s AS status, d.uploaded_at FROM fleet_schema.rider_document d
+                             WHERE d.rider_id = r.id AND d.type = q.type ORDER BY d.uploaded_at DESC LIMIT 1) l ON true) a
+        CROSS JOIN LATERAL (
+          SELECT count(*) FILTER (WHERE x.state IN ('ACTIVE', 'SUBMITTED')) > 0 AS sent,
+                 count(*) > 0 AND count(*) FILTER (WHERE x.state IN ('ACTIVE', 'SUBMITTED')) = 0 AS returned,
+                 max(x.set_at) FILTER (WHERE x.state IN ('ACTIVE', 'SUBMITTED')) AS sent_at
+          FROM fleet_schema.rider_payout_account x WHERE x.rider_id = r.id) p
+        """.formatted(FleetRules.REQUIRED_DOCUMENTS_SQL, FleetRules.DOCUMENT_STATUS_SQL);
     private static final String DOCUMENT = "SELECT id, type, " + FleetRules.DOCUMENT_STATUS_SQL + " AS status, expires_on, reason, "
         + "reviewed_by_name, reviewed_at, uploaded_at FROM fleet_schema.rider_document ";
     private static final String DEVICE = "SELECT id, model, app_version, state, first_seen_at, approved_by_name, approved_at "
@@ -120,8 +145,17 @@ public class FleetAdminService {
 
     @Transactional(readOnly = true)
     public RiderPage listRiders(String status, String search, String cursor) {
+        return listRiders(status, null, search, cursor);
+    }
+
+    /** A page of riders, newest first, by status or application stage, with how many riders each stage holds (the tabs). */
+    @Transactional(readOnly = true)
+    public RiderPage listRiders(String status, String stage, String search, String cursor) {
         if (status != null && !STATUSES.contains(status)) {
             throw FleetApiException.invalid("Choose a valid status.");
+        }
+        if (stage != null && !STAGES.contains(stage)) {
+            throw FleetApiException.invalid("Choose a valid stage.");
         }
         if (search != null && search.length() > 80) {
             throw FleetApiException.invalid("Search with at most 80 characters.");
@@ -129,32 +163,41 @@ public class FleetAdminService {
         StringBuilder where = new StringBuilder(" WHERE true");
         List<Object> args = new ArrayList<>();
         if (status != null) {
-            where.append(" AND r.status = ?");
+            where.append(" AND s.status = ?");
             args.add(status);
+        }
+        if (stage != null) {
+            where.append(" AND s.stage = ?");
+            args.add(stage);
         }
         String term = search == null ? "" : search.trim();
         if (term.matches("[0-9 ]+")) {
-            where.append(" AND r.phone LIKE ?");
+            where.append(" AND s.phone LIKE ?");
             args.add("%" + term.replace(" ", ""));
         } else if (!term.isEmpty()) {
-            where.append(" AND r.name ILIKE ?");
+            where.append(" AND s.name ILIKE ?");
             args.add("%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%");
         }
         Cursor after = Cursor.parse(cursor);
         if (after != null) {
-            where.append(" AND (r.created_at, r.id) < (?, ?)");
+            where.append(" AND (s.created_at, s.id) < (?, ?)");
             args.add(Timestamp.from(after.at()));
             args.add(after.id());
         }
-        List<RiderSummary> riders = jdbc.query(SUMMARY + where + " ORDER BY r.created_at DESC, r.id DESC LIMIT " + (RIDER_PAGE + 1),
-            (row, n) -> summary(row), args.toArray());
+        List<RiderSummary> riders = jdbc.query("SELECT * FROM (" + SUMMARY + ") s" + where + " ORDER BY s.created_at DESC, s.id DESC LIMIT "
+            + (RIDER_PAGE + 1), (row, n) -> summary(row), args.toArray());
         String next = null;
         if (riders.size() > RIDER_PAGE) {
             riders = riders.subList(0, RIDER_PAGE);
             RiderSummary last = riders.get(RIDER_PAGE - 1);
             next = new Cursor(last.createdAt(), last.riderId()).encode();
         }
-        return new RiderPage(riders, next);
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        STAGES.forEach(name -> counts.put(name, 0));
+        for (Map<String, Object> row : jdbc.queryForList("SELECT s.stage, count(*) AS riders FROM (" + SUMMARY + ") s GROUP BY s.stage")) {
+            counts.put((String) row.get("stage"), ((Number) row.get("riders")).intValue());
+        }
+        return new RiderPage(riders, next, counts);
     }
 
     @Transactional
@@ -178,8 +221,9 @@ public class FleetAdminService {
                 throw FleetApiException.conflict("PHONE_IN_USE", "Another rider already has this phone number.");
             }
             RiderHeader rider = header(id);
-            return new Done(new RiderSummary(rider.riderId(), rider.name(), rider.phoneMasked(), rider.status(), 0, false,
-                rider.createdAt()), id, id.toString(), "Created rider " + name + " (" + rider.phoneMasked() + ").");
+            return new Done(new RiderSummary(rider.riderId(), rider.name(), rider.phoneMasked(), rider.status(), rider.pendingDocuments(),
+                rider.pendingDevice(), rider.createdAt(), rider.stage(), rider.missingDocuments(), rider.documentsToFix(),
+                rider.payoutAccountSent(), rider.readySince()), id, id.toString(), "Created rider " + name + " (" + rider.phoneMasked() + ").");
         });
     }
 
@@ -197,9 +241,13 @@ public class FleetAdminService {
 
     @Transactional(readOnly = true)
     public RiderDetail getRider(UUID riderId) {
+        // Read first: a change the rider makes while the rest is read then fails the decision safe, never confirms it unseen.
+        String version = jdbc.queryForList(FleetApplicationService.VERSION, String.class, riderId).stream().findFirst().orElse(null);
         RiderHeader rider = header(riderId);
-        List<RiderDocument> documents = jdbc.query(DOCUMENT + "WHERE rider_id = ? ORDER BY uploaded_at DESC LIMIT 20",
-            (row, n) -> document(row), riderId);
+        // Each type's latest photo however many came after it (the review decides on those), then the newest of the rest.
+        List<RiderDocument> documents = jdbc.query("SELECT * FROM (" + DOCUMENT + "WHERE rider_id = ? ORDER BY id IN (SELECT DISTINCT ON "
+            + "(type) id FROM fleet_schema.rider_document WHERE rider_id = ? ORDER BY type, uploaded_at DESC) DESC, uploaded_at DESC "
+            + "LIMIT 20) d ORDER BY uploaded_at DESC", (row, n) -> document(row), riderId, riderId);
         List<RiderDevice> devices = jdbc.query(DEVICE + "WHERE rider_id = ? ORDER BY first_seen_at DESC LIMIT 10",
             (row, n) -> device(row), riderId);
         PayoutAccount account = jdbc.query("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
@@ -219,7 +267,10 @@ public class FleetAdminService {
             (row, n) -> new RiderOffer(row.getObject("id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("order_code"),
                 row.getString("state"), instant(row, "offered_at"), instant(row, "pushed_at"), row.getString("push_result"),
                 instant(row, "rang_at"), row.getString("rang_channel"), offerReason(row.getString("reason"))), riderId);
-        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events, offers);
+        boolean pilot = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.test_mode_rider WHERE rider_id = ?)",
+            Boolean.class, riderId));
+        return new RiderDetail(rider, documents, devices, account, submitted, shifts, events, offers,
+            FleetRules.requiredDocuments(rider.vehicleKind()), pilot, version);
     }
 
     /**
@@ -277,19 +328,35 @@ public class FleetAdminService {
     @Transactional
     public Object approveDocument(Admin admin, UUID key, UUID riderId, UUID documentId, LocalDate expiresOn) {
         return once(admin, key, "DOCUMENT_VERIFIED", riderId + "/" + documentId + "\n" + expiresOn, () -> {
-            String type = jdbc.queryForList("SELECT type FROM fleet_schema.rider_document WHERE id = ? AND rider_id = ?", String.class,
-                documentId, riderId).stream().findFirst()
-                .orElseThrow(() -> FleetApiException.notFound("DOCUMENT_NOT_FOUND", "No such document for this rider."));
-            if (expiresOn == null && EXPIRING_DOCUMENTS.contains(type)) {
-                throw FleetApiException.unprocessable("EXPIRY_REQUIRED", "Enter the expiry date printed on the document.");
-            }
-            int updated = jdbc.update("UPDATE fleet_schema.rider_document SET status = 'VERIFIED', reason = NULL, expires_on = ?, reviewed_by = ?, "
-                + "reviewed_by_name = ?, reviewed_at = now() WHERE id = ? AND rider_id = ? AND status = 'PENDING'",
-                expiresOn, admin.id(), admin.name(), documentId, riderId);
-            RiderDocument document = reviewedDocument(updated, riderId, documentId);
+            RiderDocument document = verifyNow(admin, riderId, documentId, expiresOn);
             return new Done(document, riderId, documentId.toString(), "Verified the " + document.type()
                 + (expiresOn == null ? "." : ", valid until " + expiresOn + "."));
         });
+    }
+
+    /**
+     * Verifies a PENDING document of this rider in the caller's transaction, by this reviewer, with the expiry date read on
+     * it. 404 DOCUMENT_NOT_FOUND, 409 DOCUMENT_NOT_PENDING, 422 EXPIRY_REQUIRED for the four riding documents.
+     */
+    public RiderDocument verifyNow(Admin admin, UUID riderId, UUID documentId, LocalDate expiresOn) {
+        String type = jdbc.queryForList("SELECT type FROM fleet_schema.rider_document WHERE id = ? AND rider_id = ?", String.class,
+            documentId, riderId).stream().findFirst()
+            .orElseThrow(() -> FleetApiException.notFound("DOCUMENT_NOT_FOUND", "No such document for this rider."));
+        if (expiresOn == null && FleetRules.EXPIRING_DOCUMENTS.contains(type)) {
+            throw FleetApiException.unprocessable("EXPIRY_REQUIRED", "Enter the expiry date printed on the document.");
+        }
+        int updated = jdbc.update("UPDATE fleet_schema.rider_document SET status = 'VERIFIED', reason = NULL, expires_on = ?, reviewed_by = ?, "
+            + "reviewed_by_name = ?, reviewed_at = now() WHERE id = ? AND rider_id = ? AND status = 'PENDING'",
+            expiresOn, admin.id(), admin.name(), documentId, riderId);
+        return reviewedDocument(updated, riderId, documentId);
+    }
+
+    /** Rejects a PENDING document of this rider in the caller's transaction, with the reason the rider reads (checked already). */
+    public RiderDocument rejectNow(Admin admin, UUID riderId, UUID documentId, String reason) {
+        int updated = jdbc.update("UPDATE fleet_schema.rider_document SET status = 'REJECTED', reason = ?, reviewed_by = ?, "
+            + "reviewed_by_name = ?, reviewed_at = now() WHERE id = ? AND rider_id = ? AND status = 'PENDING'",
+            reason, admin.id(), admin.name(), documentId, riderId);
+        return reviewedDocument(updated, riderId, documentId);
     }
 
     /** The vehicle the rider's profile shows. The registration number is stored in full, answered and audited masked. */
@@ -354,10 +421,7 @@ public class FleetAdminService {
     public Object rejectDocument(Admin admin, UUID key, UUID riderId, UUID documentId, String reason) {
         String text = reason(reason);
         return once(admin, key, "DOCUMENT_REJECTED", riderId + "/" + documentId + "\n" + text, () -> {
-            int updated = jdbc.update("UPDATE fleet_schema.rider_document SET status = 'REJECTED', reason = ?, reviewed_by = ?, "
-                + "reviewed_by_name = ?, reviewed_at = now() WHERE id = ? AND rider_id = ? AND status = 'PENDING'",
-                text, admin.id(), admin.name(), documentId, riderId);
-            RiderDocument document = reviewedDocument(updated, riderId, documentId);
+            RiderDocument document = rejectNow(admin, riderId, documentId, text);
             return new Done(document, riderId, documentId.toString(), "Rejected the " + document.type() + ": " + text);
         });
     }
@@ -442,26 +506,39 @@ public class FleetAdminService {
     @Transactional
     public Object confirmPayoutAccount(Admin admin, UUID key, UUID riderId) {
         return once(admin, key, "PAYOUT_ACCOUNT_CONFIRMED", riderId.toString(), () -> {
-            String kycName = lockRider(riderId).name();
-            Map<String, Object> sent = jdbc.queryForList("SELECT id, fingerprint, holder_name, method, masked_account "
-                + "FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'SUBMITTED'", riderId).stream().findFirst()
-                .orElseThrow(() -> FleetApiException.notFound("NO_SUBMITTED_PAYOUT_ACCOUNT", "The rider has not sent a payout account to check."));
-            if (!FleetRules.sameName((String) sent.get("holder_name"), kycName)) {
-                throw FleetApiException.unprocessable("HOLDER_NAME_MISMATCH", "The account holder's name differs from the rider's KYC name.");
-            }
-            if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
-                + "WHERE fingerprint = ? AND rider_id <> ? AND state = 'ACTIVE')", Boolean.class, sent.get("fingerprint"), riderId))) {
-                throw notUnique();
-            }
-            UUID id = (UUID) sent.get("id");
-            jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE rider_id = ? AND state = 'ACTIVE'", riderId);
-            jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'ACTIVE', set_by = ?, set_by_name = ?, set_at = now() WHERE id = ?",
-                admin.id(), admin.name(), id);
-            PayoutAccount saved = jdbc.queryForObject("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
-                + "FROM fleet_schema.rider_payout_account WHERE id = ?", (row, n) -> payoutAccount(row), id);
-            return new Done(saved, riderId, id.toString(), "Confirmed the payout account " + sent.get("method") + " "
-                + sent.get("masked_account") + " the rider sent from the app.");
+            Confirmed confirmed = confirmNow(admin, riderId);
+            PayoutAccount saved = confirmed.account();
+            return new Done(saved, riderId, confirmed.accountId().toString(), "Confirmed the payout account " + saved.method() + " "
+                + saved.maskedAccount() + " the rider sent from the app.");
         });
+    }
+
+    /** The payout account confirmed, and its id (the audit's target). */
+    public record Confirmed(UUID accountId, PayoutAccount account) {
+    }
+
+    /**
+     * Makes the account the rider sent the one payouts go to, in the caller's transaction (the rider row locked).
+     * 404 NO_SUBMITTED_PAYOUT_ACCOUNT, 422 HOLDER_NAME_MISMATCH, 409 PAYOUT_ACCOUNT_NOT_UNIQUE.
+     */
+    public Confirmed confirmNow(Admin admin, UUID riderId) {
+        String kycName = lockRider(riderId).name();
+        Map<String, Object> sent = jdbc.queryForList("SELECT id, fingerprint, holder_name FROM fleet_schema.rider_payout_account "
+            + "WHERE rider_id = ? AND state = 'SUBMITTED'", riderId).stream().findFirst()
+            .orElseThrow(() -> FleetApiException.notFound("NO_SUBMITTED_PAYOUT_ACCOUNT", "The rider has not sent a payout account to check."));
+        if (!FleetRules.sameName((String) sent.get("holder_name"), kycName)) {
+            throw FleetApiException.unprocessable("HOLDER_NAME_MISMATCH", "The account holder's name differs from the rider's KYC name.");
+        }
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.rider_payout_account "
+            + "WHERE fingerprint = ? AND rider_id <> ? AND state = 'ACTIVE')", Boolean.class, sent.get("fingerprint"), riderId))) {
+            throw notUnique();
+        }
+        UUID id = (UUID) sent.get("id");
+        jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'REPLACED' WHERE rider_id = ? AND state = 'ACTIVE'", riderId);
+        jdbc.update("UPDATE fleet_schema.rider_payout_account SET state = 'ACTIVE', set_by = ?, set_by_name = ?, set_at = now() WHERE id = ?",
+            admin.id(), admin.name(), id);
+        return new Confirmed(id, jdbc.queryForObject("SELECT method, masked_account, ifsc, holder_name, set_by_name, set_at "
+            + "FROM fleet_schema.rider_payout_account WHERE id = ?", (row, n) -> payoutAccount(row), id));
     }
 
     @Transactional
@@ -478,37 +555,47 @@ public class FleetAdminService {
             throw FleetApiException.invalid("Enter the appeal phone as +91 and 10 digits.");
         }
         return once(admin, key, "STATUS_" + input.kind(), riderId + "\n" + write(input), () -> {
-            LockedRider rider = lockRider(riderId);
-            Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            String after = FleetRules.statusAfter(input.kind(), rider.status(), input.deadline(), input.reviewBy(),
-                input.appealPhone(), openNoticeDeadline(riderId), now);
-            boolean activates = "ACTIVE".equals(after) && !"ACTIVE".equals(rider.status());
-            if (activates && rider.identityId() == null) {
-                throw FleetApiException.conflict("INVALID_STATUS_TRANSITION", "The rider must sign in to the app once before activation.");
-            }
-            Instant deadline = "NOTICE".equals(input.kind()) ? input.deadline() : null;
-            Instant reviewBy = "SAFETY_PAUSE".equals(input.kind()) ? input.reviewBy() : null;
-            UUID id = UUID.randomUUID();
-            jdbc.update("INSERT INTO fleet_schema.rider_status_event (id, rider_id, kind, reason, evidence_summary, deadline, review_by, "
-                + "appeal_phone, approver_id, approver_name, status_before, status_after, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                id, riderId, input.kind(), reason, evidence, timestamp(deadline), timestamp(reviewBy), input.appealPhone(),
-                admin.id(), admin.name(), rider.status(), after, Timestamp.from(now));
-            if (!after.equals(rider.status())) {
-                jdbc.update("UPDATE fleet_schema.rider SET status = ?, updated_at = now() WHERE id = ?", after, riderId);
-                if (engineFeed != null) {
-                    engineFeed.refresh(riderId); // a paused or deactivated rider leaves the engine's ranking at once
-                }
-            }
-            // The remote role change comes last, so its failure rolls the whole decision back.
-            if (activates) {
-                roles.grant(rider.identityId(), riderId);
-            } else if ("DEACTIVATED".equals(after) && rider.identityId() != null) {
-                roles.revoke(rider.identityId(), riderId);
-            }
-            StatusEvent event = new StatusEvent(id, input.kind(), reason, evidence, deadline, reviewBy, input.appealPhone(),
-                admin.name(), now, after);
-            return new Done(event, riderId, id.toString(), input.kind() + " (" + rider.status() + " to " + after + "): " + reason);
+            String before = lockRider(riderId).status();
+            StatusEvent event = recordStatusEvent(admin, riderId, input.kind(), reason, evidence, input.deadline(), input.reviewBy(),
+                input.appealPhone());
+            return new Done(event, riderId, event.eventId().toString(),
+                input.kind() + " (" + before + " to " + event.statusAfter() + "): " + reason);
         });
+    }
+
+    /**
+     * Applies one status event in the caller's transaction, with the rider row locked: the due-process rules of
+     * FleetRules.statusAfter, the event row, the new status, then the RIDER role. The remote role change comes last, so its
+     * failure rolls the whole decision back. reason and evidence are already checked.
+     */
+    public StatusEvent recordStatusEvent(Admin admin, UUID riderId, String kind, String reason, String evidence, Instant deadlineInput,
+                                         Instant reviewByInput, String appealPhone) {
+        LockedRider rider = lockRider(riderId);
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        String after = FleetRules.statusAfter(kind, rider.status(), deadlineInput, reviewByInput, appealPhone, openNoticeDeadline(riderId), now);
+        boolean activates = "ACTIVE".equals(after) && !"ACTIVE".equals(rider.status());
+        if (activates && rider.identityId() == null) {
+            throw FleetApiException.conflict("INVALID_STATUS_TRANSITION", "The rider must sign in to the app once before activation.");
+        }
+        Instant deadline = "NOTICE".equals(kind) ? deadlineInput : null;
+        Instant reviewBy = "SAFETY_PAUSE".equals(kind) ? reviewByInput : null;
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO fleet_schema.rider_status_event (id, rider_id, kind, reason, evidence_summary, deadline, review_by, "
+            + "appeal_phone, approver_id, approver_name, status_before, status_after, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            id, riderId, kind, reason, evidence, timestamp(deadline), timestamp(reviewBy), appealPhone,
+            admin.id(), admin.name(), rider.status(), after, Timestamp.from(now));
+        if (!after.equals(rider.status())) {
+            jdbc.update("UPDATE fleet_schema.rider SET status = ?, updated_at = now() WHERE id = ?", after, riderId);
+            if (engineFeed != null) {
+                engineFeed.refresh(riderId); // a paused or deactivated rider leaves the engine's ranking at once
+            }
+        }
+        if (activates) {
+            roles.grant(rider.identityId(), riderId);
+        } else if ("DEACTIVATED".equals(after) && rider.identityId() != null) {
+            roles.revoke(rider.identityId(), riderId);
+        }
+        return new StatusEvent(id, kind, reason, evidence, deadline, reviewBy, appealPhone, admin.name(), now, after);
     }
 
     @Transactional(readOnly = true)
@@ -628,12 +715,14 @@ public class FleetAdminService {
     }
 
     private RiderHeader header(UUID riderId) {
-        return jdbc.query(SUMMARY + " WHERE r.id = ?", (row, n) -> {
+        return jdbc.query("SELECT * FROM (" + SUMMARY + ") s WHERE s.id = ?", (row, n) -> {
             RiderSummary summary = summary(row);
             String vehicle = row.getString("vehicle_reg_number");
             return new RiderHeader(summary.riderId(), summary.name(), summary.phoneMasked(), summary.status(), summary.pendingDocuments(),
                 summary.pendingDevice(), summary.createdAt(), summary.name(), row.getString("language"),
-                vehicle == null ? null : FleetRules.maskVehicle(vehicle));
+                vehicle == null ? null : FleetRules.maskVehicle(vehicle), summary.stage(), summary.missingDocuments(),
+                summary.documentsToFix(), summary.payoutAccountSent(), summary.readySince(), row.getString("vehicle_kind"),
+                row.getString("vehicle_label"));
         }, riderId).stream().findFirst().orElseThrow(FleetAdminService::riderNotFound);
     }
 
@@ -648,7 +737,8 @@ public class FleetAdminService {
 
     private static RiderSummary summary(ResultSet row) throws SQLException {
         return new RiderSummary(row.getObject("id", UUID.class), row.getString("name"), FleetRules.maskPhone(row.getString("phone")),
-            row.getString("status"), row.getInt("pending_documents"), row.getBoolean("pending_device"), instant(row, "created_at"));
+            row.getString("status"), row.getInt("pending_documents"), row.getBoolean("pending_device"), instant(row, "created_at"),
+            row.getString("stage"), row.getInt("missing"), row.getInt("to_fix"), row.getBoolean("payout_sent"), instant(row, "ready_since"));
     }
 
     private static RiderDocument document(ResultSet row) throws SQLException {

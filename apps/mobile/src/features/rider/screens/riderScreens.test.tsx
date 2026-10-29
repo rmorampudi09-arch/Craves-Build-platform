@@ -169,9 +169,14 @@ describe('Home', () => {
   it('sends the rider to phone setup when a required check fails', async () => {
     (riderDevice.locationGranted as jest.Mock).mockResolvedValueOnce(false);
     await render(<HomeScreen />, [[riderKeys.home, home], [riderKeys.me, me], [riderKeys.activeTrip, null]]);
-    expect(allText()).toContain('Finish phone setup to go online.');
-    await act(async () => byId('rider-go-online').props.onPress());
+    // What's left before the first order: approval and terms done, the phone next, then going online.
+    expect(allText()).toContain(
+      'Before you go online | Application approved | Pay terms accepted | 3 | Set up your phone | So offers ring even when the screen is off. | Phone setup | Go online | Tap Go online below when you are ready for orders.',
+    );
+    await act(async () => byId('rider-open-setup').props.onPress());
     expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
+    await act(async () => byId('rider-go-online').props.onPress());
+    expect(mockNavigation.navigate).toHaveBeenLastCalledWith('PhoneSetup');
   });
 
   it('shows the shift and Go offline when online', async () => {

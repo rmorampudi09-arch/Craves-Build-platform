@@ -24,7 +24,7 @@ const DOC = "22222222-2222-4222-8222-222222222222";
 const DEVICE = "33333333-3333-4333-8333-333333333333";
 const SHIFT = "44444444-4444-4444-8444-444444444444";
 const at = "2026-10-20T06:30:00Z";
-const summary = { riderId: RIDER, name: "Ravi Kumar", phoneMasked: "+91 98xxxxx210", status: "PENDING", pendingDocuments: 1, pendingDevice: true, createdAt: at };
+const summary = { riderId: RIDER, name: "Ravi Kumar", phoneMasked: "+91 98xxxxx210", status: "ACTIVE", pendingDocuments: 1, pendingDevice: true, createdAt: at };
 const document = { documentId: DOC, type: "DRIVING_LICENCE", status: "PENDING", expiresOn: "2030-01-31", reason: null, reviewedBy: null, reviewedAt: null, uploadedAt: at };
 const device = { deviceId: DEVICE, model: "Redmi 13C", appVersion: "1.0.0", state: "PENDING_APPROVAL", firstSeenAt: at, approvedBy: null, approvedAt: null };
 const detail = { rider: { ...summary, kycName: "RAVI KUMAR", language: "te", vehicleNumberMasked: null }, documents: [document], devices: [device], payoutAccount: null, shifts: [], statusEvents: [] };
@@ -57,7 +57,7 @@ describe("riders list", () => {
   it("lists riders and adds one through every state", async () => {
     render(createElement(RidersList));
     expect((await screen.findByRole("link", { name: "Ravi Kumar" })).getAttribute("href")).toBe(`/admin/riders/${RIDER}`);
-    expect(screen.getByText("1 document, new phone")).toBeTruthy();
+    expect(screen.getByText("1 document to check, new phone to approve")).toBeTruthy();
 
     type("Name as on their documents", "Ravi Kumar");
     type("Phone", "+91 12345");
@@ -74,7 +74,7 @@ describe("riders list", () => {
     expect(posts()[0]).toMatchObject({ path: "riders", body: { name: "Ravi Kumar", phone: "+919876543210", language: "te" } });
     expect(posts()[0].key).toMatch(UUID);
     finish(json(summary, 201));
-    expect(await screen.findByText("Rider added. They can now sign in and upload documents.")).toBeTruthy();
+    expect(await screen.findByText("Rider added. They sign in with this phone and finish the application in the app.")).toBeTruthy();
 
     answer = () => json({ code: "PHONE_IN_USE", message: "This phone already belongs to a rider." }, 409);
     type("Name as on their documents", "Ravi Kumar");
@@ -183,7 +183,7 @@ describe("rider detail", () => {
 
   it("saves the vehicle through every state", async () => {
     render(createElement(RiderDetailView, { riderId: RIDER }));
-    await screen.findByText("No vehicle recorded yet.", { exact: false });
+    await screen.findByText("Now: Not recorded.", { exact: false });
     type("Vehicle (make and model)", "Honda Activa 6G");
     type("Registration number", "TS 09 E 12");
     fireEvent.click(button("Save vehicle"));
@@ -205,7 +205,7 @@ describe("rider detail", () => {
     expect(await screen.findByText("Saving…")).toBeTruthy();
     finish(json({ label: "Honda Activa 6G", regNumberMasked: "TS09xx1234" }));
     expect(await screen.findByText("Vehicle saved. The rider sees it on their profile.")).toBeTruthy();
-    expect(await screen.findByText("Registration TS09xx1234.", { exact: false })).toBeTruthy();
+    expect(await screen.findByText("Now: TS09xx1234.", { exact: false })).toBeTruthy();
     expect(posts().map(call => [call.method, call.path, call.body])).toEqual(Array(3).fill(["PUT", `riders/${RIDER}/vehicle`, { label: "Honda Activa 6G", regNumber: "TS09EA1234" }]));
     // The same save after a refusal keeps its Idempotency-Key.
     expect(new Set(posts().map(call => call.key)).size).toBe(1);
@@ -297,5 +297,118 @@ describe("selfie queue", () => {
     expect(await screen.findByText("No selfies are waiting for review.")).toBeTruthy();
     expect(screen.getByText("Ravi Kumar's selfie approved.")).toBeTruthy();
     expect(posts()[0]).toMatchObject({ path: `shifts/${SHIFT}/selfie/approve`, body: undefined });
+  });
+});
+
+describe("rider queue tabs", () => {
+  it("opens on applications to review, counts every tab and asks the server for the chosen one", async () => {
+    const review = { ...summary, status: "PENDING", stage: "REVIEW", missingDocuments: 0, documentsToFix: 0, payoutAccountSent: true, readySince: new Date(Date.now() - 3 * 3_600_000).toISOString() };
+    answer = (_, path) => json({ riders: path.includes("stage=FIXES") ? [] : [review], nextCursor: null, counts: { REVIEW: 1, FIXES: 0, APPLYING: 2, ACTIVE: 5, SUSPENDED: 0, DEACTIVATED: 0 } });
+    render(createElement(RidersList));
+    expect((await screen.findByRole("link", { name: "Review the application · waiting 3 h" })).getAttribute("href")).toBe(`/admin/riders/${RIDER}`);
+    expect(calls[0].path).toBe("riders?stage=REVIEW");
+    expect(button(/^To review/).getAttribute("aria-pressed")).toBe("true");
+    expect(button(/^Applying/).textContent).toBe("Applying2");
+    fireEvent.click(button(/^Fixes asked/));
+    expect(await screen.findByText("No rider is fixing anything right now.")).toBeTruthy();
+    expect(calls.at(-1)?.path).toBe("riders?stage=FIXES");
+  });
+
+  it("says what the rider still has to send", async () => {
+    const applying = { ...summary, status: "PENDING", pendingDocuments: 0, pendingDevice: false, stage: "APPLYING", missingDocuments: 3, documentsToFix: 0, payoutAccountSent: false, readySince: null };
+    answer = () => json({ riders: [applying], nextCursor: null });
+    render(createElement(RidersList));
+    expect(await screen.findByText("Rider still to send: 3 documents, payout account")).toBeTruthy();
+    expect(screen.getByText("Still applying")).toBeTruthy();
+  });
+});
+
+describe("application review", () => {
+  const PAN = "99999999-9999-4999-8999-999999999991";
+  const BANK = "99999999-9999-4999-8999-999999999992";
+  const LICENCE = "99999999-9999-4999-8999-999999999993";
+  const VERSION = "0123456789abcdef0123456789abcdef";
+  const pending = (documentId: string, type: string) => ({ ...document, documentId, type, expiresOn: null });
+  const sent = { method: "UPI", maskedAccount: "ra****@okaxis", ifsc: null, holderName: "Ravi Kumar", setBy: "Ravi Kumar", setAt: at };
+  const applicant = {
+    ...detail, rider: { ...detail.rider, status: "PENDING", stage: "REVIEW", missingDocuments: 0, documentsToFix: 0, payoutAccountSent: true, readySince: at,
+      vehicleKind: "BICYCLE", vehicleLabel: "Hero Sprint" },
+    documents: [pending(BANK, "BANK_PROOF"), pending(PAN, "PAN")], devices: [], submittedPayoutAccount: sent,
+    requiredDocuments: ["PAN", "BANK_PROOF"], pilotRider: false, applicationVersion: VERSION,
+  };
+  const result = { riderId: RIDER, decision: "APPROVE", status: "ACTIVE", stage: "ACTIVE", documentsVerified: 2, fixesAsked: 0,
+    payoutAccountConfirmed: true, payoutAccountReturned: false, addedToPilot: true, rateCardPublished: false };
+  const respond = (rider: unknown, decision: unknown = result) => (method: string, path: string) =>
+    method === "POST" ? json(decision) : path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json(rider);
+
+  it("approves a complete application in one step and says what happens next", async () => {
+    answer = respond(applicant);
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    expect(await screen.findByText("Hero Sprint")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Accept document" })).toBeNull();
+    expect(screen.queryByText("Record a status change")).toBeNull();
+    expect(button("Approve and activate").disabled).toBe(true);
+    expect(screen.getByText("Mark PAN card, Bank proof.")).toBeTruthy();
+    expect(screen.getByText("Mark the payout account.")).toBeTruthy();
+
+    fireEvent.click(button("Looks good: PAN card"));
+    fireEvent.click(button("Looks good: Bank proof"));
+    fireEvent.click(button("Looks good: payout account"));
+    expect(screen.getByText("3 of 3 checked")).toBeTruthy();
+    answer = respond({ ...applicant, rider: { ...applicant.rider, status: "ACTIVE", stage: "ACTIVE" } });
+    fireEvent.click(button("Approve and activate"));
+    expect(await screen.findByRole("heading", { name: "Ravi Kumar is an active rider" })).toBeTruthy();
+    expect(screen.getByText(/No rate card is published yet/)).toBeTruthy();
+    expect(screen.getByText("On the pilot riders, so they can get orders while test mode is on.")).toBeTruthy();
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]).toMatchObject({ path: `riders/${RIDER}/application/decision`, key: expect.stringMatching(UUID), body: {
+      decision: "APPROVE", payoutAccount: "CONFIRM", applicationVersion: VERSION,
+      documents: [{ documentId: PAN, verdict: "OK" }, { documentId: BANK, verdict: "OK" }],
+    } });
+  });
+
+  it("needs the printed expiry date of a riding document before approving", async () => {
+    answer = respond({ ...applicant, documents: [pending(LICENCE, "DRIVING_LICENCE")], requiredDocuments: ["DRIVING_LICENCE"], submittedPayoutAccount: null,
+      payoutAccount: { ...sent, setBy: "Asha" } });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    fireEvent.click(await screen.findByRole("button", { name: "Looks good: Driving licence" }));
+    expect(screen.getByText("Enter the expiry date printed on the Driving licence.")).toBeTruthy();
+    expect(button("Approve and activate").disabled).toBe(true);
+    type("Expiry date, as printed on the Driving licence", "2031-03-31");
+    expect(button("Approve and activate").disabled).toBe(false);
+    fireEvent.click(button("Approve and activate"));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0].body).toEqual({ decision: "APPROVE", applicationVersion: VERSION,
+      documents: [{ documentId: LICENCE, verdict: "OK", expiresOn: "2031-03-31" }] });
+  });
+
+  it("sends fixes with the reason the rider reads, and verifies what was fine", async () => {
+    answer = respond(applicant, { ...result, decision: "FIXES", status: "PENDING", stage: "FIXES", documentsVerified: 1, fixesAsked: 2,
+      payoutAccountConfirmed: false, payoutAccountReturned: true, addedToPilot: false });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    fireEvent.click(await screen.findByRole("button", { name: "Looks good: PAN card" }));
+    fireEvent.click(button("Needs a fix: Bank proof"));
+    expect(screen.queryByRole("button", { name: "Approve and activate" })).toBeNull();
+    expect(button("Send 1 fix to the rider").disabled).toBe(true);
+    expect(screen.getByText("Write what the rider must fix on the Bank proof.")).toBeTruthy();
+    fireEvent.click(button("The photo is blurry. Take it again in good light."));
+    fireEvent.click(button("Needs a fix: payout account"));
+    fireEvent.click(button("Send 2 fixes to the rider"));
+    expect(await screen.findByText("Sent 2 fixes to Ravi Kumar. They see them in the app now.")).toBeTruthy();
+    // In the order the page lists them: the required documents, then the payout account.
+    expect(posts()[0].body).toEqual({ decision: "FIXES", payoutAccount: "RETURN", applicationVersion: VERSION, documents: [
+      { documentId: PAN, verdict: "OK" },
+      { documentId: BANK, verdict: "FIX", reason: "The photo is blurry. Take it again in good light." },
+    ] });
+  });
+
+  it("shows what the rider still has to send and keeps approval closed", async () => {
+    answer = respond({ ...applicant, rider: { ...applicant.rider, stage: "APPLYING", missingDocuments: 1, payoutAccountSent: false },
+      documents: [pending(PAN, "PAN")], submittedPayoutAccount: null });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    expect(await screen.findByText("Waiting for the rider to send: Bank proof.")).toBeTruthy();
+    expect(screen.getByText("Waiting for the rider to send a payout account.")).toBeTruthy();
+    fireEvent.click(button("Looks good: PAN card"));
+    expect(button("Approve and activate").disabled).toBe(true);
   });
 });

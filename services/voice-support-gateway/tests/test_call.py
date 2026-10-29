@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
+import re
 
 import httpx
 import pytest
@@ -173,7 +175,8 @@ async def collect(ws, until, timeout=5.0) -> list[dict]:
 
 
 @pytest.mark.asyncio
-async def test_a_whole_call_from_greeting_to_hangup():
+async def test_a_whole_call_from_greeting_to_hangup(caplog):
+    caplog.set_level(logging.INFO, logger="voice")
     scenes = [
         ("audio", b"\x01\x02" * 2500),             # greeting: 5000 bytes -> one 3200 chunk + a padded tail
         ("tool", "set_language", '{"language": "te"}'),
@@ -249,6 +252,17 @@ async def test_a_whole_call_from_greeting_to_hangup():
     assert body == {"phone": PHONE, "subject": "Refund not received", "details": "Order from Amma's Kitchen, refund pending",
                     "callerName": "Lakshmi", "language": "Telugu"}
     assert backend_calls[0].url.params["phone"] == PHONE
+
+    # One timing line per caller turn (numbers only, never what was said), plus the greeting and the totals.
+    lines = [r.getMessage() for r in caplog.records]
+    turns = [line for line in lines if " turn=" in line and "first_audio_ms=" in line]
+    assert len(turns) == 3
+    assert re.search(r"turn=1 vad_lag_ms=-?\d+ transcript_ms=- heard_chars=-1 response_ms=\d+ first_audio_ms=\d+ "
+                     r"responses=2 tools=set_language:\d+$", turns[0]), turns[0]
+    assert "tools=open_support_ticket:" in turns[1] and "responses=2" in turns[1]
+    assert any(re.search(r"greeting first_audio_ms=\d+$", line) for line in lines)
+    assert any(re.search(r"started caller=known role=CUSTOMER orders=\d+ lookup_ms=\d+$", line) for line in lines)
+    assert any("turns=3 barge_ins=" in line for line in lines)
 
 
 @pytest.mark.asyncio

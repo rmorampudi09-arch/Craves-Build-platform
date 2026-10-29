@@ -312,7 +312,9 @@ def main():
         run('python3',str(source/'scripts/finance/configure_chef_ifsc_apim.py'),'--apply','--expected-source-sha',args.sha,'--output',str(args.output/'chef-ifsc-apim.json'))
         print('Chef onboarding and authenticated IFSC operations published.',flush=True)
     elif args.operation=='web':
-        applied(preflight());deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
+        applied(preflight())
+        run('az','acr','login','-n',ACR,'--only-show-errors')  # deploy_web and deploy_admin push images; only the other paths logged in
+        deploy_web(source,args.sha,args.regression_run,args.output/'chef-web.json')
         deploy_admin(source,args.sha,args.regression_run,args.output/'chef-admin.json')
     elif args.operation=='media':configure_media(args.output/'catalog-media.json')
     elif args.operation=='catalog':deploy_catalog(source,args.sha,args.regression_run,args.output/'catalog.json')

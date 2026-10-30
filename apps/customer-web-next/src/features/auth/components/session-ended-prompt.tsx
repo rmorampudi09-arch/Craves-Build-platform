@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogIn } from "lucide-react";
 import { getSession } from "@/features/auth/api/cravesAuth";
-import { BEFORE_SIGN_IN_EVENT, SESSION_ENDED_EVENT } from "@/features/auth/api/sessionFetch";
+import { BEFORE_SIGN_IN_EVENT, SESSION_ENDED_EVENT } from "@/shared/lib/session-fetch";
 import { Sheet } from "@/shared/ui/overlays/overlay";
 
 /** Pages that sign people in themselves, or keep their own (administrator) sessions. */

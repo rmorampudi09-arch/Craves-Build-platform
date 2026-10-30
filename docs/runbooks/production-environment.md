@@ -2,9 +2,40 @@
 
 This is the one place that says which Azure subscription, resources and pipelines are production. If anything else in the repo disagrees, this page wins and the other file is wrong. `scripts/release/tests/test_no_retired_azure_names.py` fails CI if a retired name below comes back.
 
-Checked against live Azure on 26 and 27 Oct 2026 (read only).
+Production moved to a new subscription on 29 Oct 2026; the old one below was checked against live Azure on 26 and 27 Oct 2026 (read only).
 
-## Current
+## Current (since 29 Oct 2026, 23:45 UTC): the new subscription
+
+craves.in, www.craves.in, api.craves.in and admin.craves.in are served from here. Source: the migration report of 30 Oct 2026. The full record (every resource id, script, pipeline id, NAT address and rollback) is the platform owner's `new-subscription-build` document; add the names this page still lacks (registry, Front Door, API Management, Service Bus, Redis, storage, PostgreSQL hosts) from it.
+
+| What | Name |
+|---|---|
+| Azure subscription | `34eefd95-1a19-416f-b9df-92b326500615` (Microsoft for Startups) |
+| Tenant | `182d6285-5895-47f8-9ade-77b10854ed0d` |
+| Region | Central India; database read replicas in Southeast Asia |
+| Layout | One resource group per service (`rg-craves-<service>-prod`), each with its own Container Apps environment, managed identity and Key Vault. `rg-craves-shared-prod` holds the registry, Service Bus, Redis, email, API Management, Front Door with WAF, logging and alerts. All 16 resource groups have a cannot-delete lock. |
+| Release | Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` into Azure Repos every 15 minutes (fast-forward only); a change under a service's folder runs that service's `release-<service>` pipeline: image tagged with the commit, a new revision, 10 % of traffic for two minutes, then 100 %; a failed health check rolls back by itself. No manual approval: **merging to `main` deploys to production.** The pipeline YAML is in the Azure Repos repository `craves-pipelines`. |
+| Access | Groups `craves-azure-admins` (Contributor) and `craves-azure-readers` (Reader) at subscription scope. Databases and Key Vaults only accept the services' own outbound addresses: add yours temporarily to reach them. |
+| Certificates | Front Door managed TLS for the four custom domains |
+
+| Service | Resource group | Container app | Key Vault | Database | Outbound address |
+|---|---|---|---|---|---|
+| auth | `rg-craves-auth-prod` | `ca-craves-auth-prod` | `kv-crv-auth-34eefd` | `pg-craves-auth-prod` | 20.198.108.229 |
+| catalog | `rg-craves-catalog-prod` | `ca-craves-catalog-prod` | `kv-crv-catalog-34eefd` | business | 20.235.64.75 |
+| order | `rg-craves-order-prod` | `ca-craves-order-prod` | `kv-crv-order-34eefd` | business | 20.198.125.128 |
+| user-chef | `rg-craves-user-chef-prod` | `ca-craves-user-chef-prod` | `kv-crv-userchef-34eefd` | business | 20.219.136.254 |
+| notification | `rg-craves-notification-prod` | `ca-craves-notification-prod` | `kv-crv-notif-34eefd` | business | 20.235.95.84 |
+| subscription | `rg-craves-subscription-prod` | `ca-craves-subscription-prod` | `kv-crv-subs-34eefd` | business | 20.204.118.52 |
+| integration | `rg-craves-integration-prod` | `ca-craves-integration-prod` | `kv-crv-integ-34eefd` | `pg-craves-integration-prod` | 20.204.46.72 |
+| referral | `rg-craves-referral-prod` | `ca-craves-referral-prod`, `ca-craves-referral-members-prod` | `kv-crv-referral-34eefd` | `pg-craves-referral-prod` | 20.192.2.161 |
+| voice | `rg-craves-voice-prod` | `ca-craves-voice-prod` | `kv-crv-voice-34eefd` | none | 104.211.91.72 |
+| web | `rg-craves-web-prod` | `ca-craves-web-prod` | `kv-crv-web-34eefd` | none | 20.198.84.102 |
+| admin | `rg-craves-admin-prod` | `ca-craves-admin-prod` | `kv-crv-admin-34eefd` | none | 20.219.159.80 |
+| delivery-intel | `rg-craves-delivery-intel-prod` | `ca-craves-delivery-intel-prod` | `kv-crv-delintel-34eefd` | none | 20.219.193.93 |
+
+"business" is `pg-craves-business-prod` in `rg-craves-data-business-prod`; catalog, order, user-chef, notification and subscription share it.
+
+## Before 29 Oct 2026: the old subscription (idle fallback, never deploy here)
 
 | What | Name |
 |---|---|
@@ -35,7 +66,7 @@ Each image tag is the GitHub commit it was built from. For an image pinned by di
 
 Leftovers (no traffic, not behind Front Door; do not deploy to them): `ca-craves-admin-web-prodlow`, an admin copy built on 30 Sep from the unmerged branch `fix/admin-operations-production-20260930`; and the manual job `cj-craves-referral-check-39033`, whose image registry `cravesramacr721906` no longer exists.
 
-## Azure DevOps pipelines (rmorampudi09 / Craves)
+## Old Azure DevOps pipelines (rmorampudi09 / Craves): they deploy into the old subscription, not production
 
 Every pipeline you may run builds from GitHub `main`. All are manual (no triggers) except the health check.
 

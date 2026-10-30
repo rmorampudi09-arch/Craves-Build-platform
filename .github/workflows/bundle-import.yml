@@ -6,7 +6,7 @@ name: Bundle import
 on:
   push:
     branches: ['bundle/**']
-    paths: ['.bundles/**']
+    paths: ['.bundles/**', '.github/workflows/bundle-import.yml']
 permissions:
   contents: write
   actions: write
@@ -67,9 +67,10 @@ jobs:
             git rm -q -- "$b"
             names="$names $(basename "$b")"
           done
-          git add -A -- services/advanced-features-service contracts/openapi/advanced infra/advanced-features \
-            infra/apim/advanced-features docs/advanced-features scripts/advanced-features 2>/dev/null || true
-          git add -A .bundles
+          for p in services/advanced-features-service contracts/openapi/advanced infra/advanced-features \
+                   infra/apim/advanced-features docs/advanced-features scripts/advanced-features; do
+            if [ -e "$p" ]; then git add -A -- "$p"; fi
+          done
           git -c user.name="craves-bundle-import" -c user.email="bundle-import@users.noreply.github.com" \
             commit -q -m "Import${names:- deletions}"
           git push -q origin "HEAD:${BRANCH}"

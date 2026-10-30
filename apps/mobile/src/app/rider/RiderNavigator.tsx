@@ -13,8 +13,8 @@ import {ProblemCard, RiderSplash, StateCard} from '../../features/rider/componen
 import {RiderScreen, Title} from '../../features/rider/components/ui';
 import {resolveGate} from '../../features/rider/domain/gate';
 import type {ReceivedOffer} from '../../features/rider/domain/offerTiming';
-import {RiderShellContext, type RiderStackParamList, type RiderTabParamList} from '../../features/rider/navigation';
-import {RIDER_APP_VERSION} from '../../features/rider/riderConfig';
+import {RiderShellContext, takeAfterGate, type RiderStackParamList, type RiderTabParamList} from '../../features/rider/navigation';
+import {isDemo, RIDER_APP_VERSION} from '../../features/rider/riderConfig';
 import {useActiveTrip, useRiderHome, useRiderMe} from '../../features/rider/state/riderQueries';
 import {riderSnapshot} from '../../features/rider/state/riderSnapshot';
 import {tripQueue} from '../../features/rider/state/tripQueue';
@@ -43,6 +43,8 @@ const Stack = createNativeStackNavigator<RiderStackParamList>();
 const Tabs = createBottomTabNavigator<RiderTabParamList>();
 const navigationRef = createNavigationContainerRef<RiderStackParamList>();
 const ENDED = ['DELIVERED', 'FAILED', 'CANCELLED'];
+// The demo panel exists only in demo builds and on a developer's machine: a live APK has no route to it at all.
+const DEMO_PANEL = isDemo || __DEV__;
 
 type TabIconProps = {color: string};
 const homeIcon = ({color}: TabIconProps) => <Icon name="home-outline" color={color} size={iconSize.lg} surface={false} />;
@@ -118,6 +120,8 @@ function SignedIn() {
           Alert.alert(blockedMessage);
           return;
         }
+        // A next step still waiting belongs to this rider, not to whoever signs in next on this phone.
+        takeAfterGate();
         await session.signOut();
       },
     }),
@@ -169,14 +173,14 @@ function SignedIn() {
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
-            <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
+            {DEMO_PANEL ? <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} /> : null}
           </>
         )}
         {gate.kind !== 'ready' ? (
           // The account, terms and privacy screens show SOS and the demo chip too.
           <>
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
-            <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} />
+            {DEMO_PANEL ? <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} /> : null}
           </>
         ) : null}
       </Stack.Navigator>

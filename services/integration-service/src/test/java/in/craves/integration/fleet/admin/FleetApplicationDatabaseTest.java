@@ -3,9 +3,12 @@ package in.craves.integration.fleet.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -20,6 +23,7 @@ import in.craves.integration.fleet.admin.FleetAdminModels.ApplicationResult;
 import in.craves.integration.fleet.admin.FleetAdminModels.DocumentVerdict;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderDetail;
 import in.craves.integration.fleet.admin.FleetAdminModels.RiderPage;
+import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.rider.FleetRiderModels.RiderProfile;
 import in.craves.integration.fleet.rider.FleetRiderModels.SignUp;
 import in.craves.integration.fleet.rider.FleetRiderService;
@@ -52,6 +56,7 @@ class FleetApplicationDatabaseTest {
     final TransactionTemplate transaction = new TransactionTemplate(fleet.transactions);
     final Admin ops = new Admin(UUID.randomUUID(), "Admin +91 90xxxxx001");
     final FleetRoleClient roles = mock(FleetRoleClient.class);
+    final RiderPushClient push = mock(RiderPushClient.class);
     final LocalDate valid = LocalDate.now().plusYears(3);
     FleetPolicyStore policies;
     FleetAdminService admin;
@@ -62,7 +67,7 @@ class FleetApplicationDatabaseTest {
     void setUp() {
         policies = new FleetPolicyStore(fleet.db, json);
         admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), roles, mock(BankDataCipher.class));
-        applications = new FleetApplicationService(fleet.db, admin, policies, FleetDatabase.properties(true));
+        applications = new FleetApplicationService(fleet.db, admin, policies, FleetDatabase.properties(true), push);
         riders = new FleetRiderService(fleet.db, policies, FleetDatabase.properties(true), mock(FleetStorage.class));
     }
 
@@ -287,6 +292,39 @@ class FleetApplicationDatabaseTest {
         assertThat(detail.documents().get(19).documentId()).isEqualTo(pan);
         assertThat(detail.rider().pendingDocuments()).isEqualTo(2);
         refused(() -> admin.getRider(UUID.randomUUID()), 404, "RIDER_NOT_FOUND");
+    }
+
+    /** P6-04: each decision reaches the phone the rider applied on once it commits; a replay or a refusal sends nothing. */
+    @Test
+    void eachDecisionReachesTheRidersPhoneOnceItCommits() {
+        UUID rider = applicant(UUID.randomUUID(), "PETROL");
+        fleet.db.update("INSERT INTO fleet_schema.rider_device (id, rider_id, fcm_token, app_version, model, state) "
+            + "VALUES (?, ?, 'token-applied', '1.2.0', 'Redmi 13C', 'BOUND')", UUID.randomUUID(), rider);
+        when(push.account(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn("SENT");
+        Map<String, UUID> documents = send(rider, PETROL);
+        payoutSent(rider, "Ravi Kumar");
+        List<DocumentVerdict> verdicts = new ArrayList<>(allOk(documents));
+        verdicts.removeIf(verdict -> verdict.documentId().equals(documents.get("PUC")));
+        verdicts.add(new DocumentVerdict(documents.get("PUC"), "FIX", null, "The certificate has expired. Send the new one."));
+        // A decision that rolls back tells nobody.
+        transaction.execute(status -> {
+            applications.decide(ops, false, UUID.randomUUID(), rider, decision(rider, "FIXES", verdicts, null));
+            status.setRollbackOnly();
+            return null;
+        });
+        verify(push, after(500).never()).account(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean());
+        tx(() -> applications.decide(ops, false, UUID.randomUUID(), rider, decision(rider, "FIXES", verdicts, null)));
+        verify(push, timeout(5_000)).account("token-applied", false);
+
+        refused(() -> applications.decide(ops, true, UUID.randomUUID(), rider, decision(rider, "APPROVE", List.of(), "CONFIRM")), 422,
+            "APPLICATION_INCOMPLETE");
+        UUID puc = document(rider, "PUC");
+        UUID key = UUID.randomUUID();
+        ApplicationDecision approval = decision(rider, "APPROVE", List.of(new DocumentVerdict(puc, "OK", valid, null)), "CONFIRM");
+        tx(() -> applications.decide(ops, true, key, rider, approval));
+        tx(() -> applications.decide(ops, true, key, rider, approval));
+        verify(push, timeout(5_000)).account("token-applied", true);
+        verify(push, after(500).times(2)).account(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test

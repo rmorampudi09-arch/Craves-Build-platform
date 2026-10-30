@@ -41,8 +41,8 @@ public class WebSecurityConfiguration {
                 )
                 .requestMatchers("/api/v1/chef/**").hasRole("CHEF")
                 // The native location service sends a shift credential instead of a JWT, on these two routes (and, with the
-                // P2-01 flag, on trip steps): their controllers require that credential or a RIDER JWT. The credential
-                // authenticates nothing else.
+                // P2-01 flag, on trip steps): their controllers require that credential or a RIDER JWT, and /devices also an
+                // applicant's (a PENDING rider's) JWT, checked by its service. The credential authenticates nothing else.
                 .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations", "/api/v1/rider/devices").permitAll()
                 .requestMatchers(credentialTripSteps).permitAll()
                 // Any signed-in user may ask whether they are a rider, and sign up (apply). A PENDING rider (no RIDER role

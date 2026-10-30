@@ -38,7 +38,8 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * The rider app's API (contracts/openapi/rider-v1.yaml). WebSecurityConfiguration requires the RIDER role on
  * every route here except GET /me, GET /profile, POST /documents and POST /privacy-notice/accept (a signed-in identity;
- * the service requires a rider row) and POST /devices (the RIDER check or the shift credential is here). Off unless
+ * the service requires a rider row) and POST /devices (the RIDER role, an applicant's own row or the shift credential is
+ * checked here). Off unless
  * CRAVES_FLEET_RIDER_API_ENABLED.
  */
 @RestController
@@ -138,15 +139,21 @@ public class FleetRiderController {
     }
 
     /**
-     * The phone's FCM token, with a RIDER JWT or the shift credential. 204 for the rider's bound phone; 409
-     * DEVICE_NOT_BOUND for another, which is kept for ops to approve.
+     * The phone's FCM token, with a RIDER JWT, an applicant's JWT (no RIDER role until approved: their phone hears ops's
+     * decision, P6-04) or the shift credential. 204 for the rider's bound phone; 409 DEVICE_NOT_BOUND for another, which
+     * is kept for ops to approve.
      */
     @PostMapping("/devices")
     public ResponseEntity<Void> registerDevice(@AuthenticationPrincipal CravesPrincipal principal,
                                                @RequestHeader(name = FleetShiftService.SHIFT_CREDENTIAL, required = false) String credential,
                                                @RequestBody DeviceRegistration body) {
-        boolean bound = StringUtils.hasText(credential) ? shifts.registerDevice(null, credential, body)
-            : shifts.registerDevice(riderIdentity(principal), null, body);
+        boolean bound;
+        if (StringUtils.hasText(credential)) {
+            bound = shifts.registerDevice(null, credential, body);
+        } else {
+            UUID identity = identity(principal);
+            bound = principal.hasRole("RIDER") ? shifts.registerDevice(identity, null, body) : shifts.registerApplicantDevice(identity, body);
+        }
         if (!bound) {
             throw FleetShiftService.deviceNotBound();
         }

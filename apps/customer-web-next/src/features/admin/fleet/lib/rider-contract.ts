@@ -129,7 +129,7 @@ export const EXPIRING_DOCUMENTS: readonly (typeof DOCUMENT_TYPES)[number][] = ["
 /** An expiring document is accepted only with the date printed on it, and not once that date has passed in IST. */
 export function expiryProblem(expiresOn: string, today = istDay()): string | null {
   if (!day.safeParse(expiresOn).success) return "Enter the expiry date printed on the document.";
-  return expiresOn < today ? "This document has expired. Reject it so the rider uploads a new one." : null;
+  return expiresOn < today ? "This document has expired. Mark it Needs a fix so the rider sends a new one." : null;
 }
 export const riderVehicleInputSchema = z.object({
   label: z.string().trim().min(2, "Enter the vehicle, like Honda Activa 6G.").max(60, "Keep the vehicle to 60 characters."),

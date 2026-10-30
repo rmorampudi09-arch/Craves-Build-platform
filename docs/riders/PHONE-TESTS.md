@@ -177,7 +177,7 @@ payments admin.
 
 **Pass:** every step as written; the rider's page shows one audit entry for each decision.
 
-## 8. The sign-in code from the SMS, and every way back (app 1.2.0, `FLOWS.md` §9)
+## 8. The sign-in code from the SMS, every way back, and the decision on the phone (app 1.2.0, `FLOWS.md` §4, §9)
 
 Set-up: a live build on a phone with Google Play services and a SIM that receives SMS, signed out.
 
@@ -190,6 +190,11 @@ Set-up: a live build on a phone with Google Play services and a SIM that receive
 6. **The way back.** Profile → Terms, Help and Phone setup: each has ← and the phone's Back returns to Profile. On an
    offer the phone's Back does nothing; Decline returns to Home. Online on Home, Go offline asks; Stay online keeps the
    shift.
+7. **The decision reaches the phone.** Apply on a new number and close the app. In the console, send one fix: a notice
+   "Your application needs a fix" appears; tapping it opens the app on the fix. Send it, close the app, approve: "You're
+   approved" appears, and the app opens on the pay terms. Accept: Phone setup opens by itself; Done lands on Home.
+8. **Demo is separate.** Install a mock (PR) APK: it appears as "Craves Rider Demo" beside "Craves Rider", and the live
+   app keeps its sign-in.
 
 **Pass:** every step as written, and Settings → Apps → Craves Rider → Permissions lists no SMS permission.
 
@@ -250,8 +255,8 @@ Set-up: a live build on a phone with Google Play services and a SIM that receive
 
 ### Sign-in code and the way back
 
-| Phone (model, Android) | Date | Tester | Paste (1) | Allow (2) | Deny (3) | Resend (4) | No Play services (5) | Back (6) | No SMS permission | Pass |
-|---|---|---|---|---|---|---|---|---|---|---|
-| | | | | | | | | | | |
+| Phone (model, Android) | Date | Tester | Paste (1) | Allow (2) | Deny (3) | Resend (4) | No Play services (5) | Back (6) | Decision push (7) | Demo separate (8) | No SMS permission | Pass |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

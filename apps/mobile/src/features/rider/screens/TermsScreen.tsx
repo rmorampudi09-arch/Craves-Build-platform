@@ -13,7 +13,7 @@ import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {offerRulesLines} from '../domain/offerRules';
 import {riderMessage} from '../domain/problem';
-import type {RiderScreenProps} from '../navigation';
+import {openAfterGate, type RiderScreenProps} from '../navigation';
 import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
 import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 
@@ -87,6 +87,10 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
     try {
       // The server refuses if the terms changed meanwhile.
       await riderApi.acceptTerms(version);
+      // The first terms let the rider in: phone setup opens next, not Home (changed terms just go back to work).
+      if (!me.data?.acceptedTermsVersion) {
+        openAfterGate('PhoneSetup');
+      }
       await queryClient.invalidateQueries({queryKey: riderKeys.me});
     } catch (error) {
       Alert.alert(riderMessage(error, strings, language));

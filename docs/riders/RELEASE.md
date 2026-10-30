@@ -26,7 +26,7 @@ Keep the mapping file of every build you hand out: it turns a crash stack trace 
 | Manual run | The `api_mode` input: `live` (default; only from `main`) or `mock` |
 | Pull request | The repo variable `CRAVES_RIDER_API_MODE` (`mock` or `live`); `mock` when it isn't set |
 
-- **mock:** demo data inside the app. No Firebase sign-in, no calls to the Craves API, a "Demo data" tag in the header and the demo controls (long-press the status chip).
+- **mock:** demo data inside the app. No Firebase sign-in, no calls to the Craves API, a "Demo data" tag in the header and the demo controls (long-press the status chip). It is its own app, `com.cravesapp.rider.demo` named "Craves Rider Demo" (`-PcravesRiderDemo=true`), installed beside the real one, so a demo APK can never replace or pass for the rider app; the workflow fails a live APK whose package isn't `com.cravesapp.rider`. The live APK has no demo data, demo hints or demo panel at all.
 - **live:** phone sign-in with the MSG91 OTP from auth-service (then a Firebase session, as the web does) and the Craves API at `https://api.craves.in` (`CRAVES_API_BASE_URL`). A live build fails early without `RIDER_GOOGLE_SERVICES_JSON` or `RIDER_KEYSTORE_BASE64`.
 
 Any other value fails the build. To switch pull request builds to live, set the variable in Settings → Secrets and variables → Actions → Variables. To get the live APK riders install, run the workflow by hand on `main` (`api_mode` is `live` by default); a live run on any other branch stops, because that APK talks to production. The mode is baked into the APK: switching means installing the other APK.
@@ -35,7 +35,7 @@ Any other value fails the build. To switch pull request builds to live, set the 
 
 | Name | Kind | Needed for | What it is |
 |---|---|---|---|
-| `RIDER_GOOGLE_SERVICES_JSON` | secret | live (mock uses a placeholder) | The rider app's `google-services.json` from Firebase (package `com.cravesapp.rider`). Firebase says this file isn't secret; it is a secret here only so it stays out of the repo. |
+| `RIDER_GOOGLE_SERVICES_JSON` | secret | live (mock uses a placeholder for `com.cravesapp.rider.demo`) | The rider app's `google-services.json` from Firebase (package `com.cravesapp.rider`). Firebase says this file isn't secret; it is a secret here only so it stays out of the repo. |
 | `RIDER_KEYSTORE_BASE64` | secret | live; mock uses a cached throwaway key without it | The rider signing keystore, base64 (`base64 -w0 rider.keystore`). |
 | `RIDER_KEYSTORE_PASSWORD` | secret | with the keystore | The keystore password, also used as the key password. |
 | `RIDER_KEY_ALIAS` | secret | with the keystore | The key alias (`rider` when unset). |

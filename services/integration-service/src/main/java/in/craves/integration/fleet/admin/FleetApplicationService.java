@@ -10,6 +10,7 @@ import in.craves.integration.fleet.admin.FleetAdminModels.ApplicationResult;
 import in.craves.integration.fleet.admin.FleetAdminModels.DocumentVerdict;
 import in.craves.integration.fleet.admin.FleetAdminModels.PayoutAccount;
 import in.craves.integration.fleet.admin.FleetAdminService.Done;
+import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.rider.FleetRiderService;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -21,10 +22,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Ops's one decision on a rider's application (docs/riders/FLOWS.md). The review page sends a verdict on each document and
@@ -36,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
 public class FleetApplicationService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FleetApplicationService.class);
     private static final Set<String> DECISIONS = Set.of("APPROVE", "FIXES");
     private static final Set<String> PAYOUT_ACTIONS = Set.of("CONFIRM", "RETURN");
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
@@ -55,12 +61,15 @@ public class FleetApplicationService {
     private final FleetAdminService admin;
     private final FleetPolicyStore policies;
     private final FleetProperties properties;
+    private final RiderPushClient push;
 
-    public FleetApplicationService(JdbcTemplate jdbc, FleetAdminService admin, FleetPolicyStore policies, FleetProperties properties) {
+    public FleetApplicationService(JdbcTemplate jdbc, FleetAdminService admin, FleetPolicyStore policies, FleetProperties properties,
+                                   RiderPushClient push) {
         this.jdbc = jdbc;
         this.admin = admin;
         this.policies = policies;
         this.properties = properties;
+        this.push = push;
     }
 
     /**
@@ -189,7 +198,41 @@ public class FleetApplicationService {
             ? "Approved the application" + (verified.isEmpty() ? "" : ": verified " + String.join(", ", verified))
                 + (account == null ? "" : "; confirmed the payout account " + account) + (pilot ? "; added to the pilot riders." : ".")
             : "Asked for fixes: " + String.join("; ", fixed) + (verified.isEmpty() ? "." : ". Verified " + String.join(", ", verified) + ".");
+        tellRider(riderId, approve);
         return new Done(result, riderId, riderId.toString(), summary);
+    }
+
+    /**
+     * P6-04: once the decision commits, a push to the rider's bound phone (an applicant registers it when they send the
+     * application), so their app moves on at once instead of at its next check. Off the request thread, as
+     * notification-service may wait on FCM; a push that fails is a log line, and the app still checks every 15 seconds.
+     */
+    private void tellRider(UUID riderId, boolean approve) {
+        List<String> tokens = jdbc.queryForList("SELECT fcm_token FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND'",
+            String.class, riderId);
+        if (tokens.isEmpty()) {
+            return;
+        }
+        Runnable send = () -> Thread.ofVirtual().name("rider-decision-push").start(() -> tokens.forEach(token -> {
+            try {
+                String result = push.account(token, approve);
+                if (!"SENT".equals(result)) {
+                    LOGGER.warn("Rider {}: the application decision push was not sent ({})", riderId, result);
+                }
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Rider {}: the application decision push failed", riderId, exception);
+            }
+        }));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
+        }
     }
 
     /** What still stops approval: required documents not verified (or expired), and no payout account confirmed. */

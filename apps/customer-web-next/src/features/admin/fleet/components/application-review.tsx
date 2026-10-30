@@ -187,7 +187,7 @@ export function ApprovedPanel({ name, result }: { name: string; result: Applicat
       <li><CheckCircle2 size={18} aria-hidden="true" />Documents checked{result.payoutAccountConfirmed ? " and the payout account confirmed" : ""}.</li>
       <li><CheckCircle2 size={18} aria-hidden="true" />{result.addedToPilot ? "On the pilot riders, so they can get orders while test mode is on." : "Test mode is off, so they can get orders once they go online."}</li>
       {result.rateCardPublished
-        ? <li><CheckCircle2 size={18} aria-hidden="true" />Next, in the app: they accept the pay terms, set up the phone so offers ring, then go online with a selfie.</li>
+        ? <li><CheckCircle2 size={18} aria-hidden="true" />Their app moves on by itself, with a notification if it is closed: they accept the pay terms, set up the phone so offers ring, then go online with a selfie.</li>
         : <li data-tone="warning"><CircleAlert size={18} aria-hidden="true" /><span>No rate card is published yet, so the rider waits on “Pay rates are on the way” and can&apos;t go online. <Link className="underline" href="/admin/fleet-setup">Publish one in Rider pilot setup</Link>.</span></li>}
     </ul>
   </section>;

@@ -91,7 +91,7 @@ When a location call reports the rider's trip as `CANCELLED` (ops, the customer 
 | `riderFcmToken` | `{token}` |
 | `riderOutboxChanged` | `{answer}`: a pass the outbox ran by itself (after an upload, on a new network, from the job), as `{results, needsAuth}` JSON. JS tells the trip screen about sent and refused steps, then reads the list again |
 
-JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken, appVersion, model}` from `RiderRuntime` once the gate is ready and on every token change. A 409 `DEVICE_NOT_BOUND` shows "This phone isn't approved".
+JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken, appVersion, model}` from `RiderRuntime` once the gate is ready and on every token change, and once from the application screen after the rider has applied (P6-04, live builds), so ops's decision reaches the phone. A 409 `DEVICE_NOT_BOUND` shows "This phone isn't approved". `RiderMessagingService` handles `type=ACCOUNT` (`decision` APPROVE or FIXES): it raises the JS event `riderAccount`, on which the waiting screens ask the server at once, and posts a notice in the rider's language whose tap opens the app.
 
 `installationId` is `Settings.Secure.ANDROID_ID`, from `CravesRiderDevice.getInstallationId()` (null if the phone has none; JS then registers nothing and sends no header). The server binds the first one; `POST /shift/start` sends it again as `X-Craves-Installation-Id`, and Go online shows the server's message on 409 `DEVICE_NOT_BOUND`. ANDROID_ID depends on the signing key: a build signed with another key looks like a new phone, so keep one rider signing key (see RELEASE.md).
 

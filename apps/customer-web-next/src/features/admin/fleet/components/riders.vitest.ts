@@ -95,7 +95,7 @@ describe("rider detail", () => {
     answer = (_, path) => path.startsWith("audit?") ? json({ code: "FORBIDDEN", message: "Your admin role can't do this." }, 403) : json(detail);
     render(createElement(RiderDetailView, { riderId: RIDER }));
     expect(await screen.findByText("Your admin role can't do this.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Accept document" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Looks good: Driving licence" })).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText("No admin actions recorded yet.")).toBeNull();
   });
@@ -135,8 +135,8 @@ describe("rider detail", () => {
       : path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json(detail);
     render(createElement(RiderDetailView, { riderId: RIDER }));
     expect((await screen.findByLabelText("Driving licence expiry date (as printed)") as HTMLInputElement).value).toBe("2030-01-31");
-    fireEvent.click(button("Accept document"));
-    expect(await screen.findByText("Document accepted.")).toBeTruthy();
+    fireEvent.click(button("Looks good: Driving licence"));
+    expect(await screen.findByText("Marked as good.")).toBeTruthy();
     fireEvent.click(button("Approve this phone"));
     expect(await screen.findByText("New phone approved.")).toBeTruthy();
     expect(posts().map(call => [call.path, call.body])).toEqual([
@@ -150,19 +150,19 @@ describe("rider detail", () => {
     answer = (_, path) => path.startsWith("audit?") ? json({ entries: [], nextCursor: null }) : json({ ...detail, documents: [puc] });
     render(createElement(RiderDetailView, { riderId: RIDER }));
     await screen.findByText("PUC certificate");
-    fireEvent.click(button("Accept document"));
+    fireEvent.click(button("Looks good: PUC certificate"));
     expect(screen.getByRole("alert").textContent).toBe("Enter the expiry date printed on the document.");
     type("PUC certificate expiry date (as printed)", "2020-03-31");
-    fireEvent.click(button("Accept document"));
-    expect(screen.getByRole("alert").textContent).toBe("This document has expired. Reject it so the rider uploads a new one.");
+    fireEvent.click(button("Looks good: PUC certificate"));
+    expect(screen.getByRole("alert").textContent).toBe("This document has expired. Mark it Needs a fix so the rider sends a new one.");
     expect(posts()).toHaveLength(0);
 
     let finish!: (response: Response) => void;
     answer = (method) => method === "POST" ? new Promise(resolve => { finish = resolve; }) : json({ ...detail, documents: [puc] });
     type("PUC certificate expiry date (as printed)", "2031-03-31");
-    fireEvent.click(button("Accept document"));
+    fireEvent.click(button("Looks good: PUC certificate"));
     expect(await screen.findByText("Saving…")).toBeTruthy();
-    expect(button("Accept document").disabled).toBe(true);
+    expect(button("Looks good: PUC certificate").disabled).toBe(true);
     expect(posts()[0]).toMatchObject({ path: `riders/${RIDER}/documents/${DOC}/approve`, body: { expiresOn: "2031-03-31" } });
     expect(posts()[0].key).toMatch(UUID);
     finish(json({ code: "EXPIRY_REQUIRED", message: "Add the expiry date printed on the PUC certificate." }, 422));
@@ -176,8 +176,8 @@ describe("rider detail", () => {
     render(createElement(RiderDetailView, { riderId: RIDER }));
     await screen.findByText("PAN card");
     expect(screen.queryByLabelText(/expiry date/)).toBeNull();
-    fireEvent.click(button("Accept document"));
-    expect(await screen.findByText("Document accepted.")).toBeTruthy();
+    fireEvent.click(button("Looks good: PAN card"));
+    expect(await screen.findByText("Marked as good.")).toBeTruthy();
     expect(posts()[0]).toMatchObject({ path: `riders/${RIDER}/documents/${DOC}/approve`, body: undefined });
   });
 
@@ -211,18 +211,18 @@ describe("rider detail", () => {
     expect(new Set(posts().map(call => call.key)).size).toBe(1);
   });
 
-  it("rejects a document only with a reason, shows the server's refusal and retries with the same key", async () => {
+  it("sends a document back only with a reason, shows the server's refusal and retries with the same key", async () => {
     render(createElement(RiderDetailView, { riderId: RIDER }));
-    fireEvent.click(await screen.findByRole("button", { name: "Reject document" }));
-    fireEvent.click(button("Reject document"));
+    fireEvent.click(await screen.findByRole("button", { name: "Needs a fix" }));
+    fireEvent.click(button("Needs a fix"));
     expect(screen.getByRole("alert").textContent).toBe("Write a reason of at least 3 characters.");
     expect(posts()).toHaveLength(0);
 
     answer = (method) => method === "POST" ? json({ code: "DOCUMENT_NOT_PENDING", message: "Someone already reviewed this document." }, 409) : json(detail);
     type(/Reason for/, "The photo is blurred");
-    fireEvent.click(button("Reject document"));
+    fireEvent.click(button("Needs a fix"));
     expect((await screen.findByRole("alert")).textContent).toBe("Someone already reviewed this document.");
-    fireEvent.click(button("Reject document"));
+    fireEvent.click(button("Needs a fix"));
     await waitFor(() => expect(posts()).toHaveLength(2));
     expect(posts()[0].body).toEqual({ reason: "The photo is blurred" });
     expect(posts()[1].key).toBe(posts()[0].key);
@@ -345,7 +345,8 @@ describe("application review", () => {
     answer = respond(applicant);
     render(createElement(RiderDetailView, { riderId: RIDER }));
     expect(await screen.findByText("Hero Sprint")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Accept document" })).toBeNull();
+    // The applicant sees one review, not the active rider's document list.
+    expect(screen.queryByText(/Renewals and new photos from an active rider/)).toBeNull();
     expect(screen.queryByText("Record a status change")).toBeNull();
     expect(button("Approve and activate").disabled).toBe(true);
     expect(screen.getByText("Mark PAN card, Bank proof.")).toBeTruthy();

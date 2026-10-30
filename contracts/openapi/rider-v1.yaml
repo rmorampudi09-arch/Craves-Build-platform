@@ -129,9 +129,11 @@ paths:
         installationId is bound; a different one gets 409 DEVICE_NOT_BOUND and is kept as a pending device until ops
         approves it. The same installationId with a new fcmToken updates the token.
       description: |
-        With a RIDER JWT or the shift credential. 409 DEVICE_NOT_BOUND for a phone that is not the bound one (kept
-        PENDING_APPROVAL); 400 VALIDATION_FAILED for a missing or malformed field; 401 SHIFT_CREDENTIAL_INVALID for a
-        credential that is unknown, revoked, expired or of an ended shift; 403 FORBIDDEN for a JWT without the RIDER role.
+        With a RIDER JWT, the shift credential, or an applicant's JWT (a PENDING rider has no RIDER role until approved;
+        the phone they apply on is bound, so ops's decision reaches it as an ACCOUNT push). 409 DEVICE_NOT_BOUND for a
+        phone that is not the bound one (kept PENDING_APPROVAL); 400 VALIDATION_FAILED for a missing or malformed field;
+        401 SHIFT_CREDENTIAL_INVALID for a credential that is unknown, revoked, expired or of an ended shift; 403 FORBIDDEN
+        for a JWT without the RIDER role that is not an applicant's.
       security: [{bearer: []}, {shiftCredential: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeviceRegistration'}}}}
       responses: {'204': {description: Registered}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}

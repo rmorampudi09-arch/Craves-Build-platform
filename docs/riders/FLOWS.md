@@ -17,7 +17,7 @@ and what happens next; so does ops.
 | 2 | Rider | App: Apply to ride, steps 1 to 4 | About you, the vehicle (sends the sign-up), the document photos, the payout account | "Application sent" |
 | 3 | Ops | Console: Riders → To review → the rider | Checks each photo and the payout account, then one press | Approved (5), or fixes (4) |
 | 4 | Rider | App: "Fix N things to go on" | Sends again only what ops sent back | Back to 3 ("Sent again") |
-| 5 | Rider | App, on its own | The approval arrives (checked every minute and on returning to the app): pay rates, then the terms with "You're approved" | Home |
+| 5 | Rider | App, on its own | The decision arrives as a push (a notice if the app is closed; the app also checks every 15 seconds and on returning): pay rates, then the terms with "You're approved" | Phone setup opens by itself, then Home |
 | 6 | Rider | App: Home → "Before you go online" | Phone setup, then Go online with a selfie | Offers ring |
 | 7 | Rider | App: offer, then the trip | Accept, kitchen, pickup, drop, code | Pay credited |
 | 8 | Rider, ops | App: Earnings, Payouts. Console: Rider payouts | Pay is withdrawable 24 hours after a trip; paid every Monday, or withdrawn once a day | |
@@ -94,7 +94,10 @@ they land on step 3 with their details already on file.
 **Application sent** (`REVIEW`). "Ops checks every application by hand, usually within a day. You don't need to do
 anything now; the result shows here." A timeline: Application sent (done), Ops checks your documents (now, "usually
 within a day"), You're approved (next: "Then you accept your pay terms, set up your phone and go online"). Check now asks
-at once; the app also asks every minute while open and whenever the rider comes back to it (`GET /me`, `GET /profile`).
+at once; ops's decision arrives as a push (P6-04: type ACCOUNT to the phone the rider applied on, registered by
+`POST /devices` once they have applied), and the app also asks every 15 seconds while open and whenever the rider comes
+back to it (`GET /me`, `GET /profile`). With notifications off, a card asks to turn them on, so a closed app shows the
+decision as a notice ("You're approved. Open Craves Rider for your next step.").
 Below: what was sent (each "Checking"), the details (Change details) and the payout account (Change account). Footer:
 Call support, Sign out.
 
@@ -107,13 +110,19 @@ usually within a day."
 **Approved.** The app moves on by itself when `/me` says `ACTIVE`:
 
 1. No rate card published yet: "Pay rates are on the way" with a timeline (sent, approved, pay rates for your area) and
-   Check again; asked every minute. Ops was warned on approval.
+   Check again; asked every 15 seconds. Ops was warned on approval.
 2. Terms to accept, topped with "You're approved. One last step before your first order: read how you are paid, then
    accept." (`POST /terms/accept`).
-3. Home with "Before you go online": Application approved, Pay terms accepted (done), Set up your phone (Phone setup),
-   Go online. It shows whenever location or notifications are missing, after the phone was checked once.
+3. Phone setup opens by itself right after the first terms are accepted; Done (or back) lands on Home with "Before you
+   go online": Application approved, Pay terms accepted (done), Set up your phone (Phone setup), Go online. It shows
+   whenever location or notifications are missing, after the phone was checked once.
 
 ## 5. Ops: the queue and one decision (console)
+
+**Where it is.** The console's sidebar has a Riders & fleet group, in the order ops works: Riders (start here), Go-online
+selfies, Rider support, Fleet trips & dispatch, Rider payouts, Rider slots & banner, Rider pilot setup, Rider pilot
+health. The admin overview shows, under the chef box, "Riders are waiting for you": applications to review, selfies to
+check, rider problems open and SOS presses this week, each a link to its page (hidden for an admin with no rider role).
 
 **Riders** (`/admin/riders`). Tabs with counts: To review (opens first), Fixes asked, Applying, Active, Paused, Closed,
 All riders (`GET /riders?stage=` answers the counts per stage). Columns: rider, phone, stage, next step (a link for
@@ -281,8 +290,10 @@ corrections, sent, fixes, approval, every way back, going offline, Checked at), 
 
 Limits:
 
-- Nothing pushes the decision to the phone: the app asks every minute while open and when the rider comes back to it. A
-  rider who closed the app sees it on opening. A push or SMS on decision is later work.
+- The decision push needs notification-service's realtime push on (`CRAVES_REALTIME_PUSH_ENABLED`, as offers do) and
+  notifications allowed on the phone; otherwise the app finds the decision within 15 seconds while open, or on opening.
+  Applying binds the phone the rider applies on (the last one they use, until approval); a new phone after approval
+  waits for ops as before.
 - Ops writes the fix reasons in English; the app shows them as written, also in Telugu, Hindi or Kannada.
 - A make and model can be changed but not cleared, unless the vehicle kind changes.
 - An application can't be closed from the console: there is no move from PENDING to closed, and it would count as an

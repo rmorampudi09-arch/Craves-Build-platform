@@ -22,4 +22,8 @@
     <string name="rider_trip_cancelled_body">Open Craves Rider to see what\'s next.</string>
     <string name="rider_go_online_title">You\'re offline</string>
     <string name="rider_go_online_body">Tap to go back online and get orders.</string>
+    <string name="rider_account_approved_title">You\'re approved</string>
+    <string name="rider_account_approved_body">Open Craves Rider for your next step.</string>
+    <string name="rider_account_fixes_title">Your application needs a fix</string>
+    <string name="rider_account_fixes_body">Open Craves Rider to see what ops asked for.</string>
 </resources>

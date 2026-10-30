@@ -20,4 +20,8 @@
     <string name="rider_trip_cancelled_body">తర్వాత ఏం చేయాలో చూడటానికి Craves Rider తెరవండి.</string>
     <string name="rider_go_online_title">మీరు ఆఫ్‌లైన్‌లో ఉన్నారు</string>
     <string name="rider_go_online_body">మళ్లీ ఆన్‌లైన్‌కి వచ్చి ఆర్డర్లు పొందడానికి నొక్కండి.</string>
+    <string name="rider_account_approved_title">మీరు ఆమోదం పొందారు</string>
+    <string name="rider_account_approved_body">మీ తదుపరి దశ కోసం Craves Rider తెరవండి.</string>
+    <string name="rider_account_fixes_title">మీ దరఖాస్తులో ఒక సవరణ కావాలి</string>
+    <string name="rider_account_fixes_body">ఆప్స్ టీమ్ ఏమి అడిగిందో చూడటానికి Craves Rider తెరవండి.</string>
 </resources>

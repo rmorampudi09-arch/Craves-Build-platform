@@ -196,6 +196,8 @@ export const en = {
       stepRates: 'Pay rates for your area',
       checkNow: 'Check now',
       stillChecking: (time: string) => `Checked at ${time}. Ops is still checking your application.`,
+      notifyBody: "Turn on notifications and we'll tell you the moment ops decides, even with the app closed.",
+      notifyAction: 'Turn on notifications',
       whatYouSent: 'What you sent',
       fixTitle: (count: number) => (count === 1 ? 'Fix 1 thing to go on' : `Fix ${count} things to go on`),
       fixBody: 'Ops checked your application and needs these again. Everything else is fine.',

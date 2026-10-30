@@ -1010,6 +1010,28 @@ tapped through, from sign-in to payouts. What a rider would have hit, fixed (`FL
   `RiderApp.live.test.tsx` (each fails with its fix taken out); the census and journeys in a browser build; an
   independent review; `PHONE-TESTS.md` §8 on a phone (People step S2).
 
+### P6-04 The admin side like the chef's, the next step by itself, and no demo in production (done; app 1.2.0)
+Gopi: "A clear flow like chef and after accepting the app should directly go to the next step… the admin side also need
+to be sorted… what the hack is demo data, we are about to release the production version of the apk."
+- **Admin side.** The console's Riders & fleet group reads in the order ops works (Riders, Go-online selfies, Rider
+  support, Fleet trips & dispatch, Rider payouts, Rider slots & banner, Rider pilot setup, Rider pilot health), with
+  selfies in the sidebar at last; the overview says what riders are waiting for, under the chef box; an active rider's
+  single documents use the review's words (Looks good, Needs a fix).
+- **The next step by itself.** Ops's decision reaches the phone at once: the rider's phone is registered when they apply
+  (`POST /devices` now takes an applicant's JWT and binds their last phone), and after the decision commits the server
+  sends an ACCOUNT push (`RiderPushClient.account`); an open app asks again at once, a closed one shows "You're
+  approved" or "Your application needs a fix". The app also asks every 15 seconds (was 60) while it waits, and asks for
+  notifications on the Sent screen if they are off. Accepting the first pay terms opens Phone setup by itself.
+- **No demo in production.** A mock APK is its own app, `com.cravesapp.rider.demo` named "Craves Rider Demo", so it can
+  never replace or pass for the rider app; the workflow fails a live APK that isn't `com.cravesapp.rider`, and the demo
+  panel route exists only in demo and developer builds.
+- **Guide.** "Craves Riders: policies and insurance guide" (a shared doc) and `rider-app/research/R15-policy-insurance.md`:
+  what other platforms give riders, what the law asks, the cover to buy and the policies to publish.
+- **Proved by** `FleetApplicationDatabaseTest` (the push after commit, never on a replay, refusal or rollback),
+  `FleetDeviceApiDatabaseTest`, `FleetRiderSecurityTest`, `FleetClientsTest`, the console's `attention.vitest.ts`,
+  `riders.vitest.ts` and the navigation test, the app's `screensA.test.tsx`; screenshots of the console and of the app as
+  the live APK shows it; an independent review.
+
 ### People steps for Phase 6
 **S1. Native speakers.** One each for Telugu, Hindi and Kannada reads every screen in a demo build (Profile, language; the application from the demo panel's "Start over as a new applicant") and the native notifications; the lawyer reads the terms and notice words. Add each signed-off language to `REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`. `help.talkBody` promises support in Telugu, Hindi or English: decide whether support answers in Kannada before Kannada goes live.
 

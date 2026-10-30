@@ -7,7 +7,7 @@ import { readableFleetValue } from "@/features/admin/fleet/lib/fleet-common";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { istDay } from "@/features/admin/fleet/lib/payout-contract";
 import { lastHeard, offerWhy, onShift, phoneReport, pushed, rang, silence } from "@/features/admin/fleet/lib/rider-health";
-import { STAGE_LABELS, VEHICLE_LABELS, vehicleModel } from "@/features/admin/fleet/lib/application-review";
+import { DOCUMENT_LABELS, STAGE_LABELS, VEHICLE_LABELS, vehicleModel } from "@/features/admin/fleet/lib/application-review";
 import {
   auditPageSchema, EXPIRING_DOCUMENTS, expiryProblem, payoutAccountInputSchema, payoutAccountSchema, riderDetailSchema, riderDeviceSchema,
   riderDocumentSchema, riderVehicleInputSchema, riderVehicleSchema, statusEventProblem, statusEventSchema, STATUS_EVENT_KINDS,
@@ -18,11 +18,6 @@ import { ActionMessage, fieldClass, labelClass, ReasonAction, useFleetAction } f
 
 type Document = RiderDetail["documents"][number];
 type Device = RiderDetail["devices"][number];
-
-const DOCUMENT_LABELS: Record<Document["type"], string> = {
-  DRIVING_LICENCE: "Driving licence", VEHICLE_RC: "Vehicle RC", VEHICLE_INSURANCE: "Vehicle insurance", PUC: "PUC certificate",
-  PAN: "PAN card", PHOTO: "Photo", ADDRESS_PROOF: "Address proof", BANK_PROOF: "Bank proof",
-};
 
 const KIND_LABELS: Record<StatusEventInput["kind"], string> = {
   SAFETY_PAUSE: "Safety pause (starts now, review within 72 hours)",
@@ -94,7 +89,7 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
     }} /> : <>
       <section className="cr-panel space-y-3">
         <h2 className="text-lg font-bold">Documents</h2>
-        <p className="cr-muted">Renewals and new photos from an active rider. Check each file by hand; a rejected document shows the rider your reason so they can upload it again.</p>
+        <p className="cr-muted">Renewals and new photos from an active rider. Check each file by hand; one marked Needs a fix shows the rider your reason so they can send it again.</p>
         {detail.documents.length === 0 ? <p className="cr-empty">No documents uploaded yet.</p>
           : detail.documents.map(document => <DocumentRow key={document.documentId} riderId={riderId} document={document} onDone={reload} />)}
       </section>
@@ -173,7 +168,8 @@ function DocumentRow({ riderId, document, onDone }: { riderId: string; document:
   const base = `riders/${riderId}/documents/${document.documentId}`;
   async function decide(verb: "approve" | "reject", body?: { reason: string } | { expiresOn: string }) {
     const done = await action.run("POST", `${base}/${verb}`, riderDocumentSchema, body,
-      verb === "approve" ? "Document accepted." : "Document rejected. The rider sees your reason.");
+      // The same words as the application review: Looks good, or Needs a fix with a reason the rider reads.
+      verb === "approve" ? "Marked as good." : "Sent back. The rider sees your reason and sends a new photo.");
     if (done) await onDone();
   }
   function accept(event: FormEvent) {
@@ -194,9 +190,9 @@ function DocumentRow({ riderId, document, onDone }: { riderId: string; document:
     {document.status === "PENDING" && <div className="mt-2 flex flex-wrap items-end gap-2">
       <form noValidate className="flex flex-wrap items-end gap-2" onSubmit={accept}>
         {expiring && <label className={labelClass}>{label} expiry date (as printed)<input className={fieldClass} type="date" min={istDay()} value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></label>}
-        <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Accept document</button>
+        <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Looks good<span className="cr-sr-only">: {label}</span></button>
       </form>
-      <ReasonAction label="Reject document" action={action} onSubmit={reason => void decide("reject", { reason })} />
+      <ReasonAction label="Needs a fix" action={action} onSubmit={reason => void decide("reject", { reason })} />
     </div>}
     <ActionMessage state={action.state} />
   </article>;

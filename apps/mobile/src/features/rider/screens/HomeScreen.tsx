@@ -16,7 +16,7 @@ import {Card, Money, RiderScreen} from '../components/ui';
 import {formatClock, formatRupees} from '../domain/format';
 import {riderMessage} from '../domain/problem';
 import {riderOnlineService} from '../native/riderOnlineService';
-import type {RiderNav} from '../navigation';
+import {takeAfterGate, type RiderNav} from '../navigation';
 import {riderKeys, useActiveTrip, useRiderHome, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {usePhoneReadiness} from './PhoneSetupScreen';
@@ -288,6 +288,14 @@ export function HomeScreen() {
   const tripInProgress = Boolean(trip.data && !ENDED.includes(trip.data.step));
   const online = home.data?.online ?? false;
   const refresh = () => queryClient.invalidateQueries({queryKey: riderKeys.all});
+
+  // Right after the first pay terms: the next step opens by itself.
+  useEffect(() => {
+    const next = takeAfterGate();
+    if (next) {
+      navigation.navigate(next);
+    }
+  }, [navigation]);
 
   // The server may still say "online" after a restart; keep the location loop in step with it.
   useEffect(() => {

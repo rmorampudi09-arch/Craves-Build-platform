@@ -4,13 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  Activity, BarChart3, Bike, CalendarClock, Route, Wallet, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
+  Activity, BarChart3, Bike, CalendarClock, Route, ScanFace, Wallet, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
   LayoutDashboard, LifeBuoy, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, SlidersHorizontal, Truck, X
 } from "lucide-react";
 import { observeAdminSession, logoutAdminSession } from "@/features/admin/shell/lib/admin-renewal";
 import { createAdminAuthorization, INITIAL_ADMIN_AUTHORIZATION } from "@/features/admin/shell/lib/admin-authorization";
 import { loadAdminIdentity } from "@/features/admin/shell/lib/admin-session";
-import { ADMIN_MODULES, matchesAdminRoute, searchAdminModules } from "@/features/admin/shell/lib/admin-navigation";
+import { ADMIN_MODULES, currentAdminHref, searchAdminModules } from "@/features/admin/shell/lib/admin-navigation";
 import { AdminModuleLink } from "@/features/admin/shell/components/admin-module-link";
 import { SyncfusionLicense } from "@/features/admin/shell/components/syncfusion-license";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
@@ -23,16 +23,17 @@ const icons = {
   delivery: Truck, chefs: ChefHat, accounts: ShieldCheck, finance: ReceiptText,
   plans: ReceiptText, subscriptions: ClipboardList, capacity: Gauge,
   notifications: BellRing, academy: GraduationCap,
-  riders: Bike, "fleet-trips": Route, "fleet-slots": CalendarClock, "fleet-setup": SlidersHorizontal, "fleet-health": Activity, "fleet-support": LifeBuoy, "fleet-payouts": Wallet
+  riders: Bike, "fleet-trips": Route, "fleet-slots": CalendarClock, "fleet-setup": SlidersHorizontal, "fleet-health": Activity, "fleet-support": LifeBuoy, "fleet-payouts": Wallet, "fleet-selfies": ScanFace
 };
 
 function Navigation({ pathname, close }: { pathname: string; close?: () => void }) {
   const groups = [...new Set(ADMIN_MODULES.map(module => module.group))];
+  const currentHref = currentAdminHref(pathname);
   return <nav className="cr-navigation" aria-label="Administration modules">
     {groups.map(group => <div className="cr-nav-group" key={group}><p className="cr-nav-label">{group}</p>
       {ADMIN_MODULES.filter(module => module.group === group).map(module => {
         const Icon = icons[module.id as keyof typeof icons] ?? LayoutDashboard;
-        return <AdminModuleLink key={module.id} module={module} className="cr-nav-link" current={matchesAdminRoute(pathname, module.href)} onNavigate={close}>
+        return <AdminModuleLink key={module.id} module={module} className="cr-nav-link" current={module.href === currentHref} onNavigate={close}>
           <Icon size={18} aria-hidden="true"/><span>{module.label}</span>{module.externalApp && <ArrowRight size={14} aria-hidden="true"/>}
         </AdminModuleLink>;
       })}
@@ -108,7 +109,7 @@ export function AdminWorkspace({ children }: { children: ReactNode }) {
     return <AcademyWorkspace identity={identity} message={message} sessionState={sessionState} onSignOut={() => { void signOut(); }}>{children}</AcademyWorkspace>;
   }
 
-  const current = ADMIN_MODULES.find(module => matchesAdminRoute(pathname, module.href));
+  const current = ADMIN_MODULES.find(module => module.href === currentAdminHref(pathname));
   const results = searchAdminModules(query);
   const accessScreen = <main className="cr-admin cr-session-screen">
     <section className="cr-session-card"><CravesLogo size="lg" priority/><p className="cr-eyebrow">Craves administration</p>

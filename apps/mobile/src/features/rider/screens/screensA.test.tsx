@@ -1,7 +1,7 @@
 // Screens 1–8 of "Rider app P1: screens to the design": every state of sign-in, account status, terms,
 // phone setup, home, go online and the offer.
 import React from 'react';
-import {AccessibilityInfo, Alert, AppState, BackHandler, Keyboard, Linking, StyleSheet, Text} from 'react-native';
+import {AccessibilityInfo, Alert, AppState, BackHandler, DeviceEventEmitter, Keyboard, Linking, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AxiosError} from 'axios';
@@ -14,9 +14,10 @@ import {requiredDocuments} from '../domain/application';
 import {riderApi} from '../api/riderApi';
 import {riderDevice, type DeviceState} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
+import {registerPhone} from '../components/RiderRuntime';
 import {listenForSmsCode} from '../native/smsCode';
-import {RiderShellContext} from '../navigation';
-import {riderKeys} from '../state/riderQueries';
+import {openAfterGate, RiderShellContext, takeAfterGate} from '../navigation';
+import {ACCOUNT_EVENT, riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
 import {AccountStatusScreen} from './AccountStatusScreen';
 import {GoOnlineScreen} from './GoOnlineScreen';
@@ -67,6 +68,15 @@ jest.mock('../native/riderDevice', () => ({
     installationId: jest.fn(async () => 'android-id-1'),
   },
 }));
+// Live or demo per test; the rest of riderConfig as it is (a demo build).
+let mockApiMode: 'mock' | 'live' = 'mock';
+jest.mock('../riderConfig', () => ({
+  ...jest.requireActual('../riderConfig'),
+  get riderApiMode() {
+    return mockApiMode;
+  },
+}));
+jest.mock('../components/RiderRuntime', () => ({...jest.requireActual('../components/RiderRuntime'), registerPhone: jest.fn(async () => true)}));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
   return {
@@ -516,9 +526,70 @@ describe('Account status and the application', () => {
       const [, onChange] = appState.mock.calls.find(([event]) => event === 'change')!;
       await act(async () => (onChange as (state: string) => void)('active'));
       expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+      // Ops's decision arrives as a push: the app asks at once, not at its next check.
+      refetch.mockClear();
+      await act(async () => {
+        DeviceEventEmitter.emit(ACCOUNT_EVENT);
+      });
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
 
       await act(async () => press('rider-sign-out').props.onPress());
       expect(signOut).toHaveBeenCalled();
+    });
+
+    it('asks again every 15 seconds while ops checks, and stops listening once the screen closes', async () => {
+      jest.useFakeTimers();
+      const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      const refetch = jest.spyOn(client, 'invalidateQueries');
+      await act(async () => {
+        jest.advanceTimersByTime(15_000);
+      });
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+      refetch.mockClear();
+      act(() => tree.unmount());
+      await act(async () => {
+        DeviceEventEmitter.emit(ACCOUNT_EVENT);
+        jest.advanceTimersByTime(15_000);
+      });
+      expect(refetch).not.toHaveBeenCalled();
+    });
+
+    it('registers the phone the rider applied on, so the decision reaches it (live builds only)', async () => {
+      mockApiMode = 'live';
+      try {
+        await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+        await flush();
+        expect(registerPhone).toHaveBeenCalledTimes(1);
+      } finally {
+        mockApiMode = 'mock';
+      }
+      (registerPhone as jest.Mock).mockClear();
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      expect(registerPhone).not.toHaveBeenCalled();
+    });
+
+    it('asks for notifications while ops checks, so the decision reaches a closed app', async () => {
+      (riderDevice.notificationsGranted as jest.Mock).mockResolvedValueOnce(false);
+      (riderDevice.requestNotifications as jest.Mock).mockResolvedValueOnce(true);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      expect(allText()).toContain("Turn on notifications and we'll tell you the moment ops decides, even with the app closed.");
+      await act(async () => press('rider-application-notify-on').props.onPress());
+      expect(riderDevice.requestNotifications).toHaveBeenCalled();
+      expect(riderDevice.openAppSettings).not.toHaveBeenCalled();
+      expect(allText()).not.toContain('Turn on notifications');
+      // Refused for good: only the app's settings can turn them on.
+      (riderDevice.notificationsGranted as jest.Mock).mockResolvedValueOnce(false);
+      (riderDevice.requestNotifications as jest.Mock).mockResolvedValueOnce(false);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      await act(async () => press('rider-application-notify-on').props.onPress());
+      expect(riderDevice.openAppSettings).toHaveBeenCalled();
+      // Already on: nothing to ask.
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      expect(allText()).not.toContain('Turn on notifications');
     });
 
     it('drops the pinned footer while the keyboard is up, so the forms keep the room', async () => {
@@ -743,6 +814,17 @@ describe('Terms', () => {
     await act(async () => press('rider-terms-accept').props.onPress());
     expect(riderApi.acceptTerms).toHaveBeenCalledWith('2026-10-v1');
     expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+    // The first terms let the rider in: phone setup opens next, once.
+    expect(takeAfterGate()).toBe('PhoneSetup');
+    expect(takeAfterGate()).toBeNull();
+  });
+
+  it('sends a rider who accepted changed terms straight back to work', async () => {
+    (riderApi.acceptTerms as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
+    await act(async () => press('rider-terms-accept').props.onPress());
+    expect(riderApi.acceptTerms).toHaveBeenCalled();
+    expect(takeAfterGate()).toBeNull();
   });
 
   it('shows what changed to a rider who accepted an older version', async () => {
@@ -985,6 +1067,15 @@ describe('Home', () => {
     await render(<HomeScreen />, seed({...offlineHome, guaranteedPerHourPaise: undefined}));
     expect(allText()).toContain('Your next slot');
     expect(allText()).not.toContain('an hour');
+  });
+
+  it('opens phone setup by itself right after the first pay terms, once', async () => {
+    openAfterGate('PhoneSetup');
+    await render(<HomeScreen />, seed(offlineHome));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
+    expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
+    await render(<HomeScreen />, seed(offlineHome));
+    expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
   });
 
   it('online: the shift with paid waiting, today, the rest point, and Go offline', async () => {

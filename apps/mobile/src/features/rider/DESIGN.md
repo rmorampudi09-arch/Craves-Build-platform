@@ -719,6 +719,7 @@ There is no tablet layout; the rider app is phone-only.
 - System Back always works. It never cancels a trip silently: it leaves the trip screen, and the trip stays active.
 - One exception: on a live offer Back does nothing, like an incoming call. The offer can't be opened again, so only Accept or Decline decide; once it has ended, Back closes it.
 - Going offline asks first ("Go offline?", Stay online / Go offline), and on a trip says the trip stays yours. Break and Head home are hidden during a trip.
+- While ops checks an application, a card asks for notifications if they are off ("we'll tell you the moment ops decides"), so the decision can arrive as a notice; refused for good, its button opens the app's settings. Accepting the first pay terms opens Phone setup by itself.
 - A check the rider asks for (Check now, Check again) that finds nothing new still answers, in `{typography.small}` under the button: "Checked at 4:09 pm. …"; one that couldn't check says why instead (`riderMessage`), never that nothing changed.
 
 ## Iteration Guide

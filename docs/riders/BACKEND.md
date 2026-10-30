@@ -133,7 +133,7 @@ Money is BIGINT paise everywhere. The integration migrations are re-runnable (`I
 
 ### Rider API (`/api/v1/rider`, integration-service, rider API flag)
 
-Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET /me` and `POST /apply` (any signed-in user), `GET /profile`, `POST /documents`, `POST /payout-account` and `POST /privacy-notice/accept` (any signed-in user with a rider row, so a PENDING rider can accept the privacy notice and send documents and an account), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential), and trip steps with the shift credential once `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on. Errors are `{code, message}` (`FleetApiAdvice`); `rider-v1.yaml` lists every code each route returns.
+Every route needs a Craves JWT. The RIDER role is needed everywhere except `GET /me` and `POST /apply` (any signed-in user), `GET /profile`, `POST /documents`, `POST /payout-account` and `POST /privacy-notice/accept` (any signed-in user with a rider row, so a PENDING rider can accept the privacy notice and send documents and an account), and `POST /devices` and `POST /locations` (a RIDER JWT or the shift credential; `/devices` also an applicant's JWT, P6-04: a PENDING rider's last phone is bound so ops's decision reaches it as an ACCOUNT push), and trip steps with the shift credential once `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on. Errors are `{code, message}` (`FleetApiAdvice`); `rider-v1.yaml` lists every code each route returns.
 
 | Route | Does |
 |---|---|

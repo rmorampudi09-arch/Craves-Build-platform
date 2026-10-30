@@ -6,6 +6,9 @@ import {InputField} from '../../../shared/components';
 import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import type {RiderMe, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
+import {riderDevice} from '../native/riderDevice';
+import {riderApiMode} from '../riderConfig';
+import {registerPhone} from '../components/RiderRuntime';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {CheckRow} from '../components/Choices';
@@ -373,6 +376,45 @@ function PayoutStep({me, profile, onBack}: {me: RiderMe; profile: RiderProfile; 
   );
 }
 
+/** While ops checks: asks for notifications if they are off, so the decision can reach the phone with the app closed. */
+function NotifyWhenDecided() {
+  const ap = useStrings().strings.account.apply;
+  const [allowed, setAllowed] = useState<boolean>();
+  useEffect(() => {
+    let live = true;
+    riderDevice
+      .notificationsGranted()
+      .then(granted => live && setAllowed(granted))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (allowed !== false) {
+    return null;
+  }
+  return (
+    <Card style={styles.timeline}>
+      <Text style={styles.secondary}>{ap.notifyBody}</Text>
+      <BottomAction
+        label={ap.notifyAction}
+        variant="outline"
+        size="compact"
+        leftIcon="bell"
+        onPress={async () => {
+          // Refused for good, notifications can only be turned on in the app's settings (as phone setup does).
+          const granted = await riderDevice.requestNotifications();
+          if (!granted) {
+            await riderDevice.openAppSettings();
+          }
+          setAllowed(granted);
+        }}
+        testID="rider-application-notify-on"
+      />
+    </Card>
+  );
+}
+
 /** Everything is in: ops's turn. Nothing to do but wait; the answer arrives here on its own. */
 function Sent({
   me,
@@ -408,6 +450,7 @@ function Sent({
         <Text style={styles.secondary}>{ap.sentBody}</Text>
       </View>
       {again ? <Banner tone="success" text={ap.sentAgain} testID="rider-application-sent-again" /> : null}
+      <NotifyWhenDecided />
       <Card style={styles.timeline}>
         <Timeline
           items={[
@@ -519,6 +562,12 @@ export function ApplicationScreen({me}: {me: RiderMe}) {
     return keys.map(queryKey => queryClient.getQueryState(queryKey)?.error).find(Boolean);
   };
   useRecheck(recheck, application?.stage === 'REVIEW');
+  // The phone the rider applies on hears ops's decision as a push (P6-04); without it the app still checks every 15 s.
+  useEffect(() => {
+    if (applied && riderApiMode === 'live') {
+      registerPhone().catch(() => undefined);
+    }
+  }, [applied]);
 
   const aboutStep = (
     <AboutStep

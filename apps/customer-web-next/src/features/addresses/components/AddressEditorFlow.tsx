@@ -35,7 +35,7 @@ import {
   type LocationSearchResult,
 } from "@/features/addresses/api/searchLocation";
 import { getAddress } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { duration, ease } from "@/shared/lib/motion";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
 import { DiscardChangesPrompt, useOverlayHistory } from "@/shared/ui/overlays/overlay";

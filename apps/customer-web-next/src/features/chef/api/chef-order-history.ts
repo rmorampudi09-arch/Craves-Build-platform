@@ -1,4 +1,4 @@
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { parseChefOrderHistoryPage, type ChefOrderHistoryPage, type ChefOrderStatus } from "@/features/chef/lib/chef-order-contract";
 
 /** code is FEATURE_NOT_AVAILABLE (show Coming soon), SESSION_EXPIRED, a backend code, or CHEF_ORDER_HISTORY_FAILED. */

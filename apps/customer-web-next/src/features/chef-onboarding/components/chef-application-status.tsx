@@ -1,5 +1,5 @@
 "use client";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";

@@ -1,4 +1,4 @@
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import {
   parseChefScheduleAnswerResult,
   parseChefScheduledOrderPage,

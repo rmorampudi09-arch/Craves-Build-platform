@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { setSessionIdentity, synchronizeSessionRoles } from "@/features/auth/api/cravesAuth";
-import { BEFORE_SIGN_IN_EVENT, SESSION_ENDED_EVENT, sessionFetch } from "@/features/auth/api/sessionFetch";
+import { BEFORE_SIGN_IN_EVENT, SESSION_ENDED_EVENT, sessionFetch } from "@/shared/lib/session-fetch";
 
 const route = vi.hoisted(() => ({ pathname: "/checkout" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname, useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));

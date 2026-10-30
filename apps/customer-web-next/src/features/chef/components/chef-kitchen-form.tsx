@@ -1,5 +1,5 @@
 "use client";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 import { ChefError, chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefEmpty, ChefFlash, ChefNotice, ChefPageHead, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";

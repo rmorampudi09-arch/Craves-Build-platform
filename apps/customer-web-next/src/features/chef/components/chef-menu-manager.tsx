@@ -1,5 +1,5 @@
 "use client";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 import { ChefError, chefApiError, chefErrorText, isChefAccessText } from "@/features/chef/lib/chef-errors";
 import { ChefAccessRetry } from "@/features/chef/components/chef-account-menu";

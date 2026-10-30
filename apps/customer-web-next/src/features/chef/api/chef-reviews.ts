@@ -1,4 +1,4 @@
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { parseChefReviewPage, parseChefReviewSummary, type ChefReviewPage, type ChefReviewSummary } from "@/features/chef/lib/chef-review-contract";
 
 /** code is FEATURE_NOT_AVAILABLE (show Coming soon), SESSION_EXPIRED, a backend code, or CHEF_REVIEWS_FAILED. */

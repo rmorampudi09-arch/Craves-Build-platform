@@ -27,7 +27,7 @@ import {
   parseCheckoutOperationResponse,
 } from "@/features/checkout/lib/checkout-operation-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import {
   cartCurrency,
   cartTotal,

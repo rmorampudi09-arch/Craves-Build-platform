@@ -22,7 +22,7 @@ vi.mock("firebase/auth", () => ({
   signOut: mocks.signOut,
 }));
 vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
-vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: vi.fn(), parkMsg91Captcha: vi.fn() }));
 
 const identity = { id: "31111111-1111-4111-8111-111111111111", phoneNumber: "+919876543210", roles: ["CHEF"], status: "ACTIVE" };

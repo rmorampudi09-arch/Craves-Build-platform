@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CheckoutPaymentButton } from "@/features/checkout/components/CheckoutPaymentButton";
 import type { CustomerCheckout } from "./checkout-contract";
+import { paidParcelDue } from "@/shared/lib/paid-parcel";
 
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -68,6 +69,8 @@ describe("payment pending after a reload", () => {
     renderButton();
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith(`/orders/${ORDER_ID}?paid=1`));
     expect(window.sessionStorage.getItem("craves.checkout.paymentPending")).toBeNull();
+    // Only a payment confirmed as PAID earns the order page's parcel.
+    expect(paidParcelDue(ORDER_ID)).toBe(true);
   });
 
   it("allows a retry once the payment is known to have failed", async () => {
@@ -76,6 +79,8 @@ describe("payment pending after a reload", () => {
     await waitFor(() => expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ retryAllowed: true })));
     expect(window.sessionStorage.getItem("craves.checkout.paymentPending")).toBeNull();
     expect(await screen.findByRole("button", { name: /Pay ₹240/ })).toBeTruthy();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(paidParcelDue(ORDER_ID)).toBe(false);
   });
 
   it("holds the delivery address while the payment is confirmed and frees it once it failed", async () => {
@@ -120,5 +125,8 @@ describe("closing Razorpay before paying", () => {
     expect(options!.theme.color).toBe("#F62E18");
     expect(onFailure).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.any(String) }));
     expect(screen.queryByRole("alert")).toBeNull();
+    // Checkout stays as it was: no order page, no parcel.
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(paidParcelDue(ORDER_ID)).toBe(false);
   });
 });

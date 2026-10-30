@@ -12,6 +12,7 @@ import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/features/auth/api/sessionFetch";
 import { loadCart } from "@/features/cart/api/cravesCart";
+import { markPaidParcelDue } from "@/shared/lib/paid-parcel";
 
 type CheckoutWindow = Window & {
   Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
@@ -215,6 +216,8 @@ export function CheckoutPaymentButton({
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
     window.sessionStorage.removeItem("craves.checkout.operationId");
+    // Razorpay's success is verified (PAID): only now does the order page fold the cart's leaf into a parcel.
+    markPaidParcelDue(orderId);
     // The order can trail a verified payment: paid=1 keeps its page from offering Pay again meanwhile.
     router.replace(`/orders/${orderId}?paid=1`);
   }, [router]);

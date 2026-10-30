@@ -9,7 +9,7 @@ import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
 import { OrderCalendar } from "@/features/orders/components/OrderCalendar";
 import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
-import { PaidParcel, paidParcelShown } from "@/features/orders/components/PaidParcel";
+import { PaidParcel } from "@/features/orders/components/PaidParcel";
 import {
   isAbandonedUnpaidOrder,
   parseCustomerOrder,
@@ -25,6 +25,7 @@ import { paymentStatus, TONE_TEXT } from "@/features/orders/lib/order-presentati
 import { useDishPhotos } from "@/features/orders/api/dish-photos";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { calendarCondensed } from "@/shared/fonts/theme-fonts";
+import { paidParcelDue } from "@/shared/lib/paid-parcel";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { returnToListPath } from "@/shared/lib/return-scroll";
@@ -241,14 +242,15 @@ export function CustomerOrderStatus({
 
   const { profile: kitchen } = useKitchenProfile(order?.kitchenId);
   const photos = useDishPhotos(order?.kitchenId);
-  // Right after paying, the cart's leaf folds into a parcel: once per order in this tab, never with reduced motion.
-  // This tab's record is read after mount (the server can't see it), before the first paint.
+  // The cart's leaf folds into a parcel only after this tab's checkout verified the payment with Razorpay (never for a
+  // typed ?paid=1, a failed or a closed payment), once, and never with reduced motion. The tab's mark is read after
+  // mount (the server can't see it), before the first paint.
   const reduceMotion = useReducedMotion();
-  const [parcelShown, setParcelShown] = useState(true);
+  const [parcelDue, setParcelDue] = useState(false);
   useLayoutEffect(() => {
-    setParcelShown(paidParcelShown(orderId));
+    setParcelDue(paidParcelDue(orderId));
   }, [orderId]);
-  const endParcel = useCallback(() => setParcelShown(true), []);
+  const endParcel = useCallback(() => setParcelDue(false), []);
 
   const header = (
     <TrackingHeader
@@ -264,7 +266,7 @@ export function CustomerOrderStatus({
     return (
       <div className={`${calendarCondensed.variable} min-h-screen bg-white`}>
         {/* Right after paying, the parcel's white cover is up at once, so no skeleton flashes before the leaf. */}
-        {justPaid && !parcelShown && !reduceMotion ? <div aria-hidden="true" className="fixed inset-0 z-[90] bg-white" /> : null}
+        {parcelDue && !reduceMotion ? <div aria-hidden="true" className="fixed inset-0 z-[90] bg-white" /> : null}
         {header}
         <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
           <CustomerSectionSkeleton variant="order" label="Loading your order" />
@@ -324,7 +326,7 @@ export function CustomerOrderStatus({
     <div
       className={`${calendarCondensed.variable} min-h-screen ${sheet ? "bg-[#FFFEFA]" : "bg-white"} pb-[calc(6.5rem+env(safe-area-inset-bottom))] text-[#1A1A1A] md:pb-12`}
     >
-      {justPaid && !parcelShown && !reduceMotion && !problem ? (
+      {parcelDue && !reduceMotion && !problem ? (
         <PaidParcel order={order} amount={money(order.grandTotal, order.currency)} photos={photos} onDone={endParcel} />
       ) : null}
       {header}

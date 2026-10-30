@@ -5,6 +5,7 @@ import { leafGeometry } from "@/shared/ui/banana-leaf/leaf-geometry";
 import { LeafLayers, PALE_LEAF, useSvgId, WaterDrop } from "@/shared/ui/banana-leaf/LeafDrawing";
 import { courseOf, fitOnLeaf, PLATE_SHAPE } from "@/shared/ui/banana-leaf/leaf-plate";
 import { leafSerif } from "@/shared/fonts/theme-fonts";
+import { markPaidParcelPlayed } from "@/shared/lib/paid-parcel";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
 import styles from "./PaidParcel.module.css";
 
@@ -15,21 +16,12 @@ const GEOMETRY = leafGeometry(W, H, PLATE_SHAPE);
 const CENTRE = { x: 168, y: 77.5 };
 /** The cover lifts at 2.55 s and is gone by 2.97 s. */
 export const PAID_PARCEL_MS = 3000;
-const seenKey = (orderId: string) => `craves.paid-parcel.${orderId}`;
-
-/** Whether this tab already showed the parcel for this order: a reload or Back shows the page at once. */
-export function paidParcelShown(orderId: string): boolean {
-  try {
-    return typeof window !== "undefined" && window.sessionStorage.getItem(seenKey(orderId)) === "1";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Right after payment: the order's dishes on the banana leaf from the cart, the leaf folds into a parcel, a thread ties
  * it, then "Paid ₹…, sent to <kitchen>", and the cover lifts off the live order page. Decorative (the page under it
- * says the same), about 3 s, once per order in this tab. The caller skips it for reduced motion.
+ * says the same), about 3 s. The caller shows it only after this tab's checkout verified the payment
+ * (shared/lib/paid-parcel), once, and never with reduced motion.
  */
 export function PaidParcel({
   order,
@@ -49,11 +41,7 @@ export function PaidParcel({
   const [started, setStarted] = useState(photos.size > 0);
 
   useEffect(() => {
-    try {
-      window.sessionStorage.setItem(seenKey(order.id), "1");
-    } catch {
-      // Storage blocked: it may play again on a reload, nothing worse.
-    }
+    markPaidParcelPlayed(order.id);
   }, [order.id]);
 
   useEffect(() => {

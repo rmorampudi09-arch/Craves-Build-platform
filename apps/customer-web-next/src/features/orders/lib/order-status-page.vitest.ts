@@ -4,6 +4,7 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { CustomerOrderStatus } from "../components/CustomerOrderStatus";
+import { markPaidParcelDue } from "@/shared/lib/paid-parcel";
 
 const fixture = vi.hoisted(() => ({
   id: "0bde0000-0000-4000-8000-000000000010",
@@ -215,8 +216,17 @@ describe("order status after payment", () => {
     expect(paymentStep).not.toHaveBeenCalled();
   });
 
-  it("right after payment, folds the leaf into a parcel once per order", async () => {
+  it("folds the leaf into a parcel once, only after this tab's checkout verified the payment", async () => {
     sessionStorage.clear();
+    // A typed, bookmarked or shared ?paid=1 link without a verified payment opens the page as usual.
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
+    cleanup();
+    // Checkout marks the order once Razorpay's success is verified as PAID.
+    markPaidParcelDue(fixture.id);
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
     await screen.findByRole("heading", { name: "Waiting for the chef" });
@@ -232,8 +242,7 @@ describe("order status after payment", () => {
     await screen.findByRole("heading", { name: "Waiting for the chef" });
     expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
     cleanup();
-    // Opened from Your orders (no ?paid=1), it never plays.
-    sessionStorage.clear();
+    // Opened later from Your orders, it doesn't play either.
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     await screen.findByRole("heading", { name: "Waiting for the chef" });

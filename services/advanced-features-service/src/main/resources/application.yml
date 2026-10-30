@@ -1,0 +1,59 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  max-http-request-header-size: 16KB
+  error:
+    include-message: never
+    include-stacktrace: never
+  tomcat:
+    max-swallow-size: 1MB
+    threads:
+      max: 200
+spring:
+  application:
+    name: craves-advanced-features-service
+  datasource:
+    url: ${ADV_DB_URL:jdbc:postgresql://127.0.0.1:5432/advanced_unconfigured}
+    username: ${ADV_DB_USER:advanced_unconfigured}
+    password: ${ADV_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${ADV_DB_POOL_SIZE:8}
+      minimum-idle: 0
+      connection-timeout: 5000
+      validation-timeout: 2000
+      initialization-fail-timeout: -1
+      connection-init-sql: SET statement_timeout = '15s'
+  flyway:
+    # Each module migrates its own schema (ModuleRuntime); never one global migration.
+    enabled: false
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    default-property-inclusion: always
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+  mvc:
+    problemdetails:
+      enabled: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    db:
+      enabled: false
+advanced:
+  jwt-issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
+  jwt-audience: ${CRAVES_JWT_AUDIENCE:craves-api}
+  verification-pem-base64: ${CRAVES_JWT_VERIFICATION_PEM_BASE64:}
+  admin-session-check-enabled: ${CRAVES_ADMIN_SESSION_CHECK_ENABLED:true}
+  admin-session-auth-url: ${CRAVES_ADMIN_SESSION_AUTH_URL:https://api.craves.in/api/v1/auth/me}
+  api-origin: ${CRAVES_API_ORIGIN:https://api.craves.in}
+  public-web-origin: ${CRAVES_PUBLIC_WEB_ORIGIN:https://craves.in}
+  module-concurrency: ${CRAVES_ADV_MODULE_CONCURRENCY:64}

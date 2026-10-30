@@ -1,0 +1,77 @@
+components:
+  schemas:
+    FeatureFlag:
+      properties:
+        available:
+          type: boolean
+        enabled:
+          type: boolean
+        id:
+          type: string
+      type: object
+    Status:
+      properties:
+        enabled:
+          type: boolean
+        id:
+          type: string
+        lastAttempt:
+          format: date-time
+          type: string
+        lastError:
+          type: string
+        schema:
+          type: string
+        state:
+          enum:
+          - DISABLED
+          - PENDING
+          - READY
+          - FAILED
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ none."
+  title: Craves advanced API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/features:
+    get:
+      operationId: features
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/FeatureFlag"
+                type: array
+          description: OK
+      tags:
+      - feature-status-controller
+  /api/v1/advanced/modules:
+    get:
+      operationId: modules
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/Status"
+                type: array
+          description: OK
+      tags:
+      - feature-status-controller
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

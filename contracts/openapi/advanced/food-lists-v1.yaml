@@ -1,0 +1,442 @@
+components:
+  schemas:
+    CreateFoodList:
+      properties:
+        description:
+          maxLength: 280
+          minLength: 0
+          type: string
+        name:
+          maxLength: 60
+          minLength: 0
+          type: string
+      required:
+      - name
+      type: object
+    CreateShare:
+      properties:
+        expiresInDays:
+          format: int32
+          type: integer
+      type: object
+    FoodListDetail:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        description:
+          type: string
+        id:
+          format: uuid
+          type: string
+        itemCount:
+          format: int32
+          type: integer
+        items:
+          items:
+            $ref: "#/components/schemas/FoodListItem"
+          type: array
+        name:
+          type: string
+        share:
+          $ref: "#/components/schemas/ShareInfo"
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+        visibility:
+          type: string
+      type: object
+    FoodListItem:
+      properties:
+        addedAt:
+          format: date-time
+          type: string
+        availability:
+          type: string
+        itemName:
+          type: string
+        kitchenId:
+          format: uuid
+          type: string
+        menuItemId:
+          format: uuid
+          type: string
+        note:
+          type: string
+        position:
+          format: int32
+          type: integer
+        pricePaise:
+          format: int64
+          type: integer
+      type: object
+    FoodListSummary:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        description:
+          type: string
+        id:
+          format: uuid
+          type: string
+        itemCount:
+          format: int32
+          type: integer
+        name:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+        visibility:
+          type: string
+      type: object
+    PutItem:
+      properties:
+        note:
+          maxLength: 140
+          minLength: 0
+          type: string
+      type: object
+    Reorder:
+      properties:
+        menuItemIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 200
+          minItems: 0
+          type: array
+      required:
+      - menuItemIds
+      type: object
+    ShareInfo:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        viewCount:
+          format: int64
+          type: integer
+      type: object
+    ShareLink:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        token:
+          type: string
+        url:
+          type: string
+      type: object
+    SharedFoodList:
+      properties:
+        description:
+          type: string
+        itemCount:
+          format: int32
+          type: integer
+        items:
+          items:
+            $ref: "#/components/schemas/FoodListItem"
+          type: array
+        name:
+          type: string
+      type: object
+    UpdateFoodList:
+      properties:
+        description:
+          maxLength: 280
+          minLength: 0
+          type: string
+        name:
+          maxLength: 60
+          minLength: 1
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_FOOD_LISTS_ENABLED."
+  title: Craves food-lists API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/food-lists:
+    get:
+      operationId: myLists
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/FoodListSummary"
+                type: array
+          description: OK
+      tags:
+      - food-list-controller
+    post:
+      operationId: create_1
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFoodList"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - food-list-controller
+  /api/v1/food-lists/{listId}:
+    delete:
+      operationId: delete
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - food-list-controller
+    get:
+      operationId: get
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - food-list-controller
+    patch:
+      operationId: update
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFoodList"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - food-list-controller
+  /api/v1/food-lists/{listId}/items-order:
+    put:
+      operationId: reorder
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Reorder"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - food-list-controller
+  /api/v1/food-lists/{listId}/items/{menuItemId}:
+    delete:
+      operationId: removeItem
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - food-list-controller
+    put:
+      operationId: putItem
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutItem"
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - food-list-controller
+  /api/v1/food-lists/{listId}/share:
+    delete:
+      operationId: revokeShare
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - food-list-controller
+    post:
+      operationId: share
+      parameters:
+      - in: path
+        name: listId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShare"
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ShareLink"
+          description: OK
+      tags:
+      - food-list-controller
+  /api/v1/shared-food-lists/{token}:
+    get:
+      operationId: view
+      parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SharedFoodList"
+          description: OK
+      tags:
+      - shared-food-list-controller
+  /api/v1/shared-food-lists/{token}/copy:
+    post:
+      operationId: copy
+      parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FoodListDetail"
+          description: OK
+      tags:
+      - shared-food-list-controller
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

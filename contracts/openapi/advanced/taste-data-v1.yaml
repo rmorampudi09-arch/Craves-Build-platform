@@ -1,0 +1,109 @@
+components:
+  schemas:
+    Consent:
+      properties:
+        personalization:
+          type: boolean
+        productAnalytics:
+          type: boolean
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - personalization
+      - productAnalytics
+      type: object
+    ErasureReceipt:
+      properties:
+        erasedAt:
+          format: date-time
+          type: string
+        modules:
+          items:
+            type: string
+          type: array
+        receiptId:
+          format: uuid
+          type: string
+        recordsErased:
+          format: int32
+          type: integer
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_TASTE_DATA_ENABLED."
+  title: Craves taste-data API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/my-taste-data:
+    delete:
+      operationId: erase
+      parameters:
+      - in: header
+        name: X-Confirm-Erase
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErasureReceipt"
+          description: OK
+      tags:
+      - taste-data-controller
+  /api/v1/my-taste-data/consent:
+    get:
+      operationId: consent
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Consent"
+          description: OK
+      tags:
+      - taste-data-controller
+    put:
+      operationId: setConsent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Consent"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Consent"
+          description: OK
+      tags:
+      - taste-data-controller
+  /api/v1/my-taste-data/export:
+    get:
+      operationId: export
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                additionalProperties:
+                  type: object
+                type: object
+          description: OK
+      tags:
+      - taste-data-controller
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

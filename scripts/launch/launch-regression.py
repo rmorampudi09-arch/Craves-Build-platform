@@ -76,8 +76,33 @@ def discover_java(source_folder):
     return result
 
 
-def java_result(service, reports, required, source_folder):
-    issues = []; suites = {}; totals = dict.fromkeys(COUNTS, 0)
+# Fleet tests that put hours of shifts and pay into "today" (IST) skip themselves in the first hours after IST midnight
+# (FleetDatabase.assumeTodayIsHoursOld). Only that exact, self-declared skip is accepted, and only while it is really that
+# early in India; at any other hour the same skip fails the gate like every other skip.
+CLOCK_WINDOW_SKIP = re.compile(r"(?:org\.opentest4j\.TestAbortedException: )?(?:Assumption failed: )?today \(IST\) began less than \d+ hours ago")
+CLOCK_WINDOW_LAST_HOUR_IST = 5  # the longest skip is 4 h; one more hour covers the ~20 min between running and reading
+
+
+def in_clock_window(now=None):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = now or datetime.now(ZoneInfo("Asia/Kolkata"))
+    return now.astimezone(ZoneInfo("Asia/Kolkata")).hour <= CLOCK_WINDOW_LAST_HOUR_IST
+
+
+def clock_window_skip(case):
+    skipped = case.find("skipped")
+    if skipped is None:
+        return False
+    # Surefire puts the reason in the message attribute, the element text, or both.
+    texts = [(skipped.attrib.get("message") or "").strip(), (skipped.text or "").strip().splitlines()[0:1]]
+    texts = [texts[0]] + [line.strip() for line in texts[1]]
+    return any(text and CLOCK_WINDOW_SKIP.fullmatch(text) for text in texts) and \
+        all(not text or CLOCK_WINDOW_SKIP.fullmatch(text) for text in texts)
+
+
+def java_result(service, reports, required, source_folder, now=None):
+    issues = []; suites = {}; totals = dict.fromkeys(COUNTS, 0); window = in_clock_window(now); excused = 0
     for file in sorted(Path(reports).glob("TEST-*.xml")):
         try:
             suite = ET.parse(file).getroot()
@@ -93,7 +118,15 @@ def java_result(service, reports, required, source_folder):
                 if counts[attribute] != sum(case.find(tag) is not None for case in cases):
                     raise ValueError('JUnit child outcomes do not match declared counts')
             if name in suites: raise ValueError("Duplicate JUnit suite")
+            if window:
+                early = sum(clock_window_skip(case) for case in cases)
+                counts = {**counts, "skipped": counts["skipped"] - early}; excused += early
             suites[name] = counts
+            for case in cases:
+                skipped = case.find("skipped")
+                if skipped is not None and not (window and clock_window_skip(case)):
+                    reason = (skipped.attrib.get("message") or (skipped.text or "").strip().split("\n")[0] or "no reason given")[:200]
+                    issues.append(f"Skipped: {name.rsplit('.', 1)[-1]}.{case.attrib.get('name', '?')} - {reason!r}")
             for key in COUNTS: totals[key] += counts[key]
         except (ET.ParseError, ValueError, KeyError):
             issues.append("Malformed or duplicate JUnit report: " + file.name)
@@ -105,7 +138,7 @@ def java_result(service, reports, required, source_folder):
         if not matching or count < minimum: issues.append(f"Missing required cases: {name} ({count}/{minimum})")
         if any(c[k] for c in matching for k in COUNTS[1:]): issues.append("Required suite skipped or failed: " + name)
     if not totals["tests"] or any(totals[k] for k in COUNTS[1:]): issues.append("Full service run has missing, skipped or failing tests")
-    return {"service": service, "counts": totals, "requiredSuites": len(minima), "suites": suites,
+    return {"service": service, "counts": totals, "clockWindowSkipped": excused, "requiredSuites": len(minima), "suites": suites,
             "issues": issues, "status": "GREEN" if not issues else "RED"}
 
 
@@ -253,7 +286,26 @@ def main():
         print("LAUNCH_EVIDENCE_JSON_BEGIN")
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         print("LAUNCH_EVIDENCE_JSON_END")
+    explain(result)
     return 0 if result["status"] == "GREEN" else 1
+
+
+def explain(result):
+    """Print why a component is RED, so the job log says it without downloading the evidence artifact."""
+    if result.get("status") == "GREEN":
+        return
+    print(f"RED: {result.get('kind', 'launch')} evidence is not green. Reasons:", flush=True)
+    for name, service in sorted((result.get("services") or {}).items()):
+        if service.get("status") != "GREEN":
+            print(f"  {name}: counts {service.get('counts')}", flush=True)
+            for issue in service.get("issues", [])[:25]:
+                print(f"    - {issue}", flush=True)
+    roundtrip = result.get("roundtrip")
+    if roundtrip and roundtrip.get("status") != "GREEN":
+        print(f"  roundtrip: {roundtrip.get('issue') or (roundtrip.get('report') or {}).get('status')} "
+              f"(exit {(roundtrip.get('command') or {}).get('exitCode')})", flush=True)
+    for issue in (result.get("issues") or [])[:25]:
+        print(f"  - {issue}", flush=True)
 
 
 if __name__ == "__main__":

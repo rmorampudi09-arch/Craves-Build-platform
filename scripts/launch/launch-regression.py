@@ -76,8 +76,27 @@ def discover_java(source_folder):
     return result
 
 
-def java_result(service, reports, required, source_folder):
-    issues = []; suites = {}; totals = dict.fromkeys(COUNTS, 0)
+# Fleet tests that put hours of shifts and pay into "today" (IST) skip themselves in the first hours after IST midnight
+# (FleetDatabase.assumeTodayIsHoursOld). Only that exact, self-declared skip is accepted, and only while it is really that
+# early in India; at any other hour the same skip fails the gate like every other skip.
+CLOCK_WINDOW_SKIP = re.compile(r"(?:Assumption failed: )?today \(IST\) began less than \d+ hours ago")
+CLOCK_WINDOW_LAST_HOUR_IST = 5  # the longest skip is 4 h; one more hour covers the ~20 min between running and reading
+
+
+def in_clock_window(now=None):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = now or datetime.now(ZoneInfo("Asia/Kolkata"))
+    return now.astimezone(ZoneInfo("Asia/Kolkata")).hour <= CLOCK_WINDOW_LAST_HOUR_IST
+
+
+def clock_window_skip(case):
+    skipped = case.find("skipped")
+    return skipped is not None and CLOCK_WINDOW_SKIP.fullmatch((skipped.attrib.get("message") or "").strip()) is not None
+
+
+def java_result(service, reports, required, source_folder, now=None):
+    issues = []; suites = {}; totals = dict.fromkeys(COUNTS, 0); window = in_clock_window(now); excused = 0
     for file in sorted(Path(reports).glob("TEST-*.xml")):
         try:
             suite = ET.parse(file).getroot()
@@ -93,6 +112,9 @@ def java_result(service, reports, required, source_folder):
                 if counts[attribute] != sum(case.find(tag) is not None for case in cases):
                     raise ValueError('JUnit child outcomes do not match declared counts')
             if name in suites: raise ValueError("Duplicate JUnit suite")
+            if window:
+                early = sum(clock_window_skip(case) for case in cases)
+                counts = {**counts, "skipped": counts["skipped"] - early}; excused += early
             suites[name] = counts
             for key in COUNTS: totals[key] += counts[key]
         except (ET.ParseError, ValueError, KeyError):
@@ -105,7 +127,7 @@ def java_result(service, reports, required, source_folder):
         if not matching or count < minimum: issues.append(f"Missing required cases: {name} ({count}/{minimum})")
         if any(c[k] for c in matching for k in COUNTS[1:]): issues.append("Required suite skipped or failed: " + name)
     if not totals["tests"] or any(totals[k] for k in COUNTS[1:]): issues.append("Full service run has missing, skipped or failing tests")
-    return {"service": service, "counts": totals, "requiredSuites": len(minima), "suites": suites,
+    return {"service": service, "counts": totals, "clockWindowSkipped": excused, "requiredSuites": len(minima), "suites": suites,
             "issues": issues, "status": "GREEN" if not issues else "RED"}
 
 

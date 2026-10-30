@@ -8,14 +8,13 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   session: vi.fn(),
   menu: vi.fn(),
-  addToCart: vi.fn(async () => undefined),
 }));
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mocks.navigate,
   Link: ({ children, to, ...rest }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...rest }, children),
 }));
 vi.mock("@/features/auth/api/cravesAuth", () => ({ loadSession: mocks.session }));
-vi.mock("@/features/cart/api/cravesCart", () => ({ addToCart: mocks.addToCart, loadCart: vi.fn(async () => []), CartKeptError: class extends Error {} }));
+vi.mock("@/features/cart/api/cravesCart", () => ({ loadCart: vi.fn(async () => []) }));
 vi.mock("@/features/dish/api/dishes", () => ({ loadKitchenMenu: mocks.menu }));
 
 import OrdersPage from "../screens/OrderHistory";
@@ -190,12 +189,58 @@ describe("My Orders", () => {
     expect(fetch.mock.calls.some(([url]) => String(url).startsWith("/api/orders"))).toBe(false);
   });
 
-  it("reorders a delivered order through the cart", async () => {
-    mocks.menu.mockResolvedValue([{ id: DISH, name: "Veg thali", chef: "Ammi", price: 100, img: PHOTO, imageIsPlaceholder: false }]);
-    serve({ [PAGE]: { orders: [order(ids.delivered, "Ammi's Dastarkhwan", "DELIVERED", 90)], nextCursor: null, hasMore: false } });
+});
+
+describe("Reorder, like the app", () => {
+  const CART = "0bde0000-0000-4000-8000-000000000051";
+  const LINE = { id: "0bde0000-0000-4000-8000-000000000061", quantity: 2, updatedAt: "2026-10-30T08:00:00Z" };
+  const REORDER = `/api/cart/reorder-if-unchanged/${ids.delivered}`;
+  const NAME = "Reorder from Ammi's Dastarkhwan";
+  /** One delivered order, the cart Craves holds now, and how Craves answers the rebuild. */
+  function deliveredWith(cartItems: unknown[], rebuilt: Answer = { id: CART, items: [] }) {
+    mocks.menu.mockResolvedValue([{ id: DISH, img: PHOTO, imageIsPlaceholder: false }]);
+    return serve({
+      [PAGE]: { orders: [order(ids.delivered, "Ammi's Dastarkhwan", "DELIVERED", 90)], nextCursor: null, hasMore: false },
+      "/api/cart": { id: CART, items: cartItems },
+      [REORDER]: rebuilt,
+    });
+  }
+  const sent = (items: unknown[]) => JSON.stringify({ expectedCart: { cartId: CART, items }, expectedKitchenId: KITCHEN });
+
+  it("fills an empty cart with the whole order in one step, then opens the cart", async () => {
+    const fetch = deliveredWith([]);
     render(createElement(OrdersPage));
-    fireEvent.click(await screen.findByRole("button", { name: "Reorder from Ammi's Dastarkhwan" }));
+    fireEvent.click(await screen.findByRole("button", { name: NAME }));
+    expect(screen.getByRole("button", { name: "Preparing… from Ammi's Dastarkhwan" })).toBeTruthy();
     await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith({ to: "/cart" }));
-    expect(mocks.addToCart).toHaveBeenCalledWith(expect.objectContaining({ id: DISH, kitchenId: KITCHEN }), 1);
+    expect(fetch).toHaveBeenCalledWith(REORDER, expect.objectContaining({ method: "POST", body: sent([]) }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("asks before replacing a cart that holds dishes, and keeps it when the customer says so", async () => {
+    const fetch = deliveredWith([LINE]);
+    render(createElement(OrdersPage));
+    fireEvent.click(await screen.findByRole("button", { name: NAME }));
+    const ask = await screen.findByRole("dialog", { name: "Replace current cart?" });
+    expect(within(ask).getByText("Reorder will replace your current cart after Craves verifies every dish is still available.")).toBeTruthy();
+    fireEvent.click(within(ask).getByRole("button", { name: "Keep cart" }));
+    expect(await screen.findByRole("button", { name: NAME })).toBeTruthy();
+    expect(fetch.mock.calls.some(([url]) => url === REORDER)).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: NAME }));
+    fireEvent.click(await screen.findByRole("button", { name: "Replace & reorder" }));
+    await vi.waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith({ to: "/cart" }));
+    // The cart the customer agreed to replace: Craves refuses if it changed meanwhile.
+    expect(fetch).toHaveBeenCalledWith(REORDER, expect.objectContaining({ body: sent([LINE]) }));
+  });
+
+  it("shows Craves' reason when the order can't be rebuilt, and stays on My Orders", async () => {
+    deliveredWith([], () => Response.json({ code: "MENU_ITEM_UNAVAILABLE", message: "This dish is no longer on the menu." }, { status: 409 }));
+    render(createElement(OrdersPage));
+    fireEvent.click(await screen.findByRole("button", { name: NAME }));
+    const card = screen.getByRole("link", { name: "Ammi's Dastarkhwan" }).closest("article")!;
+    expect((await within(card).findByRole("status")).textContent).toBe("This dish is no longer on the menu.");
+    expect(within(card).getByRole("button", { name: NAME })).toBeTruthy();
+    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 });

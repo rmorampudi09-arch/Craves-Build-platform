@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import {
   CheckoutPaymentButton,
@@ -8,6 +9,7 @@ import {
 } from "@/features/checkout/components/CheckoutPaymentButton";
 import { parseCheckout, type CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
 import { CustomerOrderStatus } from "@/features/orders/components/CustomerOrderStatus";
+import { useReorder } from "@/features/orders/components/use-reorder";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 
@@ -18,11 +20,15 @@ export function OrderDetailsPage({ orderId, justPaid = false }: { orderId: strin
 
 /** A meal-plan order has no checkout, so there is nothing to pay on it. */
 function PaymentStep({ order, onSettled }: { order: CustomerOrder; onSettled: () => void }) {
-  return order.checkoutId ? <ContinuePayment orderId={order.id} checkoutId={order.checkoutId} onSettled={onSettled} /> : null;
+  return order.checkoutId ? <ContinuePayment order={order} checkoutId={order.checkoutId} onSettled={onSettled} /> : null;
 }
 
 /** Offered only while the order's checkout still waits for payment, like the app. */
-function ContinuePayment({ orderId, checkoutId, onSettled }: { orderId: string; checkoutId: string; onSettled: () => void }) {
+function ContinuePayment({ order, checkoutId, onSettled }: { order: CustomerOrder; checkoutId: string; onSettled: () => void }) {
+  const orderId = order.id;
+  const router = useRouter();
+  // Once the 15 minutes to pay run out, Review cart puts this order's dishes back in the cart.
+  const { reorder, start, dialog } = useReorder(() => router.push("/cart"));
   // null: the checkout no longer waits for this order's payment.
   const [checkout, setCheckout] = useState<CustomerCheckout | null | "loading" | "failed">("loading");
   const [attempt, setAttempt] = useState(0);
@@ -94,7 +100,14 @@ function ContinuePayment({ orderId, checkoutId, onSettled }: { orderId: string; 
               if (locked.current && !next) onSettled();
               locked.current = next;
             }}
+            onReviewCart={() => void start(order)}
           />
+          {reorder?.message ? (
+            <p role="alert" className="mt-3 text-sm font-medium text-[#C4200F]">
+              {reorder.message}
+            </p>
+          ) : null}
+          {dialog}
         </>
       )}
     </section>

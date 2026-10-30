@@ -10,6 +10,7 @@ import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
 import { OrderCalendar } from "@/features/orders/components/OrderCalendar";
 import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
 import { PaidParcel } from "@/features/orders/components/PaidParcel";
+import { useReorder } from "@/features/orders/components/use-reorder";
 import {
   isAbandonedUnpaidOrder,
   parseCustomerOrder,
@@ -188,6 +189,7 @@ export function CustomerOrderStatus({
   const [error, setError] = useState("");
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const refreshingRef = useRef(false);
+  const { reorder, start: orderAgain, dialog } = useReorder(() => router.push("/cart"));
 
   const refresh = useCallback(
     async (background = false) => {
@@ -323,8 +325,9 @@ export function CustomerOrderStatus({
   ];
 
   return (
+    // While unpaid, checkout's pay bar (up to ~150px with a payment message) sits where the tab bar was.
     <div
-      className={`${calendarCondensed.variable} min-h-screen ${sheet ? "bg-[#FFFEFA]" : "bg-white"} pb-[calc(6.5rem+env(safe-area-inset-bottom))] text-[#1A1A1A] md:pb-12`}
+      className={`${calendarCondensed.variable} min-h-screen ${sheet ? "bg-[#FFFEFA]" : "bg-white"} pb-[calc(6.5rem+env(safe-area-inset-bottom))] has-[[data-craves-action-bar]]:pb-[calc(10rem+env(safe-area-inset-bottom))] text-[#1A1A1A] md:pb-12`}
     >
       {parcelDue && !reduceMotion && !problem ? (
         <PaidParcel order={order} amount={money(order.grandTotal, order.currency)} photos={photos} onDone={endParcel} />
@@ -391,15 +394,26 @@ export function CustomerOrderStatus({
                     Track order
                   </Link>
                 ) : delivered ? (
-                  <Link href={`/kitchen/${order.kitchenId}`} className="craves-primary-action !min-h-12 !px-4">
-                    Order again
-                  </Link>
+                  <button
+                    type="button"
+                    aria-disabled={reorder?.busy || undefined}
+                    aria-busy={reorder?.busy}
+                    onClick={() => void orderAgain(order)}
+                    className="craves-primary-action !min-h-12 !px-4"
+                  >
+                    {reorder?.busy ? "Preparing…" : "Order again"}
+                  </button>
                 ) : (
                   <Link href="/home" className="craves-primary-action !min-h-12 !px-4">
                     Browse dishes
                   </Link>
                 )}
               </div>
+              {reorder?.message ? (
+                <p role="alert" className="mt-3 text-sm font-medium text-[#C4200F]">
+                  {reorder.message}
+                </p>
+              ) : null}
               <p className="mt-4 text-xs text-[#6B6B6B]" role="status">
                 {refreshing
                   ? "Checking for an update…"
@@ -538,6 +552,7 @@ export function CustomerOrderStatus({
           </div>
         </div>
       </main>
+      {dialog}
     </div>
   );
 }

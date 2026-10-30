@@ -2,7 +2,7 @@
 // The page checkout lands on after payment. Synthetic owned orders; no network or customer mutations.
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CustomerOrderStatus } from "../components/CustomerOrderStatus";
 import { markPaidParcelDue } from "@/shared/lib/paid-parcel";
 
@@ -10,8 +10,11 @@ const fixture = vi.hoisted(() => ({
   id: "0bde0000-0000-4000-8000-000000000010",
   kitchen: "0bde0000-0000-4000-8000-000000000020",
   push: vi.fn(),
+  // The rebuild itself is covered in repeat-orders-bff.vitest.ts; here only what the page does with it.
+  reorder: vi.fn<(basket: unknown, confirmReplace: () => Promise<boolean>) => Promise<unknown>>(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: fixture.push, replace: vi.fn() }) }));
+vi.mock("../api/repeat-orders", () => ({ orderLikeLastTime: fixture.reorder }));
 vi.mock("../components/TrackingHeader", () => ({
   TrackingHeader: ({ title }: { title: string }) => createElement("header", null, createElement("h1", null, title)),
 }));
@@ -142,7 +145,7 @@ describe("order status after payment", () => {
   it("offers the next useful step when the order is over", async () => {
     serve(order("DELIVERED"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect((await screen.findByRole("link", { name: "Order again" })).getAttribute("href")).toBe(`/kitchen/${fixture.kitchen}`);
+    expect(await screen.findByRole("button", { name: "Order again" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Track order" })).toBeNull();
     // Only a delivered order can be rated.
     expect(screen.getByRole("heading", { name: "How was your order?" })).toBeTruthy();
@@ -269,6 +272,38 @@ describe("order status after payment", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("orders a delivered order again like the app: asks before replacing a cart, then opens the cart", async () => {
+    fixture.push.mockClear();
+    fixture.reorder.mockImplementation(async (_basket, confirmReplace) => ((await confirmReplace()) ? { added: true } : null));
+    serve(order("DELIVERED"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    fireEvent.click(await screen.findByRole("button", { name: "Order again" }));
+    expect(fixture.reorder).toHaveBeenCalledWith(
+      { orderId: fixture.id, kitchenId: fixture.kitchen, items: [expect.objectContaining({ menuItemId: "0bde0000-0000-4000-8000-000000000041" })] },
+      expect.any(Function),
+    );
+    const ask = await screen.findByRole("dialog", { name: "Replace current cart?" });
+    expect(within(ask).getByText("Reorder will replace your current cart after Craves verifies every dish is still available.")).toBeTruthy();
+    fireEvent.click(within(ask).getByRole("button", { name: "Keep cart" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Order again" }));
+    expect(fixture.push).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Replace & reorder" }));
+    await waitFor(() => expect(fixture.push).toHaveBeenCalledWith("/cart"));
+    // Busy until the cart page takes over, so a second tap can't start another rebuild.
+    expect(await screen.findByRole("button", { name: "Preparing…" })).toBeTruthy();
+  });
+
+  it("says why a delivered order can't be ordered again", async () => {
+    fixture.push.mockClear();
+    fixture.reorder.mockResolvedValue({ added: false, message: "This dish is no longer on the menu.", recovery: "menu" });
+    serve(order("DELIVERED"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    fireEvent.click(await screen.findByRole("button", { name: "Order again" }));
+    expect((await screen.findByText("This dish is no longer on the menu.")).getAttribute("role")).toBe("alert");
+    expect(screen.getByRole("button", { name: "Order again" })).toBeTruthy();
+    expect(fixture.push).not.toHaveBeenCalled();
   });
 
   it("explains a failed load and keeps a way out", async () => {

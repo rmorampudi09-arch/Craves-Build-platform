@@ -408,7 +408,7 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 - Or use the Cloud Shell route from the project doc `rider-app/DEPLOY-NOW-2026-10-24.md` §1.
 
 **S2. Deploy the server PRs.**
-1. Deploy integration-service from `main` once P1-01 to P1-16's server parts have merged (delivered as one patch, that is its merge). V161 to V171 apply on start, and nothing changes for riders until the new APK: every setting added since is off (`GO-LIVE.md` §8).
+1. Deploy integration-service from `main` once P1-01 to P1-16's server parts have merged (delivered as one patch, that is its merge). V161 to V171 apply on start, and nothing changes for riders until the new APK: every setting added since is off (`GO-LIVE.md` §8). V175, the contract migration, is its own later PR (`GO-LIVE.md` step 6.6).
 2. Check:
    - `/api/v1/rider/locations` answers 401 when signed out;
    - the console's rider pages load;
@@ -571,7 +571,7 @@ Also `riderApi.live.test.ts`: every step carries `ageMs` and `fix`.
 - **(d)** Cancel a payout file that hasn't been sent. **Done:** `POST /payout-batches/{id}/cancel` for a CREATED or APPROVED file, with a reason and the admin's check that it was not uploaded: a weekly file's payouts and recoveries go and the date can be made again; a daily file's withdrawals wait for the next one. Proved by `FleetPayoutsDatabaseTest`, `FleetMoneyAdminSecurityTest` and `payouts.vitest.ts`.
 - **(e)** Record a bank reversal after a payout. **Done:** `POST /payout-batches/{id}/payouts/{payoutId}/reverse` on a PAID payout: FAILED with the bank's reason and the UTR kept, the money back in the balance, the account paused, and a full reversal of the paid journal. Proved by `FleetPayoutsDatabaseTest`, `FleetMoneyAdminSecurityTest` and `payouts.vitest.ts`.
 - **BUILD decision 9, the slot part.** **Done:** cancelling a slot that has started ends it now instead, so it settles like any ended slot and the guarantee covers the time worked. Proved by `FleetSlotDatabaseTest`.
-- **(f)** Give a held trip to another rider. **Done:** before pickup, behind `CRAVES_FLEET_RIDER_HANDOVER_ENABLED` (off; on once order-service from the same release is live and the contract migration has dropped the old one-trip-per-order constraint, in its own later PR, because older images need it). The first trip ends as a release and is replaced (V166); the order carries on in a new trip for the second rider, and the delivery job follows it with a Craves-rider-to-Craves-rider handoff that order-service now accepts. Proved by `FleetOpsDatabaseTest`, `FleetSchemaDatabaseTest`, and order-service's `DeliveryStatusHandoffTest` and `DeliveryStatusEventValidatorTest`.
+- **(f)** Give a held trip to another rider. **Done:** before pickup, behind `CRAVES_FLEET_RIDER_HANDOVER_ENABLED` (off; on once order-service from the same release is live and V175, the contract migration, has dropped the old one-trip-per-order constraint, in its own later PR, because older images need it; until V175 runs, a handover is refused as not switched on yet). The first trip ends as a release and is replaced (V166); the order carries on in a new trip for the second rider, and the delivery job follows it with a Craves-rider-to-Craves-rider handoff that order-service now accepts. Proved by `FleetOpsDatabaseTest`, `FleetSchemaDatabaseTest`, and order-service's `DeliveryStatusHandoffTest` and `DeliveryStatusEventValidatorTest`.
 - **(g)** The offline-OTP check queue (E4). **Done:** "Delivery codes to check" on the console's Trips page (`GET /code-checks`); ops records what the customer said (`POST /trips/{id}/code-check`): delivered with full pay, or failed with the pay held. Proved by `FleetOpsDatabaseTest`, `FleetOpsSecurityTest` and `trips.vitest.ts`.
 
 **Prove it:** for each, an admin database test, `FleetAdminSecurityTest` roles, and a console vitest.
@@ -936,11 +936,12 @@ Matching to the industry's standard: DoorDash, Uber Eats and Swiggy rank riders 
   - A missing or unreadable version alerts and keeps today's rule.
 - **The engine** ranks with the same version, which integration-service publishes to Redis before naming it in a request (`Policy` fields 8 and 9, a new golden). It loads a version on the first request naming it; a request naming one it can't load is left to integration-service.
 - **Console and app.** The console's dispatch form has the rule, with its notice. Riders read it in "How you get orders" and in each offer's reason (English; Telugu and Hindi hidden until reviewed).
+- **The contract migration is now V175** (it was V174): it is still unapplied anywhere, and goes last.
 - **Proved by** `test_fleet_eta.py` (14); the engine's `EtaModelTest`, `RulesTest` and `DispatchEngineTest`; integration-service's `EtaModelTest`, `FleetEtaDatabaseTest`, `FleetEtaDispatchDatabaseTest`, `FleetEtaRankingTest`, `FleetSetupDatabaseTest`, `FleetRiderServiceTest`, `FleetEngineWireTest` and the migration tests; the console's and the app's tests. The training SQL was run on the real schema.
 
 ### People steps for Phase 5
 
-**S1. Deploy and gateway.** Deploy integration-service from `main` (`GO-LIVE.md` §1): V172, V173 and V174 apply, and the engine and travel-time switches stay off. Run the rider APIM pipeline again (§2) for the heading-home and home-spot routes.
+**S1. Deploy and gateway.** Deploy integration-service from `main` (`GO-LIVE.md` §1): V172, V173 and V174 apply, and the engine and travel-time switches stay off. V175, the contract migration, is its own later PR (`GO-LIVE.md` step 6.6). Run the rider APIM pipeline again (§2) for the heading-home and home-spot routes.
 
 **S2. Heading home.** It is part of rider choices: `GO-LIVE.md` §8, after the lawyer reads the wording.
 

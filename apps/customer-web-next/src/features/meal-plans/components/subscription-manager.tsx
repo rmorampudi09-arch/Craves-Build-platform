@@ -262,7 +262,7 @@ export function SubscriptionManager() {
             </EmptyState>
           ) : current.length === 0 ? (
             <EmptyState
-              illustration="mealPlans"
+              illustration="mealPlansLeaf"
               title="No meal plans yet"
               message="Get home food every day from a chef near you. Pick a weekly, 14-day or monthly plan."
               compact

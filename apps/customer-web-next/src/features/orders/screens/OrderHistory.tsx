@@ -19,12 +19,11 @@ import {
   type OrderTab,
 } from "@/features/orders/lib/order-presentation";
 import { useDishPhotos } from "@/features/orders/api/dish-photos";
+import { useReorder, type Reorder } from "@/features/orders/components/use-reorder";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { loadSession } from "@/features/auth/api/cravesAuth";
-import { addToCart, CartKeptError, loadCart } from "@/features/cart/api/cravesCart";
-import { loadKitchenMenu } from "@/features/dish/api/dishes";
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
@@ -34,12 +33,8 @@ import { sessionFetch } from "@/shared/lib/session-fetch";
 import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/navigation/tabs";
 
-// Read and cleared by the cart page, which shows it once (same key as checkout uses).
-const CART_NOTICE_KEY = "craves.cart.notice";
-const dishList = new Intl.ListFormat("en-IN", { type: "conjunction" });
 /** Like the app: 20 orders a page, then "Load older orders". */
 const PAGE_SIZE = 20;
-const REORDER_FAILED = "We couldn’t add these dishes to your cart. Please try again.";
 
 const EMPTY_TAB: Record<Exclude<OrderTab, "ALL">, [string, string]> = {
   UPCOMING: ["No upcoming orders", "Orders that are being made or are on their way show up here."],
@@ -88,35 +83,6 @@ async function readOrders(cursor: string | null): Promise<{ orders: CustomerOrde
   return { orders: [...orders].sort(newestFirst), cursor: null };
 }
 
-/**
- * Puts a delivered order's dishes back in the cart with the existing cart
- * functions (which ask before replacing another kitchen's cart). Returns a
- * note for the cart page about dishes that are no longer on the menu.
- */
-export async function reorderIntoCart(order: CustomerOrder): Promise<{ added: number; note: string }> {
-  // Start from the cart Craves holds now: a paid order may have used the one this page last saw.
-  await loadCart();
-  const menu = new Map((await loadKitchenMenu(order.kitchenId)).map((dish) => [dish.id, dish]));
-  const unavailable: string[] = [];
-  let added = 0;
-  for (const item of order.items) {
-    const dish = menu.get(item.menuItemId);
-    if (!dish) {
-      unavailable.push(item.itemName);
-      continue;
-    }
-    await addToCart(
-      { id: dish.id, name: dish.name, chef: dish.chef, price: dish.price, img: dish.img, kitchenId: order.kitchenId },
-      Math.min(item.quantity, 50),
-    );
-    added += 1;
-  }
-  const note = unavailable.length
-    ? `${dishList.format(unavailable)} ${unavailable.length === 1 ? "isn’t" : "aren’t"} available right now, so we added the rest of your order.`
-    : "";
-  return { added, note };
-}
-
 function DishTile({ url }: { url: string | undefined }) {
   return (
     <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[#F7F5F3] text-[#B4ABA6]" aria-hidden="true">
@@ -137,8 +103,6 @@ function DishTile({ url }: { url: string | undefined }) {
     </span>
   );
 }
-
-type Reorder = { orderId: string; busy: boolean; message: string } | null;
 
 /** The app's order card. The whole card opens the order; Reorder and Track order are their own buttons above it. */
 function OrderCard({
@@ -201,13 +165,13 @@ function OrderCard({
           {action === "REORDER" ? (
             <button
               type="button"
-              disabled={reorder?.busy}
+              aria-disabled={reorder?.busy || undefined}
               aria-busy={mine?.busy}
               onClick={() => onReorder(order)}
               className="relative z-10 inline-flex min-h-11 items-center gap-1.5 rounded-full !border !border-[#E3DDD8] !bg-white px-3.5 text-[0.9375rem] font-semibold !text-[#261A15] !shadow-none hover:!bg-[#F7F5F3]"
             >
               <RotateCw className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-              {mine?.busy ? "Adding…" : "Reorder"} <span className="sr-only">from {order.kitchenName}</span>
+              {mine?.busy ? "Preparing…" : "Reorder"} <span className="sr-only">from {order.kitchenName}</span>
             </button>
           ) : null}
           {action === "TRACK" ? (
@@ -246,7 +210,7 @@ export default function OrdersPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [older, setOlder] = useState<"idle" | "loading" | "failed">("idle");
-  const [reorder, setReorder] = useState<Reorder>(null);
+  const { reorder, start: orderAgain, dialog } = useReorder(() => navigate({ to: "/cart" }));
   // Ages are measured from the moment the list loaded, so a render never changes them.
   const [loadedAt, setLoadedAt] = useState(0);
   const unread = useCustomerUnreadCount(signedIn);
@@ -314,23 +278,6 @@ export default function OrdersPage() {
     }
   }
 
-  async function orderAgain(order: CustomerOrder) {
-    if (reorder?.busy) return;
-    setReorder({ orderId: order.id, busy: true, message: "" });
-    try {
-      const { added, note } = await reorderIntoCart(order);
-      if (added === 0) {
-        setReorder({ orderId: order.id, busy: false, message: "None of these dishes are available right now." });
-        return;
-      }
-      if (note) window.sessionStorage.setItem(CART_NOTICE_KEY, note);
-      navigate({ to: "/cart" });
-    } catch (error) {
-      // "Keep current cart" was the customer's choice: nothing to report.
-      setReorder(error instanceof CartKeptError ? null : { orderId: order.id, busy: false, message: REORDER_FAILED });
-    }
-  }
-
   const visible = ordersInTab(orders, tab, loadedAt);
   const retry =
     status === "session"
@@ -376,7 +323,7 @@ export default function OrdersPage() {
   } else if (orders.length === 0) {
     body = (
       <EmptyState
-        illustration="orders"
+        illustration="ordersLamp"
         title="No orders yet"
         message="When you order from a home chef, you can follow it live from the kitchen to your door here."
       >
@@ -401,9 +348,9 @@ export default function OrdersPage() {
         </TabsList>
         <TabsContent value={tab} className="mt-4">
           {visible.length === 0 && tab !== "ALL" ? (
-            <EmptyState illustration="orders" title={EMPTY_TAB[tab][0]} message={EMPTY_TAB[tab][1]} heading="h2" compact />
+            <EmptyState illustration="ordersLamp" title={EMPTY_TAB[tab][0]} message={EMPTY_TAB[tab][1]} heading="h2" compact />
           ) : (
-            <ul className="grid gap-3.5 lg:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
               {visible.map((order) => (
                 <li key={order.id}>
                   <OrderCard order={order} now={loadedAt} reorder={reorder} onReorder={(item) => void orderAgain(item)} />
@@ -481,6 +428,7 @@ export default function OrdersPage() {
           ) : null}
         </section>
       </main>
+      {dialog}
     </div>
   );
 }

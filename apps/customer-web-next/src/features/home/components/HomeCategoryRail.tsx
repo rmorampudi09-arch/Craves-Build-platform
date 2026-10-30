@@ -231,8 +231,7 @@ export function HomeCategoryRail({
         className={[
           "pointer-events-none sticky z-30 -mb-14 h-14",
           compact ? "top-[3.75rem]" : "top-0",
-          // Home's red-top header is 1rem taller than the plain one (room for its cloud puffs).
-          hidden ? "md:top-0" : "md:top-[5.25rem] lg:top-[5.65rem]",
+          hidden ? "md:top-0" : "md:top-[4.25rem] lg:top-[4.65rem]",
         ].join(" ")}
       >
         <div

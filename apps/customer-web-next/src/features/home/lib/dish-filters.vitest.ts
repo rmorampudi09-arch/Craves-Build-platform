@@ -46,7 +46,7 @@ describe("dish filters", () => {
     expect(matchesDishFilters(dish({ spiceLevel: "Mild" }), { ...DEFAULT_DISH_FILTERS, spice: "MILD" })).toBe(true);
     expect(matchesDishFilters(dish({ spiceLevel: "Mild" }), { ...DEFAULT_DISH_FILTERS, spice: "MEDIUM" })).toBe(false);
     expect(matchesDishFilters(dish({}), { ...DEFAULT_DISH_FILTERS, spice: "MILD" })).toBe(false);
-    expect(activeFilterCount({ filters: { ...DEFAULT_DISH_FILTERS, spice: "MILD" } })).toBe(1);
+    expect(activeFilterCount({ filters: { ...DEFAULT_DISH_FILTERS, spice: "MILD" }, foodPreference: "all" })).toBe(1);
   });
 
   it("sorts by name A to Z, keeping the nearest first among equal names", () => {
@@ -63,8 +63,7 @@ describe("dish filters", () => {
       "quickest",
     );
     expect(sorted.map((item) => item.id)).toEqual(["c", "b", "a"]);
-    // The food type pill shows the diet, so it is not counted as a filter (app 1.34.7).
-    expect(activeFilterCount({ filters: { ...DEFAULT_DISH_FILTERS, price: "under-150" } })).toBe(1);
+    expect(activeFilterCount({ filters: { ...DEFAULT_DISH_FILTERS, price: "under-150" }, foodPreference: "veg" })).toBe(2);
     expect(activeFilterCount(DEFAULT_DISH_VIEW)).toBe(0);
   });
 

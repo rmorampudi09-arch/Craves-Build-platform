@@ -2,15 +2,19 @@
 // The page checkout lands on after payment. Synthetic owned orders; no network or customer mutations.
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CustomerOrderStatus } from "../components/CustomerOrderStatus";
+import { markPaidParcelDue } from "@/shared/lib/paid-parcel";
 
 const fixture = vi.hoisted(() => ({
   id: "0bde0000-0000-4000-8000-000000000010",
   kitchen: "0bde0000-0000-4000-8000-000000000020",
   push: vi.fn(),
+  // The rebuild itself is covered in repeat-orders-bff.vitest.ts; here only what the page does with it.
+  reorder: vi.fn<(basket: unknown, confirmReplace: () => Promise<boolean>) => Promise<unknown>>(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: fixture.push, replace: vi.fn() }) }));
+vi.mock("../api/repeat-orders", () => ({ orderLikeLastTime: fixture.reorder }));
 vi.mock("../components/TrackingHeader", () => ({
   TrackingHeader: ({ title }: { title: string }) => createElement("header", null, createElement("h1", null, title)),
 }));
@@ -91,12 +95,12 @@ describe("order status after payment", () => {
     expect(await screen.findByRole("heading", { name: "Waiting for the chef" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: "Order details" })).toBeTruthy();
     expect(screen.getByText("The chef will confirm your order shortly.")).toBeTruthy();
-    // Before pickup the map is a blurred backdrop under the three kitchen steps.
-    expect(screen.getByTestId("order-map").dataset.label).toBe("Map, hidden until your order is picked up");
-    const progress = screen.getByRole("list", { name: "Order progress" });
-    expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
-    expect(progress.querySelector('[aria-current="step"]')?.textContent).toBe("Awaiting chef");
-    expect(screen.getByText("Live map opens once your order is picked up")).toBeTruthy();
+    // A paid order is the Kitchen Calendar's day sheet: each step by its time, now marked, the rest still to come.
+    const steps = screen.getByRole("list", { name: "Order steps" });
+    expect(within(steps).getAllByRole("listitem")).toHaveLength(6);
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Waiting for Ammi");
+    // The sheet lists the kitchen steps, so there is no blurred map under them.
+    expect(screen.queryByTestId("order-map")).toBeNull();
     expect(screen.getByText("₹1,125.30")).toBeTruthy();
     expect(screen.getByText("₹51.30")).toBeTruthy();
     // Each dish reads like the app: the name, then "2 × ₹329 · Biryani".
@@ -111,23 +115,29 @@ describe("order status after payment", () => {
   it("shows the chef's cooking time and note once accepted", async () => {
     serve(order("PREPARING", { prepTimeMinutes: 25, chefResponseNote: "Preparing fresh" }));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByText("The chef is cooking now. Ready in about 25 min.")).toBeTruthy();
+    const steps = await screen.findByRole("list", { name: "Order steps" });
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Cooking now");
+    expect(within(steps).getByText("Ready in about 25 min")).toBeTruthy();
     expect(screen.getByText("“Preparing fresh”").closest("figure")?.textContent).toContain("Note from the chef");
   });
 
-  it("marks the kitchen step that is actually in progress", async () => {
-    for (const [status, current, done] of [
-      ["PAYMENT_PENDING", undefined, 0],
-      ["CHEF_ACCEPTED", "Chef accepted", 1],
-      ["PREPARING", "Chef accepted", 1],
-      ["READY_FOR_PICKUP", "Ready for pickup", 2],
+  it("marks the step that is actually in progress", async () => {
+    // Recent, so an unpaid order is still waiting for its payment: the kitchen steps wait with it.
+    serve(order("PAYMENT_PENDING", { createdAt: new Date().toISOString() }));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    const progress = await screen.findByRole("list", { name: "Order progress" });
+    expect(progress.querySelector('[aria-current="step"]')).toBeNull();
+    expect(within(progress).queryAllByText("(done)")).toHaveLength(0);
+    cleanup();
+    for (const [status, current] of [
+      ["CHEF_ACCEPTED", "Ammi accepted"],
+      ["PREPARING", "Cooking now"],
+      ["READY_FOR_PICKUP", "Packed"],
     ] as const) {
-      // Recent, so an unpaid order is still waiting for its payment.
-      serve(order(status, { createdAt: new Date().toISOString() }));
+      serve(order(status));
       render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-      const progress = await screen.findByRole("list", { name: "Order progress" });
-      expect(progress.querySelector('[aria-current="step"]')?.textContent, status).toBe(current);
-      expect(within(progress).queryAllByText("(done)"), status).toHaveLength(done);
+      const steps = await screen.findByRole("list", { name: "Order steps" });
+      expect(steps.querySelector('[aria-current="step"]')?.textContent, status).toContain(current);
       cleanup();
     }
   });
@@ -135,7 +145,7 @@ describe("order status after payment", () => {
   it("offers the next useful step when the order is over", async () => {
     serve(order("DELIVERED"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect((await screen.findByRole("link", { name: "Order again" })).getAttribute("href")).toBe(`/kitchen/${fixture.kitchen}`);
+    expect(await screen.findByRole("button", { name: "Order again" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Track order" })).toBeNull();
     // Only a delivered order can be rated.
     expect(screen.getByRole("heading", { name: "How was your order?" })).toBeTruthy();
@@ -209,6 +219,39 @@ describe("order status after payment", () => {
     expect(paymentStep).not.toHaveBeenCalled();
   });
 
+  it("folds the leaf into a parcel once, only after this tab's checkout verified the payment", async () => {
+    sessionStorage.clear();
+    // A typed, bookmarked or shared ?paid=1 link without a verified payment opens the page as usual.
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
+    cleanup();
+    // Checkout marks the order once Razorpay's success is verified as PAID.
+    markPaidParcelDue(fixture.id);
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    // Decorative and hidden from screen readers: the page under it says the same.
+    // No dish photos here (the menu read fails), so it starts after its 0.7 s wait for them.
+    const paid = await screen.findByText("Paid ₹1,125.30");
+    expect(paid.closest('[aria-hidden="true"]')).toBeTruthy();
+    expect(screen.getByText("Sent to Ammi's Dastarkhwan")).toBeTruthy();
+    cleanup();
+    // A reload, or Back to this page, shows the page at once.
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
+    cleanup();
+    // Opened later from Your orders, it doesn't play either.
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
+  });
+
   it("stops checking once an order can't change, and keeps checking while it moves", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -229,6 +272,38 @@ describe("order status after payment", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("orders a delivered order again like the app: asks before replacing a cart, then opens the cart", async () => {
+    fixture.push.mockClear();
+    fixture.reorder.mockImplementation(async (_basket, confirmReplace) => ((await confirmReplace()) ? { added: true } : null));
+    serve(order("DELIVERED"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    fireEvent.click(await screen.findByRole("button", { name: "Order again" }));
+    expect(fixture.reorder).toHaveBeenCalledWith(
+      { orderId: fixture.id, kitchenId: fixture.kitchen, items: [expect.objectContaining({ menuItemId: "0bde0000-0000-4000-8000-000000000041" })] },
+      expect.any(Function),
+    );
+    const ask = await screen.findByRole("dialog", { name: "Replace current cart?" });
+    expect(within(ask).getByText("Reorder will replace your current cart after Craves verifies every dish is still available.")).toBeTruthy();
+    fireEvent.click(within(ask).getByRole("button", { name: "Keep cart" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Order again" }));
+    expect(fixture.push).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Replace & reorder" }));
+    await waitFor(() => expect(fixture.push).toHaveBeenCalledWith("/cart"));
+    // Busy until the cart page takes over, so a second tap can't start another rebuild.
+    expect(await screen.findByRole("button", { name: "Preparing…" })).toBeTruthy();
+  });
+
+  it("says why a delivered order can't be ordered again", async () => {
+    fixture.push.mockClear();
+    fixture.reorder.mockResolvedValue({ added: false, message: "This dish is no longer on the menu.", recovery: "menu" });
+    serve(order("DELIVERED"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    fireEvent.click(await screen.findByRole("button", { name: "Order again" }));
+    expect((await screen.findByText("This dish is no longer on the menu.")).getAttribute("role")).toBe("alert");
+    expect(screen.getByRole("button", { name: "Order again" })).toBeTruthy();
+    expect(fixture.push).not.toHaveBeenCalled();
   });
 
   it("explains a failed load and keeps a way out", async () => {
@@ -258,11 +333,12 @@ describe("order map, chef and bill", () => {
     expect(fetch).toHaveBeenCalledWith(`/api/orders/${fixture.id}/delivery-status`, expect.anything());
   });
 
-  it("keeps the kitchen steps while the partner is still on the way to the kitchen", async () => {
+  it("stays at Packed while the partner is still on the way to the kitchen", async () => {
     serve(order("READY_FOR_PICKUP"), 200, { "/delivery-status": delivery("COURIER_TO_PICKUP") });
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     expect(await screen.findByRole("heading", { name: "Ready for pickup" })).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Order progress" })).toBeTruthy();
+    const steps = screen.getByRole("list", { name: "Order steps" });
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Packed");
   });
 
   it("asks nothing about delivery before the food is ready, and shows no map once the order is closed", async () => {

@@ -6,7 +6,7 @@ import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideC
 interface TrackingHeaderProps {
   /** Already short: shortOrderNumber(id). */
   orderNumber: string;
-  /** The page's one h1. */
+  /** Read before the number by screen readers ("Track order, Order #…"). */
   title?: string;
   onBack: () => void;
   backLabel?: string;
@@ -14,6 +14,7 @@ interface TrackingHeaderProps {
   refreshing?: boolean;
 }
 
+/** The Kitchen Calendar live order's bar: back, "Order #…" in the calendar's condensed face, refresh. Light, no date block. */
 export function TrackingHeader({
   orderNumber,
   title = "Track order",
@@ -23,48 +24,35 @@ export function TrackingHeader({
   refreshing = false,
 }: TrackingHeaderProps) {
   return (
-    <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[72px] max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
+    <AutoHideCustomerHeader className="border-b-2 border-[#151515] bg-white">
+      <div className="mx-auto flex min-h-[4.25rem] max-w-5xl items-center gap-3 px-4 py-2.5 md:px-6">
         <button
           type="button"
           onClick={onBack}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#151515] !shadow-none transition-colors hover:!bg-[#F1F3F5]"
           aria-label={backLabel}
         >
           <FaArrowLeft className="text-lg" aria-hidden="true" />
         </button>
 
-        <Link
-          to="/home"
-          className="shrink-0 rounded-xl"
-          aria-label="Craves home"
-        >
+        <Link to="/home" className="shrink-0 rounded-xl" aria-label="Craves home">
           <CravesLogo size="sm" decorative />
         </Link>
 
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-[#1A1A1A]">
-            {title}
-          </h1>
-          <p className="mt-0.5 truncate text-xs text-[#6B6B6B]">
-            Order #{orderNumber}
-          </p>
-        </div>
+        <h1 className="min-w-0 truncate font-[family-name:var(--font-calendar)] text-[1.625rem] font-semibold leading-none text-[#151515]">
+          <span className="sr-only">{title}, </span>Order #{orderNumber}
+        </h1>
 
         <button
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18] transition-colors hover:bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#C8281F] !shadow-none transition-colors hover:!bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Refresh order tracking"
         >
-          <FaArrowsRotate
-            className={`text-lg ${refreshing ? "animate-spin" : ""}`}
-            aria-hidden="true"
-          />
+          <FaArrowsRotate className={`text-lg ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
         </button>
       </div>
-
     </AutoHideCustomerHeader>
   );
 }

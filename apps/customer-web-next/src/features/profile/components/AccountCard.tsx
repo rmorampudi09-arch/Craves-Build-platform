@@ -15,16 +15,6 @@ interface AccountCardProps {
   onEdit: () => void;
 }
 
-function initials(value: string): string {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    return (
-      (words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")
-    ).toUpperCase();
-  }
-  return value.slice(0, 2).toUpperCase() || "C";
-}
-
 export function AccountCard({
   user,
   profile,
@@ -44,34 +34,23 @@ export function AccountCard({
       aria-labelledby="customer-profile-name"
       className="overflow-hidden rounded-[1.6rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_12px_34px_rgba(26,26,26,0.07)] sm:p-5 md:rounded-[1.8rem] md:p-6"
     >
-      <div className="flex items-start gap-3.5 sm:gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-xl font-black text-[#1A1A1A] sm:h-20 sm:w-20 sm:text-2xl">
-          {initials(displayName)}
-        </div>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <h2
+          id="customer-profile-name"
+          className="mt-1.5 min-w-0 truncate text-xl font-black tracking-[-0.025em] text-[#1A1A1A] sm:text-2xl"
+        >
+          {displayName}
+        </h2>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2
-                id="customer-profile-name"
-                className="mt-1.5 truncate text-xl font-black tracking-[-0.025em] text-[#1A1A1A] sm:text-2xl"
-              >
-                {displayName}
-              </h2>
-            </div>
-
-            <button
-              type="button"
-              onClick={onEdit}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black !text-[#F62E18] transition-[background-color,box-shadow] hover:!bg-white hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
-              aria-label="Edit customer profile"
-            >
-              <FaPen className="text-xs" aria-hidden="true" />
-              <span className="hidden sm:inline">Edit profile</span>
-            </button>
-          </div>
-
-        </div>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] px-3 text-xs font-black !text-[#F62E18] transition-[background-color,box-shadow] hover:!bg-white hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
+          aria-label="Edit customer profile"
+        >
+          <FaPen className="text-xs" aria-hidden="true" />
+          <span className="hidden sm:inline">Edit profile</span>
+        </button>
       </div>
 
       <div className="mt-5 grid gap-2.5 rounded-2xl bg-[#F8F9FA] p-3 sm:grid-cols-2">

@@ -8,13 +8,19 @@ import { AssistantAvatar, SupportChat, type SupportChatRole } from "./SupportCha
 
 // These pages already show the chat (/assistant is the chat itself, framed by the landing page), or are admin.
 const HIDDEN_PATH_PREFIXES = ["/support", "/chef/support", "/assistant", "/admin"];
+// The customer app keeps the assistant on Profile only, so it never sits over dishes, the cart or Pay.
+const CUSTOMER_APP_PREFIXES = [
+  "/home", "/search", "/discover", "/chefs", "/kitchen", "/kitchens", "/dish", "/food", "/cart", "/checkout", "/payment",
+  "/confirmation", "/orders", "/tracking", "/wishlist", "/notifications", "/settings", "/addresses", "/refer", "/subscriptions", "/help",
+];
 
 /**
  * The chef workspace has Help in its header (and the chat inside it), so the floating button would only
  * cover dish switches and order buttons there. Sign-in and the application keep it.
  */
 export function hidesSupportLauncher(pathname: string): boolean {
-  if (HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  const under = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
+  if (HIDDEN_PATH_PREFIXES.some(under) || CUSTOMER_APP_PREFIXES.some(under)) return true;
   return (pathname === "/chef" || pathname.startsWith("/chef/")) && pathname !== "/chef/sign-in" && !pathname.startsWith("/chef/application");
 }
 

@@ -7,11 +7,13 @@
 #   bash scripts/apim/status-rider-fleet-apim.sh   (az login first)
 set -euo pipefail
 set +x
-RG=rg-craves-prodlow-centralindia
-APIM=apim-craves-prodlow-kmqgfy
+# Production since 29 Oct 2026 (docs/runbooks/production-environment.md).
+RG=rg-craves-shared-prod
+APIM=apim-craves-prod-34eefd
 API_VERSION=2022-08-01
 PUBLIC_HOST=https://api.craves.in
-INTEGRATION_APP=ca-craves-integration-service-pr
+INTEGRATION_RG=rg-craves-integration-prod
+INTEGRATION_APP=ca-craves-integration-prod
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROUTES_FILE="$ROOT/infra/apim/rider-fleet/routes.txt"
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -22,7 +24,7 @@ mapfile -t APIS < <(sed -n 's/^api|//p' "$ROUTES_FILE")
 mapfile -t ROUTES < <(sed -n 's/^route|//p' "$ROUTES_FILE")
 SUB=$(az account show --query id -o tsv --only-show-errors)
 MGMT_BASE="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM"
-FQDN=$(az containerapp show -g "$RG" -n "$INTEGRATION_APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
+FQDN=$(az containerapp show -g "$INTEGRATION_RG" -n "$INTEGRATION_APP" --query properties.configuration.ingress.fqdn -o tsv --only-show-errors)
 [[ -n "$FQDN" ]] || fail "$INTEGRATION_APP has no ingress FQDN"
 
 api_field() { local ROW f; for ROW in "${APIS[@]}"; do IFS='|' read -r -a f <<<"$ROW"; [[ "${f[0]}" == "$1" ]] && { echo "${f[$2]}"; return; }; done; fail "unknown api key $1"; }

@@ -277,9 +277,102 @@ jobs:
       - name: Require tests to preserve reviewed tracked source
         run: git diff --exit-code HEAD --
 
+  referral:
+    name: Referral service verify against PostgreSQL
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: referral_test
+          POSTGRES_USER: referral_ci
+          POSTGRES_PASSWORD: disposable-referral-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U referral_ci -d referral_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: referral_ci
+      PGPASSWORD: disposable-referral-ci-only
+      REFERRAL_TEST_CONFIRM: YES_DISPOSABLE_REFERRAL_TEST_ONLY
+      REFERRAL_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_test
+      REFERRAL_OWNER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_owner_test
+      REFERRAL_TEST_DB_USER: referral_ci
+      REFERRAL_TEST_DB_PASSWORD: disposable-referral-ci-only
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/referral-service/pom.xml
+      - name: Create the disposable owner database
+        run: createdb referral_owner_test
+      - name: Full referral-service verify
+        run: mvn -B -ntp -f services/referral-service/pom.xml verify
+      - name: Require tests to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
+
+  fleet:
+    name: Fleet engine verify
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/fleet-engine/pom.xml
+      - name: Install redis-server for the tests
+        run: sudo apt-get update -q && sudo apt-get install -y -q redis-server
+      - name: Full fleet-engine verify
+        run: mvn -B -ntp -f services/fleet-engine/pom.xml verify
+      - name: Require tests to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
+
+  voice:
+    name: Voice support gateway tests
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/voice-support-gateway
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/voice-support-gateway/requirements-dev.txt
+      - name: Install the pinned dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Every voice gateway test
+        run: python -m pytest -q
+      - name: Require tests to preserve reviewed tracked source
+        working-directory: .
+        run: git diff --exit-code HEAD --
+
   acceptance:
     name: Exact-SHA complete regression evidence
-    needs: [source, backend, web, mobile]
+    needs: [source, backend, web, mobile, referral, fleet, voice]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -294,7 +387,7 @@ jobs:
           jobs = json.loads(os.environ['PREREQUISITES_JSON'])
           expected = os.environ['EXPECTED_RELEASE_SHA']
           assert re.fullmatch(r'[0-9a-f]{40}', expected), 'Expected SHA missing or invalid'
-          assert set(jobs) == {'source', 'backend', 'web', 'mobile'}, 'Missing prerequisite job'
+          assert set(jobs) == {'source', 'backend', 'web', 'mobile', 'referral', 'fleet', 'voice'}, 'Missing prerequisite job'
           assert all(job.get('result') == 'success' for job in jobs.values()), 'A prerequisite did not succeed'
           assert jobs['source'].get('outputs', {}).get('release_sha') == expected, 'Source evidence is stale or missing'
           PY

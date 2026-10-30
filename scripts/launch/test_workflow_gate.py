@@ -22,7 +22,8 @@ class RequiredWorkflowGateTest(unittest.TestCase):
     def valid(self):
         return {'source': {'result': 'success', 'outputs': {'release_sha': self.sha}},
                 'backend': {'result': 'success'}, 'web': {'result': 'success'},
-                'mobile': {'result': 'success'}}
+                'mobile': {'result': 'success'}, 'referral': {'result': 'success'},
+                'fleet': {'result': 'success'}, 'voice': {'result': 'success'}}
 
     def test_required_gate_always_runs_and_pr_is_not_path_filtered(self):
         self.assertIn('if: ${{ always() }}', self.gate)
@@ -35,7 +36,7 @@ class RequiredWorkflowGateTest(unittest.TestCase):
         self.assertNotEqual(self.invoke(self.valid(), 'not-a-sha'), 0)
 
     def test_every_non_success_result_and_missing_job_fails(self):
-        for name in ('source', 'backend', 'web', 'mobile'):
+        for name in ('source', 'backend', 'web', 'mobile', 'referral', 'fleet', 'voice'):
             for status in ('failure', 'skipped', 'cancelled', None):
                 with self.subTest(name=name, status=status):
                     jobs = self.valid(); jobs[name]['result'] = status
@@ -60,7 +61,15 @@ class RequiredWorkflowGateTest(unittest.TestCase):
         for step in ('npx tsc --noEmit', 'npm run lint -- --max-warnings=0', 'npm test -- --ci --runInBand', 'react-native bundle'):
             self.assertIn(step, mobile)
         self.assertNotIn('continue-on-error', mobile)
-        self.assertIn('needs: [source, backend, web, mobile]', self.gate)
+        self.assertIn('needs: [source, backend, web, mobile, referral, fleet, voice]', self.gate)
+
+    def test_every_deployed_service_is_part_of_the_required_gate(self):
+        for job, command in (('referral', 'services/referral-service/pom.xml verify'),
+                             ('fleet', 'services/fleet-engine/pom.xml verify'),
+                             ('voice', 'python -m pytest -q')):
+            block = self.workflow.split(f'  {job}:\n', 1)[1].split('\n\n  ', 1)[0]
+            self.assertIn(command, block)
+            self.assertNotIn('continue-on-error', block)
 
 
 if __name__ == '__main__': unittest.main()

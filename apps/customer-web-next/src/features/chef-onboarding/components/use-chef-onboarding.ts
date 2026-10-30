@@ -4,7 +4,7 @@ import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
-import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/features/auth/api/sessionFetch";
+import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/shared/lib/session-fetch";
 import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
 import { useLanguage } from "@/shared/i18n/language-context";
 import { bankStatusSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";

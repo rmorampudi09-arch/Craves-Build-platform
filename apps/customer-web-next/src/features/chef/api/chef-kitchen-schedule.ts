@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import {
   CHEF_ERROR_MESSAGES,
   ChefError,

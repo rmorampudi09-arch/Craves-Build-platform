@@ -17,7 +17,7 @@ vi.mock("firebase/auth", () => ({
   RecaptchaVerifier: class { async render() { return 0; } clear() {} },
   signInWithPhoneNumber: phoneSignIn,
 }));
-vi.mock("../../auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 // Registration and email assertions exercise the Firebase fallback independently of MSG91.
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({
   beginMsg91PhoneSignIn: vi.fn(async () => null),

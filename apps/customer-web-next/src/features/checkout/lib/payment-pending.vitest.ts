@@ -12,7 +12,7 @@ import { paidParcelDue } from "@/shared/lib/paid-parcel";
 
 const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: (url: string, init?: RequestInit) => fetch(url, init) }));
+vi.mock("@/shared/lib/session-fetch", () => ({ sessionFetch: (url: string, init?: RequestInit) => fetch(url, init) }));
 vi.mock("@/features/auth/api/cravesAuth", () => ({
   loadSession: async () => ({ firstName: "Fixture", lastName: "Customer", phoneNumber: "+910000000000", email: null }),
 }));

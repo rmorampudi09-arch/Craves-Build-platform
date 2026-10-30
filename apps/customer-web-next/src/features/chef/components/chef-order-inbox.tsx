@@ -33,7 +33,7 @@ import { mergeOrders, noticeNewOrders, useChefOrderPolling } from "@/features/ch
 import { PAST_KINDS, finishedAt, groupPastOrders, inboxViewOf, pastGroupLabel, pastKindOf, type InboxView, type PastKind } from "@/features/chef/lib/chef-order-filters";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";
 import type { ChefKitchen } from "@/features/chef/lib/chef-kitchen-types";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
 import { ChefOrderHistoryError, fetchChefOrderHistoryPage } from "@/features/chef/api/chef-order-history";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";

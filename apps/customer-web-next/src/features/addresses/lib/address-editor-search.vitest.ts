@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/features/addresses/api/searchLocation", () => ({ searchLocations: mocks.search }));
 vi.mock("@/features/addresses/api/reverseGeocode", () => ({ reverseGeocodeCurrentLocation: mocks.reverse }));
 vi.mock("@/features/auth/api/cravesAuth", () => ({ getAddress: () => mocks.selected }));
-vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: vi.fn() }));
+vi.mock("@/shared/lib/session-fetch", () => ({ sessionFetch: vi.fn() }));
 vi.mock("@/features/addresses/components/AddressMapPicker", () => ({
   AddressMapPicker: (props: { latitude: number; longitude: number }) =>
     createElement("div", { "data-testid": "map", "data-lat": props.latitude, "data-lng": props.longitude }),

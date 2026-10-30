@@ -10,7 +10,7 @@ import {
 } from "@/features/checkout/lib/payment-contract";
 import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { loadCart } from "@/features/cart/api/cravesCart";
 import { markPaidParcelDue } from "@/shared/lib/paid-parcel";
 

@@ -31,7 +31,7 @@ import { ChefOrderActions } from "@/features/chef/components/chef-order-actions"
 import { CustomerNote, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
 import { useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import { chefOrderTimeline } from "@/features/chef/lib/chef-order-timeline";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import {
   parseChefOrderResponse,
   type ChefOrder,

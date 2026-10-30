@@ -1,5 +1,5 @@
 "use client";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 import { chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";

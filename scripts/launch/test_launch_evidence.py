@@ -46,6 +46,54 @@ class LaunchEvidenceTest(unittest.TestCase):
         for kwargs in ({"skipped": 1}, {"failures": 1}, {"errors": 1}, {"tests": 1}):
             self.junit(**kwargs); self.assertEqual("RED", self.java()["status"])
 
+    def clock_skip(self, message="today (IST) began less than 4 hours ago"):
+        self.junit(skipped=1)
+        report = self.reports / 'TEST-required.xml'
+        report.write_text(report.read_text().replace('<skipped/>', f'<skipped message="{message}"/>'))
+
+    def java_at(self, hour_ist):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        now = datetime(2026, 10, 31, hour_ist, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
+        return launch.java_result("example", self.reports, {"RequiredTest": 2}, self.sources, now=now)
+
+    def test_fleet_clock_window_skip_is_accepted_only_just_after_ist_midnight(self):
+        self.clock_skip()
+        for hour in (0, 1, 4, 5):
+            result = self.java_at(hour)
+            self.assertEqual("GREEN", result["status"], hour); self.assertEqual(1, result["clockWindowSkipped"])
+        for hour in (6, 9, 13, 23):
+            self.assertEqual("RED", self.java_at(hour)["status"], hour)
+        self.clock_skip("Assumption failed: today (IST) began less than 2 hours ago")
+        self.assertEqual("GREEN", self.java_at(1)["status"])
+        self.clock_skip("org.opentest4j.TestAbortedException: Assumption failed: today (IST) began less than 3 hours ago")
+        self.assertEqual("GREEN", self.java_at(1)["status"])
+        self.junit(skipped=1)
+        report = self.reports / 'TEST-required.xml'
+        report.write_text(report.read_text().replace('<skipped/>', '<skipped type="org.opentest4j.TestAbortedException">Assumption failed: today (IST) began less than 4 hours ago\n\tat org.junit...</skipped>'))
+        self.assertEqual("GREEN", self.java_at(1)["status"])
+        self.assertEqual("RED", self.java_at(8)["status"])
+
+    def test_other_skips_stay_red_inside_the_clock_window(self):
+        for message in ("redis-server is not installed", "", "today began less than 4 hours ago",
+                        "today (IST) began less than 4 hours ago; also something else",
+                        "java.lang.IllegalStateException: today (IST) began less than 4 hours ago"):
+            self.clock_skip(message); self.assertEqual("RED", self.java_at(1)["status"], message)
+        self.junit(skipped=1); self.assertEqual("RED", self.java_at(1)["status"])
+
+    def test_clock_window_does_not_excuse_failures(self):
+        self.junit(failures=1); self.assertEqual("RED", self.java_at(1)["status"])
+
+    def test_red_evidence_prints_its_reasons(self):
+        import io, contextlib
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            launch.explain({"kind": "backend", "status": "RED",
+                            "services": {"order-service": {"status": "RED", "counts": {"skipped": 1}, "issues": ["Required suite skipped or failed: X"]}},
+                            "roundtrip": {"status": "RED", "issue": "Prerequisite Integration or Order verification failed"}})
+        self.assertIn("order-service", out.getvalue()); self.assertIn("Required suite skipped or failed: X", out.getvalue())
+        self.assertIn("Prerequisite Integration or Order verification failed", out.getvalue())
+
     def test_new_source_test_cannot_be_omitted_from_execution(self):
         self.junit(); (self.sources / "NewUpgradeTest.java").write_text("class NewUpgradeTest {\n@Test void upgrade() {}\n}")
         result = self.java(); self.assertEqual("RED", result["status"])

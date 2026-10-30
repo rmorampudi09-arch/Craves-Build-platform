@@ -11,7 +11,7 @@ import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from 
 import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
 import { CodeSlots } from "@/shared/ui/forms/code-slots";
 import { markCustomerModeVerified } from "@/features/chef/lib/chef-mode";
-import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
+import { getFirebaseBrowserClient } from "@/shared/lib/firebase-client";
 import {
   loadSession,
   getSession,

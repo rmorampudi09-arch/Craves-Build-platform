@@ -36,7 +36,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => fixture.router }));
 vi.mock("@/features/auth/api/cravesAuth", () => ({
   loadSession: async () => ({ firstName: "Priya", lastName: "", username: "priya", phoneNumber: "+919000000000" }),
 }));
-vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: (url: string, init?: RequestInit) => fetch(url, init) }));
+vi.mock("@/shared/lib/session-fetch", () => ({ sessionFetch: (url: string, init?: RequestInit) => fetch(url, init) }));
 vi.mock("@/features/cart/api/cravesCart", () => ({
   cartCurrency: () => "INR",
   cartTotal: () => 400,

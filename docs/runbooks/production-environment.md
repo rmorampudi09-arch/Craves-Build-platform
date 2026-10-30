@@ -4,7 +4,25 @@ This is the one place that says which Azure subscription, resources and pipeline
 
 Checked against live Azure on 26 and 27 Oct 2026 (read only).
 
-## Current
+Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC). The section "Current" below is the new estate; the section after it describes the old subscription, which is now an idle, read-only fallback.
+
+## Current (since 29 Oct 2026)
+
+| What | Name |
+|---|---|
+| Azure subscription | `34eefd95-1a19-416f-b9df-92b326500615` (account ravitejamm6@gmail.com) |
+| Tenant | `182d6285-5895-47f8-9ade-77b10854ed0d` |
+| Resource groups | one per feature: `rg-craves-<feature>-prod` (auth, catalog, order, user-chef, notification, subscription, integration, referral, voice, web, admin, delivery-intel), plus `rg-craves-data-business-prod`, `rg-craves-shared-prod`, `rg-craves-ops-prod`, `rg-craves-dns-prod` |
+| Container apps | `ca-craves-<feature>-prod` (referral also `ca-craves-referral-members-prod`) |
+| Container registry | `crcravesprod34eefd` |
+| APIM | `apim-craves-prod-34eefd`, behind Front Door `afd-craves-prod` (api.craves.in) |
+| DNS | zone `craves.in` in `rg-craves-dns-prod` (registrar GoDaddy) |
+| Releases | Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` every 15 minutes; `release-<feature>` pipelines build and roll out automatically (10 % canary, then 100 %, automatic rollback). No manual approval: **a merge to `main` goes live.** |
+
+## Previous: subscription 721906c9 (idle since 29 Oct 2026, read only)
+
+Everything below describes the old estate. Its apps, databases and storage still exist untouched as a fallback. Do not deploy to it, change it or run its pipelines.
+
 
 | What | Name |
 |---|---|

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, ChevronRight, Clock3, LifeBuoy, MapPin, RefreshCw, Wallet } from "lucide-react";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
 import { OrderCalendar } from "@/features/orders/components/OrderCalendar";
 import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
+import { PaidParcel, paidParcelShown } from "@/features/orders/components/PaidParcel";
 import {
   isAbandonedUnpaidOrder,
   parseCustomerOrder,
@@ -240,6 +241,14 @@ export function CustomerOrderStatus({
 
   const { profile: kitchen } = useKitchenProfile(order?.kitchenId);
   const photos = useDishPhotos(order?.kitchenId);
+  // Right after paying, the cart's leaf folds into a parcel: once per order in this tab, never with reduced motion.
+  // This tab's record is read after mount (the server can't see it), before the first paint.
+  const reduceMotion = useReducedMotion();
+  const [parcelShown, setParcelShown] = useState(true);
+  useLayoutEffect(() => {
+    setParcelShown(paidParcelShown(orderId));
+  }, [orderId]);
+  const endParcel = useCallback(() => setParcelShown(true), []);
 
   const header = (
     <TrackingHeader
@@ -254,6 +263,8 @@ export function CustomerOrderStatus({
   if (loading && !order) {
     return (
       <div className={`${calendarCondensed.variable} min-h-screen bg-white`}>
+        {/* Right after paying, the parcel's white cover is up at once, so no skeleton flashes before the leaf. */}
+        {justPaid && !parcelShown && !reduceMotion ? <div aria-hidden="true" className="fixed inset-0 z-[90] bg-white" /> : null}
         {header}
         <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
           <CustomerSectionSkeleton variant="order" label="Loading your order" />
@@ -313,6 +324,9 @@ export function CustomerOrderStatus({
     <div
       className={`${calendarCondensed.variable} min-h-screen ${sheet ? "bg-[#FFFEFA]" : "bg-white"} pb-[calc(6.5rem+env(safe-area-inset-bottom))] text-[#1A1A1A] md:pb-12`}
     >
+      {justPaid && !parcelShown && !reduceMotion && !problem ? (
+        <PaidParcel order={order} amount={money(order.grandTotal, order.currency)} photos={photos} onDone={endParcel} />
+      ) : null}
       {header}
 
       <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">

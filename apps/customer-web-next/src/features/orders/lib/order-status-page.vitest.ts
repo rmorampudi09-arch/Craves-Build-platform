@@ -215,6 +215,31 @@ describe("order status after payment", () => {
     expect(paymentStep).not.toHaveBeenCalled();
   });
 
+  it("right after payment, folds the leaf into a parcel once per order", async () => {
+    sessionStorage.clear();
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    // Decorative and hidden from screen readers: the page under it says the same.
+    // No dish photos here (the menu read fails), so it starts after its 0.7 s wait for them.
+    const paid = await screen.findByText("Paid ₹1,125.30");
+    expect(paid.closest('[aria-hidden="true"]')).toBeTruthy();
+    expect(screen.getByText("Sent to Ammi's Dastarkhwan")).toBeTruthy();
+    cleanup();
+    // A reload, or Back to this page, shows the page at once.
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
+    cleanup();
+    // Opened from Your orders (no ?paid=1), it never plays.
+    sessionStorage.clear();
+    serve(order("CHEF_ACCEPTANCE_PENDING"));
+    render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
+    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
+  });
+
   it("stops checking once an order can't change, and keeps checking while it moves", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

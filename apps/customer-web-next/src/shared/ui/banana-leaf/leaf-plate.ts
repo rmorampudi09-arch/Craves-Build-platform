@@ -1,8 +1,11 @@
-// Where each dish in the cart sits on the Banana Leaf. Serving order decides it, the order every grandmother knows:
+// Where each dish sits on the Banana Leaf, in the cart and in the parcel after payment. Serving order decides it, the order every grandmother knows:
 // pickle at the tip, then curries, roti and snacks along the midrib; tiffin, meals, rice and biryani by the margin, and
 // the sweet last, at the cut. Ported from the approved theme mockup (themes/leaf/theme.js, leafLayout), without name
 // labels: the cart lists every dish by name right under the leaf.
-import type { LeafGeometry } from "../../../shared/ui/banana-leaf/leaf-geometry.ts";
+import { PHONE_LEAF, type LeafGeometry, type LeafShape } from "./leaf-geometry.ts";
+
+/** The cart's leaf (300 x 150): the cart and the parcel after payment draw the same one. */
+export const PLATE_SHAPE: LeafShape = { ...PHONE_LEAF, seed: 9, gap: 22 };
 
 export type Course = "Pickles" | "Curries" | "Roti" | "Snacks" | "Tiffin" | "Meals" | "Rice" | "Biryani" | "Sweets";
 

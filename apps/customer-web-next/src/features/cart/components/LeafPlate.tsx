@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { leafGeometry, PHONE_LEAF } from "@/shared/ui/banana-leaf/leaf-geometry";
+import { leafGeometry } from "@/shared/ui/banana-leaf/leaf-geometry";
 import { LeafLayers, PALE_LEAF, WaterDrop } from "@/shared/ui/banana-leaf/LeafDrawing";
-import { fitOnLeaf, leafCaption, type Course } from "@/features/cart/lib/leaf-plate";
+import { fitOnLeaf, leafCaption, PLATE_SHAPE, type Course } from "@/shared/ui/banana-leaf/leaf-plate";
 
 const W = 300;
 const H = 150;
-const GEOMETRY = leafGeometry(W, H, { ...PHONE_LEAF, seed: 9, gap: 22 });
+const GEOMETRY = leafGeometry(W, H, PLATE_SHAPE);
 const pct = (value: number, of: number) => `${(value / of) * 100}%`;
 
 export type LeafPlateDish = { key: string; course: Course; img: string; qty: number };

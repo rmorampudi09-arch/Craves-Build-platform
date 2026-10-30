@@ -64,7 +64,8 @@ it('keeps a customer whose sign-in could not be checked on the page, with Try ag
   expect(screen.getByRole('link', { name: 'Go to sign in' }).getAttribute('href')).toBe(`/sign-in?returnTo=${encodeURIComponent(`/orders/${fixture.id}/tracking`)}`);
   expect(fixture.navigate).not.toHaveBeenCalledWith({ to: '/' });
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-  expect(await screen.findByRole('heading', { name: 'Preparing' })).toBeTruthy();
+  // The day sheet's heading matches the order page's.
+  expect(await screen.findByRole('heading', { name: 'Preparing your food' })).toBeTruthy();
 });
 
 it('draws a failed load in its own words and tries again', async () => {

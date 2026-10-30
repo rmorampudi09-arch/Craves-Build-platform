@@ -247,8 +247,8 @@ test("customer orders page uses a white page surface", () => {
 });
 
 test("customer cart and notifications use white page surfaces", () => {
-  // The Banana Leaf cart the owner kept (30 Oct 2026) sits on the leaf-tinted ground.
-  assert.match(cart, /min-h-screen bg-\[#F1F6EC\] pb-44/);
+  // The Banana Leaf cart keeps the white page (owner, 30 Oct 2026): only the leaf is green.
+  assert.match(cart, /min-h-screen bg-white pb-44/);
   assert.match(cart, /Add a note for \{noteFor\(kitchenName\)\}/);
   assert.match(cart, /Add more from this kitchen/);
   assert.match(cart, /Undo/);

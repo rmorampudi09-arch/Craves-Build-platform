@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { leafGeometry, PHONE_LEAF } from "../../../shared/ui/banana-leaf/leaf-geometry.ts";
-import { courseOf, fitOnLeaf, leafCaption, leafLayout, LEAF_MAX_DISHES } from "./leaf-plate.ts";
+import { leafGeometry } from "./leaf-geometry.ts";
+import { courseOf, fitOnLeaf, leafCaption, leafLayout, LEAF_MAX_DISHES, PLATE_SHAPE } from "./leaf-plate.ts";
 
-const g = leafGeometry(300, 150, { ...PHONE_LEAF, seed: 9, gap: 22 });
+const g = leafGeometry(300, 150, PLATE_SHAPE);
 
 test("the app's categories read as courses, in serving order", () => {
   assert.equal(courseOf("Curry"), "Curries");

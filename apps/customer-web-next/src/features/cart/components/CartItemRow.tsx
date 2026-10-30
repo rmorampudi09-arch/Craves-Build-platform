@@ -59,7 +59,7 @@ export function CartItemRow({
   const last = item.qty <= 1;
   return (
     <article className="flex items-center gap-3 py-3.5">
-      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#F1F6EC]">
+      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#F6F7F8]">
         {item.imageIsPlaceholder ? (
           <img src={item.img} alt="" aria-hidden="true" decoding="async" className="h-10 w-10 object-contain opacity-70" />
         ) : (

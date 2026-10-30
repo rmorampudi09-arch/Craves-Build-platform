@@ -29,7 +29,7 @@ import { CartItemList } from "@/features/cart/components/CartItemList";
 import { CartCheckoutBar } from "@/features/cart/components/CartCheckoutBar";
 import type { FoodType } from "@/features/cart/components/CartItemRow";
 import { LeafPlate } from "@/features/cart/components/LeafPlate";
-import { courseOf } from "@/features/cart/lib/leaf-plate";
+import { courseOf } from "@/shared/ui/banana-leaf/leaf-plate";
 import { leafSerif } from "@/shared/fonts/theme-fonts";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
@@ -318,7 +318,7 @@ function CartPage() {
   }
 
   return (
-    <div className={`${leafSerif.variable} min-h-screen bg-[#F1F6EC] pb-44 text-[#1C2420]`}>
+    <div className={`${leafSerif.variable} min-h-screen bg-white pb-44 text-[#1C2420]`}>
       <CartHeader onBack={() => navigate({ to: "/home" })} />
       <CartAddressAvailabilityBanner
         className="mx-auto max-w-2xl px-4 md:px-6"
@@ -437,7 +437,7 @@ function CartPage() {
               </section>
             ) : null}
 
-            <section className="flex items-start gap-3 rounded-[1.25rem] bg-[#EAF3E2] p-4">
+            <section className="flex items-start gap-3 rounded-[1.25rem] bg-[#F6F7F8] p-4">
               <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[#22553A]" aria-hidden="true" />
               <div>
                 <p className="text-sm font-semibold text-[#1C2420]">

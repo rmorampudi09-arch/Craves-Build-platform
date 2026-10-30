@@ -11,7 +11,7 @@ export function CartHeader({ onBack }: { onBack: () => void }) {
         <button
           type="button"
           onClick={onBack}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full !border !border-[#E1EAD8] !bg-white !text-[#1C2420] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#F1F6EC] active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#22553A]"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full !border !border-[#E1EAD8] !bg-white !text-[#1C2420] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#F6F7F8] active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#22553A]"
           aria-label="Back to discovery"
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />

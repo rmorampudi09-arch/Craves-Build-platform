@@ -275,7 +275,13 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
               <div className="space-y-5">
                 {calendarOn ? (
-                  <OrderCalendar order={order} delivery={delivery} now={lastUpdatedAt ?? new Date()} title={currentPresentation.label} />
+                  <OrderCalendar
+                    order={order}
+                    delivery={delivery}
+                    now={lastUpdatedAt ?? new Date()}
+                    // The same heading as the order page ("Waiting for the chef"), not the list's pill ("Awaiting chef").
+                    title={orderJourney(order, delivery?.status ?? null).title}
+                  />
                 ) : (
                   <CurrentStatusCard
                     label={currentPresentation.label}

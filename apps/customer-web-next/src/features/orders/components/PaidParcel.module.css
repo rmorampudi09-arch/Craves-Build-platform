@@ -1,0 +1,194 @@
+/* After payment: the cart's banana leaf gathers the food, folds up toward its rib, tucks its ends in and becomes a
+   parcel; a thread ties it, a red tick and "Paid" follow, and the cover lifts off the live order page (about 3 s). */
+
+/* White while the dish photos come, so the page never flashes before the leaf. */
+.cover {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #fff;
+}
+
+.over {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px 8vh;
+  background: #fff;
+  animation: lift 420ms cubic-bezier(0.4, 0, 0.2, 1) 2.55s both;
+}
+
+.art {
+  width: 100%;
+  max-width: 320px;
+  overflow: visible;
+}
+
+/* The blade's own box: its clipped veins would stretch a fill-box. Up toward the rib first, then the ends tuck in. */
+.leaf {
+  transform-box: view-box;
+  transform-origin: 150px 6px;
+  animation:
+    fold 560ms cubic-bezier(0.65, 0, 0.35, 1) 0.48s both,
+    fade 160ms linear 1s both;
+}
+
+.shade {
+  opacity: 0;
+  animation: shade 320ms ease-in 0.48s both;
+}
+
+.dish {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation:
+    gather 420ms cubic-bezier(0.5, 0, 0.3, 1) 0.12s both,
+    fade 160ms linear 0.52s both;
+}
+
+.parcel {
+  transform-box: fill-box;
+  transform-origin: 50% 60%;
+  animation: parcel 380ms cubic-bezier(0.3, 1.5, 0.5, 1) 0.98s both;
+}
+
+.string,
+.check {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.string {
+  animation: draw 380ms cubic-bezier(0.6, 0, 0.3, 1) 1.25s both;
+}
+
+.down {
+  animation-delay: 1.36s;
+}
+
+.knot,
+.tick {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.knot {
+  animation: pop 220ms cubic-bezier(0.3, 1.6, 0.5, 1) 1.55s both;
+}
+
+.tick {
+  animation: pop 300ms cubic-bezier(0.3, 1.6, 0.5, 1) 1.6s both;
+}
+
+.check {
+  animation: draw 260ms ease-out 1.75s both;
+}
+
+.paid {
+  margin: 10px 0 0;
+  text-align: center;
+  animation: rise 380ms cubic-bezier(0.2, 0.8, 0.2, 1) 1.6s both;
+}
+
+.paid strong {
+  display: block;
+  font-family: var(--font-leaf), Georgia, serif;
+  font-weight: 400;
+  font-size: 1.875rem;
+  line-height: 1.1;
+  color: #22553a;
+}
+
+.paid span {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.9375rem;
+  color: #59645c;
+}
+
+@keyframes fold {
+  0% {
+    transform: none;
+  }
+  55% {
+    transform: translate(0px, 20px) scale(1, 0.55);
+  }
+  100% {
+    transform: translate(18px, 32.6px) scale(0.47, 0.55);
+  }
+}
+
+@keyframes gather {
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(0.35);
+  }
+}
+
+@keyframes shade {
+  to {
+    opacity: 0.55;
+  }
+}
+
+@keyframes fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes parcel {
+  from {
+    opacity: 0;
+    transform: scale(0.96, 0.9);
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes lift {
+  to {
+    opacity: 0;
+    transform: translateY(-18px);
+    visibility: hidden;
+  }
+}
+
+/* The page never waits on it: with reduced motion it isn't drawn at all (the component also skips it). */
+@media (prefers-reduced-motion: reduce) {
+  .over {
+    display: none;
+  }
+}

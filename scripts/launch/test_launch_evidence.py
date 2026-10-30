@@ -66,10 +66,18 @@ class LaunchEvidenceTest(unittest.TestCase):
             self.assertEqual("RED", self.java_at(hour)["status"], hour)
         self.clock_skip("Assumption failed: today (IST) began less than 2 hours ago")
         self.assertEqual("GREEN", self.java_at(1)["status"])
+        self.clock_skip("org.opentest4j.TestAbortedException: Assumption failed: today (IST) began less than 3 hours ago")
+        self.assertEqual("GREEN", self.java_at(1)["status"])
+        self.junit(skipped=1)
+        report = self.reports / 'TEST-required.xml'
+        report.write_text(report.read_text().replace('<skipped/>', '<skipped type="org.opentest4j.TestAbortedException">Assumption failed: today (IST) began less than 4 hours ago\n\tat org.junit...</skipped>'))
+        self.assertEqual("GREEN", self.java_at(1)["status"])
+        self.assertEqual("RED", self.java_at(8)["status"])
 
     def test_other_skips_stay_red_inside_the_clock_window(self):
         for message in ("redis-server is not installed", "", "today began less than 4 hours ago",
-                        "today (IST) began less than 4 hours ago; also something else"):
+                        "today (IST) began less than 4 hours ago; also something else",
+                        "java.lang.IllegalStateException: today (IST) began less than 4 hours ago"):
             self.clock_skip(message); self.assertEqual("RED", self.java_at(1)["status"], message)
         self.junit(skipped=1); self.assertEqual("RED", self.java_at(1)["status"])
 

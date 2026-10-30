@@ -79,7 +79,7 @@ def discover_java(source_folder):
 # Fleet tests that put hours of shifts and pay into "today" (IST) skip themselves in the first hours after IST midnight
 # (FleetDatabase.assumeTodayIsHoursOld). Only that exact, self-declared skip is accepted, and only while it is really that
 # early in India; at any other hour the same skip fails the gate like every other skip.
-CLOCK_WINDOW_SKIP = re.compile(r"(?:Assumption failed: )?today \(IST\) began less than \d+ hours ago")
+CLOCK_WINDOW_SKIP = re.compile(r"(?:org\.opentest4j\.TestAbortedException: )?(?:Assumption failed: )?today \(IST\) began less than \d+ hours ago")
 CLOCK_WINDOW_LAST_HOUR_IST = 5  # the longest skip is 4 h; one more hour covers the ~20 min between running and reading
 
 
@@ -92,7 +92,13 @@ def in_clock_window(now=None):
 
 def clock_window_skip(case):
     skipped = case.find("skipped")
-    return skipped is not None and CLOCK_WINDOW_SKIP.fullmatch((skipped.attrib.get("message") or "").strip()) is not None
+    if skipped is None:
+        return False
+    # Surefire puts the reason in the message attribute, the element text, or both.
+    texts = [(skipped.attrib.get("message") or "").strip(), (skipped.text or "").strip().splitlines()[0:1]]
+    texts = [texts[0]] + [line.strip() for line in texts[1]]
+    return any(text and CLOCK_WINDOW_SKIP.fullmatch(text) for text in texts) and \
+        all(not text or CLOCK_WINDOW_SKIP.fullmatch(text) for text in texts)
 
 
 def java_result(service, reports, required, source_folder, now=None):
@@ -116,6 +122,11 @@ def java_result(service, reports, required, source_folder, now=None):
                 early = sum(clock_window_skip(case) for case in cases)
                 counts = {**counts, "skipped": counts["skipped"] - early}; excused += early
             suites[name] = counts
+            for case in cases:
+                skipped = case.find("skipped")
+                if skipped is not None and not (window and clock_window_skip(case)):
+                    reason = (skipped.attrib.get("message") or (skipped.text or "").strip().split("\n")[0] or "no reason given")[:200]
+                    issues.append(f"Skipped: {name.rsplit('.', 1)[-1]}.{case.attrib.get('name', '?')} - {reason!r}")
             for key in COUNTS: totals[key] += counts[key]
         except (ET.ParseError, ValueError, KeyError):
             issues.append("Malformed or duplicate JUnit report: " + file.name)

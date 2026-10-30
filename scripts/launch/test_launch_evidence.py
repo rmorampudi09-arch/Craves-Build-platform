@@ -76,6 +76,16 @@ class LaunchEvidenceTest(unittest.TestCase):
     def test_clock_window_does_not_excuse_failures(self):
         self.junit(failures=1); self.assertEqual("RED", self.java_at(1)["status"])
 
+    def test_red_evidence_prints_its_reasons(self):
+        import io, contextlib
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            launch.explain({"kind": "backend", "status": "RED",
+                            "services": {"order-service": {"status": "RED", "counts": {"skipped": 1}, "issues": ["Required suite skipped or failed: X"]}},
+                            "roundtrip": {"status": "RED", "issue": "Prerequisite Integration or Order verification failed"}})
+        self.assertIn("order-service", out.getvalue()); self.assertIn("Required suite skipped or failed: X", out.getvalue())
+        self.assertIn("Prerequisite Integration or Order verification failed", out.getvalue())
+
     def test_new_source_test_cannot_be_omitted_from_execution(self):
         self.junit(); (self.sources / "NewUpgradeTest.java").write_text("class NewUpgradeTest {\n@Test void upgrade() {}\n}")
         result = self.java(); self.assertEqual("RED", result["status"])

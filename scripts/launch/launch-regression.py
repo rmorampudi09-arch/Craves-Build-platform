@@ -275,7 +275,26 @@ def main():
         print("LAUNCH_EVIDENCE_JSON_BEGIN")
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         print("LAUNCH_EVIDENCE_JSON_END")
+    explain(result)
     return 0 if result["status"] == "GREEN" else 1
+
+
+def explain(result):
+    """Print why a component is RED, so the job log says it without downloading the evidence artifact."""
+    if result.get("status") == "GREEN":
+        return
+    print(f"RED: {result.get('kind', 'launch')} evidence is not green. Reasons:", flush=True)
+    for name, service in sorted((result.get("services") or {}).items()):
+        if service.get("status") != "GREEN":
+            print(f"  {name}: counts {service.get('counts')}", flush=True)
+            for issue in service.get("issues", [])[:25]:
+                print(f"    - {issue}", flush=True)
+    roundtrip = result.get("roundtrip")
+    if roundtrip and roundtrip.get("status") != "GREEN":
+        print(f"  roundtrip: {roundtrip.get('issue') or (roundtrip.get('report') or {}).get('status')} "
+              f"(exit {(roundtrip.get('command') or {}).get('exitCode')})", flush=True)
+    for issue in (result.get("issues") or [])[:25]:
+        print(f"  - {issue}", flush=True)
 
 
 if __name__ == "__main__":

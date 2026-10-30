@@ -6,6 +6,7 @@ on:
     paths:
       - 'services/**'
       - 'apps/customer-web-next/**'
+      - 'apps/mobile/**'
       - 'scripts/launch/**'
       - 'scripts/release/**'
       - 'scripts/finance/**'
@@ -237,9 +238,48 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  mobile:
+    name: Mobile app (customer, chef, rider) lint, types, every test and bundle
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install locked dependencies
+        working-directory: apps/mobile
+        run: npm ci
+      - name: TypeScript strict check
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+      - name: ESLint with zero warnings and feature boundaries
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+      - name: Full Jest suite
+        working-directory: apps/mobile
+        run: npm test -- --ci --runInBand
+      - name: Production Android JavaScript bundle
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mobile-bundle"
+          npx react-native bundle --platform android --dev false --entry-file index.js \
+            --bundle-output "$RUNNER_TEMP/mobile-bundle/index.android.bundle" \
+            --assets-dest "$RUNNER_TEMP/mobile-bundle/assets"
+          test -s "$RUNNER_TEMP/mobile-bundle/index.android.bundle"
+      - name: Require tests to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
+
   acceptance:
     name: Exact-SHA complete regression evidence
-    needs: [source, backend, web]
+    needs: [source, backend, web, mobile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -254,7 +294,7 @@ jobs:
           jobs = json.loads(os.environ['PREREQUISITES_JSON'])
           expected = os.environ['EXPECTED_RELEASE_SHA']
           assert re.fullmatch(r'[0-9a-f]{40}', expected), 'Expected SHA missing or invalid'
-          assert set(jobs) == {'source', 'backend', 'web'}, 'Missing prerequisite job'
+          assert set(jobs) == {'source', 'backend', 'web', 'mobile'}, 'Missing prerequisite job'
           assert all(job.get('result') == 'success' for job in jobs.values()), 'A prerequisite did not succeed'
           assert jobs['source'].get('outputs', {}).get('release_sha') == expected, 'Source evidence is stale or missing'
           PY

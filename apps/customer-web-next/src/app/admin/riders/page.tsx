@@ -5,7 +5,7 @@ export const metadata = { title: "Riders | Craves Admin", robots: { index: false
 
 export default function AdminRidersPage() {
   return <div className="space-y-7">
-    <AdminPageIntro eyebrow="Riders & fleet" title="Riders" description="Approve riders by hand and keep due process: a person decides every status change, with a reason, the evidence and the approver recorded." />
+    <AdminPageIntro eyebrow="Riders & fleet" title="Riders" description="Review each application once and approve it, or send the rider what to fix, in one step. Every later status change keeps due process: a reason, the evidence and the approver recorded." />
     <RidersList />
   </div>;
 }

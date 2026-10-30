@@ -248,6 +248,20 @@ public class FleetShiftService {
      */
     @Transactional
     public boolean registerDevice(UUID identityId, String credential, DeviceRegistration device) {
+        return register(identityId, credential, device, false);
+    }
+
+    /**
+     * P6-04: the phone of an applicant (a PENDING rider, no RIDER role until approved), so ops's decision reaches it as a
+     * push. An applicant can't start a shift, so the phone they used last is the bound one (any earlier one REPLACED), never
+     * one held for ops; anyone else without the role is refused (403 FORBIDDEN).
+     */
+    @Transactional
+    public boolean registerApplicantDevice(UUID identityId, DeviceRegistration device) {
+        return register(identityId, null, device, true);
+    }
+
+    private boolean register(UUID identityId, String credential, DeviceRegistration device, boolean applicant) {
         if (device == null || device.installationId() == null || !device.installationId().matches("^[A-Za-z0-9._:-]{8,128}$")
             || device.fcmToken() == null || device.fcmToken().isBlank() || device.fcmToken().length() > 4096
             || device.appVersion() == null || !device.appVersion().matches(VERSION)
@@ -259,9 +273,19 @@ public class FleetShiftService {
             ? jdbc.queryForList("SELECT r.id FROM fleet_schema.rider r JOIN fleet_schema.rider_shift s ON s.rider_id = r.id "
                 + "WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL "
                 + "AND s.credential_expires_at > now() FOR UPDATE OF r", UUID.class, hash(credential))
-            : jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE identity_id = ? FOR UPDATE", UUID.class, identityId))
-            .stream().findFirst().orElseThrow(() -> credential != null ? credentialInvalid()
+            : jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE identity_id = ?" + (applicant ? " AND status = 'PENDING'" : "")
+                + " FOR UPDATE", UUID.class, identityId))
+            .stream().findFirst().orElseThrow(() -> credential != null ? credentialInvalid() : applicant ? FleetApiException.forbidden()
                 : new FleetApiException(403, "NOT_A_RIDER", "This account is not a Craves rider."));
+        if (applicant) {
+            UUID phone = deviceId(riderId, device.installationId());
+            jdbc.update("UPDATE fleet_schema.rider_device SET state = 'REPLACED' WHERE rider_id = ? AND id <> ? AND state <> 'REPLACED'",
+                riderId, phone);
+            jdbc.update("INSERT INTO fleet_schema.rider_device (id, rider_id, fcm_token, app_version, model, state) VALUES (?, ?, ?, ?, ?, 'BOUND') "
+                + "ON CONFLICT (id) DO UPDATE SET fcm_token = excluded.fcm_token, app_version = excluded.app_version, model = excluded.model, "
+                + "last_seen_at = now(), state = 'BOUND'", phone, riderId, device.fcmToken(), device.appVersion(), device.model().trim());
+            return true;
+        }
         String state = jdbc.queryForObject("""
                 INSERT INTO fleet_schema.rider_device AS d (id, rider_id, fcm_token, app_version, model, state)
                 VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (SELECT 1 FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND')

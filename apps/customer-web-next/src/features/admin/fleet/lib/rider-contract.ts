@@ -5,11 +5,22 @@ import { istDay } from "./payout-contract";
 export const RIDER_STATUSES = ["NOT_RIDER", "PENDING", "ACTIVE", "SUSPENDED", "DEACTIVATED"] as const;
 export const riderStatusSchema = z.enum(RIDER_STATUSES);
 
+/** Whose turn it is (docs/riders/FLOWS.md): REVIEW is ops's, FIXES and APPLYING the rider's; otherwise the status. */
+export const RIDER_STAGES = ["REVIEW", "FIXES", "APPLYING", "ACTIVE", "SUSPENDED", "DEACTIVATED"] as const;
+export const riderStageSchema = z.enum([...RIDER_STAGES, "NOT_RIDER"]);
+export type RiderStage = z.infer<typeof riderStageSchema>;
+
 export const riderSummarySchema = z.object({
   riderId: id, name: personName, phoneMasked: z.string().max(20), status: riderStatusSchema,
   pendingDocuments: z.number().int().nonnegative(), pendingDevice: z.boolean(), createdAt: instant,
+  // The application stage and what is left (server with the one-step review); optional so the list still reads an older server.
+  stage: riderStageSchema.optional(), missingDocuments: z.number().int().nonnegative().optional(),
+  documentsToFix: z.number().int().nonnegative().optional(), payoutAccountSent: z.boolean().optional(), readySince: instant.nullable().optional(),
 });
-export const riderPageSchema = z.object({ riders: z.array(riderSummarySchema).max(100), nextCursor: z.string().max(200).nullable() });
+export const riderPageSchema = z.object({
+  riders: z.array(riderSummarySchema).max(100), nextCursor: z.string().max(200).nullable(),
+  counts: z.record(z.string().max(20), z.number().int().nonnegative()).optional(),
+});
 
 export const DOCUMENT_TYPES = ["DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "PHOTO", "ADDRESS_PROOF", "BANK_PROOF"] as const;
 export const riderDocumentSchema = z.object({
@@ -63,9 +74,11 @@ export const statusEventSchema = z.object({
   deadline: instant.nullable(), reviewBy: instant.nullable(), appealPhone: z.string().max(20).nullable(),
   approverName: personName, createdAt: instant, statusAfter: riderStatusSchema,
 });
+export const VEHICLE_KINDS = ["PETROL", "ELECTRIC", "BICYCLE"] as const;
 export const riderDetailSchema = z.object({
   rider: riderSummarySchema.extend({
     kycName: personName, language: z.enum(["en", "te", "hi"]), vehicleNumberMasked: z.string().max(20).nullable().optional(),
+    vehicleKind: z.enum(VEHICLE_KINDS).nullable().optional(), vehicleLabel: z.string().max(80).optional(),
   }),
   documents: z.array(riderDocumentSchema).max(20),
   devices: z.array(riderDeviceSchema).max(10),
@@ -74,7 +87,30 @@ export const riderDetailSchema = z.object({
   shifts: z.array(shiftSchema).max(20),
   statusEvents: z.array(statusEventSchema).max(100),
   recentOffers: z.array(riderOfferSchema).max(20).optional(),
+  // What this rider must send (by vehicle) and whether dispatch may offer them trips in test mode.
+  requiredDocuments: z.array(z.enum(DOCUMENT_TYPES)).max(8).optional(),
+  pilotRider: z.boolean().optional(),
+  // The rider's details and sent payout account as shown: the decision sends it back, so it applies only to what ops saw.
+  applicationVersion: z.string().regex(/^[0-9a-f]{32}$/).optional(),
 });
+
+/** Ops's one decision on an application: a verdict per document, and the payout account confirmed or returned. */
+export const documentVerdictSchema = z.object({
+  documentId: id, verdict: z.enum(["OK", "FIX"]), expiresOn: day.optional(), reason: reasonText.optional(),
+});
+export const applicationDecisionSchema = z.object({
+  decision: z.enum(["APPROVE", "FIXES"]),
+  documents: z.array(documentVerdictSchema).max(20),
+  payoutAccount: z.enum(["CONFIRM", "RETURN"]).optional(),
+  applicationVersion: z.string().regex(/^[0-9a-f]{32}$/),
+});
+export const applicationResultSchema = z.object({
+  riderId: id, decision: z.enum(["APPROVE", "FIXES"]), status: riderStatusSchema, stage: z.string().max(20),
+  documentsVerified: z.number().int().nonnegative(), fixesAsked: z.number().int().nonnegative(),
+  payoutAccountConfirmed: z.boolean(), payoutAccountReturned: z.boolean(), addedToPilot: z.boolean(), rateCardPublished: z.boolean(),
+});
+export type ApplicationDecision = z.infer<typeof applicationDecisionSchema>;
+export type ApplicationResult = z.infer<typeof applicationResultSchema>;
 export const selfieReviewSchema = z.object({
   shiftId: id, riderId: id, riderName: personName, startedAt: instant, state: z.enum(["PENDING", "APPROVED", "REJECTED"]),
   reason: z.string().max(1000).nullable(), reviewedBy: personName.nullable(), reviewedAt: instant.nullable(),
@@ -93,7 +129,7 @@ export const EXPIRING_DOCUMENTS: readonly (typeof DOCUMENT_TYPES)[number][] = ["
 /** An expiring document is accepted only with the date printed on it, and not once that date has passed in IST. */
 export function expiryProblem(expiresOn: string, today = istDay()): string | null {
   if (!day.safeParse(expiresOn).success) return "Enter the expiry date printed on the document.";
-  return expiresOn < today ? "This document has expired. Reject it so the rider uploads a new one." : null;
+  return expiresOn < today ? "This document has expired. Mark it Needs a fix so the rider sends a new one." : null;
 }
 export const riderVehicleInputSchema = z.object({
   label: z.string().trim().min(2, "Enter the vehicle, like Honda Activa 6G.").max(60, "Keep the vehicle to 60 characters."),
@@ -146,7 +182,8 @@ export function statusEventProblem(input: StatusEventInput, now = Date.now()): s
 
 export const RIDER_ROUTES: readonly FleetRoute[] = [
   { method: "GET", path: "riders", response: riderPageSchema,
-    query: { status: riderStatusSchema, search: z.string().max(80), cursor: z.string().max(200) } },
+    query: { status: riderStatusSchema, stage: z.enum(RIDER_STAGES), search: z.string().max(80), cursor: z.string().max(200) } },
+  { method: "POST", path: "riders/:id/application/decision", body: applicationDecisionSchema, response: applicationResultSchema },
   { method: "POST", path: "riders", body: createRiderSchema, response: riderSummarySchema },
   { method: "GET", path: "riders/:id", response: riderDetailSchema },
   { method: "GET", path: "riders/:id/documents/:id/content", file: { types: ["application/pdf", "image/jpeg", "image/png"], maxBytes: 10 * 1024 * 1024 } },

@@ -11,11 +11,12 @@ import {BottomAction} from '../components/BottomAction';
 import {RefusalNotices} from '../components/RefusalNotices';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
+import {Timeline} from '../components/Timeline';
 import {Card, Money, RiderScreen} from '../components/ui';
 import {formatClock, formatRupees} from '../domain/format';
 import {riderMessage} from '../domain/problem';
 import {riderOnlineService} from '../native/riderOnlineService';
-import type {RiderNav} from '../navigation';
+import {takeAfterGate, type RiderNav} from '../navigation';
 import {riderKeys, useActiveTrip, useRiderHome, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {usePhoneReadiness} from './PhoneSetupScreen';
@@ -208,12 +209,24 @@ function HeadingHomeCard({home, choices, onChange}: {home: HomeSummary; choices:
 }
 
 /** Online (07-HomeOnline.png): the shift, today, where to rest, and that offers ring with the screen off. */
-function OnlineCards({home, choices, onChange}: {home: HomeSummary; choices: boolean; onChange: () => void}) {
+function OnlineCards({
+  home,
+  choices,
+  onTrip,
+  onChange,
+}: {
+  home: HomeSummary;
+  choices: boolean;
+  onTrip: boolean;
+  onChange: () => void;
+}) {
   const h = useStrings().strings.home;
+  // A break or heading home starts between trips; one already running can always be ended (choices off hides the starts).
+  const startable = choices && !onTrip;
   return (
     <>
-      <BreakCard home={home} choices={choices} onChange={onChange} />
-      <HeadingHomeCard home={home} choices={choices} onChange={onChange} />
+      <BreakCard home={home} choices={startable} onChange={onChange} />
+      <HeadingHomeCard home={home} choices={startable} onChange={onChange} />
       <Card style={styles.slot}>
         <View style={styles.tight}>
           <View style={styles.spread}>
@@ -276,6 +289,14 @@ export function HomeScreen() {
   const online = home.data?.online ?? false;
   const refresh = () => queryClient.invalidateQueries({queryKey: riderKeys.all});
 
+  // Right after the first pay terms: the next step opens by itself.
+  useEffect(() => {
+    const next = takeAfterGate();
+    if (next) {
+      navigation.navigate(next);
+    }
+  }, [navigation]);
+
   // The server may still say "online" after a restart; keep the location loop in step with it.
   useEffect(() => {
     if (online) {
@@ -293,14 +314,18 @@ export function HomeScreen() {
       await riderApi.endShift().catch(() => undefined);
       refresh();
     };
+    // A pocket tap must not end a shift: going offline always asks once, in plain words.
     if (tripInProgress) {
       Alert.alert(h.confirmOfflineTitle, h.confirmOfflineBody, [
-        {text: strings.common.cancel, style: 'cancel'},
+        {text: h.stayOnline, style: 'cancel'},
         {text: h.goOffline, style: 'destructive', onPress: stop},
       ]);
       return;
     }
-    await stop();
+    Alert.alert(h.confirmIdleOfflineTitle, h.confirmIdleOfflineBody, [
+      {text: h.stayOnline, style: 'cancel'},
+      {text: h.goOffline, onPress: stop},
+    ]);
   }
 
   const warnings = [
@@ -343,10 +368,33 @@ export function HomeScreen() {
           />
         </Card>
       ) : null}
-      {!phone.ready ? (
-        <Card>
-          <Text style={styles.body}>{h.setupNeeded}</Text>
-          <BottomAction label={h.openSetup} variant="outline" size="compact" onPress={() => navigation.navigate('PhoneSetup')} />
+      {phone.checked && !phone.ready ? (
+        // What's left before the first order, so a newly approved rider knows the next step (and anyone whose phone lost a permission).
+        <Card style={styles.slot}>
+          <Text accessibilityRole="header" style={styles.heading} testID="rider-first-day">
+            {h.firstDayTitle}
+          </Text>
+          <Timeline
+            items={[
+              {title: h.firstDayApproved, state: 'done'},
+              {title: h.firstDayTerms, state: 'done'},
+              {
+                title: h.firstDayPhone,
+                body: h.firstDayPhoneBody,
+                state: 'current',
+                action: (
+                  <BottomAction
+                    label={h.openSetup}
+                    variant="outline"
+                    size="compact"
+                    onPress={() => navigation.navigate('PhoneSetup')}
+                    testID="rider-open-setup"
+                  />
+                ),
+              },
+              {title: h.firstDayOnline, body: h.firstDayOnlineBody, state: 'todo'},
+            ]}
+          />
         </Card>
       ) : null}
       {warnings.map(warning => (
@@ -358,6 +406,7 @@ export function HomeScreen() {
           <OnlineCards
             home={home.data}
             choices={Boolean(me.data?.features.riderChoices)}
+            onTrip={tripInProgress}
             onChange={() => queryClient.invalidateQueries({queryKey: riderKeys.home})}
           />
         ) : (

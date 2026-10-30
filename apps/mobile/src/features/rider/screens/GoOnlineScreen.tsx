@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {Icon, LoadingIndicator} from '../../../shared/components';
 import {colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
+import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -98,6 +99,8 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         riderApi.endShift().catch(() => undefined);
         throw error;
       });
+      // Home says online at once, not "Offline" until its refetch lands; the refetch brings the shift's details.
+      queryClient.setQueryData<HomeSummary>(riderKeys.home, home => (home ? {...home, online: true} : home));
       queryClient.invalidateQueries({queryKey: riderKeys.all});
       navigation.goBack();
     } catch (error) {

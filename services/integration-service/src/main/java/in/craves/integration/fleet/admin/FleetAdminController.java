@@ -57,13 +57,15 @@ public class FleetAdminController {
         this.joinsExits = joinsExits;
     }
 
+    /** stage: REVIEW, FIXES or APPLYING for riders still applying (docs/riders/FLOWS.md), or a status; the page counts each. */
     @GetMapping("/riders")
     public ResponseEntity<Object> listRiders(@AuthenticationPrincipal CravesPrincipal principal,
                                              @RequestParam(required = false) String status,
+                                             @RequestParam(required = false) String stage,
                                              @RequestParam(required = false) String search,
                                              @RequestParam(required = false) String cursor) {
         admin(principal, READERS);
-        return json(200, service.listRiders(status, search, cursor));
+        return json(200, service.listRiders(status, stage, search, cursor));
     }
 
     @PostMapping("/riders")

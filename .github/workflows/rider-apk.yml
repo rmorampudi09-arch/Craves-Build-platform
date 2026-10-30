@@ -7,7 +7,8 @@ name: Craves Rider APK
 # (auth-service), then Firebase, and call CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
 # Which one: a manual run picks api_mode (default live, the APK riders install; live builds run only from main);
 # pull requests use the repo variable CRAVES_RIDER_API_MODE (mock when unset). The mode is in the APK's name and the
-# PR comment, and a mock build shows "Demo data" on every screen.
+# PR comment. A mock build is its own app, com.cravesapp.rider.demo named "Craves Rider Demo", installed beside the real
+# one, so it can never replace or pass for the rider app; a check below fails a live APK that isn't com.cravesapp.rider.
 # Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
 # RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key).
 
@@ -135,16 +136,16 @@ jobs:
             echo 'ERROR: a live build needs the RIDER_GOOGLE_SERVICES_JSON secret; phone sign-in cannot work with the placeholder.' >&2
             exit 1
           fi
-          if [[ -n "${RIDER_GOOGLE_SERVICES_JSON:-}" ]]; then
+          if [[ "$MODE" == live ]]; then
             printf '%s' "$RIDER_GOOGLE_SERVICES_JSON" > "$target"
             echo 'Using the real rider Firebase config.'
           else
-            # Placeholder so the Gradle plugin can run; demo sign-in never calls Firebase.
+            # Placeholder so the Gradle plugin can run, for the demo app's own package; demo sign-in never calls Firebase.
             cat > "$target" <<'JSON'
           {
             "project_info": {"project_number": "000000000000", "project_id": "craves-rider-demo", "storage_bucket": "craves-rider-demo.appspot.com"},
             "client": [{
-              "client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": {"package_name": "com.cravesapp.rider"}},
+              "client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": {"package_name": "com.cravesapp.rider.demo"}},
               "oauth_client": [],
               "api_key": [{"current_key": "demo-placeholder-not-a-key"}],
               "services": {"appinvite_service": {"other_platform_oauth_client": []}}
@@ -152,7 +153,7 @@ jobs:
             "configuration_version": "1"
           }
           JSON
-            echo 'No RIDER_GOOGLE_SERVICES_JSON secret: building the demo with a placeholder Firebase config.'
+            echo 'Demo build: the placeholder Firebase config for com.cravesapp.rider.demo.'
           fi
 
       - name: App settings
@@ -207,6 +208,7 @@ jobs:
         shell: bash
         env:
           RUN_NUMBER: ${{ github.run_number }}
+          MODE: ${{ steps.mode.outputs.mode }}
           PLAY_BUNDLE: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && steps.mode.outputs.mode == 'live' }}
         run: |
           set -euo pipefail
@@ -217,7 +219,8 @@ jobs:
           # A live build from main also makes the Play bundle (P2-07), from the same R8 output and key.
           tasks=(assembleRiderRelease testRiderReleaseUnitTest)
           if [[ "$PLAY_BUNDLE" == true ]]; then tasks+=(bundleRiderRelease); fi
-          ./gradlew "${tasks[@]}" -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+          # A mock build is the separate demo app (cravesRiderDemo: com.cravesapp.rider.demo, "Craves Rider Demo").
+          ./gradlew "${tasks[@]}" -PreactNativeArchitectures=arm64-v8a,armeabi-v7a -PcravesRiderDemo="$([[ "$MODE" == mock ]] && echo true || echo false)" \
             -PcravesRiderMinify=true -PcravesVersionCode="$RUN_NUMBER" -Pandroid.enableR8.fullMode=false \
             --no-daemon --stacktrace 2>&1 | tee ../rider-build.log
 
@@ -241,16 +244,21 @@ jobs:
         env:
           APK: ${{ steps.apk.outputs.name }}
           RUN_NUMBER: ${{ github.run_number }}
+          MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)"
           "$tools/apksigner" verify "$APK"
           code="$("$tools/aapt2" dump badging "$APK" | sed -n "s/^package: .*versionCode='\([0-9]*\)'.*/\1/p")"
           [[ "$code" == "$RUN_NUMBER" ]] || { echo "ERROR: versionCode is '$code', expected $RUN_NUMBER" >&2; exit 1; }
+          # The rider app is only ever a live build; a demo build is only ever the separate demo app.
+          package="$("$tools/aapt2" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          expected=com.cravesapp.rider; [[ "$MODE" == mock ]] && expected=com.cravesapp.rider.demo
+          [[ "$package" == "$expected" ]] || { echo "ERROR: a $MODE APK is '$package', expected $expected" >&2; exit 1; }
           abis="$(unzip -Z1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')"
           [[ "$abis" == "arm64-v8a armeabi-v7a " ]] || { echo "ERROR: native code for: $abis" >&2; exit 1; }
           test -s "${APK%.apk}-mapping.txt" || { echo 'ERROR: no R8 mapping: R8 did not run' >&2; exit 1; }
-          echo "Signed; versionCode $code; native code for $abis; R8 mapping present."
+          echo "Signed; $package; versionCode $code; native code for $abis; R8 mapping present."
 
       - name: Name and check the Play bundle (signed, ARM only)
         id: aab

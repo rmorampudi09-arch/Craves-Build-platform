@@ -124,6 +124,27 @@ class FleetClientsTest {
         server.verify();
     }
 
+    /** P6-04: ops's decision on an application, an ACCOUNT data message the phone words in the rider's language. */
+    @Test
+    void theDecisionPushIsAnAccountDataMessage() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://notification.internal");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo("http://notification.internal/internal/v1/push/realtime"))
+            .andExpect(jsonPath("$.token").value("fcm-token")).andExpect(jsonPath("$.data.type").value("ACCOUNT"))
+            .andExpect(jsonPath("$.data.decision").value("APPROVE")).andExpect(jsonPath("$.collapseKey").value("account"))
+            .andExpect(jsonPath("$.notification.title").value("You're approved"))
+            .andRespond(withSuccess("{\"messageId\":\"projects/craves/messages/3\"}", MediaType.APPLICATION_JSON));
+        server.expect(ExpectedCount.once(), requestTo("http://notification.internal/internal/v1/push/realtime"))
+            .andExpect(jsonPath("$.data.decision").value("FIXES")).andExpect(jsonPath("$.ttlSeconds").value(600))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        RiderPushClient client = new RiderPushClient(builder.build(), "secret");
+
+        assertThat(client.account("fcm-token", true)).isEqualTo("SENT");
+        assertThat(client.account("fcm-token", false)).isEqualTo("SENT");
+        assertThat(new RiderPushClient(null, null).account("fcm-token", true)).isEqualTo("OFF");
+        server.verify();
+    }
+
     @Test
     void opsAlertsReportWhetherAnyoneWasTold() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://notification.internal");

@@ -35,7 +35,10 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Every rider route needs the RIDER role (403 without it) except /me, /profile and /documents (a sign-in; the service checks the rider row). */
+/**
+ * Every rider route needs the RIDER role (403 without it) except /me, /profile and /documents (a sign-in; the service checks the
+ * rider row) and /devices, where an applicant without the role may register their phone (the service checks the PENDING row).
+ */
 @WebMvcTest(FleetRiderController.class)
 @ContextConfiguration(classes = {FleetRiderController.class, FleetApiAdvice.class, WebSecurityConfiguration.class,
     CravesJwtAuthenticationFilter.class})
@@ -48,6 +51,8 @@ class FleetRiderSecurityTest {
 
     @Test
     void withoutTheRiderRoleEveryRiderRouteIsForbidden() throws Exception {
+        // POST /devices without the role goes to the applicant check, which refuses anyone who is not a PENDING rider.
+        when(shifts.registerApplicantDevice(any(), any())).thenThrow(FleetApiException.forbidden());
         for (String role : List.of("CUSTOMER", "CHEF", "PLATFORM_ADMIN", "ADMIN")) {
             when(verifier.verify(role)).thenReturn(new CravesPrincipal(UUID.randomUUID(), "+919000000000", Set.of(role)));
             mvc.perform(get("/api/v1/rider/terms").header("Authorization", "Bearer " + role)).andExpect(status().isForbidden());
@@ -74,7 +79,9 @@ class FleetRiderSecurityTest {
         mvc.perform(post("/api/v1/rider/devices").header("Authorization", "Bearer CUSTOMER").contentType(MediaType.APPLICATION_JSON)
             .content("{\"installationId\":\"9774d56d682e549c\",\"fcmToken\":\"t\",\"appVersion\":\"1.0.0\",\"model\":\"Redmi\"}"))
             .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
-        verifyNoInteractions(service, shifts);
+        verify(shifts).registerApplicantDevice(any(), any());
+        verifyNoMoreInteractions(shifts);
+        verifyNoInteractions(service);
     }
 
     /** A rider ops added but has not activated has no RIDER role yet: the service decides by their rider row. */

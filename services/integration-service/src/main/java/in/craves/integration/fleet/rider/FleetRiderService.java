@@ -69,15 +69,10 @@ public class FleetRiderService {
         .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
     private static final List<String> DOCUMENT_ORDER = List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN",
         "BANK_PROOF", "PHOTO", "ADDRESS_PROOF");
-    static final Map<String, String> DOCUMENT_LABELS = Map.of("DRIVING_LICENCE", "Driving licence", "VEHICLE_RC", "Vehicle RC",
+    public static final Map<String, String> DOCUMENT_LABELS = Map.of("DRIVING_LICENCE", "Driving licence", "VEHICLE_RC", "Vehicle RC",
         "VEHICLE_INSURANCE", "Vehicle insurance", "PUC", "PUC certificate", "PAN", "PAN card", "BANK_PROOF", "Bank proof",
         "PHOTO", "Photo", "ADDRESS_PROOF", "Address proof");
     private static final Set<String> DOCUMENT_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "application/pdf");
-    // What a rider still signing up must send, by what they ride (V160); NULL is a rider ops added before sign-up existed.
-    static final Map<String, List<String>> REQUIRED_DOCUMENTS = Map.of(
-        "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF"),
-        "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
-        "BICYCLE", List.of("PAN", "BANK_PROOF"));
     private static final Features NO_FEATURES = new Features(false, false, false, false);
     private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
 
@@ -213,7 +208,7 @@ public class FleetRiderService {
         if ("PENDING".equals(rider.status())) {
             // A rider still signing up sees every document they must send, sent or not (MISSING), like the chef checklist.
             Set<String> have = sent.stream().map(Latest::type).collect(Collectors.toSet());
-            REQUIRED_DOCUMENTS.get(kind == null ? "PETROL" : kind).stream().filter(type -> !have.contains(type))
+            FleetRules.requiredDocuments(kind).stream().filter(type -> !have.contains(type))
                 .forEach(type -> sent.add(new Latest(type, new ProfileDocument(DOCUMENT_CODES.get(type), DOCUMENT_LABELS.get(type),
                     "MISSING", null, null))));
         }
@@ -223,11 +218,15 @@ public class FleetRiderService {
             + "AND state = 'ACTIVE'", String.class, rider.id()).stream().findFirst().orElse(null);
         String submitted = jdbc.queryForList("SELECT masked_account FROM fleet_schema.rider_payout_account WHERE rider_id = ? "
             + "AND state = 'SUBMITTED'", String.class, rider.id()).stream().findFirst().orElse(null);
+        // None on file, but one was set aside: ops asked for it again, or a new name made it unusable. The rider sends it again.
+        boolean returned = payoutAccount == null && submitted == null && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS ("
+            + "SELECT 1 FROM fleet_schema.rider_payout_account WHERE rider_id = ? AND state = 'REPLACED')", Boolean.class, rider.id()));
         Insurance insurance = StringUtils.hasText(properties.insuranceLabel())
             ? new Insurance(properties.insuranceLabel(), properties.supportPhone() == null ? "" : properties.supportPhone(), null) : null;
         return new RiderProfile(new Vehicle(rider.vehicleLabel(),
             rider.vehicleRegNumber() == null ? null : FleetRules.maskVehicle(rider.vehicleRegNumber()), kind), documents, payoutAccount,
-            insurance, submitted, properties.riderChoicesEnabled() ? preferences(rider.id()) : null, homeSavedAt(rider.id()));
+            insurance, submitted, properties.riderChoicesEnabled() ? preferences(rider.id()) : null, homeSavedAt(rider.id()),
+            returned ? Boolean.TRUE : null);
     }
 
     /** When the rider saved their home spot; null while none is saved. Shown even with rider choices off, so it can be deleted. */

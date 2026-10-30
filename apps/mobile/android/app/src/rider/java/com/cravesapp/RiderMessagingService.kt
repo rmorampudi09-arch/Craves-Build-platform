@@ -7,7 +7,9 @@ import com.google.firebase.messaging.RemoteMessage
 /**
  * High-priority, data-only pushes from notification-service, each posting a visible notification (or FCM deprioritises
  * later pushes): type=OFFER with offerId, offer (Offer JSON), title, body; type=GO_ONLINE (P1-13) when the shift is open
- * but the phone stopped calling, whose tap opens the app so Home resumes the shift.
+ * but the phone stopped calling, whose tap opens the app so Home resumes the shift; type=ACCOUNT (P6-04) with decision
+ * APPROVE or FIXES when ops decided the application: an open app checks at once (JS riderAccount), and the notice opens
+ * it on the next step.
  */
 class RiderMessagingService : FirebaseMessagingService() {
 
@@ -21,6 +23,15 @@ class RiderMessagingService : FirebaseMessagingService() {
           RiderText.fromServer(this, data["title"]) ?: RiderText.get(this, R.string.rider_go_online_title),
           RiderText.fromServer(this, data["body"]) ?: RiderText.get(this, R.string.rider_go_online_body))
       }
+      "ACCOUNT" -> {
+        RiderEvents.emit(ACCOUNT_EVENT) { Arguments.createMap() }
+        val approved = data["decision"] == "APPROVE"
+        RiderOffers.notice(this, ACCOUNT_TAG,
+          RiderText.fromServer(this, data["title"])
+            ?: RiderText.get(this, if (approved) R.string.rider_account_approved_title else R.string.rider_account_fixes_title),
+          RiderText.fromServer(this, data["body"])
+            ?: RiderText.get(this, if (approved) R.string.rider_account_approved_body else R.string.rider_account_fixes_body))
+      }
     }
   }
 
@@ -33,5 +44,7 @@ class RiderMessagingService : FirebaseMessagingService() {
 
   companion object {
     const val GO_ONLINE_TAG = "go-online"
+    const val ACCOUNT_TAG = "account"
+    const val ACCOUNT_EVENT = "riderAccount"
   }
 }

@@ -10,11 +10,12 @@ The "Craves Rider APK" workflow runs on pull requests that touch `apps/mobile/**
 - **ARM only:** `arm64-v8a` and `armeabi-v7a`. No x86 code; rider phones are ARM.
 - **R8 on**, for this build only: the workflow passes `-PcravesRiderMinify=true`. The customer build never passes it and is unchanged. Keep rules are in `android/app/proguard-rules.pro`. R8 runs in compatibility mode (`-Pandroid.enableR8.fullMode=false`) until a clean phone pass on an R8 build.
 - **versionCode = the workflow run number** (`-PcravesVersionCode`), so every build installs over the last one and Play accepts every upload.
-- **versionName** is set in the rider flavor (`1.1.0`, the customer app keeps `1.0`) and must equal `RIDER_APP_VERSION` in `src/features/rider/riderConfig.ts`: the app sends it to the server, which compares it with `minAppVersion`, and a step fails the build when the two differ. For a release, raise both in one commit; once the APK is on the phones, pin `minAppVersion` to it (`GO-LIVE.md`, stage wire). Riders below it are blocked only between shifts.
+- **versionName** is set in the rider flavor (`1.2.0`, the customer app keeps `1.0`) and must equal `RIDER_APP_VERSION` in `src/features/rider/riderConfig.ts`: the app sends it to the server, which compares it with `minAppVersion`, and a step fails the build when the two differ. For a release, raise both in one commit; once the APK is on the phones, pin `minAppVersion` to it (`GO-LIVE.md`, stage wire). Riders below it are blocked only between shifts.
 - A check step fails the build unless the APK is signed, its versionCode is the run number, its native code is ARM only, and R8 wrote a mapping.
 - The artifact **craves-rider-apk** (kept 14 days) holds `craves-rider-<mode>-<sha>.apk` and `craves-rider-<mode>-<sha>-mapping.txt`. On a pull request, a comment gives the file name, the versionCode, the mode and the size.
 - **Play bundle:** a live manual run on `main` also runs `bundleRiderRelease` in the same Gradle call (same R8 output, key and versionCode). A check fails the build unless the `.aab` is signed and ARM only. The rider bundle keeps every language (no language splits), because the app shows the language the rider picked, not the phone's; the customer bundle is unchanged. The artifact **craves-rider-aab** (kept 14 days) holds `craves-rider-live-<sha>.aab` and the same mapping file.
 - **Size watch:** every run compares the APK with the size kept by the last run on `main` (in the Actions cache) and prints the change. Above 5% it raises a warning and the PR comment says to check what grew: usually a new dependency, a big asset or an extra ABI. It never fails the build. Runs on `main`, mock or live, set the size the next runs compare with; until one has run, the note says so.
+- **Sign-in code from the SMS:** the rider flavor declares `play-services-auth-api-phone` (SMS User Consent API, `RiderSmsCodeModule`), which Firebase Auth already puts in the APK, so the size stays put. It needs no SMS permission and no change to MSG91's template; a phone without Google Play services types the code.
 
 Keep the mapping file of every build you hand out: it turns a crash stack trace from that build back into real class names. For a Play upload, upload it in Play Console as the deobfuscation file.
 
@@ -25,7 +26,7 @@ Keep the mapping file of every build you hand out: it turns a crash stack trace 
 | Manual run | The `api_mode` input: `live` (default; only from `main`) or `mock` |
 | Pull request | The repo variable `CRAVES_RIDER_API_MODE` (`mock` or `live`); `mock` when it isn't set |
 
-- **mock:** demo data inside the app. No Firebase sign-in, no calls to the Craves API, a "Demo data" tag in the header and the demo controls (long-press the status chip).
+- **mock:** demo data inside the app. No Firebase sign-in, no calls to the Craves API, a "Demo data" tag in the header and the demo controls (long-press the status chip). It is its own app, `com.cravesapp.rider.demo` named "Craves Rider Demo" (`-PcravesRiderDemo=true`), installed beside the real one, so a demo APK can never replace or pass for the rider app; the workflow fails a live APK whose package isn't `com.cravesapp.rider`. The live APK has no demo data, demo hints or demo panel at all.
 - **live:** phone sign-in with the MSG91 OTP from auth-service (then a Firebase session, as the web does) and the Craves API at `https://api.craves.in` (`CRAVES_API_BASE_URL`). A live build fails early without `RIDER_GOOGLE_SERVICES_JSON` or `RIDER_KEYSTORE_BASE64`.
 
 Any other value fails the build. To switch pull request builds to live, set the variable in Settings → Secrets and variables → Actions → Variables. To get the live APK riders install, run the workflow by hand on `main` (`api_mode` is `live` by default); a live run on any other branch stops, because that APK talks to production. The mode is baked into the APK: switching means installing the other APK.
@@ -34,7 +35,7 @@ Any other value fails the build. To switch pull request builds to live, set the 
 
 | Name | Kind | Needed for | What it is |
 |---|---|---|---|
-| `RIDER_GOOGLE_SERVICES_JSON` | secret | live (mock uses a placeholder) | The rider app's `google-services.json` from Firebase (package `com.cravesapp.rider`). Firebase says this file isn't secret; it is a secret here only so it stays out of the repo. |
+| `RIDER_GOOGLE_SERVICES_JSON` | secret | live (mock uses a placeholder for `com.cravesapp.rider.demo`) | The rider app's `google-services.json` from Firebase (package `com.cravesapp.rider`). Firebase says this file isn't secret; it is a secret here only so it stays out of the repo. |
 | `RIDER_KEYSTORE_BASE64` | secret | live; mock uses a cached throwaway key without it | The rider signing keystore, base64 (`base64 -w0 rider.keystore`). |
 | `RIDER_KEYSTORE_PASSWORD` | secret | with the keystore | The keystore password, also used as the key password. |
 | `RIDER_KEY_ALIAS` | secret | with the keystore | The key alias (`rider` when unset). |

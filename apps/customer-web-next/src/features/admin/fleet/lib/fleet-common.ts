@@ -54,8 +54,8 @@ const DEFAULT_MESSAGES: Record<number, string> = {
 export function fleetError(status: number, body: unknown): { code: string; message: string } {
   const raw = body && typeof body === "object" ? body as Record<string, unknown> : {};
   const code = typeof raw.code === "string" && /^[A-Z0-9_]{1,80}$/.test(raw.code) ? raw.code : "FLEET_REQUEST_FAILED";
-  // A role refusal never echoes the server's text, which could name roles; SAME_APPROVER is the one 403 that explains itself.
-  const message = status === 403 && code !== "SAME_APPROVER" ? ""
+  // A role refusal never echoes the server's text, which could name roles; SAME_APPROVER and PAYMENTS_ADMIN_REQUIRED explain themselves.
+  const message = status === 403 && code !== "SAME_APPROVER" && code !== "PAYMENTS_ADMIN_REQUIRED" ? ""
     : typeof raw.message === "string" ? raw.message.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 500) : "";
   return { code, message: message || (DEFAULT_MESSAGES[status] ?? "The fleet service is unavailable. Try again shortly.") };
 }

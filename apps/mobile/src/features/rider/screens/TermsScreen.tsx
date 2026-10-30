@@ -4,6 +4,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import {Badge} from '../../../shared/components';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import {riderApi} from '../api/riderApi';
+import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {ChoiceChip, ChoiceRow} from '../components/Choices';
 import {RiderHeader} from '../components/RiderHeader';
@@ -12,7 +13,7 @@ import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {offerRulesLines} from '../domain/offerRules';
 import {riderMessage} from '../domain/problem';
-import type {RiderScreenProps} from '../navigation';
+import {openAfterGate, type RiderScreenProps} from '../navigation';
 import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
 import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 
@@ -53,11 +54,18 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
   const terms = useTerms();
   const me = useRiderMe();
   const accepting = route.params.mode === 'accept';
-  const header = <RiderHeader title={t.title} />;
+  // Read from Profile: the way back is on screen too (accepting, the terms are the only screen there is).
+  const header = <RiderHeader title={t.title} back={!accepting} />;
+  // First terms ever: the rider was just approved, so say so and what this last step is.
+  const welcome =
+    accepting && me.data && !me.data.acceptedTermsVersion ? (
+      <Banner tone="success" title={t.welcomeTitle} text={t.welcome} testID="rider-terms-welcome" />
+    ) : null;
 
   if (!terms.data) {
     return (
       <RiderScreen header={header} testID="rider-terms">
+        {welcome}
         <LanguageChips />
         {terms.isError ? (
           <ProblemCard error={terms.error} onRetry={() => terms.refetch()} testID="rider-terms-problem" />
@@ -79,6 +87,10 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
     try {
       // The server refuses if the terms changed meanwhile.
       await riderApi.acceptTerms(version);
+      // The first terms let the rider in: phone setup opens next, not Home (changed terms just go back to work).
+      if (!me.data?.acceptedTermsVersion) {
+        openAfterGate('PhoneSetup');
+      }
       await queryClient.invalidateQueries({queryKey: riderKeys.me});
     } catch (error) {
       Alert.alert(riderMessage(error, strings, language));
@@ -109,6 +121,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
           readFull
         )
       }>
+      {welcome}
       <LanguageChips />
       <View style={styles.meta}>
         <Text style={styles.small}>{t.version(version, formatDay(effectiveFrom))}</Text>

@@ -1,3 +1,5 @@
+import {useEffect, useRef} from 'react';
+import {AppState, DeviceEventEmitter} from 'react-native';
 import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
 import type {EarningsRange, RiderMe} from '../api/contract';
 import {riderApi} from '../api/riderApi';
@@ -39,8 +41,34 @@ export const useActiveTrip = () =>
 
 export const useTerms = () => useQuery({queryKey: riderKeys.terms, queryFn: riderApi.getTerms, enabled: useRiderRole()});
 
-// Any rider ops added may read their profile (documents before activation too).
-export const useProfile = () => useQuery({queryKey: riderKeys.profile, queryFn: riderApi.getProfile});
+// Any rider ops added may read their profile (documents before activation too); someone not signed up yet may not (403).
+export const useProfile = (enabled = true) => useQuery({queryKey: riderKeys.profile, queryFn: riderApi.getProfile, enabled});
+
+/** The ACCOUNT push (ops decided the application, P6-04), from RiderMessagingService. */
+export const ACCOUNT_EVENT = 'riderAccount';
+const RECHECK_EVERY_MS = 15_000;
+
+/**
+ * While the rider waits on ops (an application in review, no rate card yet), asks again at once when ops's decision
+ * arrives as a push, every 15 seconds, and whenever they come back to the app, so the next step shows by itself.
+ */
+export function useRecheck(recheck: () => unknown, waiting: boolean) {
+  const latest = useRef(recheck);
+  latest.current = recheck;
+  useEffect(() => {
+    if (!waiting) {
+      return undefined;
+    }
+    const timer = setInterval(() => latest.current(), RECHECK_EVERY_MS);
+    const appState = AppState.addEventListener('change', state => state === 'active' && latest.current());
+    const decided = DeviceEventEmitter.addListener(ACCOUNT_EVENT, () => latest.current());
+    return () => {
+      clearInterval(timer);
+      appState.remove();
+      decided.remove();
+    };
+  }, [waiting]);
+}
 
 export const usePayouts = () => useQuery({queryKey: riderKeys.payouts, queryFn: riderApi.getPayouts, enabled: useRiderRole()});
 

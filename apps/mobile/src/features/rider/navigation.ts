@@ -34,6 +34,19 @@ export type RiderScreenProps<T extends keyof RiderStackParamList> = NativeStackS
   T
 >;
 
+// P6-04: accepting the first pay terms opens the next step by itself (phone setup) instead of leaving the rider on Home.
+let afterGate: 'PhoneSetup' | null = null;
+/** Set by the terms screen once the first terms are accepted; Home opens it when the working screens appear. */
+export const openAfterGate = (screen: 'PhoneSetup') => {
+  afterGate = screen;
+};
+/** The step to open now, once (null when none). */
+export const takeAfterGate = () => {
+  const screen = afterGate;
+  afterGate = null;
+  return screen;
+};
+
 /** What the app shell (src/app/rider) gives rider screens, so they never import features/auth. */
 export interface RiderShell {
   riderId: string;

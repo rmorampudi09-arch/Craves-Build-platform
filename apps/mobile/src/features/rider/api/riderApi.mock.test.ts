@@ -24,6 +24,40 @@ describe('mock rider server', () => {
     expect(await mock.api.acceptOffer('anything', 'k-accept')).toEqual(trip);
   });
 
+  it('walks one application from sign-up to fixes to approval, like ops decides it in the console', async () => {
+    const mock = setup();
+    mock.controls.startApplication();
+    expect((await mock.api.getMe()).status).toBe('NOT_RIDER');
+    await mock.api.signUp({ name: 'Ravi Kumar', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS09EA1234', vehicleModel: 'Ather 450X', adult: true });
+    let profile = await mock.api.getProfile();
+    // The make and model is the vehicle's name; an electric scooter needs no PUC.
+    expect(profile.vehicle).toMatchObject({ label: 'Ather 450X', kind: 'ELECTRIC' });
+    expect(profile.documents.map(doc => `${doc.type}:${doc.status}`)).toEqual(['DL:MISSING', 'RC:MISSING', 'INSURANCE:MISSING', 'PAN:MISSING', 'BANK:MISSING']);
+    for (const type of ['DL', 'RC', 'INSURANCE', 'PAN', 'BANK']) {
+      await mock.api.uploadDocument(type, `file:///${type}.jpg`);
+    }
+    await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis' });
+
+    mock.controls.askForFixes();
+    profile = await mock.api.getProfile();
+    expect(profile.documents.find(doc => doc.type === 'DL')).toMatchObject({ status: 'REJECTED', reason: expect.stringContaining('blurry') });
+    expect(profile.documents.find(doc => doc.type === 'RC')?.status).toBe('VERIFIED');
+    expect(profile.payoutAccountSubmitted).toBeUndefined();
+    expect(profile.payoutAccountReturned).toBe(true);
+
+    // A new photo and the account again put it back with ops; the make and model stays when none is sent.
+    await mock.api.uploadDocument('DL', 'file:///dl-2.jpg');
+    await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis' });
+    await mock.api.signUp({ name: 'Ravi Kumar', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: '', adult: true });
+    profile = await mock.api.getProfile();
+    expect(profile.documents.find(doc => doc.type === 'DL')?.status).toBe('PENDING');
+    expect(profile.payoutAccountReturned).toBeUndefined();
+    expect(profile.vehicle.label).toBe('Ather 450X');
+
+    mock.controls.approveApplication();
+    expect((await mock.api.getMe()).status).toBe('ACTIVE');
+  });
+
   it('lets a pending rider correct their sign-up, setting aside an account sent in the old name', async () => {
     const mock = setup();
     mock.controls.setStatus('PENDING');

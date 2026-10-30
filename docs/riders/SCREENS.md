@@ -210,36 +210,59 @@ No header, no SOS, no tab bar. The design shows the **code step** only; the phon
    - **primary** "Verify" (y 717–773).
    - Under it, the neutral text button "Resend code in 24s", centred, top ≈ 797. It shows the countdown state; when the timer ends it becomes the tappable "Resend code" (not designed).
 
-## 2. Account status — `02-AccountStatus.png` (390 × 1060, scrolls)
+## 2. The application and account status — replaces `02-AccountStatus.png`
 
-**Header:** variant A. Title "Your sign-up", chip neutral "Not active yet". No tab bar.
+The PNG was one long sign-up page with a background check and a ride-along that don't exist. It is replaced by one
+application in four steps and the screens that say whose turn it is (`FLOWS.md` §3 and §4). The account screens for a
+paused or closed rider keep the PNG's look.
 
-1. **H1** "Your sign-up is being checked", 24/700.
-2. **Body** 15/400 `colors.textSecondary`: "Ops checks every document by hand. If we can't accept one, you'll see why here."
-3. **Documents card** (y 182–580). Document rows, about 53 dp per single-line row, with inset dividers:
-   - "Driving licence" — badge success "Accepted"
-   - "Vehicle RC" — success "Accepted"
-   - "Vehicle insurance" — success "Accepted"
-   - "Pollution certificate (PUC)" — badge **error** "Not accepted". Under it:
-     - Reason 15/400 `colors.textPrimary`: "The photo is blurry. Take a clear photo of the whole certificate in good light."
-     - **outline-compact** button "Upload again", full card width.
-   - "PAN card" — badge info "Checking"
-   - "Bank account (UPI ••••@okhdfc)" — success "Name matches". The label wraps to 2 lines at 390.
-4. **Card with icon** (y 597–688):
-   - clock-outline 24 `colors.textSecondary`.
-   - Title "Background check in progress" 15/700.
-   - Body 15/400 `colors.textSecondary`: "This usually takes about a day. Your first slot opens once it clears."
-5. **Card with icon** (y 705–800):
-   - moped 24 `colors.textSecondary`.
-   - Title "Then: training and a ride-along".
-   - Body: "About an hour in person. Your free bag and T-shirt are handed over there."
-6. **Bottom action bar:**
-   - **primary** "Call support" with left phone icon.
-   - Neutral text button "Sign out", centred.
+**The four steps.** Header variant A "Apply to ride", chip neutral "Not active yet". Under the header the 4-segment bar
+of 0.4, announced "Step N of 4: <step>". Then "Step N of 4" 13/400 `colors.textSecondary` over an H1 with the step's
+name. Every step ends with a neutral "Call support" with the phone icon. Footer: the step's **primary** button, and the
+neutral "Back" under it ("Sign out" on step 1).
+
+1. **About you.** Body "Use your name exactly as on your PAN card. Craves pays only into an account in this name." A
+   card: "Full name, as on your PAN card", the app language chips, "I am 18 or older". A success banner: "Joining is
+   free. Craves never asks for a fee, deposit or kit cost." Primary "Next: your vehicle".
+2. **Your vehicle.** A card: "What will you ride?" chips; for a motor vehicle "Number plate, as on the RC" and "Make and
+   model (optional)" with the hint "Like Honda Activa 6G. Ops checks it against your RC." Then 15/400
+   `colors.textSecondary`: "Next, you send photos of: …" for that vehicle. Primary "Next: document photos".
+3. **Document photos.** A progress row: 8 dp `colors.muted` track with the `colors.success` fill (`scaleX`), and "3 of 6
+   sent" 13/700. A neutral banner with camera-outline: bold "For a quick check", then the tips. A card of document rows
+   (name 15/700, badge right): "Not sent" (neutral) with an outline-compact "Add photo" (camera icon); "Sent" (info) with
+   a neutral "Change photo" on the left; "Not accepted" (error) with ops's reason 15/400 `colors.textPrimary` and
+   outline-compact "Send a new photo"; "Accepted" or "Name matches" (success). The bank proof's hint shows until it is
+   sent. Footer: "Send all 6 photos to go on." 13/400 centred over a **locked** "Next: payout account" with the lock
+   icon, until every photo is in.
+4. **Payout account.** The payout fields in a card (UPI or bank account, holder name prefilled). Primary "Send
+   application".
+
+The photo button opens a dialog titled with the document: "Take a photo" (back camera), "Choose from gallery", Cancel.
+
+**Application sent.** Header "Your application". H1 "Application sent", body "Ops checks every application by hand,
+usually within a day. You don't need to do anything now; the result shows here." A card with the timeline (step circles
+of 0.12 joined by a 2 dp line, green between done steps): done "Application sent"; current "Ops checks your documents",
+"Usually within a day"; next "You're approved", "Then you accept your pay terms, set up your phone and go online". Under
+it outline-compact "Check now". A card "What you sent": the rows with "Checking". The details card (Change details) and
+the payout card (Change account). Footer: outline "Call support", neutral "Sign out". After fixes, a success banner
+"Sent again. Ops checks it next, usually within a day." under the body.
+
+**Fixes asked.** H1 "Fix 2 things to go on", body "Ops checked your application and needs these again. Everything else
+is fine." (only when a photo was sent back). A card with only those rows, each with ops's reason and "Send a new photo".
+When the payout account was set aside, the payout card with a warning banner "Send your payout account again. It must be
+in your name and match your bank proof." After each fix, a success banner "Sent. Ops checks it again."
+
+**Paused, closed, update, pay rates.** Header "Your account". H1 and body for the state. Waiting for pay rates (an
+approved rider with no rate card): the timeline done "Application sent", done "You're approved", current "Pay rates for
+your area", and outline-compact "Check again". The reason card and "Disagree?" as in the PNG. Footer: "Call support"
+(primary; outline while waiting for pay rates), neutral "Sign out".
 
 ## 3. Terms and rate card — `03-Terms.png` (390 × 1180)
 
 **Header:** variant A. Title "Terms and rate card", chip neutral "Offline". No tab bar.
+
+A rider accepting terms for the first time was just approved, so a success banner heads the screen: bold "You're
+approved", then "One last step before your first order: read how you are paid, then accept."
 
 1. **Language chips**, y 85–125: "English" (selected), "తెలుగు", "हिन्दी".
 2. **Meta line:** "Version 2026-10-v1, in force from 19 Oct", 13/400 `colors.textSecondary`, top ≈ 142.
@@ -308,6 +331,11 @@ No header, no SOS, no tab bar. The design shows the **code step** only; the phon
    - Inner success banner (shield-check-outline): "At least ₹80 an hour while you're online in this slot, even when orders are slow."
 4. **Bottom action bar:** **primary** "Go online" (opens 06).
 5. **Tab bar.**
+
+While location or notifications are missing (after the phone was checked once), a card heads the screen: H2 "Before
+you go online" and a timeline: done "Application approved", done "Pay terms accepted", current "Set up your phone", "So
+offers ring even when the screen is off.", with outline-compact "Phone setup" (opens 04); next "Go online", "Tap Go
+online below when you are ready for orders."
 
 ## 6. Go online (selfie) — `06-GoOnline.png` (390 × 844)
 
@@ -724,7 +752,7 @@ Heading home (`DISPATCH.md` §4), with rider choices on. The copy is in `strings
 | Spec name | On-screen copy |
 |---|---|
 | 1 Sign in | The code step "Enter the code" only. The phone-number step is not designed. |
-| 2 Account status | Header "Your sign-up", H1 "Your sign-up is being checked", chip "Not active yet". |
+| 2 Account status | Replaced by the application (header "Apply to ride", "Your application") and "Your account" for a paused or closed rider; see §2. |
 | 5 Home offline / 7 Home online | Header "Hi, Ravi" with chips "Offline" and "Online · waiting for orders". |
 | 6 Go online (selfie explainer) | The selfie camera screen "Quick selfie to go online". The explainer copy is on the camera screen; there is no separate explainer page. |
 | 8 Offer | "New order". |

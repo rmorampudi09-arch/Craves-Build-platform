@@ -67,7 +67,7 @@ describe("document expiry and vehicle", () => {
 
   it("need the printed expiry date, today (IST) or later", () => {
     expect(expiryProblem("2026-10-21", "2026-10-21")).toBeNull();
-    expect(expiryProblem("2026-10-20", "2026-10-21")).toBe("This document has expired. Reject it so the rider uploads a new one.");
+    expect(expiryProblem("2026-10-20", "2026-10-21")).toBe("This document has expired. Mark it Needs a fix so the rider sends a new one.");
     expect(expiryProblem("", "2026-10-21")).toBe("Enter the expiry date printed on the document.");
   });
 

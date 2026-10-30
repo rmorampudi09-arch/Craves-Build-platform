@@ -157,6 +157,47 @@ Set-up:
 
 **Pass:** every step as written; on Rider pilot health, `offer_rules` shows round 2, and `rider_choices` counts the break and the limit.
 
+## 7. Apply and get approved (app 1.2.0, `FLOWS.md`)
+
+Set-up: a live build, a phone number that isn't a rider yet, and the console open as an operations admin and as a
+payments admin.
+
+1. **Apply.** Sign in. "Apply to ride", step 1 of 4. Next without a name or the box: each says what is missing. Fill
+   them, Next; on step 2 a wrong plate is refused before anything is sent. Petrol, a plate, "Honda Activa 6G", Next.
+2. **Photos.** Step 3 lists six photos. Add one with **Take a photo** and one with **Choose from gallery** (a PNG
+   screenshot works). Kill the app and open it again: it opens on step 3 with those two sent. Press the phone's back
+   button: step 2, with the plate on file. Send the rest; Next unlocks. Send a UPI ID: "Application sent".
+3. **Fixes.** In the console, Riders → To review shows the rider. Mark the licence Needs a fix with a reason and the
+   payout account Return; **Send fixes**. On the phone (open, or on returning to it) within a minute: "Fix 2 things to
+   go on" with that reason. Send both again: "Sent again".
+4. **Approve.** In the console the rider is back in To review. Mark everything Looks good (dates for the licence, RC,
+   insurance, PUC) and Confirm; **Approve and activate**. The panel says the rider is on the pilot riders. On the phone
+   within a minute: the terms with "You're approved" (or "Pay rates are on the way" with no rate card), then Home with
+   "Before you go online".
+
+**Pass:** every step as written; the rider's page shows one audit entry for each decision.
+
+## 8. The sign-in code from the SMS, every way back, and the decision on the phone (app 1.2.0, `FLOWS.md` §4, §9)
+
+Set-up: a live build on a phone with Google Play services and a SIM that receives SMS, signed out.
+
+1. **Paste.** Copy "+91 98480 12345" (your number) and paste it into the number field: it shows the ten digits. Send code.
+2. **Allow.** Under the code field: "When the SMS comes, tap Allow and the code fills in by itself." When the SMS comes,
+   Android asks whether Craves Rider may read that message; **Allow**: the code fills in and the app signs in, no tap.
+3. **Deny.** Sign out, sign in again, and **Deny** this time: nothing fills in. Type the code: the sixth digit signs in.
+4. **Resend.** Sign out and in again; wait for Resend, press it, and Allow on the second SMS: its code fills in.
+5. **Without Play services** (a phone without Google services, if one is at hand): no line about Allow; typing works.
+6. **The way back.** Profile → Terms, Help and Phone setup: each has ← and the phone's Back returns to Profile. On an
+   offer the phone's Back does nothing; Decline returns to Home. Online on Home, Go offline asks; Stay online keeps the
+   shift.
+7. **The decision reaches the phone.** Apply on a new number and close the app. In the console, send one fix: a notice
+   "Your application needs a fix" appears; tapping it opens the app on the fix. Send it, close the app, approve: "You're
+   approved" appears, and the app opens on the pay terms. Accept: Phone setup opens by itself; Done lands on Home.
+8. **Demo is separate.** Install a mock (PR) APK: it appears as "Craves Rider Demo" beside "Craves Rider", and the live
+   app keeps its sign-in.
+
+**Pass:** every step as written, and Settings → Apps → Craves Rider → Permissions lists no SMS permission.
+
 ## Results
 
 ### Service survival
@@ -211,5 +252,11 @@ Set-up:
 | Phones (A, B) | Date | Tester | Policy version | Why lines (1) | Next round (2) | Break (3) | Distances (4) | Data copy (5) | Pass |
 |---|---|---|---|---|---|---|---|---|---|
 | | | | | | | | | | |
+
+### Sign-in code and the way back
+
+| Phone (model, Android) | Date | Tester | Paste (1) | Allow (2) | Deny (3) | Resend (4) | No Play services (5) | Back (6) | Decision push (7) | Demo separate (8) | No SMS permission | Pass |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Rider-only permissions. Never add these to src/main: the customer app's Play declarations must not change. -->
     <!-- ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION come from src/main. No ACCESS_BACKGROUND_LOCATION: the service starts from the Go Online tap. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -12,7 +13,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <application>
+    <!-- riderLabel: "Craves Rider", or "Craves Rider Demo" for a demo build (build.gradle, cravesRiderDemo). -->
+    <application android:label="${riderLabel}" tools:replace="android:label">
+        <activity android:name=".MainActivity" android:label="${riderLabel}" tools:replace="android:label" />
         <service
             android:name=".RiderOnlineService"
             android:exported="false"

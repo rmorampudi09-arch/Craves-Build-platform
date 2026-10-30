@@ -42,13 +42,20 @@ public final class FleetRiderModels {
     /**
      * payoutAccountSubmitted: the account the rider sent from the app, masked, until ops confirms it. homeSavedAt (Phase 5):
      * when the rider saved their home spot for heading home; absent while none is saved. The spot itself is never sent back.
+     * payoutAccountReturned: true when no account is on file because the one sent was set aside (ops asked for it again, or
+     * the rider changed their name); the rider sends it again. Absent otherwise.
      */
     public record RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
                                @JsonInclude(JsonInclude.Include.NON_NULL) String payoutAccountSubmitted, OrderPreferences preferences,
-                               Instant homeSavedAt) {
+                               Instant homeSavedAt, Boolean payoutAccountReturned) {
+        public RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
+                            String payoutAccountSubmitted, OrderPreferences preferences, Instant homeSavedAt) {
+            this(vehicle, documents, payoutAccountMasked, insurance, payoutAccountSubmitted, preferences, homeSavedAt, null);
+        }
+
         public RiderProfile(Vehicle vehicle, List<ProfileDocument> documents, String payoutAccountMasked, Insurance insurance,
                             String payoutAccountSubmitted, OrderPreferences preferences) {
-            this(vehicle, documents, payoutAccountMasked, insurance, payoutAccountSubmitted, preferences, null);
+            this(vehicle, documents, payoutAccountMasked, insurance, payoutAccountSubmitted, preferences, null, null);
         }
     }
 
@@ -150,8 +157,15 @@ public final class FleetRiderModels {
     public record AcceptTerms(String version) {
     }
 
-    /** Sign-up from the app. vehicleKind PETROL, ELECTRIC or BICYCLE; the registration number is needed for a motor vehicle. */
-    public record SignUp(String name, String language, String vehicleKind, String vehicleRegNumber, Boolean adult) {
+    /**
+     * Sign-up from the app. vehicleKind PETROL, ELECTRIC or BICYCLE; the registration number is needed for a motor vehicle.
+     * vehicleModel (optional, app 1.2.0): the make and model, like "Honda Activa 6G", shown to ops beside the RC so they never
+     * retype it; absent keeps the vehicle on file.
+     */
+    public record SignUp(String name, String language, String vehicleKind, String vehicleRegNumber, Boolean adult, String vehicleModel) {
+        public SignUp(String name, String language, String vehicleKind, String vehicleRegNumber, Boolean adult) {
+            this(name, language, vehicleKind, vehicleRegNumber, adult, null);
+        }
     }
 
     /** The rider's own payout account: UPI (upiId) or BANK (accountNumber and ifsc), in their KYC name. */

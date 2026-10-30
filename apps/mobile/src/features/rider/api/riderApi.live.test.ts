@@ -471,6 +471,12 @@ describe('live rider API: every path in rider-v1.yaml', () => {
         { uri: 'file:///puc.jpg', name: 'document.jpg', type: 'image/jpeg' },
       ],
     ]);
+    // A PNG chosen from the gallery goes as PNG, or the server's signature check refuses it.
+    await liveRiderApi.uploadDocument('PAN', 'file:///cache/ImagePicker/pan.PNG');
+    expect(parts(calls[1])).toEqual([
+      ['type', 'PAN'],
+      ['photo', { uri: 'file:///cache/ImagePicker/pan.PNG', name: 'document.png', type: 'image/png' }],
+    ]);
   });
 
   it('pages earnings with the server cursor', async () => {

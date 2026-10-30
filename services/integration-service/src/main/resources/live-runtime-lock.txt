@@ -13,6 +13,7 @@ in.craves.integration.delivery.pidge.PidgeWebhookController
 in.craves.integration.delivery.shiprocket.ShiprocketWebhookController
 in.craves.integration.finance.catalog.CatalogEligibilityController
 in.craves.integration.fleet.admin.FleetAdminController
+in.craves.integration.fleet.admin.FleetApplicationController
 in.craves.integration.fleet.admin.FleetOpsController
 in.craves.integration.fleet.admin.FleetSetupController
 in.craves.integration.fleet.admin.FleetSlotController

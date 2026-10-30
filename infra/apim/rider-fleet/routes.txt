@@ -49,6 +49,7 @@ route|admin|fleet-put-riders-riderId-payout-account|PUT|/riders/{riderId}/payout
 route|admin|fleet-post-riders-riderId-payout-account-confirm|POST|/riders/{riderId}/payout-account/confirm|admin
 route|admin|fleet-put-riders-riderId-vehicle|PUT|/riders/{riderId}/vehicle|admin
 route|admin|fleet-post-riders-riderId-status-events|POST|/riders/{riderId}/status-events|admin
+route|admin|fleet-post-riders-riderId-application-decision|POST|/riders/{riderId}/application/decision|admin
 route|admin|fleet-get-selfie-reviews|GET|/selfie-reviews|admin
 route|admin|fleet-get-shifts-shiftId-selfie|GET|/shifts/{shiftId}/selfie|admin
 route|admin|fleet-post-shifts-shiftId-selfie-approve|POST|/shifts/{shiftId}/selfie/approve|admin

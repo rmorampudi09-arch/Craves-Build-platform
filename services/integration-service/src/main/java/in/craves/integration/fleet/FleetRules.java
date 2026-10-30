@@ -6,8 +6,10 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Pure fleet rules: masking, the KYC name match and the two due-process tracks. */
 public final class FleetRules {
@@ -26,8 +28,31 @@ public final class FleetRules {
     private static final Set<String> HONORIFICS = Set.of("MR", "MRS", "MS", "MISS", "SHRI", "SMT", "KUMARI", "DR");
     public static final String RIDER_PHONE = "^\\+91[6-9][0-9]{9}$";
     public static final String VEHICLE_REGISTRATION = "^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$";
+    /**
+     * What a rider applying must send, by what they ride (V160): a bicycle needs no licence or RC, an electric bike no PUC.
+     * A rider ops added before sign-up has no kind and sends the petrol set. The rider's checklist, the ops review and the
+     * application stage all read this one list (docs/riders/FLOWS.md).
+     */
+    public static final Map<String, List<String>> REQUIRED_DOCUMENTS = Map.of(
+        "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF"),
+        "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
+        "BICYCLE", List.of("PAN", "BANK_PROOF"));
+    /** The four riding documents: verified only with the expiry date printed on them (/shift/start checks it). */
+    public static final Set<String> EXPIRING_DOCUMENTS = Set.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC");
+    /** REQUIRED_DOCUMENTS as SQL: the text[] of types for the rider row aliased r (built from the constants above). */
+    public static final String REQUIRED_DOCUMENTS_SQL = "CASE r.vehicle_kind WHEN 'ELECTRIC' THEN " + sqlArray("ELECTRIC")
+        + " WHEN 'BICYCLE' THEN " + sqlArray("BICYCLE") + " ELSE " + sqlArray("PETROL") + " END";
 
     private FleetRules() {
+    }
+
+    /** The documents a rider with this vehicle kind sends; null (ops added them before sign-up) is the petrol set. */
+    public static List<String> requiredDocuments(String vehicleKind) {
+        return REQUIRED_DOCUMENTS.getOrDefault(vehicleKind == null ? "PETROL" : vehicleKind, REQUIRED_DOCUMENTS.get("PETROL"));
+    }
+
+    private static String sqlArray(String kind) {
+        return REQUIRED_DOCUMENTS.get(kind).stream().map(type -> "'" + type + "'").collect(Collectors.joining(", ", "ARRAY[", "]::text[]"));
     }
 
     /** A UPI ID like name@bank, or a bank account of 9 to 18 digits with its IFSC; never both. */

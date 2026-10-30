@@ -1,7 +1,7 @@
 // Screens 1–8 of "Rider app P1: screens to the design": every state of sign-in, account status, terms,
 // phone setup, home, go online and the offer.
 import React from 'react';
-import {AccessibilityInfo, Alert, Keyboard, Linking, StyleSheet, Text} from 'react-native';
+import {AccessibilityInfo, Alert, AppState, BackHandler, DeviceEventEmitter, Keyboard, Linking, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AxiosError} from 'axios';
@@ -9,12 +9,15 @@ import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from '../../../app/rider/signIn/RiderOtpScreen';
 import {RiderPhoneScreen} from '../../../app/rider/signIn/RiderPhoneScreen';
 import * as ImagePicker from 'expo-image-picker';
-import type {HomeSummary, Offer, RiderMe, RiderProfile, Terms} from '../api/contract';
+import type {HomeSummary, Offer, RiderMe, RiderProfile, Terms, VehicleKind} from '../api/contract';
+import {requiredDocuments} from '../domain/application';
 import {riderApi} from '../api/riderApi';
 import {riderDevice, type DeviceState} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
-import {RiderShellContext} from '../navigation';
-import {riderKeys} from '../state/riderQueries';
+import {registerPhone} from '../components/RiderRuntime';
+import {listenForSmsCode} from '../native/smsCode';
+import {openAfterGate, RiderShellContext, takeAfterGate} from '../navigation';
+import {ACCOUNT_EVENT, riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
 import {AccountStatusScreen} from './AccountStatusScreen';
 import {GoOnlineScreen} from './GoOnlineScreen';
@@ -24,7 +27,7 @@ import {phoneBrand, PhoneSetupScreen} from './PhoneSetupScreen';
 import {PrivacyNoticeScreen} from './PrivacyNoticeScreen';
 import {TermsScreen} from './TermsScreen';
 
-const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
+const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn(), isFocused: () => true};
 const mockSession = {beginPhone: jest.fn(async (_phone: string) => undefined), confirmOtp: jest.fn(async (_code: string) => undefined)};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
@@ -33,10 +36,16 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
 }));
 jest.mock('../../../app/rider/useRiderSession', () => ({useRiderSession: () => mockSession}));
+// The real listener, watched: demo builds send no SMS, so they never wait for one.
+jest.mock('../native/smsCode', () => {
+  const actual = jest.requireActual('../native/smsCode');
+  return {...actual, listenForSmsCode: jest.fn(actual.listenForSmsCode)};
+});
 jest.mock('expo-image-picker', () => ({
   CameraType: {front: 'front', back: 'back'},
   requestCameraPermissionsAsync: jest.fn(async () => ({granted: true})),
   launchCameraAsync: jest.fn(async () => ({canceled: false, assets: [{uri: 'file:///photo.jpg'}]})),
+  launchImageLibraryAsync: jest.fn(async () => ({canceled: false, assets: [{uri: 'file:///gallery.png'}]})),
 }));
 jest.mock('../native/riderOnlineService', () => ({
   riderOnlineService: {
@@ -59,6 +68,15 @@ jest.mock('../native/riderDevice', () => ({
     installationId: jest.fn(async () => 'android-id-1'),
   },
 }));
+// Live or demo per test; the rest of riderConfig as it is (a demo build).
+let mockApiMode: 'mock' | 'live' = 'mock';
+jest.mock('../riderConfig', () => ({
+  ...jest.requireActual('../riderConfig'),
+  get riderApiMode() {
+    return mockApiMode;
+  },
+}));
+jest.mock('../components/RiderRuntime', () => ({...jest.requireActual('../components/RiderRuntime'), registerPhone: jest.fn(async () => true)}));
 jest.mock('../api/riderApi', () => {
   const never = () => new Promise(() => undefined);
   return {
@@ -81,15 +99,6 @@ const me: RiderMe = {
   minAppVersion: '1.0.0',
   supportPhone: '+910000000000',
   features: {payoutsEnabled: true, withdrawEnabled: false},
-};
-const profile: RiderProfile = {
-  vehicle: {label: 'Honda Activa 6G'},
-  documents: [
-    {type: 'DL', label: 'Driving licence', status: 'VERIFIED'},
-    {type: 'PUC', label: 'Pollution certificate (PUC)', status: 'REJECTED', reason: 'The photo is blurry.'},
-    {type: 'PAN', label: 'PAN card', status: 'PENDING'},
-    {type: 'BANK', label: 'Bank account (UPI ••••@okhdfc)', status: 'VERIFIED'},
-  ],
 };
 const terms: Terms = {
   version: '2026-10-v1',
@@ -168,6 +177,20 @@ describe('Sign in', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Otp', {phone: '+919848012345'});
   });
 
+  it('takes a number pasted or filled in with +91, 0 or spaces, and never lets Android cut it short', async () => {
+    await render(<RiderPhoneScreen {...phoneProps} />);
+    expect(input('rider-phone-input').props.maxLength).toBeUndefined();
+    for (const typed of ['+91 98480 12345', '098480-12345', '0091 9848012345']) {
+      await act(async () => input('rider-phone-input').props.onChangeText(typed));
+      expect(input('rider-phone-input').props.value).toBe('9848012345');
+    }
+    // An extra digit typed by mistake is ignored; the number never shifts.
+    await act(async () => input('rider-phone-input').props.onChangeText('91234567890'));
+    expect(input('rider-phone-input').props.value).toBe('9123456789');
+    await act(async () => press('rider-send-code').props.onPress());
+    expect(mockSession.beginPhone).toHaveBeenCalledWith('+919123456789');
+  });
+
   it("shows the server's message when the code can't be sent", async () => {
     mockSession.beginPhone.mockRejectedValueOnce(new AppApiError('RATE_LIMITED', 'Too many tries. Wait a minute.', 429));
     await render(<RiderPhoneScreen {...phoneProps} />);
@@ -177,16 +200,27 @@ describe('Sign in', () => {
     expect(mockNavigation.navigate).not.toHaveBeenCalled();
   });
 
-  it('shows the number, takes 6 digits and says when the code is wrong', async () => {
-    mockSession.confirmOtp.mockRejectedValueOnce(new Error('WRONG_CODE'));
+  it('shows the number, checks the code as soon as 6 digits are in, and says when it is wrong', async () => {
+    mockSession.confirmOtp.mockRejectedValue(new Error('WRONG_CODE'));
     await render(<RiderOtpScreen {...otpProps} />);
     expect(allText()).toContain('Sent by SMS to +91 98480 12345.');
     expect(press('rider-verify').props.disabled).toBe(true);
+    expect(input('rider-code-input').props.maxLength).toBeUndefined();
     await act(async () => input('rider-code-input').props.onChangeText('48 26 15'));
-    expect(press('rider-verify').props.disabled).toBe(false);
-    await act(async () => press('rider-verify').props.onPress());
+    expect(mockSession.confirmOtp).toHaveBeenCalledTimes(1);
     expect(mockSession.confirmOtp).toHaveBeenCalledWith('482615');
     expect(allText()).toContain('That code is wrong. Check the SMS and try again.');
+    // Verify tries the same code again; a corrected code is checked by itself.
+    expect(press('rider-verify').props.disabled).toBe(false);
+    await act(async () => press('rider-verify').props.onPress());
+    expect(mockSession.confirmOtp).toHaveBeenCalledTimes(2);
+    // A whole SMS pasted: its code, not the other numbers in it.
+    await act(async () => input('rider-code-input').props.onChangeText('Order 12 is on its way. Your Craves code is 482616.'));
+    expect(mockSession.confirmOtp).toHaveBeenLastCalledWith('482616');
+    expect(mockSession.confirmOtp).toHaveBeenCalledTimes(3);
+    // Demo build: no SMS to wait for, so no Allow sheet and no line about it.
+    expect(listenForSmsCode).not.toHaveBeenCalled();
+    expect(allText()).not.toContain('tap Allow');
     await act(async () => press('rider-change-number').props.onPress());
     expect(mockNavigation.goBack).toHaveBeenCalled();
   });
@@ -209,267 +243,550 @@ describe('Sign in', () => {
   });
 });
 
-describe('Account status', () => {
+describe('Account status and the application', () => {
   const pending = {...me, status: 'PENDING' as const};
-  // Each action refreshes the list and waits for it.
-  beforeEach(() => (riderApi.getProfile as jest.Mock).mockResolvedValue(profile));
-
-  it('lists each document with its badge, and the checks still to come', async () => {
-    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
-    const text = allText();
-    expect(text).toContain('Your sign-up is being checked');
-    expect(text).toContain('Not active yet');
-    expect(text).toContain('Driving licence | Accepted');
-    expect(text).toContain('Pollution certificate (PUC) | Not accepted | The photo is blurry.');
-    expect(text).toContain('PAN card | Checking');
-    expect(text).toContain('Name matches');
-    expect(text).toContain('Background check in progress');
-    expect(text).toContain('Then: training and a ride-along');
-    expect(press('rider-upload-DL')).toBeUndefined();
-    await act(async () => press('rider-sign-out').props.onPress());
-    expect(signOut).toHaveBeenCalled();
+  const notRider = {...me, status: 'NOT_RIDER' as const, name: ''};
+  const doc = (type: string, status: RiderProfile['documents'][number]['status'], reason?: string) => ({
+    type,
+    label: type,
+    status,
+    ...(reason ? {reason} : {}),
   });
-
-  it('takes a new photo with the back camera and sends it', async () => {
-    const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
-    (riderApi.uploadDocument as jest.Mock).mockResolvedValueOnce(undefined);
-    const refetch = jest.spyOn(client, 'invalidateQueries');
-    await act(async () => press('rider-upload-PUC').props.onPress());
-    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'back'}));
-    expect(riderApi.uploadDocument).toHaveBeenCalledWith('PUC', 'file:///photo.jpg');
-    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+  // Still applying: two photos never sent, one sent back, one sent, and the bank proof still to send.
+  const applying: RiderProfile = {
+    vehicle: {label: 'Honda Activa 6G', kind: 'PETROL', regNumberMasked: 'TS08xx4821'},
+    documents: [doc('DL', 'VERIFIED'), doc('PUC', 'REJECTED', 'The photo is blurry.'), doc('PAN', 'PENDING'), doc('BANK', 'MISSING')],
+  };
+  // Everything in, ops's turn (the bank proof was accepted early).
+  const sent = (kind: VehicleKind = 'PETROL', extra: Partial<RiderProfile> = {}): RiderProfile => ({
+    vehicle:
+      kind === 'BICYCLE'
+        ? {label: 'Bicycle', kind}
+        : {label: kind === 'PETROL' ? 'Honda Activa 6G' : 'Electric two-wheeler', kind, regNumberMasked: 'TS08xx4821'},
+    documents: requiredDocuments(kind).map(type => doc(type, type === 'BANK' ? 'VERIFIED' : 'PENDING')),
+    payoutAccountSubmitted: 'ra****@okaxis',
+    ...extra,
   });
-
-  it('asks for the camera when it is denied, and never uploads', async () => {
-    (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValueOnce({granted: false});
-    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
-    await act(async () => press('rider-upload-PUC').props.onPress());
-    expect(Alert.alert).toHaveBeenCalledWith('Allow the camera to take a photo of the document.', undefined, expect.any(Array));
-    expect(riderApi.uploadDocument).not.toHaveBeenCalled();
-  });
-
-  it('shows the server message when the upload fails', async () => {
-    (riderApi.uploadDocument as jest.Mock).mockRejectedValueOnce(new AppApiError('TOO_LARGE', 'That photo is too large.', 413));
-    await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
-    await act(async () => press('rider-upload-PUC').props.onPress());
-    expect(Alert.alert).toHaveBeenCalledWith('That photo is too large.');
-  });
-
-  it('offers a retry when the documents cannot load', async () => {
-    (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
-    await render(<AccountStatusScreen />, [[riderKeys.me, pending]]);
-    await flush();
-    expect(allText()).toContain("Craves isn't answering | The problem is on our side. Try again in a minute. | Try again");
-    await act(async () => press('rider-retry').props.onPress());
-    expect(riderApi.getProfile).toHaveBeenCalledTimes(2);
-    expect(press('rider-call-support')).toBeTruthy();
-  });
-
-  it('explains a paused account with the reason and how to appeal', async () => {
-    await render(<AccountStatusScreen />, [
-      [riderKeys.me, {...me, status: 'SUSPENDED', statusReason: 'A safety report is being reviewed.'}],
-    ]);
-    const text = allText();
-    expect(text).toContain('Your account is paused');
-    expect(text).toContain('A safety report is being reviewed.');
-    expect(text).toContain('Disagree?');
-    expect(text).not.toContain('Background check');
-  });
-
-  it('lets anyone sign up like a chef, checking the plate and age before sending', async () => {
-    const client = await render(<AccountStatusScreen />, [[riderKeys.me, {...me, status: 'NOT_RIDER', name: ''}]]);
-    expect(allText()).toContain('Become a Craves rider');
-    expect(allText()).toContain('No joining fee');
-    await act(async () => input('rider-join-name').props.onChangeText('  Ravi   Kumar '));
-    await act(async () => input('rider-join-plate').props.onChangeText('ts 09-ea 1234'));
-    await act(async () => press('rider-join-submit').props.onPress());
-    expect(allText()).toContain('confirm you are 18 or older');
-    expect(riderApi.signUp).not.toHaveBeenCalled();
-
-    (riderApi.signUp as jest.Mock).mockResolvedValueOnce({...me, status: 'PENDING'});
-    (riderApi.getProfile as jest.Mock).mockResolvedValue({
-      vehicle: {label: 'Electric two-wheeler'},
-      documents: [{type: 'DL', label: 'Driving licence', status: 'MISSING'}],
+  const none = (testID: string) => tree.root.findAll(node => node.props.testID === testID).length === 0;
+  /** Opens the photo chooser: the press waits on the dialog, so it isn't awaited. */
+  const addPhoto = (type: string) =>
+    act(() => {
+      press(`rider-upload-${type}`).props.onPress();
     });
-    await act(async () => press('rider-join-ELECTRIC').props.onPress());
-    await act(async () => press('rider-join-adult').props.onPress());
-    await act(async () => press('rider-join-submit').props.onPress());
-    expect(riderApi.signUp).toHaveBeenCalledWith({
-      name: 'Ravi Kumar', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS09EA1234', adult: true,
-    });
-    expect(client.getQueryData(riderKeys.me)).toMatchObject({status: 'PENDING'});
+  /** Presses a button of the last dialog by its words (the photo chooser, the camera prompt), then lets the upload settle. */
+  async function answer(text: string) {
+    const calls = (Alert.alert as jest.Mock).mock.calls;
+    const buttons = calls[calls.length - 1][2] as Array<{text: string; onPress?: () => void}>;
+    await act(async () => buttons.find(button => button.text === text)?.onPress?.());
     await flush();
-    expect(allText()).toContain('Your sign-up is being checked');
-    expect(allText()).toContain('Driving licence | Not sent');
-    expect(press('rider-upload-DL')).toBeTruthy();
-  });
+  }
 
-  it('needs no plate for a bicycle and shows a phone already in use', async () => {
-    await render(<AccountStatusScreen />, [[riderKeys.me, {...me, status: 'NOT_RIDER'}]]);
-    (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
-      new AppApiError('PHONE_IN_USE', 'This number is already a Craves rider on another account. Call rider support.', 409),
-    );
-    await act(async () => input('rider-join-name').props.onChangeText('Sita Devi'));
-    await act(async () => press('rider-join-BICYCLE').props.onPress());
-    expect(tree.root.findAll(node => node.props.testID === 'rider-join-plate')).toHaveLength(0);
-    await act(async () => press('rider-join-adult').props.onPress());
-    await act(async () => press('rider-join-submit').props.onPress());
-    expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'BICYCLE', adult: true});
-    expect(allText()).toContain('This number is already a Craves rider on another account.');
-  });
+  beforeEach(() => (riderApi.getProfile as jest.Mock).mockResolvedValue(applying));
 
-  it('sends a payout account in the KYC name and shows it waits for ops', async () => {
-    const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, profile]]);
-    expect(allText()).toContain("Add a UPI ID or bank account in your own name, Ravi Kumar. We can't pay into anyone else's account.");
-    expect(input('rider-payout-holder').props.value).toBe('Ravi Kumar');
-    expect(press('rider-payout-cancel')).toBeUndefined();
-    await act(async () => input('rider-payout-upi').props.onChangeText('not a upi'));
-    await act(async () => press('rider-payout-submit').props.onPress());
-    expect(allText()).toContain('Enter a UPI ID like name@bank');
-    expect(riderApi.submitPayoutAccount).not.toHaveBeenCalled();
+  describe('a new rider applying', () => {
+    it('checks the name, age and plate before anything is sent, then sends the whole sign-up from step 2', async () => {
+      const client = await render(<AccountStatusScreen />, [[riderKeys.me, notRider]]);
+      let text = allText();
+      expect(text).toContain('Apply to ride | Not active yet');
+      expect(text).toContain('Step 1 of 4 | About you');
+      expect(text).toContain('Joining is free. Craves never asks for a fee, deposit or kit cost.');
+      expect(input('rider-step-bar').props.accessibilityLabel).toBe('Step 1 of 4: About you');
+      // Not a rider yet: GET /profile would answer 403.
+      expect(riderApi.getProfile).not.toHaveBeenCalled();
+      jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      await act(async () => press('rider-call-support').props.onPress());
+      expect(Linking.openURL).toHaveBeenCalledWith('tel:+910000000000');
 
-    (riderApi.submitPayoutAccount as jest.Mock).mockResolvedValueOnce(undefined);
-    (riderApi.getProfile as jest.Mock).mockResolvedValue({...profile, payoutAccountSubmitted: 'ra****@okaxis'});
-    const refetch = jest.spyOn(client, 'invalidateQueries');
-    await act(async () => input('rider-payout-upi').props.onChangeText('ravi@okaxis'));
-    await act(async () => press('rider-payout-submit').props.onPress());
-    expect(riderApi.submitPayoutAccount).toHaveBeenCalledWith({method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis'});
-    expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
-    expect(allText()).toContain('Sent ra****@okaxis. | Checking');
-    expect(press('rider-payout-change')).toBeTruthy();
-    expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
-  });
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(allText()).toContain('Enter your full name, as on your PAN card.');
+      expect(allText()).toContain('Tick that you are 18 or older.');
 
-  it('says plainly what ops checks on a sent account, and lets the rider back out of changing it', async () => {
-    await render(<AccountStatusScreen />, [
-      [riderKeys.me, pending],
-      [riderKeys.profile, {...profile, payoutAccountMasked: 'xxxxxx1111', payoutAccountSubmitted: 'xxxxxx4020'}],
-    ]);
-    const text = allText();
-    expect(text).toContain('Payouts go to xxxxxx1111. | Accepted');
-    expect(text).toContain('Sent xxxxxx4020. | Checking');
-    expect(text).toContain('Ops checks that this account is in your name, using your bank proof. Nothing is paid into it until then.');
-    expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
+      await act(async () => input('rider-join-name').props.onChangeText('  Ravi   Kumar '));
+      await act(async () => press('rider-join-adult').props.onPress());
+      await act(async () => press('rider-apply-next').props.onPress());
+      text = allText();
+      expect(text).toContain('Step 2 of 4 | Your vehicle');
+      expect(text).toContain(
+        'Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PUC certificate, PAN card, Bank proof.',
+      );
 
-    await act(async () => press('rider-payout-change').props.onPress());
-    expect(input('rider-payout-upi').props.helperText).toContain('Find it in your UPI app');
-    await act(async () => press('rider-payout-cancel').props.onPress());
-    expect(tree.root.findAll(node => node.props.testID === 'rider-payout-upi')).toHaveLength(0);
-    expect(riderApi.submitPayoutAccount).not.toHaveBeenCalled();
-  });
-
-  it('says what counts as bank proof while it still has to be sent', async () => {
-    await render(<AccountStatusScreen />, [
-      [riderKeys.me, pending],
-      [riderKeys.profile, {...profile, documents: [{type: 'BANK', label: 'Bank proof', status: 'MISSING'}, {type: 'PAN', label: 'PAN card', status: 'PENDING'}]}],
-    ]);
-    expect(allText()).toContain("Bank proof | Not sent | A photo of your passbook's first page or a cancelled cheque.");
-    expect(press('rider-upload-BANK')).toBeTruthy();
-  });
-
-  describe('a pending rider correcting their sign-up', () => {
-    const signedUp: RiderMe = {...pending, name: 'K Gopi'};
-    const bicycle: RiderProfile = {...profile, vehicle: {label: 'Bicycle', kind: 'BICYCLE'}, payoutAccountSubmitted: '90****@axl'};
-    const scooter: RiderProfile = {...profile, vehicle: {label: 'Petrol two-wheeler', regNumberMasked: 'TS08xx4821', kind: 'PETROL'}};
-
-    it('shows the details on file and changes them, warning that a new name means sending the payout account again', async () => {
-      const client = await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, bicycle]]);
-      expect(allText()).toContain('Your details | Name | K Gopi | App language | English | Vehicle | Bicycle');
-      expect(allText()).not.toContain('Number plate');
-
-      await act(async () => press('rider-details-change').props.onPress());
-      expect(input('rider-join-name').props.value).toBe('K Gopi');
-      expect(tree.root.findAll(node => node.props.testID === 'rider-join-adult')).toHaveLength(0);
-      expect(tree.root.findAll(node => node.props.testID === 'rider-join-resend-payout')).toHaveLength(0);
-      await act(async () => input('rider-join-name').props.onChangeText('Kancharla Gopi Nishanth'));
-      expect(allText()).toContain('Your payout account is in your old name. After you save, send it again in the new name.');
-
-      // A bicycle had no plate, so a scooter needs one.
-      await act(async () => press('rider-join-ELECTRIC').props.onPress());
-      await act(async () => press('rider-join-submit').props.onPress());
-      expect(allText()).toContain('Enter your full name, and the number plate as on the RC.');
+      await act(async () => input('rider-join-plate').props.onChangeText('TS 09'));
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(allText()).toContain('Enter the number plate as on your RC, like TS09EA1234.');
       expect(riderApi.signUp).not.toHaveBeenCalled();
 
-      (riderApi.signUp as jest.Mock).mockResolvedValueOnce({...signedUp, name: 'Kancharla Gopi Nishanth'});
-      (riderApi.getProfile as jest.Mock).mockResolvedValue({...scooter, vehicle: {label: 'Electric two-wheeler', regNumberMasked: 'TS08xx4821', kind: 'ELECTRIC'}});
-      await act(async () => input('rider-join-plate').props.onChangeText('ts 08 ab 4821'));
-      await act(async () => press('rider-join-submit').props.onPress());
-      expect(riderApi.signUp).toHaveBeenCalledWith({
-        name: 'Kancharla Gopi Nishanth', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS08AB4821', adult: true,
+      // Back keeps what was typed on step 1.
+      await act(async () => press('rider-apply-back').props.onPress());
+      expect(input('rider-join-name').props.value).toBe('Ravi Kumar');
+      await act(async () => press('rider-apply-next').props.onPress());
+
+      await act(async () => press('rider-join-ELECTRIC').props.onPress());
+      expect(allText()).toContain('Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PAN card, Bank proof.');
+      (riderApi.signUp as jest.Mock).mockResolvedValueOnce(pending);
+      (riderApi.getProfile as jest.Mock).mockResolvedValue({
+        vehicle: {label: 'Ather 450X', kind: 'ELECTRIC', regNumberMasked: 'TS09xx1234'},
+        documents: requiredDocuments('ELECTRIC').map(type => doc(type, 'MISSING')),
       });
-      expect(client.getQueryData(riderKeys.me)).toMatchObject({name: 'Kancharla Gopi Nishanth'});
+      await act(async () => input('rider-join-plate').props.onChangeText('ts 09-ea 1234'));
+      await act(async () => input('rider-join-model').props.onChangeText(' Ather  450X '));
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(riderApi.signUp).toHaveBeenCalledWith({
+        name: 'Ravi Kumar',
+        language: 'en',
+        vehicleKind: 'ELECTRIC',
+        vehicleRegNumber: 'TS09EA1234',
+        vehicleModel: 'Ather 450X',
+        adult: true,
+      });
+      expect(client.getQueryData(riderKeys.me)).toMatchObject({status: 'PENDING'});
       await flush();
-      const text = allText();
-      expect(text).toContain('Details saved.');
-      expect(text).toContain('Name | Kancharla Gopi Nishanth');
-      expect(text).toContain('Vehicle | Electric bike or scooter | Number plate | TS08xx4821');
-      // The account sent in the old name is gone, so the form asks again, in the new name.
-      expect(input('rider-payout-holder').props.value).toBe('Kancharla Gopi Nishanth');
+      text = allText();
+      expect(text).toContain('Step 3 of 4 | Document photos | 0 of 5 sent');
+      expect(text).toContain('Driving licence | Not sent | Add photo');
+      expect(text).toContain('Send all 5 photos to go on. | Next: payout account');
+      expect(press('rider-apply-next').props.disabled).toBe(true);
     });
 
-    it('keeps the plate on file when it is left empty, and Cancel sends nothing', async () => {
-      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
-      expect(allText()).toContain('Number plate | TS08xx4821');
-      await act(async () => press('rider-details-change').props.onPress());
+    it('needs no plate or model for a bicycle and shows a phone already in use', async () => {
+      await render(<AccountStatusScreen />, [[riderKeys.me, notRider]]);
+      await act(async () => input('rider-join-name').props.onChangeText('Sita Devi'));
+      await act(async () => press('rider-join-adult').props.onPress());
+      await act(async () => press('rider-apply-next').props.onPress());
+      await act(async () => press('rider-join-BICYCLE').props.onPress());
+      expect(none('rider-join-plate')).toBe(true);
+      expect(none('rider-join-model')).toBe(true);
+      expect(allText()).toContain('Next, you send photos of: PAN card, Bank proof.');
+      (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
+        new AppApiError('PHONE_IN_USE', 'This number is already a Craves rider on another account. Call rider support.', 409),
+      );
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'BICYCLE', adult: true});
+      expect(allText()).toContain('This number is already a Craves rider on another account.');
+      expect(allText()).toContain('Step 2 of 4');
+    });
+
+    it('signs out from the first step', async () => {
+      await render(<AccountStatusScreen />, [[riderKeys.me, notRider]]);
+      expect(press('rider-apply-back')).toBeUndefined();
+      await act(async () => press('rider-sign-out').props.onPress());
+      expect(signOut).toHaveBeenCalled();
+    });
+  });
+
+  describe('document photos', () => {
+    it('lists each photo with its status, and adds one from the camera or the gallery', async () => {
+      const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, applying]]);
+      const text = allText();
+      expect(text).toContain('Step 3 of 4 | Document photos | 2 of 6 sent');
+      expect(text).toContain('Driving licence | Accepted');
+      expect(text).toContain('Vehicle RC | Not sent | Add photo');
+      expect(text).toContain('PUC certificate | Not accepted | The photo is blurry. | Send a new photo');
+      expect(text).toContain('PAN card | Sent | Change photo');
+      expect(text).toContain("Bank proof | Not sent | A photo of your passbook's first page or a cancelled cheque.");
+      expect(press('rider-upload-DL')).toBeUndefined();
+      (riderApi.uploadDocument as jest.Mock).mockResolvedValue(undefined);
+      const refetch = jest.spyOn(client, 'invalidateQueries');
+
+      addPhoto('RC');
+      expect(Alert.alert).toHaveBeenLastCalledWith('Vehicle RC', undefined, expect.any(Array), expect.objectContaining({cancelable: true}));
+      await answer('Take a photo');
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'back'}));
+      expect(riderApi.uploadDocument).toHaveBeenCalledWith('RC', 'file:///photo.jpg');
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+
+      addPhoto('INSURANCE');
+      await answer('Choose from gallery');
+      expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({quality: 0.7}));
+      expect(riderApi.uploadDocument).toHaveBeenLastCalledWith('INSURANCE', 'file:///gallery.png');
+
+      // Cancel sends nothing.
+      addPhoto('PUC');
+      await answer('Cancel');
+      expect(riderApi.uploadDocument).toHaveBeenCalledTimes(2);
+    });
+
+    it('asks for the camera when it is denied, and never uploads', async () => {
+      (ImagePicker.requestCameraPermissionsAsync as jest.Mock).mockResolvedValueOnce({granted: false});
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, applying]]);
+      addPhoto('PUC');
+      await answer('Take a photo');
+      expect(Alert.alert).toHaveBeenLastCalledWith('Allow the camera to take a photo of the document.', undefined, expect.any(Array));
+      expect(riderApi.uploadDocument).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's message under the photo when the upload fails", async () => {
+      (riderApi.uploadDocument as jest.Mock).mockRejectedValueOnce(
+        new AppApiError('DOCUMENT_FILE_INVALID', 'Send a clear JPG, PNG or PDF of the document, under 10 MB.', 422),
+      );
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, applying]]);
+      addPhoto('PUC');
+      await answer('Take a photo');
+      expect(allText()).toContain('The photo is blurry. | Send a clear JPG, PNG or PDF of the document, under 10 MB. | Send a new photo');
+    });
+
+    it('offers a retry when the application cannot load', async () => {
+      (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_500', 'down', 500));
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending]]);
+      await flush();
+      expect(allText()).toContain("Craves isn't answering | The problem is on our side. Try again in a minute. | Try again");
+      await act(async () => press('rider-retry').props.onPress());
+      expect(riderApi.getProfile).toHaveBeenCalledTimes(2);
+      expect(press('rider-call-support')).toBeTruthy();
+    });
+
+    it("goes back to correct the vehicle, also with the phone's back button, keeping the plate on file", async () => {
+      const backPress = jest.spyOn(BackHandler, 'addEventListener');
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, applying]]);
+      const [, onBack] = backPress.mock.calls[backPress.mock.calls.length - 1];
+      await act(async () => {
+        expect((onBack as () => boolean)()).toBe(true);
+      });
+      expect(allText()).toContain('Step 2 of 4 | Your vehicle');
       expect(input('rider-join-PETROL').props.selected).toBe(true);
       expect(input('rider-join-plate').props.helperText).toBe('Leave empty to keep TS08xx4821.');
-      await act(async () => press('rider-join-cancel').props.onPress());
-      expect(tree.root.findAll(node => node.props.testID === 'rider-join-name')).toHaveLength(0);
-      expect(riderApi.signUp).not.toHaveBeenCalled();
-
-      (riderApi.signUp as jest.Mock).mockResolvedValueOnce(signedUp);
-      await act(async () => press('rider-details-change').props.onPress());
-      await act(async () => press('rider-join-submit').props.onPress());
-      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'K Gopi', language: 'en', vehicleKind: 'PETROL', vehicleRegNumber: '', adult: true});
+      expect(input('rider-join-model').props.value).toBe('Honda Activa 6G');
+      (riderApi.signUp as jest.Mock).mockResolvedValueOnce(pending);
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(riderApi.signUp).toHaveBeenCalledWith({
+        name: 'Ravi Kumar',
+        language: 'en',
+        vehicleKind: 'PETROL',
+        vehicleRegNumber: '',
+        vehicleModel: 'Honda Activa 6G',
+        adult: true,
+      });
+      await flush();
+      expect(allText()).toContain('Step 3 of 4 | Document photos');
+      backPress.mockRestore();
     });
+  });
 
-    it("shows the server's words when ops already checked a document or account in the old name", async () => {
-      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
-      (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
-        new AppApiError('NAME_LOCKED', 'Ops has already checked your documents or payout account in this name. Call rider support to change it.', 422),
+  describe('the payout account', () => {
+    it('comes once every photo is in, and sending it completes the application', async () => {
+      const photosIn = sent('PETROL', {payoutAccountSubmitted: undefined});
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(photosIn);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, photosIn]]);
+      expect(allText()).toContain('Step 4 of 4 | Payout account');
+      expect(allText()).toContain("Add a UPI ID or bank account in your own name, Ravi Kumar. We can't pay into anyone else's account.");
+      expect(input('rider-payout-holder').props.value).toBe('Ravi Kumar');
+      // Back to the photos, all in, and on again.
+      await act(async () => press('rider-apply-back').props.onPress());
+      expect(allText()).toContain('6 of 6 sent');
+      expect(press('rider-apply-next').props.disabled).toBe(false);
+      await act(async () => press('rider-apply-next').props.onPress());
+
+      await act(async () => input('rider-payout-upi').props.onChangeText('not a upi'));
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(allText()).toContain('Enter a UPI ID like name@bank');
+      expect(riderApi.submitPayoutAccount).not.toHaveBeenCalled();
+
+      (riderApi.submitPayoutAccount as jest.Mock).mockResolvedValueOnce(undefined);
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(sent());
+      await act(async () => input('rider-payout-upi').props.onChangeText('ravi@okaxis'));
+      await act(async () => press('rider-apply-next').props.onPress());
+      expect(riderApi.submitPayoutAccount).toHaveBeenCalledWith({method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis'});
+      await flush();
+      const text = allText();
+      expect(text).toContain('Your application | Not active yet');
+      expect(text).toContain('Application sent | Ops checks every application by hand, usually within a day.');
+      expect(text).toContain('Sent ra****@okaxis. | Checking');
+    });
+  });
+
+  describe('sent: ops checks it', () => {
+    it('says whose turn it is, asks again when the rider comes back, and has nothing to upload', async () => {
+      // The test preset's AppState is a jest mock; spying on it and restoring would drop its implementation.
+      const appState = AppState.addEventListener as jest.Mock;
+      (riderApi.getMe as jest.Mock).mockResolvedValue(pending);
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(sent());
+      const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      const text = allText();
+      expect(text).toContain(
+        // The current step shows its number in its circle.
+        "Application sent | 2 | Ops checks your documents | Usually within a day | You're approved | Then you accept your pay terms, set up your phone and go online.",
       );
-      await act(async () => press('rider-details-change').props.onPress());
-      await act(async () => input('rider-join-name').props.onChangeText('Ravi Kumar'));
-      await act(async () => press('rider-join-submit').props.onPress());
-      expect(allText()).toContain('Ops has already checked your documents or payout account in this name.');
-      expect(input('rider-join-name').props.value).toBe('Ravi Kumar');
+      expect(text).toContain('What you sent | Driving licence | Checking');
+      expect(text).toContain('Bank proof | Name matches');
+      expect(text).toContain('Your details | Name | Ravi Kumar');
+      expect(tree.root.findAll(node => String(node.props.testID).startsWith('rider-upload-'))).toHaveLength(0);
+
+      const refetch = jest.spyOn(client, 'invalidateQueries');
+      expect(text).not.toContain('Checked at');
+      await act(async () => press('rider-application-check').props.onPress());
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.profile});
+      // A check that finds nothing new still says it looked, and when.
+      expect(allText()).toMatch(/Checked at \d{1,2}:\d\d [ap]m\. Ops is still checking your application\./);
+      // One that couldn't look says why, never that nothing changed.
+      (riderApi.getProfile as jest.Mock).mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'No internet'));
+      await act(async () => press('rider-application-check').props.onPress());
+      expect(allText()).toContain('No internet. Check your connection and try again.');
+      expect(allText()).not.toContain('Checked at');
+      refetch.mockClear();
+      const [, onChange] = appState.mock.calls.find(([event]) => event === 'change')!;
+      await act(async () => (onChange as (state: string) => void)('active'));
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+      // Ops's decision arrives as a push: the app asks at once, not at its next check.
+      refetch.mockClear();
+      await act(async () => {
+        DeviceEventEmitter.emit(ACCOUNT_EVENT);
+      });
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+
+      await act(async () => press('rider-sign-out').props.onPress());
+      expect(signOut).toHaveBeenCalled();
     });
 
-    it("shows the server's words when ops already accepted the RC for this vehicle", async () => {
-      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
-      (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
-        new AppApiError('VEHICLE_LOCKED', 'Ops has already accepted your RC for this vehicle. Call rider support to change it.', 422),
-      );
-      await act(async () => press('rider-details-change').props.onPress());
-      await act(async () => press('rider-join-ELECTRIC').props.onPress());
-      await act(async () => press('rider-join-submit').props.onPress());
-      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'K Gopi', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: '', adult: true});
-      expect(allText()).toContain('Ops has already accepted your RC for this vehicle. Call rider support to change it.');
-      // The form stays open with the rider's choice, so they can put it back or call support.
-      expect(input('rider-join-ELECTRIC').props.selected).toBe(true);
+    it('asks again every 15 seconds while ops checks, and stops listening once the screen closes', async () => {
+      jest.useFakeTimers();
+      const client = await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      const refetch = jest.spyOn(client, 'invalidateQueries');
+      await act(async () => {
+        jest.advanceTimersByTime(15_000);
+      });
+      expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+      refetch.mockClear();
+      act(() => tree.unmount());
+      await act(async () => {
+        DeviceEventEmitter.emit(ACCOUNT_EVENT);
+        jest.advanceTimersByTime(15_000);
+      });
+      expect(refetch).not.toHaveBeenCalled();
     });
 
-    it('drops the pinned footer while the keyboard is up, so the form keeps the room', async () => {
+    it('registers the phone the rider applied on, so the decision reaches it (live builds only)', async () => {
+      mockApiMode = 'live';
+      try {
+        await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+        await flush();
+        expect(registerPhone).toHaveBeenCalledTimes(1);
+      } finally {
+        mockApiMode = 'mock';
+      }
+      (registerPhone as jest.Mock).mockClear();
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      expect(registerPhone).not.toHaveBeenCalled();
+    });
+
+    it('asks for notifications while ops checks, so the decision reaches a closed app', async () => {
+      (riderDevice.notificationsGranted as jest.Mock).mockResolvedValueOnce(false);
+      (riderDevice.requestNotifications as jest.Mock).mockResolvedValueOnce(true);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      expect(allText()).toContain("Turn on notifications and we'll tell you the moment ops decides, even with the app closed.");
+      await act(async () => press('rider-application-notify-on').props.onPress());
+      expect(riderDevice.requestNotifications).toHaveBeenCalled();
+      expect(riderDevice.openAppSettings).not.toHaveBeenCalled();
+      expect(allText()).not.toContain('Turn on notifications');
+      // Refused for good: only the app's settings can turn them on.
+      (riderDevice.notificationsGranted as jest.Mock).mockResolvedValueOnce(false);
+      (riderDevice.requestNotifications as jest.Mock).mockResolvedValueOnce(false);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      await act(async () => press('rider-application-notify-on').props.onPress());
+      expect(riderDevice.openAppSettings).toHaveBeenCalled();
+      // Already on: nothing to ask.
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
+      await flush();
+      expect(allText()).not.toContain('Turn on notifications');
+    });
+
+    it('drops the pinned footer while the keyboard is up, so the forms keep the room', async () => {
       const listeners: Record<string, () => void> = {};
       const keyboard = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, listener) => {
         listeners[event] = listener as () => void;
         return {remove: jest.fn()} as never;
       });
-      await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, scooter]]);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, sent()]]);
       expect(press('rider-call-support')).toBeTruthy();
-      act(() => listeners.keyboardDidShow());
+      // async act: the footer's buttons, mounted again, read the reduce-motion setting inside it.
+      await act(async () => listeners.keyboardDidShow());
       expect(press('rider-call-support')).toBeUndefined();
-      expect(press('rider-payout-submit')).toBeTruthy();
-      act(() => listeners.keyboardDidHide());
+      await act(async () => listeners.keyboardDidHide());
       expect(press('rider-call-support')).toBeTruthy();
       keyboard.mockRestore();
     });
+
+    describe('correcting the details', () => {
+      const signedUp: RiderMe = {...pending, name: 'K Gopi'};
+
+      it('changes them, warning that a new name means sending the payout account again', async () => {
+        const bicycle = sent('BICYCLE', {payoutAccountSubmitted: '90****@axl'});
+        const client = await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, bicycle]]);
+        expect(allText()).toContain('Your details | Name | K Gopi | App language | English | Vehicle | Bicycle');
+        expect(allText()).not.toContain('Number plate |');
+
+        await act(async () => press('rider-details-change').props.onPress());
+        expect(input('rider-join-name').props.value).toBe('K Gopi');
+        expect(none('rider-join-adult')).toBe(true);
+        expect(none('rider-join-resend-payout')).toBe(true);
+        await act(async () => input('rider-join-name').props.onChangeText('Kancharla Gopi Nishanth'));
+        expect(allText()).toContain('Your payout account is in your old name. After you save, send it again in the new name.');
+
+        // A bicycle had no plate, so a scooter needs one.
+        await act(async () => press('rider-join-ELECTRIC').props.onPress());
+        await act(async () => press('rider-join-submit').props.onPress());
+        expect(allText()).toContain('Enter the number plate as on your RC, like TS09EA1234.');
+        expect(riderApi.signUp).not.toHaveBeenCalled();
+
+        (riderApi.signUp as jest.Mock).mockResolvedValueOnce({...signedUp, name: 'Kancharla Gopi Nishanth'});
+        // The server set the old-name account aside, so it comes back to the rider.
+        (riderApi.getProfile as jest.Mock).mockResolvedValue(sent('ELECTRIC', {payoutAccountSubmitted: undefined, payoutAccountReturned: true}));
+        await act(async () => input('rider-join-plate').props.onChangeText('ts 08 ab 4821'));
+        await act(async () => press('rider-join-submit').props.onPress());
+        expect(riderApi.signUp).toHaveBeenCalledWith({
+          name: 'Kancharla Gopi Nishanth',
+          language: 'en',
+          vehicleKind: 'ELECTRIC',
+          vehicleRegNumber: 'TS08AB4821',
+          adult: true,
+        });
+        expect(client.getQueryData(riderKeys.me)).toMatchObject({name: 'Kancharla Gopi Nishanth'});
+        await flush();
+        const text = allText();
+        expect(text).toContain('Fix 1 thing to go on');
+        expect(text).toContain('Send your payout account again. It must be in your name and match your bank proof.');
+        expect(input('rider-payout-holder').props.value).toBe('Kancharla Gopi Nishanth');
+      });
+
+      it('keeps the plate on file when it is left empty, and Cancel sends nothing', async () => {
+        await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, sent()]]);
+        expect(allText()).toContain('Vehicle | Honda Activa 6G | Number plate | TS08xx4821');
+        await act(async () => press('rider-details-change').props.onPress());
+        expect(input('rider-join-PETROL').props.selected).toBe(true);
+        expect(input('rider-join-plate').props.helperText).toBe('Leave empty to keep TS08xx4821.');
+        await act(async () => press('rider-join-cancel').props.onPress());
+        expect(none('rider-join-name')).toBe(true);
+        expect(riderApi.signUp).not.toHaveBeenCalled();
+
+        (riderApi.signUp as jest.Mock).mockResolvedValueOnce(signedUp);
+        await act(async () => press('rider-details-change').props.onPress());
+        await act(async () => press('rider-join-submit').props.onPress());
+        expect(riderApi.signUp).toHaveBeenCalledWith({
+          name: 'K Gopi',
+          language: 'en',
+          vehicleKind: 'PETROL',
+          vehicleRegNumber: '',
+          vehicleModel: 'Honda Activa 6G',
+          adult: true,
+        });
+      });
+
+      it("shows the server's words when ops already checked a document or account in the old name", async () => {
+        await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, sent()]]);
+        (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
+          new AppApiError('NAME_LOCKED', 'Ops has already checked your documents or payout account in this name. Call rider support to change it.', 422),
+        );
+        await act(async () => press('rider-details-change').props.onPress());
+        await act(async () => input('rider-join-name').props.onChangeText('Ravi Kumar'));
+        await act(async () => press('rider-join-submit').props.onPress());
+        expect(allText()).toContain('Ops has already checked your documents or payout account in this name.');
+        expect(input('rider-join-name').props.value).toBe('Ravi Kumar');
+      });
+
+      it("shows the server's words when ops already accepted the RC for this vehicle", async () => {
+        await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, sent()]]);
+        (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
+          new AppApiError('VEHICLE_LOCKED', 'Ops has already accepted your RC for this vehicle. Call rider support to change it.', 422),
+        );
+        await act(async () => press('rider-details-change').props.onPress());
+        await act(async () => press('rider-join-ELECTRIC').props.onPress());
+        await act(async () => press('rider-join-submit').props.onPress());
+        expect(riderApi.signUp).toHaveBeenCalledWith(expect.objectContaining({vehicleKind: 'ELECTRIC', vehicleRegNumber: ''}));
+        expect(allText()).toContain('Ops has already accepted your RC for this vehicle. Call rider support to change it.');
+        // The form stays open with the rider's choice, so they can put it back or call support.
+        expect(input('rider-join-ELECTRIC').props.selected).toBe(true);
+      });
+    });
   });
 
-  it('asks for an update when the app is too old', async () => {
-    await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
-    expect(allText()).toContain('Update the app to continue');
-    expect(allText()).not.toContain('Disagree?');
+  describe('fixes asked', () => {
+    const fixes: RiderProfile = {
+      ...sent(),
+      documents: requiredDocuments('PETROL').map(type =>
+        type === 'DL' ? doc(type, 'REJECTED', 'The photo is blurry. Take it again in good light.') : doc(type, 'VERIFIED'),
+      ),
+      payoutAccountSubmitted: undefined,
+      payoutAccountReturned: true,
+    };
+
+    it('lists only what ops sent back, with the reason, and says when a fix went', async () => {
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(fixes);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, fixes]]);
+      const text = allText();
+      expect(text).toContain('Fix 2 things to go on | Ops checked your application and needs these again. Everything else is fine.');
+      expect(text).toContain('Driving licence | Not accepted | The photo is blurry. Take it again in good light. | Send a new photo');
+      expect(text).not.toContain('Vehicle RC');
+      expect(text).toContain('Send your payout account again. It must be in your name and match your bank proof.');
+      expect(input('rider-payout-holder').props.value).toBe('Ravi Kumar');
+
+      (riderApi.uploadDocument as jest.Mock).mockResolvedValueOnce(undefined);
+      addPhoto('DL');
+      await answer('Take a photo');
+      expect(riderApi.uploadDocument).toHaveBeenCalledWith('DL', 'file:///photo.jpg');
+      expect(allText()).toContain('Sent. Ops checks it again.');
+    });
+
+    it('says the application went again once the last fix is in', async () => {
+      (riderApi.getProfile as jest.Mock).mockResolvedValue({...fixes, documents: requiredDocuments('PETROL').map(type => doc(type, 'VERIFIED'))});
+      await render(<AccountStatusScreen />, [
+        [riderKeys.me, pending],
+        [riderKeys.profile, {...fixes, documents: requiredDocuments('PETROL').map(type => doc(type, 'VERIFIED'))}],
+      ]);
+      expect(allText()).toContain('Fix 1 thing to go on');
+      expect(allText()).not.toContain('Ops checked your application and needs these again.');
+      (riderApi.submitPayoutAccount as jest.Mock).mockResolvedValueOnce(undefined);
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(sent());
+      await act(async () => input('rider-payout-upi').props.onChangeText('ravi@okaxis'));
+      await act(async () => press('rider-payout-submit').props.onPress());
+      await flush();
+      expect(allText()).toContain('Application sent');
+      expect(allText()).toContain('Sent again. Ops checks it next, usually within a day.');
+
+      // Ops asks for something again: a new round starts without the note that the last fix went.
+      (riderApi.getMe as jest.Mock).mockResolvedValue(pending);
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(fixes);
+      await act(async () => press('rider-application-check').props.onPress());
+      await flush();
+      expect(allText()).toContain('Fix 2 things to go on');
+      expect(allText()).not.toContain('Sent. Ops checks it again.');
+    });
+  });
+
+  describe('after the application', () => {
+    it('tells an approved rider that pay rates come next, and asks again', async () => {
+      (riderApi.getMe as jest.Mock).mockResolvedValue({...me, termsVersion: ''});
+      await render(<AccountStatusScreen />, [[riderKeys.me, {...me, termsVersion: ''}]]);
+      const text = allText();
+      expect(text).toContain('Pay rates are on the way');
+      expect(text).toContain("Application sent | You're approved | 3 | Pay rates for your area");
+      expect(text).not.toContain('Checked at');
+      await act(async () => press('rider-account-check-again').props.onPress());
+      expect(riderApi.getMe).toHaveBeenCalled();
+      expect(allText()).toMatch(/Checked at \d{1,2}:\d\d [ap]m\. No pay rates yet\./);
+      (riderApi.getMe as jest.Mock).mockRejectedValueOnce(new AppApiError('HTTP_503', 'down', 503));
+      await act(async () => press('rider-account-check-again').props.onPress());
+      expect(allText()).toContain("Craves isn't answering right now. Try again in a minute.");
+      expect(allText()).not.toContain('Checked at');
+    });
+
+    it('explains a paused account with the reason and how to appeal', async () => {
+      await render(<AccountStatusScreen />, [
+        [riderKeys.me, {...me, status: 'SUSPENDED', statusReason: 'A safety report is being reviewed.'}],
+      ]);
+      const text = allText();
+      expect(text).toContain('Your account is paused');
+      expect(text).toContain('A safety report is being reviewed.');
+      expect(text).toContain('Disagree?');
+      expect(text).not.toContain('Apply to ride');
+    });
+
+    it('asks for an update when the app is too old', async () => {
+      await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
+      expect(allText()).toContain('Update the app to continue');
+      expect(allText()).not.toContain('Disagree?');
+    });
   });
 });
 
@@ -490,17 +807,31 @@ describe('Terms', () => {
     expect(text).toContain("How you're paid");
     expect(text).toContain('Complaints and appeals');
     expect(text).not.toContain('What changed');
+    // A first acceptance comes right after approval: say so, and that this is the last step.
+    expect(text).toContain("You're approved | One last step before your first order: read how you are paid, then accept.");
     (riderApi.acceptTerms as jest.Mock).mockResolvedValueOnce(undefined);
     const refetch = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
     await act(async () => press('rider-terms-accept').props.onPress());
     expect(riderApi.acceptTerms).toHaveBeenCalledWith('2026-10-v1');
     expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.me});
+    // The first terms let the rider in: phone setup opens next, once.
+    expect(takeAfterGate()).toBe('PhoneSetup');
+    expect(takeAfterGate()).toBeNull();
+  });
+
+  it('sends a rider who accepted changed terms straight back to work', async () => {
+    (riderApi.acceptTerms as jest.Mock).mockResolvedValueOnce(undefined);
+    await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
+    await act(async () => press('rider-terms-accept').props.onPress());
+    expect(riderApi.acceptTerms).toHaveBeenCalled();
+    expect(takeAfterGate()).toBeNull();
   });
 
   it('shows what changed to a rider who accepted an older version', async () => {
     await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, {...terms, draft: false}], [riderKeys.me, me]]);
     expect(allText()).toContain('What changed | Waiting pay now starts after 6 free minutes.');
     expect(allText()).not.toContain('Draft pricing, not final');
+    expect(allText()).not.toContain("You're approved");
   });
 
   it('shows the upcoming terms in their own card, and nothing when there are none', async () => {
@@ -542,10 +873,15 @@ describe('Terms', () => {
     expect(refetch).toHaveBeenCalledWith({queryKey: riderKeys.terms});
   });
 
-  it('only reads in view mode', async () => {
+  it('only reads in view mode, with the way back to Profile; accepting, it is the only screen', async () => {
     await render(<TermsScreen {...props('view')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
     expect(press('rider-terms-accept')).toBeUndefined();
     expect(press('rider-terms-full')).toBeTruthy();
+    await act(async () => press('rider-back').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalled();
+    await render(<TermsScreen {...props('accept')} />, [[riderKeys.terms, terms], [riderKeys.me, me]]);
+    expect(press('rider-terms-accept')).toBeTruthy();
+    expect(press('rider-back')).toBeUndefined();
   });
 
   it('switches the app language from the chips', async () => {
@@ -663,10 +999,20 @@ describe('Phone setup', () => {
     expect(riderOnlineService.testRing).toHaveBeenCalledTimes(2);
   });
 
-  it('goes back to the Home tab', async () => {
+  it('goes back to where the rider came from, with Done once the phone can get offers', async () => {
+    (riderDevice.locationGranted as jest.Mock).mockResolvedValue(false);
     await render(<PhoneSetupScreen {...props} />);
-    await act(async () => press('rider-setup-home').props.onPress());
-    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs', {screen: 'Home'});
+    await flush();
+    expect(press('rider-setup-done')).toBeUndefined();
+    await act(async () => press('rider-back').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
+
+    (riderDevice.locationGranted as jest.Mock).mockResolvedValue(true);
+    await render(<PhoneSetupScreen {...props} />);
+    await flush();
+    await act(async () => press('rider-setup-done').props.onPress());
+    expect(mockNavigation.goBack).toHaveBeenCalledTimes(2);
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
   });
 });
 
@@ -723,6 +1069,15 @@ describe('Home', () => {
     expect(allText()).not.toContain('an hour');
   });
 
+  it('opens phone setup by itself right after the first pay terms, once', async () => {
+    openAfterGate('PhoneSetup');
+    await render(<HomeScreen />, seed(offlineHome));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('PhoneSetup');
+    expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
+    await render(<HomeScreen />, seed(offlineHome));
+    expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
+  });
+
   it('online: the shift with paid waiting, today, the rest point, and Go offline', async () => {
     await render(<HomeScreen />, seed(onlineHome));
     const text = allText();
@@ -732,10 +1087,35 @@ describe('Home', () => {
     expect(text).toContain('Waiting is paid: at least ₹80 an hour in this slot.');
     expect(text).toContain("Rest point: Lakshmi's Kitchen, Madhapur");
     expect(text).toContain('Offers ring even with the screen off.');
+    // Going offline asks once, so a pocket tap never ends the shift; Stay online keeps it.
     (riderApi.endShift as jest.Mock).mockResolvedValueOnce(undefined);
     await act(async () => press('rider-go-offline').props.onPress());
+    const [title, body, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect([title, body]).toEqual(['Go offline?', "You won't get offers until you go online again."]);
+    expect(buttons.map((b: {text: string}) => b.text)).toEqual(['Stay online', 'Go offline']);
+    expect(riderApi.endShift).not.toHaveBeenCalled();
+    await act(async () => buttons[1].onPress());
     expect(riderOnlineService.stop).toHaveBeenCalled();
     expect(riderApi.endShift).toHaveBeenCalled();
+  });
+
+  it('starts no break or heading home during a trip, and the trip is one tap away', async () => {
+    const choosing = {...me, features: {...me.features, riderChoices: true}};
+    const trip = {tripId: 't1', step: 'AT_KITCHEN'};
+    await render(<HomeScreen />, [[riderKeys.home, {...onlineHome, homeSaved: true}], [riderKeys.me, choosing], [riderKeys.activeTrip, trip]]);
+    expect(press('rider-break-start')).toBeUndefined();
+    expect(press('rider-head-home')).toBeUndefined();
+    // Going offline on a trip says the trip stays theirs; the safe answer is named, like the one with no trip.
+    await act(async () => press('rider-go-offline').props.onPress());
+    const [title, body, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect([title, body]).toEqual(['Go offline during a trip?', 'The trip stays yours. Ops will call you to sort it out.']);
+    expect(buttons.map((b: {text: string}) => b.text)).toEqual(['Stay online', 'Go offline']);
+    await act(async () => press('rider-resume-trip').props.onPress());
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Trip');
+    // Between trips both start again.
+    await render(<HomeScreen />, [[riderKeys.home, {...onlineHome, homeSaved: true}], [riderKeys.me, choosing], [riderKeys.activeTrip, null]]);
+    expect(press('rider-break-start')).toBeDefined();
+    expect(press('rider-head-home')).toBeDefined();
   });
 
   // The server sends slotEndsAt and zoneName only while a slot runs; nextSlot is then the running one.
@@ -825,7 +1205,7 @@ describe('Go online', () => {
 
   it('explains the selfie, then starts the shift with the front-camera photo', async () => {
     (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
-    await render(<GoOnlineScreen {...props} />);
+    const client = await render(<GoOnlineScreen {...props} />, [[riderKeys.home, {online: false, todayEarningsPaise: 0, todayTrips: 0}]]);
     expect(allText()).toContain('Take off your helmet and look at the camera');
     expect(allText()).toContain("Ops checks it's you. Customers never see this photo.");
     await act(async () => press('rider-selfie-shutter').props.onPress());
@@ -833,6 +1213,8 @@ describe('Go online', () => {
     expect(riderApi.startShift).toHaveBeenCalledWith('file:///photo.jpg', 'android-id-1');
     expect(riderOnlineService.start).toHaveBeenCalledWith(shift);
     expect(mockNavigation.goBack).toHaveBeenCalled();
+    // Home reads online as soon as the rider lands there, not after its refetch.
+    expect(client.getQueryData<HomeSummary>(riderKeys.home)?.online).toBe(true);
   });
 
   it('asks for the camera when it is denied', async () => {
@@ -1005,6 +1387,30 @@ describe('Offer', () => {
     await act(async () => press('rider-offer-decline').props.onPress());
     expect(riderApi.declineOffer).toHaveBeenCalledWith('o1', 'rider-decline-o1-r1');
     expect(mockNavigation.goBack).toHaveBeenCalled();
+  });
+
+  it("holds the phone's Back while the offer is live, like an incoming call, and lets go once it ends", async () => {
+    jest.useFakeTimers();
+    const remove = jest.fn();
+    const backPress = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(() => ({remove}));
+    try {
+      await render(<OfferScreen {...props()} />);
+      expect(backPress).toHaveBeenCalledTimes(1);
+      const [event, onBack] = backPress.mock.calls[0];
+      expect(event).toBe('hardwareBackPress');
+      // Handled, so the screen stays: the offer couldn't be opened again.
+      expect((onBack as () => boolean)()).toBe(true);
+      expect(mockNavigation.goBack).not.toHaveBeenCalled();
+      expect(riderApi.declineOffer).not.toHaveBeenCalled();
+      await act(async () => {
+        jest.advanceTimersByTime(41_000);
+      });
+      expect(allText()).toContain('Offer expired');
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(backPress).toHaveBeenCalledTimes(1);
+    } finally {
+      backPress.mockRestore();
+    }
   });
 
   it('tells TalkBack the time at 30, 20, 10 and 5 seconds only', async () => {

@@ -158,8 +158,8 @@ describe('rider app in live mode', () => {
     expect(signInWithPhoneNumber).not.toHaveBeenCalled();
     expect(JSON.parse(calls[0].data)).toEqual({phoneNumber: '9848012345', countryCode: '91'});
 
+    // The sixth digit checks the code by itself (typed, pasted or filled in from the SMS); no Verify tap.
     await act(async () => input('rider-code-input').props.onChangeText('482913'));
-    await act(async () => press('rider-verify').props.onPress());
     await settle();
     expect(JSON.parse(calls[1].data)).toEqual({challengeId: CHALLENGE, otp: '482913'});
     expect(signInWithCustomToken).toHaveBeenCalledWith(expect.anything(), CUSTOM_TOKEN);
@@ -189,7 +189,7 @@ describe('rider app in live mode', () => {
     const accept = calls.find(c => c.url === '/api/v1/rider/terms/accept');
     expect(JSON.parse(accept?.data)).toEqual({version: 'v2'});
     const device = calls.find(c => c.url === '/api/v1/rider/devices');
-    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.1.0'});
+    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.2.0'});
     expect(calls.every(c => c.baseURL === 'https://api.example.invalid')).toBe(true);
   });
 

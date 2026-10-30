@@ -83,6 +83,22 @@ public class RiderPushClient {
             "ttlSeconds", 600, "collapseKey", "go-online"));
     }
 
+    /**
+     * Ops decided the rider's application (P6-04): a data message of type ACCOUNT with the decision, APPROVE or FIXES, so
+     * an open app moves on at once and a closed one shows a notice whose tap opens it. The phone words it in the rider's
+     * language; this English shows only to English readers. Alive 10 minutes, a newer one replacing it. Returns SENT, OFF
+     * or notification-service's code, as offer does.
+     */
+    public String account(String fcmToken, boolean approved) {
+        if (client == null) {
+            return "OFF";
+        }
+        return realtime(Map.of("app", "rider", "token", fcmToken, "data", Map.of("type", "ACCOUNT", "decision", approved ? "APPROVE" : "FIXES"),
+            "notification", approved ? Map.of("title", "You're approved", "body", "Open Craves Rider for your next step.")
+                : Map.of("title", "Your application needs a fix", "body", "Open Craves Rider to see what ops asked for."),
+            "ttlSeconds", 600, "collapseKey", "account"));
+    }
+
     private String realtime(Map<String, Object> request) {
         try {
             return client.post().uri("/internal/v1/push/realtime").header("X-Craves-Internal-Key", secret)

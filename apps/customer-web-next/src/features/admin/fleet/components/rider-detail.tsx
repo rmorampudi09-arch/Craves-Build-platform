@@ -1,25 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { formatAdminTimestamp } from "@/features/admin/shell/lib/admin-navigation";
 import { readableFleetValue } from "@/features/admin/fleet/lib/fleet-common";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { istDay } from "@/features/admin/fleet/lib/payout-contract";
 import { lastHeard, offerWhy, onShift, phoneReport, pushed, rang, silence } from "@/features/admin/fleet/lib/rider-health";
+import { DOCUMENT_LABELS, STAGE_LABELS, VEHICLE_LABELS, vehicleModel } from "@/features/admin/fleet/lib/application-review";
 import {
   auditPageSchema, EXPIRING_DOCUMENTS, expiryProblem, payoutAccountInputSchema, payoutAccountSchema, riderDetailSchema, riderDeviceSchema,
   riderDocumentSchema, riderVehicleInputSchema, riderVehicleSchema, statusEventProblem, statusEventSchema, STATUS_EVENT_KINDS,
-  type AuditEntry, type RiderDetail, type StatusEventInput,
+  type ApplicationResult, type AuditEntry, type RiderDetail, type StatusEventInput,
 } from "@/features/admin/fleet/lib/rider-contract";
+import { ApplicationReview, ApprovedPanel } from "./application-review";
 import { ActionMessage, fieldClass, labelClass, ReasonAction, useFleetAction } from "./fleet-action";
 
 type Document = RiderDetail["documents"][number];
 type Device = RiderDetail["devices"][number];
-
-const DOCUMENT_LABELS: Record<Document["type"], string> = {
-  DRIVING_LICENCE: "Driving licence", VEHICLE_RC: "Vehicle RC", VEHICLE_INSURANCE: "Vehicle insurance", PUC: "PUC certificate",
-  PAN: "PAN card", PHOTO: "Photo", ADDRESS_PROOF: "Address proof", BANK_PROOF: "Bank proof",
-};
 
 const KIND_LABELS: Record<StatusEventInput["kind"], string> = {
   SAFETY_PAUSE: "Safety pause (starts now, review within 72 hours)",
@@ -32,6 +30,7 @@ const when = (value: string | null | undefined) => value ? formatAdminTimestamp(
 
 export function RiderDetailView({ riderId }: { riderId: string }) {
   const [detail, setDetail] = useState<RiderDetail | null>(null);
+  const [approved, setApproved] = useState<ApplicationResult | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [message, setMessage] = useState("Loading rider…");
@@ -63,28 +62,42 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
 
   if (!detail) return <p className="cr-panel" role="status">{message}</p>;
   const { rider } = detail;
+  // A rider still applying gets the one-decision review; everyone else the documents, vehicle and payout tools for renewals.
+  const applying = rider.status === "PENDING";
+  const vehicle = [rider.vehicleKind ? VEHICLE_LABELS[rider.vehicleKind] : null, vehicleModel(rider.vehicleLabel), rider.vehicleNumberMasked]
+    .filter(Boolean).join(" · ") || "Not recorded";
+  const vehicleForm = <VehicleForm riderId={riderId} current={vehicle} label={vehicleModel(rider.vehicleLabel) ?? ""} onDone={reload} />;
   return <div className="space-y-6">
     {message && <p className="cr-alert" role="alert">{message}</p>}
+    {approved && <ApprovedPanel name={rider.name} result={approved} />}
     <section className="cr-panel">
-      <div className="flex flex-wrap items-center gap-3"><h2 className="text-2xl font-bold">{rider.name}</h2><span className="cr-status">{readableFleetValue(rider.status)}</span></div>
+      <div className="flex flex-wrap items-center gap-3"><h2 className="text-2xl font-bold">{rider.name}</h2><span className="cr-status">{rider.stage ? STAGE_LABELS[rider.stage] : readableFleetValue(rider.status)}</span></div>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <div><dt className={labelClass}>KYC name</dt><dd>{rider.kycName}</dd></div>
         <div><dt className={labelClass}>Phone</dt><dd>{rider.phoneMasked}</dd></div>
-        <div><dt className={labelClass}>Vehicle</dt><dd>{rider.vehicleNumberMasked ?? "Not recorded"}</dd></div>
+        <div><dt className={labelClass}>Vehicle</dt><dd>{vehicle}</dd></div>
         <div><dt className={labelClass}>Joined</dt><dd>{when(rider.createdAt)}</dd></div>
       </dl>
+      {!applying && detail.pilotRider === false && <p className="mt-4 text-sm">Not on the pilot riders: while test mode is on, they get no orders. Add them in <Link className="underline" href="/admin/fleet-setup">Rider pilot setup</Link>.</p>}
       <p className="cr-muted mt-4 text-sm">A rider may ask for a copy of everything Craves keeps about them. Each download is recorded, and the rider sees it in their copy.</p>
       <a className="cr-button mt-2 inline-block" href={`/api/admin/fleet/riders/${riderId}/data-export`} download>Download the rider&apos;s data (JSON)</a>
     </section>
 
-    <section className="cr-panel space-y-3">
-      <h2 className="text-lg font-bold">Documents</h2>
-      <p className="cr-muted">Check each file by hand. A rejected document shows the rider your reason so they can upload it again.</p>
-      {detail.documents.length === 0 ? <p className="cr-empty">No documents uploaded yet.</p>
-        : detail.documents.map(document => <DocumentRow key={document.documentId} riderId={riderId} document={document} onDone={reload} />)}
-    </section>
-
-    <VehicleForm riderId={riderId} current={rider.vehicleNumberMasked ?? null} onDone={reload} />
+    {applying ? <ApplicationReview riderId={riderId} detail={detail} vehicleEditor={vehicleForm} onDecided={async result => {
+      if (result.decision === "APPROVE") setApproved(result);
+      await reload();
+    }} /> : <>
+      <section className="cr-panel space-y-3">
+        <h2 className="text-lg font-bold">Documents</h2>
+        <p className="cr-muted">Renewals and new photos from an active rider. Check each file by hand; one marked Needs a fix shows the rider your reason so they can send it again.</p>
+        {detail.documents.length === 0 ? <p className="cr-empty">No documents uploaded yet.</p>
+          : detail.documents.map(document => <DocumentRow key={document.documentId} riderId={riderId} document={document} onDone={reload} />)}
+      </section>
+      <section className="cr-panel space-y-3">
+        <h2 className="text-lg font-bold">Vehicle</h2>
+        {vehicleForm}
+      </section>
+    </>}
 
     <section className="cr-panel space-y-3">
       <h2 className="text-lg font-bold">Phones</h2>
@@ -93,9 +106,9 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
         : detail.devices.map(device => <DeviceRow key={device.deviceId} riderId={riderId} device={device} onDone={reload} />)}
     </section>
 
-    <PayoutAccountForm riderId={riderId} kycName={rider.kycName} current={detail.payoutAccount} submitted={detail.submittedPayoutAccount} onDone={reload} />
+    {!applying && <PayoutAccountForm riderId={riderId} kycName={rider.kycName} current={detail.payoutAccount} submitted={detail.submittedPayoutAccount} onDone={reload} />}
 
-    <section className="cr-panel space-y-4">
+    {!applying && <section className="cr-panel space-y-4">
       <h2 className="text-lg font-bold">Status changes</h2>
       {detail.statusEvents.length === 0 ? <p className="cr-empty">No status changes yet.</p> : <ul className="space-y-3">
         {detail.statusEvents.map(event => <li key={event.eventId} className="rounded-xl border border-slate-200 p-3 text-sm">
@@ -108,9 +121,9 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
         </li>)}
       </ul>}
       <StatusActionForm riderId={riderId} riderName={rider.name} onDone={reload} />
-    </section>
+    </section>}
 
-    <section className="cr-panel">
+    {!applying && <section className="cr-panel">
       <h2 className="text-lg font-bold">Recent shifts</h2>
       <p className="cr-muted">How the phone kept in touch (app 1.1.0): when it last called, the longest silence between calls, and its own last report. A silent phone on shift has usually been stopped by the phone&apos;s battery settings.</p>
       {detail.shifts.length === 0 ? <p className="cr-empty">No shifts yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
@@ -122,9 +135,9 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
           <td>{lastHeard(shift)}</td><td>{silence(shift)}</td><td>{phoneReport(shift.phone)}</td>
         </tr>)}</tbody>
       </table></div>}
-    </section>
+    </section>}
 
-    {detail.recentOffers && <section className="cr-panel">
+    {!applying && detail.recentOffers && <section className="cr-panel">
       <h2 className="text-lg font-bold">Recent offers</h2>
       <p className="cr-muted">The last 20 offers, newest first: what the push did and how soon the phone rang. Most should ring by push within 5 seconds; a trip ops gave the rider by hand is accepted at once and never pushed. A pay hold or adjustment asks for the trip ID.</p>
       {detail.recentOffers.length === 0 ? <p className="cr-empty">No offers yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
@@ -155,7 +168,8 @@ function DocumentRow({ riderId, document, onDone }: { riderId: string; document:
   const base = `riders/${riderId}/documents/${document.documentId}`;
   async function decide(verb: "approve" | "reject", body?: { reason: string } | { expiresOn: string }) {
     const done = await action.run("POST", `${base}/${verb}`, riderDocumentSchema, body,
-      verb === "approve" ? "Document accepted." : "Document rejected. The rider sees your reason.");
+      // The same words as the application review: Looks good, or Needs a fix with a reason the rider reads.
+      verb === "approve" ? "Marked as good." : "Sent back. The rider sees your reason and sends a new photo.");
     if (done) await onDone();
   }
   function accept(event: FormEvent) {
@@ -176,16 +190,16 @@ function DocumentRow({ riderId, document, onDone }: { riderId: string; document:
     {document.status === "PENDING" && <div className="mt-2 flex flex-wrap items-end gap-2">
       <form noValidate className="flex flex-wrap items-end gap-2" onSubmit={accept}>
         {expiring && <label className={labelClass}>{label} expiry date (as printed)<input className={fieldClass} type="date" min={istDay()} value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></label>}
-        <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Accept document</button>
+        <button type="submit" className="cr-button cr-primary" disabled={action.busy}>Looks good<span className="cr-sr-only">: {label}</span></button>
       </form>
-      <ReasonAction label="Reject document" action={action} onSubmit={reason => void decide("reject", { reason })} />
+      <ReasonAction label="Needs a fix" action={action} onSubmit={reason => void decide("reject", { reason })} />
     </div>}
     <ActionMessage state={action.state} />
   </article>;
 }
 
-function VehicleForm({ riderId, current, onDone }: { riderId: string; current: string | null; onDone: () => Promise<void> }) {
-  const [form, setForm] = useState({ label: "", regNumber: "" });
+function VehicleForm({ riderId, current, label, onDone }: { riderId: string; current: string; label: string; onDone: () => Promise<void> }) {
+  const [form, setForm] = useState({ label, regNumber: "" });
   const action = useFleetAction();
 
   async function submit(event: FormEvent) {
@@ -193,14 +207,13 @@ function VehicleForm({ riderId, current, onDone }: { riderId: string; current: s
     const parsed = riderVehicleInputSchema.safeParse({ label: form.label, regNumber: form.regNumber.toUpperCase().replace(/[\s-]/g, "") });
     if (!parsed.success) return action.refuse(parsed.error.issues[0]?.message ?? "Check the details.");
     if (await action.run("PUT", `riders/${riderId}/vehicle`, riderVehicleSchema, parsed.data, "Vehicle saved. The rider sees it on their profile.")) {
-      setForm({ label: "", regNumber: "" });
+      setForm({ label: parsed.data.label, regNumber: "" });
       await onDone();
     }
   }
 
-  return <form noValidate className="cr-panel space-y-3" onSubmit={event => void submit(event)}>
-    <h2 className="text-lg font-bold">Vehicle</h2>
-    <p className="text-sm">{current ? `Registration ${current}.` : "No vehicle recorded yet."} Check it against the RC before you save.</p>
+  return <form noValidate className="space-y-3" onSubmit={event => void submit(event)}>
+    <p className="text-sm">Now: {current}. Change it only if the RC shows something else; the plate is needed in full.</p>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className={labelClass}>Vehicle (make and model)<input className={fieldClass} value={form.label} maxLength={60} placeholder="Honda Activa 6G" onChange={event => setForm({ ...form, label: event.target.value })} /></label>
       <label className={labelClass}>Registration number<input className={fieldClass} value={form.regNumber} maxLength={16} autoComplete="off" placeholder="TS09EA1234" onChange={event => setForm({ ...form, regNumber: event.target.value })} /></label>

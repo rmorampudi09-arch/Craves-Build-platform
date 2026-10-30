@@ -21,6 +21,8 @@ export interface PhoneReadiness {
   answers: Answers;
   /** Location and notifications block going online; the rest only warn. */
   ready: boolean;
+  /** Location and notifications were read at least once; until then `ready` is false without meaning "not set up". */
+  checked: boolean;
   refresh(): void;
   answer(key: keyof Answers, value: boolean): void;
 }
@@ -31,10 +33,13 @@ export function usePhoneReadiness(): PhoneReadiness {
   const [notifications, setNotifications] = useState(false);
   const [device, setDevice] = useState<DeviceState | null>(null);
   const [answers, setAnswers] = useState<Answers>({});
+  const [checked, setChecked] = useState(false);
 
   const refresh = useCallback(() => {
-    riderDevice.locationGranted().then(setLocation, () => setLocation(false));
-    riderDevice.notificationsGranted().then(setNotifications, () => setNotifications(false));
+    Promise.all([
+      riderDevice.locationGranted().then(setLocation, () => setLocation(false)),
+      riderDevice.notificationsGranted().then(setNotifications, () => setNotifications(false)),
+    ]).then(() => setChecked(true));
     riderDevice.state().then(setDevice);
   }, []);
 
@@ -55,7 +60,7 @@ export function usePhoneReadiness(): PhoneReadiness {
     });
   }, []);
 
-  return {location, notifications, device, answers, ready: location && notifications, refresh, answer};
+  return {location, notifications, device, answers, ready: location && notifications, checked, refresh, answer};
 }
 
 export type PhoneBrand = 'xiaomi' | 'coloros' | 'vivo' | 'samsung' | 'other';
@@ -156,11 +161,10 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
 
   return (
     <RiderScreen
-      header={<RiderHeader title={s.title} />}
+      // Back to where the rider came from (Home, Profile, or Home under a closed selfie screen).
+      header={<RiderHeader title={s.title} back />}
       testID="rider-phone-setup"
-      footer={
-        <BottomAction label={s.backHome} onPress={() => navigation.popTo('Tabs', {screen: 'Home'})} testID="rider-setup-home" />
-      }>
+      footer={phone.ready ? <BottomAction label={s.done} onPress={() => navigation.goBack()} testID="rider-setup-done" /> : undefined}>
       <Text style={styles.steps}>{s.intro}</Text>
       <View style={styles.progress}>
         <View style={styles.track}>

@@ -106,6 +106,36 @@ class FleetDeviceApiDatabaseTest {
         assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.rider_device WHERE rider_id = ?", Integer.class, rider.id())).isZero();
     }
 
+    /**
+     * P6-04: an applicant has no RIDER role until approved; the phone they use is bound so ops's decision reaches it, and a
+     * new phone simply takes over (nothing waits for ops: an applicant can't start a shift).
+     */
+    @Test
+    void anApplicantBindsThePhoneTheyUseAndOnlyAnApplicantMay() throws Exception {
+        UUID identity = UUID.randomUUID();
+        UUID rider = UUID.randomUUID();
+        String phone = FleetRiderApiDatabaseTest.phone();
+        db.update("INSERT INTO fleet_schema.rider (id, identity_id, name, phone, created_by) VALUES (?, ?, 'Ravi Kumar', ?, ?)",
+            rider, identity, phone, identity);
+        when(verifier.verify("applicant")).thenReturn(new CravesPrincipal(identity, phone, Set.of("CUSTOMER")));
+        register("applicant", null, "phone-a-0001", "token-1", "1.2.0").andExpect(status().isNoContent());
+        assertThat(state(FleetShiftService.deviceId(rider, "phone-a-0001"))).isEqualTo("BOUND");
+        register("applicant", null, "phone-b-0002", "token-2", "1.2.0").andExpect(status().isNoContent());
+        assertThat(state(FleetShiftService.deviceId(rider, "phone-b-0002"))).isEqualTo("BOUND");
+        assertThat(state(FleetShiftService.deviceId(rider, "phone-a-0001"))).isEqualTo("REPLACED");
+        register("applicant", null, "phone-a-0001", "token-1", "1.2.0").andExpect(status().isNoContent());
+        assertThat(state(FleetShiftService.deviceId(rider, "phone-a-0001"))).as("back on the first phone").isEqualTo("BOUND");
+        assertThat(db.queryForObject("SELECT count(*) FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND'", Integer.class,
+            rider)).isEqualTo(1);
+
+        // Paused or closed, without the role: refused as before.
+        db.update("UPDATE fleet_schema.rider SET status = 'DEACTIVATED' WHERE id = ?", rider);
+        register("applicant", null, "phone-a-0001", "token-3", "1.2.0").andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        assertThat(db.queryForObject("SELECT fcm_token FROM fleet_schema.rider_device WHERE id = ?", String.class,
+            FleetShiftService.deviceId(rider, "phone-a-0001"))).isEqualTo("token-1");
+    }
+
     ResultActions register(String token, String credential, String installation, String fcmToken, String appVersion) throws Exception {
         var request = post("/api/v1/rider/devices").contentType(MediaType.APPLICATION_JSON).content("{\"installationId\":\"" + installation
             + "\",\"fcmToken\":\"" + fcmToken + "\",\"appVersion\":\"" + appVersion + "\",\"model\":\"Redmi Note 13\"}");

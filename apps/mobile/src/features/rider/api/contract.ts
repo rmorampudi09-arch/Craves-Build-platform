@@ -61,6 +61,8 @@ export interface RiderProfile {
   payoutAccountMasked?: string;
   /** An account the rider sent that ops has not confirmed yet; nothing is paid to it until then. */
   payoutAccountSubmitted?: string;
+  /** True when no account is on file because the one sent was set aside (ops asked again, or a new name): send it again. */
+  payoutAccountReturned?: boolean;
   insurance?: {label: string; claimPhone: string; claimStatus?: string};
   /** Phase 4, while rider choices are on: the farthest pickup and drop the rider wants to hear of. */
   preferences?: OrderPreferences;
@@ -87,6 +89,8 @@ export interface RiderSignUp {
   vehicleKind: VehicleKind;
   /** Required unless vehicleKind is BICYCLE; when a PENDING rider corrects their details, empty keeps the plate on file. */
   vehicleRegNumber?: string;
+  /** The make and model, like "Honda Activa 6G" (app 1.2.0); ops sees it beside the RC. Absent keeps the one on file. */
+  vehicleModel?: string;
   adult: boolean;
 }
 

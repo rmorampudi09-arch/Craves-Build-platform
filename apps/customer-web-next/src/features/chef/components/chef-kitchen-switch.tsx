@@ -25,7 +25,7 @@ import {
   type KitchenOpenState,
   type PauseDuration,
 } from "@/features/chef/lib/opening-hours";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { format, messages } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
 

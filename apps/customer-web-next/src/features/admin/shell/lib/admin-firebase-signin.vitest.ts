@@ -9,7 +9,7 @@ vi.mock("firebase/auth", () => ({
   RecaptchaVerifier: class { render = vi.fn().mockResolvedValue(0); clear = vi.fn(); },
   signInWithPhoneNumber: mocks.firebaseSend,
 }));
-vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
 
 afterEach(() => { cleanup(); mocks.firebaseSend.mockReset(); mocks.msg91.mockReset(); });

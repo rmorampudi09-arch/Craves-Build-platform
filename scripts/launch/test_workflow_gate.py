@@ -21,7 +21,8 @@ class RequiredWorkflowGateTest(unittest.TestCase):
 
     def valid(self):
         return {'source': {'result': 'success', 'outputs': {'release_sha': self.sha}},
-                'backend': {'result': 'success'}, 'web': {'result': 'success'}}
+                'backend': {'result': 'success'}, 'web': {'result': 'success'},
+                'mobile': {'result': 'success'}}
 
     def test_required_gate_always_runs_and_pr_is_not_path_filtered(self):
         self.assertIn('if: ${{ always() }}', self.gate)
@@ -34,7 +35,7 @@ class RequiredWorkflowGateTest(unittest.TestCase):
         self.assertNotEqual(self.invoke(self.valid(), 'not-a-sha'), 0)
 
     def test_every_non_success_result_and_missing_job_fails(self):
-        for name in ('source', 'backend', 'web'):
+        for name in ('source', 'backend', 'web', 'mobile'):
             for status in ('failure', 'skipped', 'cancelled', None):
                 with self.subTest(name=name, status=status):
                     jobs = self.valid(); jobs[name]['result'] = status
@@ -53,6 +54,13 @@ class RequiredWorkflowGateTest(unittest.TestCase):
         self.assertLess(web.index('run: python3 scripts/launch/launch-regression.py web'), web.index(guard))
         self.assertLess(web.index(guard), web.index('      - uses: actions/upload-artifact@v4'))
         self.assertNotIn('continue-on-error', web)
+
+    def test_mobile_is_part_of_the_required_gate(self):
+        mobile = self.workflow.split('  mobile:\n', 1)[1].split('  acceptance:\n', 1)[0]
+        for step in ('npx tsc --noEmit', 'npm run lint -- --max-warnings=0', 'npm test -- --ci --runInBand', 'react-native bundle'):
+            self.assertIn(step, mobile)
+        self.assertNotIn('continue-on-error', mobile)
+        self.assertIn('needs: [source, backend, web, mobile]', self.gate)
 
 
 if __name__ == '__main__': unittest.main()

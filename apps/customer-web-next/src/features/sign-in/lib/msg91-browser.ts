@@ -1,7 +1,7 @@
 "use client";
 
 import { signInWithCustomToken, type UserCredential } from "firebase/auth";
-import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
+import { getFirebaseBrowserClient } from "@/shared/lib/firebase-client";
 
 export type PhoneConfirmation = {
   confirm: (code: string, currentAttempt?: () => boolean) => Promise<UserCredential>;

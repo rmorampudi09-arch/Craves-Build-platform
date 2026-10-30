@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { isComingSoon } from "@/features/chef/api/chef-kitchen-schedule";
 import { ChefSkeletonRow } from "@/features/chef/components/chef-loading";
 import { ChefEmpty, ChefPill, ChefSection } from "@/features/chef/components/chef-ui";

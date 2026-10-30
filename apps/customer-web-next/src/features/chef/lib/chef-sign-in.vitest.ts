@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({ msg91: vi.fn(), navigate: vi.fn(), refresh: vi
 // The kitchen opens with a client-side navigation (router.replace), not a full reload.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.navigate, push: mocks.navigate, refresh: mocks.refresh }), usePathname: () => "/chef/earnings" }));
 vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = vi.fn(); clear = vi.fn(); }, signInWithPhoneNumber: vi.fn() }));
-vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
 // next/image needs a real location; the logo is not under test here.
 vi.mock("../../../shared/components/brand/CravesLogo", () => ({ CravesLogo: () => null }));

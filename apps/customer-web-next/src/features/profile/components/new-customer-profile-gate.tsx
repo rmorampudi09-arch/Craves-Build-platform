@@ -10,7 +10,7 @@ import {
   setSessionProfile,
   subscribeSession,
 } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { parseCustomerProfile } from "@/features/profile/lib/profile-contract";
 import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerificationPanel";
 import { secondaryActionClass, Sheet } from "@/shared/ui/overlays/overlay";

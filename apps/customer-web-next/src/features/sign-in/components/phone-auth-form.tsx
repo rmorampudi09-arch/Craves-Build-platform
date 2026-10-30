@@ -7,7 +7,7 @@ import {
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/features/sign-in/lib/msg91-browser";
 import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
-import { getFirebaseBrowserClient } from "@/features/auth/lib/firebase-client";
+import { getFirebaseBrowserClient } from "@/shared/lib/firebase-client";
 import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { CodeSlots, type CodeSlotsStatus } from "@/shared/ui/forms/code-slots";
 import { markCustomerModeVerified } from "@/features/chef/lib/chef-mode";

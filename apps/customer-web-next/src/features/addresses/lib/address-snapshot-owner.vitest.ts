@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { getAddress, loadSelectedAddress, saveAddress, setSessionIdentity } from "../../auth/api/cravesAuth";
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
-vi.mock("../../auth/api/sessionFetch", () => ({ sessionFetch: mocks.fetch, shareSessionRefresh: () => undefined }));
+vi.mock("@/shared/lib/session-fetch", () => ({ sessionFetch: mocks.fetch, shareSessionRefresh: () => undefined }));
 const owner = { id: "11111111-1111-4111-8111-111111111111", phoneNumber: "+10000000000", email: null,
   emailVerified: false, displayName: "Owner", status: "ACTIVE", roles: ["CUSTOMER"] };
 const address = { hno: "Private home", city: "Hyderabad", mandal: "Area", district: "Hyderabad" };

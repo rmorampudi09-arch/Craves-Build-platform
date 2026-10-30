@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { ChefAccountingBreakdown } from "@/features/chef/components/chef-accounting-breakdown";
 import { useChefBank } from "@/features/chef/components/chef-bank-onboarding-panel";

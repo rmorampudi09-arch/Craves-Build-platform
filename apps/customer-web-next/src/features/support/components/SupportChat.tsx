@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AlertCircle, Check, Clock3, RotateCw, SendHorizontal, Ticket } from "lucide-react";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { supportCaseNumber } from "@/shared/lib/order-number";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };

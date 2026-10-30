@@ -3,7 +3,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { parseChefOrdersResponse, type ChefOrder } from "@/features/chef/lib/chef-order-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { LANGUAGE_NAMES, format, messages, savedLanguage, type Language } from "@/shared/i18n/language";
 
 /**

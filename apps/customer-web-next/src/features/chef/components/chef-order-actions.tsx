@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { ChefFlash, ChefNotice, ChefSection } from "@/features/chef/components/chef-ui";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { noteOrderAnswered } from "@/features/chef/lib/chef-order-alert";
 import {
   parseChefOrderResponse,

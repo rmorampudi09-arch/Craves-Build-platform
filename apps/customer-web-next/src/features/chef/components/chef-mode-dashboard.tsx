@@ -48,7 +48,7 @@ import { bankStatusSchema } from "@/features/admin/finance/lib/bank-onboarding-c
 import { chefBalanceSchema, type ChefBalance } from "@/features/admin/finance/lib/finance-contract";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { getSession } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { ChefLoading } from "@/features/chef/components/chef-loading";
 import { format, messages } from "@/shared/i18n/language";

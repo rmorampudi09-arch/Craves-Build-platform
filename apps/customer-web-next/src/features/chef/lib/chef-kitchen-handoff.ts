@@ -1,4 +1,4 @@
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import { parseOnboardingState, type OnboardingDetails } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
 import { parseChefKitchen } from "@/features/chef/lib/chef-kitchen-contract";

@@ -19,7 +19,7 @@ import {
   Star,
   Store,
 } from "lucide-react";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { switchToCustomerApp, useChefSignOut } from "@/features/chef/components/chef-account-menu";
 import { useMinuteClock, useSpecialDay } from "@/features/chef/components/chef-kitchen-switch";
 import { ChefPill, ChefSkeleton } from "@/features/chef/components/chef-ui";

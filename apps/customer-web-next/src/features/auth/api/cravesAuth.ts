@@ -12,7 +12,7 @@ import {
   parseCustomerProfile,
   type CustomerProfile,
 } from "@/features/profile/lib/profile-contract";
-import { sessionFetch, shareSessionRefresh } from "@/features/auth/api/sessionFetch";
+import { sessionFetch, shareSessionRefresh } from "@/shared/lib/session-fetch";
 import { withSessionRefreshLock } from "@/features/auth/lib/session-refresh-lock";
 
 export type CravesUser = {

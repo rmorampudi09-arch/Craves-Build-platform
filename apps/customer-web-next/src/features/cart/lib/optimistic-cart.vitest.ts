@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   dishes: new Map<string, { img: string }>(),
   menu: vi.fn<(kitchenId: string, options?: { remember?: boolean }) => Promise<unknown[]>>(async () => []),
 }));
-vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: mocks.fetch }));
+vi.mock("@/shared/lib/session-fetch", () => ({ sessionFetch: mocks.fetch }));
 vi.mock("@/features/cart/lib/cart-kitchen-replacement", () => ({ requestCartKitchenReplacement: mocks.replace }));
 vi.mock("@/features/dish/api/dishes", () => ({
   getDish: (id: string) => mocks.dishes.get(id),

@@ -11,6 +11,7 @@ import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
 import { chefDeviceAccount, isChefModeTab, isChefModeVerified, markChefModeVerified, markCustomerModeVerified, rememberChefAccount } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
+import { rememberEarlyAccess } from "@/features/sign-in/lib/customer-launch";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
@@ -129,6 +130,20 @@ describe("Chef Mode guard", () => {
     vi.mocked(usePathname).mockReturnValue("/cart");
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("lets a chef keep customer screens while customers wait on a device that opened the early-access link", async () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    rememberEarlyAccess();
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    cleanup();
+    // A new key retires the devices that remembered the old one.
+    localStorage.setItem("craves.customer-early-access", "0".repeat(64));
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
   });
 
   it("shows an applicant who used Chef Mode on this device the launching-soon note in a new tab", async () => {

@@ -1,0 +1,54 @@
+name: Advanced features service CI
+on:
+  pull_request:
+    paths:
+      - 'services/advanced-features-service/**'
+      - 'contracts/openapi/advanced/**'
+      - 'infra/apim/advanced-features/**'
+      - 'scripts/advanced-features/**'
+      - '.github/workflows/advanced-features-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/advanced-features-service/**'
+      - 'contracts/openapi/advanced/**'
+      - 'infra/apim/advanced-features/**'
+      - 'scripts/advanced-features/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: advanced-features-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  service:
+    name: Advanced features service
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: adv_ci_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      ADV_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/postgres
+      ADV_TEST_DB_USER: postgres
+      ADV_TEST_DB_PASSWORD: adv_ci_only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build, unit and PostgreSQL integration tests
+        run: mvn -B -ntp -f services/advanced-features-service/pom.xml clean verify
+      - name: Lock file, APIM routes and contracts agree
+        run: |
+          python3 -m unittest discover -s scripts/release/tests -p 'test_launch_live_runtime_lock.py' -v
+          python3 scripts/advanced-features/check_contracts.py

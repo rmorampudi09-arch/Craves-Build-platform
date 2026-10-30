@@ -229,9 +229,9 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
   assert.match(checkout, /ensureCheckoutCart\(checkout\.orders\)/);
   assert.match(checkout, /handleBackToCart/);
-  assert.match(checkout, /autoReviewKeyRef/);
-  assert.match(checkout, /Calculating delivery fee, tax and your final total/);
-  assert.match(checkout, /Your final total is calculated automatically for the selected address/);
+  // Pricing creates a PAYMENT_PENDING order, so it waits for Review total instead of running when checkout opens.
+  assert.doesNotMatch(checkout, /autoReviewKeyRef/);
+  assert.match(checkout, /Tap Review total to see the delivery fee, tax and your final total/);
   assert.doesNotMatch(checkout, /CheckoutAddressDialog/);
   assert.doesNotMatch(checkout, /Pick a time/);
   assert.doesNotMatch(checkout, /schedule\/capability/);

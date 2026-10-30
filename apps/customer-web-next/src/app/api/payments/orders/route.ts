@@ -26,6 +26,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ checkoutId: input.checkoutId, customerName: identity.displayName || "Craves Customer", customerEmail: identity.email, customerPhone: identity.phoneNumber, returnUrl: `${origin}/checkout` }),
     }, 20_000);
     const body = await upstream.json().catch(() => null);
+    // 410 PAYMENT_WINDOW_EXPIRED: order-service closed the unpaid checkout (after 35 minutes), so the customer reviews the order again.
+    if (upstream.status === 410) return NextResponse.json({ error: "PAYMENT_WINDOW_EXPIRED", message: "This checkout timed out. Review your order again to pay." }, { status: 410 });
     if (!upstream.ok) return NextResponse.json({ error: upstream.status === 401 ? "SESSION_REQUIRED" : "PAYMENT_CREATE_FAILED", message: upstream.status === 401 ? "Please sign in again." : upstream.status === 400 ? "Checkout is not ready for payment." : "We couldn’t start the payment. You haven’t been charged. Try again." }, { status: upstream.status });
     const session = parsePaymentSession(body);
     if (!session) {

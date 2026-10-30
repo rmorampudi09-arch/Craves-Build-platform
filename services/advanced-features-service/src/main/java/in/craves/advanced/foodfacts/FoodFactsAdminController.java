@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Staff review of chef declarations. */
 @RestController
-@RequestMapping("/api/v1/food-facts/admin")
+@RequestMapping("/api/v1/advanced/food-facts/admin")
 public class FoodFactsAdminController {
     private static final String[] REVIEWERS = {Roles.PLATFORM_ADMIN, Roles.CHEF_ADMIN, Roles.COMPLIANCE_ADMIN};
     private final FoodFactsService service;

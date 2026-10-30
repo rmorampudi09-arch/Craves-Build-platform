@@ -33,12 +33,12 @@ src/main/resources/db/advanced/<schema-without-adv_>/V1__*.sql   tables fully qu
 src/test/java/in/craves/advanced/<module>/        *Test (unit) and *IT (PostgreSQL, extends support.IntegrationTestBase)
 ```
 
-Reuse the platform: `CurrentUser` (id, roles, bearer), `ApiProblem` (error codes), `Idempotency`, `Audit`, `Cursor`, `Sql`, `Money`, `CatalogGateway` / `OrderCartGateway` (calls through api.craves.in; tests use the fakes), `PersonalDataContributor` (every module holding personal data implements it, so export/erase cover it). Add each new controller to `src/main/resources/live-runtime-lock.txt`. Public routes go in the module's `publicGetPaths`/`publicPostPaths`.
+Reuse the platform: `CurrentUser` (id, roles, bearer), `ApiProblem` (error codes), `Idempotency`, `Audit`, `Cursor`, `Sql`, `Money`, `CatalogGateway` / `OrderCartGateway` (calls through api.craves.in; tests use the fakes), `PersonalDataContributor` (every module holding personal data implements it, so export/erase cover it). Add each new controller to `src/main/resources/live-runtime-lock.txt`. Every module path must start with `/api/v1/advanced/` (the one gateway API routes them all); public routes go in the module's `publicGetPaths`/`publicPostPaths`.
 
 ```bash
 cd services/advanced-features-service
 export ADV_TEST_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/postgres ADV_TEST_DB_USER=postgres ADV_TEST_DB_PASSWORD=
-ADV_WRITE_CONTRACTS=true mvn -o -B -ntp verify   # regenerates contracts/openapi/advanced/*.yaml and infra/apim/advanced-features/routes.txt
+ADV_WRITE_CONTRACTS=true mvn -o -B -ntp verify   # regenerates contracts/openapi/advanced/*.yaml (x-craves-auth per operation)
 mvn -o -B -ntp verify                             # must be green with no drift
 cd ../.. && python3 -m unittest discover -s scripts/release/tests -p 'test_launch_live_runtime_lock.py' && python3 scripts/advanced-features/check_contracts.py
 ```
@@ -52,19 +52,11 @@ cd ../.. && python3 -m unittest discover -s scripts/release/tests -p 'test_launc
 4. Open `…/compare/main...bundle/<name>?expand=1`, title + description, "Create pull request". Opening the PR starts CI. Later bundles on the same branch re-dispatch CI automatically.
 5. Wait for "Exact-SHA complete regression evidence" and "Advanced features service" to pass (PR checks page). Then "Squash and merge" → "Confirm squash and merge". Never merge red.
 
-## 4. Deploy
+## 4. Deploy and verify
 
-- After the first deployment, a merge to `main` is mirrored to Azure DevOps within 15 min and `release-advanced` (file `/advanced.yml` in repo craves-pipelines; source `infra/advanced-features/devops/advanced.yml`) builds and rolls out with canary and auto-rollback — if that pipeline exists (see ledger). Otherwise deploy from Cloud Shell:
-- Azure Cloud Shell (portal directory ravitejamm6gmail, Bash): fetch the scripts of the merged commit and run the phases you need:
-  ```bash
-  C=<40-char main commit>; mkdir -p ~/adv && cd ~/adv && for f in infra/advanced-features/provision.sh infra/advanced-features/apim-publish.sh \
-    infra/advanced-features/smoke.sh infra/apim/advanced-features/routes.txt infra/apim/advanced-features/user-policy.xml \
-    infra/apim/advanced-features/admin-policy.xml infra/apim/advanced-features/public-policy.xml; do mkdir -p $(dirname $f); \
-    curl -fsSL https://raw.githubusercontent.com/rmorampudi09-arch/Craves-Build-platform/$C/$f -o $f; done
-  bash infra/advanced-features/provision.sh image $C && bash infra/advanced-features/provision.sh app $C
-  bash infra/advanced-features/apim-publish.sh && bash infra/advanced-features/smoke.sh
-  ```
-- Cloud Shell gotchas: `set +H` before commands with `!`; if Cloud Shell says "Timeout waiting for token", switch the portal directory back to ravitejamm6gmail and open a fresh shell.
+- One-time (owner, already requested — see the ledger's "Deployment status"): `curl -fsSL https://raw.githubusercontent.com/rmorampudi09-arch/Craves-Build-platform/main/infra/advanced-features/setup-once.sh | bash` in Azure Cloud Shell. Build runs must **not** create or change Azure resources from the browser (the automation's safety check refuses it); never retry that.
+- After the setup, a merge to `main` is mirrored to Azure DevOps within 15 min and `release-advanced` builds and rolls out `ca-craves-advanced-prod` (10 % canary, 100 %, auto-rollback). Nothing else is needed for new modules: the gateway API `craves-adv-v1` forwards every `/api/v1/advanced/*` route.
+- Verification: the GitHub workflow "Advanced features live smoke" runs after each merge (waits up to 60 min for the release, then checks every route from the contracts: user/staff routes must give the service's 401 envelope, public ones a service answer, `/features` must list each module available). Read its result on the Actions page; it is read-only. Run it on demand with "Run workflow". If it reports that `/api/v1/advanced` is not published, the one-time setup has not been run yet: keep rows MERGED.
 
 ## 5. Finish every run
 

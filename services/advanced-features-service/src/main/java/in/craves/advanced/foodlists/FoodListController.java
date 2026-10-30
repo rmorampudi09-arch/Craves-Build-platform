@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** A signed-in person's own food lists. Every list is private until its owner creates a share link. */
 @RestController
-@RequestMapping("/api/v1/food-lists")
+@RequestMapping("/api/v1/advanced/food-lists")
 public class FoodListController {
     private final FoodListService service;
     private final Idempotency idempotency;

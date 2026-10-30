@@ -8,10 +8,10 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 
 | Module | Package | Schema | API (via https://api.craves.in) | Contract | Switch |
 |---|---|---|---|---|---|
-| Food lists (E04) | `foodlists` | `adv_food_lists` | `/api/v1/food-lists`, `/api/v1/shared-food-lists` | `contracts/openapi/advanced/food-lists-v1.yaml` | `CRAVES_ADV_FOOD_LISTS_ENABLED` |
-| Group orders (E13) | `grouporders` | `adv_group_orders` | `/api/v1/group-orders` | `group-orders-v1.yaml` | `CRAVES_ADV_GROUP_ORDERS_ENABLED` |
-| Food facts (E19) | `foodfacts` | `adv_food_facts` | `/api/v1/food-facts` | `food-facts-v1.yaml` | `CRAVES_ADV_FOOD_FACTS_ENABLED` |
-| Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
+| Food lists (E04) | `foodlists` | `adv_food_lists` | `/api/v1/advanced/food-lists`, `/api/v1/advanced/shared-food-lists` | `contracts/openapi/advanced/food-lists-v1.yaml` | `CRAVES_ADV_FOOD_LISTS_ENABLED` |
+| Group orders (E13) | `grouporders` | `adv_group_orders` | `/api/v1/advanced/group-orders` | `group-orders-v1.yaml` | `CRAVES_ADV_GROUP_ORDERS_ENABLED` |
+| Food facts (E19) | `foodfacts` | `adv_food_facts` | `/api/v1/advanced/food-facts` | `food-facts-v1.yaml` | `CRAVES_ADV_FOOD_FACTS_ENABLED` |
+| Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
 | Feature switches | `platform.module` | – | `/api/v1/advanced/features` (public), `/modules` (staff) | `advanced-v1.yaml` | – |
 
 Each module migrates its own schema with its own Flyway history. If one module's migration fails, or its switch is off,
@@ -20,7 +20,7 @@ only that module answers `503 FEATURE_UNAVAILABLE` / `FEATURE_DISABLED`; the res
 
 ## For the frontend
 
-- Call through `https://api.craves.in` with the user's Craves access token (`Authorization: Bearer …`), the same token the other APIs take.
+- Every route lives under `https://api.craves.in/api/v1/advanced/…` (one gateway API, so new modules need no gateway change). Send the user's Craves access token (`Authorization: Bearer …`), the same token the other APIs take; each operation's `x-craves-auth` in the contract says whether it is `public`, `user` or `staff`.
 - The OpenAPI files in `contracts/openapi/advanced/` are generated from the code by `ContractsIT`, so they are always current.
 - `GET /api/v1/advanced/features` (no sign-in) lists every feature with `enabled`/`available`: hide UI for features that are off.
 - Errors: `{timestamp, code, message, details, correlationId}`; send `X-Correlation-ID` to trace a request.
@@ -45,5 +45,6 @@ ADV_WRITE_CONTRACTS=true mvn -B -ntp verify   # after an API change: regenerate 
 
 ## Deploy
 
-Merge to `main` → Azure DevOps `release-advanced` (canary, auto-rollback). First-time infrastructure and manual deploys:
-`infra/advanced-features/provision.sh`; gateway: `infra/advanced-features/apim-publish.sh`; live check: `infra/advanced-features/smoke.sh`.
+One-time setup (owner, Azure Cloud Shell): `curl -fsSL https://raw.githubusercontent.com/rmorampudi09-arch/Craves-Build-platform/main/infra/advanced-features/setup-once.sh | bash`
+(resource group, Key Vault, database, container app, gateway API `craves-adv-v1`, alerts, lock, release pipeline). After that a merge to `main` deploys through
+Azure DevOps `release-advanced` (canary, auto-rollback) and the workflow "Advanced features live smoke" checks every route through api.craves.in.

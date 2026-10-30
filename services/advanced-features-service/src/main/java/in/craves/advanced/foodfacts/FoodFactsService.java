@@ -241,7 +241,8 @@ public class FoodFactsService {
 
     private FactsContent read(String body) {
         try {
-            return json.readValue(body, FactsContent.class);
+            // Sets come back from JSON as hash sets: normalise again so every answer lists allergens in a stable order.
+            return normalise(json.readValue(body, FactsContent.class));
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Stored facts are unreadable", ex);
         }

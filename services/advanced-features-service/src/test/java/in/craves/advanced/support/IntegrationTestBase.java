@@ -44,7 +44,7 @@ public abstract class IntegrationTestBase {
 
         /** A deliberately broken module: proves one failing feature cannot take the others down. */
         @Bean FeatureModule brokenFeature() {
-            return new FeatureModule("broken-feature", "adv_broken_feature", List.of("/api/v1/broken-feature"), List.of(), List.of());
+            return new FeatureModule("broken-feature", "adv_broken_feature", List.of("/api/v1/advanced/broken-feature"), List.of(), List.of());
         }
     }
 

@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Public reads for dish pages and listings, plus the chef's own declaration workflow. */
 @RestController
-@RequestMapping("/api/v1/food-facts")
+@RequestMapping("/api/v1/advanced/food-facts")
 public class FoodFactsController {
     private final FoodFactsService service;
 

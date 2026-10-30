@@ -12,8 +12,8 @@ public class FoodFactsModule {
 
     @Bean
     FeatureModule foodFactsFeature() {
-        return new FeatureModule(ID, "adv_food_facts", List.of("/api/v1/food-facts"),
-                List.of("/api/v1/food-facts/menu-items/*", "/api/v1/food-facts/free-from", "/api/v1/food-facts/vocabulary"),
-                List.of("/api/v1/food-facts/menu-items/lookup"));
+        return new FeatureModule(ID, "adv_food_facts", List.of("/api/v1/advanced/food-facts"),
+                List.of("/api/v1/advanced/food-facts/menu-items/*", "/api/v1/advanced/food-facts/free-from", "/api/v1/advanced/food-facts/vocabulary"),
+                List.of("/api/v1/advanced/food-facts/menu-items/lookup"));
     }
 }

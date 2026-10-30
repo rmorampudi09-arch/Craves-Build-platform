@@ -1,5 +1,7 @@
 # Advanced features — module notes and decisions
 
+All routes are under `https://api.craves.in/api/v1/advanced/` behind one gateway API with wildcard operations, so later modules ship without any gateway change. Contracts: `contracts/openapi/advanced/` (`x-craves-auth`: public, user or staff).
+
 Decisions made while building (the owner asked for no questions; each choice is the conservative one and easy to change).
 
 ## M01 Food lists (E04, E40)
@@ -21,5 +23,5 @@ Decisions made while building (the owner asked for no questions; each choice is 
 - "Free from" search only returns dishes whose facts were declared: unknown is never treated as safe. Every public answer carries a plain disclaimer.
 
 ## M22 Private taste data (E40)
-- `GET /api/v1/my-taste-data/export` returns everything the advanced modules hold about the caller; `DELETE /api/v1/my-taste-data` with `X-Confirm-Erase: ERASE` erases it and keeps only a receipt (count and modules, no content).
+- `GET /api/v1/advanced/my-taste-data/export` returns everything the advanced modules hold about the caller; `DELETE /api/v1/advanced/my-taste-data` with `X-Confirm-Erase: ERASE` erases it and keeps only a receipt (count and modules, no content).
 - Consent switches (`personalization`, `productAnalytics`) default to off; later modules (personalized ranking, product analytics) must read them.

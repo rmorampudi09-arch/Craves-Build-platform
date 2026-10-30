@@ -12,6 +12,6 @@ public class TasteDataModule {
 
     @Bean
     FeatureModule tasteDataFeature() {
-        return new FeatureModule(ID, "adv_taste_data", List.of("/api/v1/my-taste-data"), List.of(), List.of());
+        return new FeatureModule(ID, "adv_taste_data", List.of("/api/v1/advanced/my-taste-data"), List.of(), List.of());
     }
 }

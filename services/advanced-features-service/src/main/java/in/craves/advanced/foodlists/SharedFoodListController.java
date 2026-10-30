@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Read a shared list by its link (no sign-in), or copy it into your own lists (sign-in). */
 @RestController
-@RequestMapping("/api/v1/shared-food-lists")
+@RequestMapping("/api/v1/advanced/shared-food-lists")
 public class SharedFoodListController {
     private final FoodListService service;
 

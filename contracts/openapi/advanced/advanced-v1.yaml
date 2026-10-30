@@ -55,8 +55,10 @@ paths:
                   $ref: "#/components/schemas/FeatureFlag"
                 type: array
           description: OK
+      security: []
       tags:
       - feature-status-controller
+      x-craves-auth: public
   /api/v1/advanced/modules:
     get:
       operationId: modules
@@ -71,6 +73,7 @@ paths:
           description: OK
       tags:
       - feature-status-controller
+      x-craves-auth: staff
 security:
 - bearer: []
 servers:

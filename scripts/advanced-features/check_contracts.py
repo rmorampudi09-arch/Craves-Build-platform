@@ -1,58 +1,40 @@
 #!/usr/bin/env python3
-"""Static checks for the advanced-features gateway table (the drift check against code is ContractsIT).
+"""Static checks for the advanced-features gateway and contracts (the drift check against the code is ContractsIT).
 
-- every route belongs to a declared API, every API path is unique and under api/v1/,
-- policies are user/admin/public and their XML files exist,
-- every module contract file named by an API exists.
+- the single gateway API policy exists;
+- every contract lists at least one path, only under /api/v1/advanced/, and every operation says who may call it (x-craves-auth).
 """
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-ROUTES = ROOT / 'infra/apim/advanced-features/routes.txt'
-POLICIES = {'user', 'admin', 'public'}
 
 
 def main() -> int:
     errors = []
-    apis, paths, operations = {}, set(), set()
-    for number, raw in enumerate(ROUTES.read_text().splitlines(), 1):
-        line = raw.strip()
-        if not line or line.startswith('#'):
-            continue
-        parts = line.split('|')
-        if parts[0] == 'api' and len(parts) == 5:
-            _, api_id, path, _, module = parts
-            if api_id in apis or path in paths:
-                errors.append(f'line {number}: duplicate api id or path {api_id} {path}')
-            if not path.startswith('api/v1/'):
-                errors.append(f'line {number}: path must start with api/v1/: {path}')
-            apis[api_id] = module
-            paths.add(path)
-            contract = ROOT / 'contracts/openapi/advanced' / f'{module}-v1.yaml'
-            if not contract.is_file():
-                errors.append(f'line {number}: missing contract {contract.relative_to(ROOT)}')
-        elif parts[0] == 'route' and len(parts) == 6:
-            _, api_id, operation, method, template, policy = parts
-            if api_id not in apis:
-                errors.append(f'line {number}: route for undeclared api {api_id}')
-            if (api_id, operation) in operations:
-                errors.append(f'line {number}: duplicate operation {operation}')
-            operations.add((api_id, operation))
-            if method not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'} or not template.startswith('/'):
-                errors.append(f'line {number}: bad method or template {method} {template}')
-            if policy not in POLICIES:
-                errors.append(f'line {number}: unknown policy {policy}')
-        else:
-            errors.append(f'line {number}: cannot parse: {line}')
-    for policy in POLICIES:
-        if not (ROOT / f'infra/apim/advanced-features/{policy}-policy.xml').is_file():
-            errors.append(f'missing infra/apim/advanced-features/{policy}-policy.xml')
-    if not operations:
-        errors.append('no routes')
+    if not (ROOT / 'infra/apim/advanced-features/api-policy.xml').is_file():
+        errors.append('missing infra/apim/advanced-features/api-policy.xml')
+    contracts = sorted((ROOT / 'contracts/openapi/advanced').glob('*-v1.yaml'))
+    if not contracts:
+        errors.append('no contracts in contracts/openapi/advanced')
+    operations = 0
+    for contract in contracts:
+        text = contract.read_text()
+        paths = re.findall(r'^  (/[^:]+):$', text, re.M)
+        methods = re.findall(r'^    (get|post|put|patch|delete):$', text, re.M)
+        auth = re.findall(r'^      x-craves-auth: (public|user|staff)$', text, re.M)
+        if not paths:
+            errors.append(f'{contract.name}: no paths')
+        for path in paths:
+            if not path.startswith('/api/v1/advanced/'):
+                errors.append(f'{contract.name}: {path} is outside /api/v1/advanced/ (the gateway API would not route it)')
+        if len(methods) != len(auth):
+            errors.append(f'{contract.name}: {len(methods)} operations but {len(auth)} x-craves-auth markers')
+        operations += len(methods)
     for error in errors:
         print('ERROR', error)
-    print(f'{len(apis)} APIs, {len(operations)} operations checked')
+    print(f'{len(contracts)} contracts, {operations} operations checked')
     return 1 if errors else 0
 
 

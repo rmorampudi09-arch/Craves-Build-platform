@@ -218,7 +218,7 @@ info:
   version: v1
 openapi: 3.0.1
 paths:
-  /api/v1/group-orders:
+  /api/v1/advanced/group-orders:
     get:
       operationId: mine
       responses:
@@ -232,6 +232,7 @@ paths:
           description: OK
       tags:
       - group-order-controller
+      x-craves-auth: user
     post:
       operationId: create
       parameters:
@@ -255,7 +256,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/join:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/join:
     post:
       operationId: join
       requestBody:
@@ -273,7 +275,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}:
     get:
       operationId: get_1
       parameters:
@@ -292,7 +295,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/cancel:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/cancel:
     post:
       operationId: cancel
       parameters:
@@ -316,7 +320,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/checkout:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/checkout:
     post:
       operationId: checkout
       parameters:
@@ -345,7 +350,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/leave:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/leave:
     post:
       operationId: leave
       parameters:
@@ -360,7 +366,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/lock:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/lock:
     post:
       operationId: lock
       parameters:
@@ -384,7 +391,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/my-items/{menuItemId}:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/my-items/{menuItemId}:
     delete:
       operationId: removeMyItem
       parameters:
@@ -409,6 +417,7 @@ paths:
           description: OK
       tags:
       - group-order-controller
+      x-craves-auth: user
     put:
       operationId: putMyItem
       parameters:
@@ -439,7 +448,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/participants/{participantId}:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/participants/{participantId}:
     delete:
       operationId: removeParticipant
       parameters:
@@ -469,7 +479,8 @@ paths:
           description: OK
       tags:
       - group-order-controller
-  /api/v1/group-orders/{groupId}/unlock:
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/unlock:
     post:
       operationId: unlock
       parameters:
@@ -498,6 +509,7 @@ paths:
           description: OK
       tags:
       - group-order-controller
+      x-craves-auth: user
 security:
 - bearer: []
 servers:

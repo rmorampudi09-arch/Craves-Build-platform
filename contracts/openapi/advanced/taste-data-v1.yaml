@@ -42,7 +42,7 @@ info:
   version: v1
 openapi: 3.0.1
 paths:
-  /api/v1/my-taste-data:
+  /api/v1/advanced/my-taste-data:
     delete:
       operationId: erase
       parameters:
@@ -60,7 +60,8 @@ paths:
           description: OK
       tags:
       - taste-data-controller
-  /api/v1/my-taste-data/consent:
+      x-craves-auth: user
+  /api/v1/advanced/my-taste-data/consent:
     get:
       operationId: consent
       responses:
@@ -72,6 +73,7 @@ paths:
           description: OK
       tags:
       - taste-data-controller
+      x-craves-auth: user
     put:
       operationId: setConsent
       requestBody:
@@ -89,7 +91,8 @@ paths:
           description: OK
       tags:
       - taste-data-controller
-  /api/v1/my-taste-data/export:
+      x-craves-auth: user
+  /api/v1/advanced/my-taste-data/export:
     get:
       operationId: export
       responses:
@@ -103,6 +106,7 @@ paths:
           description: OK
       tags:
       - taste-data-controller
+      x-craves-auth: user
 security:
 - bearer: []
 servers:

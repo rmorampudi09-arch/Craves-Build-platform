@@ -33,10 +33,10 @@ class PlatformRulesTest {
 
     @Test
     void moduleNamingRules() {
-        FeatureModule module = new FeatureModule("food-lists", "adv_food_lists", List.of("/api/v1/food-lists"), List.of(), List.of());
+        FeatureModule module = new FeatureModule("food-lists", "adv_food_lists", List.of("/api/v1/advanced/food-lists"), List.of(), List.of());
         assertThat(module.flagName()).isEqualTo("CRAVES_ADV_FOOD_LISTS_ENABLED");
         assertThat(module.migrations()).isEqualTo("classpath:db/advanced/food_lists");
-        assertThat(module.serves("/api/v1/food-lists/123")).isTrue();
+        assertThat(module.serves("/api/v1/advanced/food-lists/123")).isTrue();
         assertThat(module.serves("/api/v1/food-listsX")).isFalse();
         assertThatThrownBy(() -> new FeatureModule("Bad", "public", List.of(), List.of(), List.of())).isInstanceOf(IllegalArgumentException.class);
     }

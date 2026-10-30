@@ -22,7 +22,7 @@ class PlatformIT extends IntegrationTestBase {
 
     @Test
     void featuresArePublicAndShowTheBrokenModuleAsUnavailable() throws Exception {
-        mvc.perform(get("/api/v1/food-lists").header("Authorization", bearer(UUID.randomUUID(), "CUSTOMER"))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/advanced/food-lists").header("Authorization", bearer(UUID.randomUUID(), "CUSTOMER"))).andExpect(status().isOk());
         mvc.perform(get("/api/v1/advanced/features"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id=='food-lists')].available", hasItem(true)))
@@ -32,15 +32,15 @@ class PlatformIT extends IntegrationTestBase {
     @Test
     void oneBrokenModuleAnswers503WhileOthersServe() throws Exception {
         String token = bearer(UUID.randomUUID(), "CUSTOMER");
-        mvc.perform(get("/api/v1/broken-feature/anything").header("Authorization", token))
+        mvc.perform(get("/api/v1/advanced/broken-feature/anything").header("Authorization", token))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("FEATURE_UNAVAILABLE"));
-        mvc.perform(get("/api/v1/food-lists").header("Authorization", token)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/advanced/food-lists").header("Authorization", token)).andExpect(status().isOk());
     }
 
     @Test
     void missingTokenGets401EnvelopeWithCorrelationId() throws Exception {
-        mvc.perform(get("/api/v1/food-lists").header("X-Correlation-ID", "test-correlation-123"))
+        mvc.perform(get("/api/v1/advanced/food-lists").header("X-Correlation-ID", "test-correlation-123"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("X-Correlation-ID", "test-correlation-123"))
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
@@ -50,7 +50,7 @@ class PlatformIT extends IntegrationTestBase {
     @Test
     void tokenForAnotherAudienceIsRefused() throws Exception {
         String foreign = TestTokens.token(UUID.randomUUID(), CLOCK.instant(), "someone-else", "CUSTOMER");
-        mvc.perform(get("/api/v1/food-lists").header("Authorization", "Bearer " + foreign)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/advanced/food-lists").header("Authorization", "Bearer " + foreign)).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -69,7 +69,7 @@ class PlatformIT extends IntegrationTestBase {
 
     @Test
     void malformedJsonIsA400Envelope() throws Exception {
-        mvc.perform(post("/api/v1/food-lists").header("Authorization", bearer(UUID.randomUUID(), "CUSTOMER"))
+        mvc.perform(post("/api/v1/advanced/food-lists").header("Authorization", bearer(UUID.randomUUID(), "CUSTOMER"))
                         .contentType(MediaType.APPLICATION_JSON).content("{not json"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
     }

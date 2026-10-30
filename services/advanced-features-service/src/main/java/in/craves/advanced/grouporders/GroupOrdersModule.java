@@ -12,6 +12,6 @@ public class GroupOrdersModule {
 
     @Bean
     FeatureModule groupOrdersFeature() {
-        return new FeatureModule(ID, "adv_group_orders", List.of("/api/v1/group-orders"), List.of(), List.of());
+        return new FeatureModule(ID, "adv_group_orders", List.of("/api/v1/advanced/group-orders"), List.of(), List.of());
     }
 }

@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/group-orders")
+@RequestMapping("/api/v1/advanced/group-orders")
 public class GroupOrderController {
     private final GroupOrderService service;
     private final Idempotency idempotency;

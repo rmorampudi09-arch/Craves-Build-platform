@@ -13,8 +13,8 @@ public class FoodListsModule {
     @Bean
     FeatureModule foodListsFeature() {
         return new FeatureModule(ID, "adv_food_lists",
-                List.of("/api/v1/food-lists", "/api/v1/shared-food-lists"),
-                List.of("/api/v1/shared-food-lists/*"),
+                List.of("/api/v1/advanced/food-lists", "/api/v1/advanced/shared-food-lists"),
+                List.of("/api/v1/advanced/shared-food-lists/*"),
                 List.of());
     }
 }

@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/my-taste-data")
+@RequestMapping("/api/v1/advanced/my-taste-data")
 public class TasteDataController {
     public record Consent(@NotNull Boolean personalization, @NotNull Boolean productAnalytics, Instant updatedAt) { }
 

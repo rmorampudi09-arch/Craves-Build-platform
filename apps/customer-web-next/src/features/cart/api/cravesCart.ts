@@ -3,7 +3,7 @@
 import type { CustomerCart, ServerCartItem } from "@/features/cart/lib/cart-contract";
 import { requestCartKitchenReplacement } from "@/features/cart/lib/cart-kitchen-replacement";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { getDish, loadDish, loadKitchenMenu } from "../../dish/api/dishes";
 
 export type CartItem = {

@@ -30,12 +30,12 @@ jobs:
           stub=$(mktemp -d)
           cp services/advanced-features-service/pom.xml "$stub/pom.xml"
           mkdir -p "$stub/src/main/java/stub" "$stub/src/test/java/stub"
-          printf 'package stub;\npublic class Stub { public static int one() { return 1; } }\n' > "$stub/src/main/java/stub/Stub.java"
+          printf 'package stub;\npublic class Stub { public static int one() { return 1; } public static void main(String[] args) { } }\n' > "$stub/src/main/java/stub/Stub.java"
           printf 'package stub;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nclass StubTest { @Test void one() { assertEquals(1, Stub.one()); } }\n' > "$stub/src/test/java/stub/StubTest.java"
           printf 'package stub;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nclass StubIT { @Test void one() { assertEquals(1, Stub.one()); } }\n' > "$stub/src/test/java/stub/StubIT.java"
           cd "$stub"
           mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" dependency:go-offline
-          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" -Dspring-boot.repackage.skip=false clean verify
+          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" clean verify
           mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" dependency:sources -DincludeGroupIds=none -q || true
       - name: Publish ci/advanced-features-m2
         run: |

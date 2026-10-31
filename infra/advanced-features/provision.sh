@@ -133,7 +133,7 @@ vault() {
 
 database() {
   log "Database $DB and least-privilege login $DB_USER on $PG"
-  az postgres flexible-server db show -g "$PG_RG" -s "$PG" -d "$DB" -o none 2>/dev/null || az postgres flexible-server db create -g "$PG_RG" -s "$PG" -d "$DB" -o none
+  az postgres flexible-server db show -g "$PG_RG" --server-name "$PG" --name "$DB" -o none 2>/dev/null || az postgres flexible-server db create -g "$PG_RG" --server-name "$PG" --name "$DB" -o none
   local fqdn admin ip admin_pw db_pw rc=0
   fqdn=$(az postgres flexible-server show -g "$PG_RG" -n "$PG" --query fullyQualifiedDomainName -o tsv)
   admin=$(az postgres flexible-server show -g "$PG_RG" -n "$PG" --query administratorLogin -o tsv)
@@ -148,7 +148,7 @@ database() {
   fi
   with_kv_access "$KV" bash -c "az keyvault secret show --vault-name '$KV' -n adv-db-password --query value -o tsv > '$db_pw'"
   ip=$(my_ip)
-  az postgres flexible-server firewall-rule create -g "$PG_RG" -n "$PG" --rule-name advanced-provision-shell --start-ip-address "$ip" --end-ip-address "$ip" -o none
+  az postgres flexible-server firewall-rule create -g "$PG_RG" --server-name "$PG" --name advanced-provision-shell --start-ip-address "$ip" --end-ip-address "$ip" -o none
   PGPASSWORD="$(cat "$admin_pw")" psql "host=$fqdn port=5432 dbname=postgres user=$admin sslmode=require" -v ON_ERROR_STOP=1 -q \
     -v role="$DB_USER" -v pw="$(cat "$db_pw")" -v db="$DB" <<'SQL' || rc=$?
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pw') WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role') \gexec
@@ -162,7 +162,7 @@ SQL
   lock_name=$(az lock list -g "$PG_RG" --query "[?level=='CanNotDelete'] | [0].name" -o tsv)
   lock_notes=$(az lock list -g "$PG_RG" --query "[?level=='CanNotDelete'] | [0].notes" -o tsv)
   if [ -n "$lock_name" ]; then az lock delete -g "$PG_RG" -n "$lock_name" -o none; fi
-  az postgres flexible-server firewall-rule delete -g "$PG_RG" -n "$PG" --rule-name advanced-provision-shell --yes -o none || rc=1
+  az postgres flexible-server firewall-rule delete -g "$PG_RG" --server-name "$PG" --name advanced-provision-shell --yes -o none || rc=1
   if [ -n "$lock_name" ]; then az lock create -g "$PG_RG" -n "$lock_name" --lock-type CanNotDelete --notes "${lock_notes:-}" -o none; fi
   return $rc
 }
@@ -170,7 +170,7 @@ SQL
 firewall() {
   log "Business Postgres admits the $FEATURE NAT IP"
   local nat; nat=$(nat_ip)
-  az postgres flexible-server firewall-rule create -g "$PG_RG" -n "$PG" --rule-name "cae-$FEATURE" --start-ip-address "$nat" --end-ip-address "$nat" -o none
+  az postgres flexible-server firewall-rule create -g "$PG_RG" --server-name "$PG" --name "cae-$FEATURE" --start-ip-address "$nat" --end-ip-address "$nat" -o none
 }
 
 environment() {

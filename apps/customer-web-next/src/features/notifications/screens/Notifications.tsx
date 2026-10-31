@@ -130,7 +130,7 @@ async function readPage(cursor: string | null): Promise<{ notices: CustomerNotif
 function NoticeIcon({ notice }: { notice: CustomerNotification }) {
   const Icon = isKitchenNotice(notice) ? ChefHat : ICONS[noticeCategory(notice)];
   return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-[#FBEBDD] bg-white text-[#F62E18]">
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
       <Icon className="h-5 w-5" aria-hidden="true" />
     </span>
   );

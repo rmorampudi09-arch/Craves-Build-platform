@@ -66,8 +66,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(similarDishes, /fetchPriority=\{index === 0 \? "high" : "auto"\}/);
   assert.match(cravings, /compact \? "top-\[3\.75rem\]" : "top-0"/);
   assert.match(cravings, /image: "\/home\/categories\/biryani\.webp"/);
-  // Below Home's red-top header, which is 1rem taller than the plain one (room for its clouds).
-  assert.match(cravings, /md:top-\[5\.25rem\] lg:top-\[5\.65rem\]/);
+  assert.match(cravings, /md:top-\[4\.25rem\] lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
   // Chips: a real press state, scroll arrows only for pointers, selection without a tint.
   assert.match(cravings, /group-active:scale-\[0\.96\]/);
@@ -79,7 +78,7 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.doesNotMatch(header, /to="\/chef/);
   assert.match(header, /focus-within:bg-white/);
   assert.match(header, /mobileCompact/);
-  assert.match(header, /<CravesLogo size=\{onRed \? "sm" : "md"\} \/>/);
+  assert.match(header, /<CravesLogo size="md" \/>/);
   assert.doesNotMatch(header, /Food From Home/);
   assert.match(header, /fixed inset-x-0 top-0 z-50/);
   assert.match(skeleton, /CustomerPageSkeleton\.module\.css/);

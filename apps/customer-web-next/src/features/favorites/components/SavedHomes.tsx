@@ -47,9 +47,9 @@ function onWatches(watches: FavoriteWatch[]): Set<WatchKey> {
   );
 }
 
-/** The bell and the heart: 48 px soft red circles, as in the app (1.35). */
+/** The bell and the heart: the web's grey round buttons with a red icon, 48 px to tap. */
 const ROUND_ACTION =
-  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#FDEAE8] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FBD5D0] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
+  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,color,scale] duration-(--dur-micro) hover:!text-[#C4200F] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
 
 function SavedHomeRow({
   entry,
@@ -81,7 +81,7 @@ function SavedHomeRow({
       <ChefFace
         photoUrl={profile?.chefPhotoUrl}
         size={56}
-        className="bg-[#FDEAE8] text-[#D92714]"
+        className="bg-[#F1F3F5] text-[#F62E18]"
       />
       <div className="min-w-0 flex-1">
         {kitchenId ? (

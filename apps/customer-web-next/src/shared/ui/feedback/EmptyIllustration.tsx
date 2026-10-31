@@ -1,11 +1,17 @@
 // Ported from apps/mobile/src/shared/components/EmptyIllustration.tsx (app 1.35.0) so web and app share the drawings.
 // shortcut: clipPath ids are fixed, so two copies of the map or plate drawing on one page share one definition; fine while they are identical.
 import type { ReactElement, ReactNode } from "react";
+import { CalendarDays, WifiOff } from "lucide-react";
+import { leafGeometry, PHONE_LEAF } from "@/shared/ui/banana-leaf/leaf-geometry";
+import { GREEN_LEAF, LEAF_DROPS, LeafLayers, PALE_LEAF, WaterDrop, useSvgId } from "@/shared/ui/banana-leaf/LeafDrawing";
 
 /** The drawings for empty, offline and error screens, from the approved empty-states canvas. */
 export type EmptyIllustrationName =
   | "cart"
   | "orders"
+  | "ordersLamp"
+  | "notFound"
+  | "mealPlansLeaf"
   | "comingSoonArea"
   | "deliveryBike"
   | "location"
@@ -126,27 +132,108 @@ function Calendar({ x, w, h }: { x: number; w: number; h: number }) {
   );
 }
 
-const DRAWINGS: Record<EmptyIllustrationName, () => ReactElement> = {
-  cart: () => (
+/* The owner's picks (30 Oct 2026): the Banana Leaf look for the empty cart, offline and no meal plans, and the black
+   lamp with its yellow light, on a light page, for no orders and a page that isn't there. */
+const STATE_LEAF = leafGeometry(228, 128, PHONE_LEAF);
+const LAMP_GLOW = "#FFC93C";
+const LAMP_LIGHT = "#FFE79A";
+
+/** The empty cart: a leaf washed and waiting, water drops still on it. */
+function WashedLeaf() {
+  return (
+    <g transform="translate(6 32)">
+      <LeafLayers geometry={STATE_LEAF} palette={PALE_LEAF}>
+        {LEAF_DROPS.map(([fx, fy, r]) => (
+          <WaterDrop key={fx} x={fx * STATE_LEAF.W} y={fy * STATE_LEAF.H} r={r} />
+        ))}
+      </LeafLayers>
+    </g>
+  );
+}
+
+/** Offline: the leaf torn in two. */
+function TornLeaf() {
+  const left = useSvgId("torn-left");
+  const right = useSvgId("torn-right");
+  const tear = "112,0 106,22 116,40 104,62 114,84 102,106 110,140";
+  return (
     <>
-      <Backdrop
-        sparkles={[
-          { x: 44, y: 52, kind: "big" },
-          { x: 198, y: 120, kind: "small" },
-          { x: 192, y: 52, kind: "ring" },
-          { x: 52, y: 130, kind: "dot" },
-        ]}
-      />
-      <g {...line}>
-        <path d="M102 72 V60 a18 18 0 0 1 36 0 V72" />
-        <path d="M78 72 H162 L170 166 H70 Z" fill={WHITE} />
-        <path d="M78 72 H162 L163.3 86 H76.7 Z" fill={CREAM_DEEP} />
-        <path d="M96 40 l-4 -8 M120 34 v-9 M144 40 l4 -8" stroke={LINE_STRONG} />
+      <defs>
+        <clipPath id={left}>
+          <polygon points={`0,0 ${tear} 0,140`} />
+        </clipPath>
+        <clipPath id={right}>
+          <polygon points={`${tear} 228,140 228,0`} />
+        </clipPath>
+      </defs>
+      <g transform="translate(6 32)">
+        <g transform="translate(-8 5) rotate(-5 60 64)" clipPath={`url(#${left})`}>
+          <LeafLayers geometry={STATE_LEAF} palette={GREEN_LEAF} />
+        </g>
+        <g transform="translate(10 -3) rotate(4 170 64)" clipPath={`url(#${right})`}>
+          <LeafLayers geometry={STATE_LEAF} palette={GREEN_LEAF} />
+        </g>
       </g>
-      <circle cx={120} cy={124} r={21} fill={RED} />
-      <path d={HEART} fill={WHITE} transform="translate(120 125)" />
+      <circle cx={122} cy={100} r={26} fill={WHITE} />
+      <WifiOff x={105} y={83} width={34} height={34} color="#163F1F" strokeWidth={2} />
     </>
+  );
+}
+
+/** No meal plans: the leaf with an empty place marked for the plan. */
+function LeafWithCalendar() {
+  return (
+    <>
+      <g transform="translate(6 32)">
+        <LeafLayers geometry={STATE_LEAF} palette={GREEN_LEAF} />
+      </g>
+      <circle cx={124} cy={100} r={31} fill="none" stroke="rgb(255 255 255 / 0.8)" strokeWidth={3} strokeDasharray="7 6" />
+      <CalendarDays x={105} y={81} width={38} height={38} color={WHITE} strokeWidth={1.7} />
+    </>
+  );
+}
+
+/** A black lamp over the table: its shade glows yellow and its light falls on whatever lies below. */
+function Lamp({ children }: { children?: ReactNode }) {
+  return (
+    <>
+      <path d="M26 166 L80 74 H160 L214 166 Z" fill={LAMP_LIGHT} opacity={0.55} />
+      <path d="M120 0 V36" stroke={INK} strokeWidth={2.5} strokeLinecap="round" />
+      <path d="M104 36 H136 L164 72 H76 Z" fill={INK} />
+      <ellipse cx={120} cy={72} rx={44} ry={4.5} fill={LAMP_GLOW} />
+      <path d="M18 168 H222" stroke={INK} strokeWidth={3} strokeLinecap="round" />
+      {children}
+    </>
+  );
+}
+
+const DRAWINGS: Record<EmptyIllustrationName, () => ReactElement> = {
+  cart: WashedLeaf,
+  ordersLamp: () => (
+    <Lamp>
+      <ellipse cx={120} cy={160} rx={46} ry={9} fill={WHITE} stroke={INK} strokeWidth={2.5} />
+      <ellipse cx={120} cy={159} rx={30} ry={5} fill="none" stroke={LINE_STRONG} strokeWidth={2} />
+      <path d="M40 163 H62 M62 159 V167 M62 159 H72 M62 163 H72 M62 167 H72" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+      <ellipse cx={176} cy={163} rx={7} ry={4.5} fill={WHITE} stroke={INK} strokeWidth={2} />
+      <path d="M183 163 H202" stroke={INK} strokeWidth={2} strokeLinecap="round" />
+    </Lamp>
   ),
+  notFound: () => (
+    <Lamp>
+      <text
+        x={120}
+        y={160}
+        textAnchor="middle"
+        fontSize={48}
+        fontWeight={800}
+        fill={INK}
+        style={{ fontFamily: "var(--font-craves-display), sans-serif", letterSpacing: "-0.04em" }}
+      >
+        404
+      </text>
+    </Lamp>
+  ),
+  mealPlansLeaf: LeafWithCalendar,
   orders: () => (
     <>
       <Backdrop
@@ -518,27 +605,7 @@ const DRAWINGS: Record<EmptyIllustrationName, () => ReactElement> = {
       </g>
     </>
   ),
-  offline: () => (
-    <>
-      <Backdrop
-        cy={98}
-        ground={{ cx: 120, rx: 56 }}
-        sparkles={[
-          { x: 196, y: 62, kind: "big" },
-          { x: 44, y: 134, kind: "ring" },
-          { x: 200, y: 138, kind: "dot" },
-        ]}
-      />
-      <g fill="none" strokeLinecap="round">
-        <path d="M58 92 C92 58 148 58 182 92" stroke={LINE} strokeWidth={11} />
-        <path d="M78 112 C102 88 138 88 162 112" stroke={LINE_STRONG} strokeWidth={11} />
-        <path d="M98 132 C111 120 129 120 142 132" stroke={INK} strokeWidth={11} />
-      </g>
-      <circle cx={120} cy={152} r={9} fill={RED} stroke={INK} strokeWidth={2.5} />
-      <path d="M68 52 L172 156" stroke={WHITE} strokeWidth={18} strokeLinecap="round" />
-      <path d="M68 52 L172 156" stroke={RED} strokeWidth={9} strokeLinecap="round" />
-    </>
-  ),
+  offline: TornLeaf,
   loadError: () => {
     const crack = "120,52 111,74 126,90 109,108 124,126 113,146 120,170";
     const plate = (

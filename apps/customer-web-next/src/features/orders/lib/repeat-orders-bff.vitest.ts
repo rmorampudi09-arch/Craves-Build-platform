@@ -14,7 +14,6 @@ vi.mock("@/features/cart/api/cravesCart", () => ({ loadCart }));
 import { GET } from "@/app/api/orders/repeat-candidates/route";
 import { POST } from "@/app/api/cart/reorder-if-unchanged/[orderId]/route";
 import { listRepeatOrders, orderLikeLastTime } from "@/features/orders/api/repeat-orders";
-import type { RepeatOrderCandidate } from "./repeat-order-contract";
 
 const ORDER = "0bde0000-0000-4000-8000-000000000101";
 const KITCHEN = "4a000000-0000-4000-8000-000000000001";
@@ -191,7 +190,8 @@ describe("conditional reorder BFF", () => {
 });
 
 describe("Your usual browser calls", () => {
-  const basket = { ...candidate, previousOrderTotal: "248.50" } as unknown as RepeatOrderCandidate;
+  // All a rebuild needs, as My Orders and the order page send it.
+  const basket = { orderId: ORDER, kitchenId: KITCHEN, items: [{ menuItemId: DISH }] };
   function answer(routes: Record<string, () => Response>) {
     const fetch = vi.fn(async (url: string) =>
       (routes[url.split("?")[0]] ?? (() => new Response(null, { status: 500 })))(),

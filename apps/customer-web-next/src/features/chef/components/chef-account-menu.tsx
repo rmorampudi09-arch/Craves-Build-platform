@@ -12,7 +12,7 @@ import {
 import { useChefWorkspace } from "@/features/chef/components/chef-workspace-navigation";
 import { clearChefMode } from "@/features/chef/lib/chef-mode";
 import { getChefName, subscribeChefName, type ChefName } from "@/features/chef/lib/chef-name";
-import { CUSTOMERS_LAUNCHING_SOON } from "@/features/sign-in/lib/customer-launch";
+import { CUSTOMERS_LAUNCHING_SOON, isCravesOwner } from "@/features/sign-in/lib/customer-launch";
 import { clearSession, getSession, subscribeSession, synchronizeSessionRoles } from "@/features/auth/api/cravesAuth";
 import { messages } from "@/shared/i18n/language";
 import { useText } from "@/shared/i18n/language-context";
@@ -37,13 +37,13 @@ const TEXT = messages({
 
 /**
  * The only way from Chef Mode to customer screens; the full load leaves no chef state behind.
- * Until the customer launch, chefs stay in Chef Mode and see the launching-soon note. After it, the
- * customer app opens at once: only this tab leaves Chef Mode, and the device still opens the kitchen.
+ * Until the customer launch, chefs stay in Chef Mode and see the launching-soon note (owners get the customer
+ * app). After it, the customer app opens at once: only this tab leaves Chef Mode, and the device still opens the kitchen.
  */
 export function switchToCustomerApp() {
   // Customer launch lock: chefs stay in Chef Mode and see the launching-soon note (see customer-launch.ts).
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load drops every chef screen
-  if (CUSTOMERS_LAUNCHING_SOON) return window.location.assign("/sign-in?from=chef");
+  if (CUSTOMERS_LAUNCHING_SOON && !isCravesOwner(getSession()?.roles)) return window.location.assign("/sign-in?from=chef");
   clearChefMode();
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load drops every chef screen
   window.location.assign("/home");

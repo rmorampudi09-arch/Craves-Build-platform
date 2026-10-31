@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, ChevronRight, Clock3, LifeBuoy, MapPin, RefreshCw, Wallet } from "lucide-react";
 import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { KitchenSteps, OrderMap } from "@/features/orders/components/OrderMap";
+import { OrderCalendar } from "@/features/orders/components/OrderCalendar";
 import { OrderReviewCard } from "@/features/orders/components/OrderReviewCard";
+import { PaidParcel } from "@/features/orders/components/PaidParcel";
+import { useReorder } from "@/features/orders/components/use-reorder";
 import {
   isAbandonedUnpaidOrder,
   parseCustomerOrder,
@@ -17,10 +20,13 @@ import {
   parseDeliveryStatusResponse,
   type DeliveryStatusResponse,
 } from "@/features/orders/lib/delivery-status";
+import { orderCalendar } from "@/features/orders/lib/order-calendar";
 import { homePin, orderJourney, tracksDelivery, type OrderJourney } from "@/features/orders/lib/order-journey";
 import { paymentStatus, TONE_TEXT } from "@/features/orders/lib/order-presentation";
 import { useDishPhotos } from "@/features/orders/api/dish-photos";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { calendarCondensed } from "@/shared/fonts/theme-fonts";
+import { paidParcelDue } from "@/shared/lib/paid-parcel";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { returnToListPath } from "@/shared/lib/return-scroll";
@@ -183,6 +189,7 @@ export function CustomerOrderStatus({
   const [error, setError] = useState("");
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const refreshingRef = useRef(false);
+  const { reorder, start: orderAgain, dialog } = useReorder(() => router.push("/cart"));
 
   const refresh = useCallback(
     async (background = false) => {
@@ -237,6 +244,15 @@ export function CustomerOrderStatus({
 
   const { profile: kitchen } = useKitchenProfile(order?.kitchenId);
   const photos = useDishPhotos(order?.kitchenId);
+  // The cart's leaf folds into a parcel only after this tab's checkout verified the payment with Razorpay (never for a
+  // typed ?paid=1, a failed or a closed payment), once, and never with reduced motion. The tab's mark is read after
+  // mount (the server can't see it), before the first paint.
+  const reduceMotion = useReducedMotion();
+  const [parcelDue, setParcelDue] = useState(false);
+  useLayoutEffect(() => {
+    setParcelDue(paidParcelDue(orderId));
+  }, [orderId]);
+  const endParcel = useCallback(() => setParcelDue(false), []);
 
   const header = (
     <TrackingHeader
@@ -250,7 +266,9 @@ export function CustomerOrderStatus({
 
   if (loading && !order) {
     return (
-      <div className="min-h-screen bg-white">
+      <div className={`${calendarCondensed.variable} min-h-screen bg-white`}>
+        {/* Right after paying, the parcel's white cover is up at once, so no skeleton flashes before the leaf. */}
+        {parcelDue && !reduceMotion ? <div aria-hidden="true" className="fixed inset-0 z-[90] bg-white" /> : null}
         {header}
         <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
           <CustomerSectionSkeleton variant="order" label="Loading your order" />
@@ -261,7 +279,7 @@ export function CustomerOrderStatus({
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-white text-[#1A1A1A]">
+      <div className={`${calendarCondensed.variable} min-h-screen bg-white text-[#1A1A1A]`}>
         {header}
         <main className="mx-auto max-w-md px-4 py-10">
           <section className={`${CARD} p-8 text-center`}>
@@ -297,6 +315,8 @@ export function CustomerOrderStatus({
   const trackable = !problem && !delivered;
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const payment = paymentStatus(order.status, { abandoned, confirming: unpaid && justPaid });
+  // A paid order on its way shows as the Kitchen Calendar's day sheet; unpaid and closed orders keep their card.
+  const sheet = orderCalendar(order, delivery) !== null;
   const bill: [string, number][] = [
     ["Item total", order.foodSubtotal],
     ["Platform fee", order.platformFee],
@@ -305,41 +325,54 @@ export function CustomerOrderStatus({
   ];
 
   return (
-    <div className="min-h-screen bg-white pb-[calc(6.5rem+env(safe-area-inset-bottom))] text-[#1A1A1A] md:pb-12">
+    // While unpaid, checkout's pay bar (up to ~150px with a payment message) sits where the tab bar was.
+    <div
+      className={`${calendarCondensed.variable} min-h-screen ${sheet ? "bg-[#FFFEFA]" : "bg-white"} pb-[calc(6.5rem+env(safe-area-inset-bottom))] has-[[data-craves-action-bar]]:pb-[calc(10rem+env(safe-area-inset-bottom))] text-[#1A1A1A] md:pb-12`}
+    >
+      {parcelDue && !reduceMotion && !problem ? (
+        <PaidParcel order={order} amount={money(order.grandTotal, order.currency)} photos={photos} onDone={endParcel} />
+      ) : null}
       {header}
 
       <main className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
           <div className="space-y-5">
             {/* What happened and what happens next, with the way forward right under it. */}
-            <section className={`${CARD} p-5 md:p-6`} aria-labelledby="order-status-title">
-              <div className="flex items-start gap-4">
-                {!problem && !unpaid ? (
-                  <PlacedTick />
-                ) : (
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
-                    {problem ? (
-                      <AlertTriangle className="h-6 w-6" aria-hidden="true" />
-                    ) : (
-                      <Clock3 className="h-6 w-6" aria-hidden="true" />
-                    )}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <h2
-                    id="order-status-title"
-                    className="font-display text-2xl font-bold leading-tight tracking-[-0.03em]"
-                  >
-                    {journey.title}
-                  </h2>
-                  {journey.detail ? (
-                    <p className="mt-1.5 text-[0.9375rem] leading-6 text-[#4A4A4A]">{journey.detail}</p>
-                  ) : null}
-                  <p className="mt-2 text-sm text-[#6B6B6B]">
-                    Order #{shortOrderNumber(order.id)} · Placed {when(order.createdAt)}
-                  </p>
+            <section
+              className={sheet ? undefined : `${CARD} p-5 md:p-6`}
+              aria-labelledby={sheet ? undefined : "order-status-title"}
+            >
+              {sheet ? (
+                <OrderCalendar order={order} delivery={delivery} now={checkedAt ?? new Date()} title={journey.title} />
+              ) : (
+                <div className="flex items-start gap-4">
+                  {!problem && !unpaid ? (
+                    <PlacedTick />
+                  ) : (
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                      {problem ? (
+                        <AlertTriangle className="h-6 w-6" aria-hidden="true" />
+                      ) : (
+                        <Clock3 className="h-6 w-6" aria-hidden="true" />
+                      )}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <h2
+                      id="order-status-title"
+                      className="font-display text-2xl font-bold leading-tight tracking-[-0.03em]"
+                    >
+                      {journey.title}
+                    </h2>
+                    {journey.detail ? (
+                      <p className="mt-1.5 text-[0.9375rem] leading-6 text-[#4A4A4A]">{journey.detail}</p>
+                    ) : null}
+                    <p className="mt-2 text-sm text-[#6B6B6B]">
+                      Order #{shortOrderNumber(order.id)} · Placed {when(order.createdAt)}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {order.chefResponseNote ? (
                 <figure className="mt-4 rounded-xl bg-[#F1F3F5] px-4 py-3">
@@ -361,15 +394,26 @@ export function CustomerOrderStatus({
                     Track order
                   </Link>
                 ) : delivered ? (
-                  <Link href={`/kitchen/${order.kitchenId}`} className="craves-primary-action !min-h-12 !px-4">
-                    Order again
-                  </Link>
+                  <button
+                    type="button"
+                    aria-disabled={reorder?.busy || undefined}
+                    aria-busy={reorder?.busy}
+                    onClick={() => void orderAgain(order)}
+                    className="craves-primary-action !min-h-12 !px-4"
+                  >
+                    {reorder?.busy ? "Preparing…" : "Order again"}
+                  </button>
                 ) : (
                   <Link href="/home" className="craves-primary-action !min-h-12 !px-4">
                     Browse dishes
                   </Link>
                 )}
               </div>
+              {reorder?.message ? (
+                <p role="alert" className="mt-3 text-sm font-medium text-[#C4200F]">
+                  {reorder.message}
+                </p>
+              ) : null}
               <p className="mt-4 text-xs text-[#6B6B6B]" role="status">
                 {refreshing
                   ? "Checking for an update…"
@@ -381,7 +425,8 @@ export function CustomerOrderStatus({
 
             {delivered ? <OrderReviewCard orderId={order.id} /> : null}
 
-            {journey.kind === "KITCHEN" ? (
+            {/* The day sheet already lists the kitchen steps, so the blurred map under them only shows without it. */}
+            {journey.kind === "KITCHEN" && !sheet ? (
               <OrderMap
                 home={home}
                 courier={null}
@@ -507,6 +552,7 @@ export function CustomerOrderStatus({
           </div>
         </div>
       </main>
+      {dialog}
     </div>
   );
 }

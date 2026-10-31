@@ -19,6 +19,25 @@ Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC)
 | DNS | zone `craves.in` in `rg-craves-dns-prod` (registrar GoDaddy) |
 | Releases | Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` every 15 minutes; `release-<feature>` pipelines build and roll out automatically (10 % canary, then 100 %, automatic rollback). No manual approval: **a merge to `main` goes live.** |
 
+Each service's resources (from the 30 Oct 2026 migration report):
+
+| Service | Resource group | Container app | Key Vault | Database | Outbound address |
+|---|---|---|---|---|---|
+| auth | `rg-craves-auth-prod` | `ca-craves-auth-prod` | `kv-crv-auth-34eefd` | `pg-craves-auth-prod` | 20.198.108.229 |
+| catalog | `rg-craves-catalog-prod` | `ca-craves-catalog-prod` | `kv-crv-catalog-34eefd` | business | 20.235.64.75 |
+| order | `rg-craves-order-prod` | `ca-craves-order-prod` | `kv-crv-order-34eefd` | business | 20.198.125.128 |
+| user-chef | `rg-craves-user-chef-prod` | `ca-craves-user-chef-prod` | `kv-crv-userchef-34eefd` | business | 20.219.136.254 |
+| notification | `rg-craves-notification-prod` | `ca-craves-notification-prod` | `kv-crv-notif-34eefd` | business | 20.235.95.84 |
+| subscription | `rg-craves-subscription-prod` | `ca-craves-subscription-prod` | `kv-crv-subs-34eefd` | business | 20.204.118.52 |
+| integration | `rg-craves-integration-prod` | `ca-craves-integration-prod` | `kv-crv-integ-34eefd` | `pg-craves-integration-prod` | 20.204.46.72 |
+| referral | `rg-craves-referral-prod` | `ca-craves-referral-prod`, `ca-craves-referral-members-prod` | `kv-crv-referral-34eefd` | `pg-craves-referral-prod` | 20.192.2.161 |
+| voice | `rg-craves-voice-prod` | `ca-craves-voice-prod` | `kv-crv-voice-34eefd` | none | 104.211.91.72 |
+| web | `rg-craves-web-prod` | `ca-craves-web-prod` | `kv-crv-web-34eefd` | none | 20.198.84.102 |
+| admin | `rg-craves-admin-prod` | `ca-craves-admin-prod` | `kv-crv-admin-34eefd` | none | 20.219.159.80 |
+| delivery-intel | `rg-craves-delivery-intel-prod` | `ca-craves-delivery-intel-prod` | `kv-crv-delintel-34eefd` | none | 20.219.193.93 |
+
+"business" is `pg-craves-business-prod` in `rg-craves-data-business-prod`; catalog, order, user-chef, notification and subscription share it.
+
 ## Previous: subscription 721906c9 (idle since 29 Oct 2026, read only)
 
 Everything below describes the old estate. Its apps, databases and storage still exist untouched as a fallback. Do not deploy to it, change it or run its pipelines.

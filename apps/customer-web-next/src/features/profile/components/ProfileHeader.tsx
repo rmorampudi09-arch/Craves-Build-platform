@@ -42,13 +42,13 @@ export function ProfileHeader({ signedIn = false }: { signedIn?: boolean }) {
         <div className="ml-auto flex items-center gap-2">
           <Link
             to="/notifications"
-            className={`${ICON_LINK} bg-[#FDEAE8] text-[#D92714] hover:bg-white`}
+            className={`${ICON_LINK} bg-[#F1F3F5] text-[#F62E18] hover:bg-white`}
             aria-label={notificationsLabel(unread)}
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             <UnreadBadge count={unread} />
           </Link>
-          <Link to="/settings" className={`${ICON_LINK} bg-[#F1F3F5] text-[#1A1A1A] hover:bg-white`} aria-label="Settings">
+          <Link to="/settings" className={`${ICON_LINK} bg-[#F1F3F5] text-[#F62E18] hover:bg-white`} aria-label="Settings">
             <Settings className="h-5 w-5" aria-hidden="true" />
           </Link>
         </div>

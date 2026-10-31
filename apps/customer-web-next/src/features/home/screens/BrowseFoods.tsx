@@ -862,7 +862,6 @@ function BrowseFoodsPage() {
         onSearchIntent={preloadHomeSearchOverlay}
         foodPreference={foodPreference}
         onFoodPreferenceChange={changeFoodPreference}
-        tone="red"
       />
 
       {comingSoonAddress ? (

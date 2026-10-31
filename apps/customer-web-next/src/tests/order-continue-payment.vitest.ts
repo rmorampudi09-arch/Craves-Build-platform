@@ -22,6 +22,8 @@ vi.mock("@/features/orders/components/CustomerOrderStatus", () => ({
       onSettled: fixture.onSettled,
     }),
 }));
+// A timed-out payment's Review cart reorders and opens the cart.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/features/checkout/components/CheckoutPaymentButton", () => ({
   CheckoutPaymentButton: (props: { checkout: { grandTotal: number } }) => {
     fixture.payment(props);
@@ -104,6 +106,8 @@ it("offers checkout's payment step while the order's checkout waits for payment"
   act(() => onPaymentLockChange(true));
   act(() => onPaymentLockChange(false));
   expect(fixture.onSettled).toHaveBeenCalledTimes(1);
+  // Once the 15 minutes to pay run out, the button's Review cart has somewhere to go.
+  expect(fixture.payment.mock.lastCall![0]).toHaveProperty("onReviewCart", expect.any(Function));
 });
 
 it.each([

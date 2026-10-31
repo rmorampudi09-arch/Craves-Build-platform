@@ -42,7 +42,7 @@ function useBuildVersion(): string | null {
 
 function RowIcon({ icon: Icon }: { icon: Row["icon"] }) {
   return (
-    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDEAE8] text-[#D92714]">
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
       <Icon className="h-5 w-5" aria-hidden="true" />
     </span>
   );

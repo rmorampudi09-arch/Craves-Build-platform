@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Rider pilot runtime switches for the Container Apps (docs/riders/GO-LIVE.md).
+"""Rider pilot runtime switches for the Container Apps (docs/riders/GO-LIVE.md §4).
+
+Production since 29 Oct 2026: subscription 34eefd95, each service in its own resource group. A subscription owner runs
+this from a clone of main in Azure Cloud Shell; any other signed-in subscription is refused before anything is read.
 
   status   Read only: what each service has for the rider fleet. Secret values are compared, never printed.
   wire     integration-service: internal base URLs, support contacts, insurance label, minimum app version;
@@ -19,13 +22,16 @@ import sys
 import time
 from pathlib import Path
 
+SUBSCRIPTION = "34eefd95-1a19-416f-b9df-92b326500615"
+TENANT = "182d6285-5895-47f8-9ade-77b10854ed0d"
 APPS = {
-    "integration": "ca-craves-integration-service-pr",
-    "order": "ca-craves-order-service-prodlow",
-    "notification": "ca-craves-notification-service-p",
-    "user-chef": "ca-craves-user-chef-service-prod",
-    "auth": "ca-craves-auth-service-prodlow",
+    "integration": "ca-craves-integration-prod",
+    "order": "ca-craves-order-prod",
+    "notification": "ca-craves-notification-prod",
+    "user-chef": "ca-craves-user-chef-prod",
+    "auth": "ca-craves-auth-prod",
 }
+GROUPS = {role: name.replace("ca-", "rg-", 1) for role, name in APPS.items()}  # rg-craves-<service>-prod
 # The variable each service checks the shared internal secret with (integration sends CRAVES_INTERNAL_SERVICE_KEY).
 INTERNAL_KEY = {
     "integration": "CRAVES_INTERNAL_SERVICE_KEY",
@@ -106,16 +112,29 @@ def literal(app: dict, name: str):
 
 
 def secret_value(group: str, name: str, app: dict, variable: str, cache: dict):
-    """The value behind a variable, plain or secret reference; kept in memory only, never printed."""
+    """The value behind a variable: plain, an app secret, or the Key Vault secret an app secret points at. Kept in memory
+    only, never printed."""
     item = environment(app).get(variable)
     if item is None:
         return None
     if not item.get("secretRef"):
         return item.get("value") or None
     if name not in cache:
-        cache[name] = {s["name"]: s.get("value") for s in
+        cache[name] = {s["name"]: s for s in
                        az("containerapp", "secret", "list", "-g", group, "-n", name, "--show-values") or []}
-    return cache[name].get(item["secretRef"]) or None
+    secret = cache[name].get(item["secretRef"]) or {}
+    if not secret.get("value") and secret.get("keyVaultUrl"):
+        try:
+            secret["value"] = (az("keyvault", "secret", "show", "--id", secret["keyVaultUrl"]) or {}).get("value")
+        except GuardError as failure:
+            raise GuardError(f"{name} {variable} is the Key Vault secret {secret['keyVaultUrl']}, which this account can't "
+                             "read: run as someone with Key Vault Secrets User on that vault") from failure
+    return secret.get("value") or None
+
+
+def commit() -> str:
+    """The commit of the clone this file is in (Cloud Shell may run it from another folder)."""
+    return subprocess.check_output(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"], text=True).strip()
 
 
 # The only variables whose plain values are printed; every other value shows as <set> (it may hold a secret).
@@ -280,7 +299,6 @@ def apply_role(group: str, name: str, app: dict, settings: dict, attempts: int, 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--stage", required=True, choices=["status", "wire", "enable", "disable"])
-    parser.add_argument("--resource-group", default="rg-craves-prodlow-centralindia")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-source-sha", default="")
     parser.add_argument("--support-phone", default="")
@@ -296,12 +314,13 @@ def main(argv=None) -> int:
     if args.apply:
         if args.stage == "status":
             raise GuardError("status is read only; drop --apply")
-        head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        if not re.fullmatch(r"[0-9a-f]{40}", args.expected_source_sha) or head != args.expected_source_sha:
+        if not re.fullmatch(r"[0-9a-f]{40}", args.expected_source_sha) or commit() != args.expected_source_sha:
             raise GuardError("--apply needs --expected-source-sha equal to this checkout's commit")
+    account = az("account", "show") or {}
+    if account.get("id") != SUBSCRIPTION or account.get("tenantId") != TENANT:
+        raise GuardError(f"Signed in to another subscription; nothing read or changed. Run: az account set -s {SUBSCRIPTION}")
 
-    group = args.resource_group
-    apps = {role: az("containerapp", "show", "-g", group, "-n", name) for role, name in APPS.items()}
+    apps = {role: az("containerapp", "show", "-g", GROUPS[role], "-n", name) for role, name in APPS.items()}
     for role, app in apps.items():
         environment(app)
         if app["properties"].get("provisioningState") not in (None, "Succeeded"):
@@ -309,13 +328,14 @@ def main(argv=None) -> int:
     cache: dict = {}
 
     def values(role, variable):
-        return secret_value(group, APPS[role], apps[role], variable, cache)
+        return secret_value(GROUPS[role], APPS[role], apps[role], variable, cache)
 
     problems, warnings = checks(args.stage, apps, args, values)
     planned = {} if problems else changes(apps, desired(args.stage, apps, args))
     report = {
-        "stage": args.stage, "mode": "APPLY" if args.apply else "PLAN_ONLY", "resourceGroup": group,
-        "apps": {role: {"name": APPS[role], "latestRevision": app["properties"].get("latestRevisionName"),
+        "stage": args.stage, "mode": "APPLY" if args.apply else "PLAN_ONLY", "subscription": SUBSCRIPTION,
+        "apps": {role: {"name": APPS[role], "resourceGroup": GROUPS[role],
+                        "latestRevision": app["properties"].get("latestRevisionName"),
                         "settings": {variable: shown(app, variable) for variable in SHOWN[role]}}
                  for role, app in apps.items()},
         "problems": problems, "warnings": warnings,
@@ -341,10 +361,10 @@ def main(argv=None) -> int:
         print("Nothing to change.")
         return 0
     if not args.apply:
-        print("Plan only: run again with --apply and the reviewed commit to make these changes.")
+        print(f"Plan only: to make these changes, run the same line again with --apply --expected-source-sha {commit()}")
         return 0
     for role, settings in planned.items():
-        revision = apply_role(group, APPS[role], apps[role], settings, args.ready_attempts, args.ready_pause_seconds,
+        revision = apply_role(GROUPS[role], APPS[role], apps[role], settings, args.ready_attempts, args.ready_pause_seconds,
                               roll_back=args.stage != "disable")
         print(f"{APPS[role]}: healthy on {revision}")
     print(f"Done: stage {args.stage} applied.")

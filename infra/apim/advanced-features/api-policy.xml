@@ -1,0 +1,19 @@
+<policies>
+  <inbound>
+    <base />
+    <!-- One API (path api/v1/advanced, wildcard operations) serves every advanced module, so new modules need no gateway change.
+         The service is authoritative for the JWT, roles, ownership and which routes are public; the gateway bounds abuse. -->
+    <rate-limit-by-key calls="300" renewal-period="60"
+      counter-key="@(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).StartsWith(&quot;Bearer &quot;, System.StringComparison.OrdinalIgnoreCase) ? &quot;adv-sub-&quot; + (context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).Split(' ').Last().AsJwt()?.Subject ?? context.Request.IpAddress) : &quot;adv-ip-&quot; + context.Request.IpAddress)" />
+    <validate-content unspecified-content-type-action="ignore" max-size="262144" size-exceeded-action="prevent" />
+    <set-header name="X-Correlation-ID" exists-action="skip"><value>@(context.RequestId.ToString())</value></set-header>
+  </inbound>
+  <backend>
+    <forward-request timeout="30" />
+  </backend>
+  <outbound>
+    <base />
+    <set-header name="X-Content-Type-Options" exists-action="override"><value>nosniff</value></set-header>
+  </outbound>
+  <on-error><base /></on-error>
+</policies>

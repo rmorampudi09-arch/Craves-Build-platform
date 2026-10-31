@@ -11,6 +11,7 @@ import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
 import { chefDeviceAccount, isChefModeTab, isChefModeVerified, markChefModeVerified, markCustomerModeVerified, rememberChefAccount } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
+import { rememberEarlyAccess } from "@/features/sign-in/lib/customer-launch";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
@@ -117,6 +118,30 @@ describe("Chef Mode guard", () => {
     launch.soon = true;
     sessionStorage.clear();
     vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
+  });
+
+  it("lets an owner (ADMIN) keep customer screens while customers wait, so they can check them", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    me = { ...chef, roles: ["CUSTOMER", "CHEF", "ADMIN"] };
+    setSessionIdentity(me);
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("lets a chef keep customer screens while customers wait on a device that opened the early-access link", async () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    rememberEarlyAccess();
+    vi.mocked(usePathname).mockReturnValue("/cart");
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    cleanup();
+    // A new key retires the devices that remembered the old one.
+    localStorage.setItem("craves.customer-early-access", "0".repeat(64));
     render(createElement(ChefModeGuard));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
   });
@@ -232,6 +257,17 @@ describe("More hub", () => {
     expect(isChefModeTab(chef.id)).toBe(true);
     expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/sign-in?from=chef");
     expect(isOpenInChefMode("/sign-in")).toBe(true);
+  });
+
+  it("opens the customer app for an owner (ADMIN) while customers wait", async () => {
+    launch.soon = true;
+    me = { ...chef, roles: ["CUSTOMER", "CHEF", "ADMIN"] };
+    setSessionIdentity(me);
+    render(createElement(ChefMorePage));
+    fireEvent.click(await screen.findByRole("button", { name: /^Switch to customer app/ }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Switch" }));
+    expect(isChefModeTab(chef.id)).toBe(false);
+    expect(mocks.assign).toHaveBeenCalledExactlyOnceWith("/home");
   });
 
   it("asks before signing out, then signs out of Craves and makes this device forget Chef Mode", async () => {

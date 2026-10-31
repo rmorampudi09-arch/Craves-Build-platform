@@ -131,8 +131,9 @@ export function DishesGrid({
     visibleCount,
   ]);
   const { sort, foodPreference } = view;
-  // The food type lives in the pill beside the search; every other narrowing shows in the filter bar.
-  const narrowing = activeFilterCount(view) > 0;
+  // Veg lives in the header switch; every other narrowing shows in the filter bar.
+  const narrowing =
+    activeFilterCount({ filters: view.filters, foodPreference: foodPreference === "veg" ? "all" : foodPreference }) > 0;
   const hasFilters = selectedCategory !== "All" || sort !== "recommended" || narrowing;
   const heading = selectedCategory === "All" ? "Popular near you" : selectedCategory;
   const more = hasMoreRemote ? "+" : "";

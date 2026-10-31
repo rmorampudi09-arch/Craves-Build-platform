@@ -7,7 +7,7 @@ export default function NotFound() {
     <main className="flex min-h-screen items-center justify-center bg-white px-4">
       <div className="flex max-w-md flex-col items-center text-center">
         <EmptyState
-          illustration="search"
+          illustration="notFound"
           heading="h1"
           title="We couldn’t find this page"
           message="The link may be old or mistyped, or the dish or kitchen is no longer listed. Pick up from one of these instead."

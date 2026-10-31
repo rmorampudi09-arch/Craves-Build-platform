@@ -57,7 +57,7 @@ async function readCart() {
  * dishes is replaced only once `confirmReplace` agrees; null when the customer keeps it.
  */
 export async function orderLikeLastTime(
-  candidate: RepeatOrderCandidate,
+  candidate: Pick<RepeatOrderCandidate, "orderId" | "kitchenId"> & { items: readonly { menuItemId: string }[] },
   confirmReplace: () => Promise<boolean>,
 ): Promise<ReorderOutcome | null> {
   let onMenu: Set<string>;

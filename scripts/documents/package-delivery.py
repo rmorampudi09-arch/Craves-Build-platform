@@ -23,6 +23,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, 
 BASELINE='147f381b578207e95c7678d208ae2366bce92579'
 README='services/notification-service/modules/pdf-documents/README.md'
 EXCLUDED={'.ttf','.otf','.woff','.woff2','.pem','.p12','.pfx','.jks','.jar','.class'}
+# The web's self-hosted fonts are licensed files, not source: the handover leaves them out ("No font files are included").
+FONTS={'.ttf','.otf','.woff','.woff2'}
 
 def git(*args):
     return subprocess.check_output(['git',*args])
@@ -102,7 +104,7 @@ def main():
     root=Path(__file__).resolve().parents[2]; os.chdir(root)
     args.output.mkdir(parents=True,exist_ok=True)
     sha=git('rev-parse','HEAD').decode().strip()
-    paths=sorted(p for p in git('diff','--name-only','--diff-filter=ACMRT','-z',BASELINE,'HEAD').decode().split('\0') if p)
+    paths=sorted(p for p in git('diff','--name-only','--diff-filter=ACMRT','-z',BASELINE,'HEAD').decode().split('\0') if p and Path(p).suffix.lower() not in FONTS)
     for path in paths:
         file=Path(path)
         if not file.is_file() or file.is_symlink() or file.suffix.lower() in EXCLUDED or file.name=='.env': raise ValueError('Unsafe delivery path: '+path)

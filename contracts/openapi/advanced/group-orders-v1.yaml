@@ -1,0 +1,516 @@
+components:
+  schemas:
+    Checkout:
+      properties:
+        applyToCart:
+          type: boolean
+        replaceCart:
+          type: boolean
+      type: object
+    CheckoutLine:
+      properties:
+        itemName:
+          type: string
+        lineTotalPaise:
+          format: int64
+          type: integer
+        menuItemId:
+          format: uuid
+          type: string
+        quantity:
+          format: int32
+          type: integer
+        unitPricePaise:
+          format: int64
+          type: integer
+      type: object
+    CheckoutResult:
+      properties:
+        appliedToCart:
+          type: boolean
+        createdAt:
+          format: date-time
+          type: string
+        groupOrderId:
+          format: uuid
+          type: string
+        lines:
+          items:
+            $ref: "#/components/schemas/CheckoutLine"
+          type: array
+        subtotalPaise:
+          format: int64
+          type: integer
+      type: object
+    CreateGroupOrder:
+      properties:
+        hostDisplayName:
+          maxLength: 40
+          minLength: 0
+          type: string
+        joinWindowMinutes:
+          format: int32
+          maximum: 1440
+          minimum: 15
+          type: integer
+        kitchenId:
+          format: uuid
+          type: string
+        maxParticipants:
+          format: int32
+          maximum: 20
+          minimum: 2
+          type: integer
+        title:
+          maxLength: 60
+          minLength: 0
+          type: string
+      required:
+      - kitchenId
+      - title
+      type: object
+    GroupOrderSummary:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        joinUntil:
+          format: date-time
+          type: string
+        kitchenId:
+          format: uuid
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        youAreHost:
+          type: boolean
+      type: object
+    GroupOrderView:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        itemCount:
+          format: int32
+          type: integer
+        joinCode:
+          type: string
+        joinUntil:
+          format: date-time
+          type: string
+        kitchenId:
+          format: uuid
+          type: string
+        maxParticipants:
+          format: int32
+          type: integer
+        participantCount:
+          format: int32
+          type: integer
+        participants:
+          items:
+            $ref: "#/components/schemas/ParticipantView"
+          type: array
+        shareUrl:
+          type: string
+        status:
+          type: string
+        subtotalPaise:
+          format: int64
+          type: integer
+        title:
+          type: string
+        version:
+          format: int64
+          type: integer
+        youAreHost:
+          type: boolean
+      type: object
+    ItemView:
+      properties:
+        itemName:
+          type: string
+        lineTotalPaise:
+          format: int64
+          type: integer
+        menuItemId:
+          format: uuid
+          type: string
+        note:
+          type: string
+        quantity:
+          format: int32
+          type: integer
+        unitPricePaise:
+          format: int64
+          type: integer
+      type: object
+    JoinGroupOrder:
+      properties:
+        code:
+          minLength: 1
+          pattern: "[A-Za-z0-9-]{8,9}"
+          type: string
+        displayName:
+          maxLength: 40
+          minLength: 0
+          type: string
+      required:
+      - code
+      type: object
+    ParticipantView:
+      properties:
+        displayName:
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/ItemView"
+          type: array
+        participantId:
+          format: uuid
+          type: string
+        role:
+          type: string
+        subtotalPaise:
+          format: int64
+          type: integer
+        you:
+          type: boolean
+      type: object
+    PutMyItem:
+      properties:
+        note:
+          maxLength: 140
+          minLength: 0
+          type: string
+        quantity:
+          format: int32
+          maximum: 20
+          minimum: 1
+          type: integer
+      type: object
+    Unlock:
+      properties:
+        joinWindowMinutes:
+          format: int32
+          maximum: 1440
+          minimum: 15
+          type: integer
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_GROUP_ORDERS_ENABLED."
+  title: Craves group-orders API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/group-orders:
+    get:
+      operationId: mine
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/GroupOrderSummary"
+                type: array
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+    post:
+      operationId: create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupOrder"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/join:
+    post:
+      operationId: join
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinGroupOrder"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}:
+    get:
+      operationId: get_1
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/cancel:
+    post:
+      operationId: cancel
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/checkout:
+    post:
+      operationId: checkout
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Checkout"
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CheckoutResult"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/leave:
+    post:
+      operationId: leave
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/lock:
+    post:
+      operationId: lock
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/my-items/{menuItemId}:
+    delete:
+      operationId: removeMyItem
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+    put:
+      operationId: putMyItem
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutMyItem"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/participants/{participantId}:
+    delete:
+      operationId: removeParticipant
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: participantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+  /api/v1/advanced/group-orders/{groupId}/unlock:
+    post:
+      operationId: unlock
+      parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Unlock"
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GroupOrderView"
+          description: OK
+      tags:
+      - group-order-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

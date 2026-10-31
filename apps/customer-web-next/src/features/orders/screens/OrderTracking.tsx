@@ -26,6 +26,9 @@ import { TrackingHeader } from "@/features/orders/components/TrackingHeader";
 import { CurrentStatusCard } from "@/features/orders/components/CurrentStatusCard";
 import { DeliveryCodeCard } from "@/features/orders/components/DeliveryCodeCard";
 import { OrderTimeline } from "@/features/orders/components/OrderTimeline";
+import { OrderCalendar } from "@/features/orders/components/OrderCalendar";
+import { orderCalendar } from "@/features/orders/lib/order-calendar";
+import { calendarCondensed } from "@/shared/fonts/theme-fonts";
 import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import { DeliveryAddressCard } from "@/features/orders/components/DeliveryAddressCard";
 import { TrackingOrderSummaryCard } from "@/features/orders/components/TrackingOrderSummaryCard";
@@ -196,6 +199,8 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
         .filter(Boolean)
         .join(", ")
     : undefined;
+  // Orders still on their way show the Kitchen Calendar day sheet; closed ones keep the plain status and updates.
+  const calendarOn = order ? orderCalendar(order, delivery) !== null : false;
   const steps = delivery?.history.length
     ? delivery.history.map((entry) => {
         const item = presentationFor(entry.newStatus);
@@ -216,7 +221,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
       ];
 
   return (
-    <div className="min-h-screen bg-white pb-16 text-[#1A1A1A]">
+    <div className={`${calendarCondensed.variable} min-h-screen bg-[#FFFEFA] pb-16 text-[#151515]`}>
       <TrackingHeader
         orderNumber={shortOrderNumber(id)}
         onBack={() => navigate({ to: `/orders/${id}` })}
@@ -267,30 +272,41 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
           </EmptyState>
         ) : (
           <div className="space-y-5">
-            <OrderMap
-              home={homePin(order)}
-              courier={delivery?.courierLocation ?? null}
-              blurred={!pickedUp}
-              interactive
-              label={pickedUp ? "Delivery map" : "Map, hidden until your order is picked up"}
-              className="h-[46vh] min-h-64 max-h-[32rem] rounded-2xl"
-            >
-              {pickedUp ? null : (
-                <div className="pointer-events-none absolute inset-0 grid place-items-center p-4">
-                  <LockedMapNote />
-                </div>
-              )}
-            </OrderMap>
-
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
               <div className="space-y-5">
-                <CurrentStatusCard
-                  label={currentPresentation.label}
-                  desc={currentPresentation.description}
-                />
+                {calendarOn ? (
+                  <OrderCalendar
+                    order={order}
+                    delivery={delivery}
+                    now={lastUpdatedAt ?? new Date()}
+                    // The same heading as the order page ("Waiting for the chef"), not the list's pill ("Awaiting chef").
+                    title={orderJourney(order, delivery?.status ?? null).title}
+                  />
+                ) : (
+                  <CurrentStatusCard
+                    label={currentPresentation.label}
+                    desc={currentPresentation.description}
+                  />
+                )}
 
                 {delivery?.deliveryCode && <DeliveryCodeCard code={delivery.deliveryCode} />}
 
+                <OrderMap
+                  home={homePin(order)}
+                  courier={delivery?.courierLocation ?? null}
+                  blurred={!pickedUp}
+                  interactive
+                  label={pickedUp ? "Delivery map" : "Map, hidden until your order is picked up"}
+                  className="h-[46vh] min-h-64 max-h-[32rem] rounded-2xl"
+                >
+                  {pickedUp ? null : (
+                    <div className="pointer-events-none absolute inset-0 grid place-items-center p-4">
+                      <LockedMapNote />
+                    </div>
+                  )}
+                </OrderMap>
+
+                {calendarOn ? null : (
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)] md:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h2 className="text-xl font-semibold tracking-[-0.02em] text-[#1A1A1A]">
@@ -313,6 +329,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
                     <OrderTimeline steps={steps} currentIndex={steps.length - 1} />
                   </div>
                 </section>
+                )}
 
                 {delivery?.trackingUrl && (
                   <a

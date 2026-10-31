@@ -1,0 +1,10 @@
+# Code advanced-features-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.advanced.platform.module.FeatureStatusController
+in.craves.advanced.foodlists.FoodListController
+in.craves.advanced.foodlists.SharedFoodListController
+in.craves.advanced.grouporders.GroupOrderController
+in.craves.advanced.foodfacts.FoodFactsController
+in.craves.advanced.foodfacts.FoodFactsAdminController
+in.craves.advanced.tastedata.TasteDataController

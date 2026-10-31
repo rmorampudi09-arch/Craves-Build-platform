@@ -13,7 +13,7 @@ public interface CatalogGateway {
     /** Items that can be bought right now (active, available, eligible kitchen). Missing ids are not purchasable. */
     Map<UUID, MenuItem> purchasable(Collection<UUID> menuItemIds);
 
-    /** Any published item, available or not. Empty when Catalog does not know it. */
+    /** A published item Catalog shows publicly: active, available today, in an eligible kitchen. Empty otherwise (switched off today included). */
     Optional<MenuItem> menuItem(UUID menuItemId);
 
     boolean kitchenExists(UUID kitchenId);

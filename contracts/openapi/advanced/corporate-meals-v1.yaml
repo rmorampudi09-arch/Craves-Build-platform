@@ -1,0 +1,889 @@
+components:
+  schemas:
+    CompanyChange:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+        name:
+          maxLength: 120
+          minLength: 0
+          type: string
+        seatLimit:
+          format: int32
+          maximum: 100000
+          minimum: 1
+          type: integer
+        status:
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          type: string
+      required:
+      - expectedVersion
+      - name
+      - seatLimit
+      - status
+      type: object
+    CompanyCharge:
+      properties:
+        companyId:
+          format: uuid
+          type: string
+        companySharePaise:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        headcount:
+          format: int32
+          type: integer
+        id:
+          format: uuid
+          type: string
+        indiaDate:
+          format: date
+          type: string
+        kind:
+          enum:
+          - MEAL
+          - TEAM_MEAL
+          type: string
+        memberSharePaise:
+          format: int64
+          type: integer
+        orderId:
+          format: uuid
+          type: string
+        status:
+          enum:
+          - RESERVED
+          - CONFIRMED
+          - RELEASED
+          - VOIDED
+          type: string
+        subtotalPaise:
+          format: int64
+          type: integer
+      type: object
+    CompanyChargeConfirm:
+      properties:
+        orderId:
+          format: uuid
+          type: string
+      required:
+      - orderId
+      type: object
+    CompanyChargeVoid:
+      properties:
+        reason:
+          maxLength: 300
+          minLength: 0
+          type: string
+      required:
+      - reason
+      type: object
+    CompanyInviteView:
+      properties:
+        code:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        maxUses:
+          format: int32
+          type: integer
+        revoked:
+          type: boolean
+        uses:
+          format: int32
+          type: integer
+      type: object
+    CompanyMealAllowance:
+      properties:
+        maxPerMealPaise:
+          format: int64
+          type: integer
+        mealDays:
+          items:
+            enum:
+            - MONDAY
+            - TUESDAY
+            - WEDNESDAY
+            - THURSDAY
+            - FRIDAY
+            - SATURDAY
+            - SUNDAY
+            type: string
+          type: array
+          uniqueItems: true
+        mealsPerDay:
+          format: int32
+          type: integer
+        memberMonthlyCapPaise:
+          format: int64
+          type: integer
+        sharePercent:
+          format: int32
+          type: integer
+        windowEnd:
+          type: string
+        windowStart:
+          type: string
+      type: object
+    CompanyMealCart:
+      properties:
+        headcount:
+          format: int32
+          maximum: 100000
+          minimum: 2
+          type: integer
+        items:
+          items:
+            $ref: "#/components/schemas/CompanyMealItem"
+          maxItems: 50
+          minItems: 0
+          type: array
+        kind:
+          enum:
+          - MEAL
+          - TEAM_MEAL
+          type: string
+      required:
+      - items
+      - kind
+      type: object
+    CompanyMealItem:
+      properties:
+        menuItemId:
+          format: uuid
+          type: string
+        quantity:
+          format: int32
+          maximum: 100
+          minimum: 1
+          type: integer
+      required:
+      - menuItemId
+      - quantity
+      type: object
+    CompanyMealQuote:
+      properties:
+        companySharePaise:
+          format: int64
+          type: integer
+        kind:
+          enum:
+          - MEAL
+          - TEAM_MEAL
+          type: string
+        memberSharePaise:
+          format: int64
+          type: integer
+        subtotalPaise:
+          format: int64
+          type: integer
+      type: object
+    CompanyMemberPage:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/CompanyMemberView"
+          type: array
+        nextCursor:
+          type: string
+      type: object
+    CompanyMemberRole:
+      properties:
+        displayName:
+          maxLength: 60
+          minLength: 0
+          type: string
+        role:
+          enum:
+          - MEMBER
+          - MANAGER
+          type: string
+      required:
+      - displayName
+      - role
+      type: object
+    CompanyMemberView:
+      properties:
+        displayName:
+          type: string
+        joinedAt:
+          format: date-time
+          type: string
+        personId:
+          format: uuid
+          type: string
+        role:
+          enum:
+          - MEMBER
+          - MANAGER
+          type: string
+      type: object
+    CompanyMembership:
+      properties:
+        allowance:
+          $ref: "#/components/schemas/CompanyMealAllowance"
+        companyId:
+          format: uuid
+          type: string
+        companyName:
+          type: string
+        displayName:
+          type: string
+        joinedAt:
+          format: date-time
+          type: string
+        mealsLeftToday:
+          format: int32
+          type: integer
+        monthLeftPaise:
+          format: int64
+          type: integer
+        payingNow:
+          type: boolean
+        role:
+          enum:
+          - MEMBER
+          - MANAGER
+          type: string
+      type: object
+    CompanyStatement:
+      properties:
+        companyId:
+          format: uuid
+          type: string
+        companyName:
+          type: string
+        companySharePaise:
+          format: int64
+          type: integer
+        dueDate:
+          format: date
+          type: string
+        meals:
+          format: int32
+          type: integer
+        month:
+          type: string
+        people:
+          items:
+            $ref: "#/components/schemas/CompanyStatementLine"
+          type: array
+        subtotalPaise:
+          format: int64
+          type: integer
+        teamMeals:
+          format: int32
+          type: integer
+      type: object
+    CompanyStatementLine:
+      properties:
+        companySharePaise:
+          format: int64
+          type: integer
+        displayName:
+          type: string
+        meals:
+          format: int32
+          type: integer
+        personId:
+          format: uuid
+          type: string
+        teamMeals:
+          format: int32
+          type: integer
+      type: object
+    CompanyTerms:
+      properties:
+        maxPerMealPaise:
+          format: int64
+          maximum: 10000000
+          minimum: 1
+          type: integer
+        mealDays:
+          items:
+            enum:
+            - MONDAY
+            - TUESDAY
+            - WEDNESDAY
+            - THURSDAY
+            - FRIDAY
+            - SATURDAY
+            - SUNDAY
+            type: string
+          minItems: 1
+          type: array
+          uniqueItems: true
+        mealsPerDay:
+          format: int32
+          maximum: 5
+          minimum: 1
+          type: integer
+        memberMonthlyCapPaise:
+          format: int64
+          minimum: 1
+          type: integer
+        monthlyBudgetPaise:
+          format: int64
+          minimum: 1
+          type: integer
+        paymentTermsDays:
+          format: int32
+          maximum: 120
+          minimum: 0
+          type: integer
+        sharePercent:
+          format: int32
+          maximum: 100
+          minimum: 1
+          type: integer
+        windowEnd:
+          type: string
+        windowStart:
+          type: string
+      required:
+      - maxPerMealPaise
+      - mealDays
+      - mealsPerDay
+      - monthlyBudgetPaise
+      - paymentTermsDays
+      - sharePercent
+      - windowEnd
+      - windowStart
+      type: object
+    CompanyTermsChange:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+        terms:
+          $ref: "#/components/schemas/CompanyTerms"
+      required:
+      - expectedVersion
+      - terms
+      type: object
+    CompanyView:
+      properties:
+        id:
+          format: uuid
+          type: string
+        members:
+          format: int32
+          type: integer
+        month:
+          type: string
+        monthCommittedPaise:
+          format: int64
+          type: integer
+        name:
+          type: string
+        seatLimit:
+          format: int32
+          type: integer
+        status:
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          type: string
+        terms:
+          $ref: "#/components/schemas/CompanyTerms"
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    JoinCompany:
+      properties:
+        code:
+          maxLength: 64
+          minLength: 0
+          type: string
+        displayName:
+          maxLength: 60
+          minLength: 0
+          type: string
+      required:
+      - code
+      - displayName
+      type: object
+    NewCompany:
+      properties:
+        name:
+          maxLength: 120
+          minLength: 0
+          type: string
+        seatLimit:
+          format: int32
+          maximum: 100000
+          minimum: 1
+          type: integer
+      required:
+      - name
+      - seatLimit
+      type: object
+    NewCompanyInvite:
+      properties:
+        expiresInDays:
+          format: int32
+          maximum: 30
+          minimum: 1
+          type: integer
+        maxUses:
+          format: int32
+          maximum: 100000
+          minimum: 1
+          type: integer
+      required:
+      - expiresInDays
+      - maxUses
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_CORPORATE_MEALS_ENABLED."
+  title: Craves corporate-meals API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/corporate-meals/admin/charges/{chargeId}/void:
+    post:
+      operationId: voidCompanyCharge
+      parameters:
+      - in: path
+        name: chargeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyChargeVoid"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyCharge"
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/corporate-meals/admin/companies:
+    get:
+      operationId: listCompanies
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/CompanyView"
+                type: array
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+    post:
+      operationId: createCompany
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewCompany"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyView"
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/corporate-meals/admin/companies/{companyId}:
+    put:
+      operationId: updateCompany
+      parameters:
+      - in: path
+        name: companyId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyChange"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyView"
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/corporate-meals/admin/companies/{companyId}/members/{personId}:
+    put:
+      operationId: setCompanyMember
+      parameters:
+      - in: path
+        name: companyId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: personId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyMemberRole"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyMemberView"
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/corporate-meals/admin/companies/{companyId}/statement:
+    get:
+      operationId: companyStatement
+      parameters:
+      - in: path
+        name: companyId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: month
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyStatement"
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/corporate-meals/admin/companies/{companyId}/terms:
+    put:
+      operationId: setCompanyTerms
+      parameters:
+      - in: path
+        name: companyId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyTermsChange"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyView"
+          description: OK
+      tags:
+      - corporate-meals-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/corporate-meals/charges:
+    post:
+      operationId: reserveCompanyMeal
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyMealCart"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyCharge"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/charges/{chargeId}:
+    delete:
+      operationId: releaseCompanyMeal
+      parameters:
+      - in: path
+        name: chargeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/charges/{chargeId}/confirm:
+    post:
+      operationId: confirmCompanyMeal
+      parameters:
+      - in: path
+        name: chargeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyChargeConfirm"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyCharge"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/join:
+    post:
+      operationId: joinCompany
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinCompany"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyMembership"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/manager/company:
+    get:
+      operationId: managedCompany
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyView"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/manager/invites:
+    get:
+      operationId: companyInvites
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/CompanyInviteView"
+                type: array
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+    post:
+      operationId: createCompanyInvite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewCompanyInvite"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyInviteView"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/manager/invites/{inviteId}:
+    delete:
+      operationId: revokeCompanyInvite
+      parameters:
+      - in: path
+        name: inviteId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/manager/members:
+    get:
+      operationId: companyMembers
+      parameters:
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyMemberPage"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/manager/members/{personId}:
+    delete:
+      operationId: removeCompanyMember
+      parameters:
+      - in: path
+        name: personId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/manager/statement:
+    get:
+      operationId: managedCompanyStatement
+      parameters:
+      - in: query
+        name: month
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyStatement"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/me:
+    delete:
+      operationId: leaveCompany
+      responses:
+        "200":
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+    get:
+      operationId: myCompanyMembership
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyMembership"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+  /api/v1/advanced/corporate-meals/quote:
+    post:
+      operationId: quoteCompanyMeal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyMealCart"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompanyMealQuote"
+          description: OK
+      tags:
+      - corporate-meals-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

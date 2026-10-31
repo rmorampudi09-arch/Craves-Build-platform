@@ -8,3 +8,17 @@ in.craves.advanced.grouporders.GroupOrderController
 in.craves.advanced.foodfacts.FoodFactsController
 in.craves.advanced.foodfacts.FoodFactsAdminController
 in.craves.advanced.tastedata.TasteDataController
+in.craves.advanced.taxonomy.TaxonomyController
+in.craves.advanced.taxonomy.TaxonomyAdminController
+in.craves.advanced.menuoptions.MenuOptionsController
+in.craves.advanced.tastememory.TasteMemoryController
+in.craves.advanced.kitchencapacity.KitchenCapacityController
+in.craves.advanced.promotions.PromotionsController
+in.craves.advanced.promotions.PromotionsAdminController
+in.craves.advanced.bulkorders.BulkOrderController
+in.craves.advanced.corporatemeals.CorporateMealsController
+in.craves.advanced.corporatemeals.CorporateMealsAdminController
+in.craves.advanced.orderamendments.OrderAmendmentController
+in.craves.advanced.orderamendments.OrderAmendmentAdminController
+in.craves.advanced.trust.TrustController
+in.craves.advanced.trust.TrustAdminController

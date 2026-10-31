@@ -1,0 +1,843 @@
+components:
+  schemas:
+    ChefDisputeStatement:
+      properties:
+        statement:
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - statement
+      type: object
+    DisputePolicy:
+      properties:
+        windowHours:
+          format: int32
+          maximum: 2160
+          minimum: 1
+          type: integer
+      required:
+      - windowHours
+      type: object
+    DisputePolicyView:
+      properties:
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+        windowHours:
+          format: int32
+          type: integer
+      type: object
+    NewOrderDispute:
+      properties:
+        category:
+          enum:
+          - MISSING_ITEMS
+          - WRONG_ITEMS
+          - QUALITY
+          - FOOD_SAFETY
+          - NOT_DELIVERED
+          - LATE
+          - OVERCHARGED
+          - REFUND_ISSUE
+          - OTHER
+          type: string
+        claimedPaise:
+          format: int64
+          minimum: 1
+          type: integer
+        description:
+          maxLength: 1000
+          minLength: 0
+          type: string
+        orderId:
+          format: uuid
+          type: string
+      required:
+      - category
+      - description
+      - orderId
+      type: object
+    NewRiskFlag:
+      properties:
+        reason:
+          maxLength: 500
+          minLength: 0
+          type: string
+        severity:
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          type: string
+        subjectId:
+          format: uuid
+          type: string
+        subjectType:
+          enum:
+          - PERSON
+          - KITCHEN
+          type: string
+      required:
+      - reason
+      - severity
+      - subjectId
+      - subjectType
+      type: object
+    NewTrustReport:
+      properties:
+        details:
+          maxLength: 1000
+          minLength: 0
+          type: string
+        orderId:
+          format: uuid
+          type: string
+        reason:
+          enum:
+          - FOOD_SAFETY
+          - HYGIENE
+          - WRONG_LABEL
+          - MISLEADING
+          - ABUSE
+          - FRAUD
+          - SPAM
+          - OTHER
+          type: string
+        targetId:
+          format: uuid
+          type: string
+        targetType:
+          enum:
+          - KITCHEN
+          - DISH
+          - REVIEW
+          - PERSON
+          type: string
+      required:
+      - details
+      - reason
+      - targetId
+      - targetType
+      type: object
+    OrderDisputeDecision:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+        note:
+          maxLength: 500
+          minLength: 0
+          type: string
+        outcome:
+          enum:
+          - OPEN
+          - RESOLVED
+          - REJECTED
+          - WITHDRAWN
+          type: string
+        refundPaise:
+          format: int64
+          minimum: 1
+          type: integer
+      required:
+      - expectedVersion
+      - note
+      - outcome
+      type: object
+    OrderDisputeView:
+      properties:
+        category:
+          enum:
+          - MISSING_ITEMS
+          - WRONG_ITEMS
+          - QUALITY
+          - FOOD_SAFETY
+          - NOT_DELIVERED
+          - LATE
+          - OVERCHARGED
+          - REFUND_ISSUE
+          - OTHER
+          type: string
+        chefRespondedAt:
+          format: date-time
+          type: string
+        chefStatement:
+          type: string
+        claimedPaise:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        decidedAt:
+          format: date-time
+          type: string
+        decisionNote:
+          type: string
+        description:
+          type: string
+        id:
+          format: uuid
+          type: string
+        kitchenId:
+          format: uuid
+          type: string
+        orderId:
+          format: uuid
+          type: string
+        orderValuePaise:
+          format: int64
+          type: integer
+        refundPaise:
+          format: int64
+          type: integer
+        refundablePaise:
+          format: int64
+          type: integer
+        status:
+          enum:
+          - OPEN
+          - RESOLVED
+          - REJECTED
+          - WITHDRAWN
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    RiskFlagClear:
+      properties:
+        note:
+          maxLength: 500
+          minLength: 0
+          type: string
+      required:
+      - note
+      type: object
+    RiskFlagView:
+      properties:
+        clearNote:
+          type: string
+        clearedAt:
+          format: date-time
+          type: string
+        clearedBy:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        open:
+          type: boolean
+        raisedAt:
+          format: date-time
+          type: string
+        raisedBy:
+          format: uuid
+          type: string
+        reason:
+          type: string
+        severity:
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          type: string
+        subjectId:
+          format: uuid
+          type: string
+        subjectType:
+          enum:
+          - PERSON
+          - KITCHEN
+          type: string
+      type: object
+    RiskSummary:
+      properties:
+        disputesOpen:
+          format: int32
+          type: integer
+        disputesRejected:
+          format: int32
+          type: integer
+        disputesResolved:
+          format: int32
+          type: integer
+        openFlags:
+          items:
+            $ref: "#/components/schemas/RiskFlagView"
+          type: array
+        refundsDecidedPaise:
+          format: int64
+          type: integer
+        reportsDismissed:
+          format: int32
+          type: integer
+        reportsOpen:
+          format: int32
+          type: integer
+        reportsUpheld:
+          format: int32
+          type: integer
+        subjectId:
+          format: uuid
+          type: string
+        subjectType:
+          enum:
+          - PERSON
+          - KITCHEN
+          type: string
+      type: object
+    StaffOrderDispute:
+      properties:
+        customerId:
+          format: uuid
+          type: string
+        dispute:
+          $ref: "#/components/schemas/OrderDisputeView"
+      type: object
+    StaffTrustReport:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        decidedAt:
+          format: date-time
+          type: string
+        decidedBy:
+          format: uuid
+          type: string
+        decisionNote:
+          type: string
+        details:
+          type: string
+        id:
+          format: uuid
+          type: string
+        orderId:
+          format: uuid
+          type: string
+        reason:
+          enum:
+          - FOOD_SAFETY
+          - HYGIENE
+          - WRONG_LABEL
+          - MISLEADING
+          - ABUSE
+          - FRAUD
+          - SPAM
+          - OTHER
+          type: string
+        reporterId:
+          format: uuid
+          type: string
+        status:
+          enum:
+          - OPEN
+          - UPHELD
+          - DISMISSED
+          type: string
+        targetId:
+          format: uuid
+          type: string
+        targetType:
+          enum:
+          - KITCHEN
+          - DISH
+          - REVIEW
+          - PERSON
+          type: string
+      type: object
+    TrustReportDecision:
+      properties:
+        note:
+          maxLength: 500
+          minLength: 0
+          type: string
+        outcome:
+          enum:
+          - OPEN
+          - UPHELD
+          - DISMISSED
+          type: string
+      required:
+      - note
+      - outcome
+      type: object
+    TrustReportView:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        decidedAt:
+          format: date-time
+          type: string
+        details:
+          type: string
+        id:
+          format: uuid
+          type: string
+        orderId:
+          format: uuid
+          type: string
+        reason:
+          enum:
+          - FOOD_SAFETY
+          - HYGIENE
+          - WRONG_LABEL
+          - MISLEADING
+          - ABUSE
+          - FRAUD
+          - SPAM
+          - OTHER
+          type: string
+        status:
+          enum:
+          - OPEN
+          - UPHELD
+          - DISMISSED
+          type: string
+        targetId:
+          format: uuid
+          type: string
+        targetType:
+          enum:
+          - KITCHEN
+          - DISH
+          - REVIEW
+          - PERSON
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_TRUST_ENABLED."
+  title: Craves trust API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/trust/admin/disputes:
+    get:
+      operationId: orderDisputeQueue
+      parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - OPEN
+          - RESOLVED
+          - REJECTED
+          - WITHDRAWN
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/StaffOrderDispute"
+                type: array
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/disputes/policy:
+    put:
+      operationId: setDisputePolicy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisputePolicy"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DisputePolicyView"
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/disputes/{disputeId}/decide:
+    post:
+      operationId: decideOrderDispute
+      parameters:
+      - in: path
+        name: disputeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderDisputeDecision"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StaffOrderDispute"
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/flags:
+    post:
+      operationId: raiseRiskFlag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewRiskFlag"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RiskFlagView"
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/flags/{flagId}/clear:
+    post:
+      operationId: clearRiskFlag
+      parameters:
+      - in: path
+        name: flagId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskFlagClear"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RiskFlagView"
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/flags/{subjectType}/{subjectId}:
+    get:
+      operationId: riskFlags
+      parameters:
+      - in: path
+        name: subjectType
+        required: true
+        schema:
+          enum:
+          - PERSON
+          - KITCHEN
+          type: string
+      - in: path
+        name: subjectId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/RiskFlagView"
+                type: array
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/reports:
+    get:
+      operationId: trustReportQueue
+      parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - OPEN
+          - UPHELD
+          - DISMISSED
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/StaffTrustReport"
+                type: array
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/reports/targets/{targetType}/{targetId}:
+    get:
+      operationId: trustReportsAbout
+      parameters:
+      - in: path
+        name: targetType
+        required: true
+        schema:
+          enum:
+          - KITCHEN
+          - DISH
+          - REVIEW
+          - PERSON
+          type: string
+      - in: path
+        name: targetId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/StaffTrustReport"
+                type: array
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/reports/{reportId}/decide:
+    post:
+      operationId: decideTrustReport
+      parameters:
+      - in: path
+        name: reportId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrustReportDecision"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StaffTrustReport"
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/admin/subjects/{subjectType}/{subjectId}:
+    get:
+      operationId: riskSummary
+      parameters:
+      - in: path
+        name: subjectType
+        required: true
+        schema:
+          enum:
+          - PERSON
+          - KITCHEN
+          type: string
+      - in: path
+        name: subjectId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RiskSummary"
+          description: OK
+      tags:
+      - trust-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/trust/chef/disputes:
+    get:
+      operationId: chefOrderDisputes
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/OrderDisputeView"
+                type: array
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+  /api/v1/advanced/trust/chef/disputes/{disputeId}/statement:
+    post:
+      operationId: chefDisputeStatement
+      parameters:
+      - in: path
+        name: disputeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChefDisputeStatement"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/OrderDisputeView"
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+  /api/v1/advanced/trust/disputes:
+    post:
+      operationId: openOrderDispute
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewOrderDispute"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/OrderDisputeView"
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+  /api/v1/advanced/trust/disputes/mine:
+    get:
+      operationId: myOrderDisputes
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/OrderDisputeView"
+                type: array
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+  /api/v1/advanced/trust/disputes/policy:
+    get:
+      operationId: disputePolicy
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DisputePolicyView"
+          description: OK
+      security: []
+      tags:
+      - trust-controller
+      x-craves-auth: public
+  /api/v1/advanced/trust/disputes/{disputeId}/withdraw:
+    post:
+      operationId: withdrawOrderDispute
+      parameters:
+      - in: path
+        name: disputeId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/OrderDisputeView"
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+  /api/v1/advanced/trust/reports:
+    post:
+      operationId: fileTrustReport
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTrustReport"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TrustReportView"
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+  /api/v1/advanced/trust/reports/mine:
+    get:
+      operationId: myTrustReports
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/TrustReportView"
+                type: array
+          description: OK
+      tags:
+      - trust-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

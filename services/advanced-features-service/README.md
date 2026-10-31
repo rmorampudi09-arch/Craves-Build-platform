@@ -11,6 +11,15 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 | Food lists (E04) | `foodlists` | `adv_food_lists` | `/api/v1/advanced/food-lists`, `/api/v1/advanced/shared-food-lists` | `contracts/openapi/advanced/food-lists-v1.yaml` | `CRAVES_ADV_FOOD_LISTS_ENABLED` |
 | Group orders (E13) | `grouporders` | `adv_group_orders` | `/api/v1/advanced/group-orders` | `group-orders-v1.yaml` | `CRAVES_ADV_GROUP_ORDERS_ENABLED` |
 | Food facts (E19) | `foodfacts` | `adv_food_facts` | `/api/v1/advanced/food-facts` | `food-facts-v1.yaml` | `CRAVES_ADV_FOOD_FACTS_ENABLED` |
+| Cuisine and diet taxonomy (E10) | `taxonomy` | `adv_taxonomy` | `/api/v1/advanced/taxonomy` | `taxonomy-v1.yaml` | `CRAVES_ADV_TAXONOMY_ENABLED` |
+| Menu options and meal hours (E16) | `menuoptions` | `adv_menu_options` | `/api/v1/advanced/menu-options` | `menu-options-v1.yaml` | `CRAVES_ADV_MENU_OPTIONS_ENABLED` |
+| Taste memory (E03) | `tastememory` | `adv_taste_memory` | `/api/v1/advanced/taste-memory` | `taste-memory-v1.yaml` | `CRAVES_ADV_TASTE_MEMORY_ENABLED` |
+| Small batches and kitchen load (E05, E20) | `kitchencapacity` | `adv_kitchen_capacity` | `/api/v1/advanced/kitchen-capacity` | `kitchen-capacity-v1.yaml` | `CRAVES_ADV_KITCHEN_CAPACITY_ENABLED` |
+| Promotions and coupons (E23) | `promotions` | `adv_promotions` | `/api/v1/advanced/promotions` | `promotions-v1.yaml` | `CRAVES_ADV_PROMOTIONS_ENABLED` |
+| Party and bulk orders (E14) | `bulkorders` | `adv_bulk_orders` | `/api/v1/advanced/bulk-orders` | `bulk-orders-v1.yaml` | `CRAVES_ADV_BULK_ORDERS_ENABLED` |
+| Corporate and team meals (E15) | `corporatemeals` | `adv_corporate_meals` | `/api/v1/advanced/corporate-meals` | `corporate-meals-v1.yaml` | `CRAVES_ADV_CORPORATE_MEALS_ENABLED` |
+| Order amendments and substitutions (E17) | `orderamendments` | `adv_order_amendments` | `/api/v1/advanced/order-amendments` | `order-amendments-v1.yaml` | `CRAVES_ADV_ORDER_AMENDMENTS_ENABLED` |
+| Reports, disputes and risk flags (E29) | `trust` | `adv_trust` | `/api/v1/advanced/trust` | `trust-v1.yaml` | `CRAVES_ADV_TRUST_ENABLED` |
 | Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
 | Feature switches | `platform.module` | – | `/api/v1/advanced/features` (public), `/modules` (staff) | `advanced-v1.yaml` | – |
 

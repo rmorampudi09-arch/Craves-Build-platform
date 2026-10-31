@@ -22,3 +22,5 @@ in.craves.advanced.orderamendments.OrderAmendmentController
 in.craves.advanced.orderamendments.OrderAmendmentAdminController
 in.craves.advanced.trust.TrustController
 in.craves.advanced.trust.TrustAdminController
+in.craves.advanced.experiments.ExperimentController
+in.craves.advanced.experiments.ExperimentAdminController

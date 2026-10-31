@@ -20,6 +20,7 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 | Corporate and team meals (E15) | `corporatemeals` | `adv_corporate_meals` | `/api/v1/advanced/corporate-meals` | `corporate-meals-v1.yaml` | `CRAVES_ADV_CORPORATE_MEALS_ENABLED` |
 | Order amendments and substitutions (E17) | `orderamendments` | `adv_order_amendments` | `/api/v1/advanced/order-amendments` | `order-amendments-v1.yaml` | `CRAVES_ADV_ORDER_AMENDMENTS_ENABLED` |
 | Reports, disputes and risk flags (E29) | `trust` | `adv_trust` | `/api/v1/advanced/trust` | `trust-v1.yaml` | `CRAVES_ADV_TRUST_ENABLED` |
+| Experiments and product analytics (E30) | `experiments` | `adv_experiments` | `/api/v1/advanced/experiments` | `experiments-v1.yaml` | `CRAVES_ADV_EXPERIMENTS_ENABLED` |
 | Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
 | Feature switches | `platform.module` | – | `/api/v1/advanced/features` (public), `/modules` (staff) | `advanced-v1.yaml` | – |
 

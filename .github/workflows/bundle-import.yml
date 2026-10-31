@@ -1,0 +1,85 @@
+name: Bundle import
+# The advanced-features build sandbox has no GitHub token. The owner's browser uploads one
+# .tgz (plus an optional .delete list) into .bundles/ on a bundle/** branch; this job checks
+# every path against the allow-list below, commits the files, and re-runs CI when a PR is open.
+# See docs/advanced-features/PLAYBOOK.md.
+on:
+  push:
+    branches: ['bundle/**']
+    paths: ['.bundles/**', '.github/workflows/bundle-import.yml']
+permissions:
+  contents: write
+  actions: write
+  pull-requests: read
+concurrency:
+  group: bundle-import-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+      - name: Validate, unpack and commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          bundles=(.bundles/*.tgz)
+          deletes=(.bundles/*.delete)
+          if [ ${#bundles[@]} -eq 0 ] && [ ${#deletes[@]} -eq 0 ]; then echo "Nothing to import"; exit 0; fi
+          python3 - "${bundles[@]}" "${deletes[@]}" <<'PY'
+          import re, sys, tarfile
+          allowed = re.compile(r'^(services/advanced-features-service/|contracts/openapi/advanced/|infra/advanced-features/'
+                               r'|infra/apim/advanced-features/|docs/advanced-features/|scripts/advanced-features/)'
+                               r'[A-Za-z0-9._/-]+$')
+          def check(path):
+              if path.startswith('/') or '..' in path.split('/') or not allowed.match(path):
+                  sys.exit(f'Refused path: {path}')
+          for name in sys.argv[1:]:
+              if name.endswith('.tgz'):
+                  with tarfile.open(name, 'r:gz') as bundle:
+                      for member in bundle.getmembers():
+                          path = member.name[2:] if member.name.startswith('./') else member.name
+                          if member.isdir():
+                              continue
+                          if not member.isfile() or member.size > 2_000_000:
+                              sys.exit(f'Refused member (not a small regular file): {member.name}')
+                          check(path)
+              else:
+                  for line in open(name, encoding='utf-8'):
+                      if line.strip():
+                          check(line.strip())
+          print('All bundle paths are inside the advanced-features allow-list.')
+          PY
+          for d in "${deletes[@]}"; do
+            while IFS= read -r path; do [ -n "$path" ] && git rm -q --ignore-unmatch -- "$path"; done < "$d"
+            git rm -q -- "$d"
+          done
+          names=""
+          for b in "${bundles[@]}"; do
+            tar -xzf "$b" --no-same-owner --no-same-permissions
+            git rm -q -- "$b"
+            names="$names $(basename "$b")"
+          done
+          for p in services/advanced-features-service contracts/openapi/advanced infra/advanced-features \
+                   infra/apim/advanced-features docs/advanced-features scripts/advanced-features; do
+            if [ -e "$p" ]; then git add -A -- "$p"; fi
+          done
+          git -c user.name="craves-bundle-import" -c user.email="bundle-import@users.noreply.github.com" \
+            commit -q -m "Import${names:- deletions}"
+          git push -q origin "HEAD:${BRANCH}"
+          sha=$(git rev-parse HEAD)
+          echo "Imported as $sha"
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)
+          if [ -n "$pr" ]; then
+            # Pushes made with GITHUB_TOKEN do not start pull_request workflows: run the required checks on the new head.
+            gh workflow run launch-regression-ci.yml --ref "$BRANCH" -f expectedReleaseSha="$sha"
+            gh workflow run advanced-features-ci.yml --ref "$BRANCH"
+            echo "Dispatched CI for PR #$pr on $sha"
+          fi

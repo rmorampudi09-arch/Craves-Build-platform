@@ -1,0 +1,53 @@
+name: Advanced features dependency cache
+# The build sandbox cannot reach Maven Central. This job resolves the service's dependencies and
+# Maven plugins on a GitHub runner and publishes the local repository as split tarballs on the
+# orphan branch ci/advanced-features-m2, which the sandbox fetches over git. No secrets involved.
+on:
+  push:
+    branches: ['main', 'bundle/**']
+    paths: ['services/advanced-features-service/pom.xml', '.github/workflows/advanced-features-deps.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: advanced-features-deps
+  cancel-in-progress: false
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Resolve dependencies and plugins with a stub build
+        run: |
+          set -euo pipefail
+          stub=$(mktemp -d)
+          cp services/advanced-features-service/pom.xml "$stub/pom.xml"
+          mkdir -p "$stub/src/main/java/stub" "$stub/src/test/java/stub"
+          printf 'package stub;\npublic class Stub { public static int one() { return 1; } public static void main(String[] args) { } }\n' > "$stub/src/main/java/stub/Stub.java"
+          printf 'package stub;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nclass StubTest { @Test void one() { assertEquals(1, Stub.one()); } }\n' > "$stub/src/test/java/stub/StubTest.java"
+          printf 'package stub;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nclass StubIT { @Test void one() { assertEquals(1, Stub.one()); } }\n' > "$stub/src/test/java/stub/StubIT.java"
+          cd "$stub"
+          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" dependency:go-offline
+          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" clean verify
+          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" dependency:sources -DincludeGroupIds=none -q || true
+      - name: Publish ci/advanced-features-m2
+        run: |
+          set -euo pipefail
+          out=$(mktemp -d)
+          tar -C "$RUNNER_TEMP" -czf "$out/m2.tgz" m2
+          cd "$out"
+          split -b 90m -d m2.tgz m2.tgz.part-
+          rm m2.tgz
+          sha256sum m2.tgz.part-* > SHA256SUMS
+          git init -q -b ci/advanced-features-m2
+          git add .
+          git -c user.name="craves-ci" -c user.email="ci@users.noreply.github.com" commit -q -m "Maven cache for ${GITHUB_SHA}"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci/advanced-features-m2
+          ls -la

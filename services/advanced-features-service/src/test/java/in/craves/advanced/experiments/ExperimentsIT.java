@@ -140,6 +140,13 @@ class ExperimentsIT extends IntegrationTestBase {
         String day = now.atZone(ZoneId.of("Asia/Kolkata")).toLocalDate().toString();
         mvc.perform(get(BASE + "/admin/events/daily").param("name", "dish.view").param("from", day).param("to", day).header("Authorization", admin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.days[0].people").value(12)).andExpect(jsonPath("$.days[0].events").value(12));
+        // One person's many events never show: the event count is hidden with the people count.
+        String rare = consenting(UUID.randomUUID(), true);
+        StringBuilder many = new StringBuilder();
+        for (int i = 0; i < 9; i++) many.append(i == 0 ? "" : ",").append(event(UUID.randomUUID(), "rare.feature", null, now));
+        send("POST", rare, BASE + "/events", "{\"events\":[" + many + "]}").andExpect(jsonPath("$.recorded").value(9));
+        mvc.perform(get(BASE + "/admin/events/daily").param("name", "rare.feature").param("from", day).param("to", day).header("Authorization", admin))
+                .andExpect(jsonPath("$.days[0].people").doesNotExist()).andExpect(jsonPath("$.days[0].events").doesNotExist());
         mvc.perform(get(BASE + "/admin/events/daily").param("name", "experiment.exposure").param("from", "2026-01-01").param("to", "2026-12-31")
                 .header("Authorization", admin)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_RANGE"));
     }
@@ -158,6 +165,8 @@ class ExperimentsIT extends IntegrationTestBase {
         send("POST", auth, BASE + "/events", "{\"events\":[{\"eventId\":\"" + UUID.randomUUID() + "\",\"name\":\"dish.view\",\"occurredAt\":\""
                 + now + "\",\"properties\":{\"nested\":{\"a\":1}}}]}").andExpect(status().isBadRequest());
         send("POST", auth, BASE + "/events", "{\"events\":[" + event(UUID.randomUUID(), "Dish View!", null, now) + "]}").andExpect(status().isBadRequest());
+        send("POST", auth, BASE + "/events", "{\"events\":[{\"eventId\":\"" + UUID.randomUUID() + "\",\"name\":\"dish.view\",\"occurredAt\":\""
+                + now + "\",\"properties\":{\"note\":\"a\\u0000b\"}}]}").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_EVENTS"));
 
         // An unknown or draft experiment is dropped from the event; the event itself is kept.
         send("POST", admin, BASE + "/admin/experiments", "{\"key\":\"later\",\"description\":\"d\",\"variants\":[{\"key\":\"va\",\"weight\":1},{\"key\":\"vb\",\"weight\":1}]}")
@@ -187,5 +196,17 @@ class ExperimentsIT extends IntegrationTestBase {
         // Erase also removed consent, so new events are dropped again.
         send("POST", auth, BASE + "/events", "{\"events\":[" + event(UUID.randomUUID(), "dish.view", null, CLOCK.instant()) + "]}")
                 .andExpect(jsonPath("$.recorded").value(0));
+    }
+
+    @Test
+    void oneAccountCannotFloodTheEventStore() throws Exception {
+        String auth = consenting(UUID.randomUUID(), true);
+        for (int batch = 0; batch < ExperimentService.MAX_EVENTS_PER_DAY / 50; batch++) {
+            StringBuilder events = new StringBuilder();
+            for (int i = 0; i < 50; i++) events.append(i == 0 ? "" : ",").append(event(UUID.randomUUID(), "dish.view", null, CLOCK.instant()));
+            send("POST", auth, BASE + "/events", "{\"events\":[" + events + "]}").andExpect(jsonPath("$.recorded").value(50));
+        }
+        send("POST", auth, BASE + "/events", "{\"events\":[" + event(UUID.randomUUID(), "dish.view", null, CLOCK.instant()) + "]}")
+                .andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.code").value("ANALYTICS_LIMIT"));
     }
 }

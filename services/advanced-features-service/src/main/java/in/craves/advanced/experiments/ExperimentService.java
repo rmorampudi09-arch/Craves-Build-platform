@@ -34,6 +34,8 @@ public class ExperimentService implements PersonalDataContributor {
     static final Duration OLDEST_EVENT = Duration.ofDays(7);
     static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
     static final int MAX_KEYS = 20;
+    /** shortcut: a fixed technical abuse cap, not a product rule; make it a setting if real use comes near it. */
+    static final int MAX_EVENTS_PER_DAY = 1000;
     static final int MAX_REPORT_DAYS = 92;
     private static final ZoneId INDIA = ZoneId.of("Asia/Kolkata");
 
@@ -117,7 +119,11 @@ public class ExperimentService implements PersonalDataContributor {
         if (!invalid.isEmpty()) {
             throw new ApiProblem(400, "INVALID_EVENTS", "Events must be from the last 7 days and have flat, short properties", invalid);
         }
+        repository.lockPerson(person);
         if (!repository.analyticsConsent(person)) return new AnalyticsReceipt(events.size(), 0, false);
+        if (repository.receivedSince(person, now.minus(Duration.ofDays(1))) + events.size() > MAX_EVENTS_PER_DAY) {
+            throw new ApiProblem(429, "ANALYTICS_LIMIT", "Too many analytics events from this account today; try again later");
+        }
         List<String> keys = events.stream().map(AnalyticsEvent::experimentKey).filter(key -> key != null).distinct().toList();
         Map<String, Stored> experiments = keys.isEmpty() ? Map.of()
                 : repository.byKeys(keys).stream().collect(Collectors.toMap(s -> s.view().key(), Function.identity()));
@@ -141,8 +147,9 @@ public class ExperimentService implements PersonalDataContributor {
         Map<String, Counts> counts = repository.results(key, eventName).stream().collect(Collectors.toMap(Counts::variant, Function.identity()));
         List<VariantResult> variants = stored.view().variants().stream().map(variant -> {
             Counts c = counts.getOrDefault(variant.key(), new Counts(variant.key(), 0, 0, 0));
-            return new VariantResult(variant.key(), ExperimentRules.suppress(c.people()), ExperimentRules.suppress(c.peopleWithEvent()),
-                    ExperimentRules.suppress(c.events()));
+            Long withEvent = ExperimentRules.suppress(c.peopleWithEvent());
+            // Event counts are hidden with their people count, so a few people's many events never show.
+            return new VariantResult(variant.key(), ExperimentRules.suppress(c.people()), withEvent, withEvent == null ? null : c.events());
         }).toList();
         return new ExperimentResults(key, eventName, ExperimentRules.MIN_REPORTED, variants);
     }
@@ -172,6 +179,7 @@ public class ExperimentService implements PersonalDataContributor {
 
     @Override
     public int erase(UUID person) {
+        repository.lockPerson(person);
         return repository.deleteEventsOf(person);
     }
 

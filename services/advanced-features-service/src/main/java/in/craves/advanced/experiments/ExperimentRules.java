@@ -16,6 +16,7 @@ final class ExperimentRules {
     /** Counts below this are reported as null: aggregate reports must not single out a handful of people. */
     static final int MIN_REPORTED = 5;
     static final int MAX_PROPERTY_TEXT = 100;
+    static final int MAX_NUMBER_CHARS = 30;
 
     private ExperimentRules() { }
 
@@ -39,8 +40,10 @@ final class ExperimentRules {
     /** Properties are flat: short text, numbers or true/false. Nested values could smuggle in anything. */
     static boolean validProperties(Map<String, Object> properties) {
         if (properties == null) return true;
-        return properties.values().stream().allMatch(value -> value instanceof Number || value instanceof Boolean
-                || value instanceof String text && text.length() <= MAX_PROPERTY_TEXT);
+        // Postgres jsonb refuses \u0000, which would fail the whole batch.
+        return properties.values().stream().allMatch(value -> value instanceof Boolean
+                || value instanceof Number number && number.toString().length() <= MAX_NUMBER_CHARS
+                || value instanceof String text && text.length() <= MAX_PROPERTY_TEXT && text.indexOf('\0') < 0);
     }
 
     static Long suppress(long count) {

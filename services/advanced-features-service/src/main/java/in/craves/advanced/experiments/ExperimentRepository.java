@@ -65,6 +65,17 @@ class ExperimentRepository {
                 + "WHERE exp_key = ?", to.name(), Sql.ts(now), staff, Sql.ts(now), key);
     }
 
+    /** Serialises one person's event batches with the erase of their data, so no batch can land after an erase. */
+    void lockPerson(UUID person) {
+        jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class, "adv_experiments:" + person);
+    }
+
+    int receivedSince(UUID person, Instant since) {
+        Integer count = jdbc.queryForObject("SELECT count(*) FROM adv_experiments.event WHERE person_id = ? AND received_at >= ?", Integer.class,
+                person, Sql.ts(since));
+        return count == null ? 0 : count;
+    }
+
     /** Absent or unreadable consent counts as no (M22: product analytics defaults off). */
     boolean analyticsConsent(UUID person) {
         try {
@@ -90,12 +101,14 @@ class ExperimentRepository {
                 eventName, eventName, key);
     }
 
-    /** Per India business day. */
+    /** Per India business day. Event counts are hidden with the people count, so one person's many events never show. */
     List<DailyEventCount> daily(String eventName, Instant from, Instant to) {
         return jdbc.query("SELECT (occurred_at AT TIME ZONE 'Asia/Kolkata')::date AS day, count(DISTINCT person_id) AS people, count(*) AS events "
                         + "FROM adv_experiments.event WHERE name = ? AND occurred_at >= ? AND occurred_at < ? GROUP BY 1 ORDER BY 1",
-                (rs, i) -> new DailyEventCount(rs.getObject("day", java.time.LocalDate.class),
-                        ExperimentRules.suppress(rs.getLong("people")), ExperimentRules.suppress(rs.getLong("events"))),
+                (rs, i) -> {
+                    Long people = ExperimentRules.suppress(rs.getLong("people"));
+                    return new DailyEventCount(rs.getObject("day", java.time.LocalDate.class), people, people == null ? null : rs.getLong("events"));
+                },
                 eventName, Sql.ts(from), Sql.ts(to));
     }
 

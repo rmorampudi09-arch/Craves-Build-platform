@@ -29,4 +29,5 @@ CREATE TABLE adv_experiments.event (
     CHECK ((exp_key IS NULL) = (variant IS NULL))
 );
 CREATE INDEX event_name_time_idx ON adv_experiments.event (name, occurred_at);
+CREATE INDEX event_person_received_idx ON adv_experiments.event (person_id, received_at);
 CREATE INDEX event_experiment_idx ON adv_experiments.event (exp_key, variant) WHERE exp_key IS NOT NULL;

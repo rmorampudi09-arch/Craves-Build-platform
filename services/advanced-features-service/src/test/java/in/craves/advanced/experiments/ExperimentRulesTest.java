@@ -43,6 +43,8 @@ class ExperimentRulesTest {
         assertThat(ExperimentRules.validProperties(null)).isTrue();
         assertThat(ExperimentRules.validProperties(Map.of("nested", Map.of("a", 1)))).isFalse();
         assertThat(ExperimentRules.validProperties(Map.of("text", "x".repeat(101)))).isFalse();
+        assertThat(ExperimentRules.validProperties(Map.of("text", "a\0b"))).isFalse();
+        assertThat(ExperimentRules.validProperties(Map.of("big", new java.math.BigInteger("9".repeat(31))))).isFalse();
     }
 
     @Test

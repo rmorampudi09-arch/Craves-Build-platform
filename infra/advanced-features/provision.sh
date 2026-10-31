@@ -199,7 +199,8 @@ image() {
   local tag=${commit:0:12}
   log "Image $IMAGE_REPO:$tag"
   if az acr repository show -n "$ACR" --image "$IMAGE_REPO:$tag" -o none 2>/dev/null; then echo "exists"; return; fi
-  az acr build -r "$ACR" -t "$IMAGE_REPO:$tag" -f Dockerfile "$(source_dir "$commit")" --no-logs -o none
+  # No -f: az acr build resolves -f against the current directory; without it, it uses <source>/Dockerfile.
+  az acr build -r "$ACR" -t "$IMAGE_REPO:$tag" "$(source_dir "$commit")" --no-logs -o none
 }
 
 app() {

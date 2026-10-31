@@ -119,9 +119,14 @@ def save():
 s['calls'].append(' '.join(a)); save()
 q, cmd = arg('--query'), ' '.join(x for x in a[:4] if not x.startswith('-'))
 if cmd.startswith('account show'):
-    print('721906c9-4a72-4606-830b-d3e7ace093ff' if q == 'id' else '1e7e43ac-c7f5-4d47-a74f-289a7cc21508')
+    if os.environ.get('FAKE_AZ_ACCOUNT') == 'old':  # the idle subscription, production until 29 Oct 2026
+        print('721906c9-4a72-4606-830b-d3e7ace093ff' if q == 'id' else '1e7e43ac-c7f5-4d47-a74f-289a7cc21508')
+    else:
+        print('34eefd95-1a19-416f-b9df-92b326500615' if q == 'id' else '182d6285-5895-47f8-9ade-77b10854ed0d')
 elif cmd.startswith('apim show'):
     pass
+elif cmd.startswith('containerapp revision show'):
+    print(os.environ.get('FAKE_AZ_HEALTH', 'Healthy'))
 elif cmd.startswith('containerapp show'):
     app = {'properties': {'configuration': {'ingress': {'fqdn': 'integration.example'}}, 'runningStatus': 'Running',
                           'latestRevisionName': 'r1', 'latestReadyRevisionName': 'r1'}}
@@ -165,8 +170,8 @@ else:
 '''
 
 FAKE_CURL = '''#!/usr/bin/env bash
-for a in "$@"; do [[ "$a" == --write-out ]] && { printf 401; exit 0; }; done
-printf '{"status":"UP"}'
+echo "$*" >>"$FAKE_CURL_LOG"
+printf 401
 '''
 
 
@@ -183,7 +188,8 @@ class ScriptsAgainstFakeAzTest(unittest.TestCase):
 
     def run_script(self, name, **env):
         return subprocess.run(['bash', str(SCRIPTS / name)], capture_output=True, text=True,
-                              env={**os.environ, 'PATH': f'{self.dir}:{os.environ["PATH"]}', 'FAKE_AZ_STATE': str(self.state), **env})
+                              env={**os.environ, 'PATH': f'{self.dir}:{os.environ["PATH"]}', 'FAKE_AZ_STATE': str(self.state),
+                                   'FAKE_CURL_LOG': str(self.dir / 'curl.log'), **env})
 
     def apis(self):
         return json.loads(self.state.read_text())['apis']
@@ -228,6 +234,25 @@ class ScriptsAgainstFakeAzTest(unittest.TestCase):
             self.assertIn('No update applied', done.stderr)
             calls = json.loads(self.state.read_text())['calls']
             self.assertFalse([c for c in calls if 'create' in c or '--method put' in c or 'delete' in c], calls)
+
+    def test_production_is_checked_by_account_and_revision_health_and_the_locked_backend_is_never_called(self):
+        old = self.run_script('configure-rider-fleet-apim.sh', CONFIRM_APIM_WRITE='true', FAKE_AZ_ACCOUNT='old')
+        self.assertNotEqual(old.returncode, 0, 'signed in to the idle subscription 721906c9, nothing is written')
+        self.assertIn('Wrong Azure subscription or tenant', old.stderr)
+        sick = self.run_script('configure-rider-fleet-apim.sh', CONFIRM_APIM_WRITE='true', FAKE_AZ_HEALTH='Unhealthy')
+        self.assertNotEqual(sick.returncode, 0)
+        self.assertIn("ready revision is not Healthy", sick.stderr)
+        self.assertFalse([c for c in json.loads(self.state.read_text())['calls'] if 'create' in c or '--method put' in c])
+
+        done = self.run_script('configure-rider-fleet-apim.sh', CONFIRM_APIM_WRITE='true')
+        self.assertEqual(done.returncode, 0, done.stderr + done.stdout)
+        calls = json.loads(self.state.read_text())['calls']
+        self.assertTrue(any(c.startswith('containerapp revision show -g rg-craves-integration-prod -n ca-craves-integration-prod') for c in calls))
+        puts = [c for c in calls if '--method put' in c]
+        self.assertTrue(puts and all('/subscriptions/34eefd95-1a19-416f-b9df-92b326500615/resourceGroups/rg-craves-shared-prod/providers/'
+                                     'Microsoft.ApiManagement/service/apim-craves-prod-34eefd/' in c for c in puts), puts[:2])
+        curls = (self.dir / 'curl.log').read_text().splitlines()
+        self.assertTrue(curls and all('https://api.craves.in/' in c for c in curls), 'only the public gateway is called')
 
 
 if __name__ == '__main__':

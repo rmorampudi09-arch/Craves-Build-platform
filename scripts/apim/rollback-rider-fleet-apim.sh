@@ -10,10 +10,11 @@
 set -euo pipefail
 set +x
 : "${CONFIRM_APIM_ROLLBACK:=false}"
-RG=rg-craves-prodlow-centralindia
-APIM=apim-craves-prodlow-kmqgfy
-EXPECTED_SUBSCRIPTION=721906c9-4a72-4606-830b-d3e7ace093ff
-EXPECTED_TENANT=1e7e43ac-c7f5-4d47-a74f-289a7cc21508
+# Production since 29 Oct 2026 (docs/runbooks/production-environment.md).
+RG=rg-craves-shared-prod
+APIM=apim-craves-prod-34eefd
+EXPECTED_SUBSCRIPTION=34eefd95-1a19-416f-b9df-92b326500615
+EXPECTED_TENANT=182d6285-5895-47f8-9ade-77b10854ed0d
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROUTES_FILE="$ROOT/infra/apim/rider-fleet/routes.txt"
 fail() { echo "ERROR: $*" >&2; exit 1; }

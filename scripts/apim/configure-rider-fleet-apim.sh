@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publishes the Craves rider API (craves-rider-v1, api/v1/rider) and the ops console's admin fleet API
-# (craves-admin-fleet-v1, api/v1/admin/fleet) on the mobile gateway (apim-craves-prodlow-kmqgfy, api.craves.in). Both go
+# (craves-admin-fleet-v1, api/v1/admin/fleet) on the mobile gateway (apim-craves-prod-34eefd, api.craves.in). Both go
 # to integration-service. Contracts: contracts/openapi/rider-v1.yaml and admin-fleet-v1.yaml. APIs, operations and their
 # policies: infra/apim/rider-fleet (routes.txt is kept equal to the contracts by scripts/apim/tests/test_rider_fleet_apim.py).
 #
@@ -19,13 +19,15 @@ set -euo pipefail
 set +x
 : "${CONFIRM_APIM_WRITE:=false}"
 : "${DRY_RUN:=false}"
-RG=rg-craves-prodlow-centralindia
-APIM=apim-craves-prodlow-kmqgfy
+# Production since 29 Oct 2026 (docs/runbooks/production-environment.md); one resource group per service.
+RG=rg-craves-shared-prod
+APIM=apim-craves-prod-34eefd
 API_VERSION=2022-08-01
 PUBLIC_HOST=https://api.craves.in
-EXPECTED_SUBSCRIPTION=721906c9-4a72-4606-830b-d3e7ace093ff
-EXPECTED_TENANT=1e7e43ac-c7f5-4d47-a74f-289a7cc21508
-INTEGRATION_APP=ca-craves-integration-service-pr
+EXPECTED_SUBSCRIPTION=34eefd95-1a19-416f-b9df-92b326500615
+EXPECTED_TENANT=182d6285-5895-47f8-9ade-77b10854ed0d
+INTEGRATION_RG=rg-craves-integration-prod
+INTEGRATION_APP=ca-craves-integration-prod
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 POLICY_DIR="$ROOT/infra/apim/rider-fleet"
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -69,13 +71,14 @@ TENANT=$(az account show --query tenantId -o tsv --only-show-errors)
 az apim show -g "$RG" -n "$APIM" -o none --only-show-errors
 MGMT_BASE="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM"
 
-APP_JSON=$(az containerapp show -g "$RG" -n "$INTEGRATION_APP" -o json --only-show-errors)
+APP_JSON=$(az containerapp show -g "$INTEGRATION_RG" -n "$INTEGRATION_APP" -o json --only-show-errors)
 FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
 [[ -n "$FQDN" && $(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON") == Running &&
   $(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON") == $(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON") ]] ||
   fail "$INTEGRATION_APP is not ready; no update applied."
-curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" | jq -e '.status=="UP"' >/dev/null ||
-  fail "$INTEGRATION_APP health is not UP; no update applied."
+# Its ingress accepts only API Management and the services' fixed addresses, so health comes from the ready revision.
+[[ $(az containerapp revision show -g "$INTEGRATION_RG" -n "$INTEGRATION_APP" --revision "$(jq -r '.properties.latestReadyRevisionName' <<<"$APP_JSON")" \
+  --query properties.healthState -o tsv --only-show-errors) == Healthy ]] || fail "$INTEGRATION_APP's ready revision is not Healthy; no update applied."
 
 GLOBAL_POLICY=$(az rest --method get --url "$MGMT_BASE/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv --only-show-errors 2>/dev/null || true)
 [[ "$GLOBAL_POLICY" != *'backend-id='* ]] || fail 'Inherited global backend-id policy blocks base-url routing; no update applied.'
@@ -182,5 +185,5 @@ for ROW in "${ROUTES[@]}"; do
   if [[ "$STATUS" == 401 ]]; then echo "OK   $METHOD $TARGET (401 unauthenticated)"
   else echo "FAIL $METHOD $TARGET expected 401 from the unauthenticated probe, got ${STATUS:-none}" >&2; FAILED_PROBES=$((FAILED_PROBES+1)); fi
 done
-(( FAILED_PROBES == 0 )) || fail "$FAILED_PROBES route(s) did not answer 401 unauthenticated; run the rollback pipeline or review the gateway."
+(( FAILED_PROBES == 0 )) || fail "$FAILED_PROBES route(s) did not answer 401 unauthenticated; run the rollback script or review the gateway."
 echo "SUCCESS: Rider fleet APIM configured: ${#ROUTES[@]} operations on craves-rider-v1 and craves-admin-fleet-v1, every route probed."

@@ -133,7 +133,7 @@ vault() {
 
 database() {
   log "Database $DB and least-privilege login $DB_USER on $PG"
-  az postgres flexible-server db show -g "$PG_RG" -s "$PG" -d "$DB" -o none 2>/dev/null || az postgres flexible-server db create -g "$PG_RG" -s "$PG" -d "$DB" -o none
+  az postgres flexible-server db show -g "$PG_RG" --server-name "$PG" --name "$DB" -o none 2>/dev/null || az postgres flexible-server db create -g "$PG_RG" --server-name "$PG" --name "$DB" -o none
   local fqdn admin ip admin_pw db_pw rc=0
   fqdn=$(az postgres flexible-server show -g "$PG_RG" -n "$PG" --query fullyQualifiedDomainName -o tsv)
   admin=$(az postgres flexible-server show -g "$PG_RG" -n "$PG" --query administratorLogin -o tsv)

@@ -25,7 +25,7 @@ From `main` at the merged commit, run each pipeline by hand in this order. Befor
 2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
 3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
 4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V174 and the fleet package. All flags stay off, so no fleet bean or job starts.
+5. `azure-pipelines-integration-service.yml`: V152 to V174 and the fleet package (V175, the contract migration, comes in its own later PR: step 6.6). All flags stay off, so no fleet bean or job starts.
 
 ## 2. Gateway
 
@@ -110,7 +110,7 @@ Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot set
 5. **Live.** Choose `live` and confirm. A published rate card must be in force. Keep the rules from step 1.1: changing them now needs a start 14 days away.
    - Offers ring on the pilot riders' phones. Each offer says why it came to the rider (`DISPATCH.md` §2).
    - An order no rider accepts within the fleet stage goes to Borzo, then Pidge, then the ops queue, exactly as before.
-6. **Moving a rider's trip to another rider (optional).** Ops can give a trip before pickup to another rider only once order-service from the same release is live and the contract migration's PR (the one that drops `trip_chef_sub_order_id_key`) is merged and deployed. Then set `CRAVES_FLEET_RIDER_HANDOVER_ENABLED=true` on integration-service (an app setting, like the flags in step 5). Until then, Reassign offers Borzo, Pidge or cancel for a rider's trip, as before.
+6. **Moving a rider's trip to another rider (optional).** Ops can give a trip before pickup to another rider only once order-service from the same release is live and the contract migration's PR (V175, which drops `trip_chef_sub_order_id_key`) is merged and integration-service is deployed with it. Merge that PR only after this release has run long enough that you will not roll integration-service back to an image from before it: an older image can't create trips without the constraint. Then set `CRAVES_FLEET_RIDER_HANDOVER_ENABLED=true` on integration-service (an app setting, like the flags in step 5). Until then, Reassign offers Borzo, Pidge or cancel for a rider's trip, as before.
 
 ## 7. The rider APK
 

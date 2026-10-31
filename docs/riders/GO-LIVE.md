@@ -1,13 +1,15 @@
 # Rider pilot go-live
 
-How a person takes the rider fleet from "merged" to **one pilot zone live**: allow-listed riders get real orders from allow-listed kitchens, and Borzo and Pidge still take every order a rider doesn't accept in time. Nothing here is done by an agent: people run each pipeline and press each console button. Details of every flag, table and endpoint: `BACKEND.md`.
+How a person takes the rider fleet from "merged" to **one pilot zone live**: allow-listed riders get real orders from allow-listed kitchens, and Borzo and Pidge still take every order a rider doesn't accept in time. Nothing here is done by an agent: people run each command and press each console button. Details of every flag, table and endpoint: `BACKEND.md`.
 
-Until step 6, customers, chefs, Borzo and Pidge see no change: every rider flag is off and dispatch is `off`.
+Production since 29 Oct 2026 is subscription 34eefd95, one resource group per service (`docs/runbooks/production-environment.md`). A merge to `main` deploys each service it changes, so steps 1 to 3 need nothing run by hand. The commands below run in Azure Cloud Shell (Bash) as a subscription owner.
+
+Until step 6, customers, chefs, Borzo and Pidge see no change: dispatch is `off`.
 
 ## 0. Before you start (once)
 
 - [ ] **Make the repository private** (PLAN P0.1). It now holds payout, KYC and dispatch code.
-- [x] **Decide the integration-service pool.** Decided (blueprint E3): 8 connections, with the Container App's maximum replicas at 1, because referral checkouts open a second transaction. The repo defaults say so (P1-16). Live settings override the repo, so on `ca-craves-integration-service-pr` set `SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE=8` if it is set, and max replicas to 1 (`az containerapp update --max-replicas 1`).
+- [x] **Decide the integration-service pool.** Decided (blueprint E3): 8 connections, with the Container App's maximum replicas at 1, because referral checkouts open a second transaction. The repo defaults say so (P1-16). Live settings override the repo, so on `ca-craves-integration-prod` set `SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE=8` if it is set, and max replicas to 1 (`az containerapp update -g rg-craves-integration-prod -n ca-craves-integration-prod --max-replicas 1`).
 - [ ] **Have the business inputs ready:**
   - the rate card numbers;
   - the pilot zone: which kitchens and riders;
@@ -19,32 +21,29 @@ Until step 6, customers, chefs, Borzo and Pidge see no change: every rider flag 
 
 ## 1. Deploy the services (no behaviour change)
 
-From `main` at the merged commit, run each pipeline by hand in this order. Before each one, follow `docs/runbooks/live-runtime-safety.md`, and wait until the service is healthy before starting the next.
-
-1. `azure-pipelines-order-service.yml`: V41, delivery code, order number in courier notes.
-2. `azure-pipelines-notification-service.yml`: V8, realtime push and ops alerts (both off).
-3. `azure-pipelines-user-chef-service.yml`: V20, road distance.
-4. `azure-pipelines-auth-service.yml`: V20, the RIDER role.
-5. `azure-pipelines-integration-service.yml`: V152 to V174 and the fleet package. All flags stay off, so no fleet bean or job starts.
+Nothing to run by hand: a merge to `main` deploys each service it changes (10 % canary, then 100 %, with automatic rollback if the new revision is unhealthy). The fleet needs order-service V41, notification-service V8, user-chef-service V20, auth-service V20 and integration-service V152 onwards, all on `main` since before the move.
 
 ## 2. Gateway
 
-Run `azure-pipelines-rider-fleet-apim.yml` on `main` with `confirmProductionChange` ticked. It publishes `api/v1/rider` and `api/v1/admin/fleet` on `api.craves.in` and probes every route for 401. Check the result with `azure-pipelines-rider-fleet-apim-status.yml`. To undo it, run `azure-pipelines-rider-fleet-apim-rollback.yml`.
+After a merge that changes `infra/apim/rider-fleet`, once that merge's integration-service revision is live, a subscription owner runs the configure line in `infra/apim/rider-fleet/README.md` ("Release") in Cloud Shell. It publishes `api/v1/rider` and `api/v1/admin/fleet` on `api.craves.in` and probes every route for 401; the same README has the read-only status line and the rollback. Last run: 31 Oct 2026, 90 routes, none failed.
 
-If the gateway was published from an older `main`, run it again after step 1: each release that adds routes needs it. Phase 4 adds `POST /shift/pause`, `POST /shift/resume`, `PUT /preferences` and `GET /my-data` for riders, and `GET /riders/{riderId}/data-export` for ops. Until then they answer 404: "Share a copy of my data" in the app shows an error, and so does the console's data download.
+Until a release's new routes are published they answer 404: for example "Share a copy of my data" in the app shows an error.
 
 ## 3. Ops console
 
-Run `azure-pipelines-admin-dashboard.yml` by hand on `main` with:
-- `deployProduction` ticked;
-- `expectedReleaseSha` set to the merged commit;
-- `regressionRunId` set to that commit's green "Exact-SHA complete regression evidence" run.
+The console (`ca-craves-admin-prod`) deploys itself with each merge that changes it. It has Riders, Fleet trips & dispatch, Rider slots & banner, **Rider pilot setup**, Rider pilot health, Rider support and Rider payouts. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
 
-The console then has Riders, Fleet trips & dispatch, Rider slots & banner, **Rider pilot setup**, Rider pilot health, Rider support and Rider payouts. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
+## 4. Wire the runtime (`scripts/riders/rider_pilot_runtime.py`)
 
-## 4. Wire the runtime (`azure-pipelines-rider-fleet-runtime.yml`)
+In Azure Cloud Shell (Bash), as a subscription owner, get `main` once per session:
 
-1. Run it with stage **status**. It is read only, and the job output plus the `rider-pilot-runtime` artifact list every setting.
+```bash
+D=$(mktemp -d) && git clone -q --depth 1 https://github.com/rmorampudi09-arch/Craves-Build-platform "$D" && az account set -s 34eefd95-1a19-416f-b9df-92b326500615
+```
+
+The tool refuses any other subscription. Without `--apply` it changes nothing: it prints the plan, writes it to `rider-pilot-runtime.json`, and ends with the `--apply --expected-source-sha <commit>` to add to the same line.
+
+1. **status** (read only): `python3 "$D/scripts/riders/rider_pilot_runtime.py" --stage status`. It lists every setting of the five services; secret values are compared, never printed. A secret kept in Key Vault is read from the service's vault (`kv-crv-<service>-34eefd`), which needs Key Vault Secrets User on it.
 2. Fix each "TO DO" line in Azure. These are people steps, because they touch secrets:
    - **Shared internal secret.** integration-service `CRAVES_INTERNAL_SERVICE_KEY` must equal:
      - order-service `CRAVES_INTERNAL_SERVICE_KEY`;
@@ -61,20 +60,22 @@ The console then has Riders, Fleet trips & dispatch, Rider slots & banner, **Rid
      - ACS email on notification-service, needed for SOS and queue alerts;
      - `OLA_MAPS_API_KEY` on user-chef-service, for road distance;
      - `CRAVES_LEDGER_POSTING_ENABLED` on integration-service, so rider pay is credited.
-3. Run stage **wire** with `supportPhone`, `opsAlertEmails` and, optionally, `supportWhatsappUrl`, `insuranceLabel` and `minAppVersion`.
-   1. First run it unticked, which only shows the plan.
-   2. Then run it with **Apply** ticked and `expectedReleaseSha` set to the run's commit.
+3. **wire**, with the real phone and emails (optionally `--support-whatsapp-url` and `--insurance-label "…"`):
 
-   This sets the four internal base URLs and the support settings on integration-service, and turns on `CRAVES_REALTIME_PUSH_ENABLED` and `CRAVES_OPS_ALERT_EMAILS` on notification-service. Each app must come back healthy, or its old values are put back.
+   ```bash
+   python3 "$D/scripts/riders/rider_pilot_runtime.py" --stage wire --support-phone +91XXXXXXXXXX --ops-alert-emails "ops@craves.in" --min-app-version 1.2.0
+   ```
+
+   Read the plan, then run the same line with the `--apply --expected-source-sha …` it prints. This sets the four internal base URLs and the support settings on integration-service, and turns on `CRAVES_REALTIME_PUSH_ENABLED` and `CRAVES_OPS_ALERT_EMAILS` on notification-service. Each app must come back healthy, or its old values are put back.
 
 ## 5. Switch the fleet on (still no orders)
 
-Run stage **enable** with Apply ticked. It sets these on integration-service:
+`python3 "$D/scripts/riders/rider_pilot_runtime.py" --stage enable`, then the same line with the `--apply …` it prints. It sets these on integration-service:
 - `CRAVES_FLEET_ENABLED`, `CRAVES_FLEET_RIDER_API_ENABLED` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED` to `true`;
 - `CRAVES_FLEET_TEST_MODE` to `true`, which makes the pilot zone;
 - `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` to `false`.
 
-Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot setup**: it should show dispatch Off, no rate card, and test mode on.
+On 30 Oct the fleet was already on in test mode (the move copied the settings), so the plan may have nothing to change. Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot setup**: it should show dispatch Off, no rate card, and test mode on.
 
 ## 6. Set up the pilot in the console
 
@@ -144,15 +145,17 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, fair turns (`DISPATCH.md` §2 and §3), and from Phase 5 whether riders are ranked by travel time (§10, step 6). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
 
 - **Notice first.** Once dispatch is live, road ranking changes who gets offers, and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before any of them (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
-- **How to set one:** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars NAME=value` (order-service: `-n ca-craves-order-service-prodlow`). Wait for the new revision to be healthy, then run the runtime pipeline's **status** stage: it lists every switch above. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
+- **How to set one** (Cloud Shell, as in §4): `az containerapp update -g rg-craves-integration-prod -n ca-craves-integration-prod --set-env-vars NAME=value` (order-service: `-g rg-craves-order-prod -n ca-craves-order-prod`). Wait for the new revision to be healthy, then run the runtime tool's **status** stage (§4): it lists every switch above. Run status again after that service's next release, to see the setting stayed. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
 
 ## 9. The fleet engine (Phase 5)
 
 The engine (`services/fleet-engine`, `SCALE.md`) keeps every online rider in Redis and ranks riders for orders by the same rules as dispatch, in milliseconds and in parallel per map block. Postgres stays the record: dispatch still makes every offer, and one ACTIVE offer per rider still holds. Each step needs the one before, and before each one, Used Memory Percentage on the cache is under 50% (`infra/fleet-engine/README.md`, "Before you start"). Road ranking stays off throughout. The engine logs `NAME key=value` lines, like the other services.
 
+The pilot doesn't need the engine. Its deploy files (`azure-pipelines-fleet-engine.yml`, `infra/fleet-engine`) and the app names below still name the old production: port them to the production of 29 Oct before step 2.
+
 1. **integration-service with Phase 5** (step 1 deploys it). The mode stays unset, so the engine is off and nothing changes.
 2. **Deploy the engine** with `azure-pipelines-fleet-engine.yml`, by `infra/fleet-engine/README.md`. Its `FLEET_ENGINE_STARTED` line must show `redisShards=1`. With more shards, stop here (`SCALE.md`, "When to grow").
-3. **Shadow.** `az containerapp update -g rg-craves-prodlow-centralindia -n ca-craves-integration-service-pr --set-env-vars CRAVES_FLEET_ENGINE_MODE=shadow`. Riders and offers don't change. Watch:
+3. **Shadow.** `az containerapp update -g rg-craves-integration-prod -n ca-craves-integration-prod --set-env-vars CRAVES_FLEET_ENGINE_MODE=shadow`. Riders and offers don't change. Watch:
    - integration-service logs `FLEET_ENGINE_FEED pings=... failed=0 dropped=0` each minute while riders are online;
    - the engine logs `FLEET_ENGINE_STATS` each minute, each figure for that minute, with `riderEvents` above 0 while riders are online;
    - for each order dispatch ranks, in each round, the engine logs `FLEET_ENGINE_SHADOW` with `agree=same`, `agree=same_set` (the same riders in another order) or `agree=differ`.
@@ -209,8 +212,8 @@ The model predicts the minutes a rider needs to reach the kitchen, and from the 
 |---|---|---|
 | Stop new offers now | Rider pilot setup → **Stop dispatch now** | Immediate, no restart. Running trips finish. Scheduled dispatch versions are withdrawn. Borzo and Pidge take every order. |
 | Remove one rider or kitchen | Rider pilot setup → Pilot zone → Remove | Immediate. |
-| Switch the whole fleet off | Runtime pipeline stage **disable**, after stopping dispatch and letting trips finish | The rider API and the console's fleet pages go away. Wiring is kept, so **enable** brings it back. |
-| Take the gateway routes away | `azure-pipelines-rider-fleet-apim-rollback.yml` | The app and console get 404. |
+| Switch the whole fleet off | After stopping dispatch and letting trips finish, in Cloud Shell (§4): `python3 "$D/scripts/riders/rider_pilot_runtime.py" --stage disable`, then the same line with the `--apply …` it prints | The rider API and the console's fleet pages go away. Wiring is kept, so **enable** brings it back. |
+| Take the gateway routes away | The rollback line in `infra/apim/rider-fleet/README.md` (Cloud Shell) | The app and console get 404. |
 | Take the fleet engine out | integration-service `CRAVES_FLEET_ENGINE_MODE=off` (§9); then, if wanted, delete its app (`infra/fleet-engine/README.md`) | With the new revision, dispatch ranks riders itself, as before Phase 5. Nothing is lost: Postgres has everything. |
 | Stop ranking by the travel-time model | integration-service `CRAVES_FLEET_ETA_MODE=off` (§10) | With the new revision, riders are ranked by distance again (an alert says so while the policy still asks for travel time), and offers show minutes at 20 km/h. |
 

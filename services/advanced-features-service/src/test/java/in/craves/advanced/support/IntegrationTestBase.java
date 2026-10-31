@@ -2,6 +2,7 @@ package in.craves.advanced.support;
 
 import in.craves.advanced.platform.clients.CatalogGateway;
 import in.craves.advanced.platform.clients.OrderCartGateway;
+import in.craves.advanced.platform.clients.OrderGateway;
 import in.craves.advanced.platform.module.FeatureModule;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -32,6 +33,7 @@ public abstract class IntegrationTestBase {
     protected static final FakeCatalog CATALOG = new FakeCatalog();
     protected static final FakeCart CART = new FakeCart();
     protected static final MutableClock CLOCK = new MutableClock();
+    protected static final FakeOrders ORDERS = new FakeOrders(CATALOG, CLOCK);
 
     @Autowired
     protected MockMvc mvc;
@@ -40,6 +42,7 @@ public abstract class IntegrationTestBase {
     public static class TestBeans {
         @Bean @Primary CatalogGateway testCatalog() { return CATALOG; }
         @Bean @Primary OrderCartGateway testCart() { return CART; }
+        @Bean @Primary OrderGateway testOrders() { return ORDERS; }
         @Bean @Primary Clock testClock() { return CLOCK; }
 
         /** A deliberately broken module: proves one failing feature cannot take the others down. */
@@ -69,6 +72,7 @@ public abstract class IntegrationTestBase {
     void resetFakes() {
         CATALOG.reset();
         CART.carts.clear();
+        ORDERS.reset();
         CLOCK.reset();
     }
 

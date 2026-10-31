@@ -7,17 +7,25 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import in.craves.advanced.support.IntegrationTestBase;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class TasteDataIT extends IntegrationTestBase {
+    @Autowired
+    JdbcTemplate jdbc;
+
     @Test
     void exportShowsEverythingAndEraseRemovesIt() throws Exception {
-        String me = bearer(UUID.randomUUID(), "CUSTOMER");
-        mvc.perform(post("/api/v1/advanced/food-lists").header("Authorization", me).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Mine\"}"))
-                .andExpect(status().isCreated());
+        UUID person = UUID.randomUUID();
+        String me = bearer(person, "CUSTOMER");
+        mvc.perform(post("/api/v1/advanced/food-lists").header("Authorization", me).header("Idempotency-Key", "taste-data-erase-01")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Mine\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/v1/advanced/my-taste-data/consent").header("Authorization", me).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"personalization\":true,\"productAnalytics\":false}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.personalization").value(true));
@@ -34,5 +42,7 @@ class TasteDataIT extends IntegrationTestBase {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.recordsErased").value(2));
         mvc.perform(get("/api/v1/advanced/food-lists").header("Authorization", me)).andExpect(jsonPath("$.length()").value(0));
         mvc.perform(get("/api/v1/advanced/my-taste-data/consent").header("Authorization", me)).andExpect(jsonPath("$.personalization").value(false));
+        // The stored reply of the keyed request (it holds the list's name) is erased too.
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM adv_platform.idempotency_record WHERE actor_id = ?", Integer.class, person)).isZero();
     }
 }

@@ -88,6 +88,9 @@ public class TasteDataController {
             total += contributor.erase(person);
             modules.add(contributor.moduleId());
         }
+        // Stored replies of the person's keyed requests (they can hold names and notes) go too; they are caches, so the receipt does not count them.
+        // shortcut: no index on actor_id; the table keeps only 48 hours of keyed requests. Add one if erasing gets slow.
+        jdbc.update("DELETE FROM adv_platform.idempotency_record WHERE actor_id = ?", person);
         Instant now = clock.instant();
         UUID receipt = UUID.randomUUID();
         jdbc.update("INSERT INTO adv_taste_data.erasure_receipt (id, person_id, records, modules, created_at) VALUES (?,?,?,?,?)",

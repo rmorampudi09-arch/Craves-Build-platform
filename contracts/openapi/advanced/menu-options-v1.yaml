@@ -1,0 +1,452 @@
+components:
+  schemas:
+    DishOptions:
+      properties:
+        groups:
+          items:
+            $ref: "#/components/schemas/OptionGroup"
+          type: array
+        kitchenId:
+          format: uuid
+          type: string
+        mealPeriods:
+          items:
+            enum:
+            - BREAKFAST
+            - LUNCH
+            - SNACKS
+            - DINNER
+            - LATE_NIGHT
+            type: string
+          type: array
+        menuItemId:
+          format: uuid
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    DishOptionsLookup:
+      properties:
+        menuItemIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 100
+          minItems: 0
+          type: array
+      required:
+      - menuItemIds
+      type: object
+    DishOptionsRequest:
+      properties:
+        groups:
+          items:
+            $ref: "#/components/schemas/OptionGroup"
+          maxItems: 10
+          minItems: 0
+          type: array
+        mealPeriods:
+          items:
+            enum:
+            - BREAKFAST
+            - LUNCH
+            - SNACKS
+            - DINNER
+            - LATE_NIGHT
+            type: string
+          maxItems: 5
+          minItems: 0
+          type: array
+          uniqueItems: true
+      type: object
+    KitchenMealPeriods:
+      properties:
+        kitchenId:
+          format: uuid
+          type: string
+        periods:
+          items:
+            $ref: "#/components/schemas/MealPeriodWindow"
+          type: array
+        servingNow:
+          items:
+            enum:
+            - BREAKFAST
+            - LUNCH
+            - SNACKS
+            - DINNER
+            - LATE_NIGHT
+            type: string
+          type: array
+        timeZone:
+          type: string
+      type: object
+    MealPeriodWindow:
+      properties:
+        days:
+          items:
+            enum:
+            - MONDAY
+            - TUESDAY
+            - WEDNESDAY
+            - THURSDAY
+            - FRIDAY
+            - SATURDAY
+            - SUNDAY
+            type: string
+          maxItems: 7
+          minItems: 1
+          type: array
+          uniqueItems: true
+        endsAt:
+          type: string
+        period:
+          enum:
+          - BREAKFAST
+          - LUNCH
+          - SNACKS
+          - DINNER
+          - LATE_NIGHT
+          type: string
+        startsAt:
+          type: string
+      required:
+      - endsAt
+      - period
+      - startsAt
+      type: object
+    MealPeriodsRequest:
+      properties:
+        periods:
+          items:
+            $ref: "#/components/schemas/MealPeriodWindow"
+          maxItems: 5
+          minItems: 0
+          type: array
+      required:
+      - periods
+      type: object
+    OptionChoice:
+      properties:
+        available:
+          type: boolean
+        id:
+          format: uuid
+          type: string
+        name:
+          maxLength: 40
+          minLength: 0
+          type: string
+        priceDeltaPaise:
+          format: int64
+          maximum: 1000000
+          minimum: 0
+          type: integer
+      required:
+      - name
+      - priceDeltaPaise
+      type: object
+    OptionGroup:
+      properties:
+        choices:
+          items:
+            $ref: "#/components/schemas/OptionChoice"
+          maxItems: 20
+          minItems: 0
+          type: array
+        id:
+          format: uuid
+          type: string
+        maxSelect:
+          format: int32
+          maximum: 20
+          minimum: 1
+          type: integer
+        minSelect:
+          format: int32
+          maximum: 20
+          minimum: 0
+          type: integer
+        name:
+          maxLength: 40
+          minLength: 0
+          type: string
+      required:
+      - choices
+      - maxSelect
+      - minSelect
+      - name
+      type: object
+    PriceQuote:
+      properties:
+        basePricePaise:
+          format: int64
+          type: integer
+        choices:
+          items:
+            $ref: "#/components/schemas/QuotedChoice"
+          type: array
+        mealPeriod:
+          enum:
+          - BREAKFAST
+          - LUNCH
+          - SNACKS
+          - DINNER
+          - LATE_NIGHT
+          type: string
+        menuItemId:
+          format: uuid
+          type: string
+        optionsVersion:
+          format: int64
+          type: integer
+        quantity:
+          format: int32
+          type: integer
+        totalPaise:
+          format: int64
+          type: integer
+        unitPricePaise:
+          format: int64
+          type: integer
+      type: object
+    PriceQuoteRequest:
+      properties:
+        at:
+          format: date-time
+          type: string
+        choiceIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 50
+          minItems: 0
+          type: array
+        menuItemId:
+          format: uuid
+          type: string
+        quantity:
+          format: int32
+          maximum: 100
+          minimum: 1
+          type: integer
+      required:
+      - menuItemId
+      - quantity
+      type: object
+    QuotedChoice:
+      properties:
+        choiceId:
+          format: uuid
+          type: string
+        choiceName:
+          type: string
+        groupId:
+          format: uuid
+          type: string
+        groupName:
+          type: string
+        priceDeltaPaise:
+          format: int64
+          type: integer
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_MENU_OPTIONS_ENABLED."
+  title: Craves menu-options API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/menu-options/chef/meal-periods:
+    get:
+      operationId: chefMealPeriods
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/KitchenMealPeriods"
+          description: OK
+      tags:
+      - menu-options-controller
+      x-craves-auth: user
+    put:
+      operationId: setMealPeriods
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealPeriodsRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/KitchenMealPeriods"
+          description: OK
+      tags:
+      - menu-options-controller
+      x-craves-auth: user
+  /api/v1/advanced/menu-options/chef/menu-items/{menuItemId}:
+    delete:
+      operationId: clearDishOptions
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - menu-options-controller
+      x-craves-auth: user
+    get:
+      operationId: chefDishOptions
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DishOptions"
+          description: OK
+      tags:
+      - menu-options-controller
+      x-craves-auth: user
+    put:
+      operationId: setDishOptions
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DishOptionsRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DishOptions"
+          description: OK
+      tags:
+      - menu-options-controller
+      x-craves-auth: user
+  /api/v1/advanced/menu-options/kitchens/{kitchenId}/meal-periods:
+    get:
+      operationId: kitchenMealPeriods
+      parameters:
+      - in: path
+        name: kitchenId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/KitchenMealPeriods"
+          description: OK
+      security: []
+      tags:
+      - menu-options-controller
+      x-craves-auth: public
+  /api/v1/advanced/menu-options/menu-items/lookup:
+    post:
+      operationId: lookupDishOptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DishOptionsLookup"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/DishOptions"
+                type: array
+          description: OK
+      security: []
+      tags:
+      - menu-options-controller
+      x-craves-auth: public
+  /api/v1/advanced/menu-options/menu-items/{menuItemId}:
+    get:
+      operationId: dishOptions
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DishOptions"
+          description: OK
+      security: []
+      tags:
+      - menu-options-controller
+      x-craves-auth: public
+  /api/v1/advanced/menu-options/quote:
+    post:
+      operationId: quoteDishPrice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceQuoteRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PriceQuote"
+          description: OK
+      tags:
+      - menu-options-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

@@ -38,6 +38,10 @@ Each service's resources (from the 30 Oct 2026 migration report):
 
 "business" is `pg-craves-business-prod` in `rg-craves-data-business-prod`; catalog, order, user-chef, notification and subscription share it.
 
+Two things every change to an app has to respect:
+- **Each app runs as its own user-assigned identity** (`id-craves-<feature>-prod`) and must name it in `AZURE_CLIENT_ID`. The services' Azure SDK (`DefaultAzureCredential`) needs that setting to reach Service Bus; without it, the call fails with "Unable to load the proper Managed Identity" and no event leaves the service. Order, integration and subscription ran without it from the move until 1 Nov 2026, so no order event reached Service Bus in that time.
+- **Traffic is pinned to a named revision** (multiple-revision mode). A setting changed with `az containerapp update` makes a new revision that gets no traffic until it is moved to it (`docs/riders/GO-LIVE.md` §8).
+
 ## Previous: subscription 721906c9 (idle since 29 Oct 2026, read only)
 
 Everything below describes the old estate. Its apps, databases and storage still exist untouched as a fallback. Do not deploy to it, change it or run its pipelines.

@@ -7,12 +7,14 @@ this from a clone of main in Azure Cloud Shell; any other signed-in subscription
   status   Read only: what each service has for the rider fleet. Secret values are compared, never printed.
   wire     integration-service: internal base URLs, support contacts, insurance label, minimum app version;
            notification-service: realtime push and the ops-alert emails. Every fleet flag stays off.
-  enable   integration-service: fleet, rider API and location ingest on, test mode on (the pilot zone), payouts off.
+  enable   integration-service: fleet, rider API and location ingest on, payouts off. Test mode stays as it is.
   disable  integration-service: fleet, rider API and location ingest off. The kill switch: stop dispatch in the
            console first and let running trips finish.
 
 Without --apply nothing changes: the plan is printed and written to --output. --apply needs the exact reviewed main
-commit. Each changed app must reach a healthy new revision, else its previous values are put back.
+commit. Each changed app must reach a healthy new revision, else its previous values are put back. The apps keep their
+traffic on a named revision (multiple-revision mode), so a healthy new revision then takes all the traffic and the
+old one is switched off.
 """
 import argparse
 import json
@@ -126,10 +128,26 @@ def secret_value(group: str, name: str, app: dict, variable: str, cache: dict):
     if not secret.get("value") and secret.get("keyVaultUrl"):
         try:
             secret["value"] = (az("keyvault", "secret", "show", "--id", secret["keyVaultUrl"]) or {}).get("value")
-        except GuardError as failure:
-            raise GuardError(f"{name} {variable} is the Key Vault secret {secret['keyVaultUrl']}, which this account can't "
-                             "read: run as someone with Key Vault Secrets User on that vault") from failure
+        except GuardError:
+            secret["value"] = UNREADABLE  # it exists; only comparing it needs Key Vault Secrets User on that vault
     return secret.get("value") or None
+
+
+# A Key Vault secret this account can't read: present, but not compared.
+UNREADABLE = "<in Key Vault, not readable by this account>"
+
+
+def pinned_revision(app: dict):
+    """The revision that has all the traffic in a multiple-revision app, else None (the latest revision takes it)."""
+    configuration = app["properties"]["configuration"]
+    if configuration.get("activeRevisionsMode") != "Multiple":
+        return None
+    weighted = [t for t in (configuration.get("ingress") or {}).get("traffic") or [] if t.get("weight")]
+    if len(weighted) == 1 and weighted[0].get("latestRevision"):
+        return None
+    if len(weighted) == 1 and weighted[0].get("weight") == 100 and weighted[0].get("revisionName"):
+        return weighted[0]["revisionName"]
+    raise GuardError(f"{app.get('name')} is splitting its traffic (a release is rolling out): try again once it has finished")
 
 
 def commit() -> str:
@@ -171,7 +189,11 @@ def checks(stage: str, apps: dict, args, values) -> tuple[list, list]:
             problems.append("integration-service has no CRAVES_INTERNAL_SERVICE_KEY: it signs every internal call.")
         else:
             for role in ("order", "notification", "user-chef", "auth"):
-                if values(role, INTERNAL_KEY[role]) != key:
+                other = values(role, INTERNAL_KEY[role])
+                if other and UNREADABLE in (key, other):
+                    warnings.append(f"{APPS[role]} {INTERNAL_KEY[role]} or integration-service's key is in a Key Vault this "
+                                    "account can't read: not compared (a wrong key shows as INTERNAL_CALL_REJECTED in the logs).")
+                elif other != key:
                     problems.append(f"{APPS[role]} {INTERNAL_KEY[role]} is missing or differs from integration-service's "
                                     "CRAVES_INTERNAL_SERVICE_KEY: a person sets it to the same secret in Azure.")
         # Riders sign in with the phone OTP auth-service sends by MSG91 (the web's flow).
@@ -227,8 +249,7 @@ def desired(stage: str, apps: dict, args) -> dict:
         return {"notification": {"CRAVES_REALTIME_PUSH_ENABLED": "true", "CRAVES_OPS_ALERT_EMAILS": emails},
                 "integration": integration}
     if stage == "enable":
-        return {"integration": {**{flag: "true" for flag in FLAGS}, "CRAVES_FLEET_TEST_MODE": "true",
-                                "CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED": "false"}}
+        return {"integration": {**{flag: "true" for flag in FLAGS}, "CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED": "false"}}
     if stage == "disable":
         return {"integration": {flag: "false" for flag in FLAGS}}
     return {}
@@ -271,29 +292,39 @@ def apply_role(group: str, name: str, app: dict, settings: dict, attempts: int, 
     disable: a kill switch must not switch the fleet back on) and the restored revision is awaited too."""
     container = app["properties"]["template"]["containers"][0]["name"]
     previous_revision = app["properties"].get("latestRevisionName", "")
+    serving = pinned_revision(app)
     before = {variable: literal(app, variable) for variable in settings}
     az("containerapp", "update", "-g", group, "-n", name, "--container-name", container,
        "--set-env-vars", *[f"{k}={v}" for k, v in settings.items()], output="none")
     try:
-        return wait_ready(group, name, previous_revision, attempts, pause)
+        revision = wait_ready(group, name, previous_revision, attempts, pause)
     except GuardError as failure:
         if not roll_back:
-            raise GuardError(f"{failure}; the new values stay (no roll back for disable): check the app in Azure") from failure
+            still = f"; {serving} still serves with the old values: press Stop dispatch now in the console" if serving else ""
+            raise GuardError(f"{failure}; the new values stay (no roll back for disable){still}: check the app in Azure") \
+                from failure
         failed_revision = az("containerapp", "show", "-g", group, "-n", name)["properties"].get("latestRevisionName", "")
         restore = [f"{k}={v}" for k, v in before.items() if v is not None]
         remove = [k for k, v in before.items() if v is None]
-        if restore:
-            az("containerapp", "update", "-g", group, "-n", name, "--container-name", container,
-               "--set-env-vars", *restore, output="none")
-        if remove:
-            az("containerapp", "update", "-g", group, "-n", name, "--container-name", container,
-               "--remove-env-vars", *remove, output="none")
+        # One update, so one revision holds the previous values.
+        az("containerapp", "update", "-g", group, "-n", name, "--container-name", container,
+           *(["--set-env-vars", *restore] if restore else []), *(["--remove-env-vars", *remove] if remove else []),
+           output="none")
         try:
             restored = wait_ready(group, name, failed_revision, attempts, pause)
         except GuardError as restore_failure:
             raise GuardError(f"{failure}; putting the previous values back also failed ({restore_failure}): "
                              "a person must check the app in Azure now") from failure
+        if serving:  # traffic never left it; the two revisions made here never served
+            for unused in (failed_revision, restored):
+                az("containerapp", "revision", "deactivate", "-g", group, "-n", name, "--revision", unused, output="none")
+            raise GuardError(f"{failure}; previous values restored, and traffic stayed on {serving}") from failure
         raise GuardError(f"{failure}; previous values restored on {restored}") from failure
+    if serving:
+        az("containerapp", "ingress", "traffic", "set", "-g", group, "-n", name, "--revision-weight", f"{revision}=100",
+           output="none")
+        az("containerapp", "revision", "deactivate", "-g", group, "-n", name, "--revision", serving, output="none")
+    return revision
 
 
 def main(argv=None) -> int:
@@ -363,6 +394,8 @@ def main(argv=None) -> int:
     if not args.apply:
         print(f"Plan only: to make these changes, run the same line again with --apply --expected-source-sha {commit()}")
         return 0
+    for role in planned:
+        pinned_revision(apps[role])  # a release moving traffic stops the run before anything changes
     for role, settings in planned.items():
         revision = apply_role(GROUPS[role], APPS[role], apps[role], settings, args.ready_attempts, args.ready_pause_seconds,
                               roll_back=args.stage != "disable")

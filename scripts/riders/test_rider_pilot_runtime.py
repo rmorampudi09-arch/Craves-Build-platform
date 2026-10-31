@@ -53,6 +53,14 @@ def ready_world():
     }
 
 
+def multiple(world):
+    """Production since 29 Oct: each app keeps all its traffic on a named revision."""
+    for name, app_ in world.items():
+        app_["properties"]["configuration"]["activeRevisionsMode"] = "Multiple"
+        app_["properties"]["configuration"]["ingress"]["traffic"] = [{"revisionName": name + "--r1", "weight": 100}]
+    return world
+
+
 class FakeAz:
     """The signed-in account, Key Vault secrets, and Container Apps in memory: show, secret list, update (set/remove env)
     and revision show."""
@@ -60,7 +68,7 @@ class FakeAz:
     def __init__(self, world, fail_revision=None, account=None, vault=None):
         """fail_revision: the one revision name (for example "<app>--r2") that comes up failed. vault: Key Vault secret
         URL to value; an app secret given as {"keyVaultUrl": url} points at one."""
-        self.world, self.fail_revision, self.updates, self.calls = world, fail_revision, [], []
+        self.world, self.fail_revision, self.updates, self.calls, self.deactivated = world, fail_revision, [], [], []
         self.account, self.vault = account or PRODUCTION, vault or {}
 
     def __call__(self, *args, output="json"):
@@ -83,18 +91,29 @@ class FakeAz:
         if args[:2] == ["containerapp", "update"]:
             self.updates.append((name, args))
             env = self.world[name]["properties"]["template"]["containers"][0]["env"]
+            def values_of(option):
+                rest = args[args.index(option) + 1:]
+                return rest[:next((i for i, a in enumerate(rest) if a.startswith("--")), len(rest))]
             if "--set-env-vars" in args:
-                for pair in args[args.index("--set-env-vars") + 1:]:
+                for pair in values_of("--set-env-vars"):
                     key, value = pair.split("=", 1)
                     env[:] = [e for e in env if e["name"] != key] + [{"name": key, "value": value}]
             if "--remove-env-vars" in args:
-                gone = set(args[args.index("--remove-env-vars") + 1:])
+                gone = set(values_of("--remove-env-vars"))
                 env[:] = [e for e in env if e["name"] not in gone]
             props = self.world[name]["properties"]
             number = int(props["latestRevisionName"].rsplit("--r", 1)[1]) + 1
             props["latestRevisionName"] = f"{name}--r{number}"
             if props["latestRevisionName"] != self.fail_revision:
                 props["latestReadyRevisionName"] = props["latestRevisionName"]
+            return None
+        if args[:4] == ["containerapp", "ingress", "traffic", "set"]:
+            revision, weight = args[args.index("--revision-weight") + 1].split("=")
+            ingress = self.world[name]["properties"]["configuration"]["ingress"]
+            ingress["traffic"] = [{"revisionName": revision, "weight": int(weight)}]
+            return None
+        if args[:3] == ["containerapp", "revision", "deactivate"]:
+            self.deactivated.append(args[args.index("--revision") + 1])
             return None
         if args[:3] == ["containerapp", "revision", "show"]:
             failed = args[args.index("--revision") + 1] == self.fail_revision
@@ -203,7 +222,8 @@ class RiderPilotRuntimeTest(unittest.TestCase):
         integration = self.env(fake, "ca-craves-integration-prod")
         for flag in runtime.FLAGS:
             self.assertEqual("true", integration[flag])
-        self.assertEqual(("true", "false"), (integration["CRAVES_FLEET_TEST_MODE"], integration["CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED"]))
+        self.assertEqual("false", integration["CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED"])
+        self.assertNotIn("CRAVES_FLEET_TEST_MODE", integration, "enable leaves test mode as it is")
 
         code, _, _ = self.run_main(fake, ["--stage", "disable", "--apply", "--expected-source-sha", SHA])
         self.assertEqual(0, code)
@@ -316,9 +336,56 @@ class RiderPilotRuntimeTest(unittest.TestCase):
 
         _, _, report = self.run_main(FakeAz(world, vault={url: "another-key"}), ["--stage", "status"])
         self.assertTrue(any("ca-craves-order-prod CRAVES_INTERNAL_SERVICE_KEY" in p for p in report["problems"]))
-        with self.assertRaises(runtime.GuardError) as unreadable:
-            self.run_main(FakeAz(world), ["--stage", "status"])
-        self.assertIn("Key Vault Secrets User", str(unreadable.exception))
+        code, _, report = self.run_main(FakeAz(world), ["--stage", "status"])
+        self.assertEqual((0, []), (code, report["problems"]), "a secret this account can't read is there, just not compared")
+        self.assertTrue(any("can't read: not compared" in w for w in report["warnings"]))
+
+    def test_multiple_revision_apps_move_traffic_to_the_healthy_revision(self):
+        fake = FakeAz(multiple(ready_world()))
+        code, _, _ = self.run_main(fake, [*WIRE, "--apply", "--expected-source-sha", SHA])
+        self.assertEqual(0, code)
+        for name in ("ca-craves-integration-prod", "ca-craves-notification-prod"):
+            self.assertEqual([{"revisionName": name + "--r2", "weight": 100}],
+                             fake.world[name]["properties"]["configuration"]["ingress"]["traffic"], name)
+        self.assertEqual(["ca-craves-notification-prod--r1", "ca-craves-integration-prod--r1"], fake.deactivated)
+
+    def test_multiple_revision_failure_keeps_traffic_where_it_was(self):
+        world = multiple(ready_world())
+        world["ca-craves-integration-prod"]["properties"]["template"]["containers"][0]["env"].append(
+            val("CRAVES_FLEET_MIN_APP_VERSION", "0.9.0"))
+        fake = FakeAz(world, fail_revision="ca-craves-integration-prod--r2")
+        with self.assertRaises(runtime.GuardError) as failure:
+            self.run_main(fake, [*WIRE, "--apply", "--expected-source-sha", SHA])
+        self.assertIn("traffic stayed on ca-craves-integration-prod--r1", str(failure.exception))
+        integration = fake.world["ca-craves-integration-prod"]["properties"]
+        self.assertEqual([{"revisionName": "ca-craves-integration-prod--r1", "weight": 100}],
+                         integration["configuration"]["ingress"]["traffic"])
+        self.assertEqual("ca-craves-integration-prod--r3", integration["latestRevisionName"], "one update restores and removes")
+        self.assertEqual(["ca-craves-integration-prod--r2", "ca-craves-integration-prod--r3"],
+                         [r for r in fake.deactivated if r.startswith("ca-craves-integration-prod")])
+        env = self.env(fake, "ca-craves-integration-prod")
+        self.assertEqual("0.9.0", env["CRAVES_FLEET_MIN_APP_VERSION"])
+        self.assertNotIn("CRAVES_FLEET_SUPPORT_PHONE", env)
+
+    def test_failed_disable_in_multiple_mode_says_to_stop_dispatch(self):
+        world = multiple(ready_world())
+        world["ca-craves-integration-prod"]["properties"]["template"]["containers"][0]["env"].append(
+            val("CRAVES_FLEET_ENABLED", "true"))
+        fake = FakeAz(world, fail_revision="ca-craves-integration-prod--r2")
+        with self.assertRaises(runtime.GuardError) as failure:
+            self.run_main(fake, ["--stage", "disable", "--apply", "--expected-source-sha", SHA])
+        self.assertIn("Stop dispatch now", str(failure.exception))
+
+    def test_a_release_moving_traffic_stops_the_run_before_any_change(self):
+        world = multiple(ready_world())
+        world["ca-craves-integration-prod"]["properties"]["configuration"]["ingress"]["traffic"] = [
+            {"revisionName": "ca-craves-integration-prod--r1", "weight": 90},
+            {"revisionName": "ca-craves-integration-prod--r0", "weight": 10}]
+        fake = FakeAz(world)
+        with self.assertRaises(runtime.GuardError) as failure:
+            self.run_main(fake, [*WIRE, "--apply", "--expected-source-sha", SHA])
+        self.assertIn("splitting its traffic", str(failure.exception))
+        self.assertEqual([], fake.updates)
 
     def test_origin_must_be_an_azure_hostname(self):
         bad = ready_world()["ca-craves-order-prod"]

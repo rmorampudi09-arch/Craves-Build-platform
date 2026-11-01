@@ -53,6 +53,7 @@ export function PrivacyNoticeScreen() {
       }>
       <Card>
         <Body>{p.intro}</Body>
+        <Body>{p.selfies}</Body>
         <Label>{p.version(version)}</Label>
       </Card>
     </RiderScreen>

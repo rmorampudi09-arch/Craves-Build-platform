@@ -1499,6 +1499,7 @@ components:
         reason: { type: string, maxLength: 1000, nullable: true }
         reviewedBy: { type: string, maxLength: 120, nullable: true }
         reviewedAt: { type: string, format: date-time, nullable: true }
+        referencePhotoId: { type: string, format: uuid, nullable: true, description: "The rider's sign-up selfie (a PHOTO document), verified first; shown beside this one" }
     StatusEventKind: { type: string, enum: [SAFETY_PAUSE, NOTICE, RESTORE, DEACTIVATE] }
     StatusEventInput:
       type: object
@@ -1741,7 +1742,7 @@ components:
         until: { type: string, format: date-time, description: The banner stops showing at this time. }
     FleetSetup:
       type: object
-      required: [testMode, dispatchPolicy, dispatchPolicies, rateCard, rateCards, pilotRiders, pilotKitchens]
+      required: [testMode, dispatchPolicy, dispatchPolicies, rateCard, rateCards, pilotRiders, pilotKitchens, builtInDispatch]
       properties:
         testMode: { type: boolean, description: "CRAVES_FLEET_TEST_MODE: while true, dispatch offers trips only for pilot kitchens to pilot riders." }
         dispatchPolicy: { allOf: [{ $ref: '#/components/schemas/DispatchPolicy' }], nullable: true, description: The newest PUBLISHED policy in force now, never a withdrawn one; null means dispatch is off. }
@@ -1750,6 +1751,14 @@ components:
         rateCards: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/RateCard' } }
         pilotRiders: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/PilotRider' } }
         pilotKitchens: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/PilotKitchen' } }
+        builtInDispatch: { $ref: '#/components/schemas/BuiltInDispatch' }
+    BuiltInDispatch:
+      description: "How Craves dispatches (decided 1 Nov 2026): one rider at a time, 30 s to accept, up to 3 rounds, fair turns within 1.5 km, within 5 km, Borzo after 120 s, then Pidge for 600 s. A version saved without a value gets it from here; the console shows these read-only."
+      allOf:
+        - { $ref: '#/components/schemas/DispatchPolicyValues' }
+        - { $ref: '#/components/schemas/OfferRulesValues' }
+        - type: object
+          required: [offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise, pidgeStageSeconds, offersAtOnce, offerRounds, fairBandM, rankByTravelTime]
     Ranges:
       type: object
       description: "[min, max] per value, keyed by the value's field name, such as basePaise."
@@ -1758,7 +1767,7 @@ components:
     DispatchMode: { type: string, enum: ['off', shadow, live], description: "off: Borzo and Pidge as before. shadow: dispatch only logs what it would do. live: offers go to riders." }
     DispatchPolicyValues:
       type: object
-      required: [offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise, pidgeStageSeconds]
+      description: "In an input, each value left out is the built-in one (FleetSetup.builtInDispatch; decided 1 Nov 2026). Always present in responses."
       properties:
         offerSeconds: { type: integer, minimum: 1, description: How long a rider has to accept an offer. }
         fleetStageSeconds: { type: integer, minimum: 1, description: How long riders get before Borzo is asked. }
@@ -1774,7 +1783,7 @@ components:
         offersAtOnce: { type: integer, minimum: 1, maximum: 3, description: Riders who see an order at the same time. 1 is calm, one rider at a time; 3 is today's. }
         offerRounds: { type: integer, minimum: 1, maximum: 5, description: "Rounds while the fleet stage lasts: when everyone asked passes or the time runs out, the next riders not yet asked hear. Rounds x offerSeconds must fit in fleetStageSeconds." }
         fairBandM: { type: integer, minimum: 0, maximum: 5000, description: "0: nearest first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)." }
-        rankByTravelTime: { type: boolean, description: "Phase 5: who hears first is decided by the travel-time model's minutes to the kitchen (soonest first; a fair band then counts its metres at 20 km/h) instead of straight-line distance. Only with CRAVES_FLEET_ETA_MODE=live and a model whose rankingVerdict is better; otherwise riders are ranked by distance and CRAVES_ALERT FLEET_ETA_NOT_RANKING is logged. A rule riders are shown: left out, it keeps the one riders are shown; a change needs 14 days' notice once a rate card is published. Always present in responses." }
+        rankByTravelTime: { type: boolean, description: "Phase 5: who hears first is decided by the travel-time model's minutes to the kitchen (soonest first; a fair band then counts its metres at 20 km/h) instead of straight-line distance. Only with CRAVES_FLEET_ETA_MODE=live and a model whose rankingVerdict is better; otherwise riders are ranked by distance and CRAVES_ALERT FLEET_ETA_NOT_RANKING is logged. A rule riders are shown: left out, it is the built-in one (false; an immediate off keeps the one riders are shown); a change needs 14 days' notice once a rate card is published. Always present in responses." }
     DispatchPolicyInput:
       allOf:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }
@@ -1789,7 +1798,7 @@ components:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }
         - { $ref: '#/components/schemas/OfferRulesValues' }
         - type: object
-          required: [version, status, effectiveFrom, mode, ranges]
+          required: [version, status, effectiveFrom, mode, ranges, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise, costGuardPremiumPaise, pidgeStageSeconds]
           properties:
             version: { type: string, maxLength: 40, example: 2026-10-v2 }
             status: { $ref: '#/components/schemas/PolicyStatus' }

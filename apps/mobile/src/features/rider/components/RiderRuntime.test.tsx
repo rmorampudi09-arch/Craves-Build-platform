@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert} from 'react-native';
+import {Alert, DeviceEventEmitter} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -9,6 +9,8 @@ import type {ReceivedOffer} from '../domain/offerTiming';
 import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
+import {connection} from '../state/connection';
+import {riderKeys, TRIP_ENDED_EVENT} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
 import {RiderRuntime} from './RiderRuntime';
 
@@ -126,7 +128,7 @@ describe('RiderRuntime pending offer', () => {
     pendingOffer.mockResolvedValueOnce({offer, receivedAtMs});
     const openOffer = jest.fn();
     const tree = await mount(openOffer);
-    // The countdown uses receivedAtMs + expiresInSec; expiresAt (in the past here) is ignored.
+    // Without a native deadline the countdown uses receivedAtMs + expiresInSec; expiresAt alone (in the past here) is not read.
     expect(openOffer).toHaveBeenCalledWith({offer, receivedAtMs});
     act(() => tree.unmount());
   });
@@ -172,5 +174,34 @@ describe('RiderRuntime queue', () => {
     expect(flushedNow()).toBe(2);
     act(() => tree.unmount());
     jest.useRealTimers();
+  });
+
+  it('tells every screen while uploads fail, until one gets through, and forgets it on the way out', async () => {
+    const tree = await mount();
+    status('ERROR'); // "No internet. Retrying."
+    expect(connection.unreachable()).toBe(true);
+    status('ERROR', true); // reached Craves; only offers can't ring
+    expect(connection.unreachable()).toBe(false);
+    status('ERROR');
+    status('ONLINE');
+    expect(connection.unreachable()).toBe(false);
+    status('ERROR');
+    act(() => tree.unmount());
+    expect(connection.unreachable()).toBe(false);
+  });
+});
+
+describe('RiderRuntime trip ended (TRIP_ENDED push)', () => {
+  it('reads the trip and Home again at once', async () => {
+    const invalidate = jest.spyOn(QueryClient.prototype, 'invalidateQueries');
+    const tree = await mount();
+    invalidate.mockClear();
+    act(() => {
+      DeviceEventEmitter.emit(TRIP_ENDED_EVENT, {tripId: 't1'});
+    });
+    expect(invalidate).toHaveBeenCalledWith({queryKey: riderKeys.activeTrip});
+    expect(invalidate).toHaveBeenCalledWith({queryKey: riderKeys.home});
+    act(() => tree.unmount());
+    invalidate.mockRestore();
   });
 });

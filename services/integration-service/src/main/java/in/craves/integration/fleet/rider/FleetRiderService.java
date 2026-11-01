@@ -64,14 +64,14 @@ public class FleetRiderService {
     static final int MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
     // Rider app document codes and the stored types the ops console reviews. Aadhaar is never one of them.
     static final Map<String, String> DOCUMENT_TYPES = Map.of("DL", "DRIVING_LICENCE", "RC", "VEHICLE_RC", "INSURANCE",
-        "VEHICLE_INSURANCE", "PUC", "PUC", "PAN", "PAN", "BANK", "BANK_PROOF");
+        "VEHICLE_INSURANCE", "PUC", "PUC", "PAN", "PAN", "BANK", "BANK_PROOF", "SELFIE", "PHOTO");
     private static final Map<String, String> DOCUMENT_CODES = DOCUMENT_TYPES.entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
     private static final List<String> DOCUMENT_ORDER = List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN",
         "BANK_PROOF", "PHOTO", "ADDRESS_PROOF");
     public static final Map<String, String> DOCUMENT_LABELS = Map.of("DRIVING_LICENCE", "Driving licence", "VEHICLE_RC", "Vehicle RC",
         "VEHICLE_INSURANCE", "Vehicle insurance", "PUC", "PUC certificate", "PAN", "PAN card", "BANK_PROOF", "Bank proof",
-        "PHOTO", "Photo", "ADDRESS_PROOF", "Address proof");
+        "PHOTO", "Sign-up selfie", "ADDRESS_PROOF", "Address proof");
     private static final Set<String> DOCUMENT_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "application/pdf");
     private static final Features NO_FEATURES = new Features(false, false, false, false);
     private static final Set<String> LANGUAGES = Set.of("en", "te", "hi");
@@ -382,10 +382,13 @@ public class FleetRiderService {
         Rider rider = rider(identityId);
         String stored = type == null ? null : DOCUMENT_TYPES.get(type);
         if (stored == null) {
-            throw FleetApiException.unprocessable("DOCUMENT_TYPE_NOT_ALLOWED", "Choose DL, RC, INSURANCE, PUC, PAN or BANK. "
+            throw FleetApiException.unprocessable("DOCUMENT_TYPE_NOT_ALLOWED", "Choose DL, RC, INSURANCE, PUC, PAN, BANK or SELFIE. "
                 + "Craves never collects Aadhaar.");
         }
         byte[] bytes = documentBytes(photo);
+        if ("PHOTO".equals(stored) && "application/pdf".equals(photo.getContentType())) {
+            throw FleetApiException.unprocessable("SELFIE_INVALID", "Take the selfie with the camera.");
+        }
         UUID id = UUID.randomUUID();
         String extension = switch (photo.getContentType()) {
             case "image/png" -> ".png";

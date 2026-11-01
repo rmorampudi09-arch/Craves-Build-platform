@@ -22,9 +22,15 @@ const SITA = "88888888-8888-4888-8888-888888888888";
 const CHEF = "33333333-3333-4333-8333-333333333333";
 const at = "2026-10-22T04:30:00Z";
 const values = { offerSeconds: 40, fleetStageSeconds: 60, radiusM: 5000, pickupDetourPercent: 130, perOrderOverheadPaise: 500, costGuardPremiumPaise: 1000, pidgeStageSeconds: 600 };
-// A server without Phase 4 (or 5) sends no offer rules: the console reads them as today's and sends them back.
-const today = { offersAtOnce: 3, offerRounds: 1, fairBandM: 0, rankByTravelTime: false };
+// A version from before dispatch was built in, from a server that sends no offer rules: three nearest at once, one round.
 const policy = { version: "2026-10-v2", status: "PUBLISHED", effectiveFrom: at, publishedAt: at, mode: "live", ...values, ranges: {} };
+// What every new version gets; the setup sends it as builtInDispatch (base leaves it out, as an older server does).
+const builtIn = {
+  offerSeconds: 30, fleetStageSeconds: 120, radiusM: 5000, pickupDetourPercent: 130, perOrderOverheadPaise: 500, costGuardPremiumPaise: 1000,
+  pidgeStageSeconds: 600, offersAtOnce: 1, offerRounds: 3, fairBandM: 1500, rankByTravelTime: false,
+};
+const onBuiltIn = { ...policy, ...builtIn };
+const BUILT_IN_TEXT = "1 rider at a time · 30 s to accept · up to 3 rounds · fair band 1.5 km · within 5 km · 120 s before Borzo · Pidge 600 s · pickup detour 130% · cost guard ₹5 overhead, ₹10 premium";
 const card = {
   version: "2026-10-v1", status: "DRAFT", effectiveFrom: "2026-11-03T18:30:00Z", basePaise: 4000, baseDropM: 2000, dropPerKmPaise: 900, pickupFreeM: 1000,
   pickupPerKmPaise: 900, waitFreeMinutes: 8, waitPerMinutePaise: 150, slotGuaranteePerHourPaise: 8000, cancellationFeePaise: 2000, returnPerKmPaise: 900, unreachableWaitMinutes: 10,
@@ -83,6 +89,27 @@ describe("pilot setup status", () => {
 });
 
 describe("dispatch", () => {
+  it("shows the built-in values as text with nothing to change them, and each version by its own rules", async () => {
+    setup = { ...base, dispatchPolicy: onBuiltIn, dispatchPolicies: [onBuiltIn, { ...policy, version: "2026-10-v1", effectiveFrom: "2026-10-01T04:30:00Z" }], rateCard: published, rateCards: [published] };
+    render(createElement(FleetSetup));
+    let panel = await section("Dispatch");
+    // An older server sends no builtInDispatch: the console shows the same values.
+    expect(within(panel).getByText(BUILT_IN_TEXT)).toBeTruthy();
+    expect(within(panel).getByText("These are built in: one rider at a time, nearest first, then the next rider — the way food delivery apps hand out orders. Changing them is a code change, and riders get 14 days' notice.")).toBeTruthy();
+    expect(within(panel).queryAllByRole("spinbutton")).toHaveLength(0);
+    expect(within(panel).queryByRole("checkbox")).toBeNull();
+    expect(within(panel).getByRole("cell", { name: "1 at once, 3 rounds, fair band 1.5 km" })).toBeTruthy();
+    expect(within(panel).getByRole("cell", { name: "3 at once, 1 round, nearest first" })).toBeTruthy();
+    // Riders are shown the built-in values already, so a new version starts at once.
+    expect(within(panel).queryByText(/riders get 14 days' notice\. This whole version/)).toBeNull();
+    cleanup();
+
+    setup = { ...setup, builtInDispatch: { ...builtIn, offerSeconds: 45 } };
+    render(createElement(FleetSetup));
+    panel = await section("Dispatch");
+    expect(within(panel).getByText(BUILT_IN_TEXT.replace("30 s", "45 s"))).toBeTruthy();
+  });
+
   it("stops dispatch with the values in force after a confirmation that names what it withdraws", async () => {
     const scheduled = { ...policy, version: "2026-10-v4", effectiveFrom: "2030-01-15T04:30:00Z", pickupDetourPercent: 140 };
     const withdrawnEarlier = { ...policy, version: "2026-10-v3", effectiveFrom: "2030-01-01T04:30:00Z", withdrawnAt: at };
@@ -101,7 +128,8 @@ describe("dispatch", () => {
     setup = { ...base, dispatchPolicy: off, dispatchPolicies: [off, { ...scheduled, withdrawnAt: "2026-10-22T05:00:00Z" }, withdrawnEarlier, policy], rateCard: published, rateCards: [published] };
     fireEvent.click(button("Stop dispatch now", panel));
     expect(await within(panel).findByText("Dispatch is off.")).toBeTruthy();
-    expect(sends()).toEqual([{ method: "POST", path: "dispatch-policies", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { mode: "off", ...values, ...today } }]);
+    // The server keeps the values riders are shown.
+    expect(sends()).toEqual([{ method: "POST", path: "dispatch-policies", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { mode: "off" } }]);
     expect(await within(panel).findByRole("cell", { name: "Withdrawn 22 Oct 2026, 10:30 am IST" })).toBeTruthy();
     expect(within(panel).queryByRole("cell", { name: "Scheduled" })).toBeNull();
     expect(within(await section("In force now")).getByText("Off")).toBeTruthy();
@@ -109,16 +137,15 @@ describe("dispatch", () => {
 
   it("warns that a scheduled version still takes over after a change that starts now", async () => {
     const scheduled = { ...policy, version: "2026-10-v4", effectiveFrom: "2030-01-15T04:30:00Z", pickupDetourPercent: 140 };
-    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [scheduled, { ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
+    setup = { ...base, dispatchPolicy: { ...onBuiltIn, mode: "shadow" }, dispatchPolicies: [scheduled, { ...onBuiltIn, mode: "shadow" }], rateCard: published, rateCards: [published] };
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
     vi.stubGlobal("confirm", vi.fn(() => false));
-    type("Time a rider has to accept, seconds", "45", panel);
     fireEvent.click(button("Save dispatch policy", panel));
     expect(window.confirm).toHaveBeenLastCalledWith("Version 2026-10-v4 (Live) still takes over on 15 Jan 2030, 10:00 am IST.");
     fireEvent.click(within(panel).getByLabelText("Live"));
     fireEvent.click(button("Save dispatch policy", panel));
-    expect(window.confirm).toHaveBeenLastCalledWith("Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time. Version 2026-10-v4 (Live) still takes over on 15 Jan 2030, 10:00 am IST.");
+    expect(window.confirm).toHaveBeenLastCalledWith("Riders will get real orders now (only the pilot riders while test mode is on). Borzo and Pidge still take any order a rider doesn't accept in time. Version 2026-10-v4 (Live) still takes over on 15 Jan 2030, 10:00 am IST.");
     fireEvent.click(within(panel).getByLabelText("Off"));
     fireEvent.click(button("Save dispatch policy", panel));
     expect(window.confirm).toHaveBeenLastCalledWith("Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order. Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
@@ -130,49 +157,17 @@ describe("dispatch", () => {
     setup = { ...base, dispatchPolicy: policy, dispatchPolicies: [scheduled, policy], rateCard: published, rateCards: [published] };
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
-    type("Pickup detour, % of the straight line", "150", panel);
-    type("Rider search radius, km", "9", panel);
-    expect(within(panel).getByLabelText("New detour starts (IST)")).toBeTruthy();
+    expect(within(panel).getByLabelText("New offer rules start (IST)")).toBeTruthy();
     fireEvent.click(within(panel).getByLabelText("Off"));
     expect(within(panel).getByText("Off stops dispatch now and keeps today's values.")).toBeTruthy();
-    const detour = within(panel).getByLabelText("Pickup detour, % of the straight line") as HTMLInputElement;
-    const radius = within(panel).getByLabelText("Rider search radius, km") as HTMLInputElement;
-    expect([detour.disabled, detour.value, radius.disabled, radius.value]).toEqual([true, "130", true, "5"]);
-    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
+    expect(within(panel).queryByLabelText("New offer rules start (IST)")).toBeNull();
 
     answer = (method, path) => method === "POST" ? json({ ...policy, version: "2026-10-v5", mode: "off" }, 201) : reads(method, path);
     fireEvent.click(button("Save dispatch policy", panel));
     expect(window.confirm).toHaveBeenCalledWith("Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order. Version 2026-10-v4 (Live, from 15 Jan 2030, 10:00 am IST) will be withdrawn.");
     expect(await within(panel).findByText("Dispatch is off.")).toBeTruthy();
     expect(within(panel).queryByText("Dispatch policy saved.")).toBeNull();
-    expect(sends()).toEqual([{ method: "POST", path: "dispatch-policies", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { mode: "off", ...values, ...today } }]);
-  });
-
-  it("compares a new detour with the one riders are shown, and gives no notice before a rate card is published", async () => {
-    // Nothing in force: riders are shown the newest draft's 120%, not the scheduled published version's 130%.
-    const draft = { ...policy, version: "2026-10-v1", status: "DRAFT", publishedAt: undefined, mode: "off", pickupDetourPercent: 120 };
-    const scheduled = { ...policy, version: "2026-10-v2", effectiveFrom: "2030-01-15T04:30:00Z" };
-    setup = { ...base, dispatchPolicies: [scheduled, draft], rateCard: published, rateCards: [published] };
-    render(createElement(FleetSetup));
-    let panel = await section("Dispatch");
-    expect((within(panel).getByLabelText("Pickup detour, % of the straight line") as HTMLInputElement).value).toBe("120");
-    fireEvent.click(within(panel).getByLabelText("Shadow — logs only"));
-    type("Pickup detour, % of the straight line", "130", panel);
-    expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the detour at 120%");
-    type("Pickup detour, % of the straight line", "120", panel);
-    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
-    cleanup();
-
-    // No published rate card yet: riders have no terms, so any detour starts at once.
-    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }] };
-    answer = (method, path) => method === "POST" ? json({ ...policy, mode: "shadow", version: "2026-10-v3", pickupDetourPercent: 140 }, 201) : reads(method, path);
-    render(createElement(FleetSetup));
-    panel = await section("Dispatch");
-    type("Pickup detour, % of the straight line", "140", panel);
-    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
-    fireEvent.click(button("Save dispatch policy", panel));
-    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
-    expect(sends()[0].body).toEqual({ mode: "shadow", ...values, ...today, pickupDetourPercent: 140 });
+    expect(sends()).toEqual([{ method: "POST", path: "dispatch-policies", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { mode: "off" } }]);
   });
 
   it("asks before going live and shows the server's refusal", async () => {
@@ -180,74 +175,67 @@ describe("dispatch", () => {
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
     expect((within(panel).getByLabelText("Shadow — logs only") as HTMLInputElement).checked).toBe(true);
-    expect((within(panel).getByLabelText("Rider search radius, km") as HTMLInputElement).value).toBe("5");
-    expect((within(panel).getByLabelText("Overhead per order, ₹") as HTMLInputElement).value).toBe("5.00");
     fireEvent.click(within(panel).getByLabelText("Live"));
-    type("Rider search radius, km", "3.5", panel);
 
     vi.stubGlobal("confirm", vi.fn(() => false));
     fireEvent.click(button("Save dispatch policy", panel));
-    expect(window.confirm).toHaveBeenCalledWith("Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time.");
+    expect(window.confirm).toHaveBeenCalledWith("Riders will get real orders now (only the pilot riders while test mode is on). Borzo and Pidge still take any order a rider doesn't accept in time.");
     expect(sends()).toHaveLength(0);
 
     vi.stubGlobal("confirm", vi.fn(() => true));
     answer = (method, path) => method === "POST" ? json({ code: "RATE_CARD_REQUIRED", message: "Publish a rate card before switching dispatch to live." }, 422) : reads(method, path);
     fireEvent.click(button("Save dispatch policy", panel));
     expect((await within(panel).findByRole("alert")).textContent).toBe("Publish a rate card before switching dispatch to live.");
-    expect(sends()[0].body).toEqual({ mode: "live", ...values, ...today, radiusM: 3500 });
+    // No rate card is published, so riders have no terms yet and the built-in values start at once.
+    expect(sends()[0].body).toEqual({ mode: "live" });
   });
 
-  it("sets how orders are offered, with notice once riders have terms", async () => {
+  it("asks when the built-in values start once they change riders' terms, 14 days and an hour ahead", async () => {
+    // Riders have terms and are shown three nearest at once, one round: the built-in offer rules need notice.
     setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
-    render(createElement(FleetSetup));
-    const panel = await section("Dispatch");
-    expect(within(panel).getByRole("cell", { name: "3 at once, 1 round, nearest first" })).toBeTruthy();
-    expect((within(panel).getByLabelText("Riders who see an order at once, 1 to 3") as HTMLInputElement).value).toBe("3");
-    type("Riders who see an order at once, 1 to 3", "1", panel);
-    expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the offer rules at 3 at once, 1 round, nearest first");
-    type("New offer rules start (IST)", "2030-01-15T10:00", panel);
-    answer = (method, path) => method === "POST" ? json({ ...policy, mode: "shadow", version: "2026-10-v3", offersAtOnce: 1, effectiveFrom: "2030-01-15T04:30:00Z" }, 201) : reads(method, path);
-    fireEvent.click(button("Save dispatch policy", panel));
-    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
-    expect(sends()[0].body).toEqual({ mode: "shadow", ...values, ...today, offersAtOnce: 1, effectiveFrom: "2030-01-15T04:30:00.000Z" });
-  });
-
-  it("ranks by travel time as an offer rule, with the same notice", async () => {
-    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
-    render(createElement(FleetSetup));
-    const panel = await section("Dispatch");
-    const travel = within(panel).getByLabelText("Rank by travel time: soonest at the kitchen first") as HTMLInputElement;
-    expect(travel.checked).toBe(false);
-    fireEvent.click(travel);
-    expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the offer rules at 3 at once, 1 round, nearest first");
-    type("New offer rules start (IST)", "2030-01-15T10:00", panel);
-    answer = (method, path) => method === "POST" ? json({ ...policy, mode: "shadow", version: "2026-10-v3", rankByTravelTime: true, effectiveFrom: "2030-01-15T04:30:00Z" }, 201) : reads(method, path);
-    fireEvent.click(button("Save dispatch policy", panel));
-    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
-    expect(sends()[0].body).toEqual({ mode: "shadow", ...values, ...today, rankByTravelTime: true, effectiveFrom: "2030-01-15T04:30:00.000Z" });
-  });
-
-  it("asks when a new detour starts, only when the detour changes", async () => {
-    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }], rateCard: published, rateCards: [published] };
-    render(createElement(FleetSetup));
-    const panel = await section("Dispatch");
-    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
     const before = noticeStart();
-    type("Pickup detour, % of the straight line", "140", panel);
-    expect(within(panel).getByText(/riders get 14 days' notice/).textContent).toContain("keep the detour at 130%");
+    render(createElement(FleetSetup));
+    const panel = await section("Dispatch");
+    expect(within(panel).getByText(/riders get 14 days' notice\. This whole version/).textContent).toContain("Until then riders keep the offer rules at 3 at once, 1 round, nearest first.");
     // Filled in as 14 days and 1 hour from now; exactly 14 days would bounce off the server's own clock.
-    expect([before, noticeStart()]).toContain((within(panel).getByLabelText("New detour starts (IST)") as HTMLInputElement).value);
-    type("New detour starts (IST)", new Date(Date.now() + 14 * 86_400_000 + 330 * 60_000).toISOString().slice(0, 16), panel);
+    expect([before, noticeStart()]).toContain((within(panel).getByLabelText("New offer rules start (IST)") as HTMLInputElement).value);
+    type("New offer rules start (IST)", new Date(Date.now() + 14 * 86_400_000 + 330 * 60_000).toISOString().slice(0, 16), panel);
     fireEvent.click(button("Save dispatch policy", panel));
-    expect(within(panel).getByRole("alert").textContent).toBe("Pick a start for the new detour at least 14 days and 1 hour from now.");
+    expect(within(panel).getByRole("alert").textContent).toBe("Pick a start for the new offer rules at least 14 days and 1 hour from now.");
+    expect(sends()).toHaveLength(0);
 
-    answer = (method, path) => method === "POST" ? json({ code: "NOTICE_TOO_SHORT", message: "Start the new detour on or after 5 Nov 2026, 10:00 am IST." }, 422) : reads(method, path);
-    type("New detour starts (IST)", "2030-01-15T10:00", panel);
+    answer = (method, path) => method === "POST" ? json({ code: "NOTICE_TOO_SHORT", message: "Choose a start at least 14 days from now." }, 422) : reads(method, path);
+    type("New offer rules start (IST)", "2030-01-15T10:00", panel);
     fireEvent.click(button("Save dispatch policy", panel));
-    expect((await within(panel).findByRole("alert")).textContent).toBe("Start the new detour on or after 5 Nov 2026, 10:00 am IST.");
-    expect(sends()[0].body).toEqual({ mode: "shadow", ...values, ...today, pickupDetourPercent: 140, effectiveFrom: "2030-01-15T04:30:00.000Z" });
-    type("Pickup detour, % of the straight line", "130", panel);
-    expect(within(panel).queryByLabelText("New detour starts (IST)")).toBeNull();
+    expect((await within(panel).findByRole("alert")).textContent).toBe("Choose a start at least 14 days from now.");
+    answer = (method, path) => method === "POST" ? json({ ...onBuiltIn, mode: "shadow", version: "2026-10-v3", effectiveFrom: "2030-01-15T04:30:00Z" }, 201) : reads(method, path);
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
+    expect(sends().map(call => call.body)).toEqual(Array(2).fill({ mode: "shadow", effectiveFrom: "2030-01-15T04:30:00.000Z" }));
+  });
+
+  it("compares the built-in detour with the one riders are shown, and gives no notice before a rate card is published", async () => {
+    // Nothing in force: riders are shown the newest draft's 120%, not the scheduled published version's.
+    const draft = { ...onBuiltIn, version: "2026-10-v1", status: "DRAFT", publishedAt: undefined, mode: "off", pickupDetourPercent: 120 };
+    const scheduled = { ...onBuiltIn, version: "2026-10-v2", effectiveFrom: "2030-01-15T04:30:00Z" };
+    setup = { ...base, dispatchPolicies: [scheduled, draft], rateCard: published, rateCards: [published] };
+    render(createElement(FleetSetup));
+    let panel = await section("Dispatch");
+    expect((within(panel).getByLabelText("Off") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(panel).getByLabelText("Shadow — logs only"));
+    expect(within(panel).getByLabelText("New detour starts (IST)")).toBeTruthy();
+    expect(within(panel).getByText(/riders get 14 days' notice\. This whole version/).textContent).toContain("Until then riders keep the detour at 120%.");
+    cleanup();
+
+    // No published rate card yet: riders have no terms, so the built-in values start at once.
+    setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }] };
+    answer = (method, path) => method === "POST" ? json({ ...onBuiltIn, mode: "shadow", version: "2026-10-v3" }, 201) : reads(method, path);
+    render(createElement(FleetSetup));
+    panel = await section("Dispatch");
+    expect(within(panel).queryByLabelText(/start/)).toBeNull();
+    fireEvent.click(button("Save dispatch policy", panel));
+    expect(await within(panel).findByText("Dispatch policy saved.")).toBeTruthy();
+    expect(sends()[0].body).toEqual({ mode: "shadow" });
   });
 });
 
@@ -317,6 +305,18 @@ describe("rate card", () => {
 });
 
 describe("pilot zone", () => {
+  it("says the lists apply only while test mode is on, and production runs with it off", async () => {
+    const rule = "The list applies only while test mode is on; production runs with test mode off, so orders from every kitchen go to every eligible rider.";
+    render(createElement(FleetSetup));
+    expect(within(await section("Pilot riders")).getByText(`Test mode is on: only these riders get Craves offers. ${rule}`)).toBeTruthy();
+    expect(within(await section("Pilot kitchens")).getByText(`Test mode is on: only orders from these kitchens go to Craves riders. ${rule}`)).toBeTruthy();
+    cleanup();
+
+    setup = { ...base, testMode: false };
+    render(createElement(FleetSetup));
+    for (const heading of ["Pilot riders", "Pilot kitchens"]) expect(within(await section(heading)).getByText(`Test mode is off: this list isn't used now. ${rule}`)).toBeTruthy();
+  });
+
   it("finds a rider and adds them with a note, then removes a rider after a confirmation", async () => {
     render(createElement(FleetSetup));
     const panel = await section("Pilot riders");

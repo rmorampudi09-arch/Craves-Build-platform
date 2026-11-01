@@ -46,6 +46,8 @@ export const useProfile = (enabled = true) => useQuery({queryKey: riderKeys.prof
 
 /** The ACCOUNT push (ops decided the application, P6-04), from RiderMessagingService. */
 export const ACCOUNT_EVENT = 'riderAccount';
+/** The TRIP_ENDED push (app 1.3.0: ops cancelled, released or handed over the trip, or the order was cancelled), {tripId}. */
+export const TRIP_ENDED_EVENT = 'riderTripEnded';
 const RECHECK_EVERY_MS = 15_000;
 
 /**

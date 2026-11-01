@@ -868,6 +868,11 @@ public class FleetDispatcher implements FleetStage {
      * offline, took a trip or started a break while the plan fetched distances and quotes. Returns how many went out.
      */
     private int insertOffers(UUID tripId, DispatchPolicy policy, List<Planned> planned, int round) {
+        // One writer per rider, as accept takes it: wait for an accept of theirs to commit, so the inserts below see it. A
+        // statement of its own, because Read Committed re-checks an UPDATE's WHERE but not an INSERT … SELECT's snapshot; in
+        // id order, so two dispatches never deadlock.
+        jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE id = ANY(CAST(? AS uuid[])) ORDER BY id FOR NO KEY UPDATE",
+            planned.stream().map(offer -> offer.riderId().toString()).collect(Collectors.joining(",", "{", "}")));
         int offered = 0;
         for (Planned offer : planned) {
             offered += jdbc.update("""

@@ -12,7 +12,8 @@ import com.google.firebase.messaging.FirebaseMessaging
 
 /**
  * JS side of the online service, offer ringing and the trip-step outbox. Events (RCTDeviceEventEmitter): riderOffer,
- * riderTripChanged, riderStatus, riderFcmToken, riderOutboxChanged. See docs/riders/NATIVE.md.
+ * riderTripChanged, riderStatus, riderFcmToken, riderOutboxChanged, and from pushes riderAccount and riderTripEnded. See
+ * docs/riders/NATIVE.md.
  */
 class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
@@ -66,6 +67,12 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
   fun testRing(promise: Promise) {
     RiderOffers.testRing(reactContext)
     promise.resolve(null)
+  }
+
+  /** An offer rings until answered: Accept, Decline or its screen closing stops it. */
+  @ReactMethod
+  fun stopRinging(offerId: String) {
+    RiderOffers.stopRinging(reactContext, offerId)
   }
 
   /** The trip actions JS has waiting to sync, for the phone's health report; oldestAtMs is the oldest one's Date.now(). */

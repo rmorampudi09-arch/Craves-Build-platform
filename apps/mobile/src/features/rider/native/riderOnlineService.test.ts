@@ -34,6 +34,7 @@ function nativeModule() {
     start: jest.fn(async () => undefined),
     stop: jest.fn(async () => undefined),
     testRing: jest.fn(async () => undefined),
+    stopRinging: jest.fn(),
     lastFix: jest.fn(async () => ({lat: 17.4, lng: 78.3, accuracyM: 9, at: '2026-10-19T09:59:00.000Z', mock: false})),
     getFcmToken: jest.fn(async () => 'fcm-1'),
     getPendingOffer: jest.fn(async () => ({offer: JSON.stringify(offer), receivedAtMs: 1234, channel: 'fcm'})),
@@ -68,8 +69,10 @@ describe('riderOnlineService in live mode with the native module', () => {
 
     await service.stop();
     await service.testRing();
+    service.stopRinging('o1');
     expect(native.stop).toHaveBeenCalled();
     expect(native.testRing).toHaveBeenCalled();
+    expect(native.stopRinging).toHaveBeenCalledWith('o1');
   });
 
   it('turns native events into offers, trip changes and statuses', async () => {
@@ -81,7 +84,8 @@ describe('riderOnlineService in live mode with the native module', () => {
     service.onTripChanged(trips);
     const off = service.onStatus(statuses);
 
-    emitter.emit('riderOffer', {offer: JSON.stringify(offer), receivedAtMs: 1000, channel: 'fcm'});
+    // deadlineMs: the server's expiresAt on the phone's clock (RiderOffers.deadlineMs), 8 s short of arrival + 40 s.
+    emitter.emit('riderOffer', {offer: JSON.stringify(offer), receivedAtMs: 1000, deadlineMs: 33_000, channel: 'fcm'});
     emitter.emit('riderOffer', {offer: 'not json', receivedAtMs: 2000, channel: 'locations'});
     emitter.emit('riderTripChanged', {tripId: 't1', step: 'TO_KITCHEN', version: 2});
     const fix = {lat: 17.5, lng: 78.4, accuracyM: 5, at: '2026-10-19T10:00:00.000Z', mock: true};
@@ -90,7 +94,7 @@ describe('riderOnlineService in live mode with the native module', () => {
     emitter.emit('riderStatus', {state: 'OFFLINE', message: 'Ops ended your shift.'});
 
     expect(offers).toHaveBeenCalledTimes(1);
-    expect(offers).toHaveBeenCalledWith(offer, 1000);
+    expect(offers).toHaveBeenCalledWith({offer, receivedAtMs: 1000, deadlineMs: 33_000});
     expect(trips).toHaveBeenCalledWith({tripId: 't1', step: 'TO_KITCHEN', version: 2});
     expect(statuses).toHaveBeenCalledTimes(1);
     expect(service.lastFix()).toEqual(fix);
@@ -161,7 +165,7 @@ describe('riderOnlineService without the native module', () => {
 
     expect(native.start).not.toHaveBeenCalled();
     expect(postLocations).toHaveBeenCalledTimes(1);
-    expect(offers).toHaveBeenCalledWith(offer, expect.any(Number));
+    expect(offers).toHaveBeenCalledWith({offer, receivedAtMs: expect.any(Number)});
     expect(statuses.mock.calls.map(([status]) => status.state)).toEqual(['ONLINE', 'OFFLINE']);
     // Demo builds register a fixed token with the mock server and never have a pending offer.
     expect(await service.fcmToken()).toBe('mock-fcm-token');

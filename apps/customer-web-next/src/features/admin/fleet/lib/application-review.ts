@@ -19,7 +19,7 @@ export const DOCUMENT_CHECKS: Record<DocumentType, string> = {
   VEHICLE_INSURANCE: "Same plate as the RC, policy not expired.",
   PUC: "Same plate as the RC, certificate not expired.",
   PAN: "Name matches the other documents.",
-  PHOTO: "A clear photo of the rider's face.",
+  PHOTO: "A clear photo of the rider's face. Compare with the licence photo. Every go-online selfie is checked against this one.",
   ADDRESS_PROOF: "Name matches, address readable.",
   BANK_PROOF: "Name, account number and IFSC match the payout account below.",
 };

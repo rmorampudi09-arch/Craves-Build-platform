@@ -260,7 +260,9 @@ jobs:
           test -s "${APK%.apk}-mapping.txt" || { echo 'ERROR: no R8 mapping: R8 did not run' >&2; exit 1; }
           # Android installs an update only over the same key: another key is "App not installed as package conflicts
           # with an existing package" (docs/riders/RELEASE.md). Every build shows its key so a change is seen at once.
-          signer="$("$tools/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          # Newer apksigner prints "V2 Signer: certificate …" per scheme, older "Signer #1 certificate …": the first one.
+          signer="$("$tools/apksigner" verify --print-certs "$APK" |
+            awk '/^(Signer #1|V[0-9.]+ Signer:) certificate SHA-256 digest: / && !n++ {print $NF}')"
           [[ -n "$signer" ]] || { echo "::error::apksigner printed no signing certificate digest" >&2; exit 1; }
           echo "Signed by key $signer; $package; versionCode $code; native code for $abis; R8 mapping present."
           echo "Rider APK: $package, versionCode $code, signing key SHA-256 $signer" >> "$GITHUB_STEP_SUMMARY"

@@ -57,6 +57,11 @@ craves:
     # Riders may take a break while online and choose the farthest pickup and drop they hear of (Phase 4). Switch on once
     # the APIM routes for /shift/pause, /shift/resume and /preferences are published and the app that shows them is out.
     rider-choices-enabled: ${CRAVES_FLEET_RIDER_CHOICES_ENABLED:false}
+    # R16 16 (DISPATCH.md §2, "A phone that doesn't ring"), 0 = off: with rounds, an offer whose phone hasn't reported ringing
+    # this many seconds after it went out (15: one idle poll and a margin) no longer holds up the next rider; the first
+    # accept wins. It changes who hears of an order: 14 days' notice to riders first, and only once offer_outcomes shows
+    # over 20% of offers expiring unanswered for two weeks with every rider on app 1.1.0 or later (GO-LIVE.md §8).
+    unheard-next-rider-seconds: ${CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS:0}
     # The fleet engine (Phase 5, services/fleet-engine, docs/riders/SCALE.md). off: nothing is written to Redis. shadow:
     # rider events and every order's ranking go to the engine, which compares and logs (FLEET_ENGINE_SHADOW); offers stay
     # Java's. live: dispatch asks the engine first and ranks itself after reply-timeout-ms. Partitions and key prefix must

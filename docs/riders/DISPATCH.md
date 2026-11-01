@@ -111,6 +111,29 @@ Riders' Terms keep showing the usual rules. The top-up is part of their pay, so 
 
 **Notice first.** Rain mode changes how orders are offered, so riders must have been told 14 days before its first use, automatic or not (Telangana s.13(2) [1]). Serve the notice with the rate card that adds the top-up: its summary of changes says what rain mode does, and riders read it under Terms from the day it is published. The server can't know when riders were told; the console asks before every switch on.
 
+### A phone that doesn't ring
+
+Built, switched off (`CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS`: 0, the default, is off; 15 when on; research R16 item 16).
+
+**Why.** With one rider at a time, an offer to a phone that never rings holds the order for the whole time to accept (30 s) before the next rider hears of it.
+
+**How it works.**
+- **The phone says when it rang.** On app 1.1.0 or later, the phone reports each offer's ring with its next `/locations` call (`trip_offer.rang_at`), at most one idle poll later (`CRAVES_FLEET_IDLE_POLL_SECONDS`, 10 s). So after 15 s, a phone that rang has almost always said so. Keep the setting above the idle poll.
+- **An offer still unheard after 15 s no longer holds up the order.** The next rider not yet asked hears of it too, by the same rules: nearest first or fair turns, the cost guard, a round only with its full time to accept left in the stage, and never more rounds than the policy's.
+- **The unheard offer stays open** until its time runs out. If that phone rings late, its rider can still accept. The first rider to accept gets the order; the other is told "Another rider took this order."
+- **An offer that rang holds up the next round as before:** its rider is deciding.
+- **No waiting for the next check.** The delivery command looks again as each offer turns unheard, not up to 5 s later. Each round sent this way logs `FLEET_UNHEARD_NEXT trip=… offer=…`, naming the unheard offers.
+- **With one round** (or the switch at 0) nothing changes.
+
+**The trade-off.** Two riders can now hold offers for one order, so the second may lose it to the first, even though the policy says one rider at a time. That changes who hears of an order: it is a change to riders' terms.
+
+**Before switching it on**, all three must hold:
+- **The data says riders aren't hearing offers.** `offer_outcomes` shows over 20% of offers expiring unanswered for two weeks, and `offer_to_ring` and `first_channel` show phones that never rang, rather than riders letting offers run out. Check the phones first (§7).
+- **Every rider is on app 1.1.0 or later.** Set `CRAVES_FLEET_MIN_APP_VERSION` to 1.1.0. Older apps send no ring receipts, so every offer to them would count as unheard.
+- **Riders have had 14 days' notice** (Telangana s.13(2) [1]), with the wording in the app.
+
+**Switching it off:** set it to 0. The next revision dispatches as before.
+
 ### What the offer card tells the rider
 
 | When | The offer card says |
@@ -244,7 +267,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 |---|---|---|
 | Under nearest first, the Gini of pay per online hour stays over 0.3 for a week, with 5 or more riders a day | `earnings_per_online_hour` | Fair turns at 1.5 km (14 days' notice). |
 | Fair-turn pickups average over 30% longer than nearest-first ones for a week | `offer_rules` | Narrow the band (14 days' notice). |
-| Over 20% of offers expire unanswered | `offer_outcomes` | Riders aren't hearing offers. Check `offer_to_ring` and the phones first. |
+| Over 20% of offers expire unanswered | `offer_outcomes` | Riders aren't hearing offers. Check `offer_to_ring` and the phones first. If it lasts two weeks and the offers never rang: the next rider after 15 s unheard (§2, "A phone that doesn't ring"; 14 days' notice). |
 | Many orders accepted only in later rounds, or reaching Borzo | `offer_rules`, `fleet_stage_outcomes` | More riders in that area, or 2 riders at once (14 days' notice). |
 | Many riders narrowing their distances | `rider_choices` | Offers ask too much: look at the radius and the pay per km. |
 | Most kitchens over 10 minutes' wait for two weeks | `kitchen_wait` | Design offers timed to the food (§9). |

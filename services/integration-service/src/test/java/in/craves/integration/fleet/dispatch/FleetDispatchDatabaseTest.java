@@ -19,27 +19,43 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
+import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
+import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
+import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
 import in.craves.integration.fleet.FleetRain;
+import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.FleetTestMode;
-import in.craves.integration.fleet.eta.FleetEta;
+import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.eta.FleetEta;
+import in.craves.integration.fleet.trip.FleetStatusBridge;
 import in.craves.integration.fleet.trip.FleetTripModels;
+import in.craves.integration.fleet.trip.FleetTripPay;
+import in.craves.integration.fleet.trip.FleetTripService;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** The fleet stage of the dispatch chain (PLAN F8a, F9) against a real database. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
@@ -508,6 +524,128 @@ class FleetDispatchDatabaseTest {
         assertThat(reason(staying)).containsEntry("round", 1).containsEntry("place", 1);
     }
 
+    /** R16 16 switched off (the default): an offer whose phone never reported ringing holds the next round up, as before. */
+    @Test
+    void whileTheUnheardSwitchIsOffAnOfferThatNeverRangHoldsUpTheNextRound() {
+        oneAtATime();
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        offeredAgo(nearest, 16);
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("the usual 5 s check").isAfter(Instant.now().plusSeconds(4)));
+        assertThat(activeOffers()).containsExactly(nearest);
+        assertThat(count("fleet_schema.trip_offer")).isOne();
+    }
+
+    /**
+     * R16 16 with CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS at 15: once an offer's phone hasn't reported ringing for 15 s, the
+     * next rider hears too while that offer stays open; an offer that rang holds the next round up as before; dispatch looks
+     * again as an offer turns unheard, not up to 5 s later; and the rounds still stop at the policy's three.
+     */
+    @Test
+    void withTheUnheardSwitchOnTheNextRiderHearsWhileTheOfferThatNeverRangStaysOpen() {
+        oneAtATime();
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID third = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.010, KITCHEN_LNG, 5, false);
+        UUID fourth = FleetDispatchFixtures.riderOnShift(fleet, "+919800000004", KITCHEN_LAT + 0.015, KITCHEN_LNG, 5, false);
+        FleetDispatcher unheard = unheardAfter(15);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(nearest);
+
+        Instant turnsUnheard = offeredAgo(nearest, 12).plusSeconds(15);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true)).as("12 s: still the first rider's alone")
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("looks again as it turns unheard, 3 s from now")
+                    .isBeforeOrEqualTo(turnsUnheard).isBefore(Instant.now().plusSeconds(4)));
+        assertThat(count("fleet_schema.trip_offer")).isOne();
+
+        offeredAgo(nearest, 16);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("the next rider hears; the first offer stays open").containsExactlyInAnyOrder(nearest, second);
+        assertThat(reason(second)).containsEntry("round", 2).containsEntry("place", 1);
+
+        offeredAgo(second, 16);
+        rang(second);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(count("fleet_schema.trip_offer")).as("a phone that rang holds the next round up").isEqualTo(2);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", second);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactlyInAnyOrder(nearest, third);
+        assertThat(reason(third)).containsEntry("round", 3);
+
+        offeredAgo(third, 16);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true)).as("rounds out, offers still open")
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer", UUID.class)).hasSize(3).doesNotContain(fourth);
+        assertThat(activeOffers()).containsExactlyInAnyOrder(nearest, third);
+        assertThat(fleet.db.queryForList("SELECT provider || ':' || state FROM fleet_schema.trip_stage", String.class))
+            .containsExactly("CRAVES_FLEET:OPEN");
+    }
+
+    /** R16 16: the rider whose phone rang late and the next rider both accept at once: exactly one gets the order. */
+    @Test
+    void whenTheUnheardRiderAndTheNextRiderBothAcceptExactlyOneGetsTheOrder() throws Exception {
+        oneAtATime();
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        FleetDispatcher unheard = unheardAfter(15);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        offeredAgo(nearest, 16);
+        assertThatThrownBy(() -> unheard.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactlyInAnyOrder(nearest, second);
+
+        FleetPolicyStore policies = new FleetPolicyStore(fleet.db, json);
+        FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json),
+            new DeliveryCommandRepository(fleet.db, json), mock(DeliveryStatusUpdateService.class), json);
+        FleetTripService trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, event -> { }), bridge, json,
+            mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions, mock(RiderPushClient.class));
+        TransactionTemplate transaction = new TransactionTemplate(fleet.transactions);
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<Object>> taps = new ArrayList<>();
+        try (ExecutorService threads = Executors.newFixedThreadPool(2)) {
+            for (UUID rider : List.of(nearest, second)) {
+                UUID identity = fleet.db.queryForObject("SELECT identity_id FROM fleet_schema.rider WHERE id = ?", UUID.class, rider);
+                UUID offer = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip_offer WHERE rider_id = ?", UUID.class, rider);
+                taps.add(threads.submit((Callable<Object>) () -> {
+                    go.await();
+                    try {
+                        return transaction.execute(status -> trips.accept(identity, offer, "rider-accept-" + offer));
+                    } catch (FleetApiException refused) {
+                        return refused;
+                    }
+                }));
+            }
+            go.countDown();
+        }
+        List<Object> outcomes = new ArrayList<>();
+        for (Future<Object> tap : taps) {
+            outcomes.add(tap.get());
+        }
+
+        assertThat(outcomes).filteredOn(FleetTripModels.Trip.class::isInstance).hasSize(1);
+        assertThat(outcomes).filteredOn(FleetApiException.class::isInstance).singleElement().satisfies(refused -> {
+            assertThat(((FleetApiException) refused).status()).isEqualTo(409);
+            assertThat(((FleetApiException) refused).code()).isEqualTo("OFFER_TAKEN");
+        });
+        assertThat(fleet.db.queryForList("SELECT state FROM fleet_schema.trip_offer ORDER BY state", String.class))
+            .containsExactly("ACCEPTED", "LOST");
+        assertThat(fleet.db.queryForList("SELECT state || ':' || outcome FROM fleet_schema.trip_stage", String.class))
+            .containsExactly("CLOSED:ACCEPTED");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isOne();
+    }
+
     /** The cost guard can leave riders out: an offer counts only the riders asked together, never the policy's three. */
     @Test
     void anOfferCountsOnlyTheRidersAskedTogether() {
@@ -650,6 +788,30 @@ class FleetDispatchDatabaseTest {
     /** A live policy that offers to one rider at a time, 20 s each, up to three rounds in a 90 s stage, with this fair band. */
     private void fairPolicy(int bandM) {
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 90, 1, 3, bandM);
+    }
+
+    /** A live policy that offers to one rider at a time, nearest first, 40 s each, up to three rounds in a 120 s stage. */
+    private void oneAtATime() {
+        FleetDispatchFixtures.policy(fleet.db, "live", 40, 120, 1, 3, 0);
+    }
+
+    /** A dispatcher with CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS at seconds (R16 16). */
+    private FleetDispatcher unheardAfter(int seconds) {
+        return new FleetDispatcher(fleet.db, fleet.transactions, new FleetPolicyStore(fleet.db, json),
+            new FleetTestMode(fleet.db, FleetDatabase.properties(true)), roads, push, json, false, false, seconds);
+    }
+
+    /** The rider's open offer went out secondsAgo, with the rest of its 40 s still to run. Returns when it went out. */
+    private Instant offeredAgo(UUID rider, int secondsAgo) {
+        return fleet.db.queryForObject("UPDATE fleet_schema.trip_offer SET offered_at = now() - make_interval(secs => ?), "
+            + "expires_at = now() + make_interval(secs => ?) WHERE rider_id = ? AND state = 'ACTIVE' RETURNING offered_at",
+            (row, n) -> row.getTimestamp("offered_at").toInstant(), secondsAgo, 40 - secondsAgo, rider);
+    }
+
+    /** The rider's phone reported their open offer ringing a second after it went out (an offer receipt on /locations). */
+    private void rang(UUID rider) {
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET rang_at = offered_at + INTERVAL '1 second', rang_channel = 'fcm' "
+            + "WHERE rider_id = ? AND state = 'ACTIVE'", rider);
     }
 
     /** A rider's day so far: online since minutesOnline ago (their shift started then) and paise credited today. */

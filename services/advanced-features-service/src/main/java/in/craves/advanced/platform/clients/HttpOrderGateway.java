@@ -6,6 +6,8 @@ import in.craves.advanced.platform.AdvancedSettings;
 import in.craves.advanced.platform.data.Money;
 import in.craves.advanced.platform.web.ApiProblem;
 import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +32,28 @@ public class HttpOrderGateway implements OrderGateway {
     @Override
     public Optional<Order> chefOrder(String chefBearerToken, UUID orderId) {
         return read(http.send("GET", "/api/v1/chef/orders/" + orderId, chefBearerToken, null), http::unavailable);
+    }
+
+    @Override
+    public OrderPage chefOrderPage(String chefBearerToken, String cursor) {
+        String query = "?limit=100" + (cursor == null ? "" : "&cursor=" + URLEncoder.encode(cursor, StandardCharsets.UTF_8));
+        GatewayHttp.Reply reply = http.send("GET", "/api/v1/chef/orders/page" + query, chefBearerToken, null);
+        if (reply.status() == 401) throw new ApiProblem(401, "AUTHENTICATION_REQUIRED", "Sign in again to continue");
+        if (reply.status() == 403) throw ApiProblem.forbidden("ACCESS_DENIED", "Sign in with a chef account");
+        if (reply.status() != 200 || reply.body() == null) throw http.unavailable();
+        try {
+            return page(reply.body());
+        } catch (RuntimeException unreadable) {
+            throw http.unavailable();
+        }
+    }
+
+    /** Order service's OrderPageResponse; a missing cursor or hasMore=false ends the paging. */
+    static OrderPage page(JsonNode body) {
+        List<Order> orders = new ArrayList<>();
+        for (JsonNode node : body.path("orders")) orders.add(order(node));
+        JsonNode next = body.path("nextCursor");
+        return new OrderPage(List.copyOf(orders), body.path("hasMore").asBoolean(false) && next.isTextual() ? next.asText() : null);
     }
 
     /**

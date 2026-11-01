@@ -1,0 +1,447 @@
+components:
+  schemas:
+    CancellationCheck:
+      properties:
+        cancelledBy:
+          enum:
+          - CUSTOMER
+          - CHEF
+          - PLATFORM
+          type: string
+        deliveryFeePaise:
+          format: int64
+          maximum: 10000000000
+          minimum: 0
+          type: integer
+        foodPaise:
+          format: int64
+          maximum: 10000000000
+          minimum: 0
+          type: integer
+        orderStatus:
+          maxLength: 40
+          minLength: 0
+          type: string
+        paidPaise:
+          format: int64
+          maximum: 10000000000
+          minimum: 0
+          type: integer
+        platformFeePaise:
+          format: int64
+          maximum: 10000000000
+          minimum: 0
+          type: integer
+      required:
+      - cancelledBy
+      - deliveryFeePaise
+      - foodPaise
+      - orderStatus
+      - paidPaise
+      - platformFeePaise
+      type: object
+    CancellationVerdict:
+      properties:
+        allowed:
+          type: boolean
+        deliveryFeeRefundPaise:
+          format: int64
+          type: integer
+        foodRefundPaise:
+          format: int64
+          type: integer
+        platformFeeRefundPaise:
+          format: int64
+          type: integer
+        policyVersion:
+          format: int32
+          type: integer
+        reason:
+          type: string
+        stage:
+          enum:
+          - PLACED
+          - COOKING
+          - READY
+          - ON_THE_WAY
+          type: string
+        totalRefundPaise:
+          format: int64
+          type: integer
+      type: object
+    JsonNode:
+      type: object
+    NotificationCheck:
+      properties:
+        at:
+          format: date-time
+          type: string
+        category:
+          pattern: "[A-Z0-9_]{2,40}"
+          type: string
+        sentAt:
+          items:
+            format: date-time
+            type: string
+          maxItems: 1000
+          minItems: 0
+          type: array
+      required:
+      - category
+      - sentAt
+      type: object
+    NotificationVerdict:
+      properties:
+        allowed:
+          type: boolean
+        nextAllowedAt:
+          format: date-time
+          type: string
+        policyVersion:
+          format: int32
+          type: integer
+        reason:
+          type: string
+      type: object
+    PolicyDraftRequest:
+      properties:
+        document:
+          $ref: "#/components/schemas/JsonNode"
+        note:
+          maxLength: 500
+          minLength: 0
+          type: string
+      required:
+      - document
+      type: object
+    PolicyVersionView:
+      properties:
+        activatedAt:
+          format: date-time
+          type: string
+        activatedBy:
+          format: uuid
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        createdBy:
+          format: uuid
+          type: string
+        document:
+          $ref: "#/components/schemas/JsonNode"
+        id:
+          format: uuid
+          type: string
+        note:
+          type: string
+        status:
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+        type:
+          type: string
+        version:
+          format: int32
+          type: integer
+      type: object
+    ProviderCandidate:
+      properties:
+        etaMinutes:
+          format: int32
+          maximum: 1440
+          minimum: 0
+          type: integer
+        pricePaise:
+          format: int64
+          maximum: 10000000
+          minimum: 0
+          type: integer
+        provider:
+          pattern: "[A-Z0-9_]{2,30}"
+          type: string
+        successRate:
+          exclusiveMaximum: false
+          exclusiveMinimum: false
+          format: double
+          maximum: 1
+          minimum: 0
+          type: number
+      required:
+      - etaMinutes
+      - pricePaise
+      - provider
+      type: object
+    ProviderRankingCheck:
+      properties:
+        candidates:
+          items:
+            $ref: "#/components/schemas/ProviderCandidate"
+          maxItems: 20
+          minItems: 1
+          type: array
+      required:
+      - candidates
+      type: object
+    ProviderRankingVerdict:
+      properties:
+        policyVersion:
+          format: int32
+          type: integer
+        providers:
+          items:
+            $ref: "#/components/schemas/RankedProvider"
+          type: array
+      type: object
+    RankedProvider:
+      properties:
+        eligible:
+          type: boolean
+        provider:
+          type: string
+        reason:
+          type: string
+        score:
+          format: int32
+          type: integer
+      type: object
+    ServiceabilityCheck:
+      properties:
+        city:
+          maxLength: 60
+          minLength: 0
+          type: string
+        customerLatitude:
+          exclusiveMaximum: false
+          exclusiveMinimum: false
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        customerLongitude:
+          exclusiveMaximum: false
+          exclusiveMinimum: false
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+        kitchenLatitude:
+          exclusiveMaximum: false
+          exclusiveMinimum: false
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        kitchenLongitude:
+          exclusiveMaximum: false
+          exclusiveMinimum: false
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+      required:
+      - customerLatitude
+      - customerLongitude
+      - kitchenLatitude
+      - kitchenLongitude
+      type: object
+    ServiceabilityVerdict:
+      properties:
+        distanceMeters:
+          format: int64
+          type: integer
+        limitMeters:
+          format: int32
+          type: integer
+        policyVersion:
+          format: int32
+          type: integer
+        reason:
+          type: string
+        serviceable:
+          type: boolean
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_POLICIES_ENABLED."
+  title: Craves policies API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/policies/admin/{type}/versions:
+    get:
+      operationId: listPolicyVersions
+      parameters:
+      - in: path
+        name: type
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/PolicyVersionView"
+                type: array
+          description: OK
+      tags:
+      - policy-admin-controller
+      x-craves-auth: staff
+    post:
+      operationId: draftPolicyVersion
+      parameters:
+      - in: path
+        name: type
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyDraftRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PolicyVersionView"
+          description: OK
+      tags:
+      - policy-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/policies/admin/{type}/versions/{version}/activate:
+    post:
+      operationId: activatePolicyVersion
+      parameters:
+      - in: path
+        name: type
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          format: int32
+          type: integer
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PolicyVersionView"
+          description: OK
+      tags:
+      - policy-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/policies/cancellation/evaluate:
+    post:
+      operationId: evaluateCancellation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancellationCheck"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancellationVerdict"
+          description: OK
+      tags:
+      - policy-controller
+      x-craves-auth: user
+  /api/v1/advanced/policies/notification-frequency/evaluate:
+    post:
+      operationId: evaluateNotificationFrequency
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationCheck"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NotificationVerdict"
+          description: OK
+      tags:
+      - policy-controller
+      x-craves-auth: user
+  /api/v1/advanced/policies/provider-ranking/evaluate:
+    post:
+      operationId: evaluateProviderRanking
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderRankingCheck"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProviderRankingVerdict"
+          description: OK
+      tags:
+      - policy-controller
+      x-craves-auth: user
+  /api/v1/advanced/policies/serviceability/evaluate:
+    post:
+      operationId: evaluateServiceability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceabilityCheck"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ServiceabilityVerdict"
+          description: OK
+      tags:
+      - policy-controller
+      x-craves-auth: user
+  /api/v1/advanced/policies/{type}/active:
+    get:
+      operationId: activePolicy
+      parameters:
+      - in: path
+        name: type
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PolicyVersionView"
+          description: OK
+      tags:
+      - policy-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

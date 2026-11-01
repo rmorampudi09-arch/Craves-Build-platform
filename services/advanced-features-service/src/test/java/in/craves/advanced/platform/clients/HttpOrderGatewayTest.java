@@ -64,4 +64,15 @@ class HttpOrderGatewayTest {
                  "items":[{"id":"%s","menuItemId":null,"itemName":"x","unitPrice":10.005,"quantity":1}]}
                 """.formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())))).isInstanceOf(ArithmeticException.class);
     }
+
+    @Test
+    void readsChefOrderPagesAndStopsWhenThereIsNoMore() throws Exception {
+        String one = "{\"id\":\"%s\",\"customerIdentityId\":\"%s\",\"kitchenId\":\"%s\",\"status\":\"DELIVERED\",\"items\":[]}"
+                .formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        OrderGateway.OrderPage more = HttpOrderGateway.page(json.readTree("{\"orders\":[" + one + "],\"nextCursor\":\"abc\",\"hasMore\":true}"));
+        assertThat(more.orders()).hasSize(1);
+        assertThat(more.nextCursor()).isEqualTo("abc");
+        assertThat(HttpOrderGateway.page(json.readTree("{\"orders\":[],\"nextCursor\":\"abc\",\"hasMore\":false}")).nextCursor()).isNull();
+        assertThat(HttpOrderGateway.page(json.readTree("{\"orders\":[],\"nextCursor\":null,\"hasMore\":true}")).nextCursor()).isNull();
+    }
 }

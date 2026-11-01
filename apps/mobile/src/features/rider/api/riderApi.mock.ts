@@ -176,6 +176,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
     PUC: 'PUC certificate',
     PAN: 'PAN card',
     BANK: 'Bank proof',
+    SELFIE: 'Photo',
   };
   const FIX_REASON = 'The photo is blurry. Take it again in good light.';
 

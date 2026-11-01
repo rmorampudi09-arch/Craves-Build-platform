@@ -24,4 +24,9 @@
     <string name="rider_account_approved_body">మీ తదుపరి దశ కోసం Craves Rider తెరవండి.</string>
     <string name="rider_account_fixes_title">మీ దరఖాస్తులో ఒక సవరణ కావాలి</string>
     <string name="rider_account_fixes_body">ఆప్స్ టీమ్ ఏమి అడిగిందో చూడటానికి Craves Rider తెరవండి.</string>
+    <string name="rider_trip_ended_title">మీ ట్రిప్ ముగిసింది</string>
+    <string name="rider_trip_ended_cancelled">Craves ఆప్స్ టీమ్ ఈ ట్రిప్‌ని రద్దు చేసింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
+    <string name="rider_trip_ended_released">Craves ఆప్స్ టీమ్ ఈ ఆర్డర్‌ని Borzo లేదా Pidgeకి ఇచ్చింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
+    <string name="rider_trip_ended_handed">Craves ఆప్స్ టీమ్ ఈ ఆర్డర్‌ని వేరే రైడర్‌కి ఇచ్చింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
+    <string name="rider_trip_ended_order_cancelled">కస్టమర్ ఆర్డర్ రద్దయింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
 </resources>

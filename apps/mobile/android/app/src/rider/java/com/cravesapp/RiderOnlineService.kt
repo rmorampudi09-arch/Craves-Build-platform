@@ -324,6 +324,10 @@ class RiderOnlineService : Service() {
             status("ERROR", text(R.string.rider_no_internet))
           }
           else -> {
+            // The server's clock against the phone's, before this answer's offers ring: an offer ends at the server's expiresAt.
+            response.headers.getDate("Date")?.let {
+              RiderOffers.serverOffsetMs = RiderOffers.offsetMs(it.time, response.sentRequestAtMillis, response.receivedResponseAtMillis)
+            }
             // The oldest went; newer ones wait for the next call. Nothing else touches fixes on this thread meanwhile.
             repeat(sent.size) { fixes.removeFirst() }
             RiderOffers.receiptsSent((0 until receipts.length()).map { receipts.getJSONObject(it).getString("offerId") })
@@ -391,9 +395,10 @@ class RiderOnlineService : Service() {
           putInt("version", trip.optInt("version"))
         }
       }
-      // Ops, the customer or the watchdog ended it: say so with the screen off too (blueprint A7). Once per change.
-      if (step == "CANCELLED") {
-        RiderOffers.notice(this, CANCELLED_TAG, text(R.string.rider_trip_cancelled_title), text(R.string.rider_trip_cancelled_body))
+      // Ops, the customer or the watchdog ended it: say so with the screen off too (blueprint A7). Once per trip: a TRIP_ENDED
+      // push that came first has already said why.
+      if (step == "CANCELLED" && RiderOffers.firstEnd(trip.optString("tripId"))) {
+        RiderOffers.notice(this, RiderOffers.TRIP_ENDED_TAG, text(R.string.rider_trip_cancelled_title), text(R.string.rider_trip_cancelled_body))
       }
     }
     tripSignature = signature
@@ -588,7 +593,6 @@ class RiderOnlineService : Service() {
     private const val MAX_SHIFT_MS = 12 * 60 * 60_000L
     private val ENDED_STEPS = setOf("DELIVERED", "FAILED", "CANCELLED")
     private val JSON = "application/json; charset=utf-8".toMediaType()
-    private const val CANCELLED_TAG = "trip-cancelled"
 
     private val http =
       OkHttpClient.Builder()

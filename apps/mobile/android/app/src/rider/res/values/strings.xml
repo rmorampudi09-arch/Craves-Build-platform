@@ -26,4 +26,10 @@
     <string name="rider_account_approved_body">Open Craves Rider for your next step.</string>
     <string name="rider_account_fixes_title">Your application needs a fix</string>
     <string name="rider_account_fixes_body">Open Craves Rider to see what ops asked for.</string>
+    <!-- The TRIP_ENDED push: why the trip ended, by its reason. -->
+    <string name="rider_trip_ended_title">Your trip has ended</string>
+    <string name="rider_trip_ended_cancelled">Craves ops cancelled this trip. You\'re paid for the trip so far.</string>
+    <string name="rider_trip_ended_released">Craves ops gave this order to Borzo or Pidge. You\'re paid for the trip so far.</string>
+    <string name="rider_trip_ended_handed">Craves ops gave this order to another rider. You\'re paid for the trip so far.</string>
+    <string name="rider_trip_ended_order_cancelled">The customer\'s order was cancelled. You\'re paid for the trip so far.</string>
 </resources>

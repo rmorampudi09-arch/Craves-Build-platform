@@ -1,5 +1,6 @@
 package in.craves.integration.fleet.admin;
 
+import static in.craves.integration.fleet.FleetPolicyStore.BUILT_IN_VALUES;
 import static in.craves.integration.fleet.FleetPolicyStore.DISPATCH_POLICY;
 import static in.craves.integration.fleet.FleetPolicyStore.DISPATCH_POLICY_FIELDS;
 import static in.craves.integration.fleet.FleetPolicyStore.DISPATCH_RULE_FIELDS;
@@ -15,6 +16,7 @@ import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
+import in.craves.integration.fleet.admin.FleetAdminModels.BuiltInDispatch;
 import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyVersion;
 import in.craves.integration.fleet.admin.FleetAdminModels.FleetSetup;
@@ -39,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -91,7 +94,8 @@ public class FleetSetupService {
             jdbc.query("SELECT * FROM fleet_schema.rate_card " + NEWEST, (row, n) -> rateCard(row)),
             jdbc.query(PILOT_RIDER + "ORDER BY t.added_at DESC, t.rider_id LIMIT 500", (row, n) -> pilotRider(row)),
             jdbc.query("SELECT chef_id, note, added_at FROM fleet_schema.test_mode_kitchen ORDER BY added_at DESC, chef_id LIMIT 500",
-                (row, n) -> new PilotKitchen(row.getObject("chef_id", UUID.class), row.getString("note"), instant(row, "added_at"))));
+                (row, n) -> new PilotKitchen(row.getObject("chef_id", UUID.class), row.getString("note"), instant(row, "added_at"))),
+            BuiltInDispatch.current());
     }
 
     /** A DRAFT rate card named YYYY-MM-vN. Its values must lie inside the published ranges, or its own for the first card. */
@@ -151,8 +155,8 @@ public class FleetSetupService {
 
     /**
      * Creates and publishes a dispatch policy version in one transaction (FleetPolicyStore.publishDispatchPolicy has the rules).
-     * An off that starts now is the emergency stop: it keeps the values riders are shown, whatever the page sent, so it
-     * always works.
+     * Every value or rule left out is the built-in one (FleetPolicyStore.BUILT_IN_VALUES, DispatchRules.BUILT_IN). An off
+     * that starts now is the emergency stop: it keeps the values riders are shown, whatever the page sent, so it always works.
      */
     @Transactional
     public Object setDispatchPolicy(Admin by, UUID key, DispatchPolicyInput input) {
@@ -160,11 +164,11 @@ public class FleetSetupService {
             throw FleetApiException.invalid("Choose off, shadow or live.");
         }
         boolean stop = "off".equals(input.mode()) && input.effectiveFrom() == null;
-        List<Number> sent = Arrays.asList(input.offerSeconds(), input.fleetStageSeconds(), input.radiusM(), input.pickupDetourPercent(),
+        List<Number> asked = Arrays.asList(input.offerSeconds(), input.fleetStageSeconds(), input.radiusM(), input.pickupDetourPercent(),
             input.perOrderOverheadPaise(), input.costGuardPremiumPaise(), input.pidgeStageSeconds());
-        if (!stop && sent.contains(null)) {
-            throw FleetApiException.invalid("Fill in every dispatch value.");
-        }
+        // A value left out is the built-in one (decided 1 Nov 2026): the console sends only the mode.
+        List<Number> sent = IntStream.range(0, asked.size()).mapToObj(i -> asked.get(i) != null ? asked.get(i)
+            : BUILT_IN_VALUES.get(DISPATCH_POLICY_FIELDS.get(i))).toList();
         return admin.once(by, key, "DISPATCH_POLICY_SET", admin.write(input), () -> {
             String version = policies.nextVersion(DISPATCH_POLICY);
             Instant now = policies.databaseNow();
@@ -172,16 +176,16 @@ public class FleetSetupService {
                 throw FleetApiException.unprocessable("NOTICE_TOO_SHORT", "Choose a start at least 14 days from now.");
             }
             List<Number> given = stop ? policies.shownDispatchPolicy(null, "")
-                .map(shown -> DISPATCH_POLICY_FIELDS.stream().map(column -> (Number) shown.get(column)).toList())
-                .orElseThrow(() -> FleetApiException.invalid("Fill in every dispatch value.")) : sent;
+                .map(shown -> DISPATCH_POLICY_FIELDS.stream().map(column -> (Number) shown.get(column)).toList()).orElse(sent) : sent;
             Map<String, Long> values = new LinkedHashMap<>();
             for (int i = 0; i < DISPATCH_POLICY_FIELDS.size(); i++) {
                 values.put(DISPATCH_POLICY_FIELDS.get(i), given.get(i).longValue());
             }
-            DispatchPolicyInput asked = stop ? new DispatchPolicyInput(input.mode(), null, null, null, null, null, null, null, null) : input;
-            List<Integer> rules = offerRules(asked, values);
-            // Phase 5: the travel-time rule, as riders are shown it unless sent (an emergency stop never changes it).
-            boolean byTravelTime = asked.rankByTravelTime() != null ? asked.rankByTravelTime() : policies.dispatchRules(null).byTravelTime();
+            DispatchPolicyInput rulesAsked = stop ? new DispatchPolicyInput(input.mode(), null, null, null, null, null, null, null, null) : input;
+            // Rules left out are the built-in ones; an emergency stop keeps those riders are shown, so it never changes them.
+            DispatchRules fallback = stop ? policies.dispatchRules(null) : DispatchRules.BUILT_IN;
+            List<Integer> rules = offerRules(rulesAsked, values, fallback);
+            boolean byTravelTime = rulesAsked.rankByTravelTime() != null ? rulesAsked.rankByTravelTime() : fallback.byTravelTime();
             // Before any policy is published, the seeded draft's ranges are the declared ones.
             Map<String, List<Long>> ranges = policies.publishedRanges(DISPATCH_POLICY).orElseGet(() -> jdbc.queryForList(
                 "SELECT ranges::text FROM fleet_schema.dispatch_policy WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1", String.class)
@@ -206,14 +210,13 @@ public class FleetSetupService {
     }
 
     /**
-     * How the new version offers orders (Phase 4): the values sent, else those riders are shown now (today's rules before any
-     * policy). An emergency stop sends none, so it never changes them. Each within its bounds, and rounds must fit the stage.
+     * How the new version offers orders (Phase 4): the values sent, else fallback's (the built-in rules; for an emergency
+     * stop, those riders are shown, so it never changes them). Each within its bounds, and rounds must fit the stage.
      */
-    private List<Integer> offerRules(DispatchPolicyInput input, Map<String, Long> values) {
-        DispatchRules shown = policies.dispatchRules(null);
-        int atOnce = input.offersAtOnce() != null ? input.offersAtOnce() : shown.offersAtOnce();
-        int rounds = input.offerRounds() != null ? input.offerRounds() : shown.offerRounds();
-        int band = input.fairBandM() != null ? input.fairBandM() : shown.fairBandM();
+    private List<Integer> offerRules(DispatchPolicyInput input, Map<String, Long> values, DispatchRules fallback) {
+        int atOnce = input.offersAtOnce() != null ? input.offersAtOnce() : fallback.offersAtOnce();
+        int rounds = input.offerRounds() != null ? input.offerRounds() : fallback.offerRounds();
+        int band = input.fairBandM() != null ? input.fairBandM() : fallback.fairBandM();
         if (atOnce < 1 || atOnce > 3) {
             throw FleetApiException.invalid("Offer each order to 1, 2 or 3 riders at a time.");
         }

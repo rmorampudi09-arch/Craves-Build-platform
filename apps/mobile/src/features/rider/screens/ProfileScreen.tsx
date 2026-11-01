@@ -192,7 +192,7 @@ export function ProfileScreen() {
     shell.signOut();
   }
 
-  /** Back camera → upload → fresh profile; ops then checks the photo by hand. */
+  /** Back camera (front for the reference selfie) → upload → fresh profile; ops then checks the photo by hand. */
   async function upload(type: string) {
     setDocProblem(null);
     try {
@@ -201,7 +201,8 @@ export function ProfileScreen() {
         setDocProblem({type, text: p.cameraDenied, settings: true});
         return;
       }
-      const shot = await ImagePicker.launchCameraAsync({cameraType: ImagePicker.CameraType.back, mediaTypes: ['images'], quality: 0.6});
+      const camera = type === 'SELFIE' ? ImagePicker.CameraType.front : ImagePicker.CameraType.back;
+      const shot = await ImagePicker.launchCameraAsync({cameraType: camera, mediaTypes: ['images'], quality: 0.6});
       const uri = shot.canceled ? null : shot.assets[0]?.uri;
       if (!uri) {
         return;

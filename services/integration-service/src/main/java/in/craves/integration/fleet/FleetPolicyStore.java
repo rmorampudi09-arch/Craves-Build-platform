@@ -49,6 +49,13 @@ public class FleetPolicyStore {
     public static final List<String> DISPATCH_RULE_FIELDS = List.of("offers_at_once", "offer_rounds", "fair_band_m");
     public static final Map<String, List<Long>> DISPATCH_RULE_BOUNDS = Map.of("offers_at_once", List.of(1L, 3L),
         "offer_rounds", List.of(1L, 5L), "fair_band_m", List.of(0L, 5000L));
+    /**
+     * The dispatch values Craves runs with, decided on 1 Nov 2026 (docs/riders/DISPATCH.md §2): 30 s to accept, a 120 s
+     * fleet stage, within 5 km, then Borzo, then Pidge for 600 s; the pickup detour and cost guard as seeded. The console
+     * doesn't ask for them: a version saved without a value takes it from here. With DispatchRules.BUILT_IN.
+     */
+    public static final Map<String, Number> BUILT_IN_VALUES = Map.of("offer_seconds", 30, "fleet_stage_seconds", 120, "radius_m", 5000,
+        "pickup_detour_percent", 130, "per_order_overhead_paise", 500L, "cost_guard_premium_paise", 1000L, "pidge_stage_seconds", 600);
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -118,9 +125,9 @@ public class FleetPolicyStore {
         return shownDispatchPolicy(at, "").map(policy -> ((Number) policy.get("pickup_detour_percent")).intValue()).orElse(null);
     }
 
-    /** How orders are offered as riders are shown at that time (null: now); today's rules when there is no policy at all. */
+    /** How orders are offered as riders are shown at that time (null: now); the built-in rules when there is no policy at all. */
     public DispatchRules dispatchRules(Instant at) {
-        return shownDispatchPolicy(at, "").map(FleetPolicyStore::rules).orElse(DispatchRules.TODAY);
+        return shownDispatchPolicy(at, "").map(FleetPolicyStore::rules).orElse(DispatchRules.BUILT_IN);
     }
 
     static DispatchRules rules(Map<String, Object> policy) {
@@ -419,8 +426,13 @@ public class FleetPolicyStore {
      * travel-time model, when it is live and was judged to rank riders well (FleetEta.ranking); else the nearest by distance.
      */
     public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime) {
-        /** Before Phase 4, and with no dispatch policy at all. */
+        /** Before Phase 4: 3 riders at once, one round, nearest first. Versions saved with these keep them. */
         public static final DispatchRules TODAY = new DispatchRules(3, 1, 0, false);
+        /**
+         * How Craves offers orders (decided 1 Nov 2026), and what riders are told before any policy: one rider at a time,
+         * like Uber's exclusive requests, Wolt and Just Eat Takeaway; up to 3 rounds; fair turns within 1.5 km; by distance.
+         */
+        public static final DispatchRules BUILT_IN = new DispatchRules(1, 3, 1500, false);
 
         /** Phase 4's rules: by distance. */
         public DispatchRules(int offersAtOnce, int offerRounds, int fairBandM) {

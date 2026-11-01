@@ -298,6 +298,18 @@ describe("selfie queue", () => {
     expect(screen.getByText("Ravi Kumar's selfie approved.")).toBeTruthy();
     expect(posts()[0]).toMatchObject({ path: `shifts/${SHIFT}/selfie/approve`, body: undefined });
   });
+
+  it("shows the sign-up selfie beside the go-online selfie, or says there is none yet", async () => {
+    const PHOTO = "99999999-9999-4999-8999-999999999994";
+    const item = { shiftId: SHIFT, riderId: RIDER, riderName: "Ravi Kumar", startedAt: at, state: "PENDING", reason: null, reviewedBy: null, reviewedAt: null };
+    answer = () => json({ items: [{ ...item, referencePhotoId: PHOTO }, { ...item, shiftId: "44444444-4444-4444-8444-444444444445", riderName: "Sita Devi", referencePhotoId: null }] });
+    render(createElement(SelfieQueue));
+    expect((await screen.findByRole("img", { name: "Sign-up selfie of Ravi Kumar" })).getAttribute("src")).toBe(`/api/admin/fleet/riders/${RIDER}/documents/${PHOTO}/content`);
+    expect(screen.getAllByText("Sign-up selfie")).toHaveLength(2);
+    expect(screen.getAllByText("Go-online selfie")).toHaveLength(2);
+    expect(screen.queryByRole("img", { name: "Sign-up selfie of Sita Devi" })).toBeNull();
+    expect(screen.getAllByText("No sign-up selfie on file yet. Ask the rider to add one in the app.")).toHaveLength(1);
+  });
 });
 
 describe("rider queue tabs", () => {
@@ -401,6 +413,15 @@ describe("application review", () => {
       { documentId: PAN, verdict: "OK" },
       { documentId: BANK, verdict: "FIX", reason: "The photo is blurry. Take it again in good light." },
     ] });
+  });
+
+  it("links the sign-up selfie and asks to compare it with the licence photo", async () => {
+    const SELFIE = "99999999-9999-4999-8999-999999999994";
+    answer = respond({ ...applicant, documents: [...applicant.documents, pending(SELFIE, "PHOTO")], requiredDocuments: ["PAN", "PHOTO", "BANK_PROOF"] });
+    render(createElement(RiderDetailView, { riderId: RIDER }));
+    const item = (await screen.findByText(/Compare with the licence photo\. Every go-online selfie is checked against this one\.$/)).closest("li") as HTMLElement;
+    expect(within(item).getByRole("link").getAttribute("href")).toBe(`/api/admin/fleet/riders/${RIDER}/documents/${SELFIE}/content`);
+    expect(within(item).queryByRole("img")).toBeNull();
   });
 
   it("shows what the rider still has to send and keeps approval closed", async () => {

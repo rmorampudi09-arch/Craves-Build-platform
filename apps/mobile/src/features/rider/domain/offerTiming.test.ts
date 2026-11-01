@@ -1,5 +1,5 @@
 import type {Offer} from '../api/contract';
-import {pickOffer, secondsLeft} from './offerTiming';
+import {offerDeadlineMs, pickOffer, secondsLeft} from './offerTiming';
 
 const offer = (offerId: string, expiresInSec = 40): Offer => ({
   offerId,
@@ -16,12 +16,22 @@ const offer = (offerId: string, expiresInSec = 40): Offer => ({
 });
 
 describe('offer timing', () => {
-  it('counts down from arrival time, not the server clock', () => {
+  it('counts down from arrival time when the native service gave no deadline', () => {
     const received = {offer: offer('a'), receivedAtMs: 10_000};
     expect(secondsLeft(received, 10_000)).toBe(40);
     expect(secondsLeft(received, 49_100)).toBe(1);
     expect(secondsLeft(received, 50_000)).toBe(0);
     expect(secondsLeft(received, 90_000)).toBe(0);
+  });
+
+  it("counts down to the native deadline (the server's expiresAt on the phone's clock) when there is one", () => {
+    // A push that landed 8 s late: 32 s left, not 40.
+    const late = {offer: offer('a'), receivedAtMs: 10_000, deadlineMs: 42_000};
+    expect(offerDeadlineMs(late)).toBe(42_000);
+    expect(secondsLeft(late, 10_000)).toBe(32);
+    expect(secondsLeft(late, 42_000)).toBe(0);
+    // Already over when it arrived: never shown.
+    expect(pickOffer(null, {offer: offer('b'), receivedAtMs: 10_000, deadlineMs: 9_000}, 10_000)).toBeNull();
   });
 
   it('shows the newest unexpired offer', () => {

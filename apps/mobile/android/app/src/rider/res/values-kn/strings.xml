@@ -24,4 +24,9 @@
     <string name="rider_account_approved_body">ನಿಮ್ಮ ಮುಂದಿನ ಹಂತಕ್ಕಾಗಿ Craves Rider ತೆರೆಯಿರಿ.</string>
     <string name="rider_account_fixes_title">ನಿಮ್ಮ ಅರ್ಜಿಯಲ್ಲಿ ಒಂದು ತಿದ್ದುಪಡಿ ಬೇಕು</string>
     <string name="rider_account_fixes_body">ಆಪ್ಸ್ ಟೀಮ್ ಏನು ಕೇಳಿದೆ ಎಂದು ನೋಡಲು Craves Rider ತೆರೆಯಿರಿ.</string>
+    <string name="rider_trip_ended_title">ನಿಮ್ಮ ಟ್ರಿಪ್ ಮುಗಿದಿದೆ</string>
+    <string name="rider_trip_ended_cancelled">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಟ್ರಿಪ್ ರದ್ದು ಮಾಡಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
+    <string name="rider_trip_ended_released">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಆರ್ಡರ್ ಅನ್ನು Borzo ಅಥವಾ Pidgeಗೆ ಕೊಟ್ಟಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
+    <string name="rider_trip_ended_handed">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಆರ್ಡರ್ ಅನ್ನು ಬೇರೆ ರೈಡರ್‌ಗೆ ಕೊಟ್ಟಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
+    <string name="rider_trip_ended_order_cancelled">ಕಸ್ಟಮರ್ ಆರ್ಡರ್ ರದ್ದಾಗಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
 </resources>

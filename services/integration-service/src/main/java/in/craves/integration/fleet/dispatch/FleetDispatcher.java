@@ -714,12 +714,13 @@ public class FleetDispatcher implements FleetStage {
             return List.of();
         }
         // One courier quote per order (R16 17): round 1's, kept on the trip. Asked here only when round 1 had none (nobody
-        // was in range, or the couriers didn't answer), and kept once it comes.
+        // was in range, or the couriers didn't answer), and kept once it comes: the first stored wins, and a worker that
+        // lost the race decides with it, not its own.
         Object kept = trip.get("courier_quote_paise");
         OptionalLong courier = kept != null ? OptionalLong.of(((Number) kept).longValue()) : courierQuotePaise.get();
         if (kept == null && courier.isPresent()) {
-            jdbc.update("UPDATE fleet_schema.trip SET courier_quote_paise = ? WHERE id = ? AND courier_quote_paise IS NULL",
-                courier.getAsLong(), tripId);
+            courier = OptionalLong.of(jdbc.queryForObject("UPDATE fleet_schema.trip SET courier_quote_paise = COALESCE(courier_quote_paise, ?) "
+                + "WHERE id = ? RETURNING courier_quote_paise", Long.class, courier.getAsLong(), tripId));
         }
         Choice choice = choose(riders, policy, card, dropM, courier, rounds + 1, lat, lng,
             ((Number) trip.get("drop_lat")).doubleValue(), ((Number) trip.get("drop_lng")).doubleValue());

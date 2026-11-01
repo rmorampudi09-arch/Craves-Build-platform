@@ -319,7 +319,7 @@ Heading home (riders asked for it) was built in Phase 5: §4.
 
 Known shortcuts in today's code, each marked `shortcut:` in the code:
 - `FleetDispatcher.standings` runs 3 queries per rider in the band. That is fine for tens of riders; batch them past about 50 in a band. The fleet engine keeps standings in Redis instead; its feed still reads them with 2 queries per rider (`FleetEngineFeed.standing`), fine to about 1,000 riders on a shift.
-- Each order asks the couriers for one quote, kept on the trip (`trip.courier_quote_paise`, V175) for every later round; two workers racing on a new order may still ask twice.
+- Each order asks the couriers for one quote, kept on the trip (`trip.courier_quote_paise`, V179) for every later round; two workers racing may still ask twice, but both decide with the first quote stored.
 - A rider's data copy reads `trip` by rider, and `trip` has no full index on `rider_id`. Add one if copies get slow.
 - An order waiting for the food (offers timed to the food) keeps its first `dispatch_at` in `delivery_command`; its `FOOD_TIMED_DISPATCH … held=true` line says when it went. A ready tap during the wait logs a harmless "Could not cancel superseded delivery schedule" warning, as that message was already used.
 

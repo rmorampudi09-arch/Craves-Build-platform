@@ -8,6 +8,7 @@ import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWo
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetConfiguration;
+import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.client.RiderPushClient;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -84,7 +85,7 @@ public class FleetCourierCancel {
         int cancelled = 0;
         for (Booking booking : due) {
             try {
-                cancelled += cancel(booking, ORDER_CANCELLED) == null ? 1 : 0;
+                cancelled += cancel(booking, ORDER_CANCELLED, null) == null ? 1 : 0;
             } catch (RuntimeException exception) {
                 LOGGER.warn("FLEET_COURIER_CANCEL provider={} delivery={} failed: {}", booking.provider(), booking.providerDeliveryId(),
                     exception.getMessage());
@@ -96,12 +97,13 @@ public class FleetCourierCancel {
     /**
      * Ops cancelling the delivery of this trip's order, before FleetOpsService.cancel's transaction: its live Borzo or Pidge
      * booking, if any, is cancelled with them first. 409 TRIP_NOT_CANCELLABLE, saying why, when they refuse (their courier
-     * may have the food already), or while another attempt or Borzo's switch to Pidge is running.
+     * may have the food already), or while another attempt or Borzo's switch to Pidge is running. The courier is called
+     * before ops's audited transaction, so courier_cancel records who asked (by).
      */
-    public void forOps(UUID tripId) {
+    public void forOps(UUID tripId, Admin by) {
         Booking booking = jdbc.query(BOOKING + "FROM fleet_schema.trip t JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = "
             + "t.chef_sub_order_id WHERE t.id = ? AND " + LIVE, FleetCourierCancel::booking, tripId).stream().findFirst().orElse(null);
-        String refused = booking == null ? null : cancel(booking, OPS_CANCELLED);
+        String refused = booking == null ? null : cancel(booking, OPS_CANCELLED, by);
         if (refused != null) {
             throw FleetApiException.conflict("TRIP_NOT_CANCELLABLE", refused);
         }
@@ -114,22 +116,25 @@ public class FleetCourierCancel {
             + "WHERE j.chef_sub_order_id = ? AND c.cancelled_at IS NOT NULL)", Boolean.class, chefSubOrderId));
     }
 
-    /** Null once the booking is cancelled, now or before; otherwise why not, in words for ops. */
-    private String cancel(Booking booking, String reason) {
+    /** Null once the booking is cancelled, now or before; otherwise why not, in words for ops. by: the admin, null for the tick. */
+    private String cancel(Booking booking, String reason, Admin by) {
         boolean ops = OPS_CANCELLED.equals(reason);
         String courier = "borzo".equals(booking.provider()) ? "Borzo" : "Pidge";
         if (switchingToPidge(booking)) {
             return "Borzo is handing this order to Pidge right now. Try again in a minute.";
         }
-        // The intent and this attempt, committed before the call; only one caller gets the row back. Ops may try past the limit.
+        // The intent and this attempt, committed before the call; only one caller gets the row back. Ops may try past the limit,
+        // and an ops attempt records its admin (the tick keeps whoever asked before).
         List<Integer> attempt = jdbc.queryForList("""
-            INSERT INTO delivery_schema.courier_cancel AS c (provider_id, provider_delivery_id, chef_sub_order_id, reason, attempts,
-              last_attempt_at)
-            VALUES (?, ?, ?, ?, 1, now())
-            ON CONFLICT (provider_id, provider_delivery_id) DO UPDATE SET attempts = c.attempts + 1, last_attempt_at = now()
+            INSERT INTO delivery_schema.courier_cancel AS c (provider_id, provider_delivery_id, chef_sub_order_id, reason, requested_by,
+              requested_by_name, attempts, last_attempt_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, now())
+            ON CONFLICT (provider_id, provider_delivery_id) DO UPDATE SET attempts = c.attempts + 1, last_attempt_at = now(),
+              requested_by = COALESCE(EXCLUDED.requested_by, c.requested_by),
+              requested_by_name = COALESCE(EXCLUDED.requested_by_name, c.requested_by_name)
             WHERE c.cancelled_at IS NULL AND (? OR c.attempts < ?) AND c.last_attempt_at <= now() - make_interval(secs => ?)
             RETURNING c.attempts""", Integer.class, booking.provider(), booking.providerDeliveryId(), booking.chefSubOrderId(), reason,
-            ops, MAX_ATTEMPTS, ATTEMPT_SECONDS);
+            by == null ? null : by.id(), by == null ? null : by.name(), ops, MAX_ATTEMPTS, ATTEMPT_SECONDS);
         if (attempt.isEmpty()) {
             return done(booking) ? null : "Craves is cancelling this " + courier + " delivery right now. Try again in a minute.";
         }

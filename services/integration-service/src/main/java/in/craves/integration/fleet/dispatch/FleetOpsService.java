@@ -210,7 +210,7 @@ public class FleetOpsService {
      */
     public Object cancel(Admin by, UUID key, UUID tripId, String reason) {
         String text = FleetAdminService.reason(reason);
-        couriers.forOps(tripId);
+        couriers.forOps(tripId, by);
         return transaction.execute(status -> admin.once(by, key, "TRIP_CANCELLED", tripId + "\n" + text, () -> {
             Current trip = current(tripId);
             if (trip.riderOnTrip()) {

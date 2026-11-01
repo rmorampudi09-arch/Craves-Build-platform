@@ -540,9 +540,10 @@ class FleetDispatchJobsDatabaseTest {
         fleet.refundRequested(refundedOrder);
         fleet.orderCancelled(deliveredOrder);
         when(borzo.cancel("B-41")).thenAnswer(call -> {
-            assertThat(fleet.db.queryForMap("SELECT reason, attempts, cancelled_at FROM delivery_schema.courier_cancel "
-                + "WHERE provider_delivery_id = 'B-41'")).as("the intent is stored before Borzo is called")
-                .containsEntry("reason", "ORDER_CANCELLED").containsEntry("attempts", 1).containsEntry("cancelled_at", null);
+            assertThat(fleet.db.queryForMap("SELECT reason, attempts, cancelled_at, requested_by, requested_by_name FROM "
+                + "delivery_schema.courier_cancel WHERE provider_delivery_id = 'B-41'")).as("the intent is stored before Borzo is called")
+                .containsEntry("reason", "ORDER_CANCELLED").containsEntry("attempts", 1).containsEntry("cancelled_at", null)
+                .as("the tick names no admin").containsEntry("requested_by", null).containsEntry("requested_by_name", null);
             return new ProviderDelivery("borzo", "B-41", "B-41", DeliveryStatus.CANCELLED, "canceled", null, null, null, null, Instant.now());
         });
         when(pidge.cancel("P-42")).thenThrow(new IllegalStateException("Pidge API HTTP 409 (order_state)"));

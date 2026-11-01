@@ -355,22 +355,34 @@ ORDER BY GROUPING(f.chef_identity_id) DESC, p50_late_min DESC NULLS LAST, orders
 
 -- name: courier_assign_minutes
 -- Orders booked with Borzo or Pidge over the last 14 days: from booking to their courier being assigned, the middle (p50)
--- and p90 minutes, and bookings never assigned; by courier, then both ("all"). If food waits for their courier, book
--- earlier: the lead before the promised ready time is CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES (10).
-SELECT CASE WHEN GROUPING(j.provider_id) = 1 THEN 'all' ELSE j.provider_id END AS courier,
+-- and p90 minutes, and bookings never assigned; by courier, then both ("all"). A Borzo booking switched to Pidge (no
+-- courier within its 120 s) counts as Borzo's, never assigned, and the Pidge booking as Pidge's. If food waits for their
+-- courier, book earlier: the lead before the promised ready time is CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES (10).
+SELECT CASE WHEN GROUPING(b.provider_id) = 1 THEN 'all' ELSE b.provider_id END AS courier,
        count(*) AS bookings,
-       count(a.assigned_at) AS assigned,
-       round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM a.assigned_at - j.booked_at) / 60))::numeric, 1)
+       count(b.assigned_at) AS assigned,
+       round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
            AS p50_assign_min,
-       round((percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM a.assigned_at - j.booked_at) / 60))::numeric, 1)
+       round((percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
            AS p90_assign_min,
-       count(*) - count(a.assigned_at) AS never_assigned
-FROM delivery_schema.delivery_job j
-LEFT JOIN LATERAL (SELECT min(e.occurred_at) AS assigned_at FROM delivery_schema.delivery_event e
-                   WHERE e.delivery_job_id = j.id AND e.normalized_status = 'COURIER_ASSIGNED') a ON true
-WHERE j.provider_id IN ('borzo', 'pidge') AND j.booked_at > now() - INTERVAL '14 days'
-GROUP BY ROLLUP (j.provider_id)
-ORDER BY GROUPING(j.provider_id) DESC, courier;
+       count(*) - count(b.assigned_at) AS never_assigned
+FROM (
+    -- The job's current booking. A switch rewrites the job (provider, booked_at) and keeps the earlier courier's events:
+    -- only its own courier's count.
+    SELECT j.provider_id, j.booked_at, a.assigned_at
+    FROM delivery_schema.delivery_job j
+    LEFT JOIN LATERAL (SELECT min(e.occurred_at) AS assigned_at FROM delivery_schema.delivery_event e
+                       WHERE e.delivery_job_id = j.id AND e.provider_id = j.provider_id
+                         AND e.normalized_status = 'COURIER_ASSIGNED') a ON true
+    WHERE j.provider_id IN ('borzo', 'pidge') AND j.booked_at > now() - INTERVAL '14 days'
+    UNION ALL
+    -- The Borzo booking a completed switch to Pidge replaced (BorzoPidgeHandoff), from its window's start.
+    SELECT 'borzo', h.started_at, NULL
+    FROM delivery_schema.delivery_borzo_pidge_handoff h
+    WHERE h.state = 'COMPLETED' AND h.started_at > now() - INTERVAL '14 days'
+) b
+GROUP BY ROLLUP (b.provider_id)
+ORDER BY GROUPING(b.provider_id) DESC, courier;
 
 -- name: track_size
 -- trip_track on disk: its day partitions and the default one. Thinning old tracks (P2-11) is worth doing past about 5 GB.

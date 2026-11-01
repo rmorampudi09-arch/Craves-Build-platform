@@ -96,6 +96,8 @@ public class DeliveryCommandRepository {
             JOIN delivery_schema.delivery_command c ON c.chef_sub_order_id = f.chef_order_id
             JOIN fleet_schema.chef_ready r ON r.chef_sub_order_id = c.chef_sub_order_id
             WHERE mine.chef_order_id = ? AND c.promised_ready_at > now() - INTERVAL '14 days'
+              -- An order is issued at checkout, before its promise: this bounds the chef's history to an index range (V180).
+              AND f.issued_at > now() - INTERVAL '21 days'
             HAVING count(*) >= 10
             """, (rs, row) -> Duration.ofSeconds(Math.round(rs.getDouble("late_s"))), chefSubOrderId).stream().findFirst();
     }

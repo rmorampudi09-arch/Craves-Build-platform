@@ -414,6 +414,27 @@ class FleetDispatchDatabaseTest {
             chefSubOrderId)).isEqualTo(9000L);
     }
 
+    /** R16 17: two workers asking for a later round's quote at once both decide with the one stored first, never their own. */
+    @Test
+    void aWorkerThatLosesTheQuoteRaceDecidesWithTheQuoteStoredFirst() {
+        fairPolicy(0);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as("round 1 without a quote: none is kept")
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", nearest);
+
+        // While this worker asks the couriers (9000), another stores the quote it got (3000: too low for any rider's pay).
+        assertThat(dispatcher.run(command, () -> {
+            fleet.db.update("UPDATE fleet_schema.trip SET courier_quote_paise = 3000 WHERE chef_sub_order_id = ?", chefSubOrderId);
+            return OptionalLong.of(9000);
+        }, true)).as("decided with 3000: the cost guard leaves the order to Borzo").isEmpty();
+
+        assertThat(count("fleet_schema.trip_offer")).as("no second round").isOne();
+        assertThat(fleet.db.queryForObject("SELECT courier_quote_paise FROM fleet_schema.trip WHERE chef_sub_order_id = ?", Long.class,
+            chefSubOrderId)).isEqualTo(3000L);
+    }
+
     /**
      * Phase 4 fair turns: within the band, the rider who has earned the least per online hour today hears first, then the
      * next; a rider outside the band waits for the riders inside it. Declines change nothing.

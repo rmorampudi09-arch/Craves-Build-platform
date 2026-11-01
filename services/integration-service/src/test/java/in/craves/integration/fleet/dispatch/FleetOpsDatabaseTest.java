@@ -468,18 +468,22 @@ class FleetOpsDatabaseTest {
                 assertThat(error.getMessage()).contains("Borzo didn't cancel delivery B-7", "rejected", "call Borzo");
             });
         assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip WHERE id = ?", String.class, tripId)).isEqualTo("SEARCHING");
-        assertThat(fleet.db.queryForMap("SELECT reason, attempts, last_error, cancelled_at FROM delivery_schema.courier_cancel "
-            + "WHERE provider_delivery_id = 'B-7'")).containsEntry("reason", "OPS_CANCELLED").containsEntry("attempts", 1)
-            .containsEntry("last_error", "Borzo cancel-order was rejected").containsEntry("cancelled_at", null);
+        assertThat(fleet.db.queryForMap("SELECT reason, attempts, last_error, cancelled_at, requested_by, requested_by_name "
+            + "FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'B-7'")).containsEntry("reason", "OPS_CANCELLED")
+            .containsEntry("attempts", 1).containsEntry("last_error", "Borzo cancel-order was rejected").containsEntry("cancelled_at", null)
+            .as("Borzo is called before the audited transaction, so the row says who asked")
+            .containsEntry("requested_by", ops.id()).containsEntry("requested_by_name", ops.name());
         refused(() -> service.cancel(ops, UUID.randomUUID(), tripId, "Customer called to cancel"), 409, "TRIP_NOT_CANCELLABLE");
         verify(borzo, times(1)).cancel("B-7"); // tried again only after a minute: a call never overlaps another
 
         fleet.db.update("UPDATE delivery_schema.courier_cancel SET last_attempt_at = now() - INTERVAL '61 seconds' WHERE provider_delivery_id = 'B-7'");
-        service.cancel(ops, UUID.randomUUID(), tripId, "Customer called to cancel");
+        Admin retry = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx321");
+        service.cancel(retry, UUID.randomUUID(), tripId, "Customer called to cancel");
 
         verify(borzo, times(2)).cancel("B-7");
-        assertThat(fleet.db.queryForObject("SELECT cancelled_at IS NOT NULL FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'B-7'",
-            Boolean.class)).isTrue();
+        assertThat(fleet.db.queryForMap("SELECT cancelled_at IS NOT NULL AS cancelled, requested_by, requested_by_name "
+            + "FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'B-7'")).containsEntry("cancelled", true)
+            .as("the admin whose retry called Borzo").containsEntry("requested_by", retry.id()).containsEntry("requested_by_name", retry.name());
         assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip WHERE id = ?", String.class, tripId)).isEqualTo("CANCELLED");
         assertThat(stages(tripId)).containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "BORZO:CLOSED:ASSIGNED");
         ArgumentCaptor<TrackingSnapshot> applied = ArgumentCaptor.forClass(TrackingSnapshot.class);

@@ -22,14 +22,14 @@
     "correlationId": { "type": "string", "format": "uuid" },
     "causationId": { "type": ["string", "null"], "format": "uuid" },
     "source": { "const": "order-service" },
-    "subject": { "type": "string", "minLength": 1 },
+    "subject": { "type": "string", "minLength": 1, "description": "data.chefSubOrderId. integration-service dead-letters an event whose subject, or Service Bus aggregateId property, names another order." },
     "data": {
       "type": "object",
       "required": ["checkoutId", "chefSubOrderId", "reason", "cancelledAt"],
       "properties": {
         "checkoutId": { "type": "string", "format": "uuid" },
         "chefSubOrderId": { "type": "string", "format": "uuid" },
-        "reason": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "pattern": "^[A-Z0-9_]{1,40}$", "description": "A code such as CUSTOMER_CANCELLED; integration-service stores any other value as OTHER." },
         "cancelledAt": { "type": "string", "format": "date-time" }
       },
       "additionalProperties": false

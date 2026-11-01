@@ -233,6 +233,8 @@ class FleetOfferDatabaseTest {
         assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip", String.class))
             .as("refused before the dispatch tick ends the trip").isEqualTo("SEARCHING");
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+        assertThat(new DeliveryCommandRepository(fleet.db, json).orderCancelled(chefSubOrderId))
+            .as("a refund alone never stops the order's delivery command (DeliveryCommandWorker)").isFalse();
     }
 
     /** R16 item 11: order-service's ORDER_CANCELLED refuses the accept the same way, with no refund for the order. */

@@ -242,16 +242,22 @@ public class DeliveryCommandScheduler {
      * ORDER_CANCELLED (R16 item 11), stored once (delivery_schema.order_cancelled). From then on the order's delivery command
      * books nobody (DeliveryCommandWorker), no rider can accept it, the fleet's dispatch tick ends its trip and tells the
      * rider, and a Borzo or Pidge courier already booked is cancelled (FleetCourierCancel). Only the order is required: an
-     * event without one is dead-lettered as invalid.
+     * event without one, or whose subject or aggregateId (the Service Bus property, null without one) names another order,
+     * is dead-lettered as invalid. The reason is kept only as a code such as CUSTOMER_CANCELLED, else stored as OTHER.
      */
-    public void orderCancelled(EventEnvelope<OrderCancelledData> event) {
+    public void orderCancelled(EventEnvelope<OrderCancelledData> event, String aggregateId) {
         OrderCancelledData data = event == null ? null : event.data();
         if (event == null || event.eventId() == null || !DeliveryCommandModels.ORDER_CANCELLED.equals(event.eventType())
             || data == null || data.chefSubOrderId() == null) {
             throw new DeliveryMessageValidationException("ORDER_CANCELLED needs eventId, eventType and data.chefSubOrderId");
         }
-        String reason = StringUtils.hasText(data.reason()) ? data.reason().trim() : "UNSPECIFIED";
-        reason = reason.length() <= 200 ? reason : reason.substring(0, 200);
+        String order = data.chefSubOrderId().toString();
+        if ((StringUtils.hasText(event.subject()) && !order.equalsIgnoreCase(event.subject()))
+            || (StringUtils.hasText(aggregateId) && !order.equalsIgnoreCase(aggregateId))) {
+            throw new DeliveryMessageValidationException("ORDER_CANCELLED subject and aggregateId must be data.chefSubOrderId");
+        }
+        // Stored and logged, so only a code: free text could carry a CR or LF that forges a log line.
+        String reason = data.reason() != null && data.reason().trim().matches("[A-Z0-9_]{1,40}") ? data.reason().trim() : "OTHER";
         Instant cancelledAt = data.cancelledAt() != null ? data.cancelledAt()
             : event.occurredAt() != null ? event.occurredAt() : clock.instant();
         boolean first = repository.recordOrderCancelled(data.chefSubOrderId(), reason, cancelledAt);
@@ -261,9 +267,10 @@ public class DeliveryCommandScheduler {
     /**
      * The narrowing window (R16 18): when a command that no worker has started and no ready tap has moved comes due, the
      * riders free near the kitchen are looked at again. If they would reach it more than HOLD_STEP before predicted ready −
-     * FOOD_BUFFER, it waits until predicted ready − their ride − FOOD_BUFFER (DeliveryCommandWorker defers its message; it
-     * stays SCHEDULED, so a ready tap still starts it at once). Each wait is longer than HOLD_STEP and none goes past
-     * predicted ready − FOOD_BUFFER, so a command waits only a few times. Empty: start now.
+     * FOOD_BUFFER, it waits until predicted ready − their ride − FOOD_BUFFER, less rain mode's earlier start as schedule()
+     * took it (DeliveryCommandWorker defers its message; it stays SCHEDULED, so a ready tap still starts it at once). Each
+     * wait is longer than HOLD_STEP and none goes past predicted ready − FOOD_BUFFER, so a command waits only a few times.
+     * Empty: start now.
      */
     public Optional<Instant> holdUntil(DeliveryCommandMessage message) {
         if (!properties.isFoodTimedDispatchEnabled() || fleetStage == null) {
@@ -280,7 +287,9 @@ public class DeliveryCommandScheduler {
             if (ride.isEmpty()) {
                 return Optional.empty();
             }
-            Instant until = promise.get().plus(readyCorrection(message.chefSubOrderId())).minus(rideAndBuffer(ride.getAsDouble()));
+            // Less rain's earlier start too, as schedule() took it, or the hold would undo it.
+            Instant until = promise.get().plus(readyCorrection(message.chefSubOrderId())).minus(fleetStage.dispatchEarlier())
+                .minus(rideAndBuffer(ride.getAsDouble()));
             if (!until.isAfter(now.plus(HOLD_STEP))) {
                 return Optional.empty();
             }

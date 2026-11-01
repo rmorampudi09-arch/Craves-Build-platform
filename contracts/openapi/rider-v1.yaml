@@ -180,8 +180,9 @@ paths:
         before codes existed) returns 423 OTP_LOCKED at once.
       description: |
         A repeated key, or a step the trip already took, returns the trip. The key is bound to the request it first came
-        with: only the tap (ageMs, fix, capturedOffline) may change between retries, and the same key with another step,
-        code, reason, note, callsMade or photo is 422 IDEMPOTENCY_KEY_REUSED. 409 STEP_CONFLICT (out of order) or
+        with: the same key with another step, delivery method (OTP or PHOTO), reason or note is 422
+        IDEMPOTENCY_KEY_REUSED. The tap (ageMs, fix, capturedOffline), the code, the photo and callsMade are not compared:
+        a retry with them changed gets the key's first answer. 409 STEP_CONFLICT (out of order) or
         TRIP_NOT_ACTIVE (the trip ended or went to another courier); 404 TRIP_NOT_FOUND (not this rider's trip);
         422 OTP_INVALID with attemptsLeft; 423 OTP_LOCKED; 503 OTP_UNAVAILABLE (the code could not be checked; try again).
         Photo: 422 CALLS_REQUIRED (fewer than two calls), WAIT_NOT_OVER (the unreachable wait since arriving is still

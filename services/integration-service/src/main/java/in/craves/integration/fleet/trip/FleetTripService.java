@@ -332,8 +332,8 @@ public class FleetTripService {
             throw FleetApiException.invalid("Enter the 4-digit OTP the customer reads out.");
         }
         Rider rider = rider(identityId);
-        // The code is in the hash, which is stored only with a refused code or the delivery that spent it: never a live code.
-        String request = requestHash("/trips/" + tripId + "/delivered", "method", "OTP", "otp", otp);
+        // Never the code: the hash is stored beside the trip id, so its 4 digits could be recovered from it.
+        String request = requestHash("/trips/" + tripId + "/delivered", "method", "OTP");
         Locked trip = transaction.execute(status -> {
             Locked locked = lock(tripId, rider);
             replay(tripId, key, request);
@@ -409,9 +409,8 @@ public class FleetTripService {
     public Trip deliveredByPhoto(UUID identityId, UUID tripId, Integer callsMade, MultipartFile photo, String key, Tap tap) {
         Rider rider = rider(identityId);
         byte[] read = readPhoto(photo);
-        // A retry without its photo is compared with nothing: all it can get back is the delivered trip (P1-07).
-        String request = read == null ? null
-            : requestHash("/trips/" + tripId + "/delivered", "method", "PHOTO", "callsMade", callsMade, "photo", sha256(read));
+        // Never the photo or callsMade: a retry may re-encode the photo, count the calls again or come without it (P1-07).
+        String request = requestHash("/trips/" + tripId + "/delivered", "method", "PHOTO");
         Locked trip = transaction.execute(status -> {
             Locked locked = lock(tripId, rider);
             replay(tripId, key, request);
@@ -642,15 +641,14 @@ public class FleetTripService {
 
     /**
      * The event a repeated Idempotency-Key stored, if any. The key is bound to the request it first came with
-     * (requestHash): another request with it is 422 IDEMPOTENCY_KEY_REUSED. A row from before V177, or a request with
-     * nothing to compare (null), replays as it always did.
+     * (requestHash): another request with it is 422 IDEMPOTENCY_KEY_REUSED. A row from before V177 replays as it always did.
      */
     private Optional<Map<String, Object>> replayed(UUID tripId, String key, String request) {
         Optional<Map<String, Object>> earlier = key == null ? Optional.empty() : jdbc.queryForList("SELECT kind, "
             + "(detail ->> 'attemptsLeft')::int AS attempts_left, COALESCE(detail ->> 'reason', '') AS reason, request_hash "
             + "FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = ?", tripId, key).stream().findFirst();
         Object first = earlier.map(row -> row.get("request_hash")).orElse(null);
-        if (first != null && request != null && !request.equals(first)) {
+        if (first != null && !request.equals(first)) {
             // The app never does this: one means a client bug that dropped a rider's queued steps.
             LOGGER.warn("FLEET_IDEMPOTENCY_KEY_REUSED trip={} key={}", tripId, key);
             throw FleetApiException.unprocessable("IDEMPOTENCY_KEY_REUSED", KEY_REUSED);
@@ -660,8 +658,10 @@ public class FleetTripService {
 
     /**
      * The request a rider's Idempotency-Key is bound to (Phase C): SHA-256 hex of the method, the path under /api/v1/rider
-     * and, as canonical JSON (keys sorted, nulls left out), the body fields that decide it, given as name, value pairs.
-     * Never the tap (ageMs, fix, capturedOffline): the app sends it again, aged, with every retry of the same tap.
+     * (it names the step) and, as canonical JSON (keys sorted, nulls left out), the body fields that decide it, given as
+     * name, value pairs: a delivery's method (OTP or PHOTO), a failure's reason and note. Never the delivery code (unsalted,
+     * beside a known trip id, 4 digits are found in 10,000 tries), the photo or callsMade (a retry may re-encode the photo
+     * or count the calls again), nor the tap (ageMs, fix, capturedOffline): the app sends it again, aged, with every retry.
      */
     static String requestHash(String path, Object... fields) {
         Map<String, Object> body = new TreeMap<>();

@@ -140,7 +140,10 @@ class DeliveryCommandWorkerTest {
         verifyNoInteractions(completion);
     }
 
-    /** R16 item 11: an order cancelled before its command ran offers no rider and books no courier, and no copy dead-letters. */
+    /**
+     * R16 item 11: an order order-service cancelled (ORDER_CANCELLED, DeliveryCommandRepository.orderCancelled) before its
+     * command ran offers no rider and books no courier, and no copy dead-letters.
+     */
     @Test
     void aCancelledOrdersCommandOffersNobodyBooksNobodyAndItsLaterCopiesComplete() {
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);

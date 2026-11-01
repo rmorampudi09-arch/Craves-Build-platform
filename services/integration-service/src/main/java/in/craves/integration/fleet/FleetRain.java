@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Rain mode (R16 19; docs/riders/DISPATCH.md, "Rain mode"), built switched off. The level is the ops switch
@@ -33,9 +35,13 @@ public class FleetRain {
     public static final List<String> LEVELS = List.of(OFF, ON, SEVERE);
     /** Dispatch reads the level at most this often on each server, not once per rider. */
     static final long CACHE_MS = 30_000;
-    /** On by itself: at least 10 rides to the door ended in the last 30 minutes, and the middle one took 1.3 times its predicted minutes. */
+    /**
+     * On by itself: at least 10 rides to the door by at least 5 riders ended in the last 30 minutes, and the middle one took
+     * 1.3 times its predicted minutes.
+     */
     static final int AUTO_MINUTES = 30;
     static final int AUTO_RIDES = 10;
+    static final int AUTO_RIDERS = 5;
     static final double AUTO_RATIO = 1.3;
     /** While on: riders get at least 45 s to accept, an order at most 2 rounds, and the search starts 5 minutes earlier. */
     static final int OFFER_SECONDS = 45;
@@ -97,12 +103,21 @@ public class FleetRain {
         return new Status(setting, auto, current(setting.level()));
     }
 
-    /** Sets the ops switch, in the caller's transaction. This server uses it at once, the others within 30 s. */
+    /** Sets the ops switch, in the caller's transaction. This server uses it once it commits, the others within 30 s. */
     public Setting set(String level, UUID by, String byName) {
         jdbc.update("INSERT INTO fleet_schema.rain_mode (id, level, set_by, set_by_name, set_at) VALUES (true, ?, ?, ?, now()) "
             + "ON CONFLICT (id) DO UPDATE SET level = EXCLUDED.level, set_by = EXCLUDED.set_by, set_by_name = EXCLUDED.set_by_name, "
             + "set_at = EXCLUDED.set_at", level, by, byName);
         last = null;
+        // A read here before the commit still sees the old level and would keep it 30 s: drop it again once committed.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    last = null;
+                }
+            });
+        }
         LOGGER.info("FLEET_RAIN_MODE level={} by={}", level, by);
         return setting();
     }
@@ -130,21 +145,24 @@ public class FleetRain {
 
     /**
      * The automatic switch's measure, only while the travel-time model is live (its minutes are the yardstick): of the rides
-     * from the kitchen to the door that ended in the last 30 minutes with predicted minutes, at least 10, the middle one took
-     * 1.3 times its prediction or more. The middle one, so one rider's long stop can't switch rain mode on.
+     * from the kitchen to the door that ended in the last 30 minutes with predicted minutes, at least 10 by at least 5
+     * riders, the middle one took 1.3 times its prediction or more. The middle one, so one rider's long stop can't switch
+     * rain mode on; 5 riders, since the times are their taps and a few riders' taps must not either.
      */
     boolean slow() {
         if (!"live".equals(eta.mode())) {
             return false;
         }
         Map<String, Object> rides = jdbc.queryForMap("""
-            SELECT count(*) AS rides, percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM t.arrived_drop_at - t.picked_up_at)
+            SELECT count(*) AS rides, count(DISTINCT t.rider_id) AS riders,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM t.arrived_drop_at - t.picked_up_at)
                      / 60 / o.drop_minutes) AS ratio
             FROM fleet_schema.trip t JOIN fleet_schema.trip_offer o ON o.trip_id = t.id AND o.state = 'ACCEPTED'
             WHERE t.arrived_drop_at > now() - make_interval(mins => ?) AND t.picked_up_at < t.arrived_drop_at AND o.drop_minutes > 0""",
             AUTO_MINUTES);
         Number ratio = (Number) rides.get("ratio");
-        return ((Number) rides.get("rides")).longValue() >= AUTO_RIDES && ratio != null && ratio.doubleValue() >= AUTO_RATIO;
+        return ((Number) rides.get("rides")).longValue() >= AUTO_RIDES && ((Number) rides.get("riders")).longValue() >= AUTO_RIDERS
+            && ratio != null && ratio.doubleValue() >= AUTO_RATIO;
     }
 
     /** The ops switch: its level, and who set it and when (null before anyone did). */

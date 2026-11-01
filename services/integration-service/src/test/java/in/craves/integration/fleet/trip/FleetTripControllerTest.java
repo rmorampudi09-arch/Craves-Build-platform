@@ -207,9 +207,9 @@ class FleetTripControllerTest {
      */
     @Test
     void theRequestAKeyIsBoundToKeepsItsForm() {
-        // SHA-256 of "POST /api/v1/rider/trips/{TRIP}/delivered\n{\"method\":\"OTP\",\"otp\":\"4821\"}".
-        assertThat(FleetTripService.requestHash("/trips/" + TRIP + "/delivered", "otp", "4821", "method", "OTP"))
-            .isEqualTo("8f9c853f7234f752235bb21e3f4f1acb417de17cdfee77c499169c7b02fd4024");
+        // SHA-256 of "POST /api/v1/rider/trips/{TRIP}/failed\n{\"note\":\"Gate locked\",\"reason\":\"UNSAFE\"}".
+        assertThat(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "UNSAFE", "note", "Gate locked"))
+            .isEqualTo("6d52c7e854c2e2e7491bd7261d5e468a6432bde074662dfc2bdbea6b69063437");
         assertThat(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "UNSAFE", "note", null))
             .isEqualTo(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "UNSAFE"))
             .isNotEqualTo(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "WRONG_ADDRESS"));

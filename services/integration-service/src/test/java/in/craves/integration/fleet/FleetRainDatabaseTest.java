@@ -10,7 +10,9 @@ import in.craves.integration.fleet.FleetRain.Setting;
 import in.craves.integration.fleet.eta.FleetEta;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,21 +21,24 @@ import org.springframework.dao.DataIntegrityViolationException;
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class FleetRainDatabaseTest {
     final FleetDatabase fleet = new FleetDatabase();
-    final UUID rider = fleet.rider("Ravi Kumar", "+919800000001");
+    final List<UUID> riders = IntStream.rangeClosed(1, 5).mapToObj(i -> fleet.rider("Rider " + i, "+91980000000" + i)).toList();
 
     FleetRain rain(String etaMode, boolean auto) {
         return new FleetRain(fleet.db, new FleetEta(fleet.db, etaMode, ""), auto);
     }
 
-    /** A delivered ride to the door that ended minutesAgo after rideMinutes; predicted: the live model's minutes (null: none). */
-    void ride(int minutesAgo, double rideMinutes, Double predicted) {
+    /**
+     * A delivered ride to the door by riders[rider] that ended minutesAgo after rideMinutes; predicted: the live model's
+     * minutes (null: none).
+     */
+    void ride(int rider, int minutesAgo, double rideMinutes, Double predicted) {
         UUID trip = fleet.trip(UUID.randomUUID());
         fleet.db.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', rider_id = ?, arrived_drop_at = now() - make_interval(mins => ?), "
             + "picked_up_at = now() - make_interval(mins => ?) - make_interval(secs => ?), finished_at = now() - make_interval(mins => ?) "
-            + "WHERE id = ?", rider, minutesAgo, minutesAgo, rideMinutes * 60, minutesAgo, trip);
+            + "WHERE id = ?", riders.get(rider), minutesAgo, minutesAgo, rideMinutes * 60, minutesAgo, trip);
         fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, state, pay_paise, rate_card_version, pickup_distance_m, "
             + "drop_distance_m, expires_at, decided_at, drop_minutes) VALUES (?, ?, ?, 'ACCEPTED', 4000, '2026-10-v1', 500, 3500, "
-            + "now() + INTERVAL '40 seconds', now(), ?)", UUID.randomUUID(), trip, rider, predicted);
+            + "now() + INTERVAL '40 seconds', now(), ?)", UUID.randomUUID(), trip, riders.get(rider), predicted);
     }
 
     @Test
@@ -64,12 +69,12 @@ class FleetRainDatabaseTest {
     @Test
     void theAutomaticSwitchReadsTheLastHalfHoursRidesToTheDoor() {
         for (int i = 0; i < 9; i++) {
-            ride(5, 18, 12.0); // 1.5 times the prediction
+            ride(i % 5, 5, 18, 12.0); // 1.5 times the prediction
         }
-        ride(45, 30, 12.0); // ended too long ago
-        ride(3, 30, null);  // no live model then
+        ride(0, 45, 30, 12.0); // ended too long ago
+        ride(0, 3, 30, null);  // no live model then
         assertThat(rain("live", true).slow()).as("9 rides are too few").isFalse();
-        ride(2, 18, 12.0);
+        ride(0, 2, 18, 12.0);
         assertThat(rain("live", true).slow()).isTrue();
         assertThat(rain("live", true).level(0)).isEqualTo("on");
         assertThat(rain("live", true).status().setting().level()).as("the ops switch is untouched").isEqualTo("off");
@@ -80,10 +85,21 @@ class FleetRainDatabaseTest {
     @Test
     void oneRidersLongStopDoesNotSwitchItOn() {
         for (int i = 0; i < 11; i++) {
-            ride(5, 12.5, 12.0);
+            ride(i % 5, 5, 12.5, 12.0);
         }
-        ride(4, 90, 12.0);
+        ride(0, 4, 90, 12.0);
         assertThat(rain("live", true).slow()).isFalse();
+    }
+
+    /** The times are riders' taps, so a few riders can't switch it on: the rides must be by at least 5. */
+    @Test
+    void fewerThanFiveRidersNeverSwitchItOn() {
+        for (int i = 0; i < 12; i++) {
+            ride(i % 4, 5, 18, 12.0);
+        }
+        assertThat(rain("live", true).slow()).as("12 slow rides by 4 riders").isFalse();
+        ride(4, 5, 18, 12.0);
+        assertThat(rain("live", true).slow()).as("and a fifth rider").isTrue();
     }
 
     @Test

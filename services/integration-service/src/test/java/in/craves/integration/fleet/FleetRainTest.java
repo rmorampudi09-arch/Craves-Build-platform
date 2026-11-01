@@ -23,6 +23,8 @@ import org.mockito.ArgumentMatchers;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** Rain mode's level (R16 19): the ops switch, the automatic switch, the 30-second cache, and the rules it runs dispatch with. */
 class FleetRainTest {
@@ -32,10 +34,11 @@ class FleetRainTest {
         when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Setting>>any())).thenReturn(List.of(new Setting(level, null, null)));
     }
 
-    /** The automatic switch's reading: how many rides to the door in the last 30 minutes, and the middle one's actual / predicted. */
-    void rides(long rides, Double ratio) {
+    /** The automatic switch's reading: rides to the door in the last 30 minutes, by how many riders, and the middle one's actual / predicted. */
+    void rides(long rides, long riders, Double ratio) {
         Map<String, Object> row = new HashMap<>();
         row.put("rides", rides);
+        row.put("riders", riders);
         row.put("ratio", ratio);
         when(jdbc.queryForMap(anyString(), eq(FleetRain.AUTO_MINUTES))).thenReturn(row);
     }
@@ -68,27 +71,46 @@ class FleetRainTest {
         assertThat(rain.status()).isEqualTo(new Status(new Setting("on", null, null), false, "on"));
     }
 
+    /** A read on this server while the switch's transaction is open sees the old level: it is dropped once the switch commits. */
+    @Test
+    void aLevelReadBeforeTheSwitchCommitsIsDroppedOnCommit() {
+        FleetRain rain = rain("off", false);
+        stored("off"); // what other connections read until the commit
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            rain.set("on", UUID.randomUUID(), "Admin +91 98xxxxx210");
+            assertThat(rain.level(0)).as("another request, before the commit").isEqualTo("off");
+            stored("on");
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        assertThat(rain.level(1)).as("not the old level for 30 s").isEqualTo("on");
+    }
+
     @Test
     void theAutomaticSwitchComesOnWhenTheMiddleOfTenOrMoreRidesRan30PercentOverItsPrediction() {
         stored("off");
-        rides(12, 1.5);
+        rides(12, 5, 1.5);
         assertThat(rain("live", true).level(0)).isEqualTo("on");
         Status status = rain("live", true).status();
         assertThat(status.level()).isEqualTo("on");
         assertThat(status.setting().level()).as("the ops switch stays off").isEqualTo("off");
         assertThat(status.auto()).isTrue();
-        rides(9, 2.0);
+        rides(12, 4, 1.5);
+        assertThat(rain("live", true).level(0)).as("4 riders: a few riders' taps can't switch it on").isEqualTo("off");
+        rides(9, 5, 2.0);
         assertThat(rain("live", true).level(0)).as("too few rides").isEqualTo("off");
-        rides(12, 1.29);
+        rides(12, 5, 1.29);
         assertThat(rain("live", true).level(0)).isEqualTo("off");
-        rides(0, null);
+        rides(0, 0, null);
         assertThat(rain("live", true).level(0)).as("no rides at all").isEqualTo("off");
     }
 
     @Test
     void theAutomaticSwitchReadsNothingWithoutTheLiveModelOrItsFlag() {
         stored("off");
-        rides(12, 1.5);
+        rides(12, 5, 1.5);
         assertThat(rain("shadow", true).level(0)).as("only with the model live").isEqualTo("off");
         assertThat(rain("live", false).level(0)).as("CRAVES_FLEET_RAIN_AUTO off").isEqualTo("off");
         verify(jdbc, never()).queryForMap(anyString(), eq(FleetRain.AUTO_MINUTES));
@@ -97,7 +119,7 @@ class FleetRainTest {
     @Test
     void theOpsSettingWinsOverTheAutomaticSwitch() {
         stored("severe");
-        rides(12, 1.0);
+        rides(12, 5, 1.0);
         assertThat(rain("live", true).level(0)).isEqualTo("severe");
         verify(jdbc, never()).queryForMap(anyString(), eq(FleetRain.AUTO_MINUTES));
         when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Setting>>any())).thenReturn(List.of());

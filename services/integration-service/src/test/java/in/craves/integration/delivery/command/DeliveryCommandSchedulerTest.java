@@ -182,17 +182,40 @@ class DeliveryCommandSchedulerTest {
         assertThat(scheduler.schedule(event(now.plusSeconds(30 * 60))).dispatchAt()).as("no rain").isEqualTo(now.plusSeconds(20 * 60));
     }
 
-    /** R16 18 off (the default): today's 10 minutes before ready, no command waits, and the fleet is never asked. */
+    /**
+     * R16 18 off (the default): today's 10 minutes before ready, no command waits, and the fleet is never asked for a ride;
+     * only schedule() asks it for rain mode's earlier start (R16 19), which runs either way.
+     */
     @Test
-    void offDispatchKeepsTodaysLeadAndTheFleetIsNeverAsked() {
+    void offDispatchKeepsTodaysLeadAndTheFleetIsNeverAskedForARide() {
         Timed timed = new Timed(false);
         timed.ride(1);
         Instant ready = NOW.plus(Duration.ofMinutes(30));
 
         assertThat(timed.dispatchAt(ready)).isEqualTo(ready.minus(Duration.ofMinutes(10)));
         assertThat(timed.scheduler.holdUntil(timed.due(ready))).isEmpty();
-        verifyNoInteractions(timed.fleet);
+        verify(timed.fleet, never()).rideMinutes(any(), anyDouble(), anyDouble(), any());
+        verify(timed.fleet, times(1)).dispatchEarlier();
         verify(timed.repository, never()).untappedPromise(any());
+    }
+
+    /**
+     * Rain mode and R16 18 together: the hold takes rain's 5 minutes off as schedule() did, so a command that came due at its
+     * rain-early time starts then, rather than waiting for the dry time.
+     */
+    @Test
+    void inRainTheHoldKeepsTheEarlierStart() {
+        Timed timed = new Timed(true);
+        when(timed.fleet.dispatchEarlier()).thenReturn(Duration.ofMinutes(5));
+        timed.ride(3);
+        Instant ready = NOW.plus(Duration.ofMinutes(30));
+        assertThat(timed.dispatchAt(ready)).as("ready − 5 in rain − 3 − 2").isEqualTo(ready.minus(Duration.ofMinutes(10)));
+
+        // The food 10 minutes away: schedule() sent it for 10 − 5 − 3 − 2, now, so it starts now (dry, it would wait 5).
+        assertThat(timed.scheduler.holdUntil(timed.due(NOW.plus(Duration.ofMinutes(10))))).isEmpty();
+        timed.ride(1);
+        assertThat(timed.scheduler.holdUntil(timed.due(NOW.plus(Duration.ofMinutes(14))))).as("14 − 5 − 1 − 2")
+            .contains(NOW.plus(Duration.ofMinutes(6)));
     }
 
     /**

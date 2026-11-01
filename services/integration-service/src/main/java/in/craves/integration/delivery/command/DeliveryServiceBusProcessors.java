@@ -129,7 +129,9 @@ public class DeliveryServiceBusProcessors {
                 JavaType cancelledType = objectMapper.getTypeFactory().constructParametricType(
                     EventEnvelope.class, OrderCancelledData.class
                 );
-                scheduler.orderCancelled(objectMapper.readValue(rawBody, cancelledType));
+                Object aggregateId = context.getMessage().getApplicationProperties().get("aggregateId");
+                scheduler.orderCancelled(objectMapper.readValue(rawBody, cancelledType),
+                    aggregateId == null ? null : aggregateId.toString());
                 context.complete();
                 return;
             }

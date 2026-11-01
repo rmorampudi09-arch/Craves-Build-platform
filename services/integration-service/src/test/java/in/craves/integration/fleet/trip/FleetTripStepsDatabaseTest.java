@@ -377,37 +377,51 @@ class FleetTripStepsDatabaseTest {
         assertThatThrownBy(() -> trips.step(identity, tripId, "picked-up", "k1")).hasMessage(FleetTripService.KEY_REUSED);
     }
 
-    /** The code is part of the request: the same code retried after the tap (capturedOffline, aged) gets the first answer. */
+    /**
+     * The key is bound to delivering by OTP, never to the code (its 4 digits could be recovered from the stored hash): a retry,
+     * aged, deferred (capturedOffline) or with another code, gets the first answer without asking order-service again; the
+     * photo under the key is 422.
+     */
     @Test
-    void aDeliveryCodesKeyIsBoundToItsCode() {
+    void aDeliveryCodesKeyIsBoundToTheOtpMethodNeverToTheCode() {
         toDrop();
         refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "d1", new Tap(2_000L, null)), 422, "OTP_INVALID");
         assertThatThrownBy(() -> trips.deliveredByOtp(identity, tripId, "1111", "d1", new Tap(90_000L, null, true)))
             .as("the same tap sent again once it was deferred").isInstanceOfSatisfying(FleetApiException.class,
                 error -> assertThat(error.attemptsLeft()).isEqualTo(4));
-        refused(() -> trips.deliveredByOtp(identity, tripId, "4821", "d1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        assertThatThrownBy(() -> trips.deliveredByOtp(identity, tripId, "4821", "d1")).as("another code: the key's first answer")
+            .isInstanceOfSatisfying(FleetApiException.class, error -> assertThat(error.attemptsLeft()).isEqualTo(4));
+        MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);
+        refused(() -> trips.deliveredByPhoto(identity, tripId, 2, photo, "d1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        assertThat(fleet.db.queryForObject("SELECT request_hash FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = 'd1'",
+            String.class, tripId)).as("no code in it").isEqualTo(FleetTripService.requestHash("/trips/" + tripId + "/delivered", "method", "OTP"));
         verify(codes, times(1)).verify(any(), anyString());
 
         assertThat(trips.deliveredByOtp(identity, tripId, "4821", "d2").step()).isEqualTo("DELIVERED");
         assertThat(trips.deliveredByOtp(identity, tripId, "4821", "d2", new Tap(30_000L, null, true)).step()).isEqualTo("DELIVERED");
-        refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "d2"), 422, "IDEMPOTENCY_KEY_REUSED");
+        refused(() -> trips.deliveredByPhoto(identity, tripId, 2, photo, "d2"), 422, "IDEMPOTENCY_KEY_REUSED");
         verify(codes, times(2)).verify(any(), anyString());
+        verify(storage, times(0)).upload(anyString(), any(), anyString(), anyBoolean());
     }
 
-    /** The photo and the calls are part of the request; a retry without its photo still gets the delivered trip (P1-07). */
+    /**
+     * The key is bound to delivering by photo, not to the photo's bytes or the calls: a retry whose photo was re-encoded,
+     * that counts the calls again, or that comes without its photo (P1-07) gets the delivered trip; the OTP under the key is 422.
+     */
     @Test
-    void aPhotoDeliverysKeyIsBoundToItsPhotoAndCalls() {
+    void aPhotoDeliverysKeyIsBoundToThePhotoMethodNotItsBytesOrCalls() {
         toDrop();
         fleet.db.update("UPDATE fleet_schema.trip SET arrived_drop_at = now() - INTERVAL '11 minutes' WHERE id = ?", tripId);
         MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);
         assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p1", new Tap(1_000L, null)).step()).isEqualTo("DELIVERED");
         assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p1", new Tap(9_000L, null)).step())
             .as("the same photo sent again, its tap aged").isEqualTo("DELIVERED");
-        MockMultipartFile another = new MockMultipartFile("photo", "door.jpg", "image/jpeg",
+        MockMultipartFile reencoded = new MockMultipartFile("photo", "door.jpg", "image/jpeg",
             new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0x00, 0x02});
-        refused(() -> trips.deliveredByPhoto(identity, tripId, 2, another, "p1"), 422, "IDEMPOTENCY_KEY_REUSED");
-        refused(() -> trips.deliveredByPhoto(identity, tripId, 3, photo, "p1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        assertThat(trips.deliveredByPhoto(identity, tripId, 2, reencoded, "p1").step()).as("re-encoded").isEqualTo("DELIVERED");
+        assertThat(trips.deliveredByPhoto(identity, tripId, 3, photo, "p1").step()).as("the calls counted again").isEqualTo("DELIVERED");
         assertThat(trips.deliveredByPhoto(identity, tripId, 2, null, "p1").step()).isEqualTo("DELIVERED");
+        refused(() -> trips.deliveredByOtp(identity, tripId, "4821", "p1"), 422, "IDEMPOTENCY_KEY_REUSED");
         verify(storage, times(1)).upload(anyString(), any(), anyString(), anyBoolean());
     }
 

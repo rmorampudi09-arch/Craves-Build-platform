@@ -71,7 +71,8 @@ public class DeliveryCommandWorker {
             commands.markCompleted(message.commandId());
             return new WorkerReceipt(existingJob.get(), true, "ALREADY_COMPLETED");
         }
-        // R16 item 11: the order was cancelled before anyone was booked, so no rider is offered it and no courier booked.
+        // R16 item 11: order-service cancelled the order (ORDER_CANCELLED; a refund alone never stops the food) before anyone
+        // was booked, so no rider is offered it and no courier booked.
         if (commands.orderCancelled(message.chefSubOrderId())) {
             commands.markDeadLetter(command.id(), ORDER_CANCELLED);
             return new WorkerReceipt(null, false, ORDER_CANCELLED);

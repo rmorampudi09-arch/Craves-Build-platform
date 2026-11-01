@@ -108,10 +108,13 @@ public class DeliveryCommandRepository {
             + "ON CONFLICT (chef_sub_order_id) DO NOTHING", chefSubOrderId, reason, toDatabaseTimestamp(cancelledAt)) == 1;
     }
 
-    /** Whether the chef order is cancelled (CANCELLED_ORDER). */
+    /**
+     * Whether order-service cancelled the chef order (ORDER_CANCELLED), so its delivery command books nobody. Never a refund
+     * alone, unlike CANCELLED_ORDER: one may have failed or be partial, and the food must still go.
+     */
     public boolean orderCancelled(UUID chefSubOrderId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT " + CANCELLED_ORDER.formatted("?"), Boolean.class, chefSubOrderId,
-            chefSubOrderId));
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM delivery_schema.order_cancelled WHERE "
+            + "chef_sub_order_id = ?)", Boolean.class, chefSubOrderId));
     }
 
     /**

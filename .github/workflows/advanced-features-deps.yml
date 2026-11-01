@@ -5,7 +5,7 @@ name: Advanced features dependency cache
 on:
   push:
     branches: ['main', 'bundle/**']
-    paths: ['services/advanced-features-service/pom.xml', '.github/workflows/advanced-features-deps.yml']
+    paths: ['services/advanced-features-service/pom.xml', 'services/order-service/pom.xml', 'services/integration-service/pom.xml', '.github/workflows/advanced-features-deps.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -27,16 +27,21 @@ jobs:
       - name: Resolve dependencies and plugins with a stub build
         run: |
           set -euo pipefail
+          # order-service and integration-service too: M24/M25 are built in the sandbox against them
+          for svc in advanced-features-service order-service integration-service; do
           stub=$(mktemp -d)
-          cp services/advanced-features-service/pom.xml "$stub/pom.xml"
+          cp services/$svc/pom.xml "$stub/pom.xml"
           mkdir -p "$stub/src/main/java/stub" "$stub/src/test/java/stub"
           printf 'package stub;\npublic class Stub { public static int one() { return 1; } public static void main(String[] args) { } }\n' > "$stub/src/main/java/stub/Stub.java"
           printf 'package stub;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nclass StubTest { @Test void one() { assertEquals(1, Stub.one()); } }\n' > "$stub/src/test/java/stub/StubTest.java"
           printf 'package stub;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nclass StubIT { @Test void one() { assertEquals(1, Stub.one()); } }\n' > "$stub/src/test/java/stub/StubIT.java"
           cd "$stub"
           mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" dependency:go-offline
-          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" clean verify
+          # only the advanced service must pass on a stub; the others just need their plugins fetched
+          mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" clean verify || [ "$svc" != advanced-features-service ]
           mvn -B -ntp -Dmaven.repo.local="$RUNNER_TEMP/m2" dependency:sources -DincludeGroupIds=none -q || true
+          cd "$GITHUB_WORKSPACE"
+          done
       - name: Publish ci/advanced-features-m2
         run: |
           set -euo pipefail

@@ -140,6 +140,39 @@ class DeliveryCommandWorkerTest {
         verifyNoInteractions(completion);
     }
 
+    /** R16 item 11: an order cancelled before its command ran offers no rider and books no courier, and no copy dead-letters. */
+    @Test
+    void aCancelledOrdersCommandOffersNobodyBooksNobodyAndItsLaterCopiesComplete() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
+        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
+        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxDeliveryAttempts(5);
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(
+            commands, deliveryJobs, router, completion, properties, retryProperties()
+        );
+        DeliveryCommandMessage message = command();
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(commandRecord(message, "PROCESSING")));
+        when(deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId())).thenReturn(Optional.empty());
+        when(commands.orderCancelled(message.chefSubOrderId())).thenReturn(true);
+
+        var receipt = worker.process(message);
+
+        assertThat(receipt.providerId()).isEqualTo("ORDER_CANCELLED");
+        assertThat(receipt.deliveryJobId()).isNull();
+        verify(commands).markDeadLetter(message.commandId(), "ORDER_CANCELLED");
+        verifyNoInteractions(router, completion);
+
+        // A ready tap or a decline sends another copy: it finds the command done, without a Service Bus dead letter.
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.empty());
+        when(commands.findById(message.commandId())).thenReturn(Optional.of(commandRecord(message, "DEAD_LETTER")));
+
+        assertThat(worker.process(message).providerId()).isEqualTo("ORDER_CANCELLED");
+        verify(commands).markDeadLetter(any(), any());
+        verifyNoInteractions(router, completion);
+    }
+
     private static DeliveryCommandRetryProperties retryProperties() {
         DeliveryCommandRetryProperties retry = new DeliveryCommandRetryProperties();
         retry.setBaseSeconds(30);

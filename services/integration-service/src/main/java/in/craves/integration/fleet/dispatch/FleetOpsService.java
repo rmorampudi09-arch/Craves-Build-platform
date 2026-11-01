@@ -37,7 +37,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * The ops console's trips (admin-fleet-v1 /trips): the list, and reassign or cancel through the dispatch chain so an order
  * never has two couriers. The stage that is open is closed in the database (the same rows an accept and the dispatch tick
- * use) before anything else happens, and the delivery command is taken over only when no booking is in progress. A trip
+ * use) before anything else happens, and the delivery command is taken over only when no booking is in progress; a cancel
+ * tells Borzo or Pidge first when they hold the order (FleetCourierCancel). A trip
  * row belongs to one rider and one pay record, so a rider's trip before pickup goes to Borzo or Pidge on the same row, or
  * to a second rider on a new trip that replaces it (craves.fleet.rider-handover-enabled). Also the queue of delivery
  * codes typed offline that were refused (decision E4). Every mutation is audited and idempotent (FleetAdminService.once).
@@ -71,6 +72,7 @@ public class FleetOpsService {
     private final FleetTripPay pay;
     private final FleetStatusBridge bridge;
     private final FleetAdminService admin;
+    private final FleetCourierCancel couriers;
     private final boolean riderHandover;
     private final ObjectMapper json = new ObjectMapper();
 
@@ -80,7 +82,8 @@ public class FleetOpsService {
      */
     public FleetOpsService(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            FleetDispatcher dispatcher, FleetTripService trips, FleetTripPay pay, FleetStatusBridge bridge,
-                           FleetAdminService admin, @Value("${craves.fleet.rider-handover-enabled:false}") boolean riderHandover) {
+                           FleetAdminService admin, FleetCourierCancel couriers,
+                           @Value("${craves.fleet.rider-handover-enabled:false}") boolean riderHandover) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.policies = policies;
@@ -90,6 +93,7 @@ public class FleetOpsService {
         this.pay = pay;
         this.bridge = bridge;
         this.admin = admin;
+        this.couriers = couriers;
         this.riderHandover = riderHandover;
     }
 
@@ -200,10 +204,13 @@ public class FleetOpsService {
 
     /**
      * Cancels the delivery. A rider's trip ends with the trip-state pay rule (not held) and CANCELLED reaches the order; an
-     * order still searching stops: the open stage closes, offers are withdrawn and the delivery command books nobody.
+     * order still searching stops: the open stage closes, offers are withdrawn and the delivery command books nobody. A
+     * Borzo or Pidge booking is cancelled with them first, outside the transaction (FleetCourierCancel.forOps): 409
+     * TRIP_NOT_CANCELLABLE with their reason when they refuse, and the delivery stays as it was.
      */
     public Object cancel(Admin by, UUID key, UUID tripId, String reason) {
         String text = FleetAdminService.reason(reason);
+        couriers.forOps(tripId);
         return transaction.execute(status -> admin.once(by, key, "TRIP_CANCELLED", tripId + "\n" + text, () -> {
             Current trip = current(tripId);
             if (trip.riderOnTrip()) {
@@ -212,10 +219,15 @@ public class FleetOpsService {
                 event(tripId, "OPS_CANCELLED", by);
                 bridge.publish(tripId);
             } else {
-                if (trip.courierJob() && !trip.courierFinished()) {
-                    throw FleetApiException.conflict("TRIP_NOT_CANCELLABLE", "Borzo or Pidge has this order. Cancel it with them, or cancel the order.");
+                // Borzo or Pidge cancelled by Craves (forOps) still read as running until their callback arrives.
+                boolean courierCancelled = trip.courierJob() && couriers.cancelled(trip.chefSubOrderId());
+                if (trip.courierJob() && !trip.courierFinished() && !courierCancelled) {
+                    throw changed(); // booked after forOps looked
                 }
-                if (trip.openStage() == null) {
+                // That cancel ends the delivery here, once, even with no stage open (the courier's closed when they took it).
+                boolean endsCourier = courierCancelled && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 "
+                    + "FROM fleet_schema.trip_event WHERE trip_id = ? AND kind = 'OPS_CANCELLED')", Boolean.class, tripId));
+                if (trip.openStage() == null && !endsCourier) {
                     throw FleetApiException.conflict("TRIP_ALREADY_FINISHED", "This delivery has already ended.");
                 }
                 // A released rider's job being rebooked: the dispatch tick records a booked courier only under this lock, and
@@ -224,7 +236,9 @@ public class FleetOpsService {
                     + "AND provider_id = 'craves_fleet' FOR UPDATE", UUID.class, trip.chefSubOrderId()).isEmpty()) {
                     throw changed();
                 }
-                closeOpenStage(trip, "OPS_CANCELLED");
+                if (trip.openStage() != null) {
+                    closeOpenStage(trip, "OPS_CANCELLED");
+                }
                 if (trip.jobProvider() == null) {
                     takeOverCommand(trip, "DEAD_LETTER", "Delivery cancelled by Craves ops");
                 }

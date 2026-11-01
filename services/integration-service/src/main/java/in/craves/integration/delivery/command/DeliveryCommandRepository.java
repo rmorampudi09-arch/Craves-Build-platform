@@ -18,6 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class DeliveryCommandRepository {
+    /**
+     * SQL true when the chef order whose id is %1$s is cancelled (R16 item 11): order-service's ORDER_CANCELLED, or a refund
+     * it requested for the order, the only signal before that event existed.
+     * shortcut: any refund counts as a cancel (today refunds come only before the chef accepts); drop the refund half before
+     * order-service ships item-level refunds, or a partial refund ends a delivery.
+     */
+    public static final String CANCELLED_ORDER = "(EXISTS (SELECT 1 FROM delivery_schema.order_cancelled oc WHERE oc.chef_sub_order_id = %1$s) "
+        + "OR EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = %1$s))";
+
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
@@ -89,6 +98,18 @@ public class DeliveryCommandRepository {
             WHERE mine.chef_order_id = ? AND c.promised_ready_at > now() - INTERVAL '14 days'
             HAVING count(*) >= 10
             """, (rs, row) -> Duration.ofSeconds(Math.round(rs.getDouble("late_s"))), chefSubOrderId).stream().findFirst();
+    }
+
+    /** order-service cancelled the chef order (ORDER_CANCELLED): stored once, the first cancel's reason kept. True the first time. */
+    public boolean recordOrderCancelled(UUID chefSubOrderId, String reason, Instant cancelledAt) {
+        return jdbc.update("INSERT INTO delivery_schema.order_cancelled (chef_sub_order_id, reason, cancelled_at) VALUES (?, ?, ?) "
+            + "ON CONFLICT (chef_sub_order_id) DO NOTHING", chefSubOrderId, reason, toDatabaseTimestamp(cancelledAt)) == 1;
+    }
+
+    /** Whether the chef order is cancelled (CANCELLED_ORDER). */
+    public boolean orderCancelled(UUID chefSubOrderId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT " + CANCELLED_ORDER.formatted("?"), Boolean.class, chefSubOrderId,
+            chefSubOrderId));
     }
 
     public boolean recordScheduled(UUID commandId, long sequenceNumber, String serviceBusMessageId) {

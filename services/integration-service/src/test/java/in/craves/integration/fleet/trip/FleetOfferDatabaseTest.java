@@ -235,6 +235,16 @@ class FleetOfferDatabaseTest {
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
     }
 
+    /** R16 item 11: order-service's ORDER_CANCELLED refuses the accept the same way, with no refund for the order. */
+    @Test
+    void anAcceptAfterOrderServiceCancelledTheOrderIsRefused() {
+        fleet.orderCancelled(chefSubOrderId);
+        refused(() -> transaction.execute(status -> trips.accept(firstIdentity, offerOf(first), "rider-accept-1")), 409, "ORDER_CANCELLED");
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_stage", String.class)).as("the stage stays for the tick")
+            .isEqualTo("OPEN");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+    }
+
     @Test
     void cancellingWhileRidersDecideWithdrawsTheOffersAndNobodyIsBooked() {
         UUID trip = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip", UUID.class);

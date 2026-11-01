@@ -188,6 +188,7 @@ changes, shifts and recent offers; and a warning if test mode is on and they are
 | Accepts | | `POST /offers/{id}/accept` | `trip` `ASSIGNED` | Fleet trips | 409 `OFFER_TAKEN`, `ORDER_CANCELLED`; 410 `OFFER_EXPIRED` |
 | Rides the trip | Trip: to kitchen, at kitchen, picked up, at drop | `POST /trips/{id}/{action}` | `trip`, `trip_event`; the customer and chef see each status | Fleet trips | 409 `STEP_CONFLICT`, `TRIP_NOT_ACTIVE`; steps queue offline |
 | Delivers | The customer's 4-digit code, or a photo after two calls and the wait | `delivered` | Pay lines on the trip | Delivery codes to check | 422 `OTP_INVALID` (tries left), 423 `OTP_LOCKED` → photo |
+| (The order is cancelled) | "The customer's order was cancelled. You're paid for the trip so far." within 5 s, also with the app closed | `TRIP_ENDED` push; `/locations` | `order_cancelled`; `trip` `CANCELLED`; a Borzo or Pidge courier is cancelled (`courier_cancel`) | Fleet trips; `FLEET_COURIER_CANCEL_FAILED` when Borzo or Pidge won't cancel theirs | An accept: 409 `ORDER_CANCELLED` |
 
 Test mode: dispatch offers trips only to pilot riders and kitchens. Approval adds the rider; kitchens are added in Rider
 pilot setup.
@@ -274,7 +275,7 @@ A break and heading home start only between trips. Check now and Check again say
 | The decision | | `GET /riders?stage=`, `POST /riders/{id}/application/decision` | `rider_document`, `rider_payout_account`, `test_mode_rider`, `rider_status_event`, `admin_audit`; the RIDER role in auth |
 | Terms | `GET /terms`, `POST /terms/accept` | `POST /rate-cards`, `.../publish` | `rate_card`, `rider_terms_acceptance` |
 | Online | `POST /devices`, `POST /shift/start`, `/end`, `POST /locations` | `.../devices/{id}/approve`, selfie review | `rider_device`, `rider_shift` |
-| Trips | `POST /offers/{id}/accept`, `/decline`, `GET /trips/active`, `POST /trips/{id}/{action}` | `GET /trips`, `/reassign`, `/cancel`, code checks | `trip_offer`, `trip`, `trip_event` |
+| Trips | `POST /offers/{id}/accept`, `/decline`, `GET /trips/active`, `POST /trips/{id}/{action}` | `GET /trips`, `/reassign`, `/cancel`, code checks | `trip_offer`, `trip`, `trip_event`; `order_cancelled` and `courier_cancel` (delivery schema) |
 | Money | `GET /earnings`, `GET /payouts`, `POST /withdrawals` | Payout files, holds, adjustments | `rider_earning`, `rider_payout_*` |
 
 ## 11. Tests and limits

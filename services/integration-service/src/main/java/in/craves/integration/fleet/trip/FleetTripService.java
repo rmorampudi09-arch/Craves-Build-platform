@@ -3,6 +3,7 @@ package in.craves.integration.fleet.trip;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.delivery.command.DeliveryCommandRepository;
 import in.craves.integration.delivery.command.DeliveryCommandWake;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetStorage;
@@ -74,9 +75,8 @@ public class FleetTripService {
     static final String PHOTO_HOLD = "Delivered with a photo. Ops checks the photo before this pay is released.";
     /** The cancel reason riders see when the customer or the chef cancelled the order. */
     public static final String ORDER_CANCELLED = "The order was cancelled.";
-    // shortcut: integration-service hears of a cancelled order only as the refund order-service requests for it, so that
-    // is the signal; switch to an order-cancelled event if order-service ever cancels without a refund (meal-plan orders).
-    public static final String ORDER_REFUNDED = "EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = t.chef_sub_order_id)";
+    /** SQL true when trip t's order is cancelled: order-service's ORDER_CANCELLED or a refund (DeliveryCommandRepository.CANCELLED_ORDER). */
+    public static final String ORDER_IS_CANCELLED = DeliveryCommandRepository.CANCELLED_ORDER.formatted("t.chef_sub_order_id");
     static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
     public static final String NOT_RECEIVED = "The customer told Craves ops they didn't get the food.";
     public static final String NOT_RECEIVED_HOLD = "The customer says they didn't get the food. Ops checks with you before this pay is released.";
@@ -143,7 +143,7 @@ public class FleetTripService {
             FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
             WHERE o.id = ? AND o.rider_id = ? AND o.state = 'ACTIVE' AND o.expires_at > now()
               AND s.trip_id = o.trip_id AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN' AND s.deadline_at > now()
-              AND\s""" + FleetShiftService.ON_SHIFT.formatted("o.rider_id") + " AND NOT " + ORDER_REFUNDED + " RETURNING s.trip_id",
+              AND\s""" + FleetShiftService.ON_SHIFT.formatted("o.rider_id") + " AND NOT " + ORDER_IS_CANCELLED + " RETURNING s.trip_id",
             UUID.class, offerId, rider.id());
         if (won.isEmpty()) {
             return notWon(offerId, rider);
@@ -697,7 +697,7 @@ public class FleetTripService {
 
     private Trip notWon(UUID offerId, Rider rider) {
         Map<String, Object> offer = jdbc.queryForList("SELECT o.state, o.trip_id, t.rider_id AS trip_rider, t.state AS trip_state, "
-            + ORDER_REFUNDED + " AS order_cancelled FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + ORDER_IS_CANCELLED + " AS order_cancelled FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
             + "WHERE o.id = ? AND o.rider_id = ?", offerId, rider.id())
             .stream().findFirst().orElseThrow(FleetTripService::offerNotFound);
         if ("ACCEPTED".equals(offer.get("state"))) {

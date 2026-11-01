@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,7 +20,9 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.FleetApiException;
@@ -44,6 +47,7 @@ import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripPayFinalized;
 import in.craves.integration.fleet.trip.FleetTripService;
 import in.craves.integration.payout.bank.BankDataCipher;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +69,7 @@ class FleetOpsDatabaseTest {
     final Admin ops = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx210");
     final UUID chefSubOrderId = UUID.fromString("0bde0101-2222-4222-8222-222222222222");
     final RiderPushClient alerts = mock(RiderPushClient.class);
+    final DeliveryProviderAdapter borzo = mock(DeliveryProviderAdapter.class);
     FleetDispatcher dispatcher;
     FleetTripService trips;
     FleetOpsService service;
@@ -88,8 +93,10 @@ class FleetOpsDatabaseTest {
             alerts);
         FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
             mock(BankDataCipher.class));
-        service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, false);
-        handover = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, true);
+        when(borzo.providerId()).thenReturn("borzo");
+        FleetCourierCancel couriers = new FleetCourierCancel(fleet.db, List.of(borzo), statusUpdates, alerts);
+        service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, false);
+        handover = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, true);
         FleetDispatchFixtures.policy(fleet.db, "live");
         near = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         other = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.01, KITCHEN_LNG, 5, false);
@@ -435,6 +442,52 @@ class FleetOpsDatabaseTest {
         assertThat(service.trips().trips()).isEmpty();
         assertThat(events).isEmpty();
         refused(() -> service.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(null, "PIDGE", "Undo")), 409, "TRIP_NOT_REASSIGNABLE");
+    }
+
+    /**
+     * R16 item 11: an order Borzo holds is cancelled with Borzo first, outside the transaction. While Borzo refuses (their
+     * courier may have the food) the delivery stays as it is and ops reads why; once Borzo cancels, the delivery ends, once.
+     */
+    @Test
+    void cancellingAnOrderBorzoHoldsCancelsTheirCourierFirstAndSaysWhyWhenTheyRefuse() {
+        UUID tripId = tripId();
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', outcome = 'NO_ACCEPT', closed_at = now() WHERE trip_id = ?", tripId);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE trip_id = ?", tripId);
+        fleet.db.update("UPDATE fleet_schema.trip SET provider = 'BORZO' WHERE id = ?", tripId);
+        stage(tripId, 2, "BORZO", "ASSIGNED", 1);
+        fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, provider_delivery_id, status) "
+            + "VALUES (?, ?, ?, 'borzo', 'B-7', 'COURIER_ASSIGNED')", UUID.randomUUID(), chefSubOrderId, command.orderId());
+        fleet.db.update("UPDATE delivery_schema.delivery_command SET status = 'COMPLETED' WHERE chef_sub_order_id = ?", chefSubOrderId);
+        when(borzo.cancel("B-7")).thenThrow(new IllegalStateException("Borzo cancel-order was rejected"))
+            .thenReturn(new ProviderDelivery("borzo", "B-7", "B-7", DeliveryStatus.CANCELLED, "canceled", null, null, null, null, Instant.now()));
+
+        assertThatThrownBy(() -> service.cancel(ops, UUID.randomUUID(), tripId, "Customer called to cancel"))
+            .isInstanceOfSatisfying(FleetApiException.class, error -> {
+                assertThat(error.status()).isEqualTo(409);
+                assertThat(error.code()).isEqualTo("TRIP_NOT_CANCELLABLE");
+                assertThat(error.getMessage()).contains("Borzo didn't cancel delivery B-7", "rejected", "call Borzo");
+            });
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip WHERE id = ?", String.class, tripId)).isEqualTo("SEARCHING");
+        assertThat(fleet.db.queryForMap("SELECT reason, attempts, last_error, cancelled_at FROM delivery_schema.courier_cancel "
+            + "WHERE provider_delivery_id = 'B-7'")).containsEntry("reason", "OPS_CANCELLED").containsEntry("attempts", 1)
+            .containsEntry("last_error", "Borzo cancel-order was rejected").containsEntry("cancelled_at", null);
+        refused(() -> service.cancel(ops, UUID.randomUUID(), tripId, "Customer called to cancel"), 409, "TRIP_NOT_CANCELLABLE");
+        verify(borzo, times(1)).cancel("B-7"); // tried again only after a minute: a call never overlaps another
+
+        fleet.db.update("UPDATE delivery_schema.courier_cancel SET last_attempt_at = now() - INTERVAL '61 seconds' WHERE provider_delivery_id = 'B-7'");
+        service.cancel(ops, UUID.randomUUID(), tripId, "Customer called to cancel");
+
+        verify(borzo, times(2)).cancel("B-7");
+        assertThat(fleet.db.queryForObject("SELECT cancelled_at IS NOT NULL FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'B-7'",
+            Boolean.class)).isTrue();
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip WHERE id = ?", String.class, tripId)).isEqualTo("CANCELLED");
+        assertThat(stages(tripId)).containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "BORZO:CLOSED:ASSIGNED");
+        ArgumentCaptor<TrackingSnapshot> applied = ArgumentCaptor.forClass(TrackingSnapshot.class);
+        verify(statusUpdates).processTracking(any(), applied.capture());
+        assertThat(applied.getValue().delivery().status()).as("the job and order-service hear it at once").isEqualTo(DeliveryStatus.CANCELLED);
+        refused(() -> service.cancel(ops, UUID.randomUUID(), tripId, "Again"), 409, "TRIP_ALREADY_FINISHED");
+        verify(borzo, times(2)).cancel("B-7");
+        verify(alerts, never()).opsAlert(any(), any(), any(), any());
     }
 
     @Test

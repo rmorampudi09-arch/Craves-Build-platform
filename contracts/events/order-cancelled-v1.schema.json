@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://craves.in/contracts/events/order-cancelled-v1.schema.json",
+  "title": "ORDER_CANCELLED v1.0",
+  "description": "order-service cancelled a chef order after the chef accepted it (OrderCancelledEventFactory, R16 item 11). Written only while ORDER_CANCELLED is in CRAVES_DOMAIN_EVENT_ENABLED_TYPES; integration-service then books no courier for the order, ends its Craves rider trip and cancels a Borzo or Pidge courier already booked. One per chef order.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "correlationId",
+    "source",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "ORDER_CANCELLED" },
+    "eventVersion": { "const": "1.0" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "causationId": { "type": ["string", "null"], "format": "uuid" },
+    "source": { "const": "order-service" },
+    "subject": { "type": "string", "minLength": 1 },
+    "data": {
+      "type": "object",
+      "required": ["checkoutId", "chefSubOrderId", "reason", "cancelledAt"],
+      "properties": {
+        "checkoutId": { "type": "string", "format": "uuid" },
+        "chefSubOrderId": { "type": "string", "format": "uuid" },
+        "reason": { "type": "string", "minLength": 1 },
+        "cancelledAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

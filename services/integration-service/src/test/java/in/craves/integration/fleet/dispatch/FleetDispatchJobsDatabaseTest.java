@@ -30,8 +30,11 @@ import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandR
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
+import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWorkItem;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetTestMode;
@@ -58,6 +61,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** The dispatch chain's clock (PLAN F8a, F8b): watchdog, Borzo, Pidge and the ops queue, against a real database. */
@@ -72,9 +76,15 @@ class FleetDispatchJobsDatabaseTest {
     final DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
     final DeliveryAssignmentRepository assignments = mock(DeliveryAssignmentRepository.class);
     final BorzoPidgeHandoffRepository handoffs = mock(BorzoPidgeHandoffRepository.class);
+    /** The trip-ended pushes to riders (FleetTripService.tellRider). */
+    final RiderPushClient riderPush = mock(RiderPushClient.class);
+    final DeliveryStatusUpdateService statusUpdates = mock(DeliveryStatusUpdateService.class);
+    final DeliveryProviderAdapter borzo = mock(DeliveryProviderAdapter.class);
+    final DeliveryProviderAdapter pidge = mock(DeliveryProviderAdapter.class);
     final List<Object> events = new ArrayList<>();
     FleetDispatchJobs jobs;
     FleetDispatcher dispatcher;
+    FleetCourierCancel couriers;
     UUID rider;
 
     @BeforeEach
@@ -86,9 +96,12 @@ class FleetDispatchJobsDatabaseTest {
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands,
             mock(DeliveryStatusUpdateService.class), json);
         FleetTripService trips = new FleetTripService(fleet.db, tripPay, bridge, json, mock(DeliveryCodeClient.class), mock(FleetStorage.class),
-            fleet.transactions, mock(RiderPushClient.class));
+            fleet.transactions, riderPush);
         jobs = new FleetDispatchJobs(fleet.db, fleet.transactions, dispatcher, tripPay, trips, alerts, router, commands, assignments,
             handoffs, new DeliveryOutboxRepository(fleet.db, json), json);
+        when(borzo.providerId()).thenReturn("borzo");
+        when(pidge.providerId()).thenReturn("pidge");
+        couriers = new FleetCourierCancel(fleet.db, List.of(borzo, pidge), statusUpdates, alerts);
         FleetDispatchFixtures.policy(fleet.db, "live");
         rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
     }
@@ -466,6 +479,164 @@ class FleetDispatchJobsDatabaseTest {
         assertThat(jobs.cancelledOrders()).as("each trip ends once").isZero();
         assertThat(jobs.courierStages()).isZero();
         verify(alerts, never()).opsAlert(anyString(), anyString(), anyString(), anyMap());
+    }
+
+    /** R16 item 11: order-service's ORDER_CANCELLED, with no refund, ends the trip on the next tick and the rider hears at once. */
+    @Test
+    void orderServicesCancelEndsASearchingAndAnAssignedTripAndTellsTheRider() {
+        UUID assignedOrder = UUID.randomUUID();
+        UUID assigned = acceptedTrip(assignedOrder, "ASSIGNED");
+        UUID searchingOrder = UUID.randomUUID();
+        UUID searching = fleet.trip(searchingOrder);
+        fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, deadline_at) VALUES (?, ?, 1, 'CRAVES_FLEET', "
+            + "now() + INTERVAL '50 seconds')", UUID.randomUUID(), searching);
+        UUID other = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, pay_paise, rate_card_version, pickup_distance_m, "
+            + "drop_distance_m, expires_at) VALUES (?, ?, ?, 5350, '2026-10-v1', 200, 3500, now() + INTERVAL '30 seconds')",
+            UUID.randomUUID(), searching, other);
+        UUID goingOn = fleet.trip(UUID.randomUUID());
+        DeliveryCommandRepository orders = new DeliveryCommandRepository(fleet.db, json);
+        fleet.orderCancelled(assignedOrder);
+        assertThat(orders.recordOrderCancelled(assignedOrder, "AGAIN", Instant.now())).as("recorded once per order").isFalse();
+        fleet.orderCancelled(searchingOrder);
+        assertThat(orders.orderCancelled(searchingOrder)).as("its delivery command books nobody (DeliveryCommandWorker)").isTrue();
+        assertThat(orders.orderCancelled(UUID.randomUUID())).isFalse();
+
+        assertThat(jobs.cancelledOrders()).isEqualTo(2);
+
+        assertThat(fleet.db.queryForMap("SELECT state, cancel_reason, pay_held FROM fleet_schema.trip WHERE id = ?", assigned))
+            .containsEntry("state", "CANCELLED").containsEntry("cancel_reason", FleetTripService.ORDER_CANCELLED)
+            .as("the rider did nothing wrong").containsEntry("pay_held", false);
+        verify(riderPush, timeout(5_000)).tripEnded("fcm-+919800000001", assigned, "ORDER_CANCELLED");
+        assertThat(state(searching)).isEqualTo("CANCELLED");
+        assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.trip_offer WHERE trip_id = ?", String.class, searching))
+            .isEqualTo("WITHDRAWN");
+        assertThat(stages(searching)).containsExactly("CRAVES_FLEET:CLOSED:CANCELLED");
+        assertThat(state(goingOn)).as("an order nobody cancelled").isEqualTo("SEARCHING");
+        assertThat(fleet.db.queryForObject("SELECT reason FROM delivery_schema.order_cancelled WHERE chef_sub_order_id = ?", String.class,
+            assignedOrder)).isEqualTo("CUSTOMER_CANCELLED");
+        assertThat(jobs.cancelledOrders()).as("each trip ends once").isZero();
+        verify(riderPush, never()).tripEnded(anyString(), eq(searching), anyString());
+    }
+
+    /**
+     * R16 item 11: a cancelled order's Borzo courier is cancelled once, with the intent stored before the call, and the job
+     * hears it at once; a Pidge that refuses is tried again a minute later, and after the last try ops is told once to cancel
+     * it by hand. Finished deliveries and orders with only a refund (which never cancels a courier) are left alone. No trip
+     * is needed (dispatch off).
+     */
+    @Test
+    void aCancelledOrdersBorzoIsCancelledOnceAndAPidgeThatRefusesIsTriedAgainThenLeftToOps() {
+        UUID borzoOrder = UUID.randomUUID();
+        UUID borzoJob = courierJob(borzoOrder, "borzo", "B-41", "COURIER_ASSIGNED");
+        UUID pidgeOrder = UUID.randomUUID();
+        courierJob(pidgeOrder, "pidge", "P-42", "SEARCHING");
+        UUID refundedOrder = UUID.randomUUID();
+        courierJob(refundedOrder, "pidge", "P-43", "SEARCHING");
+        UUID deliveredOrder = UUID.randomUUID();
+        courierJob(deliveredOrder, "borzo", "B-44", "DELIVERED");
+        fleet.orderCancelled(borzoOrder);
+        fleet.orderCancelled(pidgeOrder);
+        fleet.refundRequested(refundedOrder);
+        fleet.orderCancelled(deliveredOrder);
+        when(borzo.cancel("B-41")).thenAnswer(call -> {
+            assertThat(fleet.db.queryForMap("SELECT reason, attempts, cancelled_at FROM delivery_schema.courier_cancel "
+                + "WHERE provider_delivery_id = 'B-41'")).as("the intent is stored before Borzo is called")
+                .containsEntry("reason", "ORDER_CANCELLED").containsEntry("attempts", 1).containsEntry("cancelled_at", null);
+            return new ProviderDelivery("borzo", "B-41", "B-41", DeliveryStatus.CANCELLED, "canceled", null, null, null, null, Instant.now());
+        });
+        when(pidge.cancel("P-42")).thenThrow(new IllegalStateException("Pidge API HTTP 409 (order_state)"));
+
+        assertThat(couriers.cancelledOrders()).isEqualTo(1);
+        assertThat(couriers.cancelledOrders()).as("nothing is due again within the minute").isZero();
+
+        verify(borzo, times(1)).cancel("B-41");
+        assertThat(fleet.db.queryForObject("SELECT cancelled_at IS NOT NULL FROM delivery_schema.courier_cancel WHERE provider_delivery_id = "
+            + "'B-41'", Boolean.class)).isTrue();
+        ArgumentCaptor<TrackingWorkItem> job = ArgumentCaptor.forClass(TrackingWorkItem.class);
+        ArgumentCaptor<TrackingSnapshot> applied = ArgumentCaptor.forClass(TrackingSnapshot.class);
+        verify(statusUpdates).processTracking(job.capture(), applied.capture());
+        assertThat(job.getValue().deliveryJobId()).isEqualTo(borzoJob);
+        assertThat(job.getValue().providerDeliveryId()).isEqualTo("B-41");
+        assertThat(applied.getValue().delivery().status()).isEqualTo(DeliveryStatus.CANCELLED);
+        assertThat(fleet.db.queryForMap("SELECT attempts, last_error, cancelled_at FROM delivery_schema.courier_cancel "
+            + "WHERE provider_delivery_id = 'P-42'")).containsEntry("attempts", 1).containsEntry("last_error", "Pidge API HTTP 409 (order_state)")
+            .containsEntry("cancelled_at", null);
+        verify(alerts, never()).opsAlert(anyString(), anyString(), anyString(), anyMap());
+
+        for (int tick = 0; tick < FleetCourierCancel.MAX_ATTEMPTS; tick++) {
+            fleet.db.update("UPDATE delivery_schema.courier_cancel SET last_attempt_at = now() - INTERVAL '61 seconds' "
+                + "WHERE provider_delivery_id = 'P-42'");
+            assertThat(couriers.cancelledOrders()).isZero();
+        }
+
+        verify(pidge, times(FleetCourierCancel.MAX_ATTEMPTS)).cancel("P-42");
+        verify(alerts, times(1)).opsAlert(eq("FLEET_COURIER_CANCEL_FAILED"), contains("by hand"), contains("P-42"), anyMap());
+        assertThat(fleet.db.queryForObject("SELECT alerted_at IS NOT NULL FROM delivery_schema.courier_cancel WHERE provider_delivery_id = "
+            + "'P-42'", Boolean.class)).isTrue();
+        verify(pidge, never()).cancel("P-43");
+        verify(borzo, never()).cancel("B-44");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.courier_cancel", Integer.class)).isEqualTo(2);
+    }
+
+    /** Borzo's switch to Pidge must not book Pidge for an order Craves cancels: a waiting one stops first, one mid-switch is waited for. */
+    @Test
+    void borzosSwitchToPidgeStopsBeforeCravesCancelsAndOneMidSwitchIsLeftToFinish() {
+        UUID waitingOrder = UUID.randomUUID();
+        UUID waitingJob = courierJob(waitingOrder, "borzo", "B-61", "SEARCHING");
+        handoff(waitingJob, "B-61", "WAITING");
+        UUID switchingOrder = UUID.randomUUID();
+        UUID switchingJob = courierJob(switchingOrder, "borzo", "B-62", "SEARCHING");
+        handoff(switchingJob, "B-62", "PROCESSING_BORZO");
+        fleet.orderCancelled(waitingOrder);
+        fleet.orderCancelled(switchingOrder);
+        when(borzo.cancel(anyString())).thenAnswer(call -> new ProviderDelivery("borzo", call.getArgument(0), null, DeliveryStatus.CANCELLED,
+            "canceled", null, null, null, null, Instant.now()));
+
+        assertThat(couriers.cancelledOrders()).isEqualTo(1);
+
+        verify(borzo).cancel("B-61");
+        verify(borzo, never()).cancel("B-62");
+        assertThat(handoffState(waitingJob)).isEqualTo("MANUAL_REVIEW");
+        assertThat(handoffState(switchingJob)).isEqualTo("PROCESSING_BORZO");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'B-62'",
+            Integer.class)).as("no attempt is used while the switch runs").isZero();
+
+        fleet.db.update("UPDATE delivery_schema.delivery_borzo_pidge_handoff SET state = 'RETAINED_BORZO' WHERE delivery_job_id = ?", switchingJob);
+        assertThat(couriers.cancelledOrders()).isEqualTo(1);
+        verify(borzo).cancel("B-62");
+    }
+
+    /** A courier Craves cancelled didn't give up: its stage never goes to the ops queue ("book a courier by hand"). */
+    @Test
+    void aStageWhoseCourierCravesCancelledNeverGoesToTheOpsQueue() {
+        UUID chefSubOrderId = UUID.randomUUID();
+        UUID trip = courierTrip(chefSubOrderId, "BORZO", false);
+        courierJob(chefSubOrderId, "borzo", "B-71", "CANCELLED");
+        fleet.db.update("INSERT INTO delivery_schema.courier_cancel (provider_id, provider_delivery_id, chef_sub_order_id, reason, attempts, "
+            + "last_attempt_at, cancelled_at) VALUES ('borzo', 'B-71', ?, 'OPS_CANCELLED', 1, now(), now())", chefSubOrderId);
+
+        assertThat(jobs.courierStages()).isZero();
+
+        assertThat(stages(trip)).containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "BORZO:OPEN:");
+        verify(alerts, never()).opsAlert(anyString(), anyString(), anyString(), anyMap());
+    }
+
+    private UUID courierJob(UUID chefSubOrderId, String provider, String deliveryId, String status) {
+        UUID job = UUID.randomUUID();
+        fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, provider_delivery_id, status) "
+            + "VALUES (?, ?, ?, ?, ?, ?)", job, chefSubOrderId, UUID.randomUUID(), provider, deliveryId, status);
+        return job;
+    }
+
+    private void handoff(UUID job, String borzoDeliveryId, String state) {
+        fleet.db.update("INSERT INTO delivery_schema.delivery_borzo_pidge_handoff (delivery_job_id, borzo_provider_delivery_id, started_at, "
+            + "due_at, state, next_attempt_at) VALUES (?, ?, now() - INTERVAL '30 seconds', now() + INTERVAL '90 seconds', ?, "
+            + "now() + INTERVAL '90 seconds')", job, borzoDeliveryId, state);
+    }
+
+    private String handoffState(UUID job) {
+        return fleet.db.queryForObject("SELECT state FROM delivery_schema.delivery_borzo_pidge_handoff WHERE delivery_job_id = ?", String.class, job);
     }
 
     private UUID acceptedTrip(UUID chefSubOrderId, String state) {

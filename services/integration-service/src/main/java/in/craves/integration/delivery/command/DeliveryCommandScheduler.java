@@ -3,6 +3,7 @@ package in.craves.integration.delivery.command;
 import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAcceptedOrderData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
+import in.craves.integration.delivery.command.DeliveryCommandModels.OrderCancelledData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.OrderReadyForPickupData;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
@@ -214,6 +215,26 @@ public class DeliveryCommandScheduler {
         }
 
         return new ReadyAccelerationReceipt(command.id(), dispatchAt, true, false);
+    }
+
+    /**
+     * ORDER_CANCELLED (R16 item 11), stored once (delivery_schema.order_cancelled). From then on the order's delivery command
+     * books nobody (DeliveryCommandWorker), no rider can accept it, the fleet's dispatch tick ends its trip and tells the
+     * rider, and a Borzo or Pidge courier already booked is cancelled (FleetCourierCancel). Only the order is required: an
+     * event without one is dead-lettered as invalid.
+     */
+    public void orderCancelled(EventEnvelope<OrderCancelledData> event) {
+        OrderCancelledData data = event == null ? null : event.data();
+        if (event == null || event.eventId() == null || !DeliveryCommandModels.ORDER_CANCELLED.equals(event.eventType())
+            || data == null || data.chefSubOrderId() == null) {
+            throw new DeliveryMessageValidationException("ORDER_CANCELLED needs eventId, eventType and data.chefSubOrderId");
+        }
+        String reason = StringUtils.hasText(data.reason()) ? data.reason().trim() : "UNSPECIFIED";
+        reason = reason.length() <= 200 ? reason : reason.substring(0, 200);
+        Instant cancelledAt = data.cancelledAt() != null ? data.cancelledAt()
+            : event.occurredAt() != null ? event.occurredAt() : clock.instant();
+        boolean first = repository.recordOrderCancelled(data.chefSubOrderId(), reason, cancelledAt);
+        log.info("DELIVERY_ORDER_CANCELLED chefSubOrderId={} reason={} repeat={}", data.chefSubOrderId(), reason, !first);
     }
 
     private static RoutingContext routingContext(EventEnvelope<ChefAcceptedOrderData> event,

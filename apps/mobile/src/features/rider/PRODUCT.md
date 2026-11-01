@@ -82,4 +82,4 @@ These follow Telangana's gig-worker Act (Act 21 of 2026) and set Craves apart fr
 - **Font scale:** screens must fit at Android font scale 1.3 (PLAN.md A11), including in Telugu and Hindi.
 - **Touch targets:** 48 dp minimum, primary actions 56 dp; usable one-handed and with gloves (inferred).
 - **TalkBack:** labels on all controls; countdowns announced at intervals, not every second.
-- **Contrast:** text at 4.5:1 or better, readable in direct sunlight (inferred from the use scene).
+- **Contrast:** text at 4.5:1 or better, readable in direct sunlight (inferred from the use scene). The one exception is the brand red: buttons, links and the active tab use flame red #F62E18 as the Craves app does (the owner's rule), 3.9:1 against white, so red text stays bold or underlined.

@@ -2,9 +2,9 @@
 -- longer delivers. Two new tables, no foreign keys (nothing locks a busy table): older code never reads them.
 SET LOCAL lock_timeout = '5s';
 
--- One row per chef order order-service cancelled (ORDER_CANCELLED, read by DeliveryServiceBusProcessors). This, or a
--- refund for the order, is the cancellation signal (DeliveryCommandRepository.CANCELLED_ORDER): its delivery command books
--- nobody, no rider can accept it, the dispatch tick ends its trip and a courier already booked is cancelled.
+-- One row per chef order order-service cancelled (ORDER_CANCELLED, read by DeliveryServiceBusProcessors): its delivery
+-- command books nobody, no rider can accept it, the dispatch tick ends its trip and a courier already booked is cancelled.
+-- A refund alone also keeps riders off it (DeliveryCommandRepository.CANCELLED_ORDER) but never stops the delivery command.
 CREATE TABLE IF NOT EXISTS delivery_schema.order_cancelled (
     chef_sub_order_id UUID        PRIMARY KEY,
     reason            TEXT        NOT NULL,

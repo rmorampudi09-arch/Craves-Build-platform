@@ -252,7 +252,7 @@ class FleetTripStepsDatabaseTest {
         assertThat(failed.payLines()).extracting(PayLine::component).containsExactly("base", "drop-km", "return-km");
         assertThat(failed.payPaise()).isEqualTo(4000 + 1350 + 3150);
         assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, event -> assertThat(event.held()).isTrue());
-        assertThat(trips.failed(identity, tripId, "WRONG_ADDRESS", null, "f4").step()).isEqualTo("FAILED");
+        assertThat(trips.failed(identity, tripId, "WRONG_ADDRESS", "Gate locked, no flat 2", "f4").step()).isEqualTo("FAILED");
         refused(() -> trips.step(identity, tripId, "arrived-drop", "k9"), 409, "TRIP_NOT_ACTIVE");
     }
 

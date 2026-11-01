@@ -415,7 +415,8 @@ public class FleetOpsService {
         int dropM = locked.get("drop_distance_m") == null ? 0 : ((Number) locked.get("drop_distance_m")).intValue();
         return FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(RoadDistanceClient.straightLineMetres(
             ((Number) rider.get("lat")).doubleValue(), ((Number) rider.get("lng")).doubleValue(),
-            ((Number) locked.get("kitchen_lat")).doubleValue(), ((Number) locked.get("kitchen_lng")).doubleValue()), detour));
+            ((Number) locked.get("kitchen_lat")).doubleValue(), ((Number) locked.get("kitchen_lng")).doubleValue()), detour),
+            dispatcher.raining());
     }
 
     /** The offer ops accepted for the rider: the pay they see is locked like any accepted offer's. */

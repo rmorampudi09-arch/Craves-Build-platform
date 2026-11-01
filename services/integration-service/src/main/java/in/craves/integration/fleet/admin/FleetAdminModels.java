@@ -212,12 +212,13 @@ public final class FleetAdminModels {
                                         int fairBandM, boolean rankByTravelTime) {
     }
 
+    /** rainTopUpPaise: added to each offer while rain mode is on (0: none). */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record RateCardVersion(String version, String status, Instant effectiveFrom, Instant publishedAt, long basePaise, int baseDropM,
                                   long dropPerKmPaise, int pickupFreeM, long pickupPerKmPaise, int waitFreeMinutes,
                                   long waitPerMinutePaise, long slotGuaranteePerHourPaise, long cancellationFeePaise,
                                   long returnPerKmPaise, int unreachableWaitMinutes, Map<String, List<Long>> ranges,
-                                  Map<String, List<String>> summaryOfChanges, String fullTextUrl) {
+                                  Map<String, List<String>> summaryOfChanges, String fullTextUrl, long rainTopUpPaise) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -228,11 +229,24 @@ public final class FleetAdminModels {
     public record PilotKitchen(UUID chefId, String note, Instant addedAt) {
     }
 
-    /** A new rate card. ranges only while no rate card is published; later ones keep the published ranges. */
+    /**
+     * A new rate card. ranges only while no rate card is published; later ones keep the published ranges. rainTopUpPaise
+     * (rain mode; absent: 0) is outside the declared ranges: it only ever adds to pay.
+     */
     public record RateCardDraft(Long basePaise, Integer baseDropM, Long dropPerKmPaise, Integer pickupFreeM, Long pickupPerKmPaise,
                                 Integer waitFreeMinutes, Long waitPerMinutePaise, Long slotGuaranteePerHourPaise, Long cancellationFeePaise,
                                 Long returnPerKmPaise, Integer unreachableWaitMinutes, Instant effectiveFrom,
-                                Map<String, List<String>> summaryOfChanges, String fullTextUrl, Map<String, List<Long>> ranges) {
+                                Map<String, List<String>> summaryOfChanges, String fullTextUrl, Map<String, List<Long>> ranges,
+                                Long rainTopUpPaise) {
+        /** The console before rain mode: no rain top-up. */
+        public RateCardDraft(Long basePaise, Integer baseDropM, Long dropPerKmPaise, Integer pickupFreeM, Long pickupPerKmPaise,
+                             Integer waitFreeMinutes, Long waitPerMinutePaise, Long slotGuaranteePerHourPaise, Long cancellationFeePaise,
+                             Long returnPerKmPaise, Integer unreachableWaitMinutes, Instant effectiveFrom,
+                             Map<String, List<String>> summaryOfChanges, String fullTextUrl, Map<String, List<Long>> ranges) {
+            this(basePaise, baseDropM, dropPerKmPaise, pickupFreeM, pickupPerKmPaise, waitFreeMinutes, waitPerMinutePaise,
+                slotGuaranteePerHourPaise, cancellationFeePaise, returnPerKmPaise, unreachableWaitMinutes, effectiveFrom, summaryOfChanges,
+                fullTextUrl, ranges, null);
+        }
     }
 
     /**
@@ -262,5 +276,17 @@ public final class FleetAdminModels {
     }
 
     public record PilotNote(String note) {
+    }
+
+    /**
+     * Rain mode (R16 19): level is the ops switch (off, on or severe), set by setByName at setAt (null before anyone set it);
+     * inForce what dispatch runs on now, which is on also while the automatic switch (auto, CRAVES_FLEET_RAIN_AUTO) finds rides
+     * running slow; rainTopUpPaise the rate card in force's top-up on each offer while it is on (0: none).
+     */
+    public record RainMode(String level, String inForce, boolean auto, String setByName, Instant setAt, long rainTopUpPaise) {
+    }
+
+    /** off, on or severe. */
+    public record RainModeInput(String level) {
     }
 }

@@ -149,6 +149,33 @@ class DeliveryCommandSchedulerTest {
         verify(repository, times(4)).kitchenReadyLateness(order);
     }
 
+    @Test
+    void inRainModeTheSearchStartsFiveMinutesEarlier() {
+        DeliveryCommandRepository repository = mock(DeliveryCommandRepository.class);
+        DeliveryServiceBusPublisher publisher = mock(DeliveryServiceBusPublisher.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setLeadTimeMinutes(10);
+        Instant now = Instant.parse("2026-07-14T12:00:00Z");
+        DeliveryCommandScheduler scheduler = new DeliveryCommandScheduler(
+            repository, publisher, properties, Clock.fixed(now, ZoneOffset.UTC)
+        );
+        when(repository.createOrFind(any())).thenAnswer(invocation -> commandRecord(invocation.getArgument(0), null));
+        when(publisher.schedule(any())).thenReturn(
+            new DeliveryServiceBusPublisher.ScheduledMessage(7003L, "delivery-command:test")
+        );
+        when(repository.recordScheduled(any(), anyLong(), any())).thenReturn(true);
+        FleetStage fleet = mock(FleetStage.class);
+        scheduler.setFleetStage(fleet);
+
+        when(fleet.dispatchEarlier()).thenReturn(Duration.ofMinutes(5));
+        assertThat(scheduler.schedule(event(now.plusSeconds(30 * 60))).dispatchAt()).as("ready, less 10, less 5 in rain")
+            .isEqualTo(now.plusSeconds(15 * 60));
+        assertThat(scheduler.schedule(event(now.plusSeconds(12 * 60))).dispatchAt()).as("never before the next few seconds")
+            .isEqualTo(now.plusSeconds(5));
+        when(fleet.dispatchEarlier()).thenReturn(Duration.ZERO);
+        assertThat(scheduler.schedule(event(now.plusSeconds(30 * 60))).dispatchAt()).as("no rain").isEqualTo(now.plusSeconds(20 * 60));
+    }
+
     private static EventEnvelope<ChefAcceptedOrderData> event(Instant readyAt) {
         UUID eventId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();

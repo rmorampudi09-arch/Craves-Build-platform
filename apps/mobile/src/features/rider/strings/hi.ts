@@ -537,11 +537,12 @@ export const hi: RiderStrings = {
     loadFailed: 'आपकी ट्रिप लोड नहीं हो सकी। इंटरनेट देखकर फिर से कोशिश करें।',
   },
   pay: {
-    offer: {base: 'बेस', 'drop-km': 'ड्रॉप दूरी', 'pickup-km': 'किचन तक का सफ़र'} as Record<string, string>,
+    offer: {base: 'बेस', 'drop-km': 'ड्रॉप दूरी', 'pickup-km': 'किचन तक का सफ़र', rain: 'बारिश का अतिरिक्त'} as Record<string, string>,
     final: {
       base: 'बेस पे',
       'drop-km': 'ड्रॉप दूरी',
       'pickup-km': 'किचन तक का सफ़र',
+      rain: 'बारिश का अतिरिक्त पे',
       waiting: 'किचन पर इंतज़ार',
       cancellation: 'कैंसिलेशन फ़ीस',
       'return-km': 'किचन वापसी',

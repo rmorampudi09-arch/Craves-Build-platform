@@ -79,6 +79,10 @@ craves:
     eta:
       mode: ${CRAVES_FLEET_ETA_MODE:off}
       model-version: ${CRAVES_FLEET_ETA_MODEL_VERSION:}
+    # Rain mode (R16 19, docs/riders/DISPATCH.md "Rain mode"): ops switch it from the console. With this on, it also comes on
+    # by itself while the last 30 minutes' rides to the door run 1.3 times the travel-time model's minutes (eta.mode live
+    # only). Riders must have had 14 days' notice before its first use, automatic or not.
+    rain-auto: ${CRAVES_FLEET_RAIN_AUTO:false}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}

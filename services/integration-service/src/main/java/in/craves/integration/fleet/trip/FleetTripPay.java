@@ -39,8 +39,11 @@ public class FleetTripPay {
 
     /** The final lines; a second call for the same trip changes nothing and publishes nothing. */
     public List<PayLine> finalizePay(UUID tripId, Ending ending, boolean held, String holdReason) {
+        // The rain top-up is locked on the accepted offer (rain mode, FleetRain): the rate card can't say whether it rained.
         Map<String, Object> trip = jdbc.queryForMap("SELECT rider_id, rate_card_version, drop_distance_m, pickup_distance_m, "
-            + "arrived_kitchen_at, chef_ready_at, picked_up_at, finished_at FROM fleet_schema.trip WHERE id = ?", tripId);
+            + "arrived_kitchen_at, chef_ready_at, picked_up_at, finished_at, (SELECT COALESCE(SUM((l ->> 'amountPaise')::bigint), 0) "
+            + "FROM fleet_schema.trip_offer o, jsonb_array_elements(o.pay_lines) l WHERE o.trip_id = t.id AND o.state = 'ACCEPTED' "
+            + "AND l ->> 'component' = 'rain') AS rain_paise FROM fleet_schema.trip t WHERE t.id = ?", tripId);
         String version = (String) trip.get("rate_card_version");
         RateCard card = policies.rateCard(version)
             .orElseThrow(() -> new IllegalStateException("Trip " + tripId + " has no locked rate card"));
@@ -49,7 +52,7 @@ public class FleetTripPay {
             : instant(trip.get("finished_at")) != null ? instant(trip.get("finished_at")) : now;
         long waited = FleetPay.waitSeconds(instant(trip.get("arrived_kitchen_at")), instant(trip.get("chef_ready_at")), handover);
         List<PayLine> lines = FleetPay.finalLines(card, ending, number(trip.get("drop_distance_m")), number(trip.get("pickup_distance_m")),
-            waited);
+            waited, ((Number) trip.get("rain_paise")).longValue());
         int stored = jdbc.update("UPDATE fleet_schema.trip SET final_pay_lines = CAST(? AS jsonb), final_pay_paise = ?, pay_held = ?, "
             + "hold_reason = ?, pay_finalized_at = ? WHERE id = ? AND pay_finalized_at IS NULL", write(lines), FleetPay.total(lines), held,
             held ? holdReason : null, Timestamp.from(now), tripId);

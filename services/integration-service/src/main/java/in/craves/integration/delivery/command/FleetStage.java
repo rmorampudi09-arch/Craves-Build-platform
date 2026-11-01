@@ -1,6 +1,7 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -28,5 +29,10 @@ public interface FleetStage {
 
     /** The chef handed the food to the order's rider (P2-05): the watchdog never hands that trip back after it. */
     default void chefHandedOver(UUID chefSubOrderId, Instant handedOverAt) {
+    }
+
+    /** How much earlier than usual the search for a courier starts now: 5 minutes while rain mode is on (R16 19), else none. */
+    default Duration dispatchEarlier() {
+        return Duration.ZERO;
     }
 }

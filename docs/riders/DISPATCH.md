@@ -22,7 +22,7 @@ Changing any of these changes riders' terms. That needs the lawyer, and 14 days'
 
 ## 2. How an order is offered
 
-The rules are built in (decided 1 Nov 2026, so riders get orders the way Swiggy and Zomato hand them out, with no settings to choose): one rider at a time, 30 s to accept, up to 3 rounds, fair turns within 1.5 km, within 5 km, then Borzo after at most 120 s (`FleetPolicyStore.BUILT_IN_VALUES`, `DispatchRules.BUILT_IN`). The console's Dispatch page only switches the mode (off, shadow, live) and records each version, because riders' terms change only with notice (§7).
+The rules are built in (decided 1 Nov 2026, so riders get orders the way Swiggy and Zomato hand them out, with no settings to choose): one rider at a time, 30 s to accept, up to 3 rounds, fair turns within 1.5 km, within 5 km, then Borzo after at most 120 s (`FleetPolicyStore.BUILT_IN_VALUES`, `DispatchRules.BUILT_IN`). The console's Dispatch page only switches the mode (off, shadow, live) and records each version, because riders' terms change only with notice (§7). Rain mode changes some of them while it is on ("Rain mode" below).
 
 ### Who can hear of an order
 
@@ -90,6 +90,26 @@ A new round starts soon after the last one is decided. While a policy runs round
 - **A round is never withdrawn by mistake.** The stage closes only under a lock on its row, the same lock a round is sent under. So a round another worker has just sent never disappears from a rider's phone while it rings.
 - **If the rider chosen first becomes busy** a moment before their offer goes out, the stage stays open, and the next check offers the order to the riders free then.
 - **The cost guard** works per rider, as before: a rider is skipped if their pay plus the overhead would cost more than the next courier plus the premium.
+
+### Rain mode
+
+Built switched off (research R16, item 19; due before the June 2027 monsoon). In heavy rain, rides take longer, riders need longer to see and answer an offer, and couriers slow down too. Zomato and Swiggy charge customers a rain fee that funds rider pay.
+
+**While it is on** (`FleetRain`):
+- **Time to accept** is at least 45 s, and an order runs **at most 2 rounds**. Two rounds of 45 s still fit the 120 s before Borzo (`FleetRain.inRain`, applied in `FleetPolicyStore.currentDispatchPolicy`).
+- **The search starts 5 minutes earlier**: 15 minutes before the food is due instead of 10 (`DeliveryCommandScheduler`), for Borzo and Pidge too.
+- **Each offer adds the rain top-up** of the rate card in force, as a line of its own ("₹20 rain top-up"), inside the locked total. The trip pays it with full pay (delivered, customer unreachable, failed after pickup), never on a cancellation before pickup. A card without one (0, the default) adds no line.
+- **Severe**: all of that, and new orders skip riders and go straight to Borzo or Pidge. Orders riders are deciding on, or carrying, carry on.
+- **Unchanged**: who hears first, fair turns, the radius and the cost guard. Craves never stacks orders from two kitchens, so there is no stacking to switch off.
+
+Riders' Terms keep showing the usual rules. The top-up is part of their pay, so it comes on a rate card (`rain_top_up_paise`; the console's New draft asks for it, ₹0 to ₹100), and Terms show it as its own line.
+
+**Switching it.**
+- **Ops**: console → Rider pilot setup → Rain mode: off, on or severe (`PUT /admin/fleet/rain-mode`). Each change is audited (`RAIN_MODE_SET`) and logged (`FLEET_RAIN_MODE level=… by=…`). The server that takes it uses it at once; the others read it within 30 s (each reads it at most every 30 s, not once per rider). Offers already ringing keep their time.
+- **Automatic** (`CRAVES_FLEET_RAIN_AUTO`, off by default): while the switch is off, rain mode comes on by itself when at least 10 rides from the kitchen to the door ended in the last 30 minutes and the middle one took 1.3 times the travel-time model's prediction, and goes off when they no longer do. The middle ride, not the average, so one rider's long stop can't switch it on. It needs the model live (`CRAVES_FLEET_ETA_MODE=live`), whose minutes are the yardstick, and it never chooses severe. Logged as `FLEET_RAIN_MODE level=on by=auto`. To stop it, set the variable to false.
+- **A weather feed**: no vendor is chosen yet (the owner's decision). One would write the same switch (`fleet_schema.rain_mode`); nothing else needs to change.
+
+**Notice first.** Rain mode changes how orders are offered, so riders must have been told 14 days before its first use, automatic or not (Telangana s.13(2) [1]). Serve the notice with the rate card that adds the top-up: its summary of changes says what rain mode does, and riders read it under Terms from the day it is published. The server can't know when riders were told; the console asks before every switch on.
 
 ### What the offer card tells the rider
 
@@ -266,6 +286,7 @@ New York's regulator publishes figures like these every quarter [29]. No Indian 
 | Two orders per trip | `batching_candidates` 15% or more while `rider_busy_share` is over 60% (blueprint C7) | Same kitchen or a close drop, only when the cooking time leaves room. |
 | Matching all open orders together | **Built in Phase 5, switched off** (`CRAVES_FLEET_ENGINE_JOINT`, with the fleet engine live). Turn it on when `jointChanged` (orders whose riders sharing out together would change, against first come; counted in shadow and live) is 5% or more of peak orders for two weeks; 14 days' notice to riders first. | The fleet engine ranks the orders waiting in one map block together, in milliseconds: every order gets one rider before any gets a second, as many orders as possible get a rider, then riders are shared out in fair-turn order (Hungarian method; greedy beyond a size limit or under load). Offers still go to one rider at a time. The industry has moved here [19][23][25]. FoodMatch cut extra delivery time by 30% against greedy dispatch [13]. `SCALE.md`, "Matching". |
 | Ranking by predicted travel time | **Built in Phase 5, switched off** (`CRAVES_FLEET_ETA_MODE`, and the dispatch policy's "rank by travel time"). Start once 500 legs are delivered and a trained version beats today's rule: a week in shadow, then live (minutes shown); rank by it once a version's ranking passes, with 14 days' notice. | The travel-time model (§2): the offer's minutes, the chef's arrival time and, by the policy rule, who hears first come from a model trained on Craves's own trips, served in Java by both integration-service and the fleet engine. |
+| Rain mode | **Built, switched off** (§2, "Rain mode"). Serve the notice before the June 2027 monsoon, then switch it on in heavy rain; the automatic switch once the travel-time model is live. | At least 45 s to accept, at most 2 rounds, the search 5 minutes earlier and the rate card's rain top-up on each offer; severe sends new orders straight to Borzo or Pidge. |
 | Suggested limits by vehicle | Bicycle riders join | Suggest 3 km for a bicycle on the Profile chips. Never impose it. |
 | Weekly payslip | Riders or the lawyer ask | A PDF per week in the rider's language, from the earnings already shown. |
 | Many riders | **Built in Phase 5, switched off** (`CRAVES_FLEET_ENGINE_MODE`): shadow first, live once shadow agrees (`GO-LIVE.md` §9) | The fleet engine: rider state in Redis, one GEO set per 0.05° block, events on Redis Streams in 16 partitions, one matching loop per block, every solve time-limited with a greedy fallback, replicas sharing the partitions. Event Hubs (Kafka) replaces the streams past the limits in `SCALE.md`. |
@@ -294,7 +315,7 @@ Known shortcuts in today's code, each marked `shortcut:` in the code:
 | Requirement | Source | In Craves |
 |---|---|---|
 | Explain the system in the rider's language | Telangana s.12(1) [1]; EU PWD Art 9 [2]; ILO C193 Art 13 [3] | Terms → "How you get orders"; this file |
-| 14 days' notice of changed terms | Telangana s.13(2) [1] | Rate cards, the detour and the offer rules (code and trigger) |
+| 14 days' notice of changed terms | Telangana s.13(2) [1] | Rate cards, the detour and the offer rules (code and trigger); rain mode before its first use (served with its rate card; the console asks) |
 | Declining carries no consequence | Telangana s.13(3)(b) [1] | Nothing reads declines |
 | Explain each decision | EU PWD Art 11 [2]; C-203/22 [9] | `trip_offer.reason`, the offer line, the data copy |
 | A person decides suspensions and terminations | Telangana s.14 [1]; EU PWD Art 10(5) [2] | Due process |

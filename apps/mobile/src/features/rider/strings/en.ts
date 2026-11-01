@@ -531,11 +531,12 @@ export const en = {
   },
   // The server's pay lines by component (FleetPay); a line the app doesn't know keeps the server's words.
   pay: {
-    offer: {base: 'base', 'drop-km': 'drop distance', 'pickup-km': 'ride to the kitchen'} as Record<string, string>,
+    offer: {base: 'base', 'drop-km': 'drop distance', 'pickup-km': 'ride to the kitchen', rain: 'rain top-up'} as Record<string, string>,
     final: {
       base: 'Base pay',
       'drop-km': 'Drop distance',
       'pickup-km': 'Ride to the kitchen',
+      rain: 'Rain top-up',
       waiting: 'Waiting at the kitchen',
       cancellation: 'Cancellation fee',
       'return-km': 'Return to the kitchen',

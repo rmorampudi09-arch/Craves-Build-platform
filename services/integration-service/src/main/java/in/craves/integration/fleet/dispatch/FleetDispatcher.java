@@ -11,6 +11,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
+import in.craves.integration.fleet.FleetRain;
 import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.engine.FleetEngineClient;
 import in.craves.integration.fleet.engine.FleetEngineFeed;
@@ -120,6 +121,8 @@ public class FleetDispatcher implements FleetStage {
     /** Phase 5, the travel-time model (craves.fleet.eta.*): quotes predicted minutes while live, and ranks where the policy says. */
     private FleetEta eta;
     private final AtomicLong notRankingAlertedAt = new AtomicLong();
+    /** Rain mode (R16 19): the rain top-up on offers, the earlier search, and severe weather's straight to Borzo or Pidge. */
+    private FleetRain rain;
 
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json) {
@@ -160,6 +163,22 @@ public class FleetDispatcher implements FleetStage {
         this.eta = eta;
     }
 
+    @Autowired(required = false)
+    public void setRain(FleetRain rain) {
+        this.rain = rain;
+    }
+
+    /** Rain mode is on: offers, and trips ops give to a rider, carry the rate card's rain top-up. */
+    boolean raining() {
+        return rain != null && rain.raining();
+    }
+
+    /** Rain mode: riders and couriers ride slower, so the search starts 5 minutes earlier. */
+    @Override
+    public Duration dispatchEarlier() {
+        return raining() ? FleetRain.EARLIER : Duration.ZERO;
+    }
+
     @Override
     public Optional<UUID> run(DeliveryCommandMessage command, Supplier<OptionalLong> courierQuotePaise, boolean borzoNext) {
         Optional<TripState> existing = trip(command.chefSubOrderId());
@@ -169,6 +188,11 @@ public class FleetDispatcher implements FleetStage {
         }
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
         if (policy == null || "off".equals(policy.mode())) {
+            return Optional.empty();
+        }
+        if (rain != null && rain.severe()) {
+            // Severe weather: new orders go straight to Borzo or Pidge; orders riders already hold carry on above.
+            LOGGER.info("FLEET_SKIPPED chefSubOrderId={} reason=RAIN_SEVERE", command.chefSubOrderId());
             return Optional.empty();
         }
         Plan plan = plan(command, policy, courierQuotePaise);
@@ -580,13 +604,15 @@ public class FleetDispatcher implements FleetStage {
                           double kitchenLat, double kitchenLng, double dropLat, double dropLng) {
         EtaModel model = eta == null ? null : eta.shown();
         boolean soonest = rankingModel(policy) != null; // ranked by travel time: the offer says "soonest", not "nearest"
+        boolean raining = raining();
         long now = System.currentTimeMillis();
         List<Planned> offers = new ArrayList<>();
         String outcome = "NO_RIDERS";
         int band = (int) riders.stream().filter(rider -> rider.standing() != null).count();
         for (int place = 1; place <= riders.size() && offers.size() < policy.offersAtOnce(); place++) {
             Candidate rider = riders.get(place - 1);
-            PayQuote quote = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(rider.straightLineM(), policy.pickupDetourPercent()));
+            PayQuote quote = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(rider.straightLineM(), policy.pickupDetourPercent()),
+                raining);
             if (!FleetPay.costGuardPasses(quote.totalPaise(), policy.perOrderOverheadPaise(), courier, policy.costGuardPremiumPaise())) {
                 outcome = "COST_GUARD";
                 continue;

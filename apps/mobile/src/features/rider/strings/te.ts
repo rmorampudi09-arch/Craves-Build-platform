@@ -541,11 +541,12 @@ export const te: RiderStrings = {
     loadFailed: 'మీ ట్రిప్ లోడ్ కాలేదు. ఇంటర్నెట్ చూసి మళ్లీ ప్రయత్నించండి.',
   },
   pay: {
-    offer: {base: 'బేస్', 'drop-km': 'డ్రాప్ దూరం', 'pickup-km': 'కిచెన్‌కి ప్రయాణం'} as Record<string, string>,
+    offer: {base: 'బేస్', 'drop-km': 'డ్రాప్ దూరం', 'pickup-km': 'కిచెన్‌కి ప్రయాణం', rain: 'వర్షం అదనం'} as Record<string, string>,
     final: {
       base: 'బేస్ చెల్లింపు',
       'drop-km': 'డ్రాప్ దూరం',
       'pickup-km': 'కిచెన్‌కి ప్రయాణం',
+      rain: 'వర్షం అదనపు చెల్లింపు',
       waiting: 'కిచెన్ దగ్గర ఎదురుచూపు',
       cancellation: 'రద్దు ఫీజు',
       'return-km': 'కిచెన్‌కి తిరుగు ప్రయాణం',

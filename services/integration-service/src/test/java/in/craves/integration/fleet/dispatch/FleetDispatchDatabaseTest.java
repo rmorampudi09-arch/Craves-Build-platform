@@ -23,7 +23,9 @@ import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryPro
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
+import in.craves.integration.fleet.FleetRain;
 import in.craves.integration.fleet.FleetTestMode;
+import in.craves.integration.fleet.eta.FleetEta;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.trip.FleetTripModels;
@@ -676,6 +678,57 @@ class FleetDispatchDatabaseTest {
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    /** Rain mode (R16 19) set to level, with a dispatcher and policy store that read it. */
+    private FleetDispatcher inRain(String level) {
+        FleetRain rain = new FleetRain(fleet.db, new FleetEta(fleet.db, "off", ""), false);
+        rain.set(level, UUID.randomUUID(), "Admin +91 98xxxxx210");
+        FleetPolicyStore policies = new FleetPolicyStore(fleet.db, json);
+        policies.setRain(rain);
+        FleetDispatcher rainy = new FleetDispatcher(fleet.db, fleet.transactions, policies,
+            new FleetTestMode(fleet.db, FleetDatabase.properties(true)), roads, push, json);
+        rainy.setRain(rain);
+        return rainy;
+    }
+
+    @Test
+    void inRainOffersAddTheRateCardsTopUpGive45SecondsAndTheSearchStartsEarlier() throws Exception {
+        // The top-up goes on the card before it is published (published cards never change).
+        fleet.db.update("UPDATE fleet_schema.rate_card SET rain_top_up_paise = 2000 WHERE version = '2026-10-v1'");
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatcher rainy = inRain("on");
+        assertThat(rainy.dispatchEarlier()).isEqualTo(java.time.Duration.ofMinutes(5));
+        assertThat(dispatcher.dispatchEarlier()).as("without rain mode").isZero();
+
+        assertThatThrownBy(() -> rainy.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        Map<String, Object> offer = fleet.db.queryForMap("SELECT pay_paise, pay_lines::text AS lines, "
+            + "round(EXTRACT(EPOCH FROM expires_at - offered_at)) AS seconds FROM fleet_schema.trip_offer WHERE rider_id = ?", nearest);
+        assertThat(offer.get("seconds")).as("the policy's 40 s, at least 45 in rain").isEqualTo(new java.math.BigDecimal("45"));
+        // 4000 base + 1350 drop km (the pickup is inside the free km) + the card's 2000 rain top-up, all locked.
+        assertThat(offer.get("pay_paise")).isEqualTo(7350L);
+        JsonNode lines = json.readTree((String) offer.get("lines"));
+        assertThat(lines.findValuesAsText("component")).containsExactly("base", "drop-km", "rain");
+        assertThat(lines.get(2).get("label").asText()).isEqualTo("rain top-up");
+    }
+
+    @Test
+    void severeRainSendsNewOrdersStraightToBorzoOrPidgeAndKeepsTheOffersRidersHave() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatcher severe = inRain("severe");
+        assertThat(severe.run(command, () -> OptionalLong.of(9000), true)).as("a free rider, but severe weather").isEmpty();
+        assertThat(count("fleet_schema.trip")).isZero();
+        verifyNoInteractions(push);
+
+        // An order riders were already offered before it turned severe (this dispatcher reads no rain mode) carries on as it was.
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThatThrownBy(() -> inRain("severe").run(command, () -> OptionalLong.of(9000), true))
+            .as("riders are still deciding").isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).hasSize(1);
     }
 
     private int count(String table) {

@@ -78,12 +78,22 @@ public class DeliveryCommandScheduler {
         this.clock = clock;
     }
 
+    /** Present with CRAVES_FLEET_ENABLED: rain mode starts the search earlier (FleetStage.dispatchEarlier). */
+    private FleetStage fleetStage;
+
+    @Autowired(required = false)
+    public void setFleetStage(FleetStage fleetStage) {
+        this.fleetStage = fleetStage;
+    }
+
     public ScheduleReceipt schedule(EventEnvelope<ChefAcceptedOrderData> event) {
         validate(event);
         ChefAcceptedOrderData data = event.data();
         RoutingContext routingContext = routingContext(event, data);
         Instant dispatchAt = data.readyAt().plus(readyCorrection(data.chefSubOrderId()))
             .minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
+        // Rain mode (R16 19): riders and couriers ride slower, so the search starts 5 minutes earlier.
+        dispatchAt = dispatchAt.minus(fleetStage == null ? Duration.ZERO : fleetStage.dispatchEarlier());
         Instant minimumDispatchAt = clock.instant().plusSeconds(5);
         if (dispatchAt.isBefore(minimumDispatchAt)) {
             dispatchAt = minimumDispatchAt;

@@ -2,6 +2,7 @@ package in.craves.integration.fleet.admin;
 
 import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotNote;
+import in.craves.integration.fleet.admin.FleetAdminModels.RainModeInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.RateCardDraft;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.UUID;
@@ -19,8 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The pilot zone from the console (admin-fleet-v1 setup, rate cards, dispatch policies and pilot paths): reads for
- * support and audit too, changes for operations.
+ * The pilot zone from the console (admin-fleet-v1 setup, rate cards, dispatch policies, rain mode and pilot paths): reads
+ * for support and audit too, changes for operations.
  */
 @RestController
 @RequestMapping("/api/v1/admin/fleet")
@@ -58,6 +59,18 @@ public class FleetSetupController {
     public ResponseEntity<Object> setDispatchPolicy(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
                                                     @RequestBody DispatchPolicyInput body) {
         return json(201, setup.setDispatchPolicy(FleetAdminController.admin(principal, OPERATORS), key, body));
+    }
+
+    @GetMapping("/rain-mode")
+    public ResponseEntity<Object> getRainMode(@AuthenticationPrincipal CravesPrincipal principal) {
+        FleetAdminController.admin(principal, READERS);
+        return json(200, setup.rainMode());
+    }
+
+    @PutMapping("/rain-mode")
+    public ResponseEntity<Object> setRainMode(@AuthenticationPrincipal CravesPrincipal principal, @RequestHeader(KEY) UUID key,
+                                              @RequestBody RainModeInput body) {
+        return json(200, setup.setRainMode(FleetAdminController.admin(principal, OPERATORS), key, body));
     }
 
     @PutMapping("/pilot/riders/{riderId}")

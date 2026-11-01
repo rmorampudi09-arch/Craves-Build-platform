@@ -37,6 +37,17 @@ class FleetRiderServiceTest {
         assertThat(terms.version()).isEqualTo("2026-10-v1");
     }
 
+    /** Rain mode (R16 19): the card's rain top-up is part of the pay terms, shown only when the card has one. */
+    @Test
+    void aRainTopUpIsATermsLineOnlyWhenTheCardHasOne() {
+        RateCard rainy = new RateCard("2026-12-v2", false, DRAFT.effectiveFrom(), 4000, 2000, 900, 1000, 900, 8, 150, 8000, Map.of(),
+            DRAFT.summaryOfChanges(), null, 2000, 900, 10, 2000);
+        List<LabelValue> lines = FleetRiderService.terms(rainy, 130, null, "en", "").rateCardLines();
+        assertThat(lines.subList(lines.size() - 2, lines.size())).containsExactly(
+            new LabelValue("Rain top-up, each order offered while rain mode is on", "₹20"), new LabelValue("Declining or missing an offer", "Free"));
+        assertThat(FleetRiderService.terms(DRAFT, 130, null, "en", "").rateCardLines()).noneMatch(line -> line.label().startsWith("Rain"));
+    }
+
     @Test
     void theNextChangeShowsTheLinesRidersWillHaveThenInTheirLanguage() {
         RateCard next = new RateCard("2026-12-v2", false, Instant.parse("2026-12-01T18:30:00Z"), 4500, 2000, 900, 1000, 900, 8, 150, 8000,

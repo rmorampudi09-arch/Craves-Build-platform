@@ -11,6 +11,7 @@ import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
+import in.craves.integration.fleet.FleetRain;
 import in.craves.integration.fleet.FleetRoleClient;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.FleetTestMode;
@@ -21,7 +22,10 @@ import in.craves.integration.fleet.admin.FleetAdminModels.FleetSetup;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotKitchen;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotNote;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotRider;
+import in.craves.integration.fleet.admin.FleetAdminModels.RainMode;
+import in.craves.integration.fleet.admin.FleetAdminModels.RainModeInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.RateCardDraft;
+import in.craves.integration.fleet.eta.FleetEta;
 import in.craves.integration.fleet.admin.FleetAdminModels.RateCardVersion;
 import in.craves.integration.payout.bank.BankDataCipher;
 import java.time.Instant;
@@ -339,6 +343,38 @@ class FleetSetupDatabaseTest {
         assertThat(audited("PILOT_RIDER_REMOVED")).isEqualTo(3);
         assertThat(audited("PILOT_KITCHEN_ADDED")).isEqualTo(2);
         assertThat(audited("PILOT_KITCHEN_REMOVED")).isEqualTo(1);
+    }
+
+    /** Rain mode (R16 19): switched from the console and audited, shown with the rain top-up of the rate card in force. */
+    @Test
+    void rainModeIsSwitchedAuditedAndShownWithTheTopUpOfTheCardInForce() {
+        FleetRain rain = new FleetRain(fleet.db, new FleetEta(fleet.db, "off", ""), false);
+        setup.setRain(rain);
+        assertThat(tx(setup::rainMode)).isEqualTo(new RainMode("off", "off", false, null, null, 0));
+
+        RateCardDraft rainy = new RateCardDraft(4000L, 2000, 900L, 1000, 900L, 8, 150L, 8000L, 2000L, 900L, 10, Instant.now(),
+            Map.of("en", List.of("₹20 more on each order offered while rain mode is on.")), null, ranges(), 2000L);
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), rainy));
+        assertThat(card.rainTopUpPaise()).isEqualTo(2000);
+        assertThat(card.ranges()).as("the top-up has no declared range").hasSize(11).doesNotContainKey("rainTopUpPaise");
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+
+        UUID key = UUID.randomUUID();
+        RainMode on = (RainMode) tx(() -> setup.setRainMode(ops, key, new RainModeInput("on")));
+        assertThat(on.level()).isEqualTo("on");
+        assertThat(on.inForce()).isEqualTo("on");
+        assertThat(on.setByName()).isEqualTo("Admin +91 98xxxxx210");
+        assertThat(on.setAt()).isNotNull();
+        assertThat(on.rainTopUpPaise()).as("the card in force").isEqualTo(2000);
+        assertThat(rain.raining()).as("this server at once").isTrue();
+        tx(() -> setup.setRainMode(ops, key, new RainModeInput("on")));
+        assertThat(audited("RAIN_MODE_SET")).as("a repeat with its key changes nothing").isEqualTo(1);
+        refused(() -> setup.setRainMode(ops, key, new RainModeInput("off")), 409, "IDEMPOTENCY_KEY_REUSED");
+        refused(() -> setup.setRainMode(ops, UUID.randomUUID(), new RainModeInput("storm")), 400, "VALIDATION_FAILED");
+        refused(() -> setup.setRainMode(ops, UUID.randomUUID(), null), 400, "VALIDATION_FAILED");
+        refused(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), new RateCardDraft(4000L, 2000, 900L, 1000, 900L, 8, 150L, 8000L,
+            2000L, 900L, 10, Instant.now().plus(15, ChronoUnit.DAYS), Map.of("en", List.of("Too much.")), null, null, 10_001L)),
+            400, "VALIDATION_FAILED");
     }
 
     private DispatchPolicyVersion version(String version) {

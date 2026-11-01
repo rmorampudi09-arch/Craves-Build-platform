@@ -1142,6 +1142,43 @@ paths:
             are offered changes and no effectiveFrom was sent) or RATE_CARD_REQUIRED (live needs a published rate card in
             force).
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  /api/v1/admin/fleet/rain-mode:
+    get:
+      operationId: getRainMode
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN, SUPPORT_ADMIN, AUDIT_ADMIN]
+      description: >-
+        Rain mode (R16 19; docs/riders/DISPATCH.md, "Rain mode"): the ops switch, who set it and when, whether the automatic
+        switch is on, the level dispatch runs on now, and the rain top-up of the rate card in force.
+      responses:
+        '200':
+          description: Rain mode.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RainMode' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: setRainMode
+      x-roles: [PLATFORM_ADMIN, OPERATIONS_ADMIN]
+      description: >-
+        Sets the ops switch: off, on or severe. Dispatch on this server uses it at once, on the others within 30 s; orders
+        riders are already deciding on keep their offers. It changes how orders are offered, so riders must have been told
+        14 days before its first use (Telangana Act 21 of 2026, s.13(2)); the server can't check that. Audited
+        (RAIN_MODE_SET) and logged (FLEET_RAIN_MODE).
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RainModeInput' }
+      responses:
+        '200':
+          description: Rain mode after the change.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RainMode' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: "IDEMPOTENCY_KEY_REUSED.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/fleet/pilot/riders/{riderId}:
     put:
       operationId: addPilotRider
@@ -1843,6 +1880,7 @@ components:
             summaryOfChanges: { $ref: '#/components/schemas/SummaryOfChanges' }
             fullTextUrl: { type: string, maxLength: 400, pattern: '^https://', description: The full written terms. }
             ranges: { $ref: '#/components/schemas/Ranges' }
+            rainTopUpPaise: { type: integer, format: int64, minimum: 0, maximum: 10000, description: "Rain mode: added to each order offered while it is on; left out, 0 (none). Outside the declared ranges, as it only adds to pay. Riders see it in their terms." }
     RateCard:
       allOf:
         - { $ref: '#/components/schemas/RateCardValues' }
@@ -1856,6 +1894,23 @@ components:
             ranges: { $ref: '#/components/schemas/Ranges' }
             summaryOfChanges: { $ref: '#/components/schemas/SummaryOfChanges' }
             fullTextUrl: { type: string, maxLength: 400 }
+            rainTopUpPaise: { type: integer, format: int64, minimum: 0, description: "Rain mode: added to each order offered while it is on; 0 for none." }
+    RainLevel: { type: string, enum: ['off', 'on', severe], description: "off: dispatch as usual. on: at least 45 s to accept, at most 2 rounds, the search 5 minutes earlier and the rate card's rain top-up on each offer. severe: the same, and new orders go straight to Borzo or Pidge." }
+    RainMode:
+      type: object
+      required: [level, inForce, auto, rainTopUpPaise]
+      properties:
+        level: { $ref: '#/components/schemas/RainLevel' }
+        inForce: { allOf: [{ $ref: '#/components/schemas/RainLevel' }], description: "What dispatch runs on now: level, or on while the automatic switch (auto) finds rides to the door running slow." }
+        auto: { type: boolean, description: "CRAVES_FLEET_RAIN_AUTO: with level off, rain mode comes on by itself while the last 30 minutes' rides to the door (at least 10) ran 1.3 times the travel-time model's minutes, only with CRAVES_FLEET_ETA_MODE=live." }
+        setByName: { type: string, nullable: true, maxLength: 200, description: Who set level last; null before anyone did. }
+        setAt: { type: string, format: date-time, nullable: true }
+        rainTopUpPaise: { type: integer, format: int64, minimum: 0, description: The rate card in force's rain top-up; 0 when it has none or no card is in force. }
+    RainModeInput:
+      type: object
+      required: [level]
+      properties:
+        level: { $ref: '#/components/schemas/RainLevel' }
     PilotRider:
       type: object
       required: [riderId, name, status, addedAt]

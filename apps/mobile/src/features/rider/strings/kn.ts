@@ -547,11 +547,12 @@ export const kn: RiderStrings = {
     loadFailed: 'ನಿಮ್ಮ ಟ್ರಿಪ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಇಂಟರ್ನೆಟ್ ನೋಡಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
   },
   pay: {
-    offer: {base: 'ಬೇಸ್', 'drop-km': 'ಡ್ರಾಪ್ ದೂರ', 'pickup-km': 'ಕಿಚನ್‌ವರೆಗಿನ ಪ್ರಯಾಣ'} as Record<string, string>,
+    offer: {base: 'ಬೇಸ್', 'drop-km': 'ಡ್ರಾಪ್ ದೂರ', 'pickup-km': 'ಕಿಚನ್‌ವರೆಗಿನ ಪ್ರಯಾಣ', rain: 'ಮಳೆ ಹೆಚ್ಚುವರಿ'} as Record<string, string>,
     final: {
       base: 'ಬೇಸ್ ಪಾವತಿ',
       'drop-km': 'ಡ್ರಾಪ್ ದೂರ',
       'pickup-km': 'ಕಿಚನ್‌ವರೆಗಿನ ಪ್ರಯಾಣ',
+      rain: 'ಮಳೆ ಹೆಚ್ಚುವರಿ ಪಾವತಿ',
       waiting: 'ಕಿಚನ್‌ನಲ್ಲಿ ಕಾಯುವಿಕೆ',
       cancellation: 'ರದ್ದತಿ ಶುಲ್ಕ',
       'return-km': 'ಕಿಚನ್‌ಗೆ ವಾಪಸ್ ಪ್ರಯಾಣ',

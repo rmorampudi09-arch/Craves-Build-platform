@@ -283,7 +283,7 @@ components:
         attemptsLeft: {type: integer, minimum: 1, description: Only on 422 OTP_INVALID}
     Paise: {type: integer, description: Indian rupees x 100}
     LabelValue: {type: object, required: [label, value], properties: {label: {type: string}, value: {type: string}}}
-    PayLine: {type: object, required: [label, amountPaise], properties: {component: {type: string, description: 'On Offer and Trip lines: base, drop-km, pickup-km, waiting, cancellation or return-km (the earnings key); TripEarning lines leave it out'}, label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
+    PayLine: {type: object, required: [label, amountPaise], properties: {component: {type: string, description: 'On Offer and Trip lines: base, drop-km, pickup-km, rain (the rain top-up, while rain mode is on), waiting, cancellation or return-km (the earnings key); TripEarning lines leave it out'}, label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
     RiderNotice:
       type: object
       description: A suspension, a 7-day notice or a hold (Telangana Act 21 of 2026, s.14)

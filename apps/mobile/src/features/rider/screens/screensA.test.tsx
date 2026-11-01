@@ -1528,6 +1528,12 @@ describe('Offer', () => {
     expect(allText()).toContain('₹67 | Locked once you accept.');
   });
 
+  it("adds rain mode's top-up to the breakdown, in the server's total", async () => {
+    const rainy = {...offer, payPaise: 8700, payLines: [...offer.payLines, {component: 'rain', label: 'rain top-up', amountPaise: 2000}]};
+    await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: rainy, receivedAtMs: Date.now()}}} />);
+    expect(allText()).toContain('₹87 | ₹40 base + ₹18 drop distance + ₹9 ride to the kitchen + ₹20 rain top-up. Locked once you accept.');
+  });
+
   it('stops the ring and holds Decline while Accept is on its way; with no answer, the offer stays and both come back', async () => {
     let fail: (error: unknown) => void = () => undefined;
     (riderApi.acceptOffer as jest.Mock).mockImplementationOnce(() => new Promise((_resolve, reject) => (fail = reject)));

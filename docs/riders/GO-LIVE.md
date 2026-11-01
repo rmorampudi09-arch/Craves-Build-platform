@@ -9,7 +9,7 @@ Until step 6, customers, chefs, Borzo and Pidge see no change: dispatch is `off`
 ## 0. Before you start (once)
 
 - [ ] **Make the repository private** (PLAN P0.1). It now holds payout, KYC and dispatch code.
-- [x] **Decide the integration-service pool.** Decided (blueprint E3): 8 connections, with the Container App's maximum replicas at 1, because referral checkouts open a second transaction. The repo defaults say so (P1-16). Live settings override the repo, so on `ca-craves-integration-prod` set `SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE=8` if it is set, and max replicas to 1 (`az containerapp update -g rg-craves-integration-prod -n ca-craves-integration-prod --max-replicas 1`).
+- [x] **Decide the integration-service pool.** Decided (blueprint E3): 8 connections, with the Container App's maximum replicas at 1, because referral checkouts open a second transaction. The repo defaults say so (P1-16). Since 29 Oct integration-service has its own Postgres (`pg-craves-integration-prod`, 859 connections) and runs 2 to 10 replicas, which the fleet jobs tolerate (they lock per trip), so nothing needs changing.
 - [ ] **Have the business inputs ready:**
   - the rate card numbers;
   - the pilot zone: which kitchens and riders;
@@ -72,10 +72,11 @@ The tool refuses any other subscription. Without `--apply` it changes nothing: i
 
 `python3 "$D/scripts/riders/rider_pilot_runtime.py" --stage enable`, then the same line with the `--apply …` it prints. It sets these on integration-service:
 - `CRAVES_FLEET_ENABLED`, `CRAVES_FLEET_RIDER_API_ENABLED` and `CRAVES_FLEET_LOCATION_INGEST_ENABLED` to `true`;
-- `CRAVES_FLEET_TEST_MODE` to `true`, which makes the pilot zone;
 - `CRAVES_FLEET_PAYOUT_EXECUTION_ENABLED` to `false`.
 
-On 30 Oct the fleet was already on in test mode (the move copied the settings), so the plan may have nothing to change. Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot setup**: it should show dispatch Off, no rate card, and test mode on.
+It leaves test mode as it is. Decided on 1 Nov 2026: production runs with test mode off (`CRAVES_FLEET_TEST_MODE=false`), so, as with Swiggy and Zomato, any approved rider near a kitchen can get its orders. With test mode on, only the riders and kitchens listed under Rider pilot setup → Pilot zone can.
+
+On 30 Oct the fleet was already on (the move copied the settings), so the plan may have nothing to change. Dispatch is still `off`, so no order goes to a rider yet. Open **Rider pilot setup**: it should show dispatch Off, no rate card, and test mode off.
 
 ## 6. Set up the pilot in the console
 
@@ -90,7 +91,7 @@ On 30 Oct the fleet was already on in test mode (the move copied the settings), 
       | Time a rider has to accept | 30 seconds |
       | Time Craves riders get before Borzo | 120 seconds |
 
-      Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing, and with no pilot kitchens yet it plans nothing. To keep the old rules (3 at once, nearest first), skip this step.
+      These hand out an order the way food delivery apps do: one rider at a time, nearest first, a short window, then the next rider (DoorDash, Wolt and Gojek publish this; Swiggy and Zomato assign automatically). Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing; it only logs who would have been offered.
    2. **The rate card.** Under Rate card → New draft, enter the real numbers, their allowed ranges and the English summary. Telugu and Hindi lines wait for a native speaker's sign-off.
    3. **Publish it.** The first card takes effect at once. Every later card needs its start at least 14 days after publishing, and riders see it in the app as "New terms from …" until then.
 2. **Riders.** One application, one decision (`FLOWS.md`).
@@ -103,10 +104,9 @@ On 30 Oct the fleet was already on in test mode (the move copied the settings), 
       account needs a platform admin, or an operations admin who is also a payments admin.
    3. Approval activates the rider (the RIDER role) and, while test mode is on, adds them to the pilot riders. If no rate
       card is published yet, the page says so; the rider waits on "Pay rates are on the way" until it is.
-3. **Pilot zone.** In Rider pilot setup → Pilot zone, add each pilot kitchen by its chef ID. (Riders approved in one
-   step are already there; add a rider approved before this release by hand.)
-
-   Only orders from these kitchens are offered, and only to these riders.
+3. **Pilot zone (only while test mode is on).** In Rider pilot setup → Pilot zone, add each pilot kitchen by its chef ID.
+   (Riders approved in one step are already there; add a rider approved before this release by hand.) Then only orders
+   from these kitchens are offered, and only to these riders. With test mode off, skip this step.
 4. **Shadow.** Dispatch is already `shadow` from step 1.1; if you skipped that, choose `shadow` now and save, keeping the rules. Dispatch only logs `FLEET_SHADOW` lines saying who would have been offered and at what pay. Read those lines for a day of real orders.
 5. **Live.** Choose `live` and confirm. A published rate card must be in force. Keep the rules from step 1.1: changing them now needs a start 14 days away.
    - Offers ring on the pilot riders' phones. Each offer says why it came to the rider (`DISPATCH.md` §2).
@@ -145,7 +145,7 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, fair turns (`DISPATCH.md` §2 and §3), and from Phase 5 whether riders are ranked by travel time (§10, step 6). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
 
 - **Notice first.** Once dispatch is live, road ranking changes who gets offers, and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before any of them (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
-- **How to set one** (Cloud Shell, as in §4): `az containerapp update -g rg-craves-integration-prod -n ca-craves-integration-prod --set-env-vars NAME=value` (order-service: `-g rg-craves-order-prod -n ca-craves-order-prod`). Wait for the new revision to be healthy, then run the runtime tool's **status** stage (§4): it lists every switch above. Run status again after that service's next release, to see the setting stayed. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
+- **How to set one** (Cloud Shell, as in §4): `az containerapp update -g rg-craves-integration-prod -n ca-craves-integration-prod --set-env-vars NAME=value` (order-service: `-g rg-craves-order-prod -n ca-craves-order-prod`). The apps keep their traffic on a named revision, so the new revision gets none until you move it: once it is healthy (`az containerapp revision list -g … -n … -o table`), run `az containerapp ingress traffic set -g … -n … --revision-weight <new>=100`, then `az containerapp revision deactivate -g … -n … --revision <old>`. Then run the runtime tool's **status** stage (§4): it lists every switch above. Run status again after that service's next release, to see the setting stayed. To undo, set it back to `false`, or remove a notice setting with `--remove-env-vars NAME`.
 
 ## 9. The fleet engine (Phase 5)
 

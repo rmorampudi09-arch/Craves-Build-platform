@@ -210,6 +210,27 @@ describe('Trip: loading, error and ended', () => {
     await render(null);
     expect(allText()).toContain('This trip has ended.');
   });
+
+  // Ops cancelled, released or handed over the trip: /trips/active answers 204 while the screen is open.
+  it('goes back to waiting when the server no longer lists the trip in progress', async () => {
+    await render(trip);
+    expect(has('rider-to-kitchen')).toBe(true);
+    await act(async () => {
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs');
+  });
+
+  it('stays while a step of that trip still waits to send', async () => {
+    await render(trip);
+    await act(async () => mockSetEntries([{action: 'arrived-pickup', tripId: trip.tripId, deferred: true}]));
+    await act(async () => {
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
+  });
 });
 
 describe('Trip: to the kitchen (step 1)', () => {

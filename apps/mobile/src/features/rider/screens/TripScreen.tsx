@@ -35,7 +35,8 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const [photoDelivery, setPhotoDelivery] = useState(false);
   // Steps whose first try is over and still wait: the screen shows where they lead. A step on its first try shows when
   // the server answers (its button is busy), so a delivery code is never "saved" while it is being checked.
-  const queued = usePendingEntries(riderId, trip?.tripId).filter(e => e.deferred);
+  const entries = usePendingEntries(riderId, trip?.tripId);
+  const queued = entries.filter(e => e.deferred);
   const pending = queued.length;
 
   useEffect(() => {
@@ -43,6 +44,18 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
       setTrip(active.data);
     }
   }, [active.data]);
+
+  // Ops cancelled, released or handed over the trip, or the order was cancelled: the server no longer lists it and the
+  // rider's notice says why. With nothing of it left to send, back to waiting instead of a step nobody can take.
+  const shownStep = trip ? displayedStep(trip.step, queued) : null;
+  const gone = active.isSuccess && active.data === null && entries.length === 0 && shownStep !== null
+    && shownStep !== 'DELIVERED' && shownStep !== 'FAILED' && shownStep !== 'CANCELLED';
+  useEffect(() => {
+    if (gone) {
+      queryClient.invalidateQueries({queryKey: riderKeys.all});
+      navigation.popTo('Tabs');
+    }
+  }, [gone, navigation, queryClient]);
 
   // A wrong or locked OTP shows by the boxes, also when the queue replays a code sent while offline. A replayed step
   // that went through brings the server's trip before it leaves the queue, so the step on screen never goes back.

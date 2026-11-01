@@ -1,9 +1,8 @@
 // Loading, empty and problem states in the rider theme (DESIGN.md "States"): flat white card, 1 dp line, a bare 24 dp
 // outline glyph with the words beside it, and at most one action. Nothing here pulses, glows or shouts.
 import React, {useEffect, type ReactNode} from 'react';
-import {ActivityIndicator, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import {refreshAccessToken} from '../../../core/http/apiClient';
 import {Icon, SkeletonBlock, type IconName} from '../../../shared/components';
 import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
@@ -140,19 +139,6 @@ export function CardsSkeleton({cards = 2, testID}: {cards?: number; testID?: str
   );
 }
 
-/** The rider app while it finds out who is signed in: the name, and an espresso spinner (no brand red on a busy screen). */
-export function RiderSplash() {
-  const {strings} = useStrings();
-  return (
-    <SafeAreaView style={styles.splash} testID="rider-splash">
-      <View accessible accessibilityRole="progressbar" accessibilityLabel={strings.states.loading} style={styles.splashCentre}>
-        <Text style={styles.brand}>{strings.signIn.brand}</Text>
-        <ActivityIndicator color={colors.textPrimary} style={styles.spinner} />
-      </View>
-    </SafeAreaView>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {gap: spacing.sm},
   row: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
@@ -161,8 +147,4 @@ const styles = StyleSheet.create({
   body: {fontSize: typography.body, color: colors.textSecondary},
   stack: {gap: spacing.md},
   skeleton: {gap: spacing.sm},
-  splash: {flex: 1, backgroundColor: colors.white},
-  splashCentre: {flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl},
-  brand: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  spinner: {marginTop: spacing.lg},
 });

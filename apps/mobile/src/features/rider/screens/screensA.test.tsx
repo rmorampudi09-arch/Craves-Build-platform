@@ -991,8 +991,8 @@ describe('Phone setup', () => {
     await render(<PhoneSetupScreen {...props} />);
     const text = allText();
     expect(text).toContain('4 of 7 done');
-    expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Rider.');
-    expect(text).toContain('Open recent apps, press and hold the Craves Rider card, then tap the lock.');
+    expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Riders.');
+    expect(text).toContain('Open recent apps, press and hold the Craves Riders card, then tap the lock.');
     expect(text).not.toContain('Allow location');
     await act(async () => tree.root.findByProps({label: "I've locked it"}).props.onPress());
     expect(allText()).toContain('5 of 7 done');
@@ -1002,7 +1002,7 @@ describe('Phone setup', () => {
     (riderDevice.state as jest.Mock).mockResolvedValueOnce({...device('xiaomi'), fullScreenAllowed: false});
     await render(<PhoneSetupScreen {...props} />);
     expect(allText()).toContain(
-      'Show offers over the lock screen | Recommended | Tap the button and allow full screen notifications for Craves Rider.',
+      'Show offers over the lock screen | Recommended | Tap the button and allow full screen notifications for Craves Riders.',
     );
     expect(allText()).toContain('3 of 7 done');
     expect(press('rider-setup-done')).toBeTruthy();
@@ -1014,7 +1014,7 @@ describe('Phone setup', () => {
     (riderDevice.state as jest.Mock).mockResolvedValueOnce(device('samsung'));
     await render(<PhoneSetupScreen {...props} />);
     expect(allText()).toContain('On your Samsung: open Settings, then Battery, then Background usage limits');
-    expect(allText()).toContain('tap the Craves Rider icon above its card, then tap Keep open.');
+    expect(allText()).toContain('tap the Craves Riders icon above its card, then tap Keep open.');
   });
 
   it('opens the app settings when location was refused for good', async () => {
@@ -1334,7 +1334,7 @@ describe('Go online', () => {
 
   it.each([
     ['DOCUMENTS_EXPIRED', 'A document has expired. Upload the new one in Profile, then go online.'],
-    ['APP_UPDATE_REQUIRED', 'Update the Craves Rider app to go online.'],
+    ['APP_UPDATE_REQUIRED', 'Update the Craves Riders app to go online.'],
     ['RIDER_NOT_ACTIVE', "Your account can't do this right now. Open your account page to see why."],
   ])('says why the server refused the shift (403 %s)', async (code, text) => {
     (riderApi.startShift as jest.Mock).mockRejectedValueOnce(refusal(403, code, 'Renew these before going online: Insurance'));

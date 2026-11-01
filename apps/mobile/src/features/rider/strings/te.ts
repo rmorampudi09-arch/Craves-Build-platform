@@ -43,7 +43,7 @@ export const te: RiderStrings = {
   },
   errors: {
     AMOUNT_OVER_BALANCE: 'ఇది ఇప్పుడు విత్‌డ్రా చేయగలిగే దానికంటే ఎక్కువ. బ్యాలెన్స్ చూసి మళ్లీ ప్రయత్నించండి.',
-    APP_UPDATE_REQUIRED: 'ఆన్‌లైన్ కావడానికి Craves Rider ఆప్‌ని అప్‌డేట్ చేయండి.',
+    APP_UPDATE_REQUIRED: 'ఆన్‌లైన్ కావడానికి Craves Riders ఆప్‌ని అప్‌డేట్ చేయండి.',
     DEVICE_NOT_BOUND: 'మీ రైడర్ అకౌంట్‌కి ఈ ఫోన్ ఆమోదం పొందలేదు. ఆమోదం కోసం రైడర్ సపోర్ట్‌కి కాల్ చేయండి.',
     DOCUMENT_FILE_INVALID: 'డాక్యుమెంట్ స్పష్టమైన ఫోటో పంపండి, 10 MB లోపు.',
     DOCUMENT_TYPE_NOT_ALLOWED: 'ఈ డాక్యుమెంట్‌ని ఆప్ నుండి పంపలేరు. రైడర్ సపోర్ట్‌కి కాల్ చేయండి.',
@@ -82,7 +82,7 @@ export const te: RiderStrings = {
     tripStep: (step: number) => `ట్రిప్‌లో 4 దశల్లో ${step}వ దశ`,
   },
   signIn: {
-    brand: 'Craves Rider',
+    brand: 'Craves Riders',
     title: 'మీ మొబైల్ నంబర్ ఇవ్వండి',
     phoneLabel: 'మొబైల్ నంబర్',
     phoneHint: 'SMS ద్వారా 6 అంకెల కోడ్ పంపుతాం.',
@@ -297,7 +297,7 @@ export const te: RiderStrings = {
     lockScreenSteps:
       'బటన్ నొక్కి, Craves Riderకి ఫుల్ స్క్రీన్ నోటిఫికేషన్లు అనుమతించండి. అప్పుడు ఫోన్ లాక్‌లో ఉన్నా కొత్త ఆఫర్ దానంతట అదే తెరుచుకుంటుంది.',
     batterySteps:
-      'బటన్ నొక్కి "Allow" ఎంచుకోండి. బదులుగా జాబితా తెరుచుకుంటే, Craves Rider వెతికి, "Don\'t optimise" లేదా "No restrictions" ఎంచుకోండి.',
+      'బటన్ నొక్కి "Allow" ఎంచుకోండి. బదులుగా జాబితా తెరుచుకుంటే, Craves Riders వెతికి, "Don\'t optimise" లేదా "No restrictions" ఎంచుకోండి.',
     ringSteps: 'ఆఫర్ వచ్చినప్పుడు ఎలా రింగ్, వైబ్రేట్ అవుతుందో అలాగే మీ ఫోన్ రింగ్ అవుతుంది.',
     autostartSteps: {
       xiaomi: 'మీ Xiaomiలో: Security తెరిచి, తర్వాత Permissions, తర్వాత Autostart తెరిచి, Craves Riderని ఆన్ చేయండి.',
@@ -306,14 +306,14 @@ export const te: RiderStrings = {
       vivo: 'మీ Vivo లేదా iQOOలో: i Manager తెరిచి, తర్వాత App manager, తర్వాత Autostart manager తెరిచి, Craves Riderని ఆన్ చేయండి.',
       samsung:
         'మీ Samsungలో: Settings తెరిచి, తర్వాత Battery, తర్వాత Background usage limits, తర్వాత Never sleeping apps తెరిచి, Craves Riderని జోడించండి.',
-      other: 'Settings తెరిచి, తర్వాత Apps, తర్వాత Craves Rider తెరవండి. Autostart లేదా Auto launch కనిపిస్తే, దాన్ని ఆన్ చేయండి.',
+      other: 'Settings తెరిచి, తర్వాత Apps, తర్వాత Craves Riders తెరవండి. Autostart లేదా Auto launch కనిపిస్తే, దాన్ని ఆన్ చేయండి.',
     },
     recentsSteps: {
-      xiaomi: 'Recent apps తెరిచి, Craves Rider కార్డ్‌ని నొక్కి పట్టుకుని, తర్వాత లాక్ గుర్తును నొక్కండి.',
-      coloros: 'Recent apps తెరిచి, Craves Rider కార్డ్‌పై మెనూ నొక్కి, తర్వాత Lock నొక్కండి.',
-      vivo: 'Recent apps తెరిచి, Craves Rider కార్డ్‌ని కిందికి లాగి, తర్వాత Lock నొక్కండి.',
-      samsung: 'Recent apps తెరిచి, Craves Rider కార్డ్ పైన ఉన్న ఐకాన్ నొక్కి, తర్వాత Keep open నొక్కండి.',
-      other: 'Recent apps తెరిచి, Craves Rider కార్డ్‌ని నొక్కి పట్టుకుని, తర్వాత లాక్ గుర్తును నొక్కండి.',
+      xiaomi: 'Recent apps తెరిచి, Craves Riders కార్డ్‌ని నొక్కి పట్టుకుని, తర్వాత లాక్ గుర్తును నొక్కండి.',
+      coloros: 'Recent apps తెరిచి, Craves Riders కార్డ్‌పై మెనూ నొక్కి, తర్వాత Lock నొక్కండి.',
+      vivo: 'Recent apps తెరిచి, Craves Riders కార్డ్‌ని కిందికి లాగి, తర్వాత Lock నొక్కండి.',
+      samsung: 'Recent apps తెరిచి, Craves Riders కార్డ్ పైన ఉన్న ఐకాన్ నొక్కి, తర్వాత Keep open నొక్కండి.',
+      other: 'Recent apps తెరిచి, Craves Riders కార్డ్‌ని నొక్కి పట్టుకుని, తర్వాత లాక్ గుర్తును నొక్కండి.',
     },
     allowLocation: 'లొకేషన్‌కి అనుమతి ఇవ్వండి',
     allowNotifications: 'నోటిఫికేషన్లకు అనుమతి ఇవ్వండి',

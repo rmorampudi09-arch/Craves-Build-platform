@@ -70,7 +70,7 @@ def cravesRiderMinify = project.findProperty('cravesRiderMinify')?.toString() ==
 def cravesVersionCode = project.findProperty('cravesVersionCode')?.toString()
 /**
  * Rider CI, mock (demo data) builds only: -PcravesRiderDemo=true makes the demo its own app, com.cravesapp.rider.demo named
- * "Craves Rider Demo", installed beside the real one, so a demo APK can never replace or pass for the rider app.
+ * "Craves Riders Demo", installed beside the real one, so a demo APK can never replace or pass for the rider app.
  */
 def cravesRiderDemo = project.findProperty('cravesRiderDemo')?.toString() == 'true'
 
@@ -144,9 +144,9 @@ android {
                 applicationIdSuffix ".demo"
             }
             // The launcher name (src/rider/AndroidManifest.xml).
-            manifestPlaceholders += [riderLabel: cravesRiderDemo ? "Craves Rider Demo" : "@string/app_name"]
+            manifestPlaceholders += [riderLabel: cravesRiderDemo ? "Craves Riders Demo" : "@string/app_name"]
             // Keep in step with RIDER_APP_VERSION in src/features/rider/riderConfig.ts; rider-apk.yml fails the build otherwise.
-            versionName "1.3.1"
+            versionName "1.3.2"
             buildConfigField "String", "CRAVES_APP", "\"rider\""
             // react-native-config looks up BuildConfig by applicationId unless told the namespace.
             resValue "string", "build_config_package", "com.cravesapp"

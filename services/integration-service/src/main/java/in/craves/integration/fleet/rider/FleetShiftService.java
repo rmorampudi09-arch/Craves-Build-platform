@@ -111,7 +111,7 @@ public class FleetShiftService {
             throw deviceNotBound();
         }
         if (versionBelow(rider.appVersion(), rider.minAppVersion())) {
-            throw new FleetApiException(403, "APP_UPDATE_REQUIRED", "Update the Craves Rider app to go online.");
+            throw new FleetApiException(403, "APP_UPDATE_REQUIRED", "Update the Craves Riders app to go online.");
         }
         List<String> missing = jdbc.queryForList(MISSING_DOCUMENTS, String.class, rider.id());
         if (!missing.isEmpty()) {

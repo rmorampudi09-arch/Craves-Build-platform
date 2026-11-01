@@ -258,7 +258,11 @@ jobs:
           abis="$(unzip -Z1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')"
           [[ "$abis" == "arm64-v8a armeabi-v7a " ]] || { echo "ERROR: native code for: $abis" >&2; exit 1; }
           test -s "${APK%.apk}-mapping.txt" || { echo 'ERROR: no R8 mapping: R8 did not run' >&2; exit 1; }
-          echo "Signed; $package; versionCode $code; native code for $abis; R8 mapping present."
+          # Android installs an update only over the same key: another key is "App not installed as package conflicts
+          # with an existing package" (docs/riders/RELEASE.md). Every build shows its key so a change is seen at once.
+          signer="$("$tools/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          echo "Signed by key $signer; $package; versionCode $code; native code for $abis; R8 mapping present."
+          echo "Rider APK: $package, versionCode $code, signing key SHA-256 $signer" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Name and check the Play bundle (signed, ARM only)
         id: aab

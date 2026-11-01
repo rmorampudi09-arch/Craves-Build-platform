@@ -19,7 +19,7 @@ import com.google.android.gms.common.api.Status
 /**
  * Fills in the sign-in code from its SMS (Google Play services, no SMS permission); only its 6-digit code goes to JS
  * (event riderSmsCode). start(): the SMS User Consent API. When an SMS with a code arrives within 5 minutes, Android
- * asks the rider in its own sheet whether Craves Rider may read that one message. startRetriever(): the SMS Retriever
+ * asks the rider in its own sheet whether Craves Riders may read that one message. startRetriever(): the SMS Retriever
  * API, with no tap, for an SMS whose text ends with this app's hash (scripts/riders/app-hash.sh). auth-service sends
  * that text only from the rider template, and then answers autoRead; JS starts one or the other, never both.
  */

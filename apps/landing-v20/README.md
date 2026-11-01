@@ -26,10 +26,10 @@ The uploaded ZIP SHA-256 is `f228311ec018ddfa6958cb0b6c7808b855a56f866331f41d9b0
 | Security | `/security` |
 | Section navigation / About us | Original page sections |
 | Get the App | Coming-soon placeholder until App Store and Google Play approval; no authentication action |
-| Social icons | Availability dialog with `/contact` action |
+| Social icons | Official Craves profiles in a new tab: LinkedIn `linkedin.com/company/145186832`, Instagram `instagram.com/craves.in_`, YouTube `youtube.com/@Craves_in`, Facebook `facebook.com/profile.php?id=61594485405454` (owner-supplied 1 Nov 2026); X: availability dialog with `/contact` action |
 | Guidelines | Guidance dialog with `/chef/application` action |
 
-No app-store URL or official social profile was supplied. Those controls do not invent external destinations. Dialogs support native keyboard focus, Escape and a Close button.
+No app-store URL or X profile was supplied. Those controls do not invent external destinations. Dialogs support native keyboard focus, Escape and a Close button.
 
 ## Build locally
 

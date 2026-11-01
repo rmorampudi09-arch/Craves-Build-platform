@@ -155,5 +155,5 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
 const styles = StyleSheet.create({
   sentTo: {marginTop: -spacing.xs, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.xxs},
   sentText: {fontSize: typography.body, color: colors.textSecondary},
-  link: {color: colors.flameRedAccessible, textDecorationLine: 'underline'},
+  link: {color: colors.flameRed, textDecorationLine: 'underline'},
 });

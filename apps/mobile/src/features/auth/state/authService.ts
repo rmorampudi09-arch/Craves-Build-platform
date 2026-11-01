@@ -94,8 +94,9 @@ export const authService = {
       customToken = await authApi.verifyPhoneOtp(challenge.challengeId, code, client);
     } catch (error) {
       const mapped = toAppApiError(error);
-      // A wrong code keeps the challenge for another try; anything else needs a new code.
-      if (mapped.code !== 'OTP_INVALID') {
+      // A wrong code keeps the challenge for another try, and so does the rate limit (it spends no try); anything else
+      // needs a new code.
+      if (mapped.code !== 'OTP_INVALID' && mapped.code !== 'OTP_RATE_LIMIT') {
         otpChallenge = null;
       }
       throw mapped;

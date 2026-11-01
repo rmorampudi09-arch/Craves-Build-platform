@@ -61,8 +61,8 @@ These follow Telangana's gig-worker Act (Act 21 of 2026) and set Craves apart fr
 - **Order code:** the real code is the 8-character short order number (e.g. "#0BDE0101"); "CR-4107" in the designs is a placeholder.
 
 ## Brand Commitments
-- **Name:** "Craves Rider".
-- **Colour and type:** the mobile app's own tokens, with `flameRedAccessible` #D92714 for actions and espresso #261A15 for text, set in Roboto. The web design system (Manrope/Inter, #E5342A) is not used for rider screens.
+- **Name:** "Craves Riders".
+- **Colour and type:** the mobile app's own tokens, with flame red `flameRed` #F62E18 (the Craves brand red, as in the Craves app) for primary buttons (white bold labels on it), red links, the active tab and the countdown, and espresso #261A15 for text, set in Roboto. The web design system (Manrope/Inter, #E5342A) is not used for rider screens.
 - **Voice:** plain, short, reassuring and specific. Controls name their action. The app says what it will and won't do with the rider's money, data and photo.
 
 ## Evidence on Hand

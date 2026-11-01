@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     width: '100%',
-    backgroundColor: colors.flameRedAccessible,
+    backgroundColor: colors.flameRed,
     transformOrigin: 'left',
   },
   fillWait: {backgroundColor: colors.textPrimary},

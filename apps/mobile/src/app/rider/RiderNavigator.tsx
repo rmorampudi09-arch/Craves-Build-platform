@@ -60,7 +60,7 @@ function RiderTabs() {
     <Tabs.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.flameRedAccessible,
+        tabBarActiveTintColor: colors.flameRed,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarLabelStyle: {fontSize: typography.small, fontWeight: fontWeight.bold},
         tabBarStyle: {

@@ -71,12 +71,8 @@ export function RiderSplash() {
         }
         loops = [
           Animated.loop(Animated.timing(ride, {toValue: 1, duration: 700, easing: Easing.linear, useNativeDriver: true})),
-          Animated.loop(
-            Animated.sequence([
-              Animated.timing(bump, {toValue: 1, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true}),
-              Animated.timing(bump, {toValue: 0, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true}),
-            ]),
-          ),
+          // One timing, so the loop stays native (a sequence is re-armed from JS every cycle); `lift` shapes the up and down.
+          Animated.loop(Animated.timing(bump, {toValue: 1, duration: 520, easing: Easing.linear, useNativeDriver: true})),
         ];
         loops.forEach(loop => loop.start());
       });
@@ -88,7 +84,7 @@ export function RiderSplash() {
 
   const turn = ride.interpolate({inputRange: [0, 1], outputRange: ['0deg', '360deg']});
   const road = ride.interpolate({inputRange: [0, 1], outputRange: [0, -PERIOD]});
-  const lift = bump.interpolate({inputRange: [0, 1], outputRange: [0, -3]});
+  const lift = bump.interpolate({inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -2.1, -3, -2.1, 0]});
 
   return (
     <SafeAreaView style={styles.splash} testID="rider-splash">

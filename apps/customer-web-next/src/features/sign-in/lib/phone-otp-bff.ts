@@ -17,12 +17,12 @@ function record(value: unknown): Record<string, unknown> | null {
 
 /**
  * The browser's address, for auth-service's per-IP OTP limits: every web sign-in reaches it from this server's one
- * address, so it trusts X-Craves-Client-Ip from here (CRAVES_CENTRAL_OTP_FORWARDING_IPS). Front Door sets
- * X-Azure-ClientIP itself (as in support guest chat). Only a literal IP is sent; unknown sends nothing.
+ * address, so it trusts X-Craves-Client-Ip from here (CRAVES_CENTRAL_OTP_FORWARDING_IPS). Only X-Azure-SocketIP, the
+ * TCP peer Front Door saw: X-Azure-ClientIP and X-Forwarded-For can be written by the caller. Only a literal IP is
+ * sent; unknown sends nothing.
  */
 function clientIpHeader(request: NextRequest): Record<string, string> {
-  const ip = request.headers.get("x-azure-clientip")?.trim()
-    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = request.headers.get("x-azure-socketip")?.trim();
   return ip && isIP(ip) ? { "X-Craves-Client-Ip": ip } : {};
 }
 

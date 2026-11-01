@@ -245,6 +245,20 @@ describe('authService phone OTP by MSG91', () => {
     expect(verifyMock).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the challenge after the verify rate limit, so the next Verify works without a resend', async () => {
+    sendMock.mockResolvedValue({challengeId: first, autoRead: false});
+    await authService.beginMsg91Phone('+919848012345');
+    verifyMock.mockRejectedValueOnce(new AppApiError('OTP_RATE_LIMIT', 'Too many tries', 429));
+    await expect(authService.confirmMsg91Otp('111111')).rejects.toMatchObject({code: 'OTP_RATE_LIMIT'});
+
+    verifyMock.mockResolvedValueOnce('custom-token');
+    customTokenMock.mockResolvedValue('id');
+    exchangeMock.mockResolvedValue(createTokenPair());
+    await expect(authService.confirmMsg91Otp('482913')).resolves.toEqual(createTokenPair());
+    expect(verifyMock).toHaveBeenNthCalledWith(2, first, '482913', undefined);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
   it('passes cooldown and resend-limit refusals through without starting again', async () => {
     sendMock.mockResolvedValueOnce({challengeId: first, autoRead: false});
     await authService.beginMsg91Phone('+919848012345');

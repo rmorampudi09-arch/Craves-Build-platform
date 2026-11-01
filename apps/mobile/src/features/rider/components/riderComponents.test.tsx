@@ -223,7 +223,7 @@ describe('StatusBadge', () => {
 describe('BottomAction', () => {
   it('is 56 dp with no shadow, and 64 dp when tall', async () => {
     await render(<BottomAction label="Go online" onPress={jest.fn()} testID="go" />);
-    expect(style('go')).toMatchObject({minHeight: 56, borderRadius: radius.md, backgroundColor: colors.flameRedAccessible});
+    expect(style('go')).toMatchObject({minHeight: 56, borderRadius: radius.md, backgroundColor: colors.flameRed});
     expect(style('go').elevation).toBeUndefined();
     await render(<BottomAction label="Accept" size="tall" onPress={jest.fn()} testID="go" />);
     expect(style('go').minHeight).toBe(64);

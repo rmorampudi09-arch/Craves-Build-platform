@@ -287,25 +287,25 @@ export const te: RiderStrings = {
     location: 'ఆప్ వాడుతున్నప్పుడు లొకేషన్',
     notifications: 'నోటిఫికేషన్లు',
     lockScreen: 'లాక్ స్క్రీన్ పైన ఆఫర్లు చూపించండి',
-    battery: 'బ్యాటరీ: Craves Riderకి ఎలాంటి పరిమితులు లేవు',
+    battery: 'బ్యాటరీ: Craves Ridersకి ఎలాంటి పరిమితులు లేవు',
     autostart: 'Autostart ఆన్',
-    recents: 'Recent appsలో Craves Riderని లాక్ చేయండి',
+    recents: 'Recent appsలో Craves Ridersని లాక్ చేయండి',
     testRing: 'టెస్ట్ రింగ్',
     rang: 'మీ ఫోన్ రింగ్ అయి, వైబ్రేట్ అయింది',
     locationSteps: 'బటన్ నొక్కి, ఆప్ వాడుతున్నప్పుడు లొకేషన్‌కి అనుమతి ఇవ్వండి. "Precise" ఆన్‌లో ఉంచండి.',
     notificationsSteps: 'బటన్ నొక్కి, నోటిఫికేషన్లకు అనుమతి ఇవ్వండి.',
     lockScreenSteps:
-      'బటన్ నొక్కి, Craves Riderకి ఫుల్ స్క్రీన్ నోటిఫికేషన్లు అనుమతించండి. అప్పుడు ఫోన్ లాక్‌లో ఉన్నా కొత్త ఆఫర్ దానంతట అదే తెరుచుకుంటుంది.',
+      'బటన్ నొక్కి, Craves Ridersకి ఫుల్ స్క్రీన్ నోటిఫికేషన్లు అనుమతించండి. అప్పుడు ఫోన్ లాక్‌లో ఉన్నా కొత్త ఆఫర్ దానంతట అదే తెరుచుకుంటుంది.',
     batterySteps:
       'బటన్ నొక్కి "Allow" ఎంచుకోండి. బదులుగా జాబితా తెరుచుకుంటే, Craves Riders వెతికి, "Don\'t optimise" లేదా "No restrictions" ఎంచుకోండి.',
     ringSteps: 'ఆఫర్ వచ్చినప్పుడు ఎలా రింగ్, వైబ్రేట్ అవుతుందో అలాగే మీ ఫోన్ రింగ్ అవుతుంది.',
     autostartSteps: {
-      xiaomi: 'మీ Xiaomiలో: Security తెరిచి, తర్వాత Permissions, తర్వాత Autostart తెరిచి, Craves Riderని ఆన్ చేయండి.',
+      xiaomi: 'మీ Xiaomiలో: Security తెరిచి, తర్వాత Permissions, తర్వాత Autostart తెరిచి, Craves Ridersని ఆన్ చేయండి.',
       coloros:
-        'మీ Oppo, Realme లేదా OnePlusలో: Settings తెరిచి, తర్వాత Apps, తర్వాత Auto launch తెరిచి, Craves Riderని ఆన్ చేయండి.',
-      vivo: 'మీ Vivo లేదా iQOOలో: i Manager తెరిచి, తర్వాత App manager, తర్వాత Autostart manager తెరిచి, Craves Riderని ఆన్ చేయండి.',
+        'మీ Oppo, Realme లేదా OnePlusలో: Settings తెరిచి, తర్వాత Apps, తర్వాత Auto launch తెరిచి, Craves Ridersని ఆన్ చేయండి.',
+      vivo: 'మీ Vivo లేదా iQOOలో: i Manager తెరిచి, తర్వాత App manager, తర్వాత Autostart manager తెరిచి, Craves Ridersని ఆన్ చేయండి.',
       samsung:
-        'మీ Samsungలో: Settings తెరిచి, తర్వాత Battery, తర్వాత Background usage limits, తర్వాత Never sleeping apps తెరిచి, Craves Riderని జోడించండి.',
+        'మీ Samsungలో: Settings తెరిచి, తర్వాత Battery, తర్వాత Background usage limits, తర్వాత Never sleeping apps తెరిచి, Craves Ridersని జోడించండి.',
       other: 'Settings తెరిచి, తర్వాత Apps, తర్వాత Craves Riders తెరవండి. Autostart లేదా Auto launch కనిపిస్తే, దాన్ని ఆన్ చేయండి.',
     },
     recentsSteps: {

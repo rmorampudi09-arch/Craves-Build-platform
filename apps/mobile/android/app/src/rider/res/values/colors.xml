@@ -1,0 +1,7 @@
+<resources>
+    <!-- The Android 12+ launch screen in the Craves brand red (src/main/res/values/colors.xml has the customer app's). -->
+    <color name="craves_splash_background">#F62E18</color>
+    <color name="craves_splash_icon_background">#F62E18</color>
+    <!-- 240 dp, the white Craves Riders art inside the 2/3 circle Android 12 keeps of an icon with a background. -->
+    <item name="craves_splash_icon" type="drawable">@drawable/rider_splash_icon</item>
+</resources>

@@ -96,12 +96,13 @@ it.each([false, true])("sends only the recovered phone/challenge fields, includi
 });
 
 it.each([
-  [{ "x-azure-clientip": "203.0.113.7", "x-forwarded-for": "198.51.100.1, 10.0.0.1" }, "203.0.113.7"],
-  [{ "x-forwarded-for": "198.51.100.1, 10.0.0.1" }, "198.51.100.1"],
-  [{ "x-azure-clientip": "2001:db8::7" }, "2001:db8::7"],
-  [{ "x-azure-clientip": "spoof-1", "x-forwarded-for": "not-an-ip" }, undefined],
-  [{ "x-azure-clientip": "localhost" }, undefined],
-])("forwards only a literal browser IP, for auth-service's per-IP limits: %j", async (headers, ip) => {
+  [{ "x-azure-socketip": "203.0.113.7", "x-azure-clientip": "198.51.100.9", "x-forwarded-for": "198.51.100.1" }, "203.0.113.7"],
+  [{ "x-azure-socketip": "2001:db8::7" }, "2001:db8::7"],
+  // The caller can write these two, so without Front Door's socket IP nothing is sent.
+  [{ "x-azure-clientip": "198.51.100.9", "x-forwarded-for": "198.51.100.1, 10.0.0.1" }, undefined],
+  [{ "x-azure-socketip": "spoof-1" }, undefined],
+  [{ "x-azure-socketip": "localhost" }, undefined],
+])("forwards only Front Door's literal socket IP, for auth-service's per-IP limits: %j", async (headers, ip) => {
   const fetcher = vi.fn(async () => Response.json({ ...challenge, firebaseCustomToken: customToken }));
   vi.stubGlobal("fetch", fetcher);
   expect((await send(request("send", sendBody, headers))).status).toBe(200);

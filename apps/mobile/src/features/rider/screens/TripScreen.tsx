@@ -1,4 +1,5 @@
 import React, {useCallback, useEffect, useState} from 'react';
+import {useIsFocused} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import type {DeliverBody, FailBody, Trip, TripAction} from '../api/contract';
 import {idempotencyKey} from '../api/riderApi';
@@ -33,6 +34,9 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   // When the rider tapped Call at the door; the customer-not-answering steps show each time.
   const [callTimes, setCallTimes] = useState<number[]>([]);
   const [photoDelivery, setPhotoDelivery] = useState(false);
+  // A step on its way to the server: with the native outbox its first try is not in `entries`.
+  const [sending, setSending] = useState(false);
+  const focused = useIsFocused();
   // Steps whose first try is over and still wait: the screen shows where they lead. A step on its first try shows when
   // the server answers (its button is busy), so a delivery code is never "saved" while it is being checked.
   const entries = usePendingEntries(riderId, trip?.tripId);
@@ -47,15 +51,27 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
 
   // Ops cancelled, released or handed over the trip, or the order was cancelled: the server no longer lists it and the
   // rider's notice says why. With nothing of it left to send, back to waiting instead of a step nobody can take.
+  // Only from the top of the stack (popTo leaves from the focused route: it would close SOS or an offer over the trip).
   const shownStep = trip ? displayedStep(trip.step, queued) : null;
-  const gone = active.isSuccess && active.data === null && entries.length === 0 && shownStep !== null
+  const gone = focused && !sending && active.isSuccess && active.data === null && entries.length === 0 && shownStep !== null
     && shownStep !== 'DELIVERED' && shownStep !== 'FAILED' && shownStep !== 'CANCELLED';
+  const {refetch} = active;
   useEffect(() => {
-    if (gone) {
-      queryClient.invalidateQueries({queryKey: riderKeys.all});
-      navigation.popTo('Tabs');
+    if (!gone) {
+      return undefined;
     }
-  }, [gone, navigation, queryClient]);
+    // Asked once more first: a fetch that started before Accept cached the trip can still answer "no trip".
+    let current = true;
+    refetch().then(result => {
+      if (current && result.status === 'success' && result.data === null) {
+        queryClient.invalidateQueries({queryKey: riderKeys.all});
+        navigation.popTo('Tabs');
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [gone, navigation, queryClient, refetch]);
 
   // A wrong or locked OTP shows by the boxes, also when the queue replays a code sent while offline. A replayed step
   // that went through brings the server's trip before it leaves the queue, so the step on screen never goes back.
@@ -120,6 +136,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     }
     // Retried OTPs need a new key, or the server would replay the first (wrong) answer.
     const attempt = action === 'delivered' ? Date.now() : undefined;
+    setSending(true);
     const outcome = await tripQueue.enqueue({
       riderId,
       tripId: trip.tripId,
@@ -129,7 +146,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
       // When and where the rider tapped: the server counts the step from then, even if it syncs much later.
       occurredAt: Date.now(),
       fix: riderOnlineService.lastFix(),
-    });
+    }).finally(() => setSending(false));
     if (outcome.kind === 'sent') {
       queryClient.setQueryData(riderKeys.activeTrip, outcome.trip);
       setTrip(outcome.trip);

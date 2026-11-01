@@ -66,6 +66,14 @@ public class DeliveryServiceBusPublisher {
         if (correlationId != null) {
             message.setCorrelationId(correlationId.toString());
         }
+        // CH-06: one session per chef order (order-service's customer_order id), so session-enabled subscriptions
+        // receive each order's delivery events in order. Plain subscriptions ignore the session id.
+        String chefSubOrderId = payload.path("data").path("chefSubOrderId").asText("");
+        if (!chefSubOrderId.isBlank()) {
+            message.setSessionId(chefSubOrderId);
+        } else if (correlationId != null) {
+            message.setSessionId(correlationId.toString());
+        }
         message.getApplicationProperties().put("event_type", eventType);
         message.getApplicationProperties().put("eventType", eventType);
         requireDomainEventSender().sendMessage(message);

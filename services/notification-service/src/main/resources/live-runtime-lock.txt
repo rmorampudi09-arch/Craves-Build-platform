@@ -7,3 +7,4 @@ in.craves.notification.api.NotificationDeliveryController
 in.craves.notification.documents.DocumentController
 in.craves.notification.email.VerificationEmailController
 in.craves.notification.recovery.AdminNotificationRecoveryController
+in.craves.notification.api.InternalRealtimeController

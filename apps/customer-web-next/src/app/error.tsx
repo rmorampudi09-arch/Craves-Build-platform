@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -11,16 +12,21 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-white px-4">
-      <div className="max-w-md text-center">
-        <h1 className="font-display text-2xl font-bold text-[#1A1A1A]">
-          {offline ? "You’re offline" : "This page didn’t load"}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">
-          {offline
-            ? "Craves can’t reach the internet from this device. Check your Wi‑Fi or mobile data, then try again."
-            : "Something went wrong on our side while loading it. Try again; if it keeps happening, chat with support and share the reference below."}
-        </p>
-        <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
+      <div className="flex max-w-md flex-col items-center text-center">
+        <EmptyState
+          illustration={offline ? "offline" : "loadError"}
+          heading="h1"
+          title={offline ? "You’re offline" : "This page didn’t load"}
+          message={
+            offline
+              ? "Check your Wi‑Fi or mobile data, then try again."
+              : "Something went wrong on our side while loading it. Try again; if it keeps happening, chat with support and share the reference below."
+          }
+          className="py-0 md:py-0"
+        >
+          <button type="button" onClick={reset} className="craves-primary-action">Try again</button>
+        </EmptyState>
+        <p className="mt-4 text-sm leading-6 text-[#6B6B6B]">
           Your cart, orders and payments are safe. Nothing was repeated or charged again.
         </p>
         {reference ? (
@@ -39,16 +45,13 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
             </button>
           </p>
         ) : null}
-        <div className="mt-6 flex flex-col items-center gap-3">
-          <button type="button" onClick={reset} className="craves-primary-action">Try again</button>
-          <div className="flex flex-wrap justify-center gap-x-5">
-            <Link href="/home" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
-              Go to home
-            </Link>
-            <Link href="/support" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
-              Chat with support
-            </Link>
-          </div>
+        <div className="mt-4 flex flex-wrap justify-center gap-x-5">
+          <Link href="/home" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
+            Go to home
+          </Link>
+          <Link href="/support" className="inline-flex min-h-11 items-center text-sm font-bold text-[#1A1A1A] underline underline-offset-4">
+            Chat with support
+          </Link>
         </div>
       </div>
     </main>

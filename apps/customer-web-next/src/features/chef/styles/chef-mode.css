@@ -1,7 +1,9 @@
 /*
  * Chef Mode: an operational tool a home chef uses on a phone between cooking.
- * Neutral page, white working surfaces, ink text, Flame Red only for the next
- * action, the current tab and orders waiting for an answer. Never a red tint.
+ * White pages and white cards, as in the app (1.31.0: no grey pages), with a
+ * hairline around each card; ink text. Flame Red for the next action and
+ * orders waiting for an answer; soft red (--chef-tint) behind icons, the
+ * current tab and chosen chips, with deep red on it (5:1).
  */
 .chef-panel-theme {
   --chef-action: var(--color-flame-red);
@@ -10,7 +12,7 @@
   --primary-foreground: #fff;
   --ring: #1a1a1a;
   --gradient-primary: var(--color-flame-red);
-  --chef-page: #f1f3f5;
+  --chef-page: #ffffff;
   --chef-surface: #ffffff;
   --chef-sunken: #f7f8fa;
   --chef-line: #e3e6ea;
@@ -21,6 +23,10 @@
   --chef-border: var(--chef-line);
   --chef-input: #f1f3f5;
   --chef-accent-text: #c4200f;
+  /* Soft red tiles with red icons (app 1.34.5): #d92714 on it is 4.3:1, enough for icons; text on it uses
+     --chef-accent-text (5.1:1). */
+  --chef-tint: #fdeae8;
+  --chef-tint-ink: #d92714;
   /* Yes, open, ready: the green of the customer View cart button (5:1 with white). */
   --chef-go: #17803d;
   --chef-go-hover: #12692f;
@@ -38,6 +44,15 @@
   font-family: var(--font-craves-body), Inter, sans-serif;
   font-variant-numeric: tabular-nums;
   caret-color: var(--chef-action);
+}
+
+/* A sheet or dialog body: sheets open on <body>, outside the chef page, so their body takes the
+ * chef theme with this class next to chef-panel-theme, without the page's full height, tab-bar
+ * padding or background. */
+.chef-panel-theme.chef-sheet-theme {
+  min-height: 0;
+  padding-bottom: 0;
+  background: transparent !important;
 }
 
 /*
@@ -112,7 +127,7 @@
   .chef-icon-button:hover { background: var(--chef-input); }
 }
 /* On Notifications the bell is the current page, marked like the current tab. */
-.chef-icon-button[aria-current="page"] { background: var(--chef-input); color: var(--chef-action); }
+.chef-icon-button[aria-current="page"] { background: var(--chef-tint); color: var(--chef-tint-ink); }
 /* Holds the account menu's place until the session check says who is signed in. */
 .chef-account-placeholder { height: 3rem; width: 3rem; flex-shrink: 0; border-radius: 999px; background: var(--chef-input); }
 
@@ -132,8 +147,8 @@
   white-space: nowrap;
   transition: color 150ms var(--chef-ease), background-color 150ms var(--chef-ease);
 }
-.chef-desktop-nav-link.is-active { background: var(--chef-input); color: var(--chef-text); }
-.chef-desktop-nav-link.is-active svg { color: var(--chef-action); }
+.chef-desktop-nav-link.is-active { background: var(--chef-tint); color: var(--chef-accent-text); }
+.chef-desktop-nav-link.is-active svg { color: var(--chef-tint-ink); }
 @media (hover: hover) {
   .chef-desktop-nav-link:hover { background: var(--chef-input); color: var(--chef-text); }
 }
@@ -176,8 +191,8 @@
     text-decoration: none;
     transition: color 150ms var(--chef-ease);
   }
-  /* The selected tab is marked by shape and weight, not colour alone: ink label, icon in a pill. */
-  .chef-mobile-nav-link.is-active { color: var(--chef-text); font-weight: 700; }
+  /* The selected tab is marked by shape and weight, not colour alone: bold red label, icon in a soft red pill. */
+  .chef-mobile-nav-link.is-active { color: var(--chef-accent-text); font-weight: 700; }
   .chef-mobile-nav-link:active { background: var(--chef-input); }
   .chef-mobile-nav-icon {
     display: grid;
@@ -187,7 +202,7 @@
     border-radius: 999px;
     transition: background-color 200ms var(--chef-ease);
   }
-  .chef-mobile-nav-link.is-active .chef-mobile-nav-icon { background: var(--chef-page); color: var(--chef-action); }
+  .chef-mobile-nav-link.is-active .chef-mobile-nav-icon { background: var(--chef-tint); color: var(--chef-tint-ink); }
 }
 .chef-mobile-nav-link:focus-visible,
 .chef-desktop-nav-link:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
@@ -260,7 +275,6 @@
   padding: 1rem 1rem 0;
 }
 .chef-section-title {
-  margin: 0;
   font-family: var(--font-display-family);
   font-size: 1.0625rem;
   font-weight: 700;
@@ -277,7 +291,9 @@
 @media (min-width: 768px) { .chef-stack { gap: 1.25rem; } }
 
 /* ---------- Lists ---------- */
-.chef-list { margin: 0; padding: 0; list-style: none; }
+/* No margin/padding reset here: Tailwind's preflight already zeroes them, and an unlayered reset
+   would beat the mt-* utilities lists are given. */
+.chef-list { list-style: none; }
 .chef-list > li + li,
 .chef-list > .chef-row + .chef-row { border-top: 1px solid var(--chef-line); }
 /* Rows sit flush in sections that clip overflow, so their focus ring is drawn inside. */
@@ -304,7 +320,7 @@ a.chef-row:active,
 button.chef-row:active { background: var(--chef-input); }
 .chef-row-main { min-width: 0; flex: 1; }
 .chef-row-title { font-size: 0.9375rem; font-weight: 600; line-height: 1.35; color: var(--chef-text); }
-.chef-row-meta { margin-top: 0.125rem; color: var(--chef-muted); font-size: 0.8125rem; font-weight: 400; line-height: 1.4; }
+.chef-row-meta { color: var(--chef-muted); font-size: 0.8125rem; font-weight: 400; line-height: 1.4; }
 .chef-row-value { flex-shrink: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chef-row-icon {
   display: grid;
@@ -313,8 +329,8 @@ button.chef-row:active { background: var(--chef-input); }
   flex-shrink: 0;
   place-items: center;
   border-radius: 12px;
-  background: var(--chef-input);
-  color: var(--chef-text);
+  background: var(--chef-tint);
+  color: var(--chef-tint-ink);
 }
 .chef-chevron { flex-shrink: 0; color: var(--chef-placeholder); }
 
@@ -398,11 +414,20 @@ body .chef-panel-theme .chef-btn.is-quiet { border-color: transparent !important
 .chef-chips::-webkit-scrollbar { display: none; }
 /* Choices (not filters) wrap so every option stays in view. */
 .chef-chips.is-wrap { flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+/* The four order tabs are the page's main switch: on a phone all four stay in view, in any language. */
+@media (max-width: 639px) {
+  .chef-chips.is-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.375rem; overflow: visible; }
+  .chef-panel-theme .chef-chips.is-tabs .chef-chip {
+    justify-content: center; flex-wrap: wrap; gap: 0.25rem; border-radius: 1rem;
+    padding: 0.375rem 0.25rem; white-space: normal; text-align: center; line-height: 1.25;
+  }
+}
 .chef-field-label { display: block; margin: 0; padding: 0; font-size: 0.9375rem; font-weight: 600; color: var(--chef-text); }
-/* Choice chips are radios: the chosen one is filled, the keyboard focus ring sits on the chip. */
+/* Choice chips are radios: the chosen one is red on soft red with a red border (app 1.34.5), the keyboard
+   focus ring sits on the chip. */
 .chef-panel-theme .chef-chip.is-choice { cursor: pointer; }
-.chef-panel-theme .chef-chip.is-choice:has(input:checked) { background: var(--chef-text); color: #fff; }
-body .chef-panel-theme .chef-chip.is-choice:has(input:checked) { border-color: var(--chef-text) !important; }
+.chef-panel-theme .chef-chip.is-choice:has(input:checked) { background: var(--chef-tint); color: var(--chef-accent-text); }
+body .chef-panel-theme .chef-chip.is-choice:has(input:checked) { border-color: var(--chef-accent-text) !important; }
 .chef-panel-theme .chef-chip.is-choice:has(input:focus-visible) { outline: 2px solid var(--chef-text); outline-offset: 2px; }
 .chef-panel-theme .chef-chip.is-choice:has(input:disabled) { cursor: not-allowed; opacity: 0.6; }
 .chef-panel-theme .chef-chip {
@@ -422,8 +447,8 @@ body .chef-panel-theme .chef-chip.is-choice:has(input:checked) { border-color: v
   box-shadow: none;
   transition: background-color 150ms var(--chef-ease), color 150ms var(--chef-ease);
 }
-.chef-panel-theme .chef-chip[aria-pressed="true"] { background: var(--chef-text); color: #fff; }
-body .chef-panel-theme .chef-chip[aria-pressed="true"] { border-color: var(--chef-text) !important; }
+.chef-panel-theme .chef-chip[aria-pressed="true"] { background: var(--chef-tint); color: var(--chef-accent-text); }
+body .chef-panel-theme .chef-chip[aria-pressed="true"] { border-color: var(--chef-accent-text) !important; }
 .chef-chip-count {
   min-width: 1.25rem;
   border-radius: 999px;
@@ -501,12 +526,72 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   width: 3rem;
   place-items: center;
   border-radius: 14px;
-  background: var(--chef-input);
-  color: var(--chef-text);
+  background: var(--chef-tint);
+  color: var(--chef-tint-ink);
 }
 /* The drawing sits on the section's white, like the page it belongs to. */
 .chef-empty-image { height: 9.5rem; width: auto; max-width: 100%; object-fit: contain; }
 @media (min-width: 640px) { .chef-empty-image { height: 11rem; } }
+/* Red underline tabs (ChefUnderlineTabs), as in the app's Orders, Menu and Payout history. */
+.chef-underline-tabs {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--chef-line);
+  scrollbar-width: none;
+}
+.chef-underline-tabs::-webkit-scrollbar { display: none; }
+.chef-underline-tabs .chef-underline-tab {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  margin-bottom: -1px;
+  padding: 0 0.125rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--chef-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms var(--chef-ease);
+}
+/* The underline is a bar, not a border: the global control rules repaint button borders with !important. */
+.chef-underline-tabs .chef-underline-tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: transparent;
+  transition: background-color 150ms var(--chef-ease);
+}
+.chef-underline-tabs .chef-underline-tab:hover { color: var(--chef-text); }
+.chef-underline-tabs .chef-underline-tab[aria-pressed="true"] {
+  color: #d92714;
+  font-weight: 700;
+}
+.chef-underline-tabs .chef-underline-tab[aria-pressed="true"]::after { background: #f62e18; }
+.chef-underline-tab:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+.chef-underline-count { font-weight: 700; color: inherit; }
+.chef-underline-count.is-urgent {
+  display: inline-grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: #f62e18;
+  color: #fff;
+  font-size: 0.75rem;
+}
+/* The app's empty-state drawings (EmptyIllustration), 240 × 190. */
+.chef-empty-drawing { width: 12rem; }
+@media (min-width: 640px) { .chef-empty-drawing { width: 14rem; } }
 .chef-empty-title { margin-top: 0.5rem; font-family: var(--font-display-family); font-size: 1.125rem; font-weight: 700; color: var(--chef-text); }
 .chef-empty-text { max-width: 26rem; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.5; }
 .chef-skeleton {
@@ -534,7 +619,14 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
 .chef-panel-theme :is(input, textarea, select)[aria-invalid="true"] { border-color: var(--chef-error) !important; }
 .chef-panel-theme :is(input, textarea, select)[aria-invalid="true"]:focus { box-shadow: 0 0 0 1px var(--chef-error); }
 .chef-panel-theme :is(button, input, textarea, select):disabled { cursor: not-allowed; }
-.chef-field-error { margin-top: 0.375rem; color: var(--chef-error); font-size: 0.8125rem; font-weight: 500; }
+/* Default gaps a mt-* utility may override, so they sit in Tailwind's components layer (below utilities). */
+@layer components {
+  .chef-row-meta { margin-top: 0.125rem; }
+  .chef-field-error { margin-top: 0.375rem; }
+}
+.chef-row.is-danger .chef-row-icon,
+.chef-row.is-danger .chef-row-title { color: var(--chef-accent-text); }
+.chef-field-error { color: var(--chef-error); font-size: 0.8125rem; font-weight: 500; }
 .chef-panel-theme [role="alert"]:not([class*="text-"]) { color: var(--chef-error); }
 
 /* ---------- Older chef screens (still Tailwind-classed) ---------- */
@@ -901,11 +993,6 @@ html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
   .chef-skeleton { animation: none; }
 }
 
-/* The shared notifications screen sits under the Chef Mode header with the chef page title. */
-.chef-notifications [data-craves-auto-hide-header] { display: none; }
-.chef-notifications .min-h-screen { min-height: 0; background: transparent; padding-bottom: 0; }
-.chef-notifications .min-h-screen > main { max-width: none; padding: 0; }
-body .chef-notifications [aria-label="Notification filters"] button { border-color: transparent !important; box-shadow: none; }
 /* Help chat: fills the screen under the title, so the message box stays above the tab bar. */
 .chef-support-chat {
   display: flex;
@@ -914,8 +1001,9 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
   padding: 0 1rem 1rem;
 }
 @media (min-width: 1024px) { .chef-support-chat { height: max(30rem, calc(100dvh - 17rem)); padding-inline: 1.5rem; } }
-/* The sign-in page has no bottom navigation to make room for. */
-.chef-panel-theme:has(.chef-sign-in) { padding-bottom: 0; }
+/* The sign-in page has no tab bar, but has the floating "Questions?" button (1rem up, 3rem tall):
+   the last link ("New here? Apply to cook") must scroll clear of it. */
+.chef-panel-theme:has(.chef-sign-in) { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
 
 /* Keyboard users jump past the header and tabs; hidden until focused. */
 .chef-skip-link {
@@ -974,3 +1062,116 @@ body .chef-notifications [aria-label="Notification filters"] button { border-col
 @media (min-width: 1024px) {
   .chef-dish-actions { max-width: calc(100% - 19.5rem); }
 }
+
+/* ---------- Orders tab count ---------- */
+/* Orders waiting for an answer: a deep-red count on the tab, seen from every page. */
+.chef-mobile-nav-icon { position: relative; }
+.chef-nav-badge {
+  position: absolute;
+  top: -0.375rem;
+  right: 0.25rem;
+  display: grid;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  place-items: center;
+  border: 2px solid var(--chef-surface);
+  border-radius: 999px;
+  background: var(--chef-accent-text);
+  padding: 0 0.25rem;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.chef-desktop-nav-link .chef-nav-badge { position: static; border: 0; }
+
+/* ---------- Header help ---------- */
+.chef-help-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  padding: 0 0.75rem;
+  color: var(--chef-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+@media (hover: hover) { .chef-help-link:hover { background: var(--chef-input); } }
+.chef-help-link[aria-current="page"] { background: var(--chef-tint); color: var(--chef-accent-text); }
+.chef-help-link:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
+/* On phones in the workspace, More holds the account menu: the header keeps Help and the bell. */
+@media (max-width: 1023px) { .chef-header-actions .is-desktop-only { display: none; } }
+
+/* ---------- Home: what stops customers ordering ---------- */
+.chef-fix-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.25rem 0.875rem;
+  border: 1px solid var(--chef-line);
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  box-shadow: var(--chef-shadow);
+  padding: 1rem;
+}
+.chef-fix-card.is-urgent { border-color: var(--chef-accent-text); box-shadow: 0 0 0 1px var(--chef-accent-text); }
+.chef-fix-card-icon {
+  grid-row: span 2;
+  display: grid;
+  height: 2.75rem;
+  width: 2.75rem;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--chef-tint);
+  color: var(--chef-tint-ink);
+}
+.chef-fix-card.is-urgent .chef-fix-card-icon { background: var(--chef-accent-text); color: #fff; }
+.chef-fix-card-title { margin: 0.125rem 0 0; font-size: 1.0625rem; font-weight: 700; line-height: 1.35; color: var(--chef-text); }
+.chef-fix-card-text { margin: 0; color: var(--chef-muted); font-size: 0.9375rem; line-height: 1.45; }
+.chef-fix-card-action { grid-column: 1 / -1; margin-top: 0.625rem; }
+@media (min-width: 640px) {
+  .chef-fix-card { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+  .chef-fix-card-action { grid-column: 3; grid-row: 1 / span 2; margin-top: 0; }
+}
+@media (min-width: 768px) { .chef-fix-card { padding: 1.25rem; } }
+
+/* One quiet line for a calm moment: no orders yet, sound on. */
+.chef-quiet-line {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--chef-radius);
+  background: var(--chef-surface);
+  border: 1px solid var(--chef-line);
+  padding: 0.875rem 1rem;
+  color: var(--chef-muted);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+.chef-quiet-line > svg { flex-shrink: 0; color: var(--chef-text); }
+/* On a phone the button drops under the sentence instead of squeezing it into a narrow column. */
+.chef-quiet-line { flex-wrap: wrap; }
+.chef-quiet-line > p { flex-basis: 12rem; }
+.chef-quiet-line strong { color: var(--chef-text); font-weight: 700; }
+
+/* ---------- Telugu and Kannada ---------- */
+/* Taller lines for vowel signs above and below; no tightened letter spacing (it breaks joined
+ * letters); buttons may wrap, because a translated label is often longer than the English one. */
+/* Long joined words (ತೆಗೆದುಕೊಳ್ಳಲಾಗುತ್ತಿದೆ) break only when a line can't hold them, instead of running under a switch. */
+.chef-panel-theme:is(:lang(te), :lang(kn)) { line-height: 1.6; overflow-wrap: anywhere; }
+/* The caption under the open/closed switch wraps to the switch's width instead of narrowing the title. */
+.chef-panel-theme:is(:lang(te), :lang(kn)) .chef-kitchen-switch label { max-width: 4.5rem; text-align: center; line-height: 1.3; }
+.chef-panel-theme:is(:lang(te), :lang(kn)) :is(h1, h2, h3, .chef-page-title, .chef-section-title, .chef-group-title, .chef-stat-value, .chef-kitchen-switch-title, .chef-check-hero-title, .chef-empty-title, .chef-fix-card-title) {
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+.chef-panel-theme:is(:lang(te), :lang(kn)) .chef-btn { white-space: normal; text-align: center; line-height: 1.35; padding-block: 0.5rem; }
+.chef-panel-theme:is(:lang(te), :lang(kn)) .chef-mobile-nav-link { font-size: 0.6875rem; line-height: 1.2; text-align: center; }
+.chef-panel-theme:is(:lang(te), :lang(kn)) .chef-pill { white-space: normal; line-height: 1.35; }
+
+/* D1 */
+/* Filter pills (Menu, Past orders, Reviews), as the app draws them: soft red when on. The darker red keeps AA on the tint. */
+.chef-panel-theme .chef-chip.is-filter[aria-pressed="true"] { background: #fdeae8; color: var(--chef-accent-text); }
+body .chef-panel-theme .chef-chip.is-filter[aria-pressed="true"] { border-color: #d92714 !important; }

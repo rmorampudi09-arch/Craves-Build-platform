@@ -39,17 +39,25 @@ public class VerificationEmailTransport {
         return message;
     }
     public Outcome send(VerificationEmailRequest request) {
+        return submit(() -> prepareMessage(request));
+    }
+    /** Ops alerts (rider SOS, dispatch queue) share this bounded client and its no-resend rule. */
+    public Outcome sendPlainText(java.util.List<String> to, String subject, String text) {
+        return submit(() -> new EmailMessage().setSenderAddress(properties.getAcsEmailSenderAddress()).setToRecipients(to.toArray(String[]::new))
+            .setSubject(subject).setBodyPlainText(text).setUserEngagementTrackingDisabled(true));
+    }
+    private Outcome submit(java.util.concurrent.Callable<EmailMessage> prepare) {
         if (!capacity.tryAcquire()) return Outcome.UNAVAILABLE;
-        try { return sendWithinCapacity(request); }
+        try { return sendWithinCapacity(prepare); }
         finally { capacity.release(); }
     }
-    private Outcome sendWithinCapacity(VerificationEmailRequest request) {
+    private Outcome sendWithinCapacity(java.util.concurrent.Callable<EmailMessage> prepare) {
         final EmailClient client;
         final EmailMessage message;
         try {
             if (!configured()) return Outcome.UNAVAILABLE;
             client = client();
-            message = prepareMessage(request);
+            message = prepare.call();
         } catch (Exception ex) { return Outcome.UNAVAILABLE; }
         // Once submission starts, all ambiguous exceptions retain UNKNOWN and must never be blindly retried.
         try {

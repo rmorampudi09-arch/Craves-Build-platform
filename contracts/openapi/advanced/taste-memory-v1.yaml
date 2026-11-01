@@ -1,0 +1,247 @@
+components:
+  schemas:
+    RememberedDish:
+      properties:
+        choiceIds:
+          items:
+            format: uuid
+            type: string
+          type: array
+        menuItemId:
+          format: uuid
+          type: string
+        note:
+          type: string
+        oil:
+          enum:
+          - LESS
+          - REGULAR
+          type: string
+        spice:
+          enum:
+          - MILD
+          - MEDIUM
+          - SPICY
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    RememberedDishLookup:
+      properties:
+        menuItemIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 100
+          minItems: 0
+          type: array
+      required:
+      - menuItemIds
+      type: object
+    RememberedDishPage:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/RememberedDish"
+          type: array
+        nextCursor:
+          type: string
+      type: object
+    RememberedDishRequest:
+      properties:
+        choiceIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 50
+          minItems: 0
+          type: array
+        note:
+          maxLength: 200
+          minLength: 0
+          type: string
+        oil:
+          enum:
+          - LESS
+          - REGULAR
+          type: string
+        spice:
+          enum:
+          - MILD
+          - MEDIUM
+          - SPICY
+          type: string
+      type: object
+    TasteProfile:
+      properties:
+        note:
+          type: string
+        oil:
+          enum:
+          - LESS
+          - REGULAR
+          type: string
+        spice:
+          enum:
+          - MILD
+          - MEDIUM
+          - SPICY
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    TasteProfileRequest:
+      properties:
+        note:
+          maxLength: 200
+          minLength: 0
+          type: string
+        oil:
+          enum:
+          - LESS
+          - REGULAR
+          type: string
+        spice:
+          enum:
+          - MILD
+          - MEDIUM
+          - SPICY
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_TASTE_MEMORY_ENABLED."
+  title: Craves taste-memory API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/taste-memory/menu-items:
+    get:
+      operationId: rememberedDishes
+      parameters:
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RememberedDishPage"
+          description: OK
+      tags:
+      - taste-memory-controller
+      x-craves-auth: user
+  /api/v1/advanced/taste-memory/menu-items/lookup:
+    post:
+      operationId: lookupRememberedDishes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RememberedDishLookup"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/RememberedDish"
+                type: array
+          description: OK
+      tags:
+      - taste-memory-controller
+      x-craves-auth: user
+  /api/v1/advanced/taste-memory/menu-items/{menuItemId}:
+    delete:
+      operationId: forgetDish
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - taste-memory-controller
+      x-craves-auth: user
+    put:
+      operationId: rememberDish
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RememberedDishRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RememberedDish"
+          description: OK
+      tags:
+      - taste-memory-controller
+      x-craves-auth: user
+  /api/v1/advanced/taste-memory/profile:
+    get:
+      operationId: tasteProfile
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TasteProfile"
+          description: OK
+      tags:
+      - taste-memory-controller
+      x-craves-auth: user
+    put:
+      operationId: setTasteProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TasteProfileRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TasteProfile"
+          description: OK
+      tags:
+      - taste-memory-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

@@ -8,6 +8,16 @@ import {
 } from '../firebase/firebaseAuthError';
 import type {AuthRole, AuthTokenResponse} from '../domain/types';
 
+let otpChallenge: {phone: string; challengeId: string} | null = null;
+
+async function sendOtp(digits: string, challengeId?: string): Promise<string> {
+  try {
+    return await authApi.sendPhoneOtp(digits, challengeId);
+  } catch (error) {
+    throw toAppApiError(error);
+  }
+}
+
 async function clearPartialAuthentication(): Promise<void> {
   await Promise.allSettled([sessionManager.clearLocal(), firebaseAuth.signOut()]);
 }
@@ -46,6 +56,49 @@ export const authService = {
     try {
       const firebaseIdToken = await firebaseAuth.confirmOtp(code);
       return await exchangeAndPersist(firebaseIdToken);
+    } catch (error) {
+      throw mapFirebaseAuthError(error);
+    }
+  },
+  /**
+   * Phone OTP sent by MSG91 through auth-service's central OTP, the web's flow. A resend to the same phone reuses
+   * the challenge; when the server no longer knows it (OTP_RESTART: expired or used) a new one starts.
+   */
+  async beginMsg91Phone(e164Phone: string): Promise<void> {
+    const digits = e164Phone.replace(/^\+91/, '');
+    const previous = otpChallenge?.phone === e164Phone ? otpChallenge.challengeId : undefined;
+    try {
+      otpChallenge = {phone: e164Phone, challengeId: await sendOtp(digits, previous)};
+    } catch (error) {
+      if (error instanceof AppApiError && error.code === 'OTP_RESEND_LIMIT') {
+        otpChallenge = null; // the server's limit stands; the next tap after the wait starts a new challenge
+      }
+      if (!previous || !(error instanceof AppApiError) || error.code !== 'OTP_RESTART') {
+        throw error;
+      }
+      otpChallenge = null;
+      otpChallenge = {phone: e164Phone, challengeId: await sendOtp(digits)};
+    }
+  },
+  async confirmMsg91Otp(code: string): Promise<AuthTokenResponse> {
+    const challenge = otpChallenge;
+    if (!challenge) {
+      throw new AppApiError('OTP_EXPIRED', 'This verification request has expired. Request a new code to continue.');
+    }
+    let customToken: string;
+    try {
+      customToken = await authApi.verifyPhoneOtp(challenge.challengeId, code);
+    } catch (error) {
+      const mapped = toAppApiError(error);
+      // A wrong code keeps the challenge for another try; anything else needs a new code.
+      if (mapped.code !== 'OTP_INVALID') {
+        otpChallenge = null;
+      }
+      throw mapped;
+    }
+    otpChallenge = null;
+    try {
+      return await exchangeAndPersist(await firebaseAuth.signInWithCustomToken(customToken));
     } catch (error) {
       throw mapFirebaseAuthError(error);
     }

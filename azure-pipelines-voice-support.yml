@@ -1,0 +1,65 @@
+# Voice support line (Exotel -> voice-support-gateway -> Azure AI Foundry Voice Live). Manual runs only; builds from
+# GitHub main at this run's commit. See docs/voice-support/README.md.
+#
+#   status   read-only report
+#   logs     read-only: recent gateway console lines (per-turn timings, call ids; never what was said)
+#   create   first time: Foundry resource + Key Vault secrets + gateway image + container app ca-craves-voice-prodlow
+#   deploy   new gateway image from this commit (rolls back on failure)
+#   disable  kill switch (ingress off); enable turns it back on
+# Mutating operations need confirmProductionChange=true and must not overlap another Craves release.
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    type: string
+    default: status
+    values: [status, logs, create, deploy, disable, enable]
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/release/voice-support-runtime.sh
+      if [[ "${{ parameters.operation }}" != status && "${{ parameters.operation }}" != logs ]]; then
+        [[ "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'ERROR: production changes are made only from main.' >&2; exit 1; }
+      fi
+    displayName: Validate
+
+  - task: UsePythonVersion@0
+    condition: and(succeeded(), not(in('${{ parameters.operation }}', 'status', 'logs')))
+    inputs:
+      versionSpec: '3.12'
+
+  - script: |
+      set -euo pipefail
+      cd services/voice-support-gateway
+      python -m pip install --quiet -r requirements-dev.txt
+      python -m pytest -q
+    condition: and(succeeded(), not(in('${{ parameters.operation }}', 'status', 'logs')))
+    displayName: Gateway tests
+
+  - task: AzureCLI@2
+    displayName: Voice support runtime (${{ parameters.operation }})
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: bash scripts/release/voice-support-runtime.sh
+    env:
+      OPERATION: ${{ parameters.operation }}
+      CONFIRM: ${{ parameters.confirmProductionChange }}
+      SOURCE_SHA: $(Build.SourceVersion)

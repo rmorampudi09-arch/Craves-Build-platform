@@ -45,6 +45,10 @@ public class DeliveryStatusUpdateService {
     private static final Set<String> STALE_BORZO_HANDOFF_STATUSES = Set.of(
         "PENDING", "SEARCHING", "DELAYED"
     );
+    // A Craves rider's order can go to Borzo, Pidge or another Craves rider only before the rider picked it up.
+    private static final Set<String> RIDER_BEFORE_PICKUP_STATUSES = Set.of(
+        "COURIER_ASSIGNED", "COURIER_TO_PICKUP", "AT_PICKUP"
+    );
 
     private final JdbcTemplate jdbcTemplate;
     private final DeliveryStatusEventValidator validator;
@@ -138,7 +142,8 @@ public class DeliveryStatusUpdateService {
             drainBufferedPidgeStatuses(data.chefSubOrderId(), data.deliveryJobId());
         }
         if (result.applied() && !data.hasHandoff()
-            && "borzo".equalsIgnoreCase(data.providerId())) {
+            && ("borzo".equalsIgnoreCase(data.providerId())
+                || DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID.equalsIgnoreCase(data.providerId()))) {
             drainBufferedHandoffs(data.chefSubOrderId(), data.deliveryJobId());
         }
         return result;
@@ -163,6 +168,18 @@ public class DeliveryStatusUpdateService {
             decision = Decision.APPLY;
         }
 
+        // A new provider's courier is not the previous one's: the chef stops seeing the courier (or Craves rider) handed over.
+        if (initialHandoff(data) && decision == Decision.APPLY) {
+            jdbcTemplate.update(
+                """
+                    UPDATE order_schema.customer_order
+                    SET delivery_partner_name = NULL, delivery_partner_phone = NULL,
+                        delivery_partner_photo_url = NULL, delivery_partner_pickup_eta_at = NULL
+                    WHERE id = ?
+                    """,
+                data.chefSubOrderId()
+            );
+        }
         // Courier details ride on any report newer than the stored one (a same-status report can still refresh them).
         if (decision == Decision.APPLY || decision == Decision.NO_CHANGE) {
             storeCourier(data);
@@ -302,24 +319,28 @@ public class DeliveryStatusUpdateService {
             );
         }
         if (initialHandoff(data)) {
+            boolean fromRider = DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID
+                .equalsIgnoreCase(data.handoffFromProviderId());
             if ((order.deliveryProviderId() != null
-                    && !"borzo".equalsIgnoreCase(order.deliveryProviderId()))
+                    && !data.handoffFromProviderId().equalsIgnoreCase(order.deliveryProviderId()))
                 || (order.deliveryProviderDeliveryId() != null
                     && !order.deliveryProviderDeliveryId().equals(data.handoffFromProviderDeliveryId()))
                 || (order.deliveryStatus() != null
-                    && !PRE_ASSIGNMENT_STATUSES.contains(order.deliveryStatus()))) {
-                throw new DeliveryStatusNonRetryableException(
-                    "Delivery handoff does not match an unassigned Borzo delivery"
+                    && !(fromRider ? RIDER_BEFORE_PICKUP_STATUSES : PRE_ASSIGNMENT_STATUSES)
+                        .contains(order.deliveryStatus()))) {
+                throw new DeliveryStatusNonRetryableException(fromRider
+                    ? "Delivery handoff does not match a Craves rider before pickup"
+                    : "Delivery handoff does not match an unassigned Borzo delivery"
                 );
             }
             if (order.deliveryJobId() == null || order.deliveryProviderId() == null
                 || order.deliveryProviderDeliveryId() == null || order.deliveryStatus() == null) {
                 throw new PriorProviderProjectionMissingException(
-                    "Prior Borzo delivery projection has not arrived yet"
+                    "Prior delivery projection has not arrived yet"
                 );
             }
             if ("DELAYED".equals(order.deliveryStatus())
-                && courierPreviouslyAssigned(order.id(), order.deliveryJobId())) {
+                && courierPreviouslyAssigned(order.id(), order.deliveryJobId(), order.deliveryProviderDeliveryId())) {
                 throw new DeliveryStatusNonRetryableException(
                     "Delayed Borzo delivery already had an assigned courier"
                 );
@@ -335,7 +356,8 @@ public class DeliveryStatusUpdateService {
                 || (continuation(data) && !order.deliveryProviderDeliveryId()
                     .equals(data.handoffFromProviderDeliveryId()))
                 || ("DELAYED".equals(order.deliveryStatus())
-                    && courierPreviouslyAssigned(order.id(), order.deliveryJobId()))) {
+                    && courierPreviouslyAssigned(order.id(), order.deliveryJobId(),
+                        order.deliveryProviderDeliveryId()))) {
                 throw new DeliveryStatusNonRetryableException(
                     "Pidge status does not match an unassigned Borzo delivery"
                 );
@@ -410,13 +432,14 @@ public class DeliveryStatusUpdateService {
         return Boolean.TRUE.equals(matched);
     }
 
-    private boolean courierPreviouslyAssigned(UUID chefSubOrderId, UUID deliveryJobId) {
+    /** Whether this Borzo delivery ever had a courier; a Craves rider earlier on the same job does not count. */
+    private boolean courierPreviouslyAssigned(UUID chefSubOrderId, UUID deliveryJobId, String borzoProviderDeliveryId) {
         Boolean matched = jdbcTemplate.queryForObject(
             """
                 SELECT EXISTS (
                     SELECT 1
                     FROM order_schema.order_delivery_status_history h
-                    WHERE h.order_id = ? AND h.delivery_job_id = ?
+                    WHERE h.order_id = ? AND h.delivery_job_id = ? AND h.provider_delivery_id = ?
                       AND h.new_status IN (
                           'COURIER_ASSIGNED', 'COURIER_TO_PICKUP', 'AT_PICKUP',
                           'PICKED_UP', 'IN_TRANSIT', 'AT_DROPOFF', 'DELIVERED',
@@ -426,7 +449,8 @@ public class DeliveryStatusUpdateService {
                 """,
             Boolean.class,
             chefSubOrderId,
-            deliveryJobId
+            deliveryJobId,
+            borzoProviderDeliveryId
         );
         return Boolean.TRUE.equals(matched);
     }

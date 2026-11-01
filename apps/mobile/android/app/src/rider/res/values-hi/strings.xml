@@ -1,0 +1,27 @@
+<resources>
+    <!-- Hindi (WORKPLAN P2-08): shown only once JS passes "hi", which it does after a native speaker signs it off. -->
+    <string name="rider_channel_offers">ऑर्डर ऑफ़र</string>
+    <string name="rider_channel_online">ऑनलाइन स्टेटस</string>
+    <string name="rider_channel_trip">ट्रिप अपडेट</string>
+    <string name="rider_offer_title">नया ऑर्डर</string>
+    <string name="rider_offer_title_pay">नया ऑर्डर: %1$s</string>
+    <string name="rider_offer_route">%1$s से %2$s</string>
+    <string name="rider_offer_body">ऑफ़र देखने के लिए टैप करें।</string>
+    <string name="rider_test_ring_title">टेस्ट रिंग</string>
+    <string name="rider_test_ring_body">ऑर्डर ऑफ़र आने पर फ़ोन ऐसे ही बजेगा।</string>
+    <string name="rider_online_title">आप ऑनलाइन हैं</string>
+    <string name="rider_online_body">आपके ऑनलाइन रहने तक Craves Rider आपकी लोकेशन भेजता है।</string>
+    <string name="rider_shift_ended">आपकी शिफ़्ट खत्म हो गई। ऑर्डर पाने के लिए फिर से ऑनलाइन जाएँ।</string>
+    <string name="rider_closed_by_phone">फ़ोन ने Craves Rider बंद कर दिया। फिर से ऑर्डर पाने के लिए ऐप खोलें।</string>
+    <string name="rider_allow_location">ऑनलाइन जाने के लिए लोकेशन की अनुमति दें।</string>
+    <string name="rider_no_internet">इंटरनेट नहीं है। फिर से कोशिश कर रहे हैं।</string>
+    <string name="rider_notifications_off">ऑर्डर पाने के लिए नोटिफ़िकेशन चालू करें।</string>
+    <string name="rider_trip_cancelled_title">ट्रिप रद्द हो गई</string>
+    <string name="rider_trip_cancelled_body">आगे क्या करना है, यह देखने के लिए Craves Rider खोलें।</string>
+    <string name="rider_go_online_title">आप ऑफ़लाइन हैं</string>
+    <string name="rider_go_online_body">फिर से ऑनलाइन आकर ऑर्डर पाने के लिए टैप करें।</string>
+    <string name="rider_account_approved_title">आपको मंज़ूरी मिल गई</string>
+    <string name="rider_account_approved_body">अगला कदम देखने के लिए Craves Rider खोलें।</string>
+    <string name="rider_account_fixes_title">आपके आवेदन में एक सुधार चाहिए</string>
+    <string name="rider_account_fixes_body">ऑप्स टीम ने क्या माँगा है, यह देखने के लिए Craves Rider खोलें।</string>
+</resources>

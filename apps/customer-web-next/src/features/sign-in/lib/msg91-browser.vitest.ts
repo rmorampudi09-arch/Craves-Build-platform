@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ signin: vi.fn() }));
 vi.mock("firebase/auth", () => ({ signInWithCustomToken: mocks.signin }));
-vi.mock("../../auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: "firebase-auth" }) }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: "firebase-auth" }) }));
 const phone = "+919876543210";
 const customToken = "synthetic-custom-token".repeat(6);
 let fetcher: ReturnType<typeof vi.fn<typeof fetch>>;

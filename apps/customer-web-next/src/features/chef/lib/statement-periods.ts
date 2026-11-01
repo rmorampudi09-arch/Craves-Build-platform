@@ -1,12 +1,21 @@
+import { messages, type Language } from "../../../shared/i18n/language.ts";
+
 /** Statement periods in India dates. The statement APIs take [from, to): `to` is the day after the last day. */
 export type StatementPreset = "this-week" | "last-week" | "this-month" | "last-month";
 
-export const STATEMENT_PRESETS: { value: StatementPreset; label: string }[] = [
-  { value: "this-week", label: "This week" },
-  { value: "last-week", label: "Last week" },
-  { value: "this-month", label: "This month" },
-  { value: "last-month", label: "Last month" },
-];
+const PRESET_WORDS = messages({
+  en: { "this-week": "This week", "last-week": "Last week", "this-month": "This month", "last-month": "Last month" },
+  te: { "this-week": "ఈ వారం", "last-week": "గత వారం", "this-month": "ఈ నెల", "last-month": "గత నెల" },
+  kn: { "this-week": "ಈ ವಾರ", "last-week": "ಕಳೆದ ವಾರ", "this-month": "ಈ ತಿಂಗಳು", "last-month": "ಕಳೆದ ತಿಂಗಳು" },
+});
+
+/** The period chips, in the chef's words. */
+export function statementPresets(language: Language = "en"): { value: StatementPreset; label: string }[] {
+  return (["this-week", "last-week", "this-month", "last-month"] as const).map((value) => ({ value, label: PRESET_WORDS[language][value] }));
+}
+
+/** The English chips, for screens that don't pass a language yet. */
+export const STATEMENT_PRESETS = statementPresets();
 
 const DAY = 86_400_000;
 const isoDay = (date: Date) => date.toISOString().slice(0, 10);

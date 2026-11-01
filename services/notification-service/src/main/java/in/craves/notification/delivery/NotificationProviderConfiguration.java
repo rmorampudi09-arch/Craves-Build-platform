@@ -9,6 +9,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +17,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class NotificationProviderConfiguration {
     @Bean
-    @ConditionalOnProperty(prefix = "craves.notification.delivery", name = "push-enabled", havingValue = "true")
+    @ConditionalOnExpression("${craves.notification.delivery.push-enabled:false} or ${craves.notification.delivery.realtime-push-enabled:false}")
     FirebaseMessaging firebaseMessaging(NotificationDeliveryProperties properties) throws Exception {
         byte[] json = Base64.getDecoder().decode(properties.getFirebaseServiceAccountJsonBase64());
         GoogleCredentials credentials = GoogleCredentials.fromStream(new ByteArrayInputStream(json));

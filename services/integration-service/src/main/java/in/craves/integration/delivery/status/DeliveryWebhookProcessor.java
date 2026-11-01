@@ -35,7 +35,7 @@ public class DeliveryWebhookProcessor {
         this.properties = properties;
     }
 
-    @Scheduled(
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER,
         fixedDelayString = "${craves.delivery-command.webhook-processing-interval-ms:2000}"
     )
     public void process() {

@@ -7,8 +7,10 @@ import { UndoToast } from "@/shared/ui/overlays/undo-toast";
 import NotificationsPage from "@/features/notifications/screens/Notifications";
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
+// One navigate for the whole test, like the app's router: a new one each render would reload the page each render.
+const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
   Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => createElement("a", { href: to, ...props }, children),
 }));
 vi.mock("@/shared/components/brand/CravesLogo", () => ({ CravesLogo: () => createElement("span", null, "Craves") }));
@@ -39,29 +41,50 @@ describe("undo toast", () => {
   });
 });
 
+/** The paged inbox answers with `notices`; PATCHes succeed; the bell's count is 1. */
+function serveInbox(notices: unknown[], extra: Record<string, unknown> = {}) {
+  const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === "PATCH") return new Response(null, { status: 204 });
+    if (url in extra) return Response.json(extra[url]);
+    if (url === "/api/notifications/in-app/page?limit=50") return Response.json({ notices, nextCursor: null, hasMore: false });
+    if (url === "/api/notifications/in-app/unread-count") return Response.json({ unreadCount: 1 });
+    return Response.json({ code: "NOT_FOUND" }, { status: 404 });
+  });
+  vi.stubGlobal("fetch", fetch);
+  return fetch;
+}
+
 describe("notifications", () => {
   function stubNotices() {
-    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
-      if (init?.method === "PATCH") return new Response(null, { status: 204 });
-      return Response.json([
-        { id: "22222222-2222-4222-8222-222222222222", title: "Order delivered", body: "Enjoy your meal.", noticeType: "ORDER",
-          targetType: null, targetId: null, readAt: null, createdAt: new Date().toISOString() },
-        { id: "33333333-3333-4333-8333-333333333333", title: "Welcome to Craves", body: "Hello.", noticeType: "ACCOUNT",
-          targetType: null, targetId: null, readAt: "2026-10-01T10:00:00Z", createdAt: "2026-10-01T10:00:00Z" },
-      ]);
-    });
-    vi.stubGlobal("fetch", fetch);
-    return fetch;
+    return serveInbox([
+      { id: "22222222-2222-4222-8222-222222222222", title: "Order delivered", body: "Enjoy your meal.", noticeType: "ORDER",
+        targetType: null, targetId: null, readAt: null, createdAt: new Date().toISOString() },
+      { id: "33333333-3333-4333-8333-333333333333", title: "Welcome to Craves", body: "Hello.", noticeType: "ACCOUNT",
+        targetType: null, targetId: null, readAt: "2026-10-01T10:00:00Z", createdAt: "2026-10-01T10:00:00Z" },
+    ]);
   }
 
   it("has one h1 and marks everything read through the read-all route", async () => {
     const fetch = stubNotices();
     render(createElement(NotificationsPage));
     expect(await screen.findByRole("heading", { level: 1, name: "Notifications" })).toBeTruthy();
+    expect(await screen.findByText("1 unread")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Mark all as read" }));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Mark all as read" })).toBeNull());
     expect(fetch).toHaveBeenCalledWith("/api/notifications/in-app/read-all", expect.objectContaining({ method: "PATCH" }));
-    expect(screen.getByRole("button", { name: /^All \(2\)/ })).toBeTruthy();
+    expect(screen.getByText("You are caught up")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All 2" })).toBeTruthy();
+  });
+
+  it("marks cleared unread notices read once the clear is kept, so the bell doesn't count them", async () => {
+    const fetch = stubNotices();
+    const view = render(createElement(NotificationsPage));
+    fireEvent.click(await screen.findByRole("button", { name: "Clear all" }));
+    view.unmount();
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith("/api/notifications/in-app/22222222-2222-4222-8222-222222222222/read", expect.objectContaining({ method: "PATCH" })),
+    );
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
   });
 
   it("hides cleared notices at once and brings them back on Undo without saving", async () => {
@@ -86,7 +109,7 @@ describe("notifications", () => {
   });
 });
 
-describe("who a notice is for, and where it leads", () => {
+describe("where a notice leads", () => {
   const ORDER = "44444444-4444-4444-8444-444444444444";
   const notices = [
     { id: "55555555-5555-4555-8555-555555555555", title: "New order received", body: "A paid Craves order is waiting.", noticeType: "CHEF_ORDER_AWAITING_ACCEPTANCE",
@@ -98,33 +121,77 @@ describe("who a notice is for, and where it leads", () => {
     { id: "88888888-8888-4888-8888-888888888888", title: "Welcome to Craves", body: "Hello.", noticeType: "ACCOUNT",
       targetType: null, targetId: null, readAt: null, createdAt: new Date().toISOString() },
   ];
-  function stub() {
-    const fetch = vi.fn(async (_url: string, init?: RequestInit) => init?.method === "PATCH" ? new Response(null, { status: 204 }) : Response.json(notices));
-    vi.stubGlobal("fetch", fetch);
-    return fetch;
-  }
-
-  it("shows a chef only kitchen notices, and opening one marks it read", async () => {
-    const fetch = stub();
-    render(createElement(NotificationsPage, { audience: "chef" }));
-    const open = await screen.findByRole("link", { name: "Open order" });
-    expect(open.getAttribute("href")).toBe(`/chef/orders/${ORDER}`);
-    expect(screen.queryByText("Chef accepted your order")).toBeNull();
-    expect(screen.queryByText("Payment received")).toBeNull();
-    expect(screen.getByText("Welcome to Craves")).toBeTruthy();
-    fireEvent.click(open);
-    expect(fetch).toHaveBeenCalledWith(`/api/notifications/in-app/${notices[0].id}/read`, expect.objectContaining({ method: "PATCH" }));
-    expect(screen.getByRole("button", { name: /^Unread \(1\)/ })).toBeTruthy();
-  });
-
-  it("links a customer's own orders and never a kitchen's order", async () => {
-    stub();
+  it("opens a customer's own orders from the whole row and never a kitchen's order", async () => {
+    const fetch = serveInbox(notices);
     render(createElement(NotificationsPage));
     await screen.findByText("Payment received");
-    const links = screen.getAllByRole("link", { name: "View order" });
-    expect(links).toHaveLength(2);
-    expect(links.every((link) => link.getAttribute("href") === `/orders/${ORDER}`)).toBe(true);
-    expect(screen.getByText("New order received")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Open order" })).toBeNull();
+    const orderLinks = screen.getAllByRole("link").filter((link) => link.getAttribute("href") === `/orders/${ORDER}`);
+    expect(orderLinks.map((link) => link.textContent)).toEqual(["Chef accepted your order", "Payment received"]);
+    expect(screen.queryByRole("link", { name: "New order received" })).toBeNull();
+    // A notice that leads nowhere is read with one tap.
+    fireEvent.click(screen.getByRole("button", { name: "Welcome to Craves, mark as read" }));
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith("/api/notifications/in-app/88888888-8888-4888-8888-888888888888/read", expect.objectContaining({ method: "PATCH" })),
+    );
+  });
+
+  it("sorts notices under the app's chips and filters by them", async () => {
+    serveInbox(notices);
+    render(createElement(NotificationsPage));
+    fireEvent.click(await screen.findByRole("button", { name: "Orders 3" }));
+    expect(screen.getByRole("button", { name: "Orders 3" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Welcome to Craves")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Offers 0" }));
+    expect(screen.getByRole("heading", { name: "Nothing in this category" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Updates 1" }));
+    expect(screen.getByText("Welcome to Craves")).toBeTruthy();
+  });
+
+  it("opens a delivery notice on the live tracking page", async () => {
+    serveInbox([{ ...notices[1], targetType: "DELIVERY", title: "Your rider is on the way" }]);
+    render(createElement(NotificationsPage));
+    expect((await screen.findByRole("link", { name: "Your rider is on the way" })).getAttribute("href")).toBe(`/orders/${ORDER}/tracking`);
+  });
+});
+
+describe("loading the inbox", () => {
+  const notice = (n: number) => ({ id: `${n}${n}${n}${n}${n}${n}${n}${n}-1111-4111-8111-111111111111`, title: `Notice ${n}`, body: "Body.", noticeType: "ACCOUNT",
+    targetType: null, targetId: null, readAt: "2026-10-01T10:00:00Z", createdAt: `2026-10-0${n}T10:00:00Z` });
+
+  it("loads older notifications from the paged inbox", async () => {
+    serveInbox([], {
+      "/api/notifications/in-app/page?limit=50": { notices: [notice(2)], nextCursor: "c2", hasMore: true },
+      "/api/notifications/in-app/page?limit=50&cursor=c2": { notices: [notice(1)], nextCursor: null, hasMore: false },
+    });
+    render(createElement(NotificationsPage));
+    fireEvent.click(await screen.findByRole("button", { name: "Load older notifications" }));
+    expect(await screen.findByText("Notice 1")).toBeTruthy();
+    expect(screen.getByText("Notice 2")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load older notifications" })).toBeNull();
+    expect(screen.getByText("You've reached the end")).toBeTruthy();
+  });
+
+  it("shows today's latest list while the paged inbox isn't live", async () => {
+    const fetch = vi.fn(async (url: string) =>
+      url.startsWith("/api/notifications/in-app/page")
+        ? Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 })
+        : url === "/api/notifications/in-app?limit=50" ? Response.json([notice(3)]) : Response.json({ unreadCount: 0 }));
+    vi.stubGlobal("fetch", fetch);
+    render(createElement(NotificationsPage));
+    expect(await screen.findByText("Notice 3")).toBeTruthy();
+    expect(screen.getByText("You are caught up")).toBeTruthy();
+  });
+
+  it("draws the empty inbox and a failed load like the app", async () => {
+    serveInbox([]);
+    render(createElement(NotificationsPage));
+    expect(await screen.findByRole("heading", { name: "No notifications yet" })).toBeTruthy();
+    expect(screen.getByTestId("empty-illustration-notifications")).toBeTruthy();
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "NOTIFICATIONS_UNAVAILABLE", message: "db down" }, { status: 503 })));
+    render(createElement(NotificationsPage));
+    expect(await screen.findByRole("heading", { name: "We couldn’t load your notifications" })).toBeTruthy();
+    expect(screen.queryByText(/db down/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });

@@ -28,7 +28,7 @@ const screens: Screen[] = [
   { name: "finance", path: "/chef/finance", h1: "Balance & payouts", setup: approved },
   { name: "bank", path: "/chef/bank", h1: "Bank account", setup: approved },
   { name: "statements", path: "/chef/statements", h1: "Statements", setup: approved },
-  { name: "more", path: "/chef/profile", h1: "More", setup: approved },
+  { name: "more", path: "/chef/profile", h1: "Profile", setup: approved },
   { name: "kitchen-details", path: "/chef/kitchen", h1: "Kitchen", setup: approved },
   { name: "readiness", path: "/chef/operations", h1: "Can customers find you?", setup: approved },
 ];

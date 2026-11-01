@@ -221,6 +221,9 @@ public class NearbyDiscoveryService {
                 kp.state,
                 kp.latitude,
                 kp.longitude,
+                kp.chef_photo_url,
+                kp.kitchen_photo_url,
+                kp.kitchen_photo_2_url,
                 ROUND(public.ST_Distance(kp.location, rl.location))::bigint AS distance_meters,
                 (
                     SELECT COUNT(*)
@@ -569,7 +572,9 @@ public class NearbyDiscoveryService {
             rs.getBigDecimal("latitude"),
             rs.getBigDecimal("longitude"),
             rs.getLong("distance_meters"),
-            rs.getLong("active_menu_item_count")
+            rs.getLong("active_menu_item_count"),
+            rs.getString("chef_photo_url"),
+            CatalogService.kitchenPhotoUrls(rs)
         );
     }
 

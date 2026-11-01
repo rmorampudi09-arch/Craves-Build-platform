@@ -20,10 +20,12 @@ it("sends the conversation without the greeting, shows typing, the reply, Sent a
   type("My payout is missing");
   expect(screen.getByText(/Sending$/)).toBeTruthy();
   expect(screen.getByText("Craves Assistant is typing")).toBeTruthy();
-  answer(Response.json({ reply: "I've raised this with our team.", supportCase: { id: "c1", caseNumber: "SUP-1042" } }));
+  answer(Response.json({ reply: "I've raised this with our team.", supportCase: { id: "5c000000-0000-4000-8000-000000000001", caseNumber: "CRV-2026-01042" } }));
   expect(await screen.findByText("I've raised this with our team.")).toBeTruthy();
   expect(screen.getByText(/ Sent$/)).toBeTruthy();
-  expect(screen.getByRole("status").textContent).toContain("Ticket SUP-1042 created — our team will reply in your notifications");
+  // The same short number as the chef's ticket list, where the reply arrives.
+  expect(screen.getByRole("status").textContent).toContain("Ticket #01042 created — see it in Help & support");
+  expect(screen.getByRole("link", { name: "Help & support" }).getAttribute("href")).toBe("/chef/support/tickets/5c000000-0000-4000-8000-000000000001");
   const [url, init] = fetch.mock.calls[0];
   expect(url).toBe("/api/support/chat");
   expect(JSON.parse(init.body)).toEqual({
@@ -88,4 +90,12 @@ it("lets a visitor who is not signed in ask for a callback", async () => {
   expect(url).toBe("/api/support/chat/guest");
   expect(JSON.parse(init.body)).toEqual({ messages: [{ role: "user", content: "Please call me on 9876543210" }] });
   expect(init.credentials).toBeUndefined();
+});
+
+it("greets a chat opened from an order about that order, like the app", () => {
+  render(createElement(SupportChat, { contextRole: "CUSTOMER", orderId: "0b6f3f1e-8d0a-4c43-9a3e-2f7f6c2d9b11" }));
+  expect(screen.getByText("Hi! How can I help with this order? You can also ask where to find anything in the app.")).toBeTruthy();
+  cleanup();
+  render(createElement(SupportChat, { contextRole: "CUSTOMER" }));
+  expect(screen.getByText(/^Hi! I'm the Craves support assistant\. Ask me about your orders/)).toBeTruthy();
 });

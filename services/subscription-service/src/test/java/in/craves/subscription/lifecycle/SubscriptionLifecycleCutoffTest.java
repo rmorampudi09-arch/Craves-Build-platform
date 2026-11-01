@@ -3,6 +3,7 @@ package in.craves.subscription.lifecycle;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -13,10 +14,14 @@ import static org.mockito.Mockito.when;
 import in.craves.subscription.billing.SubscriptionBillingProperties;
 import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditRepository;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.OwnedSubscription;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.ScheduleClock;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.ResumeSubscriptionRequest;
+import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.policy.SubscriptionPolicyModels.SubscriptionPolicyResponse;
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
 import in.craves.subscription.repository.SubscriptionRepository;
@@ -47,7 +52,7 @@ class SubscriptionLifecycleCutoffTest {
     private final SubscriptionBillingRepository billingRepository = mock(SubscriptionBillingRepository.class);
     private final SubscriptionLifecycleService service = new SubscriptionLifecycleService(
         lifecycle, policies, subscriptions, mock(CapacityService.class), new SubscriptionBillingProperties(),
-        billingRepository, Clock.fixed(NOW, ZoneOffset.UTC)
+        new DayCreditService(mock(DayCreditRepository.class), billingRepository, mock(OccurrenceRepository.class), false, Clock.systemUTC()), Clock.fixed(NOW, ZoneOffset.UTC)
     );
 
     @BeforeEach
@@ -58,9 +63,15 @@ class SubscriptionLifecycleCutoffTest {
         ));
         when(lifecycle.findActiveScheduleClock(PLAN_ID)).thenReturn(Optional.of(new ScheduleClock("Asia/Kolkata", LocalTime.NOON)));
         when(lifecycle.findOccurrenceServiceAt(any(), any())).thenReturn(Optional.empty());
-        when(lifecycle.pause(eq(SUBSCRIPTION_ID), eq(CUSTOMER_ID), any())).thenReturn(true);
+        when(lifecycle.pause(eq(SUBSCRIPTION_ID), eq(CUSTOMER_ID), any(), any(), any(), anyInt(), any())).thenReturn(true);
+        when(lifecycle.pauseUsage(SUBSCRIPTION_ID)).thenReturn(new PauseUsage(null, 0, null, null));
+        when(lifecycle.firstUnservedDate(eq(SUBSCRIPTION_ID), any())).thenReturn(LocalDate.parse("2026-10-11"));
+        when(lifecycle.currentBillStart(eq(SUBSCRIPTION_ID), any())).thenReturn(LocalDate.parse("2026-10-04"));
         when(lifecycle.cancel(eq(SUBSCRIPTION_ID), eq(CUSTOMER_ID), any())).thenReturn(true);
-        when(subscriptions.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(mock(SubscriptionResponse.class)));
+        SubscriptionResponse weekly = mock(SubscriptionResponse.class);
+        when(weekly.id()).thenReturn(SUBSCRIPTION_ID);
+        when(weekly.billingPeriod()).thenReturn("WEEKLY");
+        when(subscriptions.findSubscriptionById(SUBSCRIPTION_ID)).thenReturn(Optional.of(weekly));
     }
 
     @Test
@@ -80,7 +91,7 @@ class SubscriptionLifecycleCutoffTest {
         assertThatThrownBy(() -> service.pause(SUBSCRIPTION_ID, "Travelling", CUSTOMER))
             .isInstanceOf(ApiException.class)
             .hasMessageContaining("cutoff");
-        verify(lifecycle, never()).pause(any(), any(), anyString());
+        verify(lifecycle, never()).pause(any(), any(), anyString(), any(), any(), anyInt(), any());
     }
 
     @Test

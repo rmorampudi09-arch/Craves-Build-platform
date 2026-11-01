@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, LoaderCircle, LockKeyhole } from "lucide-react";
 import {
@@ -10,8 +10,9 @@ import {
 } from "@/features/checkout/lib/payment-contract";
 import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { loadCart } from "@/features/cart/api/cravesCart";
+import { markPaidParcelDue } from "@/shared/lib/paid-parcel";
 
 type CheckoutWindow = Window & {
   Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayCheckout;
@@ -48,6 +49,8 @@ type RazorpayCheckoutOptions = {
     email?: string;
     contact?: string;
   };
+  /** Seconds until Razorpay closes itself. */
+  timeout: number;
   handler(response: RazorpaySuccess): void;
   modal: { ondismiss(): void };
   theme: { color: string };
@@ -55,6 +58,7 @@ type RazorpayCheckoutOptions = {
 
 export type CheckoutPaymentFailure = {
   message: string;
+  /** False once this checkout can't be paid any more (its 15 minutes ran out): only Review cart helps. */
   retryAllowed: boolean;
   /** Where the fix lives. Payment and connection problems show next to Pay. */
   section?: "address" | "cart";
@@ -90,8 +94,35 @@ function forgetPendingPayment() {
   window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
 }
 
-/** The customer closed Razorpay before paying: nothing happened, so not an error. */
-class PaymentDismissedError extends Error {}
+// Owner rule: 15 minutes from checkout creation to pay, enforced here. The backend refuses (410) only once
+// order-service has closed the unpaid checkout, after 35 minutes.
+const PAYMENT_WINDOW_MS = 15 * 60_000;
+const PAYMENT_TIMED_OUT = "This checkout timed out. Review your order again to pay.";
+const PAYMENT_FAILED =
+  "If money left your account, your bank will return it in 5–7 working days.";
+
+/** The checkout's 15 minutes to pay ran out, so Razorpay isn't opened. */
+class CheckoutTimedOutError extends Error {}
+
+/** Runs check every 5 s for the first minute, then every 15 s, until forMs has passed or the returned stop runs. */
+function pollPayment(check: () => Promise<unknown>, forMs: number): () => void {
+  const started = Date.now();
+  let timer = 0;
+  let stopped = false;
+  const next = () => {
+    const elapsed = Date.now() - started;
+    const wait = elapsed < 60_000 ? 5_000 : 15_000;
+    if (stopped || elapsed + wait > forMs) return;
+    timer = window.setTimeout(() => {
+      void check().catch(() => undefined).finally(next);
+    }, wait);
+  };
+  next();
+  return () => {
+    stopped = true;
+    window.clearTimeout(timer);
+  };
+}
 
 const clockTime = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" });
 
@@ -101,10 +132,13 @@ interface CheckoutPaymentButtonProps {
   currency: string;
   disabled?: boolean;
   failure: CheckoutPaymentFailure;
-  ensureCheckout: () => Promise<CustomerCheckout>;
+  /** Review total: creates the checkout (an unpaid order) and shows its total. */
+  ensureCheckout: () => Promise<unknown>;
   onFailure: (failure: CheckoutPaymentFailure) => void;
   /** True while a payment is being opened, paid or confirmed: checkout then keeps its address. */
   onPaymentLockChange?: (locked: boolean) => void;
+  /** Rebuilds the cart from a checkout that timed out. Without it, Review cart stays disabled. */
+  onReviewCart?: () => void;
 }
 
 function money(amount: number, currency: string): string {
@@ -190,16 +224,20 @@ export function CheckoutPaymentButton({
   ensureCheckout,
   onFailure,
   onPaymentLockChange,
+  onReviewCart,
 }: CheckoutPaymentButtonProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingPayment | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkProblem, setCheckProblem] = useState("");
-  const [notice, setNotice] = useState("");
+  // Razorpay closed without a confirmed payment: a UPI payment approved in the app can still land.
+  const [closedPaymentId, setClosedPaymentId] = useState<string | null>(null);
 
   const paymentLocked = busy || pending !== null;
-  useEffect(() => {
+  // Layout effect: checkout's Back and address lock in the same commit that shows the payment state. A passive effect
+  // left a gap where "We're confirming your payment" was on screen but Back still rebuilt the cart and left.
+  useLayoutEffect(() => {
     onPaymentLockChange?.(paymentLocked);
   }, [onPaymentLockChange, paymentLocked]);
 
@@ -215,15 +253,19 @@ export function CheckoutPaymentButton({
     window.sessionStorage.removeItem("craves.checkout.instructions");
     window.sessionStorage.removeItem("craves.checkout.id");
     window.sessionStorage.removeItem("craves.checkout.operationId");
-    router.replace(`/orders/${orderId}`);
+    // Razorpay's success is verified (PAID): only now does the order page fold the cart's leaf into a parcel.
+    markPaidParcelDue(orderId);
+    // The order can trail a verified payment: paid=1 keeps its page from offering Pay again meanwhile.
+    router.replace(`/orders/${orderId}?paid=1`);
   }, [router]);
 
-  const checkStatus = useCallback(async (paymentOrderId: string) => {
+  /** Quiet checks (the automatic ones) leave the Check status button and its error line alone. */
+  const checkStatus = useCallback(async (paymentOrderId: string, quiet = false) => {
     if (!checkout) return;
-    setChecking(true);
-    setCheckProblem("");
+    if (!quiet) setChecking(true);
     try {
       const status = await readPaymentStatus(paymentOrderId);
+      setCheckProblem("");
       if (status.status === "PAID") {
         await finishConfirmedOrder(checkout);
         return;
@@ -231,28 +273,40 @@ export function CheckoutPaymentButton({
       if (status.status === "FAILED" || status.status === "CANCELLED") {
         forgetPendingPayment();
         setPending(null);
-        onFailure({
-          message:
-            "The payment wasn’t completed. Nothing was charged by Craves. Your reviewed order is still available.",
-          retryAllowed: true,
-        });
+        onFailure({ message: PAYMENT_FAILED, retryAllowed: true });
         return;
       }
       setPending({ paymentOrderId, checkedAt: new Date() });
     } catch {
-      setCheckProblem("We couldn’t check just now. Try again in a moment.");
+      if (!quiet) setCheckProblem("We couldn’t check just now. Try again in a moment.");
     } finally {
-      setChecking(false);
+      if (!quiet) setChecking(false);
     }
   }, [checkout, finishConfirmedOrder, onFailure]);
 
-  // After a reload, pick up a payment that was submitted for this checkout.
-  useEffect(() => {
+  // After a reload, pick up a payment that was submitted for this checkout before the first paint, so Pay and an
+  // unlocked Back never show for a frame.
+  useLayoutEffect(() => {
     const paymentOrderId = checkout ? storedPendingPayment(checkout.id) : null;
     if (!paymentOrderId) return;
     setPending({ paymentOrderId, checkedAt: null });
     void checkStatus(paymentOrderId);
   }, [checkout, checkStatus]);
+
+  // While a payment is being confirmed, check by itself for up to 15 minutes; Check status stays for the impatient.
+  const pendingPaymentId = pending?.paymentOrderId;
+  useEffect(() => {
+    if (!pendingPaymentId) return;
+    return pollPayment(() => checkStatus(pendingPaymentId, true), 15 * 60_000);
+  }, [pendingPaymentId, checkStatus]);
+
+  // After Razorpay closed unpaid, look quietly for 2 minutes: only a PAID payment changes the screen.
+  useEffect(() => {
+    if (!closedPaymentId || !checkout) return;
+    return pollPayment(async () => {
+      if ((await readPaymentStatus(closedPaymentId)).status === "PAID") await finishConfirmedOrder(checkout);
+    }, 2 * 60_000);
+  }, [closedPaymentId, checkout, finishConfirmedOrder]);
 
   async function createPayment(checkoutId: string) {
     const response = await sessionFetch("/api/payments/orders", {
@@ -261,7 +315,11 @@ export function CheckoutPaymentButton({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ checkoutId }),
     });
+    // The 15 minutes run on the server's clock (its Date header), so a wrong device clock can't block or stretch them.
+    const clockOffset = (Date.parse(response.headers.get("date") ?? "") || Date.now()) - Date.now();
     const raw = await response.json().catch(() => null);
+    // 410: order-service already closed this checkout. Before that, the 15 minutes are checked below.
+    if (response.status === 410) throw new CheckoutTimedOutError();
     if (!response.ok) {
       throw new Error(
         responseMessage(raw, "We couldn’t start the payment. You haven’t been charged. Try again."),
@@ -280,7 +338,7 @@ export function CheckoutPaymentButton({
     ) {
       throw new Error("Razorpay checkout configuration is incomplete.");
     }
-    return parsed;
+    return { ...parsed, clockOffset };
   }
 
   async function verifyPayment(
@@ -331,7 +389,7 @@ export function CheckoutPaymentButton({
   async function openPayment() {
     if (busy || disabled) return;
     setBusy(true);
-    setNotice("");
+    setClosedPaymentId(null);
     onFailure(null);
     let submitted: string | null = null;
 
@@ -352,15 +410,21 @@ export function CheckoutPaymentButton({
       if (!razorpayConstructor()) {
         throw new Error("Razorpay checkout is unavailable.");
       }
+      // Razorpay closes itself when the checkout's 15 minutes run out; with none left it isn't opened.
+      const timeout = Math.floor(
+        (Date.parse(currentCheckout.createdAt) + PAYMENT_WINDOW_MS - Date.now() - payment.clockOffset) / 1000,
+      );
+      if (!(timeout > 0)) throw new CheckoutTimedOutError();
 
       const profileName =
         [session.firstName, session.lastName].filter(Boolean).join(" ").trim() ||
         session.username ||
         "Craves customer";
       const contact = session.phoneNumber || session.phone || "";
-      let bankFailureReason = "";
+      let bankDeclined = false;
 
-      const result = await new Promise<RazorpaySuccess>((resolve, reject) => {
+      // null: Razorpay was closed without its success callback.
+      const result = await new Promise<RazorpaySuccess | null>((resolve, reject) => {
         let settled = false;
         const Razorpay = razorpayConstructor();
         if (!Razorpay) {
@@ -380,6 +444,7 @@ export function CheckoutPaymentButton({
             email: session.email || undefined,
             contact: contact || undefined,
           },
+          timeout,
           handler: (response) => {
             if (settled) return;
             settled = true;
@@ -389,24 +454,26 @@ export function CheckoutPaymentButton({
             ondismiss: () => {
               if (settled) return;
               settled = true;
-              reject(
-                bankFailureReason
-                  ? new Error(bankFailureReason)
-                  : new PaymentDismissedError(),
-              );
+              resolve(null);
             },
           },
           theme: { color: "#F62E18" },
         });
 
-        instance.on("payment.failed", (response) => {
-          bankFailureReason =
-            response.error?.description ||
-            response.error?.reason ||
-            "The bank or payment provider declined the payment.";
+        instance.on("payment.failed", () => {
+          bankDeclined = true;
         });
         instance.open();
       });
+
+      if (!result) {
+        // Closed before Razorpay's success: a payment approved in the UPI app may still be paid, so look once first.
+        const status = await readPaymentStatus(payment.paymentOrderId).catch(() => null);
+        if (status?.status === "PAID") await finishConfirmedOrder(currentCheckout);
+        else if (bankDeclined) onFailure({ message: PAYMENT_FAILED, retryAllowed: true });
+        else setClosedPaymentId(payment.paymentOrderId);
+        return;
+      }
 
       submitted = payment.paymentOrderId;
       rememberPendingPayment(currentCheckout.id, submitted);
@@ -418,18 +485,13 @@ export function CheckoutPaymentButton({
         setPending({ paymentOrderId: submitted, checkedAt: null });
         return;
       }
-      if (error instanceof PaymentDismissedError) {
-        setNotice("Payment cancelled. You haven’t been charged.");
+      if (error instanceof CheckoutTimedOutError) {
+        onFailure({ message: PAYMENT_TIMED_OUT, retryAllowed: false });
         return;
       }
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Payment checkout could not be completed.";
+      // Errors from before Razorpay opened: no payment was attempted, so no refund sentence.
       onFailure({
-        message: checkout
-          ? `${message} Nothing was charged by Craves. Your reviewed order is still available.`
-          : `${message} Nothing was charged by Craves. Your cart is still here.`,
+        message: error instanceof Error ? error.message : "Payment checkout could not be completed.",
         retryAllowed: true,
       });
     } finally {
@@ -438,13 +500,16 @@ export function CheckoutPaymentButton({
   }
 
   const authoritativeAmount = checkout?.grandTotal ?? null;
-  const buttonLabel = failure?.retryAllowed
-    ? checkout
-      ? "Try payment again"
-      : "Retry total"
-    : authoritativeAmount !== null
-      ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
-      : "Preparing total…";
+  const timedOut = failure?.retryAllowed === false;
+  const buttonLabel = timedOut
+    ? "Review cart"
+    : failure?.retryAllowed || closedPaymentId
+      ? checkout
+        ? "Try payment again"
+        : "Retry total"
+      : authoritativeAmount !== null
+        ? `Pay ${money(authoritativeAmount, checkout?.currency ?? currency)}`
+        : "Review total";
   const barClass =
     "fixed inset-x-0 bottom-0 z-30 border-t border-[#E5E7EB] bg-white shadow-[0_-8px_28px_rgba(17,24,39,0.06)] lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:shadow-none";
 
@@ -495,45 +560,46 @@ export function CheckoutPaymentButton({
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#C4200F]" aria-hidden="true" />
           <div className="min-w-0">
             <p className="text-sm font-bold text-[#1A1A1A]">
-              {checkout ? "Payment didn’t go through" : "We couldn’t prepare your order"}
+              {checkout ? (timedOut ? "Time to pay ran out" : "Payment didn’t go through") : "We couldn’t prepare your order"}
             </p>
             <p className="mt-0.5 text-xs leading-5 text-[#6B6B6B]">{paymentProblem.message}</p>
           </div>
         </div>
-      ) : notice ? (
+      ) : closedPaymentId ? (
         <p
           role="status"
           className="mx-auto max-w-2xl px-4 pt-3 text-sm font-medium text-[#1A1A1A] md:px-6 lg:max-w-none lg:px-0"
         >
-          {notice}
+          Payment not completed. If money left your account, we’ll confirm it here, or your bank will return it in
+          5–7 working days.
         </p>
       ) : null}
       <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6 lg:max-w-none lg:flex-col lg:items-stretch lg:gap-3 lg:px-0 lg:pb-0 lg:pt-4">
-        <div className="shrink-0 lg:hidden">
+        {/* Wraps its note before the button narrows: "Review total" and its lock need 175px at 360px. */}
+        <div className="lg:hidden">
           <p className="text-xl font-bold tabular-nums text-[#1A1A1A]">
             {authoritativeAmount !== null
               ? money(authoritativeAmount, checkout?.currency ?? currency)
               : money(previewAmount, currency)}
           </p>
           <p className="text-[10px] text-[#6B6B6B]">
+            {/* No "not charged" after a failure: a bank can debit a payment that failed. */}
             {authoritativeAmount !== null
-              ? failure?.retryAllowed
-                ? "not charged"
-                : "incl. taxes"
-              : "food subtotal · final total calculates automatically"}
+              ? "incl. taxes"
+              : "food subtotal · fees and tax on Review total"}
           </p>
         </div>
 
         <button
           type="button"
-          disabled={busy || disabled}
+          disabled={busy || disabled || (timedOut && !onReviewCart)}
           aria-busy={busy}
-          onClick={() => void openPayment()}
-          className="craves-primary-action ml-auto flex-1 !px-4 sm:flex-none sm:min-w-52 sm:!px-6 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none"
+          onClick={() => (timedOut ? onReviewCart?.() : void openPayment())}
+          className="craves-primary-action ml-auto flex-[1_0_auto] !px-4 sm:flex-none sm:min-w-52 sm:!px-6 lg:ml-0 lg:w-full lg:min-w-0 lg:flex-none"
         >
           {busy ? (
             <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
-          ) : (
+          ) : timedOut ? null : (
             <LockKeyhole className="h-5 w-5" aria-hidden="true" />
           )}
           {/* Short busy labels keep the 19px label on one line at 360px. */}

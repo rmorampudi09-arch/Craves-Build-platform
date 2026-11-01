@@ -1,0 +1,43 @@
+# Rider API (craves-rider-v1) and admin fleet API (craves-admin-fleet-v1) on the mobile gateway (apim-craves-prodlow-kmqgfy).
+# Manual runs from main only.
+#
+# Run AFTER the integration-service image that carries the routes is live (its fleet flags may stay off): the script only
+# wires the gateway, and each route is probed for a 401 when unauthenticated. Without confirmProductionChange the run only
+# validates the script and prints the route table. To go back to an earlier version, run this pipeline at that main commit;
+# to remove both APIs, run azure-pipelines-rider-fleet-apim-rollback.yml. A write must not overlap another Craves release.
+trigger: none
+pr: none
+
+parameters:
+  - name: confirmProductionChange
+    type: boolean
+    default: false
+
+variables:
+  azureServiceConnection: Craves-RMORAMPUDI09-Service-Connection
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    clean: true
+    fetchDepth: 1
+    persistCredentials: false
+
+  - script: |
+      set -euo pipefail
+      bash -n scripts/apim/configure-rider-fleet-apim.sh
+      DRY_RUN=true bash scripts/apim/configure-rider-fleet-apim.sh
+    displayName: Validate rider fleet APIM script and print the route table
+
+  - task: AzureCLI@2
+    displayName: Rider and admin fleet APIM routes
+    condition: and(succeeded(), eq('${{ parameters.confirmProductionChange }}', 'True'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        [[ "$BUILD_REASON" == Manual && "$BUILD_SOURCEBRANCH" == refs/heads/main ]] || { echo 'Only a manual run from main may write the gateway.' >&2; exit 2; }
+        CONFIRM_APIM_WRITE=true bash scripts/apim/configure-rider-fleet-apim.sh

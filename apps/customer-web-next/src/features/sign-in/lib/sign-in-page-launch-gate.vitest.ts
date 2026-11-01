@@ -9,7 +9,7 @@ vi.mock("./customer-launch", async (original) => ({
 }));
 vi.mock("next/link", () => ({ default: (props: { href: string; children?: unknown }) => createElement("a", { href: props.href }, props.children as never) }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); } }));
-vi.mock("@/features/sign-in/components/phone-auth-form", () => ({ PhoneAuthForm: () => createElement("form", { id: "phone-auth-form" }) }));
+vi.mock("@/features/sign-in/components/phone-auth-form", () => ({ PhoneAuthForm: ({ email }: { email?: boolean }) => createElement("form", { id: "phone-auth-form", "data-email": String(email) }) }));
 vi.mock("@/shared/components/brand/CravesLogo", () => ({ CravesLogo: () => createElement("span", null, "Craves") }));
 
 const { default: SignInPage } = await import("@/app/sign-in/page");
@@ -24,6 +24,11 @@ it("shows customers the launching-soon note unless the private link is used", as
   expect(await page({})).not.toContain("phone-auth-form");
   expect(await page({ access: "wrong-key", returnTo: "/home" })).not.toContain("phone-auth-form");
   expect(await page({ access: "test-key", returnTo: "/home" })).toContain("phone-auth-form");
+});
+
+it("opens on email & password from the landing popup's link, and on phone OTP otherwise", async () => {
+  expect(await page({ access: "test-key", returnTo: "/home", method: "email" })).toContain('data-email="true"');
+  expect(await page({ access: "test-key", returnTo: "/home" })).toContain('data-email="false"');
 });
 
 it("shows the rider illustration on the note, resized by the image optimizer", async () => {

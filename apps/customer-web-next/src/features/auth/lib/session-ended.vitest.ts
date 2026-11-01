@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { setSessionIdentity, synchronizeSessionRoles } from "@/features/auth/api/cravesAuth";
-import { BEFORE_SIGN_IN_EVENT, SESSION_ENDED_EVENT, sessionFetch } from "@/features/auth/api/sessionFetch";
+import { BEFORE_SIGN_IN_EVENT, SESSION_ENDED_EVENT, sessionFetch } from "@/shared/lib/session-fetch";
 
 const route = vi.hoisted(() => ({ pathname: "/checkout" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname, useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
@@ -117,8 +117,9 @@ describe("one refresh at a time", () => {
       String(input) === "/api/auth/me" ? Response.json(identity) : Response.json({ identity }));
     vi.stubGlobal("fetch", fetcher);
     const request = vi.fn(async (_name: string, work: () => Promise<unknown>) => {
-      // Another tab finishes renewing the shared cookies while this one waits for the lock.
-      localStorage.setItem("craves.session.refreshed-at", String(Date.now()));
+      // Another tab finishes renewing the shared cookies while this one waits for the lock. A strictly later time:
+      // in the same millisecond as this tab's own last refresh (an earlier test's), it would read as this tab's own.
+      localStorage.setItem("craves.session.refreshed-at", String(Date.now() + 1));
       return work();
     });
     vi.stubGlobal("navigator", { ...navigator, locks: { request } });

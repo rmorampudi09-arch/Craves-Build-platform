@@ -118,23 +118,17 @@ test("public landing keeps the approved semantic reference experience and wired 
   assert.doesNotMatch(landing, /min-h-screen bg-cream text-ink/);
 });
 
-test("welcome banner uses the approved responsive full-art asset while discovery uses the saved default address", () => {
-  assert.match(welcome, /src="\/home\/cravings\/craves-home-banner\.webp"/);
-  assert.match(welcome, /width=\{1983\}/);
-  assert.match(welcome, /height=\{793\}/);
-  assert.match(welcome, /unoptimized/);
-  assert.match(welcome, /className="block h-auto w-full"/);
-  // The approved artwork is shown as it is: no greeting box over it.
-  assert.doesNotMatch(welcome, /greetingName|Hello \{/);
-  assert.doesNotMatch(welcome, /absolute left-/);
-  assert.match(welcome, /data-live-dish-count=\{dishCount\}/);
-  assert.doesNotMatch(welcome, /styles\.heroArtwork/);
-  assert.doesNotMatch(welcome, /import \{ Heart \} from "lucide-react"/);
-  assert.doesNotMatch(welcome, /backdrop-blur-sm/);
-  assert.match(welcome, /Eat for Health\./);
-  assert.match(welcome, /Taste the[\s\S]*Comfort of[\s\S]*Home\./);
-  assert.match(welcome, /dishCount/);
-  assert.doesNotMatch(welcome, /<button/);
+test("welcome banner shows the admin-published promo banners while discovery uses the saved default address", () => {
+  assert.match(welcome, /fetchHomeBanners\(\)/);
+  // No bundled fallback: with no banners (or a failed call) the section is not shown.
+  assert.doesNotMatch(welcome, /craves-home-banner\.webp/);
+  assert.match(welcome, /if \(!count\) return null;/);
+  assert.match(welcome, /aspect-\[2\/1\]/);
+  assert.match(welcome, /export const BANNER_ADVANCE_MS = 4_000;/);
+  assert.match(welcome, /useReducedMotion\(\)/);
+  assert.match(welcome, /visibilitychange/);
+  assert.match(welcome, /Pause banners/);
+  assert.match(welcome, /onClick=\{onOpenSearch\}/);
   assert.doesNotMatch(welcome, /Default address/);
   assert.doesNotMatch(welcome, /Choose default address/);
   assert.doesNotMatch(welcome, /Use current delivery location/);
@@ -235,9 +229,9 @@ test("checkout is one page with saved addresses, ASAP delivery and the shared ad
   assert.match(checkout, /window\.sessionStorage\.setItem\(CHECKOUT_ID_KEY, prepared\.id\)/);
   assert.match(checkout, /ensureCheckoutCart\(checkout\.orders\)/);
   assert.match(checkout, /handleBackToCart/);
-  assert.match(checkout, /autoReviewKeyRef/);
-  assert.match(checkout, /Calculating delivery fee, tax and your final total/);
-  assert.match(checkout, /Your final total is calculated automatically for the selected address/);
+  // Pricing creates a PAYMENT_PENDING order, so it waits for Review total instead of running when checkout opens.
+  assert.doesNotMatch(checkout, /autoReviewKeyRef/);
+  assert.match(checkout, /Tap Review total to see the delivery fee, tax and your final total/);
   assert.doesNotMatch(checkout, /CheckoutAddressDialog/);
   assert.doesNotMatch(checkout, /Pick a time/);
   assert.doesNotMatch(checkout, /schedule\/capability/);
@@ -253,8 +247,9 @@ test("customer orders page uses a white page surface", () => {
 });
 
 test("customer cart and notifications use white page surfaces", () => {
-  assert.match(cart, /min-h-screen bg-white pb-36 text-\[#1A1A1A\]/);
-  assert.match(cart, /Cooking instructions/);
+  // The Banana Leaf cart keeps the white page (owner, 30 Oct 2026): only the leaf is green.
+  assert.match(cart, /min-h-screen bg-white pb-44/);
+  assert.match(cart, /Add a note for \{noteFor\(kitchenName\)\}/);
   assert.match(cart, /Add more from this kitchen/);
   assert.match(cart, /Undo/);
   assert.match(cart, /navigate\(\{ to: "\/checkout" \}\)/);

@@ -9,7 +9,8 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     hikari:
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      # Shared database budget: scripts/release/check-db-connection-budget.py
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:2}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
       connection-timeout: 30000
   flyway:
@@ -37,6 +38,16 @@ management:
       enabled: ${CRAVES_REDIS_HEALTH_ENABLED:false}
 
 craves:
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/api/v1/catalog/internal/**=order}
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
@@ -60,6 +71,11 @@ craves:
       ttl-seconds: ${CRAVES_DISCOVERY_CACHE_TTL_SECONDS:120}
       failure-backoff-seconds: ${CRAVES_DISCOVERY_CACHE_FAILURE_BACKOFF_SECONDS:30}
       key-prefix: ${CRAVES_DISCOVERY_CACHE_KEY_PREFIX:craves:catalog:discovery}
+  user-chef:
+    # Kitchen photo import pulls approved registration photos from user-chef-service; blank = import off.
+    internal-base-url: ${CRAVES_USER_CHEF_INTERNAL_BASE_URL:}
+    # Defaults to the shared internal secret that user-chef-service also reads as CRAVES_INTERNAL_SERVICE_SECRET.
+    internal-secret: ${CRAVES_USER_CHEF_INTERNAL_SECRET:${CRAVES_INTERNAL_SERVICE_SECRET:}}
   pickup-provisioning:
     enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}
     integration-base-url: ${CRAVES_INTEGRATION_SERVICE_BASE_URL:}

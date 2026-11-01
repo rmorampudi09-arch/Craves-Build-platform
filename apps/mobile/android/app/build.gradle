@@ -24,6 +24,7 @@ react {
     //   skip the bundling of the JS bundle and the assets. Default is "debug", "debugOptimized".
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
     // debuggableVariants = ["liteDebug", "liteDebugOptimized", "prodDebug", "prodDebugOptimized"]
+    debuggableVariants = ["customerDebug", "customerDebugOptimized", "riderDebug", "riderDebugOptimized"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -62,6 +63,18 @@ react {
 def enableProguardInReleaseBuilds = false
 
 /**
+ * Rider CI only: .github/workflows/rider-apk.yml runs assembleRiderRelease with -PcravesRiderMinify=true (R8, and every
+ * language in the Play bundle) and -PcravesVersionCode=<run number>. Nothing else passes them, so the customer build is unchanged.
+ */
+def cravesRiderMinify = project.findProperty('cravesRiderMinify')?.toString() == 'true'
+def cravesVersionCode = project.findProperty('cravesVersionCode')?.toString()
+/**
+ * Rider CI, mock (demo data) builds only: -PcravesRiderDemo=true makes the demo its own app, com.cravesapp.rider.demo named
+ * "Craves Rider Demo", installed beside the real one, so a demo APK can never replace or pass for the rider app.
+ */
+def cravesRiderDemo = project.findProperty('cravesRiderDemo')?.toString() == 'true'
+
+/**
  * The preferred build flavor of JavaScriptCore (JSC)
  *
  * For example, to use the international variant, you can use:
@@ -73,6 +86,9 @@ def enableProguardInReleaseBuilds = false
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+
+def rnfbAndroidSdk = new groovy.json.JsonSlurper()
+    .parse(file('../../node_modules/@react-native-firebase/app/package.json')).sdkVersions.android
 
 /**
  * Release signing is intentionally external to source. P127 only prepares a
@@ -103,6 +119,43 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    buildFeatures {
+        buildConfig true
+    }
+    // A rider Play bundle keeps every language: RiderText shows the language the rider picked in the app (P2-08), and Play
+    // would deliver only the phone's. Rider CI builds only (cravesRiderMinify), so the customer bundle keeps its splits.
+    bundle {
+        language {
+            enableSplit = !cravesRiderMinify
+        }
+    }
+    // One codebase, two apps: the customer app keeps com.cravesapp; the rider app installs side by side.
+    flavorDimensions "app"
+    productFlavors {
+        customer {
+            dimension "app"
+            applicationId "com.cravesapp"
+            buildConfigField "String", "CRAVES_APP", "\"customer\""
+        }
+        rider {
+            dimension "app"
+            applicationId "com.cravesapp.rider"
+            if (cravesRiderDemo) {
+                applicationIdSuffix ".demo"
+            }
+            // The launcher name (src/rider/AndroidManifest.xml).
+            manifestPlaceholders += [riderLabel: cravesRiderDemo ? "Craves Rider Demo" : "@string/app_name"]
+            // Keep in step with RIDER_APP_VERSION in src/features/rider/riderConfig.ts; rider-apk.yml fails the build otherwise.
+            versionName "1.2.0"
+            buildConfigField "String", "CRAVES_APP", "\"rider\""
+            // react-native-config looks up BuildConfig by applicationId unless told the namespace.
+            resValue "string", "build_config_package", "com.cravesapp"
+            if (cravesVersionCode != null) {
+                // Each CI build installs over the last one (and Play needs a higher code for every upload).
+                versionCode cravesVersionCode.toInteger()
+            }
+        }
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -127,7 +180,7 @@ android {
             if (hasReleaseSigningConfig) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled enableProguardInReleaseBuilds
+            minifyEnabled enableProguardInReleaseBuilds || cravesRiderMinify
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
@@ -142,4 +195,15 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Rider app only (android/app/src/rider): the online service and offer pushes. Never the customer flavor or src/main.
+    riderImplementation("com.google.android.gms:play-services-location:21.3.0")
+    // The Firebase BOM @react-native-firebase/app uses, so both resolve one set of Firebase libraries.
+    riderImplementation(platform("com.google.firebase:firebase-bom:${rnfbAndroidSdk.firebase}"))
+    riderImplementation("com.google.firebase:firebase-messaging")
+    // The sign-in code from its SMS (RiderSmsCodeModule, SMS User Consent API). Already in the APK through Firebase Auth;
+    // declared so rider code compiles against it. Gradle keeps the newer version Firebase Auth asks for.
+    riderImplementation("com.google.android.gms:play-services-auth-api-phone:18.0.1")
+    // Tests only, never in the APK: the native trip outbox's rules (src/testRider, RiderOutboxCoreTest).
+    testRiderImplementation("junit:junit:4.13.2")
 }

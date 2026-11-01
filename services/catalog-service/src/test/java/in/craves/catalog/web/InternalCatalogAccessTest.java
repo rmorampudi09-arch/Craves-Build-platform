@@ -13,7 +13,7 @@ class InternalCatalogAccessTest {
     @Test void historicalKitchenReadRequiresExistingInternalKeyAndNeverUsesPublicSellingGate() {
         var service = mock(CatalogService.class);
         var properties = new InternalCatalogAccessProperties(); properties.setAccessValue("internal-test-key");
-        var controller = new InternalCatalogController(service,new InternalCatalogAuthorizer(properties));
+        var controller = new InternalCatalogController(service,new InternalCatalogAuthorizer(properties),mock(in.craves.catalog.service.DiscoveryCacheService.class));
         UUID kitchen = UUID.randomUUID();
         assertThrows(ApiException.class,() -> controller.getKitchen(null,kitchen));
         assertThrows(ApiException.class,() -> controller.getKitchen("wrong",kitchen));

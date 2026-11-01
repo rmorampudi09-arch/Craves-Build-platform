@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Isolated identities and responses; no production auth or OTP service is called.
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChefSignIn } from "../components/chef-sign-in";
@@ -8,12 +8,17 @@ import { ChefAccessBoundary } from "../components/chef-access-boundary";
 import { isChefModeTab, isChefModeVerified, markChefModeVerified } from "./chef-mode";
 import { captureSessionContext, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
+import { LanguageProvider } from "@/shared/i18n/language-context";
+import type { Language } from "@/shared/i18n/language";
 
-const mocks = vi.hoisted(() => ({ msg91: vi.fn(), navigate: vi.fn() }));
+// createElement passes children as its third argument; the cast only makes that prop optional.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
+
+const mocks = vi.hoisted(() => ({ msg91: vi.fn(), navigate: vi.fn(), refresh: vi.fn() }));
 // The kitchen opens with a client-side navigation (router.replace), not a full reload.
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.navigate, push: mocks.navigate }), usePathname: () => "/chef/earnings" }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.navigate, push: mocks.navigate, refresh: mocks.refresh }), usePathname: () => "/chef/earnings" }));
 vi.mock("firebase/auth", () => ({ RecaptchaVerifier: class { render = vi.fn(); clear = vi.fn(); }, signInWithPhoneNumber: vi.fn() }));
-vi.mock("@/features/auth/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
+vi.mock("@/shared/lib/firebase-client", () => ({ getFirebaseBrowserClient: () => ({ auth: {} }) }));
 vi.mock("@/features/sign-in/lib/msg91-browser", () => ({ beginMsg91PhoneSignIn: mocks.msg91, parkMsg91Captcha: vi.fn() }));
 // next/image needs a real location; the logo is not under test here.
 vi.mock("../../../shared/components/brand/CravesLogo", () => ({ CravesLogo: () => null }));
@@ -48,6 +53,28 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   invalidateSession(captureSessionContext());
+  document.cookie = "craves_lang=; Path=/; Max-Age=0";
+});
+
+it("asks a chef new to this device for a language first, then signs in in that language", async () => {
+  render(createElement(Provider, { initial: "en", chosen: false }, createElement(ChefSignIn, { returnTo: "/chef/earnings", centralOtp: true })));
+  // The question comes before the sign-in check and the number field, asked in all three languages.
+  expect(screen.getByRole("heading", { name: "Choose your language" })).toBeTruthy();
+  expect(screen.getByText("ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ")).toBeTruthy();
+  expect(screen.queryByText("Checking your sign-in…")).toBeNull();
+  await act(async () => {});
+  expect(screen.queryByRole("button", { name: "Send OTP" })).toBeNull();
+  // The globe at the top of the picture changes it at any time.
+  expect(screen.getByRole("button", { name: "Change language: English" })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: /తెలుగు/ }));
+  expect(await screen.findByRole("heading", { name: "మీ వంటగదిలోకి సైన్ ఇన్ చేయండి" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "OTP పంపండి" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "కొత్తగా వచ్చారా? Craves లో వండడానికి దరఖాస్తు చేయండి" }).getAttribute("href")).toBe("/chef/application");
+  expect(screen.getByRole("button", { name: "భాష మార్చండి: తెలుగు" })).toBeTruthy();
+  expect(document.cookie).toContain("craves_lang=te");
+  expect(mocks.refresh).toHaveBeenCalledOnce();
+  expect(mocks.navigate).not.toHaveBeenCalled();
 });
 
 it("shows the signed-in number and opens the application after a fresh OTP", async () => {
@@ -86,12 +113,12 @@ it("goes straight in on a device that already verified Chef Mode, even in a new 
   expect(screen.queryByRole("button", { name: "Send OTP" })).toBeNull();
   expect(fetcher.mock.calls.filter(([url]) => url === "/api/auth/refresh")).toHaveLength(1);
   expect(isChefModeTab(customer.id)).toBe(true);
-  // Access was confirmed here, so the kitchen page renders at once without checking it again.
+  // Access was confirmed here, so the kitchen page opens without checking it again: its only read is the kitchen, for the chef picture.
   cleanup();
   const requests = fetcher.mock.calls.length;
   render(createElement(ChefAccessBoundary, null, createElement("p", null, "Kitchen")));
-  expect(screen.getByText("Kitchen")).toBeTruthy();
-  expect(fetcher.mock.calls.length).toBe(requests);
+  expect(await screen.findByText("Kitchen")).toBeTruthy();
+  expect(fetcher.mock.calls.slice(requests).map(([url]) => url)).toEqual(["/api/chef/kitchen"]);
 });
 
 it("sends an approved account whose session still lacks CHEF to the status page, never back to /chef", async () => {

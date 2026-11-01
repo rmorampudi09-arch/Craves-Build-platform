@@ -33,7 +33,7 @@ elif a[:2]==['apim','show']:
  emit(sku if '--query' in a and a[a.index('--query')+1]=='sku.name' else {'sku':{'name':sku},'gatewayUrl':'https://fixture.azure-api.net','hostnameConfigurations':[{'type':'Proxy','hostName':'api.example.test'}]})
 elif a[:3]==['containerapp','replica','list']:emit([{}])
 elif a[:2]==['containerapp','show']:
- name=a[a.index('-n')+1]; admin='admin-web' in name
+ name=a[a.index('-n')+1]; admin=name.startswith('ca-craves-admin-')
  if not admin:
   assert '--query' in a, 'Backend inventory must use a projection'
   projection=a[a.index('--query')+1]

@@ -1,0 +1,144 @@
+components:
+  schemas:
+    LiveActivityRegistration:
+      properties:
+        pushToken:
+          pattern: "[0-9a-fA-F]{32,256}"
+          type: string
+      required:
+      - pushToken
+      type: object
+    LiveActivityView:
+      properties:
+        active:
+          type: boolean
+        createdAt:
+          format: date-time
+          type: string
+        endedAt:
+          format: date-time
+          type: string
+        orderId:
+          format: uuid
+          type: string
+      type: object
+    LiveOrderState:
+      properties:
+        isFinal:
+          type: boolean
+        orderId:
+          format: uuid
+          type: string
+        orderStatus:
+          type: string
+        stage:
+          enum:
+          - PAYMENT_PENDING
+          - PLACED
+          - COOKING
+          - READY
+          - ON_THE_WAY
+          - DELIVERED
+          - ENDED
+          - UNKNOWN
+          type: string
+        step:
+          format: int32
+          type: integer
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_LIVE_ACTIVITIES_ENABLED."
+  title: Craves live-activities API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/live-activities:
+    get:
+      operationId: myLiveActivities
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/LiveActivityView"
+                type: array
+          description: OK
+      tags:
+      - live-activity-controller
+      x-craves-auth: user
+  /api/v1/advanced/live-activities/orders/{orderId}:
+    delete:
+      operationId: endLiveActivity
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - live-activity-controller
+      x-craves-auth: user
+    put:
+      operationId: startLiveActivity
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiveActivityRegistration"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LiveOrderState"
+          description: OK
+      tags:
+      - live-activity-controller
+      x-craves-auth: user
+  /api/v1/advanced/live-activities/orders/{orderId}/state:
+    get:
+      operationId: liveOrderState
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LiveOrderState"
+          description: OK
+      tags:
+      - live-activity-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

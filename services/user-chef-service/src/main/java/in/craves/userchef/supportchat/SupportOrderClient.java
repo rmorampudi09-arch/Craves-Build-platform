@@ -66,6 +66,30 @@ public class SupportOrderClient {
         return orders;
     }
 
+    /**
+     * Latest orders of the account that matched a support phone call, with dish names so the caller can say which
+     * order they mean. Goes through order-service's internal support route with the shared service secret, since a
+     * phone call carries no user token. Same allowlist as the chat tools.
+     */
+    public ArrayNode recentOrdersForPhoneCall(String internalSecret, UUID identityId, boolean chef, int limit) {
+        JsonNode page = get("X-Craves-Internal-Secret", internalSecret, "/internal/v1/support/orders?identityId="
+            + identityId + "&role=" + (chef ? "CHEF" : "CUSTOMER") + "&limit=" + limit);
+        ArrayNode orders = objectMapper.createArrayNode();
+        if (page != null) {
+            page.path("orders").forEach(order -> {
+                ObjectNode summary = summary(order);
+                ArrayNode items = summary.putArray("items");
+                order.path("items").forEach(item -> {
+                    ObjectNode line = items.addObject();
+                    copy(line, item, "itemName", "name");
+                    copy(line, item, "quantity", "quantity");
+                });
+                orders.add(summary);
+            });
+        }
+        return orders;
+    }
+
     /** One of the caller's orders, or null when it does not exist or is not theirs. */
     public ObjectNode order(String bearer, boolean chef, UUID orderId) {
         JsonNode order = get(bearer, (chef ? "/api/v1/chef/orders/" : "/api/v1/orders/") + orderId);
@@ -125,15 +149,19 @@ public class SupportOrderClient {
         }
     }
 
-    /** Null for 403/404 (not the caller's); 503 for anything else so the assistant can say lookups are down. */
     private JsonNode get(String bearer, String path) {
+        return get("Authorization", bearer, path);
+    }
+
+    /** Null for 403/404 (not the caller's); 503 for anything else so the assistant can say lookups are down. */
+    private JsonNode get(String credentialHeader, String credential, String path) {
         if (base == null) {
             throw unavailable("CRAVES_SUPPORT_ORDER_BASE_URL is not configured");
         }
         HttpRequest request = HttpRequest.newBuilder(URI.create(base + path))
             .timeout(timeout)
             .header("Accept", "application/json")
-            .header("Authorization", bearer)
+            .header(credentialHeader, credential)
             .GET()
             .build();
         CompletableFuture<HttpResponse<byte[]>> pending =

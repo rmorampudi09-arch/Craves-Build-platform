@@ -29,6 +29,7 @@ import in.craves.order.web.CheckoutOperationDtos.Request;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -54,6 +55,7 @@ class ChefOrderDetailsDatabaseTest {
     private final CravesPrincipal chefActor = new CravesPrincipal(chef, "", Set.of("CHEF"));
     private final CravesPrincipal otherChefActor = new CravesPrincipal(UUID.randomUUID(), "", Set.of("CHEF"));
     private JdbcTemplate jdbc;
+    private CatalogClient catalog;
     private OrderService orders;
     private DeliveryStatusUpdateService delivery;
 
@@ -72,7 +74,7 @@ class ChefOrderDetailsDatabaseTest {
         Flyway.configure().dataSource(ds).defaultSchema("order_schema").schemas("order_schema")
             .locations("classpath:db/migration").load().migrate();
 
-        CatalogClient catalog = mock(CatalogClient.class);
+        catalog = mock(CatalogClient.class);
         CustomerAddressClient addresses = mock(CustomerAddressClient.class);
         when(catalog.getActiveMenuItem(menu)).thenReturn(new CatalogMenuItem(menu, kitchen, "Test meal", "Test meal",
             "MEAL", "VEG", new BigDecimal("369.00"), "INR", 1, 20, "MILD", 500, false, true, "ACTIVE"));
@@ -297,6 +299,47 @@ class ChefOrderDetailsDatabaseTest {
             assertThrows(ResponseStatusException.class, () -> orders.markHandedOver(customerActor, id)).getStatusCode());
         assertNull(jdbc.queryForObject(
             "SELECT chef_handed_over_at FROM order_schema.customer_order WHERE id = ?", Timestamp.class, id));
+    }
+
+    // Production 25 Oct: one newer order from a kitchen Catalog no longer serves failed every chef's list.
+    @Test
+    void anotherKitchensOrderNeverReachesCatalogOrBreaksTheChefList() {
+        UUID mine = placeOrder("note");
+        UUID theirs = placeOrder("note");
+        UUID closedKitchen = UUID.randomUUID();
+        // V16's trigger takes the order's chef from this table when the kitchen changes.
+        jdbc.update("INSERT INTO catalog_schema.kitchen_profile(id,identity_id) VALUES (?,?)", closedKitchen, UUID.randomUUID());
+        jdbc.update("UPDATE order_schema.customer_order SET kitchen_id = ?, "
+            + "created_at = created_at + interval '1 minute' WHERE id = ?", closedKitchen, theirs);
+        when(catalog.getKitchen(closedKitchen)).thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active"));
+
+        assertEquals(List.of(mine), orders.listChefOrders(chefActor).stream().map(OrderResponse::id).toList());
+    }
+
+    // The Hikari pool is 3 per replica; a read that took a second connection per request stalled at a few parallel polls.
+    @Test
+    void orderReadsWorkOnAPoolOfOneConnection() {
+        UUID id = placeOrder("note");
+        UUID checkoutId = jdbc.queryForObject("SELECT checkout_id FROM order_schema.customer_order WHERE id = ?", UUID.class, id);
+        try (var one = new com.zaxxer.hikari.HikariDataSource()) {
+            one.setJdbcUrl(System.getenv("LEDGER_TEST_JDBC_URL"));
+            one.setUsername(System.getenv("LEDGER_TEST_DB_USER"));
+            one.setPassword(System.getenv("LEDGER_TEST_DB_PASSWORD"));
+            one.setMaximumPoolSize(1);
+            one.setConnectionTimeout(250);
+            CatalogClient catalog = mock(CatalogClient.class);
+            when(catalog.getKitchen(kitchen)).thenReturn(new CatalogKitchen(kitchen, chef, "Test kitchen", "Test chef",
+                "Test", "9000000000", "test@example.invalid", "Test pickup", null, null, "Test area", "Hyderabad",
+                "Telangana", "500001", new BigDecimal("17.40"), new BigDecimal("78.40"), "ACTIVE"));
+            OrderService pooled = new OrderService(new JdbcTemplate(one), catalog, mock(CustomerAddressClient.class),
+                new CheckoutSnapshotFactory(), mock(NotificationInternalClient.class));
+
+            assertEquals(1, pooled.getCheckout(customerActor, checkoutId).orders().getFirst().items().size());
+            assertEquals(1, pooled.listCustomerOrders(customerActor).getFirst().items().size());
+            assertEquals(1, pooled.getOrderForCustomer(customerActor, id).items().size());
+            assertEquals(1, pooled.getChefOrderDetail(chefActor, id).items().size());
+            assertEquals(1, pooled.listChefOrders(chefActor).getFirst().items().size());
+        }
     }
 
     private UUID placeOrder(String note) {

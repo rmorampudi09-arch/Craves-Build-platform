@@ -9,7 +9,8 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     hikari:
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      # Shared database budget: scripts/release/check-db-connection-budget.py
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:2}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
       connection-timeout: 30000
   flyway:
@@ -34,6 +35,16 @@ management:
       enabled: ${CRAVES_REDIS_HEALTH_ENABLED:${CRAVES_TOKEN_REVOCATION_ENABLED:false}}
 
 craves:
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/customer-addresses/**=order;/internal/v1/chef-bank/**=integration;/internal/v1/chef-finance/**=integration;/internal/v1/auth-email/**=auth;/internal/v1/maps/**=integration;/internal/v1/support/voice/**=voice}
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
@@ -54,3 +65,7 @@ craves:
       batch-size: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_BATCH_SIZE:25}
       max-attempts: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_MAX_ATTEMPTS:5}
       retry-base-delay-seconds: ${CRAVES_NOTIFICATION_OUTBOX_DISPATCHER_RETRY_BASE_DELAY_SECONDS:60}
+  kitchen-launch-alerts:
+    enabled: ${CRAVES_KITCHEN_LAUNCH_ALERTS_ENABLED:false}
+    discovery-base-url: ${CRAVES_DISCOVERY_BASE_URL:}
+    fixed-delay-ms: ${CRAVES_KITCHEN_LAUNCH_ALERTS_FIXED_DELAY_MS:900000}

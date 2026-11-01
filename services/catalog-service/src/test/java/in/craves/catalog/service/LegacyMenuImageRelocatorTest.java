@@ -15,6 +15,7 @@ class LegacyMenuImageRelocatorTest {
         String base="https://stcravesmediakmqgfy.blob.core.windows.net/media";
         when(media.publicBaseUrl()).thenReturn(base);
         UUID ok=UUID.randomUUID(), broken=UUID.randomUUID(), foreign=UUID.randomUUID();
+        // Retired storage account (old subscription): menu rows saved before the move still carry these URLs.
         String oldOk="https://stcravesprodlowl3ing6.blob.core.windows.net/media/public%2Fdishes%2Fa.jpg";
         String oldBroken="https://stcravesprodlowl3ing6.blob.core.windows.net/media/public%2Fdishes%2Fb.jpg";
         when(jdbc.queryForList(anyString(),eq(base+"/"))).thenReturn(List.of(

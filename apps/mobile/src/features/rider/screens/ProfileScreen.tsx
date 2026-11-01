@@ -1,0 +1,420 @@
+import React, {useState} from 'react';
+import {Alert, Image, Linking, Pressable, Share, StyleSheet, Text, View} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import {useQueryClient} from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import {Icon} from '../../../shared/components';
+import {borderWidth, colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
+import type {OrderPreferences, RiderProfile} from '../api/contract';
+import {riderApi} from '../api/riderApi';
+import {Banner} from '../components/Banner';
+import {BottomAction} from '../components/BottomAction';
+import {ChoiceChip, ChoiceRow} from '../components/Choices';
+import {RiderHeader} from '../components/RiderHeader';
+import {CardsSkeleton} from '../components/StateCard';
+import {StatusBadge} from '../components/StatusBadge';
+import {Body, Card, Label, RiderScreen, Title, Value} from '../components/ui';
+import {formatDay} from '../domain/format';
+import {roundToSpot} from '../domain/homeSpot';
+import {problemOf, riderMessage} from '../domain/problem';
+import {riderDevice} from '../native/riderDevice';
+import {useRiderShell, type RiderNav} from '../navigation';
+import {riderKeys, useProfile, useRiderMe} from '../state/riderQueries';
+import {usePendingActions} from '../state/tripQueue';
+import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
+import {LoadFailed} from './TripDetailScreen';
+
+const SOON_MS = 30 * 24 * 3_600_000;
+/** Phase 4 order preferences, in metres; null is any distance. */
+const PICKUP_LIMITS = [null, 1000, 2000, 3000, 5000];
+const DROP_LIMITS = [null, 3000, 5000, 8000, 12000];
+/** Android's share sheet carries about 1 MB: a larger copy goes through rider support. */
+const SHARE_LIMIT = 400_000;
+
+type Doc = RiderProfile['documents'][number];
+
+/** Expired documents say so; ones expiring within 30 days warn before anything blocks the rider. */
+export function documentBadge(doc: Doc, now = Date.now()): {label: 'EXPIRED' | 'SOON' | Doc['status']} {
+  const expires = doc.expiresOn ? Date.parse(doc.expiresOn) : null;
+  if (doc.status === 'EXPIRED' || (expires !== null && expires < now)) {
+    return {label: 'EXPIRED'};
+  }
+  if (expires !== null && expires - now < SOON_MS) {
+    return {label: 'SOON'};
+  }
+  return {label: doc.status};
+}
+
+/** "8 Nov" this year, "2 May 2031" otherwise. */
+function dayWithYear(value: string) {
+  const year = new Date(value).getFullYear();
+  return year === new Date().getFullYear() ? formatDay(value) : `${formatDay(value)} ${year}`;
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0].toUpperCase())
+    .join('');
+
+/** One farthest distance as chips, saved on tap; a value set elsewhere selects no chip. */
+function LimitChips({label, limits, value, onPick, testID}: {
+  label: string;
+  limits: (number | null)[];
+  value?: number | null;
+  onPick: (limit: number | null) => void;
+  testID: string;
+}) {
+  const p = useStrings().strings.profile;
+  return (
+    <View style={styles.language}>
+      <Label>{label}</Label>
+      <ChoiceRow label={label}>
+        {limits.map(limit => (
+          <ChoiceChip
+            key={limit ?? 'any'}
+            label={limit === null ? p.anyDistance : p.km(String(limit / 1000))}
+            selected={(value ?? null) === limit}
+            onPress={() => onPick(limit)}
+            testID={`${testID}-${limit ?? 'any'}`}
+          />
+        ))}
+      </ChoiceRow>
+    </View>
+  );
+}
+
+/**
+ * Phase 5: the home spot heading home leads to. Saved from where the phone is now, rounded on the phone to about a kilometre;
+ * shown while rider choices are on, and whenever one is saved, so the rider can always delete it.
+ */
+function HomeSpotCard({savedAt, choices, onChange}: {savedAt?: string; choices: boolean; onChange: () => void}) {
+  const {strings, language} = useStrings();
+  const p = strings.profile;
+  const [busy, setBusy] = useState(false);
+
+  async function run(work: () => Promise<unknown>) {
+    setBusy(true);
+    try {
+      await work();
+      onChange();
+    } catch (error) {
+      Alert.alert(riderMessage(error, strings, language));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save() {
+    const here = await riderDevice.currentPosition();
+    if (!here) {
+      Alert.alert(p.homeSpotNoFix);
+      return;
+    }
+    const spot = roundToSpot(here);
+    await riderApi.saveHomeSpot(spot.lat, spot.lng);
+  }
+
+  if (!savedAt && !choices) {
+    return null;
+  }
+  return (
+    <Card>
+      <Label>{p.homeSpotTitle}</Label>
+      <Body>{savedAt ? p.homeSpotSaved(formatDay(savedAt)) : p.homeSpotNone}</Body>
+      {savedAt ? (
+        <BottomAction
+          label={p.deleteHomeSpot}
+          variant="outline"
+          size="compact"
+          disabled={busy}
+          onPress={() => run(() => riderApi.forgetHomeSpot())}
+          style={styles.upload}
+          testID="rider-home-spot-delete"
+        />
+      ) : (
+        <BottomAction
+          label={p.saveHomeSpot}
+          variant="outline"
+          size="compact"
+          disabled={busy}
+          onPress={() => run(save)}
+          style={styles.upload}
+          testID="rider-home-spot-save"
+        />
+      )}
+    </Card>
+  );
+}
+
+export function ProfileScreen() {
+  const {strings, language, setLanguage} = useStrings();
+  const p = strings.profile;
+  const navigation = useNavigation<RiderNav>();
+  const shell = useRiderShell();
+  const queryClient = useQueryClient();
+  const me = useRiderMe();
+  const profile = useProfile();
+  const pending = usePendingActions(shell.riderId);
+  const [docProblem, setDocProblem] = useState<{type: string; text: string; settings?: boolean} | null>(null);
+
+  /** Phase 4: saves the rider's farthest pickup and drop; the profile shows what the server kept. */
+  async function choose(next: OrderPreferences) {
+    try {
+      const saved = await riderApi.setPreferences(next);
+      queryClient.setQueryData<RiderProfile>(riderKeys.profile, old => (old ? {...old, preferences: saved} : old));
+    } catch (error) {
+      Alert.alert(riderMessage(error, strings, language));
+    }
+  }
+
+  /** Phase 4: the rider's copy of their data, shared as text from the phone's share sheet. */
+  async function shareData() {
+    try {
+      const text = JSON.stringify(await riderApi.getMyData(), null, 1);
+      if (text.length > SHARE_LIMIT) {
+        Alert.alert(p.dataTooLarge);
+        return;
+      }
+      await Share.share({title: p.dataTitle, message: text});
+    } catch (error) {
+      Alert.alert(riderMessage(error, strings, language));
+    }
+  }
+
+  function signOut() {
+    if (pending > 0) {
+      Alert.alert(p.signOutBlocked);
+      return;
+    }
+    shell.signOut();
+  }
+
+  /** Back camera → upload → fresh profile; ops then checks the photo by hand. */
+  async function upload(type: string) {
+    setDocProblem(null);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setDocProblem({type, text: p.cameraDenied, settings: true});
+        return;
+      }
+      const shot = await ImagePicker.launchCameraAsync({cameraType: ImagePicker.CameraType.back, mediaTypes: ['images'], quality: 0.6});
+      const uri = shot.canceled ? null : shot.assets[0]?.uri;
+      if (!uri) {
+        return;
+      }
+      await riderApi.uploadDocument(type, uri);
+      await queryClient.invalidateQueries({queryKey: riderKeys.profile});
+    } catch (error) {
+      // The server's reason (a file it can't read, storage down), or "check your internet" when it never got there.
+      setDocProblem({type, text: problemOf(error) === 'offline' ? p.uploadFailed : riderMessage(error, strings, language)});
+    }
+  }
+
+  function documentRow(doc: Doc, index: number) {
+    const badge = documentBadge(doc).label;
+    const sub =
+      doc.status === 'PENDING'
+        ? p.checking
+        : doc.expiresOn
+          ? (badge === 'EXPIRED' ? p.expired : p.expires)(dayWithYear(doc.expiresOn))
+          : undefined;
+    const action =
+      badge === 'SOON' && doc.expiresOn ? p.renewBy(dayWithYear(doc.expiresOn)) : badge === 'EXPIRED' ? p.renewNow : badge === 'REJECTED' ? doc.reason : undefined;
+    const canUpload = Boolean(doc.type) && (badge === 'SOON' || badge === 'EXPIRED' || badge === 'REJECTED');
+    const problem = docProblem && docProblem.type === doc.type ? docProblem : null;
+    return (
+      <View key={doc.label} style={[styles.doc, index > 0 && styles.divider]} testID={`doc-${doc.label}`}>
+        <View style={styles.docTop}>
+          <View style={styles.grow}>
+            <Body>{doc.label}</Body>
+            {sub ? <Label>{sub}</Label> : null}
+          </View>
+          <StatusBadge status={badge} label={badge === 'SOON' ? p.expiresSoon : p.docStatus[badge]} />
+        </View>
+        {action ? <Body>{action}</Body> : null}
+        {canUpload ? (
+          <BottomAction
+            label={doc.type === 'INSURANCE' ? p.uploadInsurance : p.upload}
+            variant="outline"
+            size="compact"
+            onPress={() => upload(doc.type as string)}
+            style={styles.upload}
+            testID={`rider-upload-${doc.type}`}
+          />
+        ) : null}
+        {problem ? (
+          <View style={styles.problem}>
+            <Banner tone="warning" inset text={problem.text} />
+            {problem.settings ? (
+              <BottomAction label={p.openSettings} variant="ghost" onPress={() => Linking.openSettings().catch(() => undefined)} style={styles.link} />
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  const links: [string, string, () => void][] = [
+    [p.terms, 'terms', () => navigation.navigate('Terms', {mode: 'view'})],
+    [p.setup, 'setup', () => navigation.navigate('PhoneSetup')],
+    [p.help, 'help', () => navigation.navigate('Help')],
+  ];
+
+  return (
+    <RiderScreen header={<RiderHeader title={p.title} />} testID="rider-profile">
+      {me.data ? (
+        <View style={styles.person}>
+          {me.data.photoUrl ? (
+            <Image source={{uri: me.data.photoUrl}} style={styles.avatar} accessibilityIgnoresInvertColors accessible={false} />
+          ) : (
+            <View style={styles.avatar} importantForAccessibility="no-hide-descendants">
+              <Text style={styles.initials}>{initials(me.data.name)}</Text>
+            </View>
+          )}
+          <View style={styles.grow}>
+            <Title>{me.data.name}</Title>
+            <Label>{me.data.phoneMasked}</Label>
+          </View>
+        </View>
+      ) : null}
+      {profile.data ? (
+        <>
+          <Card>
+            <Label>{p.vehicle}</Label>
+            <Value>{profile.data.vehicle.label}</Value>
+            {profile.data.vehicle.regNumberMasked ? <Text style={styles.reg}>{profile.data.vehicle.regNumberMasked}</Text> : null}
+          </Card>
+          {profile.data.documents.length ? (
+            <Card style={styles.docs}>
+              <Label>{p.documents}</Label>
+              {profile.data.documents.map(documentRow)}
+            </Card>
+          ) : null}
+          {profile.data.payoutAccountMasked ? (
+            <Card>
+              <Label>{p.payoutAccount}</Label>
+              <Value>{profile.data.payoutAccountMasked}</Value>
+              <Label>{p.payoutChange}</Label>
+            </Card>
+          ) : null}
+          {profile.data.preferences ? (
+            <Card>
+              <Label>{p.ordersTitle}</Label>
+              <Body>{p.ordersBody}</Body>
+              <LimitChips
+                label={p.pickupLimit}
+                limits={PICKUP_LIMITS}
+                value={profile.data.preferences.maxPickupM}
+                onPick={limit => choose({...profile.data?.preferences, maxPickupM: limit})}
+                testID="rider-pickup-limit"
+              />
+              <LimitChips
+                label={p.dropLimit}
+                limits={DROP_LIMITS}
+                value={profile.data.preferences.maxDropM}
+                onPick={limit => choose({...profile.data?.preferences, maxDropM: limit})}
+                testID="rider-drop-limit"
+              />
+            </Card>
+          ) : null}
+          <HomeSpotCard
+            savedAt={profile.data.homeSavedAt}
+            choices={Boolean(me.data?.features.riderChoices)}
+            onChange={() => queryClient.invalidateQueries({queryKey: riderKeys.all})}
+          />
+          <Card>
+            <Label>{p.dataTitle}</Label>
+            <Body>{p.dataBody}</Body>
+            <BottomAction label={p.dataShare} variant="outline" size="compact" onPress={shareData} style={styles.upload} testID="rider-share-data" />
+          </Card>
+          {profile.data.insurance ? (
+            <Card>
+              <Label>{p.insurance}</Label>
+              <Value>{profile.data.insurance.label}</Value>
+              {profile.data.insurance.claimStatus ? <Body>{profile.data.insurance.claimStatus}</Body> : null}
+              <BottomAction
+                label={p.claimCall}
+                variant="outline"
+                size="compact"
+                onPress={() => Linking.openURL(`tel:${profile.data.insurance?.claimPhone}`).catch(() => undefined)}
+                style={styles.upload}
+                testID="rider-claim-call"
+              />
+            </Card>
+          ) : null}
+        </>
+      ) : profile.isError ? (
+        <LoadFailed error={profile.error} onRetry={profile.refetch} />
+      ) : (
+        <CardsSkeleton cards={3} testID="rider-profile-loading" />
+      )}
+      {RIDER_LANGUAGES.length > 1 ? (
+        <View style={styles.language}>
+          <Label>{p.language}</Label>
+          <ChoiceRow label={p.language}>
+            {RIDER_LANGUAGES.map(code => (
+              <ChoiceChip
+                key={code}
+                label={strings.languages[code]}
+                selected={language === code}
+                onPress={() => setLanguage(code)}
+                testID={`rider-language-${code}`}
+              />
+            ))}
+          </ChoiceRow>
+        </View>
+      ) : null}
+      <Card style={styles.links}>
+        {links.map(([label, id, open], index) => (
+          <Pressable
+            key={id}
+            accessibilityRole="button"
+            onPress={open}
+            testID={`rider-open-${id}`}
+            style={({pressed}) => [styles.linkRow, index > 0 && styles.divider, pressed && styles.pressed]}>
+            <Text style={styles.linkText}>{label}</Text>
+            <Icon name="chevron-right" size={iconSize.lg} color={colors.textSecondary} surface={false} />
+          </Pressable>
+        ))}
+      </Card>
+      <Pressable accessibilityRole="button" onPress={signOut} style={styles.signOut} testID="rider-sign-out">
+        <Text style={styles.signOutText}>{p.signOut}</Text>
+      </Pressable>
+    </RiderScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  grow: {flex: 1},
+  person: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: borderWidth.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.cream,
+  },
+  initials: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  reg: {fontSize: typography.small, color: colors.textPrimary},
+  docs: {gap: 0},
+  doc: {gap: spacing.xs, paddingVertical: spacing.sm},
+  divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
+  docTop: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  upload: {marginTop: spacing.xxs},
+  problem: {gap: spacing.xxs},
+  link: {alignSelf: 'flex-start', marginLeft: -spacing.xs},
+  language: {gap: spacing.xs},
+  links: {padding: 0, gap: 0, overflow: 'hidden'},
+  linkRow: {minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md},
+  linkText: {flex: 1, fontSize: typography.body, color: colors.textPrimary},
+  pressed: {backgroundColor: colors.muted},
+  signOut: {minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
+  signOutText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textSecondary},
+});

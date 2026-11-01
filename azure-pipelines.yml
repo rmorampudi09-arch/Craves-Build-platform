@@ -4,7 +4,8 @@
 # It is intentionally parameterized so deployment does not happen accidentally.
 #
 # Required Azure DevOps pipeline variables:
-# - AZURE_SERVICE_CONNECTION: name of the Azure Resource Manager service connection
+# - AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection. Deliberately not set here:
+#   this pipeline can deploy infra/main.bicep into production, so set it only for a planned run.
 # - POSTGRES_ADMIN_PASSWORD: secret variable; rotate before production use
 #
 # Recommended first run:
@@ -41,7 +42,7 @@ parameters:
 variables:
   projectName: craves
   environmentName: prodlow
-  acrName: cravesprodlowacr82121
+  acrName: cravesrm09prodlow6bf632
   templateFile: infra/main.bicep
 
 pool:

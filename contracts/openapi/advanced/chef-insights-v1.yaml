@@ -1,0 +1,127 @@
+components:
+  schemas:
+    ChefInsightsDay:
+      properties:
+        day:
+          format: date
+          type: string
+        delivered:
+          format: int32
+          type: integer
+        deliveredFoodPaise:
+          format: int64
+          type: integer
+        orders:
+          format: int32
+          type: integer
+      type: object
+    ChefInsightsDish:
+      properties:
+        deliveredFoodPaise:
+          format: int64
+          type: integer
+        deliveredQuantity:
+          format: int32
+          type: integer
+        menuItemId:
+          format: uuid
+          type: string
+        name:
+          type: string
+      type: object
+    ChefInsightsSummary:
+      properties:
+        complete:
+          type: boolean
+        days:
+          items:
+            $ref: "#/components/schemas/ChefInsightsDay"
+          type: array
+        from:
+          format: date
+          type: string
+        ordersByHour:
+          items:
+            format: int32
+            type: integer
+          type: array
+        to:
+          format: date
+          type: string
+        topDishes:
+          items:
+            $ref: "#/components/schemas/ChefInsightsDish"
+          type: array
+        totals:
+          $ref: "#/components/schemas/ChefInsightsTotals"
+      type: object
+    ChefInsightsTotals:
+      properties:
+        delivered:
+          format: int32
+          type: integer
+        deliveredFoodPaise:
+          format: int64
+          type: integer
+        inProgress:
+          format: int32
+          type: integer
+        orders:
+          format: int32
+          type: integer
+        refunded:
+          format: int32
+          type: integer
+        rejected:
+          format: int32
+          type: integer
+        repeatCustomers:
+          format: int32
+          type: integer
+        uniqueCustomers:
+          format: int32
+          type: integer
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_CHEF_INSIGHTS_ENABLED."
+  title: Craves chef-insights API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/chef-insights/summary:
+    get:
+      operationId: chefInsightsSummary
+      parameters:
+      - in: query
+        name: from
+        required: true
+        schema:
+          format: date
+          type: string
+      - in: query
+        name: to
+        required: true
+        schema:
+          format: date
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChefInsightsSummary"
+          description: OK
+      tags:
+      - chef-insights-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

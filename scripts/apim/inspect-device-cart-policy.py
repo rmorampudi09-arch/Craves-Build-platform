@@ -7,7 +7,7 @@ import json
 spec = importlib.util.spec_from_file_location('cart_routes', Path(__file__).with_name('device-safe-cart-routes.py'))
 routes = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(routes)
-expected_image = 'cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0'
+expected_image = 'cravesrm09prodlow6bf632.azurecr.io/craves/order-service:device-cart-e1cf04e0537e2eaf32f1c494142dd52a3e3bafa0'
 origin = routes.runtime(expected_image)
 scope = f'https://management.azure.com/subscriptions/{routes.SUB}/resourceGroups/{routes.RG}/providers/Microsoft.ApiManagement/service/{routes.APIM}/apis/craves-cart-v1/operations/clear-cart-if-unchanged/policies/policy'
 actual = routes.rest('get', scope)['properties']

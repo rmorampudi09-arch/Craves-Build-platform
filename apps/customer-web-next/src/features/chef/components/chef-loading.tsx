@@ -3,6 +3,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ChefSkeleton } from "@/features/chef/components/chef-ui";
+import { messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
+
+const TEXT = messages({
+  en: { slow: "Still loading. Check your internet connection." },
+  te: { slow: "ఇంకా లోడ్ అవుతోంది. ఇంటర్నెట్ చూసుకోండి." },
+  kn: { slow: "ಇನ್ನೂ ಲೋಡ್ ಆಗುತ್ತಿದೆ. ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ." },
+});
 
 /** Each Chef Mode page loads in its own shape, so the page fills in without jumping. */
 export type ChefLoadingShape =
@@ -34,11 +42,10 @@ const ROUTE_SHAPES: ReadonlyArray<readonly [RegExp, ChefLoadingShape]> = [
   [/^\/chef\/statements\/?$/, "statements"],
   [/^\/chef\/operations\/?$/, "checklist"],
   [/^\/chef\/kitchen\/?$/, "kitchen"],
-  // Meal plans are a "coming soon" page for now: a Back link and one card.
-  [/^\/chef\/meal-plans\/?$/, "soon"],
+  [/^\/chef\/meal-plans\/?$/, "plans"],
   [/^\/chef\/notifications\/?$/, "notifications"],
   [/^\/chef\/profile\/?$/, "more"],
-  [/^\/chef\/support\/?$/, "chat"],
+  [/^\/chef\/support\/chat\/?$/, "chat"],
 ];
 
 export function chefLoadingShapeFor(pathname: string | null): ChefLoadingShape {
@@ -46,8 +53,8 @@ export function chefLoadingShapeFor(pathname: string | null): ChefLoadingShape {
 }
 
 /** Pages whose header has a Back link above the title, a button beside it, or no line under it. */
-const HEAD_BACK = new Set<ChefLoadingShape>(["order", "money", "bank", "statements", "checklist", "kitchen", "soon", "form", "notifications", "chat"]);
-const HEAD_ACTION = new Set<ChefLoadingShape>(["orders", "order", "menu", "earnings"]);
+const HEAD_BACK = new Set<ChefLoadingShape>(["order", "money", "bank", "statements", "checklist", "kitchen", "plans", "soon", "form", "notifications", "chat"]);
+const HEAD_ACTION = new Set<ChefLoadingShape>(["orders", "order", "menu", "earnings", "plans"]);
 const HEAD_TITLE_ONLY = new Set<ChefLoadingShape>(["bank", "checklist", "soon", "notifications"]);
 
 const bar = (className: string) => <ChefSkeleton className={className} />;
@@ -447,6 +454,7 @@ export function ChefLoading({
   label: string;
   head?: boolean;
 }) {
+  const text = useText(TEXT);
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => setSlow(true), 10_000);
@@ -463,7 +471,7 @@ export function ChefLoading({
             : "sr-only"
         }
       >
-        {slow ? "Still loading. Check your internet connection." : label}
+        {slow ? text.slow : label}
       </p>
       {head ? <Head shape={shape} /> : null}
       <div className="chef-stack" aria-hidden="true">

@@ -10,7 +10,7 @@ Cashout planning uses the weekly UTC cutoff in `PayoutBatchPlanner`. Member disp
 
 ## Capacity and availability
 
-Start only at the approved deployment profile. The provided isolated template keeps min/max replicas at one per active revision, database pool at eight and ingress private. One replica is not high availability and a rollout may transiently have old/new revisions. No current application is scaled or reconfigured by this delivery.
+Start only at the approved deployment profile. The provided isolated template keeps min/max replicas at one per active revision, database pool at four and ingress private. One replica is not high availability and a rollout may transiently have old/new revisions. No current application is scaled or reconfigured by this delivery.
 
 Before expansion, measure actual incoming events, worker backlog age, transaction duration, lock waits, pool utilisation, query plans, storage/index growth and downstream Finance capacity. For N replicas, budget at least N × configured pool connections plus migration/operations/source-owner headroom. Increase replica count, CPU/memory or DB allocation only through an approved capacity change; protect the existing Craves workload. Retest worker races and queue fairness under the chosen profile. Neither the CI backlog case nor bounded batch sizes establish a production throughput ceiling or service-level guarantee.
 

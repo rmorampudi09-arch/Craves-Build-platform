@@ -73,7 +73,9 @@ class PublicCatalogControllerPrivacyTest {
                 new DiscoveryRadiusResponse("Hyderabad", "DEFAULT", BigDecimal.TEN, BigDecimal.valueOf(15)),
                 List.of(new PublicKitchenSummaryResponse(
                     kitchenId, "Kitchen", "Display", "Description", "Madhapur", "Hyderabad",
-                    new BigDecimal("17.44"), new BigDecimal("78.39"), new BigDecimal("2.30"), 5
+                    new BigDecimal("17.44"), new BigDecimal("78.39"), new BigDecimal("2.30"), 5,
+                    "https://media.example/public/chef-avatars/chef-avatar-04.jpg",
+                    List.of("https://media.example/public/kitchens/k/kitchen/1.jpg")
                 ))
             )
         );
@@ -81,6 +83,10 @@ class PublicCatalogControllerPrivacyTest {
         assertThat(response.kitchens().getFirst().latitude()).isNull();
         assertThat(response.kitchens().getFirst().longitude()).isNull();
         assertThat(response.kitchens().getFirst().distanceKm()).isEqualByComparingTo("2.30");
+        assertThat(response.kitchens().getFirst().chefPhotoUrl())
+            .isEqualTo("https://media.example/public/chef-avatars/chef-avatar-04.jpg");
+        assertThat(response.kitchens().getFirst().kitchenPhotoUrls())
+            .containsExactly("https://media.example/public/kitchens/k/kitchen/1.jpg");
     }
 
     @Test
@@ -110,7 +116,8 @@ class PublicCatalogControllerPrivacyTest {
             "Private Lane", "Private Landmark", "Kukatpally", "Hyderabad", "Telangana", "500072",
             new BigDecimal("17.4948"), new BigDecimal("78.3996"), KitchenStatus.ACTIVE,
             Instant.now(), Instant.now(),
-            "https://cdn.example/chef.jpg", "https://cdn.example/kitchen.jpg", List.of("Andhra"), List.of("Kondapur"),
+            "https://cdn.example/chef.jpg", "https://cdn.example/kitchen.jpg",
+            List.of("https://cdn.example/kitchen.jpg", "https://cdn.example/kitchen-2.jpg"), List.of("Andhra"), List.of("Kondapur"),
             new SocialLinks("https://instagram.com/ravi", null, null, null), true, 30
         );
     }
@@ -122,6 +129,7 @@ class PublicCatalogControllerPrivacyTest {
         var response = controller.getKitchen(kitchenId);
         assertThat(response.chefPhotoUrl()).isEqualTo("https://cdn.example/chef.jpg");
         assertThat(response.kitchenPhotoUrl()).isEqualTo("https://cdn.example/kitchen.jpg");
+        assertThat(response.kitchenPhotoUrls()).containsExactly("https://cdn.example/kitchen.jpg", "https://cdn.example/kitchen-2.jpg");
         assertThat(response.cuisines()).containsExactly("Andhra");
         assertThat(response.serviceAreas()).containsExactly("Kondapur");
         assertThat(response.socialLinks().instagram()).isEqualTo("https://instagram.com/ravi");

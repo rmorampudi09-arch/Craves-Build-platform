@@ -49,7 +49,7 @@ test("every tab opens its page and marks itself current", async ({ page, backend
     ["Orders", /\/chef\/orders$/, "Orders"],
     ["Menu", /\/chef\/menu$/, "Menu"],
     ["Earnings", /\/chef\/earnings$/, "Earnings"],
-    ["More", /\/chef\/profile$/, "More"],
+    ["Profile", /\/chef\/profile$/, "Profile"],
     ["Home", /\/chef$/, /^Good (morning|afternoon|evening)/],
   ] as const) {
     await nav(page).getByRole("link", { name: tab }).click();
@@ -61,21 +61,21 @@ test("every tab opens its page and marks itself current", async ({ page, backend
 
 test("the kitchen is created once on first open, not on every visit", async ({ page, backend }) => {
   await openApprovedChef(page, backend);
-  await expect(page.getByRole("switch", { name: "Kitchen open" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Taking orders" })).toBeVisible();
   await expect.poll(() => backend.callsTo("PUT", "/api/chef/kitchen").length).toBe(1);
   await page.reload();
-  await expect(page.getByRole("switch", { name: "Kitchen open" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Taking orders" })).toBeVisible();
   expect(backend.callsTo("PUT", "/api/chef/kitchen")).toHaveLength(1);
 });
 
 test("BUG: the kitchen can be opened with no dishes and says customers can order", async ({ page, backend }) => {
   test.fail(true, "P2: live 12 Oct the switch turned on with 0 dishes ('Customers can order now'); readiness page says a dish is required");
   await openApprovedChef(page, backend);
-  const kitchen = page.getByRole("region", { name: /^Kitchen (open|closed)$/ });
-  await kitchen.getByRole("switch", { name: "Kitchen open" }).click();
+  const kitchen = page.getByRole("region", { name: /^(Open|Closed|Paused)\b/ });
+  await kitchen.getByRole("switch", { name: "Taking orders" }).click();
   // No optimistic toggle: the switch stays off while the save runs, so read it only once the region stops being busy.
   await expect(kitchen).not.toHaveAttribute("aria-busy", "true");
-  await expect(kitchen.getByRole("switch", { name: "Kitchen open" })).not.toBeChecked();
+  await expect(kitchen.getByRole("switch", { name: "Taking orders" })).not.toBeChecked();
   await expect(page.getByText("Customers can order now.")).toHaveCount(0);
 });
 
@@ -124,13 +124,13 @@ test("Statements: a failed PDF request shows an error and keeps the form usable"
   await expect(page.getByRole("button", { name: "Make PDF" })).toBeEnabled();
 });
 
-test("BUG: a new chef with no bank account is told payouts are 'on hold, contact support'", async ({ page, backend }) => {
-  test.fail(true, "P2: the real next step is adding a bank account; the hold message sends new chefs to support");
+test("a new chef with no bank account is asked to add one, not told payouts are on hold", async ({ page, backend }) => {
   await openApprovedChef(page, backend, "/chef/finance");
   await expect(page.getByRole("heading", { level: 1, name: "Balance & payouts" })).toBeVisible();
   // The heading renders before the balance; wait for it, or the count below passes on a page that hasn't loaded.
-  await expect(page.getByRole("region", { name: "Money you can take out" }).getByRole("button", { name: /^Send ₹/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Money you can take out" }).getByRole("button", { name: /^Withdraw ₹/ })).toBeVisible();
   await expect(page.getByText(/payouts are on hold/i)).toHaveCount(0);
+  await expect(page.getByText("Add your bank account to get paid.").first()).toBeVisible();
 });
 
 test("Bank account: holder name is locked to the approved chef name", async ({ page, backend }) => {

@@ -2,7 +2,7 @@
 // Behaviour of the customer address search typeahead. All provider calls are mocked fixtures.
 import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/features/addresses/api/searchLocation", () => ({ searchLocations: mocks.search }));
 vi.mock("@/features/addresses/api/reverseGeocode", () => ({ reverseGeocodeCurrentLocation: mocks.reverse }));
 vi.mock("@/features/auth/api/cravesAuth", () => ({ getAddress: () => mocks.selected }));
-vi.mock("@/features/auth/api/sessionFetch", () => ({ sessionFetch: vi.fn() }));
+vi.mock("@/shared/lib/session-fetch", () => ({ sessionFetch: vi.fn() }));
 vi.mock("@/features/addresses/components/AddressMapPicker", () => ({
   AddressMapPicker: (props: { latitude: number; longitude: number }) =>
     createElement("div", { "data-testid": "map", "data-lat": props.latitude, "data-lng": props.longitude }),
@@ -49,6 +49,8 @@ beforeEach(() => {
   mocks.selected = null;
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+// Radix FocusScope restores focus in a setTimeout(0) after the last unmount; let it run before jsdom is torn down.
+afterAll(() => new Promise((resolve) => setTimeout(resolve, 0)));
 
 describe("customer address search typeahead", () => {
   it("debounces keystrokes into one search and aborts superseded requests", async () => {

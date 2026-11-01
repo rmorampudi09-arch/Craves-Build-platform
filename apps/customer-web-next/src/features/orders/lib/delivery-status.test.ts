@@ -61,6 +61,14 @@ test('rejects unsupported statuses and invalid identifiers', () => {
   );
 });
 
+test('keeps only a 4-digit delivery code', () => {
+  const base = { orderId: ORDER_ID, status: 'IN_TRANSIT', history: [] };
+  assert.equal(parseDeliveryStatusResponse({ ...base, deliveryCode: '0719' }).deliveryCode, '0719');
+  for (const deliveryCode of [undefined, null, '471', '47190', '47a9', ' 4719', 4719]) {
+    assert.equal(parseDeliveryStatusResponse({ ...base, deliveryCode }).deliveryCode, null);
+  }
+});
+
 test('accepts only HTTPS tracking links', () => {
   assert.equal(safeTrackingUrl('https://tracking.example/1'), 'https://tracking.example/1');
   assert.equal(safeTrackingUrl('http://tracking.example/1'), null);

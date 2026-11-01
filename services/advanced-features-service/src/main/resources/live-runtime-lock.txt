@@ -1,0 +1,37 @@
+# Code advanced-features-service must keep in production. A production start (CRAVES_ENVIRONMENT=prod*) refuses
+# to run a build that lacks any of them. Remove a line only when retiring that code on purpose.
+# See docs/runbooks/live-runtime-safety.md.
+in.craves.advanced.platform.module.FeatureStatusController
+in.craves.advanced.foodlists.FoodListController
+in.craves.advanced.foodlists.SharedFoodListController
+in.craves.advanced.grouporders.GroupOrderController
+in.craves.advanced.foodfacts.FoodFactsController
+in.craves.advanced.foodfacts.FoodFactsAdminController
+in.craves.advanced.tastedata.TasteDataController
+in.craves.advanced.taxonomy.TaxonomyController
+in.craves.advanced.taxonomy.TaxonomyAdminController
+in.craves.advanced.menuoptions.MenuOptionsController
+in.craves.advanced.tastememory.TasteMemoryController
+in.craves.advanced.kitchencapacity.KitchenCapacityController
+in.craves.advanced.promotions.PromotionsController
+in.craves.advanced.promotions.PromotionsAdminController
+in.craves.advanced.bulkorders.BulkOrderController
+in.craves.advanced.corporatemeals.CorporateMealsController
+in.craves.advanced.corporatemeals.CorporateMealsAdminController
+in.craves.advanced.orderamendments.OrderAmendmentController
+in.craves.advanced.orderamendments.OrderAmendmentAdminController
+in.craves.advanced.trust.TrustController
+in.craves.advanced.trust.TrustAdminController
+in.craves.advanced.experiments.ExperimentController
+in.craves.advanced.experiments.ExperimentAdminController
+in.craves.advanced.partneroffers.PartnerOfferController
+in.craves.advanced.partneroffers.PartnerOfferAdminController
+in.craves.advanced.chefinsights.ChefInsightsController
+in.craves.advanced.demandforecast.DemandForecastController
+in.craves.advanced.savedfeed.SavedFeedController
+in.craves.advanced.personalized.PersonalizedController
+in.craves.advanced.semanticsearch.SemanticSearchController
+in.craves.advanced.semanticsearch.SemanticSearchAdminController
+in.craves.advanced.liveactivities.LiveActivityController
+in.craves.advanced.policies.PolicyController
+in.craves.advanced.policies.PolicyAdminController

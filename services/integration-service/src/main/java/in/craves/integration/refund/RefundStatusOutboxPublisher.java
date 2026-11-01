@@ -50,8 +50,12 @@ public class RefundStatusOutboxPublisher {
             .buildClient();
     }
 
-    @Scheduled(fixedDelayString = "${craves.refund.status-outbox-fixed-delay-ms:5000}")
+    @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.REFUND_SCHEDULER, fixedDelayString = "${craves.refund.status-outbox-fixed-delay-ms:5000}")
     public void publish() {
+        int deadLettered = repository.deadLetterExpiredStatusOutbox(MAX_ATTEMPTS, properties.validatedStaleLockSeconds());
+        if (deadLettered > 0) {
+            LOGGER.error("CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=refund_status reason=attempts_exhausted count={}", deadLettered);
+        }
         UUID lockToken = UUID.randomUUID();
         List<RefundStatusOutboxRecord> records = repository.claimStatusOutbox(
             properties.validatedStatusOutboxBatchSize(),
@@ -70,7 +74,9 @@ public class RefundStatusOutboxPublisher {
                 .setMessageId(record.id().toString())
                 .setCorrelationId(record.correlationId().toString())
                 .setSubject(record.eventType())
-                .setContentType("application/json");
+                .setContentType("application/json")
+                // CH-06: one session per chef order (subject), for session-enabled subscriptions.
+                .setSessionId(record.subject().toString());
             message.getApplicationProperties().put("eventType", record.eventType());
             message.getApplicationProperties().put("eventVersion", record.eventVersion());
             message.getApplicationProperties().put("source", "integration-service");

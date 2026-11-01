@@ -4,6 +4,7 @@
 in.craves.userchef.admin.explorer.AdminExplorerController
 in.craves.userchef.email.AuthEmailProjectionController
 in.craves.userchef.onboarding.ChefOnboardingController
+in.craves.userchef.supportchat.InternalVoiceSupportController
 in.craves.userchef.supportchat.SupportChatController
 in.craves.userchef.web.AdminDirectoryController
 in.craves.userchef.web.AdminSupportCaseController
@@ -16,7 +17,10 @@ in.craves.userchef.web.ChefReviewController
 in.craves.userchef.web.CustomerAddressGeocodingController
 in.craves.userchef.web.CustomerFavoriteController
 in.craves.userchef.web.CustomerHomeFavoriteController
+in.craves.userchef.web.CustomerLaunchAlertController
 in.craves.userchef.web.CustomerProfileController
 in.craves.userchef.web.InternalBankApplicantController
+in.craves.userchef.web.InternalChefKitchenPhotoController
 in.craves.userchef.web.InternalCustomerAddressController
+in.craves.userchef.web.InternalRoadDistanceController
 in.craves.userchef.web.SupportCaseController

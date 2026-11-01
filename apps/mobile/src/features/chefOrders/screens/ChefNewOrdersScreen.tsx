@@ -40,6 +40,7 @@ import {
 } from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
 import {SkeletonBlock} from '../../../shared/components/Skeleton';
+import {shortOrderNumber} from '../../../utils/orderNumber';
 import type {ChefOperationalOrder} from '../../chefShell/api/chefOperationalApi';
 import {ChefHeader} from '../../chefShell/components/ChefHeader';
 import {useChefOperationalState} from '../../chefShell/state/ChefOperationalProvider';
@@ -67,10 +68,6 @@ type ChefNewOrdersNavigation = CompositeNavigationProp<
     NativeStackNavigationProp<ChefProductStackParamList>
   >
 >;
-
-function shortOrderReference(orderId: string): string {
-  return `#${orderId.replace(/-/g, '').slice(-8).toUpperCase()}`;
-}
 
 function deliveryLabel(order: ChefOperationalOrder): string {
   const summary = order.deliverySummary;
@@ -161,7 +158,7 @@ function NewOrderCard({
   onReject: () => void;
   order: ChefOperationalOrder;
 }) {
-  const reference = shortOrderReference(order.id);
+  const reference = `#${shortOrderNumber(order.id)}`;
   const items = order.items ?? [];
   const received = deriveChefNewOrderReceivedAge(order.createdAt, nowMs);
   const busy = action !== undefined;
@@ -625,7 +622,7 @@ export function ChefNewOrdersScreen() {
               style={styles.sheet}>
               <Text accessibilityRole="header" style={styles.sheetTitle}>Accept order</Text>
               <Text style={styles.sheetText}>
-                Enter the preparation time for {acceptOrderId ? shortOrderReference(acceptOrderId) : 'this order'}.
+                Enter the preparation time for {acceptOrderId ? `#${shortOrderNumber(acceptOrderId)}` : 'this order'}.
               </Text>
               <View style={styles.inputRow}>
                 <TextInput
@@ -689,7 +686,7 @@ export function ChefNewOrdersScreen() {
               style={styles.sheet}>
               <Text accessibilityRole="header" style={styles.sheetTitle}>Reject order?</Text>
               <Text style={styles.sheetText}>
-                Give a reason before rejecting {rejectOrderId ? shortOrderReference(rejectOrderId) : 'this order'}.
+                Give a reason before rejecting {rejectOrderId ? `#${shortOrderNumber(rejectOrderId)}` : 'this order'}.
               </Text>
               <TextInput
                 accessibilityLabel="Rejection reason"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   FaBagShopping,
@@ -11,6 +11,7 @@ import {
   FaGift,
   FaHeadset,
   FaHeart,
+  FaKey,
   FaRightFromBracket,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
@@ -18,25 +19,23 @@ import { GiChefToque } from "react-icons/gi";
 import { AccountCard } from "@/features/profile/components/AccountCard";
 import { AddressCard } from "@/features/addresses/components/AddressCard";
 import { EditProfileModal } from "@/features/profile/components/EditProfileModal";
-import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { ProfileHeader } from "@/features/profile/components/ProfileHeader";
 import { ProfileLinkCard } from "@/features/profile/components/ProfileLinkCard";
+import { useCustomerSignOut } from "@/features/profile/components/SignOutFlow";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { ChangePasswordSheet, useHasPassword } from "@/shared/ui/forms/change-password-sheet";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import type { ChefApplication } from "@/features/chef-onboarding/lib/chef-application-contract";
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
 import type { CustomerProfile } from "@/features/profile/lib/profile-contract";
 import {
   captureSessionContext,
-  clearSession,
   getSession,
   isSessionContextCurrent,
   isSessionReady,
   loadSession,
-  LogoutUnconfirmedError,
   subscribeSession,
   type CravesUser,
-  type SessionContext,
 } from "@/features/auth/api/cravesAuth";
 import { cartCount, loadCart } from "@/features/cart/api/cravesCart";
 import { loadCustomerFavoriteIds } from "@/features/favorites/api/customerFavorites";
@@ -131,74 +130,16 @@ function ProfileSignOutAction({ onSignOut }: ProfileContentProps) {
 }
 
 export default function ProfilePage() {
-  const navigate = useNavigate();
   const scope = useSyncExternalStore(
     subscribeSession,
     profileScope,
     serverProfileScope,
   );
-  const logoutAttempt = useRef(0);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const [logout, setLogout] = useState<{
-    context: SessionContext | null;
-    busy: boolean;
-    error: string;
-  }>({ context: null, busy: false, error: "" });
-
-  const currentLogout =
-    logout.context !== null && isSessionContextCurrent(logout.context);
-
-  async function signOut() {
-    if (logout.busy && currentLogout) return;
-
-    const attempt = ++logoutAttempt.current;
-    const pending = clearSession();
-    setLogout({
-      context: captureSessionContext(),
-      busy: true,
-      error: "",
-    });
-
-    try {
-      await pending;
-      if (attempt !== logoutAttempt.current) return;
-      if (!getSession()) {
-        // Stay on "Signing out…" until the landing page replaces this one.
-        setLeaving(true);
-        navigate({ to: "/" });
-      }
-      setLogout({ context: null, busy: false, error: "" });
-    } catch (error) {
-      if (attempt !== logoutAttempt.current) return;
-      if (
-        !(error instanceof LogoutUnconfirmedError) ||
-        !error.retryContext ||
-        !isSessionContextCurrent(error.retryContext)
-      ) {
-        return;
-      }
-
-      setLogout({
-        context: error.retryContext,
-        busy: false,
-        error:
-          "We couldn’t confirm that you signed out, so you’re still signed in. Please try again.",
-      });
-    }
-  }
-
-  const logoutBusy = leaving || (currentLogout && logout.busy);
+  const signOut = useCustomerSignOut();
   return (
     <>
-      <ProfileContent key={scope} onSignOut={() => setConfirmOpen(true)} />
-      <CustomerSignOutDialog
-        open={confirmOpen}
-        busy={logoutBusy}
-        error={currentLogout ? logout.error : ""}
-        onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => void signOut()}
-      />
+      <ProfileContent key={scope} onSignOut={signOut.ask} />
+      {signOut.dialog}
     </>
   );
 }
@@ -213,6 +154,8 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [application, setApplication] = useState<ChefApplication | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const hasPassword = useHasPassword(user?.phoneNumber);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -384,7 +327,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
   const chef = chefLink(user, application);
   return (
     <div className="min-h-screen bg-[#FAFAFA] pb-8 text-[#1A1A1A] md:pb-12">
-      <ProfileHeader />
+      <ProfileHeader signedIn />
 
       <main className="mx-auto max-w-5xl px-4 pb-8 pt-4 md:px-6 md:pt-6">
         <AccountCard
@@ -498,11 +441,10 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
               badge={String(cartItemCount)}
             />
             <ProfileLinkCard
+              to="/refer"
               icon={FaGift}
               title="Refer a friend"
-              subtitle="Invite friends and earn rewards"
-              badge="Soon"
-              disabled
+              subtitle="Share Craves with friends"
             />
             <ProfileLinkCard
               to={chef.to}
@@ -525,10 +467,10 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
 
           <div className="grid gap-3 md:grid-cols-2">
             <ProfileLinkCard
-              to="/contact"
+              to="/help"
               icon={FaHeadset}
-              title="Contact us"
-              subtitle="Help and support"
+              title="Help & support"
+              subtitle="Chat, call or email"
             />
             <ProfileLinkCard
               to="/support"
@@ -536,6 +478,23 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
               title="Chat with support"
               subtitle="Get quick answers about orders and payments"
             />
+
+            {/* Only accounts that sign in with email and password have one to change. */}
+            {hasPassword ? (
+              <button
+                type="button"
+                onClick={() => setPasswordOpen(true)}
+                className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl !border-[#E5E7EB] !bg-white p-3.5 text-left !shadow-none transition-[box-shadow] hover:!shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                  <FaKey className="text-[18px]" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="block text-sm font-black text-[#1A1A1A]">Change password</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[#6B6B6B]">Choose a new password</span>
+                </span>
+              </button>
+            ) : null}
 
             <ProfileSignOutAction onSignOut={onSignOut} />
           </div>
@@ -553,6 +512,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
           setError("");
         }}
       />
+      <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} phoneNumber={user.phoneNumber} />
     </div>
   );
 }

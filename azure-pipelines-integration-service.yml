@@ -10,7 +10,7 @@ parameters:
     default: rg-craves-prodlow-centralindia
   - name: acrName
     type: string
-    default: cravesprodlowacr82121
+    default: cravesrm09prodlow6bf632
   - name: containerAppName
     type: string
     default: ca-craves-integration-service-pr
@@ -19,7 +19,7 @@ parameters:
     default: $(Build.BuildId)
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   modulePath: services/integration-service
   imageRepository: craves/integration-service
 
@@ -96,6 +96,9 @@ steps:
         # more than ten minutes to converge. Preserve fail-fast terminal-state
         # checks but use the proven bounded 25-minute observation window.
         echo 'Integration Container App readiness window: 1500 seconds (150 x 10s).'
+        # Integration runs with one plain app secret set by the referral activation; the release leaves it
+        # as it is (the helper still refuses any other non Key Vault secret).
+        ALLOW_PLAIN_SECRET_REFS='referral-source-hmac' \
         READY_ATTEMPTS=150 \
         READY_SLEEP_SECONDS=10 \
         bash scripts/release/deploy-single-service-preserve-runtime.sh \

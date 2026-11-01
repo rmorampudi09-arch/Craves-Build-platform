@@ -40,7 +40,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
-        source: "/api/:path*",
+        // Except the photo routes: their own headers cache a photo and keep errors no-store, and
+        // Next drops a route's Cache-Control when a rule here has set one.
+        source:
+          "/api/:path((?!(?:catalog/banners|chef/subscription-plans|subscriptions/plans)/[^/]+/image$).*)",
         headers: [
           { key: "Cache-Control", value: "private, no-store, max-age=0" },
           { key: "Pragma", value: "no-cache" },
@@ -56,7 +59,7 @@ const nextConfig: NextConfig = {
       {
         // Page routes only: a path with a dot is a static file (see the rule above).
         source:
-          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support)([^.]*)",
+          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support|help|refer)([^.]*)",
         headers: [
           {
             key: "Cache-Control",

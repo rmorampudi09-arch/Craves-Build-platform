@@ -2,13 +2,27 @@
 // Disposable response fixtures exercise the updated flow; no production APIs are called.
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
-import { createElement } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
+import { createElement, type ReactNode } from "react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { ChefLanguageStart, ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
+import { ChefApplicationStatus } from "@/features/chef-onboarding/components/chef-application-status";
 import { LanguagePicker } from "@/features/chef-onboarding/components/chef-language-picker";
+import { useChefOnboarding } from "@/features/chef-onboarding/components/use-chef-onboarding";
 import { EMPTY_ONBOARDING, ONBOARDING_LANGUAGES } from "./chef-onboarding-v2-contract";
+import {
+  CHEF_SECTIONS,
+  applicationPhaseCopy,
+  chefSectionDescription,
+  chefSectionLabel,
+  chefSectionTitle,
+  fssaiGuideText,
+  type ChefApplicationPhase,
+  type ChefFormScreen,
+} from "./chef-onboarding-flow";
 import { setSessionIdentity } from "../../auth/api/cravesAuth";
-const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+import { LanguageProvider } from "@/shared/i18n/language-context";
+import type { Language } from "@/shared/i18n/language";
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => navigation, usePathname: () => "/chef/application", useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/features/sign-in/components/EmailVerificationPanel", () => ({ EmailVerificationPanel: () => null }));
 vi.mock("@/features/addresses/components/AddressMapPicker", () => ({ AddressMapPicker: () => null }));
@@ -79,7 +93,14 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  document.cookie = "craves_lang=; Path=/; Max-Age=0";
 });
+// createElement passes children as its third argument; the cast only makes that prop optional.
+const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
+const inLanguage = (language: Language, chosen = true) =>
+  function Wrapper({ children }: { children: ReactNode }) {
+    return createElement(Provider, { initial: language, chosen }, children);
+  };
 function mount() {
   return render(
     createElement(ChefOnboardingWorkspace, {
@@ -210,4 +231,89 @@ it("keeps what was typed when the chef has to sign in again, and brings it back 
   mount();
   await resume();
   expect((screen.getByLabelText("FSSAI registration number") as HTMLInputElement).value).toBe("");
+});
+
+it("asks a chef new to this device for a language before anything else, and one tap carries on", async () => {
+  render(createElement(ChefLanguageStart, null, createElement("p", null, "Application")), { wrapper: inLanguage("en", false) });
+  // Asked in all three languages, with no Back, Save & exit or footer to get in the way.
+  expect(screen.getByRole("dialog", { name: "Choose your language" })).toBeTruthy();
+  expect(screen.getByText("మీ భాషను ఎంచుకోండి")).toBeTruthy();
+  expect(screen.getByText("ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Back|Save & exit|^Change language/ })).toBeNull();
+  expect(screen.queryByText("Application")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /ಕನ್ನಡ/ }));
+  expect(await screen.findByText("Application")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.cookie).toContain("craves_lang=kn");
+});
+
+it("speaks the chef's language on every step and keeps the language one tap away", async () => {
+  render(createElement(ChefOnboardingWorkspace, { fallback: null }), { wrapper: inLanguage("te") });
+  expect(await screen.findByRole("heading", { name: "మళ్లీ స్వాగతం, Test" })).toBeTruthy();
+  expect(screen.getByText("వంటగది వివరాలు")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "దరఖాస్తు కొనసాగించండి" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "సేవ్ చేసి వెళ్లండి" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "భాష మార్చండి: తెలుగు" }));
+  fireEvent.click(await screen.findByRole("button", { name: /ಕನ್ನಡ/ }));
+  expect(await screen.findByRole("heading", { name: "ಮತ್ತೆ ಸ್ವಾಗತ, Test" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "ಉಳಿಸಿ ಹೊರಡಿ" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "ಭಾಷೆ ಬದಲಿಸಿ: ಕನ್ನಡ" })).toBeTruthy();
+});
+
+it("starts the FSSAI video in the chef's language until the first save, which sends it", async () => {
+  const draft = { ...state, details: null, application: { id, status: "NOT_SUBMITTED", documents: [] } };
+  const saves: { details: { language: string } }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "PUT") {
+        const body = JSON.parse(String(options.body));
+        saves.push(body);
+        return Response.json({ ...draft, version: 2, details: body.details });
+      }
+      return Response.json(url.includes("/content") ? [] : draft);
+    }),
+  );
+  const fresh = renderHook(() => useChefOnboarding(), { wrapper: inLanguage("kn") });
+  await waitFor(() => expect(fresh.result.current.details.language).toBe("kn"));
+  // Not something the chef typed: leaving asks nothing.
+  expect(fresh.result.current.dirty).toBe(false);
+  await act(() => fresh.result.current.persist());
+  expect(saves).toEqual([expect.objectContaining({ details: expect.objectContaining({ language: "kn" }) })]);
+  fresh.unmount();
+
+  // A saved application keeps its own choice.
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json(state)));
+  const saved = renderHook(() => useChefOnboarding(), { wrapper: inLanguage("kn") });
+  await waitFor(() => expect(saved.result.current.state).not.toBeNull());
+  expect(saved.result.current.details.language).toBe("en");
+});
+
+it("explains the application status in the chef's language", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ id, status: "PENDING", documents: [] })));
+  render(createElement(ChefApplicationStatus, { draftsEnabled: false }), { wrapper: inLanguage("kn") });
+  expect(await screen.findByText("ಕಳುಹಿಸಲಾಗಿದೆ")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "ನಿಮ್ಮ ಅರ್ಜಿ" })).toBeTruthy();
+  expect(screen.getByText("ಮುಂದೆ ಏನಾಗುತ್ತದೆ?")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "ಸ್ಥಿತಿ ಮತ್ತೆ ನೋಡಿ" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "ಗ್ರಾಹಕ ಆ್ಯಪ್‌ಗೆ ಬದಲಿಸಿ" })).toBeTruthy();
+});
+
+it("names every screen, section and status in Telugu and Kannada", () => {
+  const screens: ChefFormScreen[] = [...CHEF_SECTIONS, "review", "resume", "submitted", "status"];
+  const phases: ChefApplicationPhase[] = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "MORE_INFORMATION_REQUIRED", "APPROVED", "REJECTED"];
+  for (const language of ["te", "kn"] as const) {
+    for (const screen of screens) {
+      expect(chefSectionTitle(screen, language), screen).not.toBe(chefSectionTitle(screen));
+      expect(chefSectionDescription(screen, language), screen).not.toBe(chefSectionDescription(screen));
+    }
+    // "FSSAI" is a name and stays as it is.
+    for (const section of CHEF_SECTIONS.filter((section) => section !== "fssai"))
+      expect(chefSectionLabel(section, language), section).not.toBe(chefSectionLabel(section));
+    for (const phase of phases) {
+      expect(applicationPhaseCopy(phase, language).label, phase).not.toBe(applicationPhaseCopy(phase).label);
+      expect(applicationPhaseCopy(phase, language).message, phase).not.toBe(applicationPhaseCopy(phase).message);
+    }
+    expect(fssaiGuideText(language).title).not.toBe(fssaiGuideText().title);
+  }
 });

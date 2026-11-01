@@ -9,7 +9,8 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     hikari:
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:5}
+      # Shared database budget: scripts/release/check-db-connection-budget.py
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:2}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
       connection-timeout: 30000
   servlet:
@@ -36,6 +37,16 @@ management:
       enabled: ${CRAVES_REDIS_HEALTH_ENABLED:${CRAVES_TOKEN_REVOCATION_ENABLED:false}}
 
 craves:
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/subscription-occurrences/**=order}
+  http-client:
+    connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
@@ -51,6 +62,15 @@ craves:
       projection-scheduler-enabled: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_ENABLED:false}
       projection-batch-size: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_BATCH_SIZE:50}
       projection-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_CAPACITY_PROJECTION_FIXED_DELAY_MS:60000}
+    pause:
+      # On by default: a paused plan must restart when its pause days run out, or the customer loses meals.
+      auto-resume-enabled: ${CRAVES_SUBSCRIPTION_AUTO_RESUME_ENABLED:true}
+      auto-resume-fixed-delay-ms: ${CRAVES_SUBSCRIPTION_AUTO_RESUME_FIXED_DELAY_MS:300000}
+    refund-choice:
+      # Off until finance can price and pay refunds: declined and paused days are added at the end, as before.
+      enabled: ${CRAVES_SUBSCRIPTION_REFUND_CHOICE_ENABLED:false}
+      # On by default, switch on or off: a choice left unanswered for 48 hours is settled (days at the end, else a refund request).
+      deadline-sweep-enabled: ${CRAVES_SUBSCRIPTION_DAY_CREDIT_SWEEP_ENABLED:true}
     occurrence-generator:
       enabled: ${CRAVES_SUBSCRIPTION_OCCURRENCE_GENERATOR_ENABLED:false}
       batch-size: ${CRAVES_SUBSCRIPTION_OCCURRENCE_BATCH_SIZE:50}

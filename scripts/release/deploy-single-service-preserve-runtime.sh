@@ -15,6 +15,11 @@ READY_ATTEMPTS=${READY_ATTEMPTS:-60}
 READY_SLEEP_SECONDS=${READY_SLEEP_SECONDS:-5}
 STATUS_READ_FAILURE_LIMIT=${STATUS_READ_FAILURE_LIMIT:-4}
 DEPLOY_PREFLIGHT_ONLY=${DEPLOY_PREFLIGHT_ONLY:-false}
+# Exact names of plain (non Key Vault) app secrets this service already runs with and that the release
+# leaves untouched (the secret metadata hash is still compared before and after). Empty for every
+# service except order-service (finance-internal, referral-source-hmac) and integration-service
+# (referral-source-hmac); see their azure-pipelines-*.yml.
+ALLOW_PLAIN_SECRET_REFS=${ALLOW_PLAIN_SECRET_REFS:-}
 
 fail() {
   echo "ERROR: $*" >&2
@@ -101,6 +106,12 @@ verify_active_secret_refs_are_key_vault_backed() {
   while IFS= read -r ref; do
     [[ -n "$ref" ]] || continue
     count=$((count + 1))
+
+    if [[ " $ALLOW_PLAIN_SECRET_REFS " == *" $ref "* ]] \
+      && jq -e --arg N "$ref" 'any(.[]; .name == $N)' >/dev/null <<<"$secret_meta"; then
+      echo "Plain secret reference '$ref' is on this service's allowlist; left unchanged."
+      continue
+    fi
 
     kv_url=$(jq -r --arg N "$ref" '[.[] | select(.name == $N)][0].keyVaultUrl // ""' <<<"$secret_meta")
     identity=$(jq -r --arg N "$ref" '[.[] | select(.name == $N)][0].identity // ""' <<<"$secret_meta")

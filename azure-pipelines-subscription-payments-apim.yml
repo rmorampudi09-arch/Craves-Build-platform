@@ -10,7 +10,7 @@ parameters:
     default: rg-craves-prodlow-centralindia
   - name: apimName
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlow-kmqgfy
   - name: integrationContainerAppName
     type: string
     default: ca-craves-integration-service-pr

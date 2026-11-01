@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAcceptedOrderData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
+import in.craves.integration.delivery.command.DeliveryCommandModels.OrderHandedOverData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.OrderReadyForPickupData;
 import in.craves.integration.delivery.command.DeliveryCommandScheduler.DeliveryMessageValidationException;
 import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryCommandNonRetryableException;
@@ -38,6 +39,7 @@ public class DeliveryServiceBusProcessors {
     private final ServiceBusSenderClient commandRetrySender;
     private final ServiceBusProcessorClient chefAcceptedProcessor;
     private final ServiceBusProcessorClient commandProcessor;
+    private final FleetStage fleetStage;
 
     public DeliveryServiceBusProcessors(DeliveryServiceBusClientFactory factory,
                                         DeliveryCommandScheduler scheduler,
@@ -45,7 +47,9 @@ public class DeliveryServiceBusProcessors {
                                         DeliveryCommandProperties properties,
                                         ObjectMapper objectMapper,
                                         @Qualifier("deliveryCommandSender")
-                                        ServiceBusSenderClient commandRetrySender) {
+                                        ServiceBusSenderClient commandRetrySender,
+                                        java.util.Optional<FleetStage> fleetStage) {
+        this.fleetStage = fleetStage.orElse(null);
         this.scheduler = scheduler;
         this.worker = worker;
         this.properties = properties;
@@ -107,7 +111,16 @@ public class DeliveryServiceBusProcessors {
                     EventEnvelope.class, OrderReadyForPickupData.class
                 );
                 EventEnvelope<OrderReadyForPickupData> event = objectMapper.readValue(rawBody, readyType);
+                recordChefReady(event);
                 scheduler.accelerateReadyForPickup(event);
+                context.complete();
+                return;
+            }
+            if (DeliveryCommandModels.ORDER_HANDED_OVER.equals(eventType)) {
+                JavaType handedOverType = objectMapper.getTypeFactory().constructParametricType(
+                    EventEnvelope.class, OrderHandedOverData.class
+                );
+                recordHandedOver(objectMapper.readValue(rawBody, handedOverType));
                 context.complete();
                 return;
             }
@@ -123,6 +136,29 @@ public class DeliveryServiceBusProcessors {
         } catch (Exception ex) {
             retryOrDeadLetter(context, "DELIVERY_DOMAIN_EVENT_PROCESSING_FAILED", ex);
         }
+    }
+
+    // The rider's free wait starts at the chef's ready time; a fleet failure here never holds up the courier.
+    private void recordChefReady(EventEnvelope<OrderReadyForPickupData> event) {
+        if (fleetStage == null || event == null || event.data() == null || event.data().chefSubOrderId() == null) {
+            return;
+        }
+        try {
+            fleetStage.chefReady(event.data().chefSubOrderId(),
+                event.data().readyAt() != null ? event.data().readyAt() : event.occurredAt());
+        } catch (RuntimeException ex) {
+            log.warn("Craves rider chef-ready time not recorded chefSubOrderId={}", event.data().chefSubOrderId(), ex);
+        }
+    }
+
+    // The rider holds the food once the chef hands it over, so the fleet watchdog keeps the trip with them (P2-05). A
+    // failure retries the message (the caller's catch): nothing else rides on it.
+    private void recordHandedOver(EventEnvelope<OrderHandedOverData> event) {
+        if (fleetStage == null || event == null || event.data() == null || event.data().chefSubOrderId() == null) {
+            return;
+        }
+        fleetStage.chefHandedOver(event.data().chefSubOrderId(),
+            event.data().handedOverAt() != null ? event.data().handedOverAt() : event.occurredAt());
     }
 
     private void processDeliveryCommand(ServiceBusReceivedMessageContext context) {

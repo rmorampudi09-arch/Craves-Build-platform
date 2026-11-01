@@ -13,6 +13,7 @@ Starter low-cost deployment for 50-100 concurrent users:
 
 Deferred / separately activated infrastructure:
 - Azure Managed Redis: `infra/redis/main.bicep`
+- The rider fleet engine (one container app, `deployEngine=false` by default): `infra/fleet-engine/main.bicep`, steps in `infra/fleet-engine/README.md`
 - AKS
 - Application Gateway
 - Front Door Premium

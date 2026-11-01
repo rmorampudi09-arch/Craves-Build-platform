@@ -29,6 +29,7 @@ it("says when the device is offline and what to check", () => {
   render(createElement(ErrorPage, { error: new Error("network"), reset: vi.fn() }));
   expect(screen.getByRole("heading", { name: "You’re offline" })).toBeTruthy();
   expect(screen.getByText(/Check your Wi‑Fi or mobile data/)).toBeTruthy();
+  expect(screen.getByTestId("empty-illustration-offline")).toBeTruthy();
 });
 
 it("shows no reference chip when there is no digest", () => {

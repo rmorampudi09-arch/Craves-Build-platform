@@ -23,13 +23,13 @@ parameters:
     default: afd-craves-prodlow
   - name: adminContainerAppName
     type: string
-    default: ca-craves-admin-web-prodlow
+    default: ca-craves-admin-r92-ffe80e7c
   - name: adminHostname
     type: string
     default: admin.craves.in
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
   artifactDir: $(Build.ArtifactStagingDirectory)/admin-frontdoor
 
 pool:

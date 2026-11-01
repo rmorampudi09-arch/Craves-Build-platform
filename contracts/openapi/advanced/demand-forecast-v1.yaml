@@ -1,0 +1,79 @@
+components:
+  schemas:
+    DemandForecast:
+      properties:
+        averageOrders:
+          format: double
+          type: number
+        basedOnWeeks:
+          format: int32
+          type: integer
+        complete:
+          type: boolean
+        date:
+          format: date
+          type: string
+        dishes:
+          items:
+            $ref: "#/components/schemas/DishForecast"
+          type: array
+        weeksCounted:
+          items:
+            format: date
+            type: string
+          type: array
+      type: object
+    DishForecast:
+      properties:
+        averagePortions:
+          format: double
+          type: number
+        high:
+          format: int32
+          type: integer
+        low:
+          format: int32
+          type: integer
+        menuItemId:
+          format: uuid
+          type: string
+        name:
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_DEMAND_FORECAST_ENABLED."
+  title: Craves demand-forecast API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/demand-forecast/dishes:
+    get:
+      operationId: dishDemandForecast
+      parameters:
+      - in: query
+        name: date
+        required: true
+        schema:
+          format: date
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DemandForecast"
+          description: OK
+      tags:
+      - demand-forecast-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

@@ -5,12 +5,20 @@ import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { BellRing, ChevronRight } from "lucide-react";
 import { isChefModeVerified } from "@/features/chef/lib/chef-mode";
-import { orderWords, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
+import { isAwaitingAnswer, orderWords, useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
 import type { ChefOrder } from "@/features/chef/lib/chef-order-contract";
 import { shortOrderNumber } from "@/shared/lib/order-number";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { format, messages } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
 
-const waitingOrders = (orders: ChefOrder[]) => orders.filter((order) => order.status === "CHEF_ACCEPTANCE_PENDING");
+const TEXT = messages({
+  en: { newOrder: "New order {number}", newOrderAndMore: "New order {number}, and {count} more", waitingOne: "New order waiting", waitingMany: "{count} new orders waiting", answerNow: "Answer now" },
+  te: { newOrder: "కొత్త ఆర్డర్ {number}", newOrderAndMore: "కొత్త ఆర్డర్ {number}, మరో {count} కూడా", waitingOne: "కొత్త ఆర్డర్ ఎదురుచూస్తోంది", waitingMany: "{count} కొత్త ఆర్డర్లు ఎదురుచూస్తున్నాయి", answerNow: "ఇప్పుడే జవాబు ఇవ్వండి" },
+  kn: { newOrder: "ಹೊಸ ಆರ್ಡರ್ {number}", newOrderAndMore: "ಹೊಸ ಆರ್ಡರ್ {number}, ಇನ್ನೂ {count} ಕೂಡ", waitingOne: "ಹೊಸ ಆರ್ಡರ್ ಕಾಯುತ್ತಿದೆ", waitingMany: "{count} ಹೊಸ ಆರ್ಡರ್‌ಗಳು ಕಾಯುತ್ತಿವೆ", answerNow: "ಈಗಲೇ ಉತ್ತರಿಸಿ" },
+});
+
+const waitingOrders = (orders: ChefOrder[]) => orders.filter(isAwaitingAnswer);
 
 /**
  * On every chef page: says a new order out loud to screen readers, and on pages that don't
@@ -25,13 +33,16 @@ export function ChefOrderWatcher() {
   const listsOrders = pathname === "/chef" || pathname === "/chef/orders";
   const [waiting, setWaiting] = useState<ChefOrder[]>([]);
   const [announcement, setAnnouncement] = useState("");
+  const text = useText(TEXT);
+  const { language } = useLanguage();
 
   useChefOrderPolling(
     enabled,
     (orders, fresh) => {
       setWaiting(waitingOrders(orders));
       if (fresh.length > 0) {
-        setAnnouncement(orderWords(fresh[0]!, `New order ${shortOrderNumber(fresh[0]!.id)}${fresh.length > 1 ? `, and ${fresh.length - 1} more` : ""}`));
+        const intro = format(fresh.length > 1 ? text.newOrderAndMore : text.newOrder, { number: shortOrderNumber(fresh[0]!.id), count: fresh.length - 1 });
+        setAnnouncement(orderWords(fresh[0]!, intro, language));
       }
     },
     { checkNow: !listsOrders },
@@ -48,9 +59,9 @@ export function ChefOrderWatcher() {
         <div className="chef-order-banner-wrap">
           <Link href={only ? `/chef/orders/${only.id}` : "/chef"} className="chef-order-banner">
             <BellRing className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0">{only ? "New order waiting" : `${others.length} new orders waiting`}</span>
+            <span className="min-w-0">{only ? text.waitingOne : format(text.waitingMany, { count: others.length })}</span>
             <span className="chef-order-banner-cta">
-              Answer now
+              {text.answerNow}
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </span>
           </Link>

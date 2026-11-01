@@ -13,14 +13,14 @@ parameters:
   - name: apimServiceName
     displayName: API Management service
     type: string
-    default: apim-craves-prodlow-l3ing6
+    default: apim-craves-prodlow-kmqgfy
   - name: userChefContainerAppName
     displayName: User/Chef Service Container App
     type: string
     default: ca-craves-user-chef-service-prod
 
 variables:
-  AZURE_SERVICE_CONNECTION: Craves-Dev-Service-Connection
+  AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection
 
 pool:
   vmImage: ubuntu-latest

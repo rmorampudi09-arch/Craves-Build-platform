@@ -5,6 +5,7 @@ import {
   type HomeDishSort,
   type HomeFoodPreference,
 } from "@/features/home/lib/home-return-state";
+import { SPICE_LEVEL_LABELS } from "@/shared/lib/spice-level";
 
 /** Everything that shapes Home's dish list besides the craving rail. */
 export type DishView = {
@@ -18,6 +19,7 @@ export const SORT_LABELS: Record<HomeDishSort, string> = {
   "price-low-high": "Price: low to high",
   "price-high-low": "Price: high to low",
   quickest: "Quickest to cook",
+  "name-a-z": "Name A–Z",
 };
 
 export const FOOD_LABELS: Record<HomeFoodPreference, string> = {
@@ -43,7 +45,7 @@ export const DISTANCE_LABELS: Record<Exclude<HomeDishFilters["distance"], "any">
   "5": "Within 5 km",
 };
 
-export function matchesFoodPreference(dish: Dish, preference: HomeFoodPreference): boolean {
+export function matchesFoodPreference(dish: Pick<Dish, "foodType" | "veg">, preference: HomeFoodPreference): boolean {
   if (preference === "all") return true;
   const type = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
   return preference === "veg" ? type === "VEG" : preference === "egg" ? type === "EGG" : type === "NON_VEG";
@@ -60,6 +62,7 @@ export function matchesDishFilters(dish: Dish, filters: HomeDishFilters): boolea
   if (filters.distance !== "any" && !(dish.distanceMeters !== undefined && dish.distanceMeters <= Number(filters.distance) * 1000)) {
     return false;
   }
+  if (filters.spice !== "any" && dish.spiceLevel !== SPICE_LEVEL_LABELS[filters.spice]) return false;
   return true;
 }
 
@@ -70,13 +73,14 @@ export function sortDishes(dishes: Dish[], sort: HomeDishSort): Dish[] {
   if (sort === "quickest") {
     return [...dishes].sort((left, right) => (left.prepMinutes ?? 10_000) - (right.prepMinutes ?? 10_000));
   }
+  if (sort === "name-a-z") return [...dishes].sort((left, right) => left.name.localeCompare(right.name, "en-IN"));
   return dishes;
 }
 
 /** How many filters are on (food type counts; sort order does not). */
 export function activeFilterCount(view: Pick<DishView, "filters" | "foodPreference">): number {
   const { filters, foodPreference } = view;
-  return [filters.price, filters.ready, filters.distance].filter((value) => value !== "any").length +
+  return [filters.price, filters.ready, filters.distance, filters.spice].filter((value) => value !== "any").length +
     (foodPreference === "all" ? 0 : 1);
 }
 

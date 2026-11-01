@@ -141,6 +141,9 @@ class OlaMapsClientTest {
             assertEquals("17.4483,78.3915", request.query().get("latlng"));
             assertEquals(KEY, request.query().get("api_key"));
             assertEquals("https://craves.in", request.origin());
+            // Places lookups stay plain GETs without a body header, as before the Directions call was added.
+            assertEquals("GET", request.method());
+            assertNull(request.contentLength());
         }
     }
 
@@ -198,7 +201,54 @@ class OlaMapsClientTest {
         }
     }
 
-    private record Recorded(String path, Map<String, String> query, String origin) {
+    private static final String ROUTE = """
+        {"status": "SUCCESS", "routes": [{"legs": [{"distance": 3990, "duration": 1001,
+          "readable_distance": "3.99", "readable_duration": "16"}]}]}
+        """;
+
+    @Test
+    void roadDistancePostsOriginAndDestinationAndReadsFirstLeg() throws Exception {
+        try (var stub = new Stub(200, ROUTE, 0)) {
+            var route = stub.client(null).roadDistance(
+                new BigDecimal("17.4483"), new BigDecimal("78.3915"), new BigDecimal("17.4374"), new BigDecimal("78.3897"));
+
+            assertEquals(new OlaMapsClient.RoadDistance(3990, 1001L, "OLA"), route);
+            var request = stub.requests.get(0);
+            assertEquals("POST", request.method());
+            assertEquals("/routing/v1/directions", request.path());
+            assertEquals("17.4483,78.3915", request.query().get("origin"));
+            assertEquals("17.4374,78.3897", request.query().get("destination"));
+            assertEquals(KEY, request.query().get("api_key"));
+        }
+    }
+
+    @Test
+    void roadDistanceFailsOnBadJsonMissingRouteOrTimeout() throws Exception {
+        for (String body : new String[] {"not json", "{\"routes\":[]}", "{\"routes\":[{\"legs\":[{\"distance\":\"3.99 km\"}]}]}"}) {
+            try (var stub = new Stub(200, body, 0)) {
+                assertEquals(503, assertThrows(ApiException.class, () -> stub.client(null).roadDistance(
+                    BigDecimal.ONE, BigDecimal.ONE, BigDecimal.TEN, BigDecimal.TEN)).getStatus());
+            }
+        }
+        try (var stub = new Stub(200, ROUTE, 5_000)) {
+            // The client is built with a 7 s timeout, as in production; directions must still give up at 3 s.
+            var client = new OlaMapsClient(objectMapper, HttpClient.newHttpClient(), stub.endpoint(), KEY, null, Duration.ofSeconds(7));
+            long started = System.nanoTime();
+            assertThrows(ApiException.class, () -> client.roadDistance(BigDecimal.ONE, BigDecimal.ONE, BigDecimal.TEN, BigDecimal.TEN));
+            long elapsed = Duration.ofNanos(System.nanoTime() - started).toMillis();
+            assertTrue(elapsed >= 2_500 && elapsed < 4_500, "took " + elapsed + " ms");
+        }
+    }
+
+    @Test
+    void parsesDirectionsDurationAsOptional() throws Exception {
+        var noDuration = OlaMapsClient.parseDirections(objectMapper.readTree("{\"routes\":[{\"legs\":[{\"distance\":812.6}]}]}"));
+        assertEquals(new OlaMapsClient.RoadDistance(813, null, "OLA"), noDuration);
+        assertNull(OlaMapsClient.parseDirections(objectMapper.readTree("{\"status\":\"FAILED\"}")));
+        assertNull(OlaMapsClient.parseDirections(null));
+    }
+
+    private record Recorded(String method, String path, Map<String, String> query, String origin, String contentLength) {
     }
 
     /** Local JDK HTTP stub; no live Ola request is ever made. */
@@ -217,8 +267,8 @@ class OlaMapsClientTest {
                     query.put(URLDecoder.decode(parts[0], StandardCharsets.UTF_8),
                         parts.length > 1 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "");
                 }
-                requests.add(new Recorded(exchange.getRequestURI().getPath(), query,
-                    exchange.getRequestHeaders().getFirst("Origin")));
+                requests.add(new Recorded(exchange.getRequestMethod(), exchange.getRequestURI().getPath(), query,
+                    exchange.getRequestHeaders().getFirst("Origin"), exchange.getRequestHeaders().getFirst("Content-Length")));
                 try {
                     Thread.sleep(delayMillis);
                 } catch (InterruptedException interrupted) {

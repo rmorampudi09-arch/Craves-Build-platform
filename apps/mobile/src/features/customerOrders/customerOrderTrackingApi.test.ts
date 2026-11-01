@@ -71,7 +71,15 @@ describe('P55 customer delivery tracking API', () => {
       trackingUrl: null,
       observedAt: null,
       history: [],
+      deliveryCode: null,
     });
+  });
+
+  it('keeps only a 4-digit delivery code', () => {
+    expect(parseCustomerOrderTrackingResponse(tracking({deliveryCode: '0719'}))?.deliveryCode).toBe('0719');
+    for (const deliveryCode of [undefined, null, '471', '47190', '47a9', ' 4719', 4719]) {
+      expect(parseCustomerOrderTrackingResponse(tracking({deliveryCode}))?.deliveryCode).toBeNull();
+    }
   });
 
   it('strips unapproved fields and removes non-HTTPS tracking URLs', () => {

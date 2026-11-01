@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import {
+  indiaBusinessDate,
   parseCustomerSubscription,
   type PublicSubscriptionPlan,
 } from "@/features/meal-plans/lib/subscription-contract";
+import { billingPeriodLabel } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -30,7 +33,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const [message, setMessage] = useState(LOADING_PLAN);
   const [busy, setBusy] = useState(false);
   const idempotencyKey = useRef("");
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => indiaBusinessDate(), []);
 
   useEffect(() => {
     let active = true;
@@ -39,7 +42,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
         if (!response.ok) throw new Error("We couldn’t load this meal plan. Please try again shortly.");
         return response.json();
       }),
-      fetch("/api/customer/addresses", { cache: "no-store" }).then(async response => {
+      sessionFetch("/api/customer/addresses", { cache: "no-store" }).then(async response => {
         if (response.status === 401) throw new Error("Your session expired. Sign in again.");
         if (!response.ok) throw new Error("We couldn’t load your saved addresses. Please try again.");
         return response.json();
@@ -74,7 +77,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/subscriptions", {
+      const response = await sessionFetch("/api/subscriptions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -89,6 +92,9 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
       });
       const body = await response.json().catch(() => null);
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
+      if ((body as { code?: unknown } | null)?.code === "DELIVERY_ADDRESS_OUT_OF_RANGE") {
+        throw new Error("This chef delivers meal plans within 10 km of their kitchen. Choose a saved address closer to the chef.");
+      }
       if (response.status === 409) {
         throw new Error("We already received this request. Refresh the page before trying again.");
       }
@@ -119,7 +125,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   return (
     <form onSubmit={submit} className="max-w-xl rounded-2xl border border-[#E5E7EB] bg-white p-5 sm:p-6">
       <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6B6B6B]">
-        {plan.billingPeriod === "WEEKLY" ? "Weekly plan" : "Monthly plan"}
+        {billingPeriodLabel(plan.billingPeriod)}
       </p>
       <h2 className="mt-1 text-2xl font-bold text-[#1A1A1A]">{plan.name}</h2>
       {plan.description ? <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{plan.description}</p> : null}

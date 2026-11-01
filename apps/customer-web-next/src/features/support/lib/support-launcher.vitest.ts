@@ -57,6 +57,23 @@ it("signed-in customers get their own assistant", async () => {
   expect(JSON.parse(fetch.mock.calls[0][1].body).contextRole).toBe("CUSTOMER");
 });
 
+it.each(["/home", "/kitchen/k1", "/dish/d1", "/cart", "/checkout", "/orders/o1", "/wishlist", "/notifications", "/subscriptions/plans", "/help"])(
+  "stays off the customer screen %s: customers find it on Profile",
+  path => {
+    nav.pathname = path;
+    auth.user = { status: "ACTIVE", roles: ["CUSTOMER"] };
+    render(createElement(SupportLauncher));
+    expect(screen.queryByRole("button", { name: "Questions? Ask Craves assistant" })).toBeNull();
+  },
+);
+
+it("shows on Profile", () => {
+  nav.pathname = "/profile";
+  auth.user = { status: "ACTIVE", roles: ["CUSTOMER"] };
+  render(createElement(SupportLauncher));
+  expect(screen.getByRole("button", { name: "Questions? Ask Craves assistant" })).toBeTruthy();
+});
+
 it.each(["/support", "/chef/support", "/admin", "/admin/support/abc"])("stays off %s, which already has the chat or is admin", path => {
   nav.pathname = path;
   render(createElement(SupportLauncher));

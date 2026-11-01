@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseKitchenDiscovery } from "@/features/home/lib/discovery-contract";
+import { parseKitchenDiscovery, parseSearchQuery } from "@/features/home/lib/discovery-contract";
 import { publicApiFetch } from "@/shared/lib/public-api";
 import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
+import { SPICE_LEVELS, type SpiceLevel } from "@/shared/lib/spice-level";
 
-const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size"]);
+const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size", "spiceLevel", "query"]);
+const NO_STORE = { "Cache-Control": "no-store" };
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 function coordinate(value: string | null): number {
@@ -17,7 +19,8 @@ function integer(value: string | null, fallback: number): number {
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const seen = new Set<string>();
-  let invalidQuery = request.nextUrl.search.length > 256;
+  // Room for 120 search characters of up to 12 encoded characters each, beside the numbers.
+  let invalidQuery = request.nextUrl.search.length > 2_048;
   if (!invalidQuery) {
     for (const [key] of params) {
       if (!QUERY_KEYS.has(key) || seen.has(key)) invalidQuery = true;
@@ -29,6 +32,10 @@ export async function GET(request: NextRequest) {
   const radiusMeters = integer(params.get("radiusMeters"), DEFAULT_DISCOVERY_RADIUS_METERS);
   const page = integer(params.get("page"), 0);
   const size = integer(params.get("size"), 20);
+  // Kitchens with at least one dish at this spice level (the Chefs tab filter).
+  const spiceLevel = params.get("spiceLevel");
+  // Search words, as the app sends them: kitchens whose name, chef, area or dishes match.
+  const searchQuery = parseSearchQuery(params.get("query"));
   if (
     invalidQuery
     || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
@@ -36,19 +43,23 @@ export async function GET(request: NextRequest) {
     || !Number.isSafeInteger(radiusMeters) || radiusMeters < 1 || radiusMeters > MAX_DISCOVERY_RADIUS_METERS
     || !Number.isSafeInteger(page) || page < 0 || page > 1_000
     || !Number.isSafeInteger(size) || size < 1 || size > 50
+    || (spiceLevel !== null && !SPICE_LEVELS.includes(spiceLevel as SpiceLevel))
+    || searchQuery === null
   ) {
     return NextResponse.json(
       { error: "INVALID_LOCATION", message: "Valid latitude, longitude and discovery bounds are required." },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status: 400, headers: NO_STORE },
     );
   }
   const query = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: String(page), size: String(size) });
+  if (spiceLevel) query.set("spiceLevel", spiceLevel);
+  if (searchQuery) query.set("query", searchQuery);
   try {
     const upstream = await publicApiFetch(`/discovery/kitchens?${query}`); const body = await upstream.json().catch(() => null);
-    if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: upstream.status });
-    const parsed = parseKitchenDiscovery(body); return parsed ? NextResponse.json(parsed, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Catalog response validation failed." }, { status: 502 });
+    if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: upstream.status, headers: NO_STORE });
+    const parsed = parseKitchenDiscovery(body); return parsed ? NextResponse.json(parsed, { headers: NO_STORE }) : NextResponse.json({ error: "INVALID_UPSTREAM_RESPONSE", message: "Catalog response validation failed." }, { status: 502, headers: NO_STORE });
   } catch (error) {
     const timeout = error instanceof Error && error.name === "AbortError";
-    return NextResponse.json({ error: timeout ? "DISCOVERY_TIMEOUT" : "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: timeout ? 504 : 502 });
+    return NextResponse.json({ error: timeout ? "DISCOVERY_TIMEOUT" : "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: timeout ? 504 : 502, headers: NO_STORE });
   }
 }

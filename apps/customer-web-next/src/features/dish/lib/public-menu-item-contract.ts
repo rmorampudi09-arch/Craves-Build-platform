@@ -18,6 +18,10 @@ export type PublicMenuItemDetail = {
   spiceLevel: "MILD" | "MEDIUM" | "SPICY" | null;
   primaryImageUrl: string | null;
   imageUrls: string[];
+  /** One pack's weight in grams ("Pack 250 g"), when the kitchen gave it. */
+  unitPackageWeightGrams: number | null;
+  /** Packed in a thermobox so it arrives hot; null when the kitchen didn't say. */
+  thermoboxRequired: boolean | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -155,6 +159,8 @@ export function parsePublicMenuItemDetail(
         : null,
     primaryImageUrl: imageUrls[0] ?? null,
     imageUrls,
+    unitPackageWeightGrams: integer(item.unitPackageWeightGrams, 1, 100_000),
+    thermoboxRequired: typeof item.thermoboxRequired === "boolean" ? item.thermoboxRequired : null,
   };
 }
 

@@ -1,5 +1,5 @@
 "use client";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 import { chefApiError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import Link from "next/link";
@@ -31,12 +31,15 @@ import { AddressMapPicker } from "@/features/addresses/components/AddressMapPick
 import { searchLocations, type LocationSearchResult } from "@/features/addresses/api/searchLocation";
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
 import {
+  PROOF_LABELS,
   PROOF_OPTIONS,
   proofNeedsBack,
   type LearningContent,
   type OnboardingDetails,
   type ProofKind,
 } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
+import { format, messages } from "@/shared/i18n/language";
+import { useText } from "@/shared/i18n/language-context";
 import {
   CHEF_SECTION_LABELS,
   adultCutoff,
@@ -67,6 +70,216 @@ import {
 import { chefOnboardingApi, type ChefOnboardingFlow } from "@/features/chef-onboarding/components/use-chef-onboarding";
 import { DateOfBirthPicker } from "@/features/chef-onboarding/components/chef-date-of-birth";
 import { LanguagePicker } from "@/features/chef-onboarding/components/chef-language-picker";
+
+const TEXT = messages({
+  en: {
+    // Basic details
+    dobLabel: "Date of birth", dobHelper: "You must be at least 18 years old to apply.", aboutYou: "About you", fullName: "Full name",
+    nameHelper: "Enter your name as it appears on your bank account.", namePlaceholder: "First and last name",
+    contact: "Contact details", contactHelper: "We’ll use these for updates about your application.", mobile: "Mobile number",
+    verified: "Verified", signInAgain: "Sign in again to verify your mobile number.", verifyMobile: "Verify mobile number",
+    // Your kitchen
+    pinNoAddress: "Your pin is selected. We couldn’t fill in the address automatically, so please enter or correct it below.",
+    noLocation: "Location isn’t available in this browser. Search for your address instead.",
+    locationOff: "Location access is turned off. Allow it in your browser settings, or search for your address.",
+    locationFailed: "We couldn’t find your location. Search for your address or try again.",
+    searchShort: "Enter at least 3 characters to search.", noResults: "No matching address found. Try a nearby landmark or area name.",
+    searchFailed: "Address search is unavailable right now. Use your current location or enter the address below.",
+    kitchenInfo: "Kitchen information", kitchenName: "Kitchen name", kitchenNameExample: "For example, Ananya’s Kitchen",
+    aboutKitchen: "About your kitchen", aboutKitchenPlaceholder: "A line about the food you love to cook",
+    kitchenAddress: "Kitchen address", kitchenAddressHelper: "Find your kitchen, then check the pin.", dragHint: "Drag the map to adjust the pin",
+    mapLabel: "Kitchen map. Drag the map or use the arrow keys to move the pin to your kitchen.",
+    pinHere: "Your kitchen pin will appear here", pinHow: "Search for your address or use your current location.",
+    searchLabel: "Search location", searchPlaceholder: "Building, street or area", searchButton: "Search address", searching: "Searching addresses…",
+    locating: "Finding your location…", useLocation: "Use my current location", pinPlaced: "Pin placed on the map",
+    pinCheck: "Move the map if the pin isn’t exactly on your kitchen.", addressLine1: "Flat / house number / building", addressLine2: "Street / area",
+    landmark: "Landmark", landmarkExample: "For example, near the metro station", postalCode: "PIN code", city: "City", state: "State", mapPin: "Map pin",
+    photos: "Kitchen photos", photosHelper: "Two clear photos of where you cook. Customers see them on your kitchen page.",
+    photosWait: "Finish your kitchen address to add photos", photosWaitWhy: "Photos are saved with your address. Still needed:", goTo: "Go to {field}",
+    overallPhoto: "Overall kitchen photo", overallPhotoHelper: "Show the full kitchen space where you prepare food.",
+    setupPhoto: "Cooking setup photo", setupPhotoHelper: "Show your stove and the cooking equipment you use.",
+    photoFormats: "JPG, PNG, HEIC or WebP · up to 10 MB each",
+    // FSSAI and its guide
+    fssaiHelper: "The 14-digit number on your FSSAI registration or licence.", fssaiLabel: "FSSAI registration number",
+    noFssai: "Don’t have FSSAI?", fssaiPlaceholder: "14-digit number", verifiedByCraves: "Verified by Craves",
+    guideUnavailable: "The video guide is unavailable right now.", guideUnreadable: "The video guide could not be loaded.",
+    videoNotOpened: "The video could not be opened. Please try again.", videoFailed: "The video could not be opened.",
+    step1: "Visit the official FSSAI FoSCoS portal", step1Before: "Open the official registration and licensing website, ", step1After: ".",
+    step2: "Choose the registration or licence for your business", step2Text: "Use the portal’s eligibility guidance to pick the right option.",
+    step3: "Enter your details", step3Text: "Complete the required personal and food business information.",
+    step4: "Upload documents and submit", step4Text: "Provide the requested documents and pay the applicable fee shown on the portal.",
+    step5: "Track your application", step5Text: "Use your acknowledgement or reference number to follow the status on FoSCoS.",
+    watch: "Watch how to apply", videoLanguage: "Video language", loadingGuide: "Loading video guide", tryAgain: "Try again",
+    guideSoon: "The video guide is coming soon. Follow the steps above, or ask us to call you.",
+    playbackFailed: "Video access expired or playback failed. Play it again to retry.", watchVideo: "Watch video: {title}",
+    inEnglish: "In English", reloadVideo: "Reload video", fssaiHelp: "Need help with FSSAI?",
+    fssaiHelpText: "Our team can guide you through the application process.", contacted: "Our team contacted you", received: "Request received",
+    contactedText: "Our Craves team has spoken to you about your FSSAI application. We’ll follow up if anything else is needed.",
+    receivedText: "Our Craves team will call you on your registered mobile number to help with your FSSAI application.",
+    reference: "Reference {case}", requested: " · Requested {date}",
+    resolved: "Your last request ({case}) is resolved. Ask again if you still need help.", requestCall: "Request a call from Craves",
+    finishOthers: "You can finish the other sections now. Add your FSSAI number before you submit your application.",
+    haveFssai: "I have an FSSAI number",
+    // Identity
+    docType: "Document type", identityDocument: "Identity document",
+    removeFirst: "To choose a different document, remove the uploaded files first.", chooseOne: "Choose one valid document that shows your name.",
+    idName: "Name of the ID", idNameExample: "For example, Voter ID, Driving Licence or Passport", noBack: "This document has no back side",
+    frontAndBack: "Upload the front and the back.", oneFile: "Upload one clear photo or PDF.", front: "Front side", addFront: "Add front side",
+    addDocument: "Add document", back: "Back side", addBack: "Add back side", fileFormats: "PDF, JPG, PNG, HEIC or WebP · up to 10 MB each",
+    clearPhoto: "Make sure all four corners are visible, the text is readable and there is no glare.",
+    // Review
+    complete: "Complete", attention: "Needs attention", editSection: "Edit {section}", edit: "Edit", notAdded: "Not added",
+    photoUploaded: "{photo} uploaded", photoMissing: "{photo} missing", mobileShort: "Mobile", email: "Email", address: "Address",
+    location: "Location", pinned: "Pinned on map", overallShort: "Overall kitchen", setupShort: "Cooking setup", status: "Status",
+    numberAdded: "Number added", notAddedYet: "Not added yet", registrationNumber: "Registration number", document: "Document",
+    uploaded: "Uploaded", saved: "Saved", addLater: "Add later", accountSaved: "Account ending {lastFour} is saved. {message}",
+    bankLater: "You can add bank details later. They aren’t needed to submit your application for review. Saving them now means one less step when payouts open.",
+    changeBank: "Change bank details", addBankNow: "Add bank details now", addOrCheckBank: "Add or check bank details",
+    accountHolder: "Account holder", bank: "Bank", account: "Account",
+    termsBefore: "I confirm these details are correct and agree to the ", terms: "Craves Chef Terms", termsMiddle: " and ",
+    privacy: "Privacy Policy", termsAfter: ".",
+  },
+  te: {
+    dobLabel: "పుట్టిన తేదీ", dobHelper: "దరఖాస్తు చేయాలంటే మీకు కనీసం 18 ఏళ్లు ఉండాలి.", aboutYou: "మీ గురించి", fullName: "పూర్తి పేరు",
+    nameHelper: "మీ బ్యాంక్ ఖాతాలో ఉన్నట్టే మీ పేరు రాయండి.", namePlaceholder: "పేరు, ఇంటి పేరు",
+    contact: "మీ ఫోన్, ఈమెయిల్", contactHelper: "మీ దరఖాస్తు గురించిన సమాచారం వీటికే పంపుతాం.", mobile: "మొబైల్ నంబర్",
+    verified: "ధృవీకరించిన", signInAgain: "మీ మొబైల్ నంబర్ ధృవీకరించడానికి మళ్లీ సైన్ ఇన్ చేయండి.", verifyMobile: "మొబైల్ నంబర్ ధృవీకరించండి",
+    pinNoAddress: "మీ పిన్ పెట్టాం. చిరునామా మేమే నింపలేకపోయాం, కింద మీరే రాయండి లేదా సరిచేయండి.",
+    noLocation: "ఈ బ్రౌజర్‌లో లొకేషన్ పని చేయదు. మీ చిరునామా వెతకండి.",
+    locationOff: "లొకేషన్ అనుమతి ఆఫ్‌లో ఉంది. బ్రౌజర్ సెట్టింగ్స్‌లో ఆన్ చేయండి, లేదా మీ చిరునామా వెతకండి.",
+    locationFailed: "మీ లొకేషన్ దొరకలేదు. మీ చిరునామా వెతకండి, లేదా మళ్లీ ప్రయత్నించండి.",
+    searchShort: "వెతకడానికి కనీసం 3 అక్షరాలు రాయండి.", noResults: "ఈ చిరునామా దొరకలేదు. దగ్గర్లోని ల్యాండ్‌మార్క్ లేదా ఏరియా పేరుతో వెతకండి.",
+    searchFailed: "ఇప్పుడు చిరునామా వెతకడం కుదరడం లేదు. మీ లొకేషన్ వాడండి, లేదా కింద చిరునామా రాయండి.",
+    kitchenInfo: "వంటగది వివరాలు", kitchenName: "వంటగది పేరు", kitchenNameExample: "ఉదాహరణకు, Ananya’s Kitchen",
+    aboutKitchen: "మీ వంటగది గురించి", aboutKitchenPlaceholder: "మీకు ఇష్టమైన వంటల గురించి ఒక మాట",
+    kitchenAddress: "వంటగది చిరునామా", kitchenAddressHelper: "మీ వంటగదిని వెతకండి, తర్వాత పిన్ సరిగ్గా ఉందో చూడండి.", dragHint: "పిన్ సరిచేయడానికి మ్యాప్ జరపండి",
+    mapLabel: "వంటగది మ్యాప్. పిన్‌ను మీ వంటగది మీదకు తేవడానికి మ్యాప్ జరపండి, లేదా బాణం కీలు వాడండి.",
+    pinHere: "మీ వంటగది పిన్ ఇక్కడ కనిపిస్తుంది", pinHow: "మీ చిరునామా వెతకండి, లేదా మీ ఇప్పటి లొకేషన్ వాడండి.",
+    searchLabel: "చిరునామా వెతకండి", searchPlaceholder: "బిల్డింగ్, వీధి లేదా ఏరియా", searchButton: "చిరునామా వెతకండి", searching: "చిరునామాలు వెతుకుతున్నాం…",
+    locating: "మీ లొకేషన్ వెతుకుతున్నాం…", useLocation: "నా ఇప్పటి లొకేషన్ వాడండి", pinPlaced: "మ్యాప్ మీద పిన్ పెట్టాం",
+    pinCheck: "పిన్ సరిగ్గా మీ వంటగది మీద లేకపోతే మ్యాప్ జరపండి.", addressLine1: "ఫ్లాట్ / ఇంటి నంబర్ / బిల్డింగ్", addressLine2: "వీధి / ఏరియా",
+    landmark: "ల్యాండ్‌మార్క్", landmarkExample: "ఉదాహరణకు, మెట్రో స్టేషన్ దగ్గర", postalCode: "పిన్ కోడ్", city: "నగరం", state: "రాష్ట్రం", mapPin: "మ్యాప్ పిన్",
+    photos: "వంటగది ఫోటోలు", photosHelper: "మీరు వంట చేసే చోటును రెండు స్పష్టమైన ఫోటోలు తీయండి. కస్టమర్లు వీటిని మీ వంటగది పేజీలో చూస్తారు.",
+    photosWait: "ఫోటోలు పెట్టాలంటే ముందు వంటగది చిరునామా పూర్తి చేయండి", photosWaitWhy: "ఫోటోలు మీ చిరునామాతో పాటు సేవ్ అవుతాయి. ఇంకా కావాల్సినవి:", goTo: "{field} కి వెళ్లండి",
+    overallPhoto: "వంటగది మొత్తం ఫోటో", overallPhotoHelper: "మీరు వంట చేసే వంటగది మొత్తం కనిపించేలా ఫోటో తీయండి.",
+    setupPhoto: "స్టవ్, వంట సామాను ఫోటో", setupPhotoHelper: "మీ స్టవ్, మీరు వాడే వంట సామాను కనిపించేలా ఫోటో తీయండి.",
+    photoFormats: "JPG, PNG, HEIC లేదా WebP · ఒక్కోటి 10 MB వరకు",
+    fssaiHelper: "మీ FSSAI రిజిస్ట్రేషన్ లేదా లైసెన్స్ మీద ఉన్న 14 అంకెల నంబర్.", fssaiLabel: "FSSAI రిజిస్ట్రేషన్ నంబర్",
+    noFssai: "FSSAI లేదా?", fssaiPlaceholder: "14 అంకెల నంబర్", verifiedByCraves: "Craves ధృవీకరించింది",
+    guideUnavailable: "వీడియో గైడ్ ఇప్పుడు అందుబాటులో లేదు.", guideUnreadable: "వీడియో గైడ్ లోడ్ కాలేదు.",
+    videoNotOpened: "వీడియో తెరవలేకపోయాం. మళ్లీ ప్రయత్నించండి.", videoFailed: "వీడియో తెరవలేకపోయాం.",
+    step1: "అధికారిక FSSAI FoSCoS వెబ్‌సైట్‌కి వెళ్లండి", step1Before: "అధికారిక రిజిస్ట్రేషన్, లైసెన్స్ వెబ్‌సైట్ ", step1After: " తెరవండి.",
+    step2: "మీ వ్యాపారానికి సరిపడే రిజిస్ట్రేషన్ లేదా లైసెన్స్ ఎంచుకోండి", step2Text: "సరైనది ఎంచుకోవడానికి వెబ్‌సైట్‌లో ఉన్న సూచనలు చూడండి.",
+    step3: "మీ వివరాలు రాయండి", step3Text: "అడిగిన మీ వ్యక్తిగత వివరాలు, ఆహార వ్యాపారం వివరాలు నింపండి.",
+    step4: "పత్రాలు అప్‌లోడ్ చేసి పంపండి", step4Text: "అడిగిన పత్రాలు ఇవ్వండి, వెబ్‌సైట్‌లో చూపిన ఫీజు కట్టండి.",
+    step5: "మీ దరఖాస్తు ఎక్కడ ఉందో చూడండి", step5Text: "మీకు వచ్చిన రసీదు లేదా రెఫరెన్స్ నంబర్‌తో FoSCoS లో స్థితి చూడండి.",
+    watch: "ఎలా దరఖాస్తు చేయాలో చూడండి", videoLanguage: "వీడియో భాష", loadingGuide: "వీడియో గైడ్ లోడ్ అవుతోంది", tryAgain: "మళ్లీ ప్రయత్నించండి",
+    guideSoon: "వీడియో గైడ్ త్వరలో వస్తుంది. పైన ఉన్న దశలు పాటించండి, లేదా మీకు కాల్ చేయమని మమ్మల్ని అడగండి.",
+    playbackFailed: "వీడియో సమయం ముగిసింది లేదా ప్లే కాలేదు. మళ్లీ ప్లే చేయండి.", watchVideo: "వీడియో చూడండి: {title}",
+    inEnglish: "ఇంగ్లీష్‌లో", reloadVideo: "వీడియో మళ్లీ లోడ్ చేయండి", fssaiHelp: "FSSAI కోసం సహాయం కావాలా?",
+    fssaiHelpText: "దరఖాస్తు చేయడంలో మా బృందం మీకు సహాయం చేస్తుంది.", contacted: "మా బృందం మిమ్మల్ని సంప్రదించింది", received: "మీ అభ్యర్థన అందింది",
+    contactedText: "మా Craves బృందం మీ FSSAI దరఖాస్తు గురించి మీతో మాట్లాడింది. ఇంకేమైనా కావాలంటే మళ్లీ సంప్రదిస్తాం.",
+    receivedText: "మీ FSSAI దరఖాస్తుకు సహాయం చేయడానికి మా Craves బృందం మీ రిజిస్టర్డ్ మొబైల్ నంబర్‌కు కాల్ చేస్తుంది.",
+    reference: "రెఫరెన్స్ {case}", requested: " · అడిగిన తేదీ {date}",
+    resolved: "మీ గత అభ్యర్థన ({case}) పూర్తయింది. ఇంకా సహాయం కావాలంటే మళ్లీ అడగండి.", requestCall: "నాకు కాల్ చేయండి",
+    finishOthers: "మిగతా భాగాలు ఇప్పుడే పూర్తి చేయవచ్చు. దరఖాస్తు పంపే ముందు మీ FSSAI నంబర్ జోడించండి.",
+    haveFssai: "నా దగ్గర FSSAI నంబర్ ఉంది",
+    docType: "ఏ పత్రం", identityDocument: "గుర్తింపు పత్రం",
+    removeFirst: "వేరే పత్రం ఎంచుకోవాలంటే, ముందు అప్‌లోడ్ చేసిన ఫైళ్లు తొలగించండి.", chooseOne: "మీ పేరు ఉన్న ఒక సరైన పత్రం ఎంచుకోండి.",
+    idName: "గుర్తింపు కార్డు పేరు", idNameExample: "ఉదాహరణకు, ఓటర్ ID, డ్రైవింగ్ లైసెన్స్ లేదా పాస్‌పోర్ట్", noBack: "ఈ పత్రానికి వెనక వైపు లేదు",
+    frontAndBack: "ముందు వైపు, వెనక వైపు అప్‌లోడ్ చేయండి.", oneFile: "ఒక స్పష్టమైన ఫోటో లేదా PDF అప్‌లోడ్ చేయండి.", front: "ముందు వైపు", addFront: "ముందు వైపు జోడించండి",
+    addDocument: "పత్రం జోడించండి", back: "వెనక వైపు", addBack: "వెనక వైపు జోడించండి", fileFormats: "PDF, JPG, PNG, HEIC లేదా WebP · ఒక్కోటి 10 MB వరకు",
+    clearPhoto: "నాలుగు మూలలూ కనిపించాలి, అక్షరాలు స్పష్టంగా చదవగలగాలి, మెరుపు పడకూడదు.",
+    complete: "పూర్తయింది", attention: "సరిచేయాలి", editSection: "{section} మార్చండి", edit: "మార్చండి", notAdded: "జోడించలేదు",
+    photoUploaded: "{photo} అప్‌లోడ్ అయింది", photoMissing: "{photo} లేదు", mobileShort: "మొబైల్", email: "ఈమెయిల్", address: "చిరునామా",
+    location: "లొకేషన్", pinned: "మ్యాప్‌లో పిన్ పెట్టారు", overallShort: "వంటగది మొత్తం", setupShort: "స్టవ్, వంట సామాను", status: "స్థితి",
+    numberAdded: "నంబర్ జోడించారు", notAddedYet: "ఇంకా జోడించలేదు", registrationNumber: "రిజిస్ట్రేషన్ నంబర్", document: "పత్రం",
+    uploaded: "అప్‌లోడ్ అయింది", saved: "సేవ్ అయింది", addLater: "తర్వాత జోడించండి", accountSaved: "{lastFour} తో ముగిసే ఖాతా సేవ్ అయింది. {message}",
+    bankLater: "బ్యాంక్ వివరాలు తర్వాత కూడా జోడించవచ్చు. దరఖాస్తు పంపడానికి అవి అవసరం లేదు. ఇప్పుడే సేవ్ చేస్తే, బ్యాంక్‌కు డబ్బు పంపడం మొదలైనప్పుడు ఒక పని తగ్గుతుంది.",
+    changeBank: "బ్యాంక్ వివరాలు మార్చండి", addBankNow: "బ్యాంక్ వివరాలు ఇప్పుడే జోడించండి", addOrCheckBank: "బ్యాంక్ వివరాలు జోడించండి లేదా చూడండి",
+    accountHolder: "ఖాతాదారు", bank: "బ్యాంక్", account: "ఖాతా",
+    termsBefore: "ఈ వివరాలు సరైనవే అని నిర్ధారిస్తున్నాను. ", terms: "Craves చెఫ్ నిబంధనలు", termsMiddle: ", ",
+    privacy: "గోప్యతా విధానం", termsAfter: " నాకు అంగీకారమే.",
+  },
+  kn: {
+    dobLabel: "ಹುಟ್ಟಿದ ದಿನಾಂಕ", dobHelper: "ಅರ್ಜಿ ಹಾಕಲು ನಿಮಗೆ ಕನಿಷ್ಠ 18 ವರ್ಷ ಆಗಿರಬೇಕು.", aboutYou: "ನಿಮ್ಮ ಬಗ್ಗೆ", fullName: "ಪೂರ್ಣ ಹೆಸರು",
+    nameHelper: "ನಿಮ್ಮ ಬ್ಯಾಂಕ್ ಖಾತೆಯಲ್ಲಿ ಇರುವಂತೆಯೇ ಹೆಸರು ಬರೆಯಿರಿ.", namePlaceholder: "ಮೊದಲ ಹೆಸರು, ಕೊನೆಯ ಹೆಸರು",
+    contact: "ನಿಮ್ಮ ಫೋನ್, ಇಮೇಲ್", contactHelper: "ನಿಮ್ಮ ಅರ್ಜಿಯ ಬಗ್ಗೆ ಮಾಹಿತಿಯನ್ನು ಇವುಗಳಿಗೇ ಕಳುಹಿಸುತ್ತೇವೆ.", mobile: "ಮೊಬೈಲ್ ಸಂಖ್ಯೆ",
+    verified: "ಪರಿಶೀಲಿತ", signInAgain: "ನಿಮ್ಮ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ಪರಿಶೀಲಿಸಲು ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.", verifyMobile: "ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ಪರಿಶೀಲಿಸಿ",
+    pinNoAddress: "ನಿಮ್ಮ ಪಿನ್ ಹಾಕಲಾಗಿದೆ. ವಿಳಾಸವನ್ನು ನಾವೇ ತುಂಬಲು ಆಗಲಿಲ್ಲ, ಕೆಳಗೆ ನೀವೇ ಬರೆಯಿರಿ ಅಥವಾ ಸರಿಪಡಿಸಿ.",
+    noLocation: "ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಲೊಕೇಶನ್ ಸಿಗುವುದಿಲ್ಲ. ನಿಮ್ಮ ವಿಳಾಸ ಹುಡುಕಿ.",
+    locationOff: "ಲೊಕೇಶನ್ ಅನುಮತಿ ಆಫ್ ಆಗಿದೆ. ಬ್ರೌಸರ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಆನ್ ಮಾಡಿ, ಅಥವಾ ನಿಮ್ಮ ವಿಳಾಸ ಹುಡುಕಿ.",
+    locationFailed: "ನಿಮ್ಮ ಲೊಕೇಶನ್ ಸಿಗಲಿಲ್ಲ. ನಿಮ್ಮ ವಿಳಾಸ ಹುಡುಕಿ, ಅಥವಾ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    searchShort: "ಹುಡುಕಲು ಕನಿಷ್ಠ 3 ಅಕ್ಷರ ಬರೆಯಿರಿ.", noResults: "ಈ ವಿಳಾಸ ಸಿಗಲಿಲ್ಲ. ಹತ್ತಿರದ ಲ್ಯಾಂಡ್‌ಮಾರ್ಕ್ ಅಥವಾ ಏರಿಯಾ ಹೆಸರಿನಿಂದ ಹುಡುಕಿ.",
+    searchFailed: "ಈಗ ವಿಳಾಸ ಹುಡುಕಲು ಆಗುತ್ತಿಲ್ಲ. ನಿಮ್ಮ ಲೊಕೇಶನ್ ಬಳಸಿ, ಅಥವಾ ಕೆಳಗೆ ವಿಳಾಸ ಬರೆಯಿರಿ.",
+    kitchenInfo: "ಅಡುಗೆಮನೆ ವಿವರಗಳು", kitchenName: "ಅಡುಗೆಮನೆಯ ಹೆಸರು", kitchenNameExample: "ಉದಾಹರಣೆಗೆ, Ananya’s Kitchen",
+    aboutKitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಬಗ್ಗೆ", aboutKitchenPlaceholder: "ನಿಮಗೆ ಇಷ್ಟವಾದ ಅಡುಗೆಯ ಬಗ್ಗೆ ಒಂದು ಸಾಲು",
+    kitchenAddress: "ಅಡುಗೆಮನೆಯ ವಿಳಾಸ", kitchenAddressHelper: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಹುಡುಕಿ, ನಂತರ ಪಿನ್ ಸರಿಯಾಗಿದೆಯೇ ನೋಡಿ.", dragHint: "ಪಿನ್ ಸರಿಪಡಿಸಲು ಮ್ಯಾಪ್ ಸರಿಸಿ",
+    mapLabel: "ಅಡುಗೆಮನೆಯ ಮ್ಯಾಪ್. ಪಿನ್ ಅನ್ನು ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಮೇಲೆ ತರಲು ಮ್ಯಾಪ್ ಸರಿಸಿ, ಅಥವಾ ಬಾಣದ ಕೀಗಳನ್ನು ಬಳಸಿ.",
+    pinHere: "ಅಡುಗೆಮನೆಯ ಪಿನ್ ಇಲ್ಲಿ ಕಾಣುತ್ತದೆ", pinHow: "ನಿಮ್ಮ ವಿಳಾಸ ಹುಡುಕಿ, ಅಥವಾ ನಿಮ್ಮ ಈಗಿನ ಲೊಕೇಶನ್ ಬಳಸಿ.",
+    searchLabel: "ವಿಳಾಸ ಹುಡುಕಿ", searchPlaceholder: "ಬಿಲ್ಡಿಂಗ್, ರಸ್ತೆ ಅಥವಾ ಏರಿಯಾ", searchButton: "ವಿಳಾಸ ಹುಡುಕಿ", searching: "ವಿಳಾಸಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇವೆ…",
+    locating: "ನಿಮ್ಮ ಲೊಕೇಶನ್ ಹುಡುಕುತ್ತಿದ್ದೇವೆ…", useLocation: "ನನ್ನ ಈಗಿನ ಲೊಕೇಶನ್ ಬಳಸಿ", pinPlaced: "ಮ್ಯಾಪ್ ಮೇಲೆ ಪಿನ್ ಹಾಕಲಾಗಿದೆ",
+    pinCheck: "ಪಿನ್ ಸರಿಯಾಗಿ ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಮೇಲೆ ಇಲ್ಲದಿದ್ದರೆ ಮ್ಯಾಪ್ ಸರಿಸಿ.", addressLine1: "ಫ್ಲ್ಯಾಟ್ / ಮನೆ ಸಂಖ್ಯೆ / ಬಿಲ್ಡಿಂಗ್", addressLine2: "ರಸ್ತೆ / ಏರಿಯಾ",
+    landmark: "ಲ್ಯಾಂಡ್‌ಮಾರ್ಕ್", landmarkExample: "ಉದಾಹರಣೆಗೆ, ಮೆಟ್ರೋ ನಿಲ್ದಾಣದ ಹತ್ತಿರ", postalCode: "ಪಿನ್ ಕೋಡ್", city: "ನಗರ", state: "ರಾಜ್ಯ", mapPin: "ಮ್ಯಾಪ್ ಪಿನ್",
+    photos: "ಅಡುಗೆಮನೆಯ ಫೋಟೋಗಳು", photosHelper: "ನೀವು ಅಡುಗೆ ಮಾಡುವ ಜಾಗದ ಎರಡು ಸ್ಪಷ್ಟ ಫೋಟೋಗಳು. ಗ್ರಾಹಕರು ಇವನ್ನು ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಪುಟದಲ್ಲಿ ನೋಡುತ್ತಾರೆ.",
+    photosWait: "ಫೋಟೋ ಹಾಕಲು ಮೊದಲು ಅಡುಗೆಮನೆಯ ವಿಳಾಸ ಪೂರ್ಣಗೊಳಿಸಿ", photosWaitWhy: "ಫೋಟೋಗಳು ನಿಮ್ಮ ವಿಳಾಸದ ಜೊತೆ ಉಳಿಯುತ್ತವೆ. ಇನ್ನೂ ಬೇಕಾಗಿರುವುದು:", goTo: "{field} ಗೆ ಹೋಗಿ",
+    overallPhoto: "ಅಡುಗೆಮನೆಯ ಪೂರ್ತಿ ಫೋಟೋ", overallPhotoHelper: "ನೀವು ಅಡುಗೆ ಮಾಡುವ ಅಡುಗೆಮನೆ ಪೂರ್ತಿ ಕಾಣುವಂತೆ ಫೋಟೋ ತೆಗೆಯಿರಿ.",
+    setupPhoto: "ಸ್ಟವ್, ಅಡುಗೆ ಸಾಮಾನುಗಳ ಫೋಟೋ", setupPhotoHelper: "ನಿಮ್ಮ ಸ್ಟವ್ ಮತ್ತು ನೀವು ಬಳಸುವ ಅಡುಗೆ ಸಾಮಾನುಗಳು ಕಾಣುವಂತೆ ಫೋಟೋ ತೆಗೆಯಿರಿ.",
+    photoFormats: "JPG, PNG, HEIC ಅಥವಾ WebP · ಪ್ರತಿಯೊಂದೂ 10 MB ವರೆಗೆ",
+    fssaiHelper: "ನಿಮ್ಮ FSSAI ನೋಂದಣಿ ಅಥವಾ ಲೈಸೆನ್ಸ್ ಮೇಲಿರುವ 14 ಅಂಕಿಯ ಸಂಖ್ಯೆ.", fssaiLabel: "FSSAI ನೋಂದಣಿ ಸಂಖ್ಯೆ",
+    noFssai: "FSSAI ಇಲ್ಲವೇ?", fssaiPlaceholder: "14 ಅಂಕಿಯ ಸಂಖ್ಯೆ", verifiedByCraves: "Craves ಪರಿಶೀಲಿಸಿದೆ",
+    guideUnavailable: "ವೀಡಿಯೊ ಮಾರ್ಗದರ್ಶಿ ಈಗ ಲಭ್ಯವಿಲ್ಲ.", guideUnreadable: "ವೀಡಿಯೊ ಮಾರ್ಗದರ್ಶಿ ಲೋಡ್ ಆಗಲಿಲ್ಲ.",
+    videoNotOpened: "ವೀಡಿಯೊ ತೆರೆಯಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", videoFailed: "ವೀಡಿಯೊ ತೆರೆಯಲು ಆಗಲಿಲ್ಲ.",
+    step1: "ಅಧಿಕೃತ FSSAI FoSCoS ವೆಬ್‌ಸೈಟ್‌ಗೆ ಹೋಗಿ", step1Before: "ಅಧಿಕೃತ ನೋಂದಣಿ ಮತ್ತು ಲೈಸೆನ್ಸ್ ವೆಬ್‌ಸೈಟ್ ", step1After: " ತೆರೆಯಿರಿ.",
+    step2: "ನಿಮ್ಮ ವ್ಯಾಪಾರಕ್ಕೆ ಸರಿಯಾದ ನೋಂದಣಿ ಅಥವಾ ಲೈಸೆನ್ಸ್ ಆಯ್ಕೆಮಾಡಿ", step2Text: "ಸರಿಯಾದದ್ದನ್ನು ಆಯ್ಕೆಮಾಡಲು ವೆಬ್‌ಸೈಟ್‌ನಲ್ಲಿರುವ ಸೂಚನೆಗಳನ್ನು ನೋಡಿ.",
+    step3: "ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಬರೆಯಿರಿ", step3Text: "ಕೇಳಿದ ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ವಿವರಗಳು ಮತ್ತು ಆಹಾರ ವ್ಯಾಪಾರದ ವಿವರಗಳನ್ನು ತುಂಬಿ.",
+    step4: "ದಾಖಲೆಗಳನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ ಸಲ್ಲಿಸಿ", step4Text: "ಕೇಳಿದ ದಾಖಲೆಗಳನ್ನು ಕೊಡಿ, ವೆಬ್‌ಸೈಟ್‌ನಲ್ಲಿ ತೋರಿಸುವ ಶುಲ್ಕ ಕಟ್ಟಿ.",
+    step5: "ನಿಮ್ಮ ಅರ್ಜಿ ಎಲ್ಲಿದೆ ಎಂದು ನೋಡಿ", step5Text: "ನಿಮಗೆ ಸಿಕ್ಕ ರಸೀದಿ ಅಥವಾ ರೆಫರೆನ್ಸ್ ಸಂಖ್ಯೆಯಿಂದ FoSCoS ನಲ್ಲಿ ಸ್ಥಿತಿ ನೋಡಿ.",
+    watch: "ಅರ್ಜಿ ಹಾಕುವುದು ಹೇಗೆ ಎಂದು ನೋಡಿ", videoLanguage: "ವೀಡಿಯೊ ಭಾಷೆ", loadingGuide: "ವೀಡಿಯೊ ಮಾರ್ಗದರ್ಶಿ ಲೋಡ್ ಆಗುತ್ತಿದೆ", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    guideSoon: "ವೀಡಿಯೊ ಮಾರ್ಗದರ್ಶಿ ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ. ಮೇಲಿನ ಹಂತಗಳನ್ನು ಅನುಸರಿಸಿ, ಅಥವಾ ನಿಮಗೆ ಕರೆ ಮಾಡಲು ನಮ್ಮನ್ನು ಕೇಳಿ.",
+    playbackFailed: "ವೀಡಿಯೊ ಅವಧಿ ಮುಗಿದಿದೆ ಅಥವಾ ಪ್ಲೇ ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ಲೇ ಮಾಡಿ.", watchVideo: "ವೀಡಿಯೊ ನೋಡಿ: {title}",
+    inEnglish: "ಇಂಗ್ಲಿಷ್‌ನಲ್ಲಿ", reloadVideo: "ವೀಡಿಯೊ ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ", fssaiHelp: "FSSAI ಗೆ ಸಹಾಯ ಬೇಕೇ?",
+    fssaiHelpText: "ಅರ್ಜಿ ಹಾಕಲು ನಮ್ಮ ತಂಡ ನಿಮಗೆ ಸಹಾಯ ಮಾಡುತ್ತದೆ.", contacted: "ನಮ್ಮ ತಂಡ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿದೆ", received: "ನಿಮ್ಮ ಮನವಿ ಸಿಕ್ಕಿದೆ",
+    contactedText: "ನಮ್ಮ Craves ತಂಡ ನಿಮ್ಮ FSSAI ಅರ್ಜಿಯ ಬಗ್ಗೆ ನಿಮ್ಮೊಂದಿಗೆ ಮಾತನಾಡಿದೆ. ಇನ್ನೇನಾದರೂ ಬೇಕಾದರೆ ಮತ್ತೆ ಸಂಪರ್ಕಿಸುತ್ತೇವೆ.",
+    receivedText: "ನಿಮ್ಮ FSSAI ಅರ್ಜಿಗೆ ಸಹಾಯ ಮಾಡಲು ನಮ್ಮ Craves ತಂಡ ನಿಮ್ಮ ನೋಂದಾಯಿತ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಗೆ ಕರೆ ಮಾಡುತ್ತದೆ.",
+    reference: "ರೆಫರೆನ್ಸ್ {case}", requested: " · ಕೇಳಿದ ದಿನಾಂಕ {date}",
+    resolved: "ನಿಮ್ಮ ಹಿಂದಿನ ಮನವಿ ({case}) ಮುಗಿದಿದೆ. ಇನ್ನೂ ಸಹಾಯ ಬೇಕಾದರೆ ಮತ್ತೆ ಕೇಳಿ.", requestCall: "ನನಗೆ ಕರೆ ಮಾಡಿ",
+    finishOthers: "ಉಳಿದ ಭಾಗಗಳನ್ನು ಈಗಲೇ ಮುಗಿಸಬಹುದು. ಅರ್ಜಿ ಸಲ್ಲಿಸುವ ಮೊದಲು ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಿ.",
+    haveFssai: "ನನ್ನ ಬಳಿ FSSAI ಸಂಖ್ಯೆ ಇದೆ",
+    docType: "ಯಾವ ದಾಖಲೆ", identityDocument: "ಗುರುತಿನ ದಾಖಲೆ",
+    removeFirst: "ಬೇರೆ ದಾಖಲೆ ಆಯ್ಕೆಮಾಡಲು, ಮೊದಲು ಅಪ್‌ಲೋಡ್ ಮಾಡಿದ ಫೈಲ್‌ಗಳನ್ನು ತೆಗೆದುಹಾಕಿ.", chooseOne: "ನಿಮ್ಮ ಹೆಸರು ಇರುವ ಒಂದು ಸರಿಯಾದ ದಾಖಲೆ ಆಯ್ಕೆಮಾಡಿ.",
+    idName: "ಗುರುತಿನ ಚೀಟಿಯ ಹೆಸರು", idNameExample: "ಉದಾಹರಣೆಗೆ, ವೋಟರ್ ಐಡಿ, ಡ್ರೈವಿಂಗ್ ಲೈಸೆನ್ಸ್ ಅಥವಾ ಪಾಸ್‌ಪೋರ್ಟ್", noBack: "ಈ ದಾಖಲೆಗೆ ಹಿಂಭಾಗ ಇಲ್ಲ",
+    frontAndBack: "ಮುಂಭಾಗ ಮತ್ತು ಹಿಂಭಾಗ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ.", oneFile: "ಒಂದು ಸ್ಪಷ್ಟ ಫೋಟೋ ಅಥವಾ PDF ಅಪ್‌ಲೋಡ್ ಮಾಡಿ.", front: "ಮುಂಭಾಗ", addFront: "ಮುಂಭಾಗ ಸೇರಿಸಿ",
+    addDocument: "ದಾಖಲೆ ಸೇರಿಸಿ", back: "ಹಿಂಭಾಗ", addBack: "ಹಿಂಭಾಗ ಸೇರಿಸಿ", fileFormats: "PDF, JPG, PNG, HEIC ಅಥವಾ WebP · ಪ್ರತಿಯೊಂದೂ 10 MB ವರೆಗೆ",
+    clearPhoto: "ದಾಖಲೆಯ ನಾಲ್ಕೂ ಮೂಲೆಗಳು ಕಾಣಬೇಕು, ಅಕ್ಷರಗಳು ಸ್ಪಷ್ಟವಾಗಿ ಓದುವಂತಿರಬೇಕು, ಹೊಳಪು ಬೀಳಬಾರದು.",
+    complete: "ಮುಗಿದಿದೆ", attention: "ಸರಿಪಡಿಸಿ", editSection: "{section} ಬದಲಾಯಿಸಿ", edit: "ಬದಲಾಯಿಸಿ", notAdded: "ಸೇರಿಸಿಲ್ಲ",
+    photoUploaded: "{photo} ಅಪ್‌ಲೋಡ್ ಆಗಿದೆ", photoMissing: "{photo} ಇಲ್ಲ", mobileShort: "ಮೊಬೈಲ್", email: "ಇಮೇಲ್", address: "ವಿಳಾಸ",
+    location: "ಲೊಕೇಶನ್", pinned: "ಮ್ಯಾಪ್‌ನಲ್ಲಿ ಪಿನ್ ಹಾಕಲಾಗಿದೆ", overallShort: "ಅಡುಗೆಮನೆ ಪೂರ್ತಿ", setupShort: "ಸ್ಟವ್, ಅಡುಗೆ ಸಾಮಾನು", status: "ಸ್ಥಿತಿ",
+    numberAdded: "ಸಂಖ್ಯೆ ಸೇರಿಸಲಾಗಿದೆ", notAddedYet: "ಇನ್ನೂ ಸೇರಿಸಿಲ್ಲ", registrationNumber: "ನೋಂದಣಿ ಸಂಖ್ಯೆ", document: "ದಾಖಲೆ",
+    uploaded: "ಅಪ್‌ಲೋಡ್ ಆಗಿದೆ", saved: "ಉಳಿಸಲಾಗಿದೆ", addLater: "ನಂತರ ಸೇರಿಸಿ", accountSaved: "{lastFour} ರಲ್ಲಿ ಕೊನೆಗೊಳ್ಳುವ ಖಾತೆ ಉಳಿಸಲಾಗಿದೆ. {message}",
+    bankLater: "ಬ್ಯಾಂಕ್ ವಿವರಗಳನ್ನು ನಂತರವೂ ಸೇರಿಸಬಹುದು. ಅರ್ಜಿ ಸಲ್ಲಿಸಲು ಅವು ಬೇಕಿಲ್ಲ. ಈಗಲೇ ಉಳಿಸಿದರೆ, ಬ್ಯಾಂಕ್‌ಗೆ ಹಣ ಕಳುಹಿಸುವುದು ಶುರುವಾದಾಗ ಒಂದು ಕೆಲಸ ಕಡಿಮೆ.",
+    changeBank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳನ್ನು ಬದಲಾಯಿಸಿ", addBankNow: "ಬ್ಯಾಂಕ್ ವಿವರಗಳನ್ನು ಈಗಲೇ ಸೇರಿಸಿ", addOrCheckBank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳನ್ನು ಸೇರಿಸಿ ಅಥವಾ ನೋಡಿ",
+    accountHolder: "ಖಾತೆದಾರರು", bank: "ಬ್ಯಾಂಕ್", account: "ಖಾತೆ",
+    termsBefore: "ಈ ವಿವರಗಳು ಸರಿಯಾಗಿವೆ ಎಂದು ಖಚಿತಪಡಿಸುತ್ತೇನೆ. ", terms: "Craves ಚೆಫ್ ನಿಯಮಗಳು", termsMiddle: " ಮತ್ತು ",
+    privacy: "ಗೌಪ್ಯತಾ ನೀತಿ", termsAfter: " ನನಗೆ ಒಪ್ಪಿಗೆ ಇದೆ.",
+  },
+});
+type Text = (typeof TEXT)["en"];
+/** Short section names on Review; the same words as the Welcome back list. */
+const SECTION_LABELS = messages({
+  en: CHEF_SECTION_LABELS,
+  te: { personal: "మీ వివరాలు", kitchen: "వంటగది వివరాలు", fssai: "FSSAI", documents: "గుర్తింపు పత్రం", bank: "బ్యాంక్ వివరాలు" },
+  kn: { personal: "ನಿಮ್ಮ ವಿವರಗಳು", kitchen: "ಅಡುಗೆಮನೆ ವಿವರಗಳು", fssai: "FSSAI", documents: "ಗುರುತಿನ ದಾಖಲೆ", bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು" },
+});
+// A missing-detail chip names its field in the words of that field's label.
+const KITCHEN_FIELD_TEXT: Record<string, keyof Text> = {
+  kitchenName: "kitchenName",
+  location: "mapPin",
+  addressLine1: "addressLine1",
+  postalCode: "postalCode",
+  city: "city",
+  state: "state",
+};
 
 type Props = { flow: ChefOnboardingFlow };
 
@@ -165,13 +378,14 @@ function Upload({
 /* ------------------------------------------------------------------ */
 
 function DateOfBirthField({ flow }: Props) {
+  const text = useText(TEXT);
   const id = "chef-dateOfBirth";
   const error = fieldError(flow, "dateOfBirth");
-  const helper = "You must be at least 18 years old to apply.";
+  const helper = text.dobHelper;
   return (
     <div className="cob-field">
       <label id={`${id}-label`} className="cob-label" htmlFor={id} data-required="">
-        Date of birth
+        {text.dobLabel}
       </label>
       <DateOfBirthPicker
         id={id}
@@ -195,23 +409,24 @@ function DateOfBirthField({ flow }: Props) {
 }
 
 export function ChefBasicDetails({ flow }: Props) {
+  const text = useText(TEXT);
   const [name, setName] = useState(() => chefFullName(flow.details));
   const nameError = fieldError(flow, "fullName");
   const phoneError = fieldError(flow, "phoneNumber");
   const emailError = fieldError(flow, "email");
-  const nameHelper = "Enter your name as it appears on your bank account.";
+  const nameHelper = text.nameHelper;
   return (
     <div className="cob-stack">
-      <Card icon={<UserRound size={20} aria-hidden="true" />} title="About you">
+      <Card icon={<UserRound size={20} aria-hidden="true" />} title={text.aboutYou}>
         <div className="cob-fields">
-          <FieldShell id="chef-fullName" label="Full name" helper={nameHelper} error={nameError}>
+          <FieldShell id="chef-fullName" label={text.fullName} helper={nameHelper} error={nameError}>
             <input
               id="chef-fullName"
               autoComplete="name"
               className="cob-input"
               value={name}
               maxLength={120}
-              placeholder="First and last name"
+              placeholder={text.namePlaceholder}
               disabled={flow.busy}
               aria-invalid={Boolean(nameError) || undefined}
               aria-describedby={describedBy("chef-fullName", nameError, nameHelper)}
@@ -232,23 +447,23 @@ export function ChefBasicDetails({ flow }: Props) {
       </Card>
       <Card
         icon={<ShieldCheck size={20} aria-hidden="true" />}
-        title="Contact details"
-        subtitle="We’ll use these for updates about your application."
+        title={text.contact}
+        subtitle={text.contactHelper}
       >
         <div className="cob-fields">
           {flow.state?.phoneNumber ? (
             <LockedInput
               id="chef-phoneNumber"
-              label="Mobile number"
+              label={text.mobile}
               value={formatPhone(flow.state.phoneNumber)}
-              badge={<VerifiedBadge />}
+              badge={<VerifiedBadge label={text.verified} />}
             />
           ) : (
             <div className="cob-field" id="chef-phoneNumber" tabIndex={-1}>
-              <span className="cob-label">Mobile number</span>
-              <FieldError>{phoneError ?? "Sign in again to verify your mobile number."}</FieldError>
+              <span className="cob-label">{text.mobile}</span>
+              <FieldError>{phoneError ?? text.signInAgain}</FieldError>
               <Link href="/chef/sign-in?returnTo=%2Fchef%2Fapplication" className="cob-link">
-                Verify mobile number
+                {text.verifyMobile}
               </Link>
             </div>
           )}
@@ -272,6 +487,7 @@ export function ChefBasicDetails({ flow }: Props) {
 /* ------------------------------------------------------------------ */
 
 export function ChefKitchenDetails({ flow }: Props) {
+  const text = useText(TEXT);
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<LocationSearchResult[]>([]);
   const [locating, setLocating] = useState(false),
@@ -308,19 +524,14 @@ export function ChefKitchenDetails({ flow }: Props) {
         postalCode: address.postalCode ?? previous.postalCode,
       }));
     } catch {
-      if (mounted.current && request === generation.current)
-        setLocationError(
-          "Your pin is selected. We couldn’t fill in the address automatically, so please enter or correct it below.",
-        );
+      if (mounted.current && request === generation.current) setLocationError(text.pinNoAddress);
     } finally {
       if (mounted.current && request === generation.current) setLocating(false);
     }
   }
   async function locate() {
     if (!navigator.geolocation) {
-      setLocationError(
-        "Location isn’t available in this browser. Search for your address instead.",
-      );
+      setLocationError(text.noLocation);
       return;
     }
     setLocating(true);
@@ -342,18 +553,14 @@ export function ChefKitchenDetails({ flow }: Props) {
           failure !== null &&
           "code" in failure &&
           failure.code === 1;
-        setLocationError(
-          denied
-            ? "Location access is turned off. Allow it in your browser settings, or search for your address."
-            : "We couldn’t find your location. Search for your address or try again.",
-        );
+        setLocationError(denied ? text.locationOff : text.locationFailed);
         setLocating(false);
       }
     }
   }
   async function search() {
     if (query.trim().length < 3) {
-      setLocationError("Enter at least 3 characters to search.");
+      setLocationError(text.searchShort);
       return;
     }
     const request = ++generation.current;
@@ -367,13 +574,10 @@ export function ChefKitchenDetails({ flow }: Props) {
       );
       if (!mounted.current || request !== generation.current) return;
       setResults(found);
-      if (!found.length)
-        setLocationError("No matching address found. Try a nearby landmark or area name.");
+      if (!found.length) setLocationError(text.noResults);
     } catch (failure) {
       if (mounted.current && request === generation.current)
-        setLocationError(
-          chefErrorText(failure, "Address search is unavailable right now. Use your current location or enter the address below."),
-        );
+        setLocationError(chefErrorText(failure, text.searchFailed));
     } finally {
       if (mounted.current && request === generation.current) setSearching(false);
     }
@@ -395,20 +599,20 @@ export function ChefKitchenDetails({ flow }: Props) {
     <div className="cob-stack">
       <Card
         icon={<Store size={20} aria-hidden="true" />}
-        title="Kitchen information"
+        title={text.kitchenInfo}
         done={Boolean(d.kitchenName.trim())}
       >
         <div className="cob-fields">
           <TextField
             flow={flow}
             name="kitchenName"
-            label="Kitchen name"
+            label={text.kitchenName}
             maxLength={160}
-            placeholder="For example, Ananya’s Kitchen"
+            placeholder={text.kitchenNameExample}
           />
           <FieldShell
             id="chef-kitchenDescription"
-            label="About your kitchen"
+            label={text.aboutKitchen}
             optional
             after={<span className="cob-counter">{description.length}/1000</span>}
           >
@@ -417,7 +621,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               className="cob-input"
               rows={3}
               maxLength={1000}
-              placeholder="A line about the food you love to cook"
+              placeholder={text.aboutKitchenPlaceholder}
               disabled={flow.busy}
               value={description}
               onChange={(event) => flow.field("kitchenDescription", event.target.value)}
@@ -429,8 +633,8 @@ export function ChefKitchenDetails({ flow }: Props) {
       <Card
         id="chef-location"
         icon={<MapPin size={20} aria-hidden="true" />}
-        title="Kitchen address"
-        subtitle="Find your kitchen, then check the pin."
+        title={text.kitchenAddress}
+        subtitle={text.kitchenAddressHelper}
         done={addressDone}
       >
         <div className="cob-fields">
@@ -439,7 +643,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               <>
                 <span className="cob-map-hint">
                   <Move size={14} aria-hidden="true" />
-                  Drag the map to adjust the pin
+                  {text.dragHint}
                 </span>
                 <AddressMapPicker
                   latitude={d.latitude!}
@@ -447,19 +651,20 @@ export function ChefKitchenDetails({ flow }: Props) {
                   disabled={flow.busy || searching}
                   locating={locating}
                   showLocateButton={false}
-                  ariaLabel="Kitchen map. Drag the map or use the arrow keys to move the pin to your kitchen."
+                  ariaLabel={text.mapLabel}
                   onCenterChange={(point) => void pin(point.latitude, point.longitude)}
                   onUseCurrentLocation={() => void locate()}
                 />
               </>
             ) : (
-              <div className="cob-map-empty">
+              // Grows when its two lines wrap on a 320 px phone, instead of clipping them (overflow: hidden).
+              <div className="cob-map-empty" style={{ overflow: "visible" }}>
                 <div>
                   <span className="cob-icon-well">
                     <MapPin size={22} aria-hidden="true" />
                   </span>
-                  <strong>Your kitchen pin will appear here</strong>
-                  <span>Search for your address or use your current location.</span>
+                  <strong>{text.pinHere}</strong>
+                  <span>{text.pinHow}</span>
                 </div>
               </div>
             )}
@@ -467,7 +672,7 @@ export function ChefKitchenDetails({ flow }: Props) {
 
           <div className="cob-field">
             <label className="cob-label" htmlFor="chef-location-search">
-              Search location
+              {text.searchLabel}
             </label>
             <div className="cob-control">
               <Search size={18} className="cob-input-icon" aria-hidden="true" />
@@ -477,7 +682,7 @@ export function ChefKitchenDetails({ flow }: Props) {
                 enterKeyHint="search"
                 className="cob-input cob-input--with-icon cob-input--with-trailing-icon"
                 autoComplete="off"
-                placeholder="Building, street or area"
+                placeholder={text.searchPlaceholder}
                 value={query}
                 maxLength={200}
                 disabled={flow.busy}
@@ -498,7 +703,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               />
               <button
                 type="button"
-                aria-label="Search address"
+                aria-label={text.searchButton}
                 className="cob-trailing-button"
                 disabled={flow.busy || searching}
                 onClick={() => void search()}
@@ -508,7 +713,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             </div>
             {searching ? (
               <span role="status" className="cob-helper">
-                Searching addresses…
+                {text.searching}
               </span>
             ) : null}
             {results.length ? (
@@ -540,7 +745,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             onClick={() => void locate()}
           >
             {locating ? <Spinner red /> : <LocateFixed size={18} aria-hidden="true" />}
-            {locating ? "Finding your location…" : "Use my current location"}
+            {locating ? text.locating : text.useLocation}
           </button>
 
           {locationError || locationFieldError ? (
@@ -551,8 +756,8 @@ export function ChefKitchenDetails({ flow }: Props) {
             <div className="cob-pinned" role="status">
               <MapPin size={18} aria-hidden="true" />
               <span>
-                {pinnedLabel || kitchenAddress(d) || "Pin placed on the map"}
-                <small>Move the map if the pin isn’t exactly on your kitchen.</small>
+                {pinnedLabel || kitchenAddress(d) || text.pinPlaced}
+                <small>{text.pinCheck}</small>
               </span>
             </div>
           ) : null}
@@ -570,28 +775,28 @@ export function ChefKitchenDetails({ flow }: Props) {
             <TextField
               flow={flow}
               name="addressLine1"
-              label="Flat / house number / building"
+              label={text.addressLine1}
               autoComplete="address-line1"
             />
             <TextField
               flow={flow}
               name="addressLine2"
-              label="Street / area"
+              label={text.addressLine2}
               optional
               autoComplete="address-line2"
             />
             <TextField
               flow={flow}
               name="landmark"
-              label="Landmark"
+              label={text.landmark}
               optional
-              placeholder="For example, near the metro station"
+              placeholder={text.landmarkExample}
             />
             <div className="cob-pair">
               <TextField
                 flow={flow}
                 name="postalCode"
-                label="PIN code"
+                label={text.postalCode}
                 maxLength={6}
                 inputMode="numeric"
                 autoComplete="postal-code"
@@ -600,7 +805,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               <TextField
                 flow={flow}
                 name="city"
-                label="City"
+                label={text.city}
                 maxLength={80}
                 autoComplete="address-level2"
               />
@@ -608,7 +813,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             <TextField
               flow={flow}
               name="state"
-              label="State"
+              label={text.state}
               maxLength={80}
               autoComplete="address-level1"
             />
@@ -618,29 +823,33 @@ export function ChefKitchenDetails({ flow }: Props) {
 
       <Card
         icon={<Camera size={20} aria-hidden="true" />}
-        title="Kitchen photos"
-        subtitle="Two clear photos of where you cook."
+        title={text.photos}
+        subtitle={text.photosHelper}
         done={photosDone}
       >
         {missing.length && !photosDone ? (
           <div className="cob-requires" role="group" aria-labelledby="chef-photos-requires">
             <p id="chef-photos-requires">
-              <strong>Finish your kitchen address to add photos</strong>
-              Photos are saved with your address. Still needed:
+              <strong>{text.photosWait}</strong>
+              {text.photosWaitWhy}
             </p>
             <ul className="cob-requires-list">
-              {missing.map((item) => (
-                <li key={item.field}>
-                  <button
-                    type="button"
-                    className="cob-requires-chip"
-                    aria-label={`Go to ${item.label}`}
-                    onClick={() => flow.goToField(item.field)}
-                  >
-                    {item.label}
-                  </button>
-                </li>
-              ))}
+              {missing.map((item) => {
+                const key = KITCHEN_FIELD_TEXT[item.field];
+                const name = key ? text[key] : item.label;
+                return (
+                  <li key={item.field}>
+                    <button
+                      type="button"
+                      className="cob-requires-chip"
+                      aria-label={format(text.goTo, { field: name })}
+                      onClick={() => flow.goToField(item.field)}
+                    >
+                      {name}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ) : null}
@@ -648,20 +857,20 @@ export function ChefKitchenDetails({ flow }: Props) {
           <Upload
             flow={flow}
             type="KITCHEN_PHOTO_1"
-            label="Overall kitchen photo"
+            label={text.overallPhoto}
             photo
-            helper="Show the full kitchen space where you prepare food."
+            helper={text.overallPhotoHelper}
             beforePick={flow.kitchenReadyForPhotos}
           />
           <Upload
             flow={flow}
             type="KITCHEN_PHOTO_2"
-            label="Cooking setup photo"
+            label={text.setupPhoto}
             photo
-            helper="Show your stove and the cooking equipment you use."
+            helper={text.setupPhotoHelper}
             beforePick={flow.kitchenReadyForPhotos}
           />
-          <p className="cob-formats">JPG, PNG, HEIC or WebP · up to 10 MB each</p>
+          <p className="cob-formats">{text.photoFormats}</p>
         </div>
       </Card>
     </div>
@@ -675,6 +884,7 @@ export function ChefKitchenDetails({ flow }: Props) {
 const FOSCOS_URL = "https://foscos.fssai.gov.in/";
 
 export function ChefFssaiDetails({ flow }: Props) {
+  const text = useText(TEXT);
   if (flow.fssaiGuide) return <FssaiGuide flow={flow} />;
   const id = "chef-fssaiNumber";
   const value = flow.details.fssaiNumber;
@@ -683,13 +893,13 @@ export function ChefFssaiDetails({ flow }: Props) {
     flow.state?.progress?.fssaiVerified && flow.state.details?.fssaiNumber === value,
   );
   const complete = /^\d{14}$/.test(value);
-  const helper = "The 14-digit number on your FSSAI registration or licence.";
+  const helper = text.fssaiHelper;
   return (
     <div className="cob-stack">
       <Card>
         <FieldShell
           id={id}
-          label="FSSAI registration number"
+          label={text.fssaiLabel}
           helper={helper}
           error={error}
           after={
@@ -700,7 +910,7 @@ export function ChefFssaiDetails({ flow }: Props) {
               disabled={flow.busy}
               onClick={() => flow.setFssaiGuide(true)}
             >
-              Don’t have FSSAI?
+              {text.noFssai}
             </button>
           }
         >
@@ -710,7 +920,7 @@ export function ChefFssaiDetails({ flow }: Props) {
               className="cob-input cob-input--with-adornment cob-mono"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="14-digit number"
+              placeholder={text.fssaiPlaceholder}
               maxLength={14}
               value={value}
               disabled={flow.busy}
@@ -722,7 +932,7 @@ export function ChefFssaiDetails({ flow }: Props) {
             />
             <span className="cob-adornment">
               {reviewed ? (
-                <VerifiedBadge label="Verified by Craves" />
+                <VerifiedBadge label={text.verifiedByCraves} />
               ) : complete ? (
                 <span className="cob-success-line">
                   <CheckCircle2 size={16} aria-hidden="true" />
@@ -753,6 +963,7 @@ function isLearningContent(item: unknown): item is LearningContent {
 }
 
 function FssaiGuide({ flow }: Props) {
+  const text = useText(TEXT);
   const [content, setContent] = useState<LearningContent[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
@@ -774,10 +985,10 @@ function FssaiGuide({ flow }: Props) {
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw chefApiError(response, await response.json().catch(() => null), "The video guide is unavailable right now.");
+        if (!response.ok) throw chefApiError(response, await response.json().catch(() => null), text.guideUnavailable);
         const raw: unknown = await response.json();
         if (!Array.isArray(raw) || raw.length > 100 || !raw.every(isLearningContent))
-          throw new Error("The video guide could not be loaded.");
+          throw new Error(text.guideUnreadable);
         if (controller.signal.aborted) return;
         const ready = raw.filter((item) => item.published === true && item.ready === true);
         const own = ready.filter((item) => item.language === language);
@@ -785,16 +996,13 @@ function FssaiGuide({ flow }: Props) {
         setContent(own.length || language === "en" ? own : ready.filter((item) => item.language === "en"));
       })
       .catch((failure) => {
-        if (!controller.signal.aborted)
-          setError(
-            chefErrorText(failure, "The video guide is unavailable right now."),
-          );
+        if (!controller.signal.aborted) setError(chefErrorText(failure, text.guideUnavailable));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [language, attempt]);
+  }, [language, attempt, text]);
 
   async function play(item: LearningContent) {
     setOpening(item.id);
@@ -808,10 +1016,10 @@ function FssaiGuide({ flow }: Props) {
         typeof result.url !== "string" ||
         !result.url.startsWith("https://")
       )
-        throw new Error("The video could not be opened. Please try again.");
+        throw new Error(text.videoNotOpened);
       setPlayback((previous) => ({ ...previous, [item.id]: result.url as string }));
     } catch (failure) {
-      setVideoError(chefErrorText(failure, "The video could not be opened."));
+      setVideoError(chefErrorText(failure, text.videoFailed));
     } finally {
       setOpening(null);
     }
@@ -824,9 +1032,9 @@ function FssaiGuide({ flow }: Props) {
       <Card>
         <ol className="cob-steps">
           <li>
-            <strong>Visit the official FSSAI FoSCoS portal</strong>
+            <strong>{text.step1}</strong>
             <p>
-              Open the official registration and licensing website,{" "}
+              {text.step1Before}
               <a href={FOSCOS_URL} target="_blank" rel="noopener noreferrer">
                 foscos.fssai.gov.in
                 <ExternalLink
@@ -835,24 +1043,24 @@ function FssaiGuide({ flow }: Props) {
                   style={{ display: "inline", marginLeft: 3 }}
                 />
               </a>
-              .
+              {text.step1After}
             </p>
           </li>
           <li>
-            <strong>Choose the registration or licence for your business</strong>
-            <p>Use the portal’s eligibility guidance to pick the right option.</p>
+            <strong>{text.step2}</strong>
+            <p>{text.step2Text}</p>
           </li>
           <li>
-            <strong>Enter your details</strong>
-            <p>Complete the required personal and food business information.</p>
+            <strong>{text.step3}</strong>
+            <p>{text.step3Text}</p>
           </li>
           <li>
-            <strong>Upload documents and submit</strong>
-            <p>Provide the requested documents and pay the applicable fee shown on the portal.</p>
+            <strong>{text.step4}</strong>
+            <p>{text.step4Text}</p>
           </li>
           <li>
-            <strong>Track your application</strong>
-            <p>Use your acknowledgement or reference number to follow the status on FoSCoS.</p>
+            <strong>{text.step5}</strong>
+            <p>{text.step5Text}</p>
           </li>
         </ol>
       </Card>
@@ -863,12 +1071,12 @@ function FssaiGuide({ flow }: Props) {
             <PlayCircle size={20} aria-hidden="true" />
           </span>
           <div className="cob-card-title">
-            <h2>Watch how to apply</h2>
+            <h2>{text.watch}</h2>
           </div>
         </div>
         <div className="cob-field" style={{ marginBottom: 14 }}>
           <span id="chef-language-label" className="cob-label">
-            Video language
+            {text.videoLanguage}
           </span>
           <LanguagePicker
             labelId="chef-language-label"
@@ -882,7 +1090,7 @@ function FssaiGuide({ flow }: Props) {
             className="cob-skeleton"
             style={{ aspectRatio: "16 / 9" }}
             role="status"
-            aria-label="Loading video guide"
+            aria-label={text.loadingGuide}
           />
         ) : error ? (
           <div className="cob-video-empty" role="alert">
@@ -892,13 +1100,13 @@ function FssaiGuide({ flow }: Props) {
               className="cob-link"
               onClick={() => setAttempt((value) => value + 1)}
             >
-              Try again
+              {text.tryAgain}
             </button>
           </div>
         ) : videos.length === 0 && articles.length === 0 ? (
           <div className="cob-video-empty">
             <PlayCircle size={28} aria-hidden="true" />
-            <span>The video guide is coming soon. Follow the steps above, or ask us to call you.</span>
+            <span>{text.guideSoon}</span>
           </div>
         ) : (
           <div className="cob-fields">
@@ -913,18 +1121,14 @@ function FssaiGuide({ flow }: Props) {
                       preload="metadata"
                       src={playback[item.id]}
                       aria-label={item.title}
-                      onError={() =>
-                        setVideoError(
-                          "Video access expired or playback failed. Play it again to retry.",
-                        )
-                      }
+                      onError={() => setVideoError(text.playbackFailed)}
                     />
                   ) : (
                     <button
                       type="button"
                       className="cob-video-poster"
                       disabled={opening !== null}
-                      aria-label={`Watch video: ${item.title}`}
+                      aria-label={format(text.watchVideo, { title: item.title })}
                       onClick={() => void play(item)}
                     >
                       <span className="cob-play" aria-hidden="true">
@@ -935,7 +1139,7 @@ function FssaiGuide({ flow }: Props) {
                   )}
                 </div>
                 {/* Said on the video itself when the chosen language has no version of it yet. */}
-                {item.language === "en" && language !== "en" ? <span className="cob-helper">In English</span> : null}
+                {item.language === "en" && language !== "en" ? <span className="cob-helper">{text.inEnglish}</span> : null}
                 {playback[item.id] ? (
                   <button
                     type="button"
@@ -949,7 +1153,7 @@ function FssaiGuide({ flow }: Props) {
                       void play(item);
                     }}
                   >
-                    Reload video
+                    {text.reloadVideo}
                   </button>
                 ) : null}
               </div>
@@ -972,8 +1176,8 @@ function FssaiGuide({ flow }: Props) {
 
       <Card
         icon={<Headset size={20} aria-hidden="true" />}
-        title="Need help with FSSAI?"
-        subtitle="Our team can guide you through the application process."
+        title={text.fssaiHelp}
+        subtitle={text.fssaiHelpText}
       >
         {flow.callbackCase ? (
           <div className="cob-success" role="status">
@@ -983,15 +1187,11 @@ function FssaiGuide({ flow }: Props) {
               style={{ color: "#C4200F", flexShrink: 0 }}
             />
             <div>
-              <strong>{flow.callback?.status === "CONTACTED" ? "Our team contacted you" : "Request received"}</strong>
-              <p>
-                {flow.callback?.status === "CONTACTED"
-                  ? "Our Craves team has spoken to you about your FSSAI application. We’ll follow up if anything else is needed."
-                  : "Our Craves team will call you on your registered mobile number to help with your FSSAI application."}
-              </p>
+              <strong>{flow.callback?.status === "CONTACTED" ? text.contacted : text.received}</strong>
+              <p>{flow.callback?.status === "CONTACTED" ? text.contactedText : text.receivedText}</p>
               <small>
-                Reference {flow.callbackCase}
-                {flow.callback?.requestedAt ? ` · Requested ${formatDate(flow.callback.requestedAt)}` : ""}
+                {format(text.reference, { case: flow.callbackCase })}
+                {flow.callback?.requestedAt ? format(text.requested, { date: formatDate(flow.callback.requestedAt) }) : ""}
               </small>
             </div>
           </div>
@@ -999,7 +1199,7 @@ function FssaiGuide({ flow }: Props) {
           <>
           {flow.callback?.status === "RESOLVED" ? (
             <p className="cob-helper" style={{ marginBottom: 10 }}>
-              Your last request ({flow.callback.caseNumber}) is resolved. Ask again if you still need help.
+              {format(text.resolved, { case: flow.callback.caseNumber })}
             </p>
           ) : null}
           <button
@@ -1009,16 +1209,13 @@ function FssaiGuide({ flow }: Props) {
             onClick={() => void flow.requestCallback()}
           >
             <Phone size={18} aria-hidden="true" />
-            Request a call from Craves
+            {text.requestCall}
           </button>
           </>
         )}
       </Card>
 
-      <Note tone="neutral">
-        You can finish the other sections now. Add your FSSAI number before you submit your
-        application.
-      </Note>
+      <Note tone="neutral">{text.finishOthers}</Note>
 
       <button
         type="button"
@@ -1026,7 +1223,7 @@ function FssaiGuide({ flow }: Props) {
         disabled={flow.busy}
         onClick={() => flow.setFssaiGuide(false)}
       >
-        I have an FSSAI number
+        {text.haveFssai}
       </button>
     </div>
   );
@@ -1036,14 +1233,9 @@ function FssaiGuide({ flow }: Props) {
 /* Screen 5 - Identity                                                 */
 /* ------------------------------------------------------------------ */
 
-const PROOF_SHORT: Record<ProofKind, string> = {
-  AADHAAR: "Aadhaar card",
-  PAN: "PAN card",
-  BANK_STATEMENT: "Bank statement",
-  OTHER_GOVERNMENT_ID: "Other government ID",
-};
-
 export function ChefIdentityDetails({ flow }: Props) {
+  const text = useText(TEXT);
+  const proofs = useText(PROOF_LABELS);
   const proof = flow.details.proofKind;
   const locked = Boolean(
     flow.state?.documents.some((document) => document.documentType.startsWith("SELECTED_PROOF_")),
@@ -1061,12 +1253,12 @@ export function ChefIdentityDetails({ flow }: Props) {
       <Card
         id="chef-proofKind"
         icon={<IdCard size={20} aria-hidden="true" />}
-        title="Document type"
+        title={text.docType}
       >
         <div className="cob-fields">
           {/* Native radios: one Tab stop and arrow keys, drawn as chips. */}
           <fieldset className="cob-choices">
-            <legend className="sr-only">Identity document</legend>
+            <legend className="sr-only">{text.identityDocument}</legend>
             {PROOF_OPTIONS.map(([key]) => {
               const selected = proof === key;
               const disabled = flow.busy || (locked && !selected);
@@ -1089,7 +1281,7 @@ export function ChefIdentityDetails({ flow }: Props) {
                     }}
                   />
                   {selected ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}
-                  {PROOF_SHORT[key]}
+                  {proofs[key]}
                 </label>
               );
             })}
@@ -1097,19 +1289,15 @@ export function ChefIdentityDetails({ flow }: Props) {
           {proofError ? (
             <FieldError>{proofError}</FieldError>
           ) : (
-            <span className="cob-helper">
-              {locked
-                ? "To choose a different document, remove the uploaded files first."
-                : "Choose one valid document that shows your name."}
-            </span>
+            <span className="cob-helper">{locked ? text.removeFirst : text.chooseOne}</span>
           )}
           {proof === "OTHER_GOVERNMENT_ID" ? (
             <TextField
               flow={flow}
               name="otherGovernmentId"
-              label="Name of the ID"
+              label={text.idName}
               maxLength={80}
-              placeholder="For example, Voter ID, Driving Licence or Passport"
+              placeholder={text.idNameExample}
             />
           ) : null}
           {proof === "OTHER_GOVERNMENT_ID" ? (
@@ -1120,7 +1308,7 @@ export function ChefIdentityDetails({ flow }: Props) {
                 disabled={flow.busy}
                 onChange={(event) => flow.field("proofHasBack", event.target.checked ? false : null)}
               />
-              <span>This document has no back side</span>
+              <span>{text.noBack}</span>
             </label>
           ) : null}
         </div>
@@ -1128,34 +1316,30 @@ export function ChefIdentityDetails({ flow }: Props) {
       {proof ? (
         <Card
           icon={<FileCheck2 size={20} aria-hidden="true" />}
-          title={PROOF_SHORT[proof]}
-          subtitle={twoSided ? "Upload the front and the back." : "Upload one clear photo or PDF."}
+          title={proofs[proof]}
+          subtitle={twoSided ? text.frontAndBack : text.oneFile}
           done={done}
         >
           <div className="cob-photo-grid">
             <Upload
               flow={flow}
               type="SELECTED_PROOF_FRONT"
-              label={twoSided ? "Front side" : PROOF_SHORT[proof]}
-              emptyTitle={twoSided ? "Add front side" : "Add document"}
+              label={twoSided ? text.front : proofs[proof]}
+              emptyTitle={twoSided ? text.addFront : text.addDocument}
             />
             {twoSided ? (
               <Upload
                 flow={flow}
                 type="SELECTED_PROOF_BACK"
-                label="Back side"
-                emptyTitle="Add back side"
+                label={text.back}
+                emptyTitle={text.addBack}
               />
             ) : null}
-            <p className="cob-formats">PDF, JPG, PNG, HEIC or WebP · up to 10 MB each</p>
+            <p className="cob-formats">{text.fileFormats}</p>
           </div>
         </Card>
       ) : null}
-      {proof ? (
-        <Note>
-          Make sure all four corners are visible, the text is readable and there is no glare.
-        </Note>
-      ) : null}
+      {proof ? <Note>{text.clearPhoto}</Note> : null}
     </div>
   );
 }
@@ -1178,7 +1362,8 @@ function ReviewCard({
   children: ReactNode;
   editable?: boolean;
 }) {
-  const title = CHEF_SECTION_LABELS[section];
+  const text = useText(TEXT);
+  const title = useText(SECTION_LABELS)[section];
   return (
     <section className="cob-card" aria-labelledby={`review-${section}`}>
       <div className="cob-review-head">
@@ -1186,21 +1371,21 @@ function ReviewCard({
         <div className="cob-card-title">
           <h2 id={`review-${section}`}>{title}</h2>
           {complete ? (
-            <StatusChip tone="complete">Complete</StatusChip>
+            <StatusChip tone="complete">{text.complete}</StatusChip>
           ) : (
-            <StatusChip tone="attention">Needs attention</StatusChip>
+            <StatusChip tone="attention">{text.attention}</StatusChip>
           )}
         </div>
         {editable ? (
           <button
             type="button"
             className="cob-link"
-            aria-label={`Edit ${title}`}
+            aria-label={format(text.editSection, { section: title })}
             disabled={flow.busy}
             onClick={() => flow.edit(section)}
           >
             <PencilLine size={16} aria-hidden="true" />
-            Edit
+            {text.edit}
           </button>
         ) : null}
       </div>
@@ -1210,12 +1395,13 @@ function ReviewCard({
 }
 
 function Rows({ rows }: { rows: [string, ReactNode][] }) {
+  const text = useText(TEXT);
   return (
     <dl className="cob-rows">
       {rows.map(([label, value]) => (
         <div key={label} className="cob-row">
           <dt>{label}</dt>
-          <dd className={value ? undefined : "cob-muted"}>{value || "Not added"}</dd>
+          <dd className={value ? undefined : "cob-muted"}>{value || text.notAdded}</dd>
         </div>
       ))}
     </dl>
@@ -1223,6 +1409,7 @@ function Rows({ rows }: { rows: [string, ReactNode][] }) {
 }
 
 function ReviewPhoto({ flow, type, label }: Props & { type: string; label: string }) {
+  const text = useText(TEXT);
   const evidence = flow.state?.documents.find(
     (document) => document.documentType === type && document.status !== "REJECTED",
   );
@@ -1233,9 +1420,9 @@ function ReviewPhoto({ flow, type, label }: Props & { type: string; label: strin
         {preview ? (
           <img src={preview} alt={label} />
         ) : evidence ? (
-          <Check size={20} aria-label={`${label} uploaded`} style={{ color: "#C4200F" }} />
+          <Check size={20} aria-label={format(text.photoUploaded, { photo: label })} style={{ color: "#C4200F" }} />
         ) : (
-          <Camera size={20} aria-label={`${label} missing`} />
+          <Camera size={20} aria-label={format(text.photoMissing, { photo: label })} />
         )}
       </span>
       <span>{label}</span>
@@ -1244,6 +1431,9 @@ function ReviewPhoto({ flow, type, label }: Props & { type: string; label: strin
 }
 
 export function ChefReviewDetails({ flow }: Props) {
+  const text = useText(TEXT);
+  const proofs = useText(PROOF_LABELS);
+  const sections = useText(SECTION_LABELS);
   const d = flow.details,
     saved = flow.state;
   if (!saved) return null;
@@ -1264,28 +1454,28 @@ export function ChefReviewDetails({ flow }: Props) {
       >
         <Rows
           rows={[
-            ["Full name", chefFullName(d)],
-            ["Date of birth", d.dateOfBirth ? formatDateOfBirth(d.dateOfBirth) : ""],
+            [text.fullName, chefFullName(d)],
+            [text.dobLabel, d.dateOfBirth ? formatDateOfBirth(d.dateOfBirth) : ""],
             [
-              "Mobile",
+              text.mobileShort,
               saved.phoneNumber ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   {formatPhone(saved.phoneNumber)}
-                  <CheckCircle2 size={15} aria-label="Verified" style={{ color: "#C4200F" }} />
+                  <CheckCircle2 size={15} aria-label={text.verified} style={{ color: "#C4200F" }} />
                 </span>
               ) : (
                 ""
               ),
             ],
             [
-              "Email",
+              text.email,
               d.email ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   {d.email}
                   {completion.personal ? (
                     <CheckCircle2
                       size={15}
-                      aria-label="Verified"
+                      aria-label={text.verified}
                       style={{ color: "#C4200F", flexShrink: 0 }}
                     />
                   ) : null}
@@ -1306,14 +1496,14 @@ export function ChefReviewDetails({ flow }: Props) {
       >
         <Rows
           rows={[
-            ["Kitchen name", d.kitchenName],
-            ["Address", kitchenAddress(d)],
-            ["Location", d.latitude != null && d.longitude != null ? "Pinned on map" : ""],
+            [text.kitchenName, d.kitchenName],
+            [text.address, kitchenAddress(d)],
+            [text.location, d.latitude != null && d.longitude != null ? text.pinned : ""],
           ]}
         />
         <div className="cob-review-photos" style={{ marginTop: 14 }}>
-          <ReviewPhoto flow={flow} type="KITCHEN_PHOTO_1" label="Overall kitchen" />
-          <ReviewPhoto flow={flow} type="KITCHEN_PHOTO_2" label="Cooking setup" />
+          <ReviewPhoto flow={flow} type="KITCHEN_PHOTO_1" label={text.overallShort} />
+          <ReviewPhoto flow={flow} type="KITCHEN_PHOTO_2" label={text.setupShort} />
         </div>
       </ReviewCard>
 
@@ -1326,11 +1516,11 @@ export function ChefReviewDetails({ flow }: Props) {
         <Rows
           rows={[
             [
-              "Status",
-              fssaiReviewed ? "Verified by Craves" : fssaiAdded ? "Number added" : "Not added yet",
+              text.status,
+              fssaiReviewed ? text.verifiedByCraves : fssaiAdded ? text.numberAdded : text.notAddedYet,
             ],
             [
-              "Registration number",
+              text.registrationNumber,
               fssaiAdded ? <span className="cob-mono">{formatFssai(d.fssaiNumber)}</span> : "",
             ],
           ]}
@@ -1346,19 +1536,19 @@ export function ChefReviewDetails({ flow }: Props) {
         <Rows
           rows={[
             [
-              "Document type",
+              text.docType,
               d.proofKind
                 ? d.proofKind === "OTHER_GOVERNMENT_ID" && d.otherGovernmentId
                   ? d.otherGovernmentId
-                  : PROOF_SHORT[d.proofKind]
+                  : proofs[d.proofKind]
                 : "",
             ],
             ...(proofNeedsBack(d.proofKind, d.proofHasBack)
               ? ([
-                  ["Front side", uploaded("SELECTED_PROOF_FRONT") ? "Uploaded" : ""],
-                  ["Back side", uploaded("SELECTED_PROOF_BACK") ? "Uploaded" : ""],
+                  [text.front, uploaded("SELECTED_PROOF_FRONT") ? text.uploaded : ""],
+                  [text.back, uploaded("SELECTED_PROOF_BACK") ? text.uploaded : ""],
                 ] as [string, string][])
-              : ([["Document", uploaded("SELECTED_PROOF_FRONT") ? "Uploaded" : ""]] as [
+              : ([[text.document, uploaded("SELECTED_PROOF_FRONT") ? text.uploaded : ""]] as [
                   string,
                   string,
                 ][])),
@@ -1373,18 +1563,18 @@ export function ChefReviewDetails({ flow }: Props) {
               <Landmark size={20} aria-hidden="true" />
             </span>
             <div className="cob-card-title">
-              <h2 id="review-bank">Bank details</h2>
+              <h2 id="review-bank">{sections.bank}</h2>
               {bankCanContinue(flow.bank) ? (
-                <StatusChip tone="complete">Saved</StatusChip>
+                <StatusChip tone="complete">{text.saved}</StatusChip>
               ) : (
-                <StatusChip tone="idle">Add later</StatusChip>
+                <StatusChip tone="idle">{text.addLater}</StatusChip>
               )}
             </div>
           </div>
           <p className="cob-helper" style={{ fontSize: 14 }}>
             {bankCanContinue(flow.bank)
-              ? `Account ending ${flow.bank?.lastFour ?? ""} is saved. ${flow.bank?.message ?? ""}`
-              : "You can add bank details later. They aren’t needed to submit your application for review. Saving them now means one less step when payouts open."}
+              ? format(text.accountSaved, { lastFour: flow.bank?.lastFour ?? "", message: flow.bank?.message ?? "" })
+              : text.bankLater}
           </p>
           <button
             type="button"
@@ -1393,11 +1583,7 @@ export function ChefReviewDetails({ flow }: Props) {
             disabled={flow.busy}
             onClick={() => flow.edit("bank")}
           >
-            {bankCanContinue(flow.bank)
-              ? "Change bank details"
-              : flow.bank
-                ? "Add bank details now"
-                : "Add or check bank details"}
+            {bankCanContinue(flow.bank) ? text.changeBank : flow.bank ? text.addBankNow : text.addOrCheckBank}
           </button>
         </section>
       ) : (
@@ -1409,10 +1595,10 @@ export function ChefReviewDetails({ flow }: Props) {
         >
           <Rows
             rows={[
-              ["Account holder", flow.bank?.accountHolderName || chefFullName(d)],
-              ["Bank", flow.bank?.bankName ?? ""],
+              [text.accountHolder, flow.bank?.accountHolderName || chefFullName(d)],
+              [text.bank, flow.bank?.bankName ?? ""],
               [
-                "Account",
+                text.account,
                 flow.bank?.lastFour ? (
                   <span className="cob-mono">•••• {flow.bank.lastFour}</span>
                 ) : (
@@ -1439,15 +1625,15 @@ export function ChefReviewDetails({ flow }: Props) {
             onChange={(event) => flow.setTerms(event.target.checked)}
           />
           <span>
-            I confirm these details are correct and agree to the{" "}
+            {text.termsBefore}
             <Link href="/terms" target="_blank" rel="noopener noreferrer">
-              Craves Chef Terms
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" target="_blank" rel="noopener noreferrer">
-              Privacy Policy
+              {text.terms}
             </Link>
-            .
+            {text.termsMiddle}
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer">
+              {text.privacy}
+            </Link>
+            {text.termsAfter}
           </span>
         </label>
       </section>

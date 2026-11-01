@@ -1,0 +1,23 @@
+name: Advanced features live smoke
+# Read-only: after a merge (or on demand) waits for the release, then checks every advanced route through api.craves.in.
+on:
+  push:
+    branches: [main]
+    paths: ['services/advanced-features-service/**', 'contracts/openapi/advanced/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: advanced-features-smoke
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
+      - name: Wait for the release, then check every route
+        run: python3 scripts/advanced-features/smoke.py --wait ${{ github.event_name == 'push' && '60' || '1' }}

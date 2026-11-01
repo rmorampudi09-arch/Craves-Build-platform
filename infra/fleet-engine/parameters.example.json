@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "managedEnvironmentId": {"value": "REPLACE_WITH_THE_RESOURCE_ID_OF_cae-craves-prodlow-kmqgfy"},
+    "userAssignedIdentityId": {"value": "REPLACE_WITH_THE_RESOURCE_ID_OF_id-craves-fleet-engine-prodlow"},
+    "image": {"value": "cravesrm09prodlow6bf632.azurecr.io/craves/fleet-engine@sha256:REPLACE_WITH_64_LOWERCASE_HEX"},
+    "redisUrlSecretUrl": {"value": "https://kvcravesprodlowkmqgfy.vault.azure.net/secrets/fleet-engine-redis-url"},
+    "riderPartitions": {"value": 16},
+    "dispatchPartitions": {"value": 16},
+    "replicas": {"value": 1}
+  }
+}

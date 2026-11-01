@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isCanonicalUuid,
+  isChefOrderStatus,
   parseChefOrder,
+  parseChefOrderHistoryPage,
   parseChefOrderResponse,
   parseChefOrders,
   parseChefOrdersResponse,
@@ -52,9 +54,43 @@ test("keeps fulfillment address but removes identity/internal fields", () => {
   const parsed = parseChefOrder(order);
   assert.equal(parsed?.deliveryAddress?.contactPhoneNumber, "+919999999999");
   assert.equal("customerIdentityId" in (parsed ?? {}), false);
-  assert.equal("checkoutId" in (parsed ?? {}), false);
   assert.equal("kitchenId" in (parsed ?? {}), false);
   assert.equal("pickupAddress" in (parsed ?? {}), false);
+});
+
+test("keeps the address pin (whole and in range) and the order page's status history", () => {
+  const pinned = parseChefOrder({ ...order, deliveryAddress: { ...order.deliveryAddress, latitude: 17.4948, longitude: "78.4001" } });
+  assert.deepEqual([pinned?.deliveryAddress?.latitude, pinned?.deliveryAddress?.longitude], [17.4948, 78.4001]);
+  for (const pin of [{ latitude: 17.49, longitude: null }, { latitude: 95, longitude: 78 }, { latitude: "", longitude: "" }]) {
+    assert.equal("latitude" in (parseChefOrder({ ...order, deliveryAddress: { ...order.deliveryAddress, ...pin } })?.deliveryAddress ?? {}), false, JSON.stringify(pin));
+  }
+  const history = [{ status: "CHEF_ACCEPTANCE_PENDING", at: "2026-07-30T00:00:00Z" }, { status: "SHIPPED", at: "2026-07-30T00:01:00Z" }, { status: "CHEF_ACCEPTED", at: "soon" }];
+  assert.deepEqual(parseChefOrder({ ...order, statusHistory: history })?.statusHistory, [history[0]]);
+  assert.equal("statusHistory" in (parseChefOrder(order) ?? {}), false);
+});
+
+test("keeps the checkout (none for a meal-plan order), the response deadline and the customer's note", () => {
+  assert.equal(parseChefOrder(order)?.checkoutId, order.checkoutId);
+  assert.equal(parseChefOrder({ ...order, checkoutId: null })?.checkoutId, null);
+  assert.equal(parseChefOrder({ ...order, checkoutId: "bad" })?.checkoutId, null);
+  assert.equal(parseChefOrder(order)?.chefAcceptanceExpiresAt, null);
+  assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "2026-07-30T00:10:00Z" })?.chefAcceptanceExpiresAt, "2026-07-30T00:10:00Z");
+  assert.equal(parseChefOrder({ ...order, chefAcceptanceExpiresAt: "soon" })?.chefAcceptanceExpiresAt, null);
+  assert.equal(parseChefOrder({ ...order, customerNote: " Less spicy please " })?.customerNote, "Less spicy please");
+  assert.equal(parseChefOrder({ ...order, customerNote: "n".repeat(501) })?.customerNote, null);
+});
+
+test("keeps the delivery partner with an https photo only, and tells a missing hand-over apart from one still to do", () => {
+  const partner = { name: "Ravi", phone: "+919888888888", photoUrl: "https://cdn.craves.in/p.jpg", pickupEtaAt: "2026-07-30T00:20:00Z" };
+  assert.deepEqual(parseChefOrder({ ...order, deliveryPartner: partner })?.deliveryPartner, partner);
+  assert.equal(parseChefOrder({ ...order, deliveryPartner: { ...partner, photoUrl: "http://cdn.craves.in/p.jpg" } })?.deliveryPartner?.photoUrl, null);
+  assert.equal(parseChefOrder({ ...order, deliveryPartner: { ...partner, photoUrl: "javascript:alert(1)" } })?.deliveryPartner?.photoUrl, null);
+  assert.deepEqual(parseChefOrder({ ...order, deliveryPartner: {} })?.deliveryPartner, { name: null, phone: null, photoUrl: null, pickupEtaAt: null });
+  assert.equal(parseChefOrder(order)?.deliveryPartner, null);
+  assert.equal("chefHandedOverAt" in (parseChefOrder(order) ?? {}), false);
+  assert.equal(parseChefOrder({ ...order, chefHandedOverAt: null })?.chefHandedOverAt, null);
+  assert.equal(parseChefOrder({ ...order, chefHandedOverAt: "2026-07-30T00:30:00Z" })?.chefHandedOverAt, "2026-07-30T00:30:00Z");
+  assert.equal("chefHandedOverAt" in (parseChefOrder({ ...order, chefHandedOverAt: "later" }) ?? {}), false);
 });
 
 test("accepts canonical PostgreSQL UUIDs regardless of RFC version bits", () => {
@@ -116,4 +152,24 @@ test("validates complete chef order arrays", () => {
   assert.equal(parseChefOrders([order])?.length, 1);
   assert.equal(parseChefOrders([order, { ...order, id: "bad" }]), null);
   assert.equal(parseChefOrdersResponse({ unexpected: [order] }), null);
+});
+
+test("reads a chef order history page and rejects a broken one", () => {
+  const second = { ...order, id: "11111111-2222-4333-8444-555555555556" };
+  assert.deepEqual(parseChefOrderHistoryPage({ orders: [order, second], nextCursor: "c1", hasMore: true })?.orders.map((o) => o.id), [order.id, second.id]);
+  assert.deepEqual(parseChefOrderHistoryPage({ orders: [], nextCursor: null, hasMore: false }), { orders: [], nextCursor: null, hasMore: false });
+  assert.equal(parseChefOrderHistoryPage({ orders: [order], hasMore: false })?.nextCursor, null);
+  for (const page of [
+    { orders: [order], nextCursor: null, hasMore: true },
+    { orders: [order], nextCursor: "", hasMore: false },
+    { orders: [order], nextCursor: "c".repeat(513), hasMore: true },
+    { orders: [order, order], nextCursor: null, hasMore: false },
+    { orders: [{ ...order, status: "PROVIDER_INTERNAL" }], nextCursor: null, hasMore: false },
+    { orders: [order], nextCursor: null, hasMore: "false" },
+    { orders: [order], nextCursor: null, hasMore: false, total: 1 },
+    { content: [order], nextCursor: null, hasMore: false },
+    [order],
+  ]) assert.equal(parseChefOrderHistoryPage(page), null);
+  assert.equal(isChefOrderStatus("DELIVERED"), true);
+  assert.equal(isChefOrderStatus("delivered"), false);
 });

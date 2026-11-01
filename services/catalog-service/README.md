@@ -16,7 +16,8 @@ Catalog Service owns kitchen profiles, menu items, public media metadata, packag
 ## Chef app additions (all optional for existing clients)
 
 - `GET/PUT /api/v1/kitchens/me` also carry `chefPhotoUrl`, `kitchenPhotoUrl`, `cuisines`, `serviceAreas` (up to 10 entries of 1-40 characters each) and `socialLinks` (`instagram`, `facebook`, `youtube`, `website`; `https://`, up to 200 characters). A field that is absent or `null` in a PUT keeps the stored value; an empty list or a `socialLinks` object replaces it.
-- `POST /api/v1/kitchens/me/photos?kind=CHEF|KITCHEN` (multipart `file`, JPEG/PNG/WebP, same size limit as dish photos) and `DELETE /api/v1/kitchens/me/photos/{kind}`; the replaced or deleted photo file is removed after the change commits.
+- `POST /api/v1/kitchens/me/photos?kind=KITCHEN` (multipart `file`, JPEG/PNG/WebP, same size limit as dish photos; `kind=CHEF` is refused, see the chef picture below) and `DELETE /api/v1/kitchens/me/photos/{kind}`; the replaced or deleted photo file is removed after the change commits.
+- Chef picture: `PUT /api/v1/kitchens/me/chef-avatar` with `{"avatarId":"chef-avatar-04"}` (`chef-avatar-01` to `chef-avatar-18`) stores the hosted address `<public media base>/public/chef-avatars/<id>.jpg` as `chefPhotoUrl` and returns the kitchen profile; an unknown id is a 400 `CHEF_AVATAR_UNKNOWN`. The 18 drawn faces are static JPEGs kept in `docs/release/chef-avatars`, uploaded to the media container once by the release runbook, and shared by every chef who picks one, so the catalog never deletes a file under `public/chef-avatars/` (switching faces or deleting the chef photo only changes the stored link). Real chef photos are no longer accepted: `POST /api/v1/kitchens/me/photos?kind=CHEF` answers 400 `CHEF_PHOTO_UPLOAD_DISABLED`. `chefPhotoUrl` is also returned by the nearby kitchen list and the public kitchen list.
 - `GET/PUT /api/v1/kitchens/me/settings` with `{autoAcceptOrders, defaultPrepMinutes}` (`defaultPrepMinutes` 5-120 or `null`). The internal kitchen read used by order-service (`GET /api/v1/catalog/internal/kitchens/{id}`) returns both fields; public kitchen reads never do.
 - `DELETE /api/v1/kitchens/me/menu-items/{menuItemId}` archives a dish (status `ARCHIVED`, 204). It disappears from the chef list, the public menu, discovery, favorites and checkout; its photos stay in storage. Archiving again is harmless, an archived dish cannot be edited or reopened, and another chef's dish is a 404.
 
@@ -72,7 +73,8 @@ Example response shape:
       "latitude": 17.4480,
       "longitude": 78.3920,
       "distanceMeters": 74,
-      "activeMenuItemCount": 8
+      "activeMenuItemCount": 8,
+      "chefPhotoUrl": "https://craves.in/media/public/chef-avatars/chef-avatar-04.jpg"
     }
   ]
 }
@@ -246,6 +248,15 @@ CRAVES_MEDIA_PUBLIC_BASE_URL
 
 `CRAVES_MEDIA_PUBLIC_BASE_URL` is the address customers load dish photos from. In production it is `https://craves.in/media`, the cached Front Door route created by `azure-pipelines-media-cdn.yml`. Left empty, photo links point straight at blob storage. Uploads larger than 1600 px or 400 KB are shrunk (opaque PNGs become JPEGs) and stored with a one-year immutable `Cache-Control`. On start, photos whose links are not under this address are copied once, shrunk, and their links rewritten.
 
+Kitchen photos (approved registration photos are copied into the kitchen's two photo slots):
+
+```text
+CRAVES_USER_CHEF_INTERNAL_BASE_URL   user-chef-service internal address; blank turns the import off
+CRAVES_USER_CHEF_INTERNAL_SECRET     optional; defaults to CRAVES_INTERNAL_SERVICE_SECRET
+```
+
+Each kitchen is imported once (`kitchen_photos_imported_at`): after the chef saves the kitchen, and at start-up for every kitchen not imported yet (log line `kitchen photo backfill imported N of M`). Registration photos replace the slots. Chefs can fill an empty slot but never replace or remove a kitchen photo (`409 KITCHEN_PHOTOS_LOCKED`); support empties a slot with `DELETE /api/v1/catalog/internal/kitchens/{kitchenId}/photos/{slot}` and the `X-Craves-Internal-Key` header.
+
 Optional discovery configuration:
 
 ```text
@@ -301,7 +312,7 @@ The Catalog deployment pipeline is image-only after the build. It does not read 
 The only Azure DevOps connection variable required by this pipeline is:
 
 ```text
-AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection
+AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection
 ```
 
 Do not add `POSTGRES_BUSINESS_DB_PASSWORD` or `CRAVES_JWT_VERIFICATION_PEM_BASE64` merely for this pipeline; the running Container App already owns its secure runtime bindings and the deployment preserves them.

@@ -26,7 +26,10 @@ test("chef workspace uses the Customer Flame Red, white and neutral palette", ()
   assert.doesNotMatch(pageHeader, /\{eyebrow\}/);
   assert.match(chefTheme, /--chef-surface:\s*#ffffff/i);
   assert.match(chefTheme, /--chef-text:\s*#1a1a1a/i);
-  assert.match(chefTheme, /--chef-page:\s*#f1f3f5/i);
+  // White pages, as in the app (1.31.0: no grey pages); soft red tiles with red icons.
+  assert.match(chefTheme, /--chef-page:\s*#ffffff/i);
+  assert.match(chefTheme, /--chef-tint:\s*#fdeae8/i);
+  assert.match(chefTheme, /--chef-tint-ink:\s*#d92714/i);
   assert.match(chefTheme, /--chef-action:\s*var\(--color-flame-red\)/i);
   assert.match(chefTheme, /--chef-action-hover:\s*var\(--color-contrast-red\)/i);
   // The neutral surface comes from --chef-page and the shared Sheet (approval prompt).

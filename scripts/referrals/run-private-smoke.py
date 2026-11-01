@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Create one manual, bounded ACA smoke job; no existing app configuration changes."""
 import json, pathlib, subprocess
-RG='rg-craves-prodlow-centralindia'; SUB='4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+RG='rg-craves-prodlow-centralindia'; SUB='721906c9-4a72-4606-830b-d3e7ace093ff'
 APP='ca-craves-referral-prodlow'; JOB='cj-craves-referral-check-39033'
-EXPECTED_IMAGE='cravesprodlowacr82121.azurecr.io/craves/referral-service@sha256:9b110d10541e976462c792e1d8b749754b2d8ba214fa85c7875d9d8346a2f2d0'
+EXPECTED_IMAGE='cravesrm09prodlow6bf632.azurecr.io/craves/referral-service@sha256:9b110d10541e976462c792e1d8b749754b2d8ba214fa85c7875d9d8346a2f2d0'
 def az(*args):
     p=subprocess.run(['az',*args,'--only-show-errors','-o','json'],capture_output=True,text=True)
     if p.returncode: raise RuntimeError(p.stderr[:600])
@@ -26,7 +26,7 @@ body={'location':'centralindia','identity':{'type':'UserAssigned','userAssignedI
       'properties':{'environmentId':p['managedEnvironmentId'],
           'configuration':{'triggerType':'Manual','replicaTimeout':150,'replicaRetryLimit':0,
               'manualTriggerConfig':{'parallelism':1,'replicaCompletionCount':1},
-              'registries':[{'server':'cravesprodlowacr82121.azurecr.io','identity':identity}]},
+              'registries':[{'server':'cravesrm09prodlow6bf632.azurecr.io','identity':identity}]},
           'template':{'containers':[{'name':'smoke','image':EXPECTED_IMAGE,'command':['/bin/bash'],'args':['-c',script],
               'env':[{'name':'REFERRAL_SMOKE_HOST','value':p['configuration']['ingress']['fqdn']}],
               'resources':{'cpu':0.5,'memory':'1Gi'}}]}}}

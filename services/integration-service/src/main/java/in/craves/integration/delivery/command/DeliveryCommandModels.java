@@ -14,6 +14,8 @@ public final class DeliveryCommandModels {
 
     public static final String CHEF_ACCEPTED_ORDER = "CHEF_ACCEPTED_ORDER";
     public static final String ORDER_READY_FOR_PICKUP = "ORDER_READY_FOR_PICKUP";
+    /** The chef handed the food to the courier (order-service markHandedOver; P2-05). */
+    public static final String ORDER_HANDED_OVER = "ORDER_HANDED_OVER";
     public static final String DELIVERY_COMMAND = "DELIVERY_COMMAND";
     public static final String DELIVERY_STATUS_CHANGED = "DELIVERY_STATUS_CHANGED";
 
@@ -42,6 +44,12 @@ public final class DeliveryCommandModels {
         UUID orderId,
         UUID chefSubOrderId,
         Instant readyAt
+    ) {}
+
+    public record OrderHandedOverData(
+        UUID orderId,
+        UUID chefSubOrderId,
+        Instant handedOverAt
     ) {}
 
     public record DeliveryCommandMessage(
@@ -97,8 +105,25 @@ public final class DeliveryCommandModels {
         Instant observedAt,
         String handoffFromProviderId,
         String handoffFromProviderDeliveryId,
-        Boolean handoffContinuation
+        Boolean handoffContinuation,
+        // Courier the provider reported, for the chef's ready-for-pickup screen; same fields as order-service's record.
+        String courierName,
+        String courierPhone,
+        String courierPhotoUrl,
+        Instant pickupEtaAt
     ) {
+        public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
+                                         String providerId, String providerDeliveryId, String status,
+                                         String trackingUrl, Instant observedAt,
+                                         String handoffFromProviderId,
+                                         String handoffFromProviderDeliveryId,
+                                         Boolean handoffContinuation) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId,
+                providerDeliveryId, status, trackingUrl, observedAt,
+                handoffFromProviderId, handoffFromProviderDeliveryId, handoffContinuation,
+                null, null, null, null);
+        }
+
         public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
                                          String providerId, String providerDeliveryId, String status,
                                          String trackingUrl, Instant observedAt,

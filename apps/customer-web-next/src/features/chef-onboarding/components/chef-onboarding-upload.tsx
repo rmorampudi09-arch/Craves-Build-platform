@@ -1,5 +1,5 @@
 "use client";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 import { chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useEffect, useRef, useState } from "react";
@@ -23,30 +23,84 @@ import {
   fileKind,
   formatBytes,
 } from "@/features/chef-onboarding/components/chef-onboarding-ui";
+import { format, messages, textFor, type Language } from "@/shared/i18n/language";
+import { useLanguage, useText } from "@/shared/i18n/language-context";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const IMAGE_NAME = /\.(jpe?g|png|webp|heic|heif)$/i;
 
-export async function prepareChefUpload(file: File, photo: boolean): Promise<File> {
-  if (file.size === 0 || file.size > MAX_BYTES) throw new Error("Choose a file up to 10 MB.");
+const FILE_ERRORS = messages({
+  en: {
+    tooBig: "Choose a file up to 10 MB.",
+    notPhoto: "Choose a JPG, PNG, HEIC or WebP photo.",
+    notFile: "Choose a PDF, JPG, PNG, HEIC or WebP file.",
+    unreadable: "This browser could not read this photo. Export it as JPG or PNG, then try again.",
+    noConversion: "Photo conversion is unavailable. Choose JPG or PNG instead.",
+    smaller: "Use a smaller JPG or PNG photo.",
+  },
+  te: {
+    tooBig: "10 MB వరకు ఉన్న ఫైల్ ఎంచుకోండి.",
+    notPhoto: "JPG, PNG, HEIC లేదా WebP ఫోటో ఎంచుకోండి.",
+    notFile: "PDF, JPG, PNG, HEIC లేదా WebP ఫైల్ ఎంచుకోండి.",
+    unreadable: "ఈ బ్రౌజర్ ఈ ఫోటోను చదవలేకపోయింది. దాన్ని JPG లేదా PNG గా మార్చి మళ్లీ ప్రయత్నించండి.",
+    noConversion: "ఫోటో మార్చడం కుదరడం లేదు. JPG లేదా PNG ఎంచుకోండి.",
+    smaller: "ఇంకా చిన్న JPG లేదా PNG ఫోటో వాడండి.",
+  },
+  kn: {
+    tooBig: "10 MB ವರೆಗಿನ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.",
+    notPhoto: "JPG, PNG, HEIC ಅಥವಾ WebP ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ.",
+    notFile: "PDF, JPG, PNG, HEIC ಅಥವಾ WebP ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.",
+    unreadable: "ಈ ಬ್ರೌಸರ್ ಈ ಫೋಟೋವನ್ನು ಓದಲಾಗಲಿಲ್ಲ. ಅದನ್ನು JPG ಅಥವಾ PNG ಆಗಿ ಬದಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    noConversion: "ಫೋಟೋ ಬದಲಿಸಲು ಆಗುತ್ತಿಲ್ಲ. JPG ಅಥವಾ PNG ಆಯ್ಕೆಮಾಡಿ.",
+    smaller: "ಇನ್ನೂ ಚಿಕ್ಕ JPG ಅಥವಾ PNG ಫೋಟೋ ಬಳಸಿ.",
+  },
+});
+
+const TEXT = messages({
+  en: {
+    uploadFailed: "Upload failed. Please try again.", chooseAnother: "Choose another file.", removeFailed: "Removal failed.",
+    take: "Take {label}", confirming: " · Confirming", uploading: " · Uploading", preparing: " · Preparing", cancel: "Cancel",
+    failed: "Upload failed", retry: "Retry", chooseAnotherFile: "Choose another file", open: "Open {label}",
+    approved: "Approved", update: "Update", uploaded: "Uploaded", locked: "Reviewed by Craves. Contact support to change it.",
+    replaceLabel: "Replace {label}", replace: "Replace", removeLabel: "Remove {label}", remove: "Remove",
+    addPhoto: "Add photo", addFile: "Add file", photoHow: "Take a photo or choose one", fileHow: "Take a photo or choose a file",
+    camera: "Use camera",
+  },
+  te: {
+    uploadFailed: "అప్‌లోడ్ కాలేదు. మళ్లీ ప్రయత్నించండి.", chooseAnother: "వేరే ఫైల్ ఎంచుకోండి.", removeFailed: "తొలగించలేకపోయాం.",
+    take: "{label} తీయండి", confirming: " · నిర్ధారిస్తున్నాం", uploading: " · అప్‌లోడ్ అవుతోంది", preparing: " · సిద్ధం చేస్తున్నాం", cancel: "రద్దు చేయండి",
+    failed: "అప్‌లోడ్ కాలేదు", retry: "మళ్లీ ప్రయత్నించండి", chooseAnotherFile: "వేరే ఫైల్ ఎంచుకోండి", open: "{label} తెరవండి",
+    approved: "ఆమోదించబడింది", update: "మార్చాలి", uploaded: "అప్‌లోడ్ అయింది", locked: "Craves దీన్ని చూసింది. మార్చాలంటే సహాయ బృందాన్ని అడగండి.",
+    replaceLabel: "{label} మార్చండి", replace: "మార్చండి", removeLabel: "{label} తొలగించండి", remove: "తొలగించండి",
+    addPhoto: "ఫోటో జోడించండి", addFile: "ఫైల్ జోడించండి", photoHow: "ఫోటో తీయండి, లేదా ఉన్నది ఎంచుకోండి", fileHow: "ఫోటో తీయండి, లేదా ఫైల్ ఎంచుకోండి",
+    camera: "కెమెరా వాడండి",
+  },
+  kn: {
+    uploadFailed: "ಅಪ್‌ಲೋಡ್ ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", chooseAnother: "ಬೇರೆ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.", removeFailed: "ತೆಗೆದುಹಾಕಲು ಆಗಲಿಲ್ಲ.",
+    take: "{label} ತೆಗೆಯಿರಿ", confirming: " · ಖಚಿತಪಡಿಸುತ್ತಿದ್ದೇವೆ", uploading: " · ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ", preparing: " · ಸಿದ್ಧಪಡಿಸುತ್ತಿದ್ದೇವೆ", cancel: "ರದ್ದುಮಾಡಿ",
+    failed: "ಅಪ್‌ಲೋಡ್ ಆಗಲಿಲ್ಲ", retry: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", chooseAnotherFile: "ಬೇರೆ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ", open: "{label} ತೆರೆಯಿರಿ",
+    approved: "ಅನುಮೋದಿಸಲಾಗಿದೆ", update: "ಬದಲಿಸಬೇಕು", uploaded: "ಅಪ್‌ಲೋಡ್ ಆಗಿದೆ", locked: "Craves ಇದನ್ನು ಪರಿಶೀಲಿಸಿದೆ. ಬದಲಾಯಿಸಲು ಸಹಾಯ ತಂಡವನ್ನು ಕೇಳಿ.",
+    replaceLabel: "{label} ಬದಲಾಯಿಸಿ", replace: "ಬದಲಾಯಿಸಿ", removeLabel: "{label} ತೆಗೆದುಹಾಕಿ", remove: "ತೆಗೆದುಹಾಕಿ",
+    addPhoto: "ಫೋಟೋ ಸೇರಿಸಿ", addFile: "ಫೈಲ್ ಸೇರಿಸಿ", photoHow: "ಫೋಟೋ ತೆಗೆಯಿರಿ, ಅಥವಾ ಇರುವುದನ್ನು ಆಯ್ಕೆಮಾಡಿ", fileHow: "ಫೋಟೋ ತೆಗೆಯಿರಿ, ಅಥವಾ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ",
+    camera: "ಕ್ಯಾಮೆರಾ ಬಳಸಿ",
+  },
+});
+
+export async function prepareChefUpload(file: File, photo: boolean, language: Language = "en"): Promise<File> {
+  const text = textFor(FILE_ERRORS, language);
+  if (file.size === 0 || file.size > MAX_BYTES) throw new Error(text.tooBig);
   if (file.type === "application/pdf" && !photo) return file;
   if (["image/jpeg", "image/png"].includes(file.type)) return file;
   if (
     !["image/webp", "image/heic", "image/heif"].includes(file.type) &&
     !/\.(webp|heic|heif)$/i.test(file.name)
   )
-    throw new Error(
-      photo
-        ? "Choose a JPG, PNG, HEIC or WebP photo."
-        : "Choose a PDF, JPG, PNG, HEIC or WebP file.",
-    );
+    throw new Error(photo ? text.notPhoto : text.notFile);
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    throw new Error(
-      "This browser could not read this photo. Export it as JPG or PNG, then try again.",
-    );
+    throw new Error(text.unreadable);
   }
   try {
     const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
@@ -54,14 +108,14 @@ export async function prepareChefUpload(file: File, photo: boolean): Promise<Fil
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("Photo conversion is unavailable. Choose JPG or PNG instead.");
+    if (!context) throw new Error(text.noConversion);
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.9),
     );
-    if (!blob || blob.size > MAX_BYTES) throw new Error("Use a smaller JPG or PNG photo.");
+    if (!blob || blob.size > MAX_BYTES) throw new Error(text.smaller);
     return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
   } finally {
     bitmap.close();
@@ -138,6 +192,10 @@ export function ChefOnboardingUpload({
   onCancel,
   beforePick,
 }: Props) {
+  const text = useText(TEXT);
+  const { language } = useLanguage();
+  // English reads "Replace kitchen photo"; Telugu and Kannada keep the label as written (it may hold "PAN").
+  const named = language === "en" ? label.toLowerCase() : label;
   const [file, setFile] = useState<File | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -189,7 +247,7 @@ export function ChefOnboardingUpload({
         setFile(null);
         setError("");
       } else
-        setError(chefErrorText(failure, "Upload failed. Please try again."));
+        setError(chefErrorText(failure, text.uploadFailed));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -206,12 +264,12 @@ export function ChefOnboardingUpload({
     let prepared: File;
     try {
       setBusy(true);
-      prepared = await prepareChefUpload(selected, photo);
+      prepared = await prepareChefUpload(selected, photo, language);
     } catch (failure) {
       if (mounted.current) {
         setBusy(false);
         setFile(null);
-        setError(chefErrorText(failure, "Choose another file."));
+        setError(chefErrorText(failure, text.chooseAnother));
       }
       return;
     }
@@ -230,7 +288,7 @@ export function ChefOnboardingUpload({
         setUploadedName(null);
       }
     } catch (failure) {
-      if (mounted.current) setError(chefErrorText(failure, "Removal failed."));
+      if (mounted.current) setError(chefErrorText(failure, text.removeFailed));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -266,7 +324,7 @@ export function ChefOnboardingUpload({
           type="file"
           className="sr-only"
           tabIndex={-1}
-          aria-label={`Take ${label.toLowerCase()}`}
+          aria-label={format(text.take, { label: named })}
           accept="image/*"
           capture="environment"
           disabled={disabled || busy || locked}
@@ -308,7 +366,7 @@ export function ChefOnboardingUpload({
             <span>
               {meta}
               <span role="status">
-                {progress >= 100 ? " · Confirming" : progress > 0 ? " · Uploading" : " · Preparing"}
+                {progress >= 100 ? text.confirming : progress > 0 ? text.uploading : text.preparing}
               </span>
               {progress > 0 && progress < 100 ? <span aria-hidden="true"> {progress}%</span> : null}
             </span>
@@ -322,7 +380,7 @@ export function ChefOnboardingUpload({
           <div className="cob-upload-actions">
             <button type="button" className="cob-link" onClick={cancel}>
               <X size={16} aria-hidden="true" />
-              Cancel
+              {text.cancel}
             </button>
           </div>
         ) : null}
@@ -340,7 +398,7 @@ export function ChefOnboardingUpload({
             <AlertCircle size={24} />
           </span>
           <div className="cob-file-text">
-            <strong>Upload failed</strong>
+            <strong>{text.failed}</strong>
             <span style={{ whiteSpace: "normal" }}>{error}</span>
           </div>
         </div>
@@ -352,7 +410,7 @@ export function ChefOnboardingUpload({
             onClick={() => file && (!beforePick || beforePick()) && void upload(file)}
           >
             <RefreshCw size={16} aria-hidden="true" />
-            Retry
+            {text.retry}
           </button>
           <button
             type="button"
@@ -360,7 +418,7 @@ export function ChefOnboardingUpload({
             disabled={disabled || busy}
             onClick={() => pick(picker.current)}
           >
-            Choose another file
+            {text.chooseAnotherFile}
           </button>
         </div>
       </>
@@ -375,7 +433,7 @@ export function ChefOnboardingUpload({
               href={savedPreview}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`Open ${label.toLowerCase()}`}
+              aria-label={format(text.open, { label: named })}
             >
               <img src={savedPreview} alt="" />
             </a>
@@ -387,11 +445,11 @@ export function ChefOnboardingUpload({
             <span>{meta}</span>
           </div>
           {locked ? (
-            <StatusChip tone="complete">Approved</StatusChip>
+            <StatusChip tone="complete">{text.approved}</StatusChip>
           ) : rejected ? (
-            <StatusChip tone="attention">Update</StatusChip>
+            <StatusChip tone="attention">{text.update}</StatusChip>
           ) : (
-            <span className="cob-done-tick" role="img" aria-label="Uploaded">
+            <span className="cob-done-tick" role="img" aria-label={text.uploaded}>
               <Check size={15} strokeWidth={3} aria-hidden="true" />
             </span>
           )}
@@ -405,7 +463,7 @@ export function ChefOnboardingUpload({
             style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
           >
             <Lock size={14} aria-hidden="true" />
-            Reviewed by Craves. Contact support to change it.
+            {text.locked}
           </span>
         ) : (
           <div className="cob-upload-actions">
@@ -413,22 +471,22 @@ export function ChefOnboardingUpload({
               type="button"
               className="cob-link"
               disabled={disabled || busy}
-              aria-label={`Replace ${label.toLowerCase()}`}
+              aria-label={format(text.replaceLabel, { label: named })}
               onClick={() => pick(picker.current)}
             >
               <RefreshCw size={16} aria-hidden="true" />
-              Replace
+              {text.replace}
             </button>
             {onRemove && !rejected ? (
               <button
                 type="button"
                 className="cob-link"
                 disabled={disabled || busy}
-                aria-label={`Remove ${label.toLowerCase()}`}
+                aria-label={format(text.removeLabel, { label: named })}
                 onClick={() => void removeSaved()}
               >
                 <Trash2 size={16} aria-hidden="true" />
-                Remove
+                {text.remove}
               </button>
             ) : null}
             {busy ? <Spinner red /> : null}
@@ -461,8 +519,8 @@ export function ChefOnboardingUpload({
           <span className="cob-dropzone-icon" aria-hidden="true">
             {busy ? <Spinner red /> : <Upload size={20} />}
           </span>
-          <strong>{emptyTitle ?? (photo ? "Add photo" : "Add file")}</strong>
-          <span>{photo ? "Take a photo or choose one" : "Take a photo or choose a file"}</span>
+          <strong>{emptyTitle ?? (photo ? text.addPhoto : text.addFile)}</strong>
+          <span>{photo ? text.photoHow : text.fileHow}</span>
         </button>
         {photo ? (
           <div className="cob-upload-actions cob-camera-only">
@@ -473,7 +531,7 @@ export function ChefOnboardingUpload({
               onClick={() => pick(camera.current)}
             >
               <Camera size={16} aria-hidden="true" />
-              Use camera
+              {text.camera}
             </button>
           </div>
         ) : null}

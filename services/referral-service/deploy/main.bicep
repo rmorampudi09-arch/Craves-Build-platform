@@ -111,7 +111,7 @@ var dormantEnvironment = [
   }
   {
     name: 'REFERRAL_DB_POOL_SIZE'
-    value: '8'
+    value: '4'
   }
   {
     name: 'CRAVES_JWT_ISSUER'

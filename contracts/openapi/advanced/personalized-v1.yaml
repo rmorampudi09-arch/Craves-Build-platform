@@ -1,0 +1,90 @@
+components:
+  schemas:
+    RankCandidate:
+      properties:
+        kitchenId:
+          format: uuid
+          type: string
+        menuItemId:
+          format: uuid
+          type: string
+      required:
+      - menuItemId
+      type: object
+    RankRequest:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/RankCandidate"
+          maxItems: 100
+          minItems: 1
+          type: array
+      required:
+      - items
+      type: object
+    RankResult:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/RankedDish"
+          type: array
+        personalized:
+          type: boolean
+      type: object
+    RankedDish:
+      properties:
+        kitchenId:
+          format: uuid
+          type: string
+        menuItemId:
+          format: uuid
+          type: string
+        reasons:
+          items:
+            enum:
+            - SAVED_DISH
+            - ORDERED_DISH
+            - SAVED_KITCHEN
+            - ORDERED_KITCHEN
+            type: string
+          type: array
+        score:
+          format: int32
+          type: integer
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_PERSONALIZED_ENABLED."
+  title: Craves personalized API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/personalized/rank:
+    post:
+      operationId: rankPersonalized
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RankRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RankResult"
+          description: OK
+      tags:
+      - personalized-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

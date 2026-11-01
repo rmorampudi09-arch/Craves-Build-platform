@@ -1,4 +1,5 @@
 import type { BankStatus } from "../../admin/finance/lib/bank-onboarding-contract.ts";
+import { messages, type Language } from "../../../shared/i18n/language.ts";
 import type { ChefApplication } from "./chef-application-contract.ts";
 import type { OnboardingDetails, OnboardingState } from "./chef-onboarding-v2-contract.ts";
 import { proofNeedsBack } from "./chef-onboarding-v2-contract.ts";
@@ -12,39 +13,120 @@ export const CHEF_SECTIONS: readonly ChefFormSection[] = [
   "documents",
   "bank",
 ];
-export const CHEF_SECTION_TITLES: Record<ChefFormScreen, string> = {
-  personal: "Basic details",
-  kitchen: "Your kitchen",
-  fssai: "FSSAI details",
-  documents: "Identity verification",
-  bank: "Bank details",
-  review: "Review your application",
-  resume: "Welcome back",
-  submitted: "Application submitted",
-  status: "Your application",
-};
-export const CHEF_SECTION_DESCRIPTIONS: Record<ChefFormScreen, string> = {
-  personal: "Tell us a little about yourself.",
-  kitchen: "Tell us where you prepare your food.",
-  fssai: "Add your FSSAI registration number or get help applying.",
-  documents: "Upload a valid identity document.",
-  bank: "Add the account where you will receive your earnings.",
-  review: "Please check your details before submitting.",
-  resume: "Continue setting up your kitchen.",
-  submitted:
-    "Thank you for joining Craves. Your application has been received, and our team will review your details.",
-  status: "Your application status and what happens next.",
-};
+const SECTION_TITLES = messages({
+  en: {
+    personal: "Basic details",
+    kitchen: "Your kitchen",
+    fssai: "FSSAI details",
+    documents: "Identity verification",
+    bank: "Bank details",
+    review: "Review your application",
+    resume: "Welcome back",
+    submitted: "Application submitted",
+    status: "Your application",
+  },
+  te: {
+    personal: "మీ వివరాలు",
+    kitchen: "మీ వంటగది",
+    fssai: "FSSAI వివరాలు",
+    documents: "గుర్తింపు నిర్ధారణ",
+    bank: "బ్యాంక్ వివరాలు",
+    review: "మీ దరఖాస్తు ఒకసారి చూడండి",
+    resume: "మళ్లీ స్వాగతం",
+    submitted: "దరఖాస్తు పంపారు",
+    status: "మీ దరఖాస్తు",
+  },
+  kn: {
+    personal: "ನಿಮ್ಮ ವಿವರಗಳು",
+    kitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ",
+    fssai: "FSSAI ವಿವರಗಳು",
+    documents: "ಗುರುತಿನ ಪರಿಶೀಲನೆ",
+    bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು",
+    review: "ನಿಮ್ಮ ಅರ್ಜಿಯನ್ನು ಒಮ್ಮೆ ನೋಡಿ",
+    resume: "ಮತ್ತೆ ಸ್ವಾಗತ",
+    submitted: "ಅರ್ಜಿ ಕಳುಹಿಸಲಾಗಿದೆ",
+    status: "ನಿಮ್ಮ ಅರ್ಜಿ",
+  },
+});
+const SECTION_DESCRIPTIONS = messages({
+  en: {
+    personal: "Tell us a little about yourself.",
+    kitchen: "Tell us where you prepare your food.",
+    fssai: "Add your FSSAI registration number or get help applying.",
+    documents: "Upload a valid identity document.",
+    bank: "Add the account where you will receive your earnings.",
+    review: "Please check your details before submitting.",
+    resume: "Continue setting up your kitchen.",
+    submitted:
+      "Thank you for joining Craves. Your application has been received, and our team will review your details.",
+    status: "Your application status and what happens next.",
+  },
+  te: {
+    personal: "మీ గురించి కొంచెం చెప్పండి.",
+    kitchen: "మీరు వంట ఎక్కడ చేస్తారో చెప్పండి.",
+    fssai: "మీ FSSAI నంబర్ ఇవ్వండి, లేదా దరఖాస్తు చేయడానికి సహాయం పొందండి.",
+    documents: "సరైన గుర్తింపు పత్రం అప్‌లోడ్ చేయండి.",
+    bank: "మీ సంపాదన వచ్చే బ్యాంక్ ఖాతాను జోడించండి.",
+    review: "పంపే ముందు మీ వివరాలు ఒకసారి చూడండి.",
+    resume: "మీ వంటగది సిద్ధం చేయడం కొనసాగించండి.",
+    submitted: "Craves లో చేరినందుకు ధన్యవాదాలు. మీ దరఖాస్తు మాకు అందింది. మా బృందం మీ వివరాలు చూస్తుంది.",
+    status: "మీ దరఖాస్తు స్థితి, తర్వాత ఏమి జరుగుతుంది.",
+  },
+  kn: {
+    personal: "ನಿಮ್ಮ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ತಿಳಿಸಿ.",
+    kitchen: "ನೀವು ಅಡುಗೆ ಎಲ್ಲಿ ಮಾಡುತ್ತೀರಿ ಎಂದು ತಿಳಿಸಿ.",
+    fssai: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಿ, ಅಥವಾ ಅರ್ಜಿ ಹಾಕಲು ಸಹಾಯ ಪಡೆಯಿರಿ.",
+    documents: "ಸರಿಯಾದ ಗುರುತಿನ ದಾಖಲೆ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ.",
+    bank: "ನಿಮ್ಮ ಗಳಿಕೆ ಬರುವ ಬ್ಯಾಂಕ್ ಖಾತೆಯನ್ನು ಸೇರಿಸಿ.",
+    review: "ಕಳುಹಿಸುವ ಮೊದಲು ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಒಮ್ಮೆ ನೋಡಿ.",
+    resume: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಸಿದ್ಧಪಡಿಸುವುದನ್ನು ಮುಂದುವರಿಸಿ.",
+    submitted: "Craves ಗೆ ಸೇರಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು. ನಿಮ್ಮ ಅರ್ಜಿ ನಮಗೆ ತಲುಪಿದೆ. ನಮ್ಮ ತಂಡ ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸುತ್ತದೆ.",
+    status: "ನಿಮ್ಮ ಅರ್ಜಿಯ ಸ್ಥಿತಿ ಮತ್ತು ಮುಂದೆ ಏನಾಗುತ್ತದೆ.",
+  },
+});
+const SECTION_LABELS = messages({
+  en: {
+    personal: "Basic details",
+    kitchen: "Kitchen details",
+    fssai: "FSSAI",
+    documents: "Identity proof",
+    bank: "Bank details",
+  },
+  te: {
+    personal: "మీ వివరాలు",
+    kitchen: "వంటగది వివరాలు",
+    fssai: "FSSAI",
+    documents: "గుర్తింపు పత్రం",
+    bank: "బ్యాంక్ వివరాలు",
+  },
+  kn: {
+    personal: "ನಿಮ್ಮ ವಿವರಗಳು",
+    kitchen: "ಅಡುಗೆಮನೆ ವಿವರಗಳು",
+    fssai: "FSSAI",
+    documents: "ಗುರುತಿನ ದಾಖಲೆ",
+    bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು",
+  },
+});
+/** Short section names in English, for the admin review. Chef screens use chefSectionLabel. */
+export const CHEF_SECTION_LABELS: Record<ChefFormSection, string> = SECTION_LABELS.en;
+export function chefSectionTitle(screen: ChefFormScreen, language: Language = "en"): string {
+  return SECTION_TITLES[language][screen];
+}
+export function chefSectionDescription(screen: ChefFormScreen, language: Language = "en"): string {
+  return SECTION_DESCRIPTIONS[language][screen];
+}
 /** Short section names used in the Welcome back list and on Review. */
-export const CHEF_SECTION_LABELS: Record<ChefFormSection, string> = {
-  personal: "Basic details",
-  kitchen: "Kitchen details",
-  fssai: "FSSAI",
-  documents: "Identity proof",
-  bank: "Bank details",
-};
-export const FSSAI_GUIDE_TITLE = "How to apply for FSSAI";
-export const FSSAI_GUIDE_DESCRIPTION = "Follow these simple steps to apply for your registration.";
+export function chefSectionLabel(section: ChefFormSection, language: Language = "en"): string {
+  return SECTION_LABELS[language][section];
+}
+const FSSAI_GUIDE = messages({
+  en: { title: "How to apply for FSSAI", description: "Follow these simple steps to apply for your registration." },
+  te: { title: "FSSAI కి ఎలా దరఖాస్తు చేయాలి", description: "మీ రిజిస్ట్రేషన్ కోసం ఈ సులభమైన దశలు పాటించండి." },
+  kn: { title: "FSSAI ಗೆ ಅರ್ಜಿ ಹಾಕುವುದು ಹೇಗೆ", description: "ನಿಮ್ಮ ನೋಂದಣಿಗಾಗಿ ಈ ಸುಲಭ ಹಂತಗಳನ್ನು ಅನುಸರಿಸಿ." },
+});
+export function fssaiGuideText(language: Language = "en"): { title: string; description: string } {
+  return FSSAI_GUIDE[language];
+}
 export function chefFullName(details: Pick<OnboardingDetails, "firstName" | "lastName">): string {
   return [details.firstName, details.lastName].filter(Boolean).join(" ");
 }
@@ -187,35 +269,64 @@ export function applicationPhase(input: {
   if (review === "UNDER_REVIEW") return "UNDER_REVIEW";
   return "SUBMITTED";
 }
-export const APPLICATION_PHASE_COPY: Record<
-  ChefApplicationPhase,
-  { label: string; message: string }
-> = {
-  DRAFT: {
-    label: "Draft",
-    message: "Your application is not complete.",
+const PHASE_LABELS = messages({
+  en: {
+    DRAFT: "Draft",
+    SUBMITTED: "Submitted",
+    UNDER_REVIEW: "Under review",
+    MORE_INFORMATION_REQUIRED: "More information required",
+    APPROVED: "Approved",
+    REJECTED: "Not approved",
   },
-  SUBMITTED: {
-    label: "Submitted",
-    message: "Your application has been submitted for review.",
+  te: {
+    DRAFT: "డ్రాఫ్ట్",
+    SUBMITTED: "పంపారు",
+    UNDER_REVIEW: "Craves చూస్తోంది",
+    MORE_INFORMATION_REQUIRED: "మరిన్ని వివరాలు కావాలి",
+    APPROVED: "ఆమోదించబడింది",
+    REJECTED: "ఆమోదించలేదు",
   },
-  UNDER_REVIEW: {
-    label: "Under review",
-    message: "Our team is reviewing your application.",
+  kn: {
+    DRAFT: "ಡ್ರಾಫ್ಟ್",
+    SUBMITTED: "ಕಳುಹಿಸಲಾಗಿದೆ",
+    UNDER_REVIEW: "Craves ಪರಿಶೀಲಿಸುತ್ತಿದೆ",
+    MORE_INFORMATION_REQUIRED: "ಇನ್ನಷ್ಟು ಮಾಹಿತಿ ಬೇಕು",
+    APPROVED: "ಅನುಮೋದಿಸಲಾಗಿದೆ",
+    REJECTED: "ಅನುಮೋದಿಸಲಾಗಿಲ್ಲ",
   },
-  MORE_INFORMATION_REQUIRED: {
-    label: "More information required",
-    message: "Some details need to be updated.",
+});
+const PHASE_MESSAGES = messages({
+  en: {
+    DRAFT: "Your application is not complete.",
+    SUBMITTED: "Your application has been submitted for review.",
+    UNDER_REVIEW: "Our team is reviewing your application.",
+    MORE_INFORMATION_REQUIRED: "Some details need to be updated.",
+    APPROVED: "Your application has been approved.",
+    REJECTED: "Your application was not approved.",
   },
-  APPROVED: {
-    label: "Approved",
-    message: "Your application has been approved.",
+  te: {
+    DRAFT: "మీ దరఖాస్తు ఇంకా పూర్తి కాలేదు.",
+    SUBMITTED: "మీ దరఖాస్తు పరిశీలనకు పంపారు.",
+    UNDER_REVIEW: "మా బృందం మీ దరఖాస్తు చూస్తోంది.",
+    MORE_INFORMATION_REQUIRED: "కొన్ని వివరాలు మార్చాలి.",
+    APPROVED: "మీ దరఖాస్తు ఆమోదించబడింది.",
+    REJECTED: "మీ దరఖాస్తు ఆమోదించబడలేదు.",
   },
-  REJECTED: {
-    label: "Not approved",
-    message: "Your application was not approved.",
+  kn: {
+    DRAFT: "ನಿಮ್ಮ ಅರ್ಜಿ ಇನ್ನೂ ಪೂರ್ಣಗೊಂಡಿಲ್ಲ.",
+    SUBMITTED: "ನಿಮ್ಮ ಅರ್ಜಿಯನ್ನು ಪರಿಶೀಲನೆಗೆ ಕಳುಹಿಸಲಾಗಿದೆ.",
+    UNDER_REVIEW: "ನಮ್ಮ ತಂಡ ನಿಮ್ಮ ಅರ್ಜಿಯನ್ನು ಪರಿಶೀಲಿಸುತ್ತಿದೆ.",
+    MORE_INFORMATION_REQUIRED: "ಕೆಲವು ವಿವರಗಳನ್ನು ಬದಲಾಯಿಸಬೇಕು.",
+    APPROVED: "ನಿಮ್ಮ ಅರ್ಜಿ ಅನುಮೋದನೆಯಾಗಿದೆ.",
+    REJECTED: "ನಿಮ್ಮ ಅರ್ಜಿ ಅನುಮೋದನೆಯಾಗಿಲ್ಲ.",
   },
-};
+});
+export function applicationPhaseCopy(
+  phase: ChefApplicationPhase,
+  language: Language = "en",
+): { label: string; message: string } {
+  return { label: PHASE_LABELS[language][phase], message: PHASE_MESSAGES[language][phase] };
+}
 
 export function firstIncompleteSection(
   state: OnboardingState,

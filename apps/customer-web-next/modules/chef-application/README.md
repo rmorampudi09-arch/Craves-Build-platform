@@ -36,4 +36,4 @@ azure-pipelines-chef-web-application-ci.yml
 azure-pipelines-chef-application-apim.yml
 ```
 
-The APIM pipeline requires `confirmConfigureChefApplication=true` and uses `Craves-Dev-Service-Connection` later through `AZURE_SERVICE_CONNECTION`.
+The APIM pipeline requires `confirmConfigureChefApplication=true` and uses `Craves-RMORAMPUDI09-Service-Connection` later through `AZURE_SERVICE_CONNECTION`.

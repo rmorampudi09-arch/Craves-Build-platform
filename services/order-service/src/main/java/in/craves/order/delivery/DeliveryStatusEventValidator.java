@@ -69,9 +69,17 @@ public class DeliveryStatusEventValidator {
         if (hasHandoffProvider) {
             requireText(data.handoffFromProviderId(), "handoffFromProviderId");
             requireText(data.handoffFromProviderDeliveryId(), "handoffFromProviderDeliveryId");
-            if (!"borzo".equalsIgnoreCase(data.handoffFromProviderId())
-                || !"pidge".equalsIgnoreCase(data.providerId())) {
-                throw new DeliveryStatusValidationException("Only a Borzo to Pidge handoff is supported");
+            boolean borzoToPidge = "borzo".equalsIgnoreCase(data.handoffFromProviderId())
+                && "pidge".equalsIgnoreCase(data.providerId());
+            // A Craves rider's order before pickup goes to Borzo or Pidge (the rider went silent), or to another Craves rider
+            // on a new trip when ops gives it to them; never as a continuation.
+            boolean riderToCourier = DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID.equalsIgnoreCase(data.handoffFromProviderId())
+                && ("borzo".equalsIgnoreCase(data.providerId()) || "pidge".equalsIgnoreCase(data.providerId())
+                    || DeliveryCodeService.CRAVES_FLEET_PROVIDER_ID.equalsIgnoreCase(data.providerId()))
+                && !Boolean.TRUE.equals(data.handoffContinuation());
+            if (!borzoToPidge && !riderToCourier) {
+                throw new DeliveryStatusValidationException(
+                    "Only a Borzo to Pidge or a Craves rider to Borzo, Pidge or another Craves rider handoff is supported");
             }
             if (data.handoffFromProviderDeliveryId().equals(data.providerDeliveryId())) {
                 throw new DeliveryStatusValidationException("Delivery handoff requires a new provider delivery identifier");

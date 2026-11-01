@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Craves backend launch-critical completion handover
 
 **Document date:** 31 July 2026  

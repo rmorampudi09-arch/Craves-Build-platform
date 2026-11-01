@@ -1,0 +1,522 @@
+components:
+  schemas:
+    AdminPromotion:
+      properties:
+        activatedAt:
+          format: date-time
+          type: string
+        committedPaise:
+          format: int64
+          type: integer
+        confirmed:
+          format: int32
+          type: integer
+        id:
+          format: uuid
+          type: string
+        promotion:
+          $ref: "#/components/schemas/NewPromotion"
+        reserved:
+          format: int32
+          type: integer
+        status:
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    NewPromotion:
+      properties:
+        code:
+          pattern: "[A-Za-z0-9]{4,20}"
+          type: string
+        description:
+          maxLength: 300
+          minLength: 0
+          type: string
+        discountKind:
+          enum:
+          - PERCENT
+          - FLAT
+          type: string
+        endsAt:
+          format: date-time
+          type: string
+        flatPaise:
+          format: int64
+          minimum: 1
+          type: integer
+        fundedBy:
+          enum:
+          - CRAVES
+          - KITCHEN
+          type: string
+        kitchenIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 50
+          minItems: 0
+          type: array
+        listed:
+          type: boolean
+        maxDiscountPaise:
+          format: int64
+          minimum: 1
+          type: integer
+        maxRedemptions:
+          format: int32
+          minimum: 1
+          type: integer
+        minOrderPaise:
+          format: int64
+          minimum: 0
+          type: integer
+        name:
+          maxLength: 80
+          minLength: 0
+          type: string
+        perPersonLimit:
+          format: int32
+          maximum: 100
+          minimum: 1
+          type: integer
+        percentOff:
+          format: int32
+          maximum: 100
+          minimum: 1
+          type: integer
+        startsAt:
+          format: date-time
+          type: string
+        title:
+          maxLength: 80
+          minLength: 0
+          type: string
+        totalBudgetPaise:
+          format: int64
+          minimum: 1
+          type: integer
+      required:
+      - discountKind
+      - endsAt
+      - fundedBy
+      - listed
+      - minOrderPaise
+      - name
+      - perPersonLimit
+      - startsAt
+      - title
+      - totalBudgetPaise
+      type: object
+    PromotionCartItem:
+      properties:
+        menuItemId:
+          format: uuid
+          type: string
+        quantity:
+          format: int32
+          maximum: 100
+          minimum: 1
+          type: integer
+      required:
+      - menuItemId
+      - quantity
+      type: object
+    PromotionCartRequest:
+      properties:
+        code:
+          pattern: "[A-Za-z0-9]{4,20}"
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/PromotionCartItem"
+          maxItems: 50
+          minItems: 0
+          type: array
+      required:
+      - items
+      type: object
+    PromotionChange:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+        promotion:
+          $ref: "#/components/schemas/NewPromotion"
+        status:
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          type: string
+      required:
+      - expectedVersion
+      - promotion
+      - status
+      type: object
+    PromotionOffer:
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+        discountKind:
+          enum:
+          - PERCENT
+          - FLAT
+          type: string
+        endsAt:
+          format: date-time
+          type: string
+        flatPaise:
+          format: int64
+          type: integer
+        id:
+          format: uuid
+          type: string
+        kitchenIds:
+          items:
+            format: uuid
+            type: string
+          type: array
+        maxDiscountPaise:
+          format: int64
+          type: integer
+        minOrderPaise:
+          format: int64
+          type: integer
+        percentOff:
+          format: int32
+          type: integer
+        title:
+          type: string
+      type: object
+    PromotionQuote:
+      properties:
+        discountPaise:
+          format: int64
+          type: integer
+        eligibleSubtotalPaise:
+          format: int64
+          type: integer
+        promotion:
+          $ref: "#/components/schemas/PromotionOffer"
+        subtotalPaise:
+          format: int64
+          type: integer
+      type: object
+    PromotionRedemption:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        discountPaise:
+          format: int64
+          type: integer
+        eligibleSubtotalPaise:
+          format: int64
+          type: integer
+        expiresAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        orderId:
+          format: uuid
+          type: string
+        personId:
+          format: uuid
+          type: string
+        promotionId:
+          format: uuid
+          type: string
+        status:
+          enum:
+          - RESERVED
+          - CONFIRMED
+          - RELEASED
+          - VOIDED
+          type: string
+        subtotalPaise:
+          format: int64
+          type: integer
+      type: object
+    PromotionRedemptionConfirm:
+      properties:
+        orderId:
+          format: uuid
+          type: string
+      required:
+      - orderId
+      type: object
+    PromotionRedemptionPage:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/PromotionRedemption"
+          type: array
+        nextCursor:
+          type: string
+      type: object
+    PromotionRedemptionVoid:
+      properties:
+        reason:
+          maxLength: 300
+          minLength: 0
+          type: string
+      required:
+      - reason
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_PROMOTIONS_ENABLED."
+  title: Craves promotions API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/promotions/admin/promotions:
+    get:
+      operationId: listPromotions
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/AdminPromotion"
+                type: array
+          description: OK
+      tags:
+      - promotions-admin-controller
+      x-craves-auth: staff
+    post:
+      operationId: createPromotion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPromotion"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminPromotion"
+          description: OK
+      tags:
+      - promotions-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/promotions/admin/promotions/{promotionId}:
+    put:
+      operationId: updatePromotion
+      parameters:
+      - in: path
+        name: promotionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionChange"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminPromotion"
+          description: OK
+      tags:
+      - promotions-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/promotions/admin/promotions/{promotionId}/redemptions:
+    get:
+      operationId: promotionRedemptions
+      parameters:
+      - in: path
+        name: promotionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionRedemptionPage"
+          description: OK
+      tags:
+      - promotions-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/promotions/admin/redemptions/{redemptionId}/void:
+    post:
+      operationId: voidPromotionRedemption
+      parameters:
+      - in: path
+        name: redemptionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionRedemptionVoid"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionRedemption"
+          description: OK
+      tags:
+      - promotions-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/promotions/offers:
+    get:
+      operationId: promotionOffers
+      parameters:
+      - in: query
+        name: kitchenId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/PromotionOffer"
+                type: array
+          description: OK
+      security: []
+      tags:
+      - promotions-controller
+      x-craves-auth: public
+  /api/v1/advanced/promotions/quote:
+    post:
+      operationId: quotePromotion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionCartRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionQuote"
+          description: OK
+      tags:
+      - promotions-controller
+      x-craves-auth: user
+  /api/v1/advanced/promotions/redemptions:
+    post:
+      operationId: reservePromotion
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionCartRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionRedemption"
+          description: OK
+      tags:
+      - promotions-controller
+      x-craves-auth: user
+  /api/v1/advanced/promotions/redemptions/{redemptionId}:
+    delete:
+      operationId: releasePromotionRedemption
+      parameters:
+      - in: path
+        name: redemptionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - promotions-controller
+      x-craves-auth: user
+  /api/v1/advanced/promotions/redemptions/{redemptionId}/confirm:
+    post:
+      operationId: confirmPromotionRedemption
+      parameters:
+      - in: path
+        name: redemptionId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionRedemptionConfirm"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PromotionRedemption"
+          description: OK
+      tags:
+      - promotions-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

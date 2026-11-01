@@ -20,7 +20,7 @@
 # Backend JWT/role checks stay authoritative.
 #
 # Not published here (older scripts own them; chef-menu, chef-kitchen-profile, chef-order-read and chef-order-actions
-# default to the deleted apim-craves-prodlow-l3ing6, so run them with APIM=apim-craves-prodlow-kmqgfy; chef-menu-media
+# default to the deleted apim-craves-prodlow-kmqgfy, so run them with APIM=apim-craves-prodlow-kmqgfy; chef-menu-media
 # and chef-onboarding-v2 already default to kmqgfy):
 #   kitchens/me GET|PUT, menu items, per-dish availability and image upload (configure-chef-kitchen-profile / chef-menu /
 #   chef-menu-media), chef orders list/get/accept/reject/ready (chef-order-read / chef-order-actions), chef subscription plans
@@ -71,6 +71,7 @@ ROUTES=(
   'kitchen|chef-app-delete-menu-item|DELETE|/menu-items/{menuItemId}|json'
   'kitchen|chef-app-upload-kitchen-photo|POST|/photos|upload'
   'kitchen|chef-app-delete-kitchen-photo|DELETE|/photos/{kind}|json'
+  'kitchen|chef-app-put-chef-avatar|PUT|/chef-avatar|json'
   'kitchen|chef-app-get-kitchen-settings|GET|/settings|json'
   'kitchen|chef-app-put-kitchen-settings|PUT|/settings|json'
   'orders|chef-app-order-history-page|GET|/page|json'

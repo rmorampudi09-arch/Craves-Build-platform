@@ -1,5 +1,7 @@
+import { safeChefPhotoUrl } from "../../../shared/lib/chef-photo.ts";
+
 export type PageMetadata = { page: number; size: number; totalElements: number; totalPages: number; hasNext: boolean };
-export type NearbyKitchen = { id: string; kitchenName: string; displayName: string | null; description: string | null; areaName: string | null; city: string; state: string; distanceMeters: number; activeMenuItemCount: number };
+export type NearbyKitchen = { id: string; kitchenName: string; displayName: string | null; description: string | null; areaName: string | null; city: string; state: string; distanceMeters: number; activeMenuItemCount: number; chefPhotoUrl: string | null; kitchenPhotoUrls: string[] };
 export type NearbyMenuItem = { id: string; kitchenId: string; kitchenName: string; kitchenDisplayName: string | null; areaName: string | null; city: string; state: string; distanceMeters: number; itemName: string; description: string | null; category: string; foodType: "VEG" | "NON_VEG" | "EGG"; price: number; currency: string; servesCount: number | null; preparationTimeMinutes: number | null; spiceLevel: "MILD" | "MEDIUM" | "SPICY" | null; primaryImageUrl: string | null };
 export type NearbyKitchenDiscovery = { latitude: number; longitude: number; radiusMeters: number; page: PageMetadata; kitchens: NearbyKitchen[] };
 export type NearbyMenuDiscovery = { latitude: number; longitude: number; radiusMeters: number; page: PageMetadata; menuItems: NearbyMenuItem[] };
@@ -23,8 +25,10 @@ function parsePage(value: unknown): PageMetadata | null {
 function parseKitchen(value: unknown): NearbyKitchen | null {
   const raw = object(value); if (!raw) return null;
   const id = text(raw.id, 64); const kitchenName = text(raw.kitchenName, 180); const city = text(raw.city, 120); const state = text(raw.state, 120); const distanceMeters = integer(raw.distanceMeters, 0, 10_000_000); const activeMenuItemCount = integer(raw.activeMenuItemCount, 0, 100_000);
-  if (!id || !UUID.test(id) || !kitchenName || !city || !state || distanceMeters === null || activeMenuItemCount === null) return null;
-  return { id, kitchenName, displayName: text(raw.displayName, 180), description: text(raw.description, 1_000), areaName: text(raw.areaName, 120), city, state, distanceMeters, activeMenuItemCount };
+  if (!id || !UUID.test(id) || !kitchenName || !city || !state || distanceMeters === null || activeMenuItemCount === null || (raw.kitchenPhotoUrls != null && !Array.isArray(raw.kitchenPhotoUrls))) return null;
+  // Same rules as the public kitchen profile: https only, each once, at most 12.
+  const photos = ((raw.kitchenPhotoUrls ?? []) as unknown[]).map(safeChefPhotoUrl).filter((url): url is string => url !== null);
+  return { id, kitchenName, displayName: text(raw.displayName, 180), description: text(raw.description, 1_000), areaName: text(raw.areaName, 120), city, state, distanceMeters, activeMenuItemCount, chefPhotoUrl: safeChefPhotoUrl(raw.chefPhotoUrl), kitchenPhotoUrls: [...new Set(photos)].slice(0, 12) };
 }
 
 function parseMenuItem(value: unknown): NearbyMenuItem | null {
@@ -46,5 +50,8 @@ export function parseMenuDiscovery(value: unknown): NearbyMenuDiscovery | null {
   const latitude = number(raw.latitude, -90, 90); const longitude = number(raw.longitude, -180, 180); const radiusMeters = integer(raw.radiusMeters, 1, 100_000); const page = parsePage(raw.page); const menuItems = raw.menuItems.map(parseMenuItem);
   return latitude !== null && longitude !== null && radiusMeters !== null && page && !menuItems.some((item) => item === null) ? { latitude, longitude, radiusMeters, page, menuItems: menuItems as NearbyMenuItem[] } : null;
 }
+
+/** Search words for the catalog (the app's rule): trimmed, at most 120 characters, no control characters. "" when none; null when not allowed. */
+export function parseSearchQuery(value: string | null): string | null { const query = value?.trim() ?? ""; return Array.from(query).length <= 120 && !/\p{Cc}/u.test(query) ? query : null; }
 
 export function formatDistance(distanceMeters: number): string { return distanceMeters < 1_000 ? `${distanceMeters} m` : `${(distanceMeters / 1_000).toFixed(1)} km`; }

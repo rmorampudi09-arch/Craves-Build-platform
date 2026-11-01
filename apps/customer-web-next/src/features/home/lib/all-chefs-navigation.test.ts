@@ -30,8 +30,9 @@ test("delivery location control uses the compact Swiggy-Zomato style address but
   const header = source("../components/BrowseHeader.tsx");
 
   assert.match(header, /data-craves-location-button="mobile"/);
-  assert.match(header, /rounded-\[1\.1rem\] border border-\[#E5E7EB\] !bg-white/);
-  assert.match(header, /shadow-\[0_4px_16px_rgba\(26,26,26,0\.07\)\]/);
+  // A bordered white card on the white header.
+  assert.match(header, /rounded-\[1\.1rem\] border border-\[#E5E7EB\] !bg-white px-2\.5 py-2 text-left !text-\[#1A1A1A\] shadow-\[0_4px_16px_rgba\(26,26,26,0\.07\)\]/);
+  assert.doesNotMatch(header, /!text-white/);
   assert.match(header, /<FaMapMarkerAlt/);
   assert.match(header, /<ChevronDown/);
   assert.match(header, /\{locationTypeLabel\}/);

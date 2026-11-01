@@ -116,6 +116,7 @@ public class PublicCatalogController {
             null,
             kitchen.chefPhotoUrl(),
             kitchen.kitchenPhotoUrl(),
+            kitchen.kitchenPhotoUrls(),
             kitchen.cuisines(),
             kitchen.serviceAreas(),
             kitchen.socialLinks(),
@@ -135,7 +136,9 @@ public class PublicCatalogController {
             null,
             null,
             kitchen.distanceKm(),
-            kitchen.activeMenuItemCount()
+            kitchen.activeMenuItemCount(),
+            kitchen.chefPhotoUrl(),
+            kitchen.kitchenPhotoUrls()
         );
     }
 

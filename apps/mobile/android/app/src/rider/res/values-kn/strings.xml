@@ -1,0 +1,27 @@
+<resources>
+    <!-- Kannada (WORKPLAN P2-08): shown only once JS passes "kn", which it does after a native speaker signs it off. -->
+    <string name="rider_channel_offers">ಆರ್ಡರ್ ಆಫರ್‌ಗಳು</string>
+    <string name="rider_channel_online">ಆನ್‌ಲೈನ್ ಸ್ಟೇಟಸ್</string>
+    <string name="rider_channel_trip">ಟ್ರಿಪ್ ಅಪ್‌ಡೇಟ್‌ಗಳು</string>
+    <string name="rider_offer_title">ಹೊಸ ಆರ್ಡರ್</string>
+    <string name="rider_offer_title_pay">ಹೊಸ ಆರ್ಡರ್: %1$s</string>
+    <string name="rider_offer_route">%1$s ಇಂದ %2$s</string>
+    <string name="rider_offer_body">ಆಫರ್ ನೋಡಲು ಒತ್ತಿ.</string>
+    <string name="rider_test_ring_title">ಟೆಸ್ಟ್ ರಿಂಗ್</string>
+    <string name="rider_test_ring_body">ಆರ್ಡರ್ ಆಫರ್ ಬಂದಾಗ ಫೋನ್ ಹೀಗೆ ರಿಂಗ್ ಆಗುತ್ತದೆ.</string>
+    <string name="rider_online_title">ನೀವು ಆನ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ</string>
+    <string name="rider_online_body">ನೀವು ಆನ್‌ಲೈನ್ ಇರುವಾಗ Craves Rider ನಿಮ್ಮ ಲೊಕೇಶನ್ ಕಳುಹಿಸುತ್ತದೆ.</string>
+    <string name="rider_shift_ended">ನಿಮ್ಮ ಶಿಫ್ಟ್ ಮುಗಿದಿದೆ. ಆರ್ಡರ್ ಬರಲು ಮತ್ತೆ ಆನ್‌ಲೈನ್ ಆಗಿ.</string>
+    <string name="rider_closed_by_phone">ಫೋನ್ Craves Rider ಆ್ಯಪ್ ಮುಚ್ಚಿದೆ. ಮತ್ತೆ ಆರ್ಡರ್ ಬರಲು ಆ್ಯಪ್ ತೆರೆಯಿರಿ.</string>
+    <string name="rider_allow_location">ಆನ್‌ಲೈನ್ ಆಗಲು ಲೊಕೇಶನ್‌ಗೆ ಅನುಮತಿ ಕೊಡಿ.</string>
+    <string name="rider_no_internet">ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸುತ್ತಿದ್ದೇವೆ.</string>
+    <string name="rider_notifications_off">ಆರ್ಡರ್ ಬರಲು ನೋಟಿಫಿಕೇಶನ್‌ಗಳನ್ನು ಆನ್ ಮಾಡಿ.</string>
+    <string name="rider_trip_cancelled_title">ಟ್ರಿಪ್ ರದ್ದಾಗಿದೆ</string>
+    <string name="rider_trip_cancelled_body">ಮುಂದೆ ಏನು ಮಾಡಬೇಕು ಎಂದು ನೋಡಲು Craves Rider ತೆರೆಯಿರಿ.</string>
+    <string name="rider_go_online_title">ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ</string>
+    <string name="rider_go_online_body">ಮತ್ತೆ ಆನ್‌ಲೈನ್ ಆಗಿ ಆರ್ಡರ್ ಪಡೆಯಲು ಒತ್ತಿ.</string>
+    <string name="rider_account_approved_title">ನಿಮಗೆ ಅನುಮೋದನೆ ಸಿಕ್ಕಿದೆ</string>
+    <string name="rider_account_approved_body">ನಿಮ್ಮ ಮುಂದಿನ ಹಂತಕ್ಕಾಗಿ Craves Rider ತೆರೆಯಿರಿ.</string>
+    <string name="rider_account_fixes_title">ನಿಮ್ಮ ಅರ್ಜಿಯಲ್ಲಿ ಒಂದು ತಿದ್ದುಪಡಿ ಬೇಕು</string>
+    <string name="rider_account_fixes_body">ಆಪ್ಸ್ ಟೀಮ್ ಏನು ಕೇಳಿದೆ ಎಂದು ನೋಡಲು Craves Rider ತೆರೆಯಿರಿ.</string>
+</resources>

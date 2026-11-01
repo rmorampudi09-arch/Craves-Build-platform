@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 API_PATH="${API_PATH:-api/v1/chef/earnings}"
 API_VERSION="${API_VERSION:-2022-08-01}"
 OPERATION_ID="list-chef-earnings-v1"

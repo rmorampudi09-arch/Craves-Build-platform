@@ -1,0 +1,560 @@
+components:
+  schemas:
+    AdminTerm:
+      properties:
+        aliases:
+          items:
+            type: string
+          type: array
+        code:
+          type: string
+        description:
+          type: string
+        kind:
+          enum:
+          - CUISINE
+          - DIET
+          type: string
+        name:
+          type: string
+        parentCode:
+          type: string
+        sortOrder:
+          format: int32
+          type: integer
+        status:
+          enum:
+          - ACTIVE
+          - RETIRED
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    ChefTagsView:
+      properties:
+        cuisines:
+          items:
+            type: string
+          type: array
+        declaredBy:
+          type: string
+        diets:
+          items:
+            type: string
+          type: array
+        menuItemId:
+          format: uuid
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    DishBrowsePage:
+      properties:
+        menuItemIds:
+          items:
+            format: uuid
+            type: string
+          type: array
+        nextCursor:
+          type: string
+      type: object
+    DishTags:
+      properties:
+        cuisines:
+          items:
+            $ref: "#/components/schemas/TermRef"
+          type: array
+        declaredBy:
+          type: string
+        diets:
+          items:
+            $ref: "#/components/schemas/TermRef"
+          type: array
+        menuItemId:
+          format: uuid
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    DishTagsLookup:
+      properties:
+        menuItemIds:
+          items:
+            format: uuid
+            type: string
+          maxItems: 100
+          minItems: 0
+          type: array
+      required:
+      - menuItemIds
+      type: object
+    LabelResolution:
+      properties:
+        code:
+          type: string
+        kind:
+          enum:
+          - CUISINE
+          - DIET
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+      type: object
+    NewTerm:
+      properties:
+        aliases:
+          items:
+            maxLength: 40
+            minLength: 0
+            type: string
+          maxItems: 10
+          minItems: 0
+          type: array
+        code:
+          pattern: "[a-z][a-z0-9-]{1,39}"
+          type: string
+        description:
+          maxLength: 300
+          minLength: 0
+          type: string
+        kind:
+          enum:
+          - CUISINE
+          - DIET
+          type: string
+        name:
+          maxLength: 60
+          minLength: 0
+          type: string
+        parentCode:
+          pattern: "[a-z][a-z0-9-]{1,39}"
+          type: string
+        sortOrder:
+          format: int32
+          maximum: 10000
+          minimum: 0
+          type: integer
+      required:
+      - code
+      - kind
+      - name
+      type: object
+    StaffTagRequest:
+      properties:
+        cuisines:
+          items:
+            pattern: "[a-z][a-z0-9-]{1,39}"
+            type: string
+          maxItems: 3
+          minItems: 0
+          type: array
+        diets:
+          items:
+            pattern: "[a-z][a-z0-9-]{1,39}"
+            type: string
+          maxItems: 6
+          minItems: 0
+          type: array
+        expectedVersion:
+          format: int64
+          type: integer
+        note:
+          maxLength: 300
+          minLength: 0
+          type: string
+      required:
+      - cuisines
+      - expectedVersion
+      - note
+      type: object
+    TagRequest:
+      properties:
+        cuisines:
+          items:
+            pattern: "[a-z][a-z0-9-]{1,39}"
+            type: string
+          maxItems: 3
+          minItems: 0
+          type: array
+        diets:
+          items:
+            pattern: "[a-z][a-z0-9-]{1,39}"
+            type: string
+          maxItems: 6
+          minItems: 0
+          type: array
+      required:
+      - cuisines
+      type: object
+    TaxonomyTerm:
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+        kind:
+          enum:
+          - CUISINE
+          - DIET
+          type: string
+        name:
+          type: string
+        parentCode:
+          type: string
+      type: object
+    TaxonomyVocabulary:
+      properties:
+        cuisines:
+          items:
+            $ref: "#/components/schemas/TaxonomyTerm"
+          type: array
+        diets:
+          items:
+            $ref: "#/components/schemas/TaxonomyTerm"
+          type: array
+        disclaimer:
+          type: string
+      type: object
+    TermChange:
+      properties:
+        aliases:
+          items:
+            maxLength: 40
+            minLength: 0
+            type: string
+          maxItems: 10
+          minItems: 0
+          type: array
+        description:
+          maxLength: 300
+          minLength: 0
+          type: string
+        expectedVersion:
+          format: int64
+          type: integer
+        name:
+          maxLength: 60
+          minLength: 0
+          type: string
+        parentCode:
+          pattern: "[a-z][a-z0-9-]{1,39}"
+          type: string
+        sortOrder:
+          format: int32
+          maximum: 10000
+          minimum: 0
+          type: integer
+        status:
+          enum:
+          - ACTIVE
+          - RETIRED
+          type: string
+      required:
+      - expectedVersion
+      - name
+      - sortOrder
+      - status
+      type: object
+    TermRef:
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_TAXONOMY_ENABLED."
+  title: Craves taxonomy API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/taxonomy/admin/menu-items/{menuItemId}:
+    put:
+      operationId: correctDishTags
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffTagRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChefTagsView"
+          description: OK
+      tags:
+      - taxonomy-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/taxonomy/admin/terms:
+    get:
+      operationId: listTerms
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/AdminTerm"
+                type: array
+          description: OK
+      tags:
+      - taxonomy-admin-controller
+      x-craves-auth: staff
+    post:
+      operationId: createTerm
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTerm"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminTerm"
+          description: OK
+      tags:
+      - taxonomy-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/taxonomy/admin/terms/{code}:
+    put:
+      operationId: updateTerm
+      parameters:
+      - in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TermChange"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminTerm"
+          description: OK
+      tags:
+      - taxonomy-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/taxonomy/chef/menu-items/{menuItemId}:
+    delete:
+      operationId: clearDishTags
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          description: OK
+      tags:
+      - taxonomy-controller
+      x-craves-auth: user
+    get:
+      operationId: chefDishTags
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChefTagsView"
+          description: OK
+      tags:
+      - taxonomy-controller
+      x-craves-auth: user
+    put:
+      operationId: setDishTags
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ChefTagsView"
+          description: OK
+      tags:
+      - taxonomy-controller
+      x-craves-auth: user
+  /api/v1/advanced/taxonomy/menu-items:
+    get:
+      operationId: browseDishTags
+      parameters:
+      - in: query
+        name: cuisine
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: diets
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DishBrowsePage"
+          description: OK
+      security: []
+      tags:
+      - taxonomy-controller
+      x-craves-auth: public
+  /api/v1/advanced/taxonomy/menu-items/lookup:
+    post:
+      operationId: lookupDishTags
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DishTagsLookup"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/DishTags"
+                type: array
+          description: OK
+      security: []
+      tags:
+      - taxonomy-controller
+      x-craves-auth: public
+  /api/v1/advanced/taxonomy/menu-items/{menuItemId}:
+    get:
+      operationId: dishTags
+      parameters:
+      - in: path
+        name: menuItemId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DishTags"
+          description: OK
+      security: []
+      tags:
+      - taxonomy-controller
+      x-craves-auth: public
+  /api/v1/advanced/taxonomy/resolve:
+    get:
+      operationId: resolveLabels
+      parameters:
+      - in: query
+        name: labels
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/LabelResolution"
+                type: array
+          description: OK
+      security: []
+      tags:
+      - taxonomy-controller
+      x-craves-auth: public
+  /api/v1/advanced/taxonomy/vocabulary:
+    get:
+      operationId: taxonomyVocabulary
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaxonomyVocabulary"
+          description: OK
+      security: []
+      tags:
+      - taxonomy-controller
+      x-craves-auth: public
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

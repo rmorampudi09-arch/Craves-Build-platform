@@ -50,6 +50,10 @@ public class ChefNoticeDispatcher {
         }
         int batchSize = Math.max(1, dispatcherProperties.getBatchSize());
         int maxAttempts = Math.max(1, dispatcherProperties.getMaxAttempts());
+        int deadLettered = repository.deadLetterExhausted(maxAttempts);
+        if (deadLettered > 0) {
+            log.error("CRAVES_ALERT alert=OUTBOX_DEAD_LETTERED outbox=chef_notice reason=attempts_exhausted count={}", deadLettered);
+        }
         for (PendingChefNoticeOutboxEvent event : repository.findDue(batchSize, maxAttempts)) {
             if (repository.markProcessing(event.id())) {
                 dispatchOne(event, key, maxAttempts);

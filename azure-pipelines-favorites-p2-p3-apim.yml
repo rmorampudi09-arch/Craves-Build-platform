@@ -50,7 +50,7 @@ steps:
     displayName: 'Publish Favorites P2/P3 private APIM operations'
     condition: and(succeeded(), eq('${{ parameters.confirmConfigureFavoritesP2P3 }}', 'true'), ne('${{ parameters.confirmRollbackFavoritesP2P3 }}', 'true'))
     inputs:
-      azureSubscription: 'Craves-Dev-Service-Connection'
+      azureSubscription: 'Craves-RMORAMPUDI09-Service-Connection'
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -58,7 +58,7 @@ steps:
         chmod +x scripts/apim/configure-favorites-p2-p3-apim.sh
         scripts/apim/configure-favorites-p2-p3-apim.sh
 
-        gateway="$(az apim show -g rg-craves-prodlow-centralindia -n apim-craves-prodlow-l3ing6 --query gatewayUrl -o tsv)"
+        gateway="$(az apim show -g rg-craves-prodlow-centralindia -n apim-craves-prodlow-kmqgfy --query gatewayUrl -o tsv)"
         test -n "$gateway"
         correlation="favorites-p2-p3-$(Build.BuildId)"
         probe_401() {
@@ -83,7 +83,7 @@ steps:
     displayName: 'Rollback Favorites P2/P3 APIM operations'
     condition: and(succeeded(), eq('${{ parameters.confirmRollbackFavoritesP2P3 }}', 'true'), ne('${{ parameters.confirmConfigureFavoritesP2P3 }}', 'true'))
     inputs:
-      azureSubscription: 'Craves-Dev-Service-Connection'
+      azureSubscription: 'Craves-RMORAMPUDI09-Service-Connection'
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |

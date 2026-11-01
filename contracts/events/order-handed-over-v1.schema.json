@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://craves.in/contracts/events/order-handed-over-v1.schema.json",
+  "title": "ORDER_HANDED_OVER v1.0",
+  "description": "The chef handed the food to the courier (order-service markHandedOver). Written only while ORDER_HANDED_OVER is in CRAVES_DOMAIN_EVENT_ENABLED_TYPES; integration-service keeps a Craves rider's trip with its rider after it (WORKPLAN P2-05). One per chef order.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "occurredAt",
+    "correlationId",
+    "source",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "ORDER_HANDED_OVER" },
+    "eventVersion": { "const": "1.0" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "causationId": { "type": ["string", "null"], "format": "uuid" },
+    "source": { "const": "order-service" },
+    "subject": { "type": "string", "minLength": 1 },
+    "data": {
+      "type": "object",
+      "required": ["orderId", "chefSubOrderId", "handedOverAt"],
+      "properties": {
+        "orderId": { "type": "string", "format": "uuid" },
+        "chefSubOrderId": { "type": "string", "format": "uuid" },
+        "handedOverAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

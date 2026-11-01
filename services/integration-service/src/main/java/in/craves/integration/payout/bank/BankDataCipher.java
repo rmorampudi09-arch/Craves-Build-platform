@@ -68,6 +68,15 @@ public class BankDataCipher {
             return activeId + "." + HexFormat.of().formatHex(mac.doFinal(json.writeValueAsBytes(details)));
         } catch (Exception e) { throw new IllegalStateException("BANK_ENCRYPTION_UNAVAILABLE"); }
     }
+    /** Keyed hash of one payout account alone (not its owner), so the same account is found across payees. */
+    public String accountFingerprint(String account) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key(activeId), "HmacSHA256"));
+            mac.update("craves-payout-account-fingerprint-v1:".getBytes(StandardCharsets.UTF_8));
+            return activeId + "." + HexFormat.of().formatHex(mac.doFinal(account.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) { throw new IllegalStateException("BANK_ENCRYPTION_UNAVAILABLE"); }
+    }
     public boolean same(BankOnboardingModels.Details a, BankOnboardingModels.Details b) {
         try { return MessageDigest.isEqual(json.writeValueAsBytes(a), json.writeValueAsBytes(b)); }
         catch (Exception e) { return false; }

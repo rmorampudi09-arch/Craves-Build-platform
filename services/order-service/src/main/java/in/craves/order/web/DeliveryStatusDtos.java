@@ -15,7 +15,9 @@ public final class DeliveryStatusDtos {
         String status,
         String trackingUrl,
         Instant observedAt,
-        List<DeliveryStatusHistoryResponse> history
+        List<DeliveryStatusHistoryResponse> history,
+        // Only while a Craves rider carries the order; customer endpoint only.
+        String deliveryCode
     ) {
     }
 

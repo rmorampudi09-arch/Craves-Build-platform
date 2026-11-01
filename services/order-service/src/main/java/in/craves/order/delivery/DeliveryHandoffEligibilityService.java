@@ -37,6 +37,8 @@ public class DeliveryHandoffEligibilityService {
                            SELECT 1
                            FROM order_schema.order_delivery_status_history h
                            WHERE h.order_id = o.id AND h.delivery_job_id = ?
+                             -- this Borzo delivery only: a Craves rider who handed the job to Borzo does not count
+                             AND h.provider_delivery_id = ?
                              AND h.new_status IN (
                                  'COURIER_ASSIGNED', 'COURIER_TO_PICKUP', 'AT_PICKUP',
                                  'PICKED_UP', 'IN_TRANSIT', 'AT_DROPOFF', 'DELIVERED',
@@ -67,6 +69,7 @@ public class DeliveryHandoffEligibilityService {
                 );
             },
             deliveryJobId,
+            borzoProviderDeliveryId,
             chefSubOrderId,
             checkoutId
         ).stream().findFirst().orElse(new Eligibility(false));

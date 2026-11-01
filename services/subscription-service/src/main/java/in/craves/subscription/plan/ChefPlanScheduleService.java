@@ -25,8 +25,6 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ChefPlanScheduleService {
-    private static final Set<String> RECURRENCES = Set.of("WEEKLY", "MONTHLY");
-
     private final PlanScheduleRepository repository;
     private final PlanCatalogClient catalogClient;
 
@@ -47,11 +45,11 @@ public class ChefPlanScheduleService {
             throw ApiException.conflict("PLAN_NOT_EDITABLE", "Meal schedule can only be changed while the plan is draft or rejected");
         }
         String recurrence = request.recurrenceType().trim().toUpperCase(Locale.ROOT);
-        if (!RECURRENCES.contains(recurrence)) {
-            throw ApiException.badRequest("INVALID_RECURRENCE", "recurrenceType must be WEEKLY or MONTHLY");
+        if ("MONTHLY".equals(recurrence)) {
+            throw ApiException.badRequest("DATE_SCHEDULES_RETIRED", "Set up one week; it repeats every week.");
         }
-        if (!recurrence.equals(plan.billingPeriod())) {
-            throw ApiException.conflict("RECURRENCE_BILLING_PERIOD_MISMATCH", "Meal schedule frequency must match the plan billing period");
+        if (!"WEEKLY".equals(recurrence)) {
+            throw ApiException.badRequest("INVALID_RECURRENCE", "recurrenceType must be WEEKLY");
         }
         requireTimezone(request.timezone());
         List<PreparedScheduleItem> prepared = validateAndPrepareItems(recurrence, request.items(), user.identityId());
@@ -77,7 +75,7 @@ public class ChefPlanScheduleService {
         if (schedule.items().isEmpty()) {
             throw ApiException.conflict("PLAN_SCHEDULE_EMPTY", "Add at least one meal to the plan before submitting it");
         }
-        requireScheduleMatchesPlan(plan, schedule);
+        requireWeeklySchedule(schedule);
         validateAndPrepareItems(
             schedule.recurrenceType(),
             schedule.items().stream().map(item -> new ScheduleItemRequest(
@@ -102,7 +100,7 @@ public class ChefPlanScheduleService {
         if (schedule.items().isEmpty()) {
             throw ApiException.conflict("PLAN_SCHEDULE_EMPTY", "Submitted plan has no meal items");
         }
-        requireScheduleMatchesPlan(plan, schedule);
+        requireWeeklySchedule(schedule);
         validateAndPrepareItems(
             schedule.recurrenceType(),
             schedule.items().stream().map(item -> new ScheduleItemRequest(
@@ -173,11 +171,12 @@ public class ChefPlanScheduleService {
         return List.copyOf(prepared);
     }
 
-    private static void requireScheduleMatchesPlan(PlanOwner plan, PlanScheduleResponse schedule) {
-        if (!plan.billingPeriod().equals(schedule.recurrenceType())) {
+    // Every plan repeats one week whatever its bill length; date-based schedules only keep serving plans already live.
+    private static void requireWeeklySchedule(PlanScheduleResponse schedule) {
+        if (!"WEEKLY".equals(schedule.recurrenceType())) {
             throw ApiException.conflict(
-                "RECURRENCE_BILLING_PERIOD_MISMATCH",
-                "Meal schedule frequency no longer matches the plan. Save the meal schedule again before submitting or approving."
+                "DATE_SCHEDULES_RETIRED",
+                "This plan was set up by date. Set up one week again before submitting."
             );
         }
     }

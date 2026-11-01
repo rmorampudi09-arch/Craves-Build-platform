@@ -1,4 +1,4 @@
-import { ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
+import { ChefLanguageStart, ChefOnboardingWorkspace } from "@/features/chef-onboarding/components/chef-onboarding-workspace";
 import { ChefApplicationWorkspace } from "@/features/chef-onboarding/components/chef-application-workspace";
 import { ChefReadinessPanel } from "@/features/chef/components/chef-readiness-panel";
 import { ChefApplicationSessionBoundary } from "@/features/chef-onboarding/components/chef-application-session-boundary";
@@ -12,11 +12,14 @@ export const metadata = {
 
 export default function ChefApplicationPage() {
   const legacyWorkspace = <><ChefApplicationWorkspace /><div className="mt-6"><ChefReadinessPanel /></div></>;
+  // The language comes first, before the sign-in check, so even "Opening your application" is in it.
   return (
-    <ChefApplicationSessionBoundary>
-      <main className="chef-page is-narrow">
-        {process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true" ? <ChefOnboardingWorkspace fallback={legacyWorkspace} /> : legacyWorkspace}
-      </main>
-    </ChefApplicationSessionBoundary>
+    <ChefLanguageStart>
+      <ChefApplicationSessionBoundary>
+        <main className="chef-page is-narrow">
+          {process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED === "true" ? <ChefOnboardingWorkspace fallback={legacyWorkspace} /> : legacyWorkspace}
+        </main>
+      </ChefApplicationSessionBoundary>
+    </ChefLanguageStart>
   );
 }

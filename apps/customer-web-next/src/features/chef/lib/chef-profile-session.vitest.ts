@@ -2,21 +2,20 @@
 // Actual rendered components; all service responses and identity changes are disposable fixtures.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
-import { createElement, useState } from "react";
+import { Fragment, createElement, useState } from "react";
 import { usePathname } from "next/navigation";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ChefMenuManager } from "../components/chef-menu-manager";
 import { ChefKitchenForm } from "../components/chef-kitchen-form";
 import { ChefModeDashboard } from "../components/chef-mode-dashboard";
-import { ChefSubscriptionPlanManager } from "../components/chef-subscription-plan-manager";
-import ChefLayout from "../../../app/chef/layout";
+import { ChefShell } from "../components/chef-shell";
 import { ChefWorkspaceNavigation } from "../components/chef-workspace-navigation";
 import type { ChefMenuItem } from "./chef-menu-contract";
 import type { ChefKitchen } from "./chef-kitchen-types";
-import type { ChefMealPlan } from "./chef-subscription-plan-contract";
 import { ChefAccessBoundary } from "../components/chef-access-boundary";
 import { ChefBankOnboardingPanel } from "../components/chef-bank-onboarding-panel";
 import ChefFinancePage from "../../../app/chef/finance/page";
+import ChefBankPage from "../../../app/chef/bank/page";
 import ProfilePage from "../../profile/screens/Profile";
 import { captureSessionContext, clearSession, getSession, invalidateSession, setSessionEmailVerification, setSessionIdentity } from "../../auth/api/cravesAuth";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
@@ -65,7 +64,7 @@ async function confirmSignOut() {
 describe("Chef navigation placement", () => {
   it("keeps fixed bottom navigation outside the filtered sticky header", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/menu");
-    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Chef fixture")));
     const header = screen.getByRole("link", { name: "Craves Chef home" }).closest("header")!;
     expect(screen.getByRole("link", { name: "Craves Chef home" }).getAttribute("href")).toBe("/chef");
     expect(header.contains(screen.getByRole("button", { name: "Account menu" }))).toBe(true);
@@ -77,13 +76,14 @@ describe("Chef navigation placement", () => {
   it.each([
     ["/chef", "Home", "page"], ["/chef/orders/fixture", "Orders", "true"], ["/chef/menu", "Menu", "page"], ["/chef/earnings", "Earnings", "page"],
     ["/chef/finance", "Earnings", "true"], ["/chef/statements", "Earnings", "true"], ["/chef/bank", "Earnings", "true"],
-    ["/chef/profile", "More", "page"], ["/chef/kitchen", "More", "true"], ["/chef/operations", "More", "true"], ["/chef/meal-plans", "More", "true"],
-    ["/chef/capacity", "More", "true"], ["/chef/support", "More", "true"], ["/chef/application/status", "More", "true"],
+    ["/chef/earnings/payouts", "Earnings", "true"], ["/chef/earnings/orders", "Earnings", "true"], ["/chef/meal-plans", "Menu", "true"],
+    ["/chef/profile", "Profile", "page"], ["/chef/kitchen", "Profile", "true"], ["/chef/operations", "Profile", "true"], ["/chef/hours", "Profile", "true"],
+    ["/chef/capacity", "Profile", "true"], ["/chef/support", "Profile", "true"], ["/chef/application/status", "Profile", "true"],
   ])("keeps labeled active navigation for %s", (pathname, label, current) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefWorkspaceNavigation, { placement: "bottom" }));
     const links = screen.getAllByRole("link");
-    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "More"]);
+    expect(links.map(link => link.textContent)).toEqual(["Home", "Orders", "Menu", "Earnings", "Profile"]);
     expect(screen.getByRole("link", { name: label }).getAttribute("aria-current")).toBe(current);
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
   });
@@ -102,7 +102,7 @@ describe("Chef navigation placement", () => {
   });
   it("marks the bell, not a tab, on Notifications", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/notifications");
-    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Chef fixture")));
     expect(screen.getByRole("link", { name: "Notifications" }).getAttribute("aria-current")).toBe("page");
     const tabs = within(screen.getByRole("navigation", { name: "Chef primary navigation" })).getAllByRole("link");
     expect(tabs.filter(link => link.hasAttribute("aria-current"))).toHaveLength(0);
@@ -111,7 +111,7 @@ describe("Chef navigation placement", () => {
     vi.mocked(usePathname).mockReturnValue("/chef/orders");
     // Opened fresh: the session has not answered yet, and this device remembers Chef A's kitchen.
     act(() => invalidateSession(captureSessionContext()));
-    render(createElement(ChefLayout, null, createElement("main", null, "Chef fixture")));
+    render(createElement(ChefShell, { language: "en", chosen: true }, createElement("main", null, "Chef fixture")));
     expect(screen.getByRole("navigation", { name: "Chef primary navigation" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Notifications" })).toBeTruthy();
     // The account menu needs the account, so it waits for the answer.
@@ -131,28 +131,29 @@ describe("chef finance owner boundaries", () => {
   it("shows the authoritative verified email alongside real finance panels", async () => {
     render(createElement(ChefFinancePage));
     await screen.findByDisplayValue("a@example.invalid");
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
-    expect(screen.getByText("Money summary")).toBeTruthy();
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
+    // The money summary PDF moved to Statements; Balance & payouts keeps how the balance is worked out.
+    expect(screen.getByText("How your balance is worked out")).toBeTruthy();
   });
 
   it("clears bank inputs and the old balance on owner change and ignores a late refresh", async () => {
-    render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    render(createElement(Fragment, null, createElement(ChefFinancePage), createElement(ChefBankPage)));
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     fireEvent.change(await screen.findByLabelText("Account number"), { target: { value: "123456789" } });
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/chef/finance/balance" && identity?.id === a.id ? late.promise : normal(input));
     fireEvent.click(screen.getByRole("button", { name: "Check balance again" }));
     change(b);
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
-    await screen.findByRole("button", { name: "Send ₹22.00 to my bank" });
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
+    await screen.findByRole("button", { name: "Withdraw ₹22.00" });
     expect((screen.getByLabelText("Account number") as HTMLInputElement).value).toBe("");
     await act(async () => { late.resolve(Response.json(balance(a))); });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     expect(screen.queryByDisplayValue("a@example.invalid")).toBeNull();
   });
 
   it("preserves healthy form input on a same-owner verified email update", async () => {
-    render(createElement(ChefFinancePage));
+    render(createElement(Fragment, null, createElement(ChefFinancePage), createElement(ChefBankPage)));
     const account = await screen.findByLabelText("Account number");
     fireEvent.change(account, { target: { value: "123456789" } });
     act(() => { setSessionEmailVerification(a.id, { ...email(a), email: "replacement@example.invalid", emailRevision: 2 }); });
@@ -188,9 +189,9 @@ describe("chef finance owner boundaries", () => {
 
   it("removes finance and gives sign-in guidance for an inactive owner", async () => {
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     change({ ...a, status: "SUSPENDED" });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(toChefSignIn));
   });
 
@@ -198,10 +199,10 @@ describe("chef finance owner boundaries", () => {
     const late = deferred<Response>();
     fetcher.mockImplementation(input => String(input) === "/api/auth/logout" ? late.promise : normal(input));
     render(createElement(ChefFinancePage));
-    await screen.findByRole("button", { name: "Send ₹11.00 to my bank" });
+    await screen.findByRole("button", { name: "Withdraw ₹11.00" });
     let signingOut!: Promise<void>;
     act(() => { signingOut = clearSession(); });
-    expect(screen.queryByRole("button", { name: "Send ₹11.00 to my bank" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw ₹11.00" })).toBeNull();
     identity = null;
     expect(navigate).not.toHaveBeenCalled();
     await act(async () => { late.resolve(Response.json({ signedOut: true })); await signingOut; });
@@ -369,7 +370,7 @@ describe("Chef menu save and recovery", () => {
   }
   async function fillRequired() {
     fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture dish" } });
-    await pickCategory("Meals");
+    await pickCategory("Rice");
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
     fireEvent.change(screen.getByLabelText(/Price/), { target: { value: "180" } });
     fireEvent.change(screen.getByLabelText(/Packed weight/), { target: { value: "500" } });
@@ -621,7 +622,7 @@ describe("Chef menu save and recovery", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Dish name/)));
     expect(screen.getByText("Give your dish a name.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Dish name/), { target: { value: "Fixture" } });
-    await pickCategory("Meals");
+    await pickCategory("Rice");
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Veg" })));
     fireEvent.click(screen.getByRole("radio", { name: "Veg" }));
@@ -740,6 +741,8 @@ describe("Approved Chef first step", () => {
       const url = String(input);
       if (url === "/api/chef/kitchen") return Promise.resolve(Response.json(hasKitchen ? kitchenFixture : null));
       if (["/api/chef/menu", "/api/chef/orders", "/api/chef/earnings"].includes(url)) return Promise.resolve(Response.json([]));
+      // The welcome is only for a chef approved in the last 30 days: it needs the approval date.
+      if (url === "/api/chef/application") return Promise.resolve(Response.json({ firstName: "Fixture", lastName: "Chef", status: "APPROVED", reviewedAt: new Date().toISOString() }));
       return normal(input);
     });
     render(createElement(ChefModeDashboard));
@@ -789,14 +792,14 @@ describe("Approved Chef first step", () => {
       return normal(input);
     });
     render(createElement(ChefModeDashboard));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose another time" }));
     fireEvent.click(screen.getByText("45"));
     fireEvent.click(screen.getByRole("button", { name: "Start cooking" }));
-    const note = await screen.findByText(/^Order #000101 accepted\./);
+    const note = await screen.findByText(/^Order #0BDE0000 accepted\./);
     // ChefFlash leaves on its own when its CSS countdown ends (jsdom never animates); the chef can also close it.
     expect(note).toBeTruthy();
     const flash = document.querySelector("#chef-order-update .chef-flash");
-    expect(flash?.textContent).toMatch(/Order #000101 accepted\./);
+    expect(flash?.textContent).toMatch(/Order #0BDE0000 accepted\./);
     fireEvent.click(within(flash as HTMLElement).getByRole("button", { name: "Close message", hidden: true }));
     await waitFor(() => expect(document.querySelector("#chef-order-update .chef-flash")).toBeNull());
   });
@@ -813,81 +816,5 @@ describe("Approved Chef first step", () => {
     expect(screen.queryByRole("link", { name: "Name my kitchen" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(fetcher.mock.calls.some(([url]) => url === "/api/chef/menu")).toBe(false);
-  });
-});
-
-describe("Chef meal plans before kitchen setup", () => {
-  const draft: ChefMealPlan = { id: a.id, planCode: "FIXTURE_WEEKLY", name: "Existing weekly draft", description: null, billingPeriod: "WEEKLY", amount: 750, currency: "INR", status: "DRAFT", reviewReason: null, submittedAt: null, reviewedAt: null, createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z" };
-  let plans: ChefMealPlan[];
-  let menuStatus: number;
-  let menuBody: unknown;
-  beforeEach(() => {
-    plans = [{ ...draft }];
-    menuStatus = 400;
-    menuBody = { code: "KITCHEN_PROFILE_REQUIRED" };
-    fetcher.mockImplementation(async (input, options) => {
-      const url = String(input);
-      if (url === "/api/chef/subscription-plans") {
-        if (options?.method === "POST") {
-          const payload = JSON.parse(String(options.body));
-          const created: ChefMealPlan = { ...draft, ...payload, id: b.id, planCode: "FIXTURE_NEW" };
-          plans = [created, ...plans];
-          return Response.json(created, { status: 201 });
-        }
-        return Response.json(plans);
-      }
-      if (url === "/api/chef/menu") return Response.json(menuBody, { status: menuStatus });
-      if (url === "/api/chef/subscription-capacity") return Response.json({ chefIdentityId: a.id, adminSalesFrozen: true, freezeReason: "Fixture capacity hold", slotRules: [], menuItemRules: [], dateOverrides: [], menuItemDateOverrides: [], openIncidentCount: 0 });
-      if (/^\/api\/chef\/subscription-plans\/[^/]+\/schedule$/.test(url)) return Response.json({ code: "SCHEDULE_NOT_FOUND" }, { status: 404 });
-      throw new Error(`Unexpected meal-plan fixture route ${url}`);
-    });
-  });
-
-  it("keeps real plans and capacity available when the menu explicitly requires a kitchen", async () => {
-    render(createElement(ChefSubscriptionPlanManager));
-    await screen.findByRole("heading", { name: draft.name });
-    expect(screen.getByText("Fixture capacity hold")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Set up my kitchen" }).getAttribute("href")).toBe("/chef/kitchen");
-    expect(screen.getByRole("link", { name: "Go to kitchen setup" }).getAttribute("href")).toBe("/chef/kitchen");
-    expect(screen.queryByRole("alert")).toBeNull();
-    expect((screen.getByRole("button", { name: "Create new meal plan" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Save & submit for approval" }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("allows a draft to be created before kitchen setup and retains it after remount", async () => {
-    render(createElement(ChefSubscriptionPlanManager));
-    await screen.findByRole("link", { name: "Set up my kitchen" });
-    fireEvent.click(screen.getByRole("button", { name: "Create new meal plan" }));
-    expect(screen.getByRole("link", { name: "Set up my kitchen" })).toBeTruthy();
-    fireEvent.change(screen.getByRole("textbox", { name: /^Plan name/ }), { target: { value: "New Chef draft" } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: /Subscription price/ }), { target: { value: "900" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create draft & continue" }));
-    await screen.findByRole("heading", { name: "New Chef draft" });
-    expect(plans[0]).toMatchObject({ name: "New Chef draft", amount: 900, status: "DRAFT" });
-    expect(screen.getByRole("link", { name: "Set up my kitchen" })).toBeTruthy();
-    cleanup();
-    render(createElement(ChefSubscriptionPlanManager));
-    await screen.findByRole("heading", { name: "New Chef draft" });
-    expect(fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
-  });
-
-  it("returns to normal menu guidance after kitchen setup is confirmed by a successful menu read", async () => {
-    render(createElement(ChefSubscriptionPlanManager));
-    await screen.findByRole("link", { name: "Set up my kitchen" });
-    menuStatus = 200;
-    menuBody = [];
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull());
-    expect(screen.getByRole("link", { name: "Manage menu" }).getAttribute("href")).toBe("/chef/menu");
-    expect(screen.getByRole("heading", { name: draft.name })).toBeTruthy();
-    expect(screen.getByText("Fixture capacity hold")).toBeTruthy();
-  });
-
-  it.each([400, 503, 404])("keeps an unrelated menu %s failure visible instead of claiming kitchen setup is missing", async status => {
-    menuStatus = status;
-    menuBody = { code: status === 400 ? "MENU_REQUEST_FAILED" : "KITCHEN_PROFILE_REQUIRED", message: "Fixture menu read failed" };
-    render(createElement(ChefSubscriptionPlanManager));
-    expect((await screen.findByRole("alert")).textContent).toContain("Fixture menu read failed");
-    expect(screen.queryByRole("link", { name: "Set up my kitchen" })).toBeNull();
   });
 });

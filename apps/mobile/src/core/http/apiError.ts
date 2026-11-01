@@ -1,10 +1,11 @@
 import axios, {type AxiosError} from 'axios';
 import {isRetriableFailure} from './requestPolicy';
 
-interface BackendErrorPayload {
+export interface BackendErrorPayload {
   code?: unknown;
   message?: unknown;
   details?: unknown;
+  attemptsLeft?: unknown;
 }
 
 const stackTracePattern =
@@ -20,6 +21,8 @@ export class AppApiError extends Error {
     readonly cancelled = false,
     readonly details: readonly string[] = [],
     readonly retryAfterSeconds?: number,
+    /** Tries left after a wrong code (rider delivery OTP: 422 OTP_INVALID). */
+    readonly attemptsLeft?: number,
   ) {
     super(message);
     this.name = 'AppApiError';
@@ -111,6 +114,9 @@ function publicHttpMessage(status: number, backendMessage?: string): string {
   if (status === 422) {
     return backendMessage ?? 'Some information could not be accepted.';
   }
+  if (status === 423) {
+    return backendMessage ?? 'This is locked for now.';
+  }
   if (status === 429) {
     return 'Too many requests. Please wait a moment and try again.';
   }
@@ -118,6 +124,25 @@ function publicHttpMessage(status: number, backendMessage?: string): string {
     return 'Craves is temporarily unavailable. Please try again.';
   }
   return 'We could not complete that request.';
+}
+
+function attemptsLeftFrom(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+/** The error for a server answer that reached the app another way (the rider's native trip outbox): same code and words. */
+export function appApiErrorFromStatus(status: number, data: BackendErrorPayload = {}): AppApiError {
+  return new AppApiError(
+    normalizedBackendCode(data.code, status),
+    publicHttpMessage(status, safeBackendMessage(data.message)),
+    status,
+    undefined,
+    isRetriableFailure(status),
+    false,
+    safeBackendDetails(data.details),
+    undefined,
+    attemptsLeftFrom(data.attemptsLeft),
+  );
 }
 
 export function toAppApiError(error: unknown): AppApiError {
@@ -167,6 +192,7 @@ export function toAppApiError(error: unknown): AppApiError {
       false,
       details,
       retryAfterSecondsFrom(error),
+      attemptsLeftFrom(error.response?.data?.attemptsLeft),
     );
   }
 

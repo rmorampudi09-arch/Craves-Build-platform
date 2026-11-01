@@ -1,16 +1,18 @@
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Clock3, MapPin, Minus, Plus } from "lucide-react";
+import { Clock3, MapPin, Minus, Plus, RefreshCw, Thermometer } from "lucide-react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
+import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 import { returnToListPath } from "@/shared/lib/return-scroll";
 import type { KitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
-import { loadSelectedAddress, loadSession } from "@/features/auth/api/cravesAuth";
+import { loadSelectedAddress, loadSession, type CravesAddress } from "@/features/auth/api/cravesAuth";
 import {
   discoverDishes,
   getDish,
-  getSimilarDishes,
+  hasMoreDiscoveredDishes,
   loadDish,
+  loadKitchenMenu,
   type Dish,
 } from "@/features/dish/api/dishes";
 import {
@@ -30,29 +32,17 @@ import { SimilarDishesSection } from "@/features/dish/components/SimilarDishesSe
 import { DishBottomBar } from "@/features/dish/components/DishBottomBar";
 import { CravesCartIcon } from "@/features/home/components/CravesCartIcon";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import {
   CustomerFloatingCart,
   useCartLine,
   useCustomerCartSummary,
 } from "@/features/cart/components/CustomerFloatingCart";
 
-export const routeMeta = {
-  head: ({ params }: { params: { id: string } }) => {
-    const dish = getDish(params.id);
-    return {
-      meta: [
-        { title: dish ? `${dish.name} – Craves` : "Dish – Craves" },
-        {
-          name: "description",
-          content: dish?.desc ?? "Live homemade dish details on Craves.",
-        },
-        { name: "robots", content: "noindex" },
-      ],
-    };
-  },
-};
-
 const routeApi = getRouteApi("/dish/$id");
+
+/** Whether the dish's kitchen delivers to the selected address: "unknown" never turns Add off (checkout checks again). */
+type Delivery = "yes" | "no" | "unknown" | "no-address";
 
 function priceLabel(price: number, currency = "INR", maximumFractionDigits = 2): string {
   return new Intl.NumberFormat("en-IN", {
@@ -78,6 +68,10 @@ function DishDetailPage() {
   const [adding, setAdding] = useState(false);
   const [messageKind, setMessageKind] = useState<"error" | "success" | "info" | null>(null);
   const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
+  // The kitchen's menu: "More from this kitchen" and its dish count; null until read (or when it can't be).
+  const [kitchenMenu, setKitchenMenu] = useState<Dish[] | null>(null);
+  const [delivery, setDelivery] = useState<{ status: Delivery; address: CravesAddress | null }>({ status: "unknown", address: null });
+  const [attempt, setAttempt] = useState(0);
   const cartSummary = useCustomerCartSummary();
   const cartLine = useCartLine(dish?.id);
   const feedbackTimerRef = useRef<number | null>(null);
@@ -107,6 +101,7 @@ function DishDetailPage() {
     setMessage("");
     setMessageKind(null);
     setReviewSummary(null);
+    setKitchenMenu(null);
 
     void (async () => {
       const session = await loadSession();
@@ -115,45 +110,38 @@ function DishDetailPage() {
         return;
       }
 
-      const address = await loadSelectedAddress();
-      if (
-        typeof address?.lat !== "number" ||
-        typeof address.lng !== "number"
-      ) {
-        throw new Error(
-          "Choose a delivery address before opening this dish.",
-        );
-      }
-
+      // Any dish opens by its id, like its kitchen's page; whether the kitchen delivers to the
+      // selected address only decides whether it can be added.
+      const address = await loadSelectedAddress().catch(() => null);
       const cachedDish = getDish(id);
       const detailPromise = cachedDish?.detailsLoaded
         ? Promise.resolve(cachedDish)
         : loadDish(id);
       const [nearby, detail] = await Promise.all([
-        discoverDishes(
-          address.lat,
-          address.lng,
-          DEFAULT_DISCOVERY_RADIUS_METERS,
-        ),
+        typeof address?.lat === "number" && typeof address.lng === "number"
+          ? discoverDishes(address.lat, address.lng, DEFAULT_DISCOVERY_RADIUS_METERS).catch(() => null)
+          : null,
         detailPromise,
       ]);
-      const nearbyDish = nearby.find((candidate) => candidate.id === id);
-      if (!nearbyDish) {
-        throw new Error(
-          "This dish is outside the 50 km Craves browsing area for your selected address.",
-        );
-      }
+      const nearbyDish = nearby?.find((candidate) => candidate.id === id);
+      // shortcut: only the first page of nearby dishes is read; a dish past it counts as unknown (Add stays on, checkout checks).
+      const status: Delivery =
+        typeof address?.lat !== "number" ? "no-address"
+        : nearbyDish ? "yes"
+        : nearby && !hasMoreDiscoveredDishes() ? "no"
+        : "unknown";
 
       const resolved: Dish = {
         ...detail,
-        distanceMeters: nearbyDish.distanceMeters,
-        areaName: detail.areaName ?? nearbyDish.areaName,
-        city: detail.city ?? nearbyDish.city,
-        state: detail.state ?? nearbyDish.state,
+        distanceMeters: nearbyDish?.distanceMeters,
+        areaName: detail.areaName ?? nearbyDish?.areaName,
+        city: detail.city ?? nearbyDish?.city,
+        state: detail.state ?? nearbyDish?.state,
       };
 
       if (!active) return;
       setDish(resolved);
+      setDelivery({ status, address });
       setLoading(false);
 
       if (resolved.kitchenId) {
@@ -164,22 +152,25 @@ function DishDetailPage() {
           .catch(() => {
             if (active) setReviewSummary(null);
           });
+        // Read without adding the kitchen's dishes to the nearby ones Home lists.
+        void loadKitchenMenu(resolved.kitchenId, { remember: false })
+          .then((menu) => {
+            if (active) setKitchenMenu(menu);
+          })
+          .catch(() => {
+            if (active) setKitchenMenu(null);
+          });
       }
-    })().catch((error) => {
+    })().catch(() => {
       if (!active) return;
       setDish(undefined);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Dish details could not be loaded.",
-      );
       setLoading(false);
     });
 
     return () => {
       active = false;
     };
-  }, [id, navigate]);
+  }, [id, navigate, attempt]);
 
   useEffect(() => {
     return () => {
@@ -216,20 +207,22 @@ function DishDetailPage() {
     return (
       <div className="min-h-screen bg-white">
         <DetailBrowseHeader returnPath={`/dish/${id}`} onBack={handleBack} />
-        <main className="flex min-h-[70vh] items-center justify-center px-4 text-center">
-          <div className="max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-8 shadow-[0_12px_36px_rgba(26,26,26,0.07)]">
-            <h1 className="font-display text-2xl font-black text-[#1A1A1A]">Dish unavailable</h1>
-            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
-              {message || "This dish is no longer active in the Craves catalog."}
-            </p>
-            <button
-              type="button"
-              onClick={handleBack}
-              className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white"
-            >
-              Go back
+        <main className="flex min-h-[70vh] items-center justify-center">
+          <EmptyState
+            heading="h1"
+            role="alert"
+            illustration="loadError"
+            title="This dish couldn't be opened"
+            message="It may be off today's menu, or the connection dropped. Try again, or see what's cooking near you."
+          >
+            <button type="button" onClick={() => setAttempt((value) => value + 1)} className="craves-primary-action">
+              <RefreshCw className="h-5 w-5" aria-hidden="true" />
+              Try again
             </button>
-          </div>
+            <Link to="/home" className={emptyStateSecondaryAction}>
+              Browse dishes
+            </Link>
+          </EmptyState>
         </main>
       </div>
     );
@@ -271,13 +264,10 @@ function DishDetailPage() {
       }, 1800);
     } catch (error) {
       awaitingCartLineRef.current = false;
-      // Keeping the current cart is the customer's choice: a neutral note, not a failure.
-      setMessageKind(error instanceof CartKeptError ? "info" : "error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Dish could not be added to the cart.",
-      );
+      // Keeping the current cart is the customer's choice: a neutral note (our own words), not a failure.
+      const kept = error instanceof CartKeptError;
+      setMessageKind(kept ? "info" : "error");
+      setMessage(kept ? error.message : `We couldn’t add ${dish.name} to your cart. Please try again.`);
     } finally {
       setAdding(false);
     }
@@ -287,18 +277,22 @@ function DishDetailPage() {
     if (!cartLine) return;
     setMessage("");
     setMessageKind(null);
-    setCartQuantity(cartLine.id, next).catch((error: unknown) => {
+    setCartQuantity(cartLine.id, next).catch(() => {
       setMessageKind("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The quantity didn’t change. Check your connection and try again.",
-      );
+      setMessage("The quantity didn’t change. Check your connection and try again.");
     });
   };
 
   const location = locationLabel(dish);
   const itemTotal = dish.price * qty;
+  // Add is off only when the kitchen is known not to deliver here, or there is no address to check.
+  const orderable = delivery.status === "yes" || delivery.status === "unknown";
+  const place = delivery.address?.mandal?.trim() || delivery.address?.city?.trim() || "your address";
+  const moreDishes = (kitchenMenu ?? []).filter((item) => item.id !== dish.id).slice(0, 10);
+  const changeAddress = () => {
+    rememberReturnRoute("/addresses", `/dish/${id}`);
+    navigate({ to: "/addresses" });
+  };
 
   return (
     // Room at the end for the bottom bar (phones) or the floating cart (wide screens, when it shows).
@@ -331,6 +325,12 @@ function DishDetailPage() {
               </div>
 
               <QuickInfoChips dish={dish} />
+              {dish.thermobox ? (
+                <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
+                  <Thermometer className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />
+                  Packed in a thermobox so it reaches you hot.
+                </p>
+              ) : null}
 
               {location ? (
                 <div className="mt-4 flex items-start gap-2.5 rounded-2xl bg-[#F1F3F5] px-3.5 py-3.5">
@@ -344,53 +344,83 @@ function DishDetailPage() {
                 </div>
               ) : null}
 
+              {orderable ? null : (
+                // Said plainly, and Add stays off while the kitchen is out of reach.
+                <div role="status" className="mt-4 flex items-start gap-3 rounded-2xl bg-[#FDEAE8] p-4">
+                  <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#D92714]" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-[0.9375rem] font-bold text-[#261A15]">
+                      {delivery.status === "no"
+                        ? `This kitchen doesn't deliver to ${place} yet`
+                        : "Choose a delivery address to order this dish"}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
+                      {delivery.status === "no"
+                        ? "It's outside the 10 km Craves browsing area for your selected address."
+                        : "We'll check that its kitchen delivers to you."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={changeAddress}
+                      className="mt-1 !min-h-11 !min-w-0 !border-0 !bg-transparent !p-0 text-[0.9375rem] font-bold !text-[#D92714] underline-offset-4 !shadow-none hover:underline"
+                    >
+                      {delivery.status === "no" ? "Change delivery address" : "Choose location"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Phones add from the bottom bar; one add control per screen. */}
-              <div className="mt-5 hidden rounded-2xl border border-[#E5E7EB] p-3.5 lg:block">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#6B6B6B]">Quantity</p>
-                    <p className="mt-1 text-xs font-semibold text-[#1A1A1A]">Choose how many you need</p>
-                  </div>
-                  <div className="flex min-h-11 items-center rounded-full bg-[#F1F3F5]">
-                    <button
-                      type="button"
-                      onClick={() => setQty((value) => Math.max(1, value - 1))}
-                      disabled={qty <= 1 || adding}
-                      className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !p-0 !text-[#F62E18] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label="Decrease quantity"
-                    >
-                      <Minus className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <span className="min-w-8 text-center text-sm font-black" aria-live="polite" aria-atomic="true"><span className="sr-only">Quantity </span>{qty}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQty((value) => Math.min(50, value + 1))}
-                      disabled={adding || qty >= 50}
-                      className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !p-0 !text-[#F62E18] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label="Increase quantity"
-                    >
-                      <Plus className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
+              {orderable ? (
+                <>
+                  <div className="mt-5 hidden rounded-2xl border border-[#E5E7EB] p-3.5 lg:block">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#6B6B6B]">Quantity</p>
+                        <p className="mt-1 text-xs font-semibold text-[#1A1A1A]">Choose how many you need</p>
+                      </div>
+                      <div className="flex min-h-11 items-center rounded-full bg-[#F1F3F5]">
+                        <button
+                          type="button"
+                          onClick={() => setQty((value) => Math.max(1, value - 1))}
+                          disabled={qty <= 1 || adding}
+                          className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !p-0 !text-[#F62E18] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <span className="min-w-8 text-center text-sm font-black" aria-live="polite" aria-atomic="true"><span className="sr-only">Quantity </span>{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => setQty((value) => Math.min(50, value + 1))}
+                          disabled={adding || qty >= 50}
+                          className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !p-0 !text-[#F62E18] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="mt-3 flex items-center justify-between border-t border-[#F1F3F5] pt-3">
-                  <span className="text-sm font-bold text-[#6B6B6B]">Item total</span>
-                  <span className="font-display text-xl font-black text-[#1A1A1A]">
-                    {priceLabel(itemTotal, dish.currency)}
-                  </span>
-                </div>
-              </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-[#F1F3F5] pt-3">
+                      <span className="text-sm font-bold text-[#6B6B6B]">Item total</span>
+                      <span className="font-display text-xl font-black text-[#1A1A1A]">
+                        {priceLabel(itemTotal, dish.currency)}
+                      </span>
+                    </div>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => void handleAddToCart()}
-                disabled={adding}
-                className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(26,26,26,0.14)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
-              >
-                <CravesCartIcon className="h-4 w-4" />
-                {adding ? "Adding…" : "Add to cart"}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleAddToCart()}
+                    disabled={adding}
+                    className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(26,26,26,0.14)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
+                  >
+                    <CravesCartIcon className="h-4 w-4" />
+                    {adding ? "Adding…" : "Add to cart"}
+                  </button>
+                </>
+              ) : null}
             </div>
 
             {message ? (
@@ -427,6 +457,8 @@ function DishDetailPage() {
               rating={reviewSummary?.overallAverage ?? dish.rating}
               reviewCount={reviewSummary?.reviewCount ?? null}
               distanceMeters={dish.distanceMeters}
+              kitchenDescription={dish.kitchenDescription}
+              menuDishCount={kitchenMenu?.length ?? null}
             />
 
             {dish.ingredients && dish.ingredients.length > 0 ? (
@@ -438,36 +470,40 @@ function DishDetailPage() {
           </div>
         </div>
 
-        <div className="mt-9 border-t border-[#E5E7EB] pt-1">
-          <SimilarDishesSection dishes={getSimilarDishes(dish)} />
-        </div>
+        {moreDishes.length > 0 ? (
+          <div className="mt-9 border-t border-[#E5E7EB] pt-1">
+            <SimilarDishesSection dishes={moreDishes} />
+          </div>
+        ) : null}
       </main>
 
-      <DishBottomBar
-        price={cartLine ? cartLine.lineTotal : itemTotal}
-        quantity={cartLine ? cartLine.qty : qty}
-        inCart={Boolean(cartLine)}
-        justAdded={justAdded}
-        cartTotalLabel={priceLabel(cartSummary.total, cartSummary.currency, 0)}
-        onDecrease={() =>
-          cartLine
-            ? changeCartQuantity(cartLine.qty - 1)
-            : setQty((value) => Math.max(1, value - 1))
-        }
-        onIncrease={() =>
-          cartLine
-            ? changeCartQuantity(cartLine.qty + 1)
-            : setQty((value) => Math.min(50, value + 1))
-        }
-        onAddToCart={() => void handleAddToCart()}
-        onViewCart={() => navigate({ to: "/cart" })}
-        disabled={adding && !cartLine}
-        message={
-          message && messageKind !== "success"
-            ? { text: message, error: messageKind === "error" }
-            : null
-        }
-      />
+      {orderable ? (
+        <DishBottomBar
+          price={cartLine ? cartLine.lineTotal : itemTotal}
+          quantity={cartLine ? cartLine.qty : qty}
+          inCart={Boolean(cartLine)}
+          justAdded={justAdded}
+          cartTotalLabel={priceLabel(cartSummary.total, cartSummary.currency, 0)}
+          onDecrease={() =>
+            cartLine
+              ? changeCartQuantity(cartLine.qty - 1)
+              : setQty((value) => Math.max(1, value - 1))
+          }
+          onIncrease={() =>
+            cartLine
+              ? changeCartQuantity(cartLine.qty + 1)
+              : setQty((value) => Math.min(50, value + 1))
+          }
+          onAddToCart={() => void handleAddToCart()}
+          onViewCart={() => navigate({ to: "/cart" })}
+          disabled={adding && !cartLine}
+          message={
+            message && messageKind !== "success"
+              ? { text: message, error: messageKind === "error" }
+              : null
+          }
+        />
+      ) : null}
       {/* Success is shown by the bar itself; this keeps it announced on phones. */}
       <p className="sr-only lg:hidden" role="status">
         {messageKind === "success" ? message : ""}

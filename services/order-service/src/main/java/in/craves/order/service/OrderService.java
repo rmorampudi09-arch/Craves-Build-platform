@@ -14,8 +14,6 @@ import in.craves.order.web.ApiDtos.ChargePolicyResponse;
 import in.craves.order.web.ApiDtos.CheckoutRequest;
 import in.craves.order.web.ApiDtos.CheckoutResponse;
 import in.craves.order.web.ApiDtos.CheckoutStatus;
-import in.craves.order.web.ApiDtos.ChefAcceptRequest;
-import in.craves.order.web.ApiDtos.ChefRejectRequest;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.DeliveryPartnerResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
@@ -40,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -476,9 +475,10 @@ public class OrderService {
 
     public CheckoutResponse getCheckout(CravesPrincipal principal, UUID checkoutId) {
         requireCustomer(principal);
+        List<OrderResponse> orders = listOrdersByCheckout(checkoutId);
         List<CheckoutResponse> rows = jdbcTemplate.query(
             "SELECT * FROM order_schema.checkout WHERE id = ? AND customer_identity_id = ?",
-            (rs, rowNum) -> mapCheckout(rs, listOrdersByCheckout(checkoutId)),
+            (rs, rowNum) -> mapCheckout(rs, orders),
             checkoutId, principal.identityId()
         );
         if (rows.isEmpty()) {
@@ -489,7 +489,7 @@ public class OrderService {
 
     public List<OrderResponse> listCustomerOrders(CravesPrincipal principal) {
         requireCustomer(principal);
-        return jdbcTemplate.query(
+        return queryOrders(
             "SELECT * FROM order_schema.customer_order WHERE customer_identity_id = ? ORDER BY created_at DESC LIMIT 50",
             this::mapOrder,
             principal.identityId()
@@ -498,7 +498,7 @@ public class OrderService {
 
     public OrderResponse getOrderForCustomer(CravesPrincipal principal, UUID orderId) {
         requireCustomer(principal);
-        List<OrderResponse> rows = jdbcTemplate.query(
+        List<OrderResponse> rows = queryOrders(
             "SELECT * FROM order_schema.customer_order WHERE id = ? AND customer_identity_id = ?",
             this::mapOrder,
             orderId, principal.identityId()
@@ -511,32 +511,13 @@ public class OrderService {
 
     public List<OrderResponse> listChefOrders(CravesPrincipal principal) {
         requireChef(principal);
-        List<OrderResponse> allRecent = jdbcTemplate.query(
-            "SELECT * FROM order_schema.customer_order ORDER BY created_at DESC LIMIT 100",
-            this::mapChefOrder
+        // Owner from the order row (V16 keeps it NOT NULL), not a Catalog call per order: one closed kitchen
+        // among everyone's recent orders used to fail this list for every chef.
+        return queryOrders(
+            "SELECT * FROM order_schema.customer_order WHERE chef_identity_id = ? ORDER BY created_at DESC LIMIT 100",
+            this::mapChefOrder,
+            principal.identityId()
         );
-        return allRecent.stream()
-            .filter(order -> catalogClient.getKitchen(order.kitchenId()).identityId().equals(principal.identityId()))
-            .toList();
-    }
-
-    @Transactional
-    public OrderResponse acceptChefOrder(CravesPrincipal principal, UUID orderId, ChefAcceptRequest request) {
-        requireChef(principal);
-        OrderResponse order = getOrderForChef(principal, orderId);
-        if (order.status() != OrderStatus.PAYMENT_PENDING && order.status() != OrderStatus.CHEF_ACCEPTANCE_PENDING && order.status() != OrderStatus.PAID) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order is not waiting for chef acceptance");
-        }
-        updateOrderStatus(orderId, order.status(), OrderStatus.CHEF_ACCEPTED, principal.identityId(), safeReason(request.note()), request.prepTimeMinutes());
-        return getOrderForChef(principal, orderId);
-    }
-
-    @Transactional
-    public OrderResponse rejectChefOrder(CravesPrincipal principal, UUID orderId, ChefRejectRequest request) {
-        requireChef(principal);
-        OrderResponse order = getOrderForChef(principal, orderId);
-        updateOrderStatus(orderId, order.status(), OrderStatus.CHEF_REJECTED, principal.identityId(), safeReason(request.reason()), null);
-        return getOrderForChef(principal, orderId);
     }
 
     @Transactional
@@ -601,7 +582,7 @@ public class OrderService {
     }
 
     private OrderResponse findChefOrder(UUID orderId) {
-        List<OrderResponse> rows = jdbcTemplate.query("SELECT * FROM order_schema.customer_order WHERE id = ?", this::mapChefOrder, orderId);
+        List<OrderResponse> rows = queryOrders("SELECT * FROM order_schema.customer_order WHERE id = ?", this::mapChefOrder, orderId);
         if (rows.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order was not found");
         }
@@ -675,19 +656,24 @@ public class OrderService {
     }
 
     private void updateOrderStatus(UUID orderId, OrderStatus oldStatus, OrderStatus newStatus, UUID actor, String reason, Integer prepTimeMinutes) {
+        int updated;
         if (newStatus == OrderStatus.CHEF_ACCEPTED) {
             if (prepTimeMinutes == null || prepTimeMinutes <= 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Preparation time is required when accepting an order");
             }
-            jdbcTemplate.update(
-                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = ?, ready_at = now() + (? * INTERVAL '1 minute'), updated_at = now() WHERE id = ?",
-                newStatus.name(), reason, prepTimeMinutes, prepTimeMinutes, orderId
+            updated = jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = ?, ready_at = now() + (? * INTERVAL '1 minute'), updated_at = now() WHERE id = ? AND status = ?",
+                newStatus.name(), reason, prepTimeMinutes, prepTimeMinutes, orderId, oldStatus.name()
             );
         } else {
-            jdbcTemplate.update(
-                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = COALESCE(?, prep_time_minutes), updated_at = now() WHERE id = ?",
-                newStatus.name(), reason, prepTimeMinutes, orderId
+            updated = jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET status = ?, chef_response_note = ?, prep_time_minutes = COALESCE(?, prep_time_minutes), updated_at = now() WHERE id = ? AND status = ?",
+                newStatus.name(), reason, prepTimeMinutes, orderId, oldStatus.name()
             );
+        }
+        if (updated != 1) {
+            // CH-05 / F1-12: compare-and-set, so a status that moved meanwhile is never overwritten.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order status changed; reload the order");
         }
         addStatusHistory(orderId, oldStatus, newStatus, actor, reason);
     }
@@ -713,7 +699,12 @@ public class OrderService {
     }
 
     private List<OrderResponse> listOrdersByCheckout(UUID checkoutId) {
-        return jdbcTemplate.query("SELECT * FROM order_schema.customer_order WHERE checkout_id = ? ORDER BY created_at ASC", this::mapOrder, checkoutId);
+        return queryOrders("SELECT * FROM order_schema.customer_order WHERE checkout_id = ? ORDER BY created_at ASC", this::mapOrder, checkoutId);
+    }
+
+    // Items are read after the order rows: a read inside the row mapper needs a second connection from a small pool.
+    private List<OrderResponse> queryOrders(String sql, RowMapper<OrderResponse> mapper, Object... args) {
+        return jdbcTemplate.query(sql, mapper, args).stream().map(order -> order.withItems(listOrderItems(order.id()))).toList();
     }
 
     private CartItemResponse mapCartItem(ResultSet rs, int rowNum) throws SQLException {
@@ -764,7 +755,7 @@ public class OrderService {
             integerOrNull(rs, "prep_time_minutes"),
             mapDropoffSnapshot(rs),
             mapPickupSnapshot(rs),
-            listOrderItems(orderId),
+            List.of(),
             instant(rs, "created_at"),
             instant(rs, "updated_at")
         );

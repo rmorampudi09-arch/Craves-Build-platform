@@ -30,8 +30,14 @@ export type Dish = {
   kitchenDescription?: string;
   ingredients?: string[];
   serves?: string;
+  /** How many people one order serves, when the kitchen said ("Serves 2" on menu rows). */
+  servesCount?: number;
+  /** One pack's weight in grams, when the kitchen gave it. */
+  packGrams?: number;
+  /** Packed in a thermobox so it arrives hot. */
+  thermobox?: boolean;
   originalPrice?: number;
-  spiceLevel?: "Mild" | "Medium" | "Hot";
+  spiceLevel?: "Mild" | "Medium" | "Spicy";
   reviewCount?: number;
   reviews?: { name: string; rating: number; daysAgo: number; text: string }[];
   kitchenId?: string;
@@ -44,7 +50,7 @@ export type Dish = {
 
 const PLACEHOLDER_IMAGE = "/brand/craves-logo.svg";
 const DISCOVERY_PAGE_SIZE = 50;
-const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v1";
+const DISCOVERY_SNAPSHOT_KEY = "craves.customer.dish-discovery.snapshot.v2";
 
 type DishDiscoveryCursor = {
   latitude: number;
@@ -127,7 +133,7 @@ function hydrateDiscoverySnapshot(): void {
 function spiceLabel(
   value: NearbyMenuItem["spiceLevel"] | PublicMenuItemDetail["spiceLevel"],
 ): Dish["spiceLevel"] {
-  if (value === "SPICY") return "Hot";
+  if (value === "SPICY") return "Spicy";
   if (value === "MEDIUM") return "Medium";
   if (value === "MILD") return "Mild";
   return undefined;
@@ -182,6 +188,7 @@ function mapNearbyItem(item: NearbyMenuItem): Dish {
     foodType: item.foodType,
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
     serves: servesLabel(item.servesCount),
+    servesCount: item.servesCount ?? undefined,
     spiceLevel: spiceLabel(item.spiceLevel),
     distanceMeters: item.distanceMeters,
     areaName: item.areaName ?? undefined,
@@ -230,6 +237,9 @@ function mapDetail(item: PublicMenuItemDetail): Dish {
     desc: descriptionLabel(item.description, item.itemName, item.category, chef),
     kitchenDescription: item.kitchenDescription ?? undefined,
     serves: servesLabel(item.servesCount),
+    servesCount: item.servesCount ?? undefined,
+    packGrams: item.unitPackageWeightGrams ?? undefined,
+    thermobox: item.thermoboxRequired === true,
     spiceLevel: spiceLabel(item.spiceLevel),
     areaName: item.areaName ?? undefined,
     city: item.city ?? undefined,
@@ -424,10 +434,6 @@ export async function loadDish(id: string): Promise<Dish> {
   return remember(mapDetail(body));
 }
 
-export function getDiscoveryRadiusMeters(): number {
-  return discoveryRadiusMeters;
-}
-
 export function allDishes(): Dish[] {
   hydrateDiscoverySnapshot();
   return discoveredDishes.filter(
@@ -456,24 +462,3 @@ export function getDish(id: string): Dish | undefined {
   return discoveredDishes.find((dish) => dish.id === id);
 }
 
-export function getSimilarDishes(dish: Dish, limit = 4): Dish[] {
-  const sameKitchen = discoveredDishes.filter(
-    (candidate) =>
-      candidate.id !== dish.id &&
-      Boolean(dish.kitchenId) &&
-      candidate.kitchenId === dish.kitchenId,
-  );
-  const sameCategory = discoveredDishes.filter(
-    (candidate) =>
-      candidate.id !== dish.id &&
-      candidate.category === dish.category &&
-      candidate.kitchenId !== dish.kitchenId,
-  );
-
-  return [...sameKitchen, ...sameCategory]
-    .filter(
-      (candidate, index, items) =>
-        items.findIndex((item) => item.id === candidate.id) === index,
-    )
-    .slice(0, limit);
-}

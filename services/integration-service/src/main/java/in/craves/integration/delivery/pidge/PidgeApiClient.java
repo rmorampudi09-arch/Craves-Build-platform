@@ -149,11 +149,15 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
     @Override public TrackingSnapshot track(String id) {
         JsonNode order = getOrder(requiredId(id));
         ProviderDelivery delivery = mapOrder(order);
-        JsonNode rider = order.path("fulfillment").path("rider");
-        Courier courier = rider.isObject() ? new Courier(rider.path("id").asText(null), rider.path("name").asText(null),
-            rider.path("mobile").asText(null), null, null, null) : null;
         // Status polling does not infer current rider coordinates from pickup/drop checkpoint locations.
-        return new TrackingSnapshot(delivery, courier, delivery.observedAt());
+        return new TrackingSnapshot(delivery, courier(order), delivery.observedAt());
+    }
+
+    /** The rider in a Pidge order or webhook payload (fulfillment.rider), or null before one is assigned. */
+    static Courier courier(JsonNode order) {
+        JsonNode rider = order.path("fulfillment").path("rider");
+        return rider.isObject() ? new Courier(rider.path("id").asText(null), rider.path("name").asText(null),
+            rider.path("mobile").asText(null), null, null, null) : null;
     }
 
     @Override public CreateReconciliationResult reconcileCreate(String reference, Instant notBefore) {

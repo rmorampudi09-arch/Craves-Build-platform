@@ -4,8 +4,9 @@ import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
-import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/features/auth/api/sessionFetch";
+import { BEFORE_SIGN_IN_EVENT, sessionFetch } from "@/shared/lib/session-fetch";
 import { useStepHistory } from "@/features/chef-onboarding/lib/use-step-history";
+import { useLanguage } from "@/shared/i18n/language-context";
 import { bankStatusSchema, type BankStatus } from "@/features/admin/finance/lib/bank-onboarding-contract";
 import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
 import {
@@ -119,6 +120,7 @@ function stepFor(state: OnboardingState, bank: BankStatus | null, step: string):
 
 export function useChefOnboarding() {
   const router = useRouter();
+  const { language: appLanguage } = useLanguage();
   const [state, setState] = useState<OnboardingState | null>(null);
   const [details, setDetails] = useState<OnboardingDetails>({ ...EMPTY_ONBOARDING });
   const [screen, setScreen] = useState<ChefFormScreen>("personal");
@@ -292,6 +294,14 @@ export function useChefOnboarding() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    // Nothing saved yet: the FSSAI videos start in the language the chef picked for the app. Not a change
+    // to warn about; the first save sends it with the other details.
+    if (appLanguage === "en" || state?.details !== null || currentDetails.current.language !== "en") return;
+    const next = { ...currentDetails.current, language: appLanguage };
+    currentDetails.current = next;
+    setDetails(next);
+  }, [appLanguage, state]);
 
   function field<K extends keyof OnboardingDetails>(key: K, value: OnboardingDetails[K]) {
     setDetails((previous) => {

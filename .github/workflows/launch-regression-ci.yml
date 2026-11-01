@@ -6,6 +6,7 @@ on:
     paths:
       - 'services/**'
       - 'apps/customer-web-next/**'
+      - 'apps/mobile/**'
       - 'scripts/launch/**'
       - 'scripts/release/**'
       - 'scripts/finance/**'
@@ -56,6 +57,7 @@ jobs:
           python3 -m unittest discover -s scripts/refund -p 'test_*.py' -v
           python3 scripts/release/tests/test-backend-preflight.py
           python3 scripts/release/tests/test-backend-image-reuse.py
+          python3 scripts/release/check-db-connection-budget.py
           python3 scripts/admin-explorer/test-runtime-readiness.py
           python3 scripts/admin-explorer/test-backend-release.py
           python3 scripts/admin-explorer/test-backend-pinning.py
@@ -64,7 +66,10 @@ jobs:
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_protection_inventory.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_gateway_inventory.py' -v
           python3 -m unittest discover -s scripts/release/tests -p 'test_auth_activation.py' -v
+          python3 -m unittest discover -s scripts/release/tests -p 'test_no_retired_azure_names.py' -v
+          python3 -m unittest discover -s scripts/release/tests -p 'test_web_certificate_renewal.py' -v
           python3 -m unittest discover -s scripts/apim/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s scripts/riders -p 'test_*.py' -v
             python3 scripts/release/tests/test-customer-web-runtime.py
             python3 scripts/release/tests/test_web_runtime_shape.py
           python3 -m unittest discover -s scripts/release/tests -p 'test_web_release_*.py' -v
@@ -234,9 +239,141 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  mobile:
+    name: Mobile app (customer, chef, rider) lint, types, every test and bundle
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install locked dependencies
+        working-directory: apps/mobile
+        run: npm ci
+      - name: TypeScript strict check
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+      - name: ESLint with zero warnings and feature boundaries
+        working-directory: apps/mobile
+        run: npm run lint -- --max-warnings=0
+      - name: Full Jest suite
+        working-directory: apps/mobile
+        run: npm test -- --ci --runInBand
+      - name: Production Android JavaScript bundle
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mobile-bundle"
+          npx react-native bundle --platform android --dev false --entry-file index.js \
+            --bundle-output "$RUNNER_TEMP/mobile-bundle/index.android.bundle" \
+            --assets-dest "$RUNNER_TEMP/mobile-bundle/assets"
+          test -s "$RUNNER_TEMP/mobile-bundle/index.android.bundle"
+      - name: Require tests to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
+
+  referral:
+    name: Referral service verify against PostgreSQL
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: referral_test
+          POSTGRES_USER: referral_ci
+          POSTGRES_PASSWORD: disposable-referral-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U referral_ci -d referral_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: referral_ci
+      PGPASSWORD: disposable-referral-ci-only
+      REFERRAL_TEST_CONFIRM: YES_DISPOSABLE_REFERRAL_TEST_ONLY
+      REFERRAL_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_test
+      REFERRAL_OWNER_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/referral_owner_test
+      REFERRAL_TEST_DB_USER: referral_ci
+      REFERRAL_TEST_DB_PASSWORD: disposable-referral-ci-only
+      CRAVES_DISPOSABLE_TEST_DATABASE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/referral-service/pom.xml
+      - name: Create the disposable owner database
+        run: createdb referral_owner_test
+      - name: Full referral-service verify
+        run: mvn -B -ntp -f services/referral-service/pom.xml verify
+      - name: Require tests to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
+
+  fleet:
+    name: Fleet engine verify
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/fleet-engine/pom.xml
+      - name: Install redis-server for the tests
+        run: sudo apt-get update -q && sudo apt-get install -y -q redis-server
+      - name: Full fleet-engine verify
+        run: mvn -B -ntp -f services/fleet-engine/pom.xml verify
+      - name: Require tests to preserve reviewed tracked source
+        run: git diff --exit-code HEAD --
+
+  voice:
+    name: Voice support gateway tests
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/voice-support-gateway
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/voice-support-gateway/requirements-dev.txt
+      - name: Install the pinned dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Every voice gateway test
+        run: python -m pytest -q
+      - name: Require tests to preserve reviewed tracked source
+        working-directory: .
+        run: git diff --exit-code HEAD --
+
   acceptance:
     name: Exact-SHA complete regression evidence
-    needs: [source, backend, web]
+    needs: [source, backend, web, mobile, referral, fleet, voice]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -251,7 +388,7 @@ jobs:
           jobs = json.loads(os.environ['PREREQUISITES_JSON'])
           expected = os.environ['EXPECTED_RELEASE_SHA']
           assert re.fullmatch(r'[0-9a-f]{40}', expected), 'Expected SHA missing or invalid'
-          assert set(jobs) == {'source', 'backend', 'web'}, 'Missing prerequisite job'
+          assert set(jobs) == {'source', 'backend', 'web', 'mobile', 'referral', 'fleet', 'voice'}, 'Missing prerequisite job'
           assert all(job.get('result') == 'success' for job in jobs.values()), 'A prerequisite did not succeed'
           assert jobs['source'].get('outputs', {}).get('release_sha') == expected, 'Source evidence is stale or missing'
           PY

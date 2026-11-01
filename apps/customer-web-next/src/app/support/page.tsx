@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { AssistantAvatar, SupportChat } from "@/features/support/components/SupportChat";
+import { shortOrderNumber } from "@/shared/lib/order-number";
 import { isUuid } from "@/shared/lib/server-api";
 
 export const metadata = {
@@ -29,7 +30,7 @@ export default async function SupportPage({
         <div className="min-w-0">
           <h1 className="text-lg leading-6 font-bold text-[#1A1A1A]">Craves support</h1>
           <p className="truncate text-xs text-[#6B6B6B]">
-            {order ? `About order #${order.slice(-8).toUpperCase()} · ` : ""}AI assistant · replies in seconds
+            {order ? `About order #${shortOrderNumber(order)} · ` : ""}AI assistant · replies in seconds
           </p>
         </div>
       </header>

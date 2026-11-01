@@ -1,0 +1,395 @@
+components:
+  schemas:
+    PartnerOfferAdminView:
+      properties:
+        claimLimit:
+          format: int32
+          type: integer
+        claimedCount:
+          format: int32
+          type: integer
+        code:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        description:
+          type: string
+        endsAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        linkUrl:
+          type: string
+        partnerName:
+          type: string
+        startsAt:
+          format: date-time
+          type: string
+        status:
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          type: string
+        terms:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    PartnerOfferCard:
+      properties:
+        claimed:
+          type: boolean
+        description:
+          type: string
+        endsAt:
+          format: date-time
+          type: string
+        hasCode:
+          type: boolean
+        id:
+          format: uuid
+          type: string
+        partnerName:
+          type: string
+        terms:
+          type: string
+        title:
+          type: string
+      type: object
+    PartnerOfferClaimRequest:
+      properties:
+        offerId:
+          format: uuid
+          type: string
+      required:
+      - offerId
+      type: object
+    PartnerOfferClaimView:
+      properties:
+        claimedAt:
+          format: date-time
+          type: string
+        code:
+          type: string
+        endsAt:
+          format: date-time
+          type: string
+        linkUrl:
+          type: string
+        offerId:
+          format: uuid
+          type: string
+        orderId:
+          format: uuid
+          type: string
+        partnerName:
+          type: string
+        terms:
+          type: string
+        title:
+          type: string
+      type: object
+    PartnerOfferDraft:
+      properties:
+        claimLimit:
+          format: int32
+          maximum: 10000000
+          minimum: 1
+          type: integer
+        code:
+          pattern: "[A-Za-z0-9-]{3,40}"
+          type: string
+        description:
+          maxLength: 1000
+          minLength: 0
+          type: string
+        endsAt:
+          format: date-time
+          type: string
+        expectedVersion:
+          format: int64
+          type: integer
+        linkUrl:
+          maxLength: 500
+          minLength: 0
+          pattern: "https://[^\\s]+"
+          type: string
+        partnerName:
+          maxLength: 80
+          minLength: 0
+          type: string
+        startsAt:
+          format: date-time
+          type: string
+        terms:
+          maxLength: 2000
+          minLength: 0
+          type: string
+        title:
+          maxLength: 120
+          minLength: 0
+          type: string
+      required:
+      - description
+      - endsAt
+      - linkUrl
+      - partnerName
+      - startsAt
+      - terms
+      - title
+      type: object
+    PartnerOfferTransition:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+      required:
+      - expectedVersion
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_PARTNER_OFFERS_ENABLED."
+  title: Craves partner-offers API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/partner-offers/admin/offers:
+    get:
+      operationId: listPartnerOffers
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/PartnerOfferAdminView"
+                type: array
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+    post:
+      operationId: createPartnerOffer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOfferDraft"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferAdminView"
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/partner-offers/admin/offers/{id}:
+    get:
+      operationId: getPartnerOffer
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferAdminView"
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+    put:
+      operationId: changePartnerOfferDraft
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOfferDraft"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferAdminView"
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/partner-offers/admin/offers/{id}/activate:
+    post:
+      operationId: activatePartnerOffer
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOfferTransition"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferAdminView"
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/partner-offers/admin/offers/{id}/end:
+    post:
+      operationId: endPartnerOffer
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOfferTransition"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferAdminView"
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/partner-offers/admin/offers/{id}/pause:
+    post:
+      operationId: pausePartnerOffer
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOfferTransition"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferAdminView"
+          description: OK
+      tags:
+      - partner-offer-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/partner-offers/claims:
+    get:
+      operationId: myPartnerOfferClaims
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/PartnerOfferClaimView"
+                type: array
+          description: OK
+      tags:
+      - partner-offer-controller
+      x-craves-auth: user
+  /api/v1/advanced/partner-offers/orders/{orderId}:
+    get:
+      operationId: partnerOffersForOrder
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                items:
+                  $ref: "#/components/schemas/PartnerOfferCard"
+                type: array
+          description: OK
+      tags:
+      - partner-offer-controller
+      x-craves-auth: user
+  /api/v1/advanced/partner-offers/orders/{orderId}/claims:
+    post:
+      operationId: claimPartnerOffer
+      parameters:
+      - in: path
+        name: orderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartnerOfferClaimRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PartnerOfferClaimView"
+          description: OK
+      tags:
+      - partner-offer-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

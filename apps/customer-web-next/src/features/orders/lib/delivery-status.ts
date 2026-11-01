@@ -1,7 +1,10 @@
 export const DELIVERY_STATUSES = ["PENDING", "SEARCHING", "COURIER_ASSIGNED", "COURIER_TO_PICKUP", "AT_PICKUP", "PICKED_UP", "IN_TRANSIT", "AT_DROPOFF", "DELIVERED", "CANCELLED", "DELAYED", "RETURNING", "RETURNED", "FAILED"] as const;
 export type DeliveryStatus = typeof DELIVERY_STATUSES[number];
 export type DeliveryStatusHistoryItem = { oldStatus: DeliveryStatus | null; newStatus: DeliveryStatus; trackingUrl: string | null; observedAt: string; recordedAt: string };
-export type DeliveryStatusResponse = { orderId: string; deliveryJobId: string | null; providerId: string | null; status: DeliveryStatus | null; trackingUrl: string | null; observedAt: string | null; history: DeliveryStatusHistoryItem[] };
+/** The delivery partner's last reported position. */
+export type CourierLocation = { latitude: number; longitude: number; observedAt: string };
+/** courierLocation is absent until the server reports one. deliveryCode is set only while a Craves rider carries the order. */
+export type DeliveryStatusResponse = { orderId: string; deliveryJobId: string | null; providerId: string | null; status: DeliveryStatus | null; trackingUrl: string | null; observedAt: string | null; history: DeliveryStatusHistoryItem[]; courierLocation?: CourierLocation; deliveryCode: string | null };
 export type DeliveryStatusPresentation = { label: string; description: string; stage: number; terminal: boolean; attention: boolean };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUS_SET = new Set<string>(DELIVERY_STATUSES);
@@ -28,6 +31,8 @@ export function shouldAutoRefresh(status: DeliveryStatus | null): boolean { retu
 export function safeTrackingUrl(value: unknown): string | null { if (typeof value !== "string" || value.length > 2048) return null; try { const url = new URL(value); return url.protocol === "https:" ? url.toString() : null; } catch { return null; } }
 function nullableString(value: unknown, max: number): string | null { return value == null ? null : typeof value === "string" && value.length <= max ? value : null; }
 function instant(value: unknown, nullable = false): string | null { if (value == null && nullable) return null; if (typeof value !== "string" || Number.isNaN(Date.parse(value))) throw new DeliveryStatusContractError("Invalid delivery timestamp"); return new Date(value).toISOString(); }
+// A bad position is dropped, not fatal: the map just shows the home pin.
+function courierLocation(value: unknown): CourierLocation | null { if (!value || typeof value !== "object" || Array.isArray(value)) return null; const { latitude, longitude, observedAt } = value as Record<string, unknown>; return typeof latitude === "number" && Math.abs(latitude) <= 90 && typeof longitude === "number" && Math.abs(longitude) <= 180 && typeof observedAt === "string" && !Number.isNaN(Date.parse(observedAt)) ? { latitude, longitude, observedAt: new Date(observedAt).toISOString() } : null; }
 export function parseDeliveryStatusResponse(value: unknown): DeliveryStatusResponse {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new DeliveryStatusContractError("Invalid delivery response");
   const raw = value as Record<string, unknown>; if (typeof raw.orderId !== "string" || !UUID.test(raw.orderId)) throw new DeliveryStatusContractError("Invalid order id");
@@ -35,6 +40,7 @@ export function parseDeliveryStatusResponse(value: unknown): DeliveryStatusRespo
   const deliveryJobId = nullableString(raw.deliveryJobId, 36); if (deliveryJobId && !UUID.test(deliveryJobId)) throw new DeliveryStatusContractError("Invalid delivery job id");
   if (!Array.isArray(raw.history) || raw.history.length > 100) throw new DeliveryStatusContractError("Invalid delivery history");
   const history = raw.history.map((value): DeliveryStatusHistoryItem => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new DeliveryStatusContractError("Invalid history row"); const row = value as Record<string, unknown>; const oldStatus = row.oldStatus == null ? null : isDeliveryStatus(row.oldStatus) ? row.oldStatus : (() => { throw new DeliveryStatusContractError("Invalid previous status"); })(); if (!isDeliveryStatus(row.newStatus)) throw new DeliveryStatusContractError("Invalid new status"); return { oldStatus, newStatus: row.newStatus, trackingUrl: safeTrackingUrl(row.trackingUrl), observedAt: instant(row.observedAt)!, recordedAt: instant(row.recordedAt)! }; });
-  return { orderId: raw.orderId, deliveryJobId, providerId: nullableString(raw.providerId, 80), status, trackingUrl: safeTrackingUrl(raw.trackingUrl), observedAt: instant(raw.observedAt, true), history };
+  const courier = courierLocation(raw.courierLocation);
+  return { orderId: raw.orderId, deliveryJobId, providerId: nullableString(raw.providerId, 80), status, trackingUrl: safeTrackingUrl(raw.trackingUrl), observedAt: instant(raw.observedAt, true), history, ...(courier ? { courierLocation: courier } : {}), deliveryCode: typeof raw.deliveryCode === "string" && /^[0-9]{4}$/.test(raw.deliveryCode) ? raw.deliveryCode : null };
 }
 export class DeliveryStatusContractError extends Error { constructor(message: string) { super(message); this.name = "DeliveryStatusContractError"; } }

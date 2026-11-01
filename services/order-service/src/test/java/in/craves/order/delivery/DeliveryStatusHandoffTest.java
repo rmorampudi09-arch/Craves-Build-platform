@@ -319,7 +319,7 @@ class DeliveryStatusHandoffTest {
     void permitsDelayedBorzoHandoffOnlyWithoutEarlierCourierAssignment() throws Exception {
         project("borzo", "borzo-order-1", "DELAYED", BORZO_OBSERVED_AT);
         when(jdbc.queryForObject(contains("order_delivery_status_history"),
-            eq(Boolean.class), eq(chefSubOrderId), eq(deliveryJobId)))
+            eq(Boolean.class), eq(chefSubOrderId), eq(deliveryJobId), eq("borzo-order-1")))
             .thenReturn(false);
 
         assertThat(service.accept(handoff("borzo-order-1", PIDGE_OBSERVED_AT), "{}")
@@ -327,7 +327,7 @@ class DeliveryStatusHandoffTest {
 
         project("borzo", "borzo-order-1", "DELAYED", BORZO_OBSERVED_AT);
         when(jdbc.queryForObject(contains("order_delivery_status_history"),
-            eq(Boolean.class), eq(chefSubOrderId), eq(deliveryJobId)))
+            eq(Boolean.class), eq(chefSubOrderId), eq(deliveryJobId), eq("borzo-order-1")))
             .thenReturn(true);
         assertThatThrownBy(() -> service.accept(handoff("borzo-order-1", PIDGE_OBSERVED_AT), "{}"))
             .isInstanceOf(DeliveryStatusNonRetryableException.class)
@@ -443,6 +443,107 @@ class DeliveryStatusHandoffTest {
         assertThat(result.applied()).isFalse();
         assertThat(result.result()).isEqualTo("STALE");
         verify(jdbc, never()).update(contains("SET delivery_job_id = ?"), any(Object[].class));
+    }
+
+    @Test
+    void aSilentCravesRiderBeforePickupIsReplacedByBorzoOrPidgeAndTheChefStopsSeeingTheRider() throws Exception {
+        String trip = UUID.randomUUID().toString();
+        for (String[] at : new String[][] {{"COURIER_ASSIGNED", "borzo"}, {"AT_PICKUP", "pidge"}}) {
+            project("craves_fleet", trip, at[0], BORZO_OBSERVED_AT);
+            var result = service.accept(riderHandoff(trip, at[1], PIDGE_OBSERVED_AT), "{}");
+
+            assertThat(result.applied()).as(at[0]).isTrue();
+            verify(jdbc).update(contains("SET delivery_job_id = ?"),
+                eq(deliveryJobId), eq(at[1]), eq(at[1] + "-order-9"), eq("SEARCHING"),
+                eq(null), eq(Timestamp.from(PIDGE_OBSERVED_AT)), any(UUID.class), eq(chefSubOrderId));
+        }
+        // The rider card goes; the customer's delivery code goes with the provider (DeliveryCodeService needs craves_fleet).
+        verify(jdbc, times(2)).update(contains("SET delivery_partner_name = NULL"), eq(chefSubOrderId));
+        assertThat(new DeliveryCodeService(jdbc).codeForCustomer(chefSubOrderId, "borzo", "PICKED_UP")).isNull();
+    }
+
+    @Test
+    void aCravesRiderWhoPickedUpOrAnotherTripIsNeverHandedOver() throws Exception {
+        String trip = UUID.randomUUID().toString();
+        project("craves_fleet", trip, "PICKED_UP", BORZO_OBSERVED_AT);
+        assertThatThrownBy(() -> service.accept(riderHandoff(trip, "borzo", PIDGE_OBSERVED_AT), "{}"))
+            .isInstanceOf(DeliveryStatusNonRetryableException.class)
+            .hasMessageContaining("Craves rider before pickup");
+
+        project("craves_fleet", trip, "COURIER_ASSIGNED", BORZO_OBSERVED_AT);
+        assertThatThrownBy(() -> service.accept(riderHandoff(UUID.randomUUID().toString(), "pidge", PIDGE_OBSERVED_AT), "{}"))
+            .isInstanceOf(DeliveryStatusNonRetryableException.class)
+            .hasMessageContaining("Craves rider before pickup");
+
+        project("borzo", "borzo-order-1", "SEARCHING", BORZO_OBSERVED_AT);
+        assertThatThrownBy(() -> service.accept(riderHandoff("borzo-order-1", "pidge", PIDGE_OBSERVED_AT), "{}"))
+            .as("a Borzo delivery is not a rider's").isInstanceOf(DeliveryStatusNonRetryableException.class);
+        verify(jdbc, never()).update(contains("SET delivery_job_id = ?"), any(Object[].class));
+        verify(jdbc, never()).update(contains("SET delivery_partner_name = NULL"), any(Object[].class));
+    }
+
+    @Test
+    void opsGiveAHeldRiderTripToAnotherRiderAndTheChefSeesTheNewRiderOnly() throws Exception {
+        String first = UUID.randomUUID().toString();
+        String second = UUID.randomUUID().toString();
+        project("craves_fleet", first, "AT_PICKUP", BORZO_OBSERVED_AT);
+
+        var result = service.accept(riderToRider(first, second), "{}");
+
+        assertThat(result.applied()).isTrue();
+        verify(jdbc).update(contains("SET delivery_partner_name = NULL"), eq(chefSubOrderId));
+        verify(jdbc).update(contains("SET delivery_job_id = ?"),
+            eq(deliveryJobId), eq("craves_fleet"), eq(second), eq("COURIER_ASSIGNED"),
+            eq(null), eq(Timestamp.from(PIDGE_OBSERVED_AT)), any(UUID.class), eq(chefSubOrderId));
+        verify(jdbc).update(contains("delivery_partner_name = COALESCE"),
+            eq("Sita R."), eq("+919800000002"), eq(null), eq(null), eq(chefSubOrderId));
+
+        // After pickup the food is with the first rider: only a cancel ends it, never a second rider.
+        project("craves_fleet", first, "PICKED_UP", BORZO_OBSERVED_AT);
+        assertThatThrownBy(() -> service.accept(riderToRider(first, second), "{}"))
+            .isInstanceOf(DeliveryStatusNonRetryableException.class)
+            .hasMessageContaining("Craves rider before pickup");
+    }
+
+    @Test
+    void buffersARiderHandoffUntilTheRidersOwnProjectionArrives() throws Exception {
+        String trip = UUID.randomUUID().toString();
+        ResultSet missing = row(null, null, null, null);
+        ResultSet riderProjected = row("craves_fleet", trip, "COURIER_ASSIGNED", BORZO_OBSERVED_AT);
+        AtomicInteger locks = new AtomicInteger();
+        when(jdbc.query(contains("FROM order_schema.customer_order"), any(RowMapper.class), eq(chefSubOrderId)))
+            .thenAnswer(invocation -> {
+                RowMapper<?> mapper = invocation.getArgument(1);
+                return List.of(mapper.mapRow(locks.incrementAndGet() <= 2 ? missing : riderProjected, 0));
+            });
+        when(jdbc.update(any(String.class), any(Object[].class))).thenReturn(1);
+        EventEnvelope<DeliveryStatusChangedData> event = riderHandoff(trip, "borzo", PIDGE_OBSERVED_AT);
+        String payload = new ObjectMapper().findAndRegisterModules().writeValueAsString(event);
+        ResultSet waiting = mock(ResultSet.class);
+        when(waiting.getObject("event_id", UUID.class)).thenReturn(event.eventId());
+        when(waiting.getString("raw_payload")).thenReturn(payload);
+        when(jdbc.query(contains("WAITING_FOR_PRIOR_PROVIDER"), any(RowMapper.class), eq(chefSubOrderId), eq(deliveryJobId)))
+            .thenAnswer(invocation -> {
+                RowMapper<?> mapper = invocation.getArgument(1);
+                return List.of(mapper.mapRow(waiting, 0));
+            });
+
+        assertThat(service.accept(event, payload).result()).isEqualTo("WAITING_FOR_PRIOR_PROVIDER");
+        assertThat(service.accept(envelope(new DeliveryStatusChangedData(deliveryJobId, checkoutId, chefSubOrderId,
+            "craves_fleet", trip, "COURIER_ASSIGNED", null, BORZO_OBSERVED_AT)), "{}").applied()).isTrue();
+        verify(jdbc).update(contains("SET delivery_job_id = ?"),
+            eq(deliveryJobId), eq("borzo"), eq("borzo-order-9"), eq("SEARCHING"),
+            eq(null), eq(Timestamp.from(PIDGE_OBSERVED_AT)), eq(event.eventId()), eq(chefSubOrderId));
+    }
+
+    private EventEnvelope<DeliveryStatusChangedData> riderToRider(String fromTripId, String toTripId) {
+        return envelope(new DeliveryStatusChangedData(deliveryJobId, checkoutId, chefSubOrderId, "craves_fleet", toTripId,
+            "COURIER_ASSIGNED", null, PIDGE_OBSERVED_AT, "craves_fleet", fromTripId, null, "Sita R.", "+919800000002", null, null));
+    }
+
+    private EventEnvelope<DeliveryStatusChangedData> riderHandoff(String tripId, String courier, Instant observedAt) {
+        return envelope(new DeliveryStatusChangedData(deliveryJobId, checkoutId, chefSubOrderId, courier, courier + "-order-9",
+            "SEARCHING", null, observedAt, "craves_fleet", tripId));
     }
 
     private void project(String provider, String providerDeliveryId, String status,

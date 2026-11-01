@@ -3,7 +3,7 @@ set -euo pipefail
 set +x
 
 RG="${RG:-rg-craves-prodlow-centralindia}"
-APIM="${APIM:-apim-craves-prodlow-l3ing6}"
+APIM="${APIM:-apim-craves-prodlow-kmqgfy}"
 API_VERSION="${API_VERSION:-2022-08-01}"
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
@@ -73,6 +73,7 @@ check_operation "$SUB_API" PATCH "/{subscriptionId}/pause" true
 check_operation "$SUB_API" PATCH "/{subscriptionId}/resume" true
 check_operation "$SUB_API" PATCH "/{subscriptionId}/cancel" true
 check_operation "$SUB_API" POST "/{subscriptionId}/skips" true
+check_operation "$SUB_API" POST "/{subscriptionId}/day-credits/{creditId}/choice" true
 
 check_operation "$CHEF_PLAN_API" GET "/" true
 check_operation "$CHEF_PLAN_API" POST "/" true

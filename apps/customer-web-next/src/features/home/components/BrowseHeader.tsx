@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { useSyncExternalStore, type KeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bell, CalendarDays, ChevronDown, ClipboardList } from "lucide-react";
 import {
@@ -16,6 +16,8 @@ import {
 } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/shared/lib/return-navigation";
+import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
+import { notificationsLabel, UnreadBadge, useCustomerUnreadCount } from "@/shared/components/notifications/unread-badge";
 import type { HomeFoodPreference } from "@/features/home/lib/home-return-state";
 
 interface BrowseHeaderProps {
@@ -38,6 +40,8 @@ interface BrowseHeaderProps {
   returnPath?: string;
   onBack?: () => void;
   backLabel?: string;
+  /** Placeholder for every search field in the header (the Chefs tab searches kitchens and areas). */
+  searchPlaceholder?: string;
 }
 
 const headerIconActionClass =
@@ -102,11 +106,16 @@ export function BrowseHeader({
   returnPath = "/home",
   onBack,
   backLabel = "Back to home",
+  searchPlaceholder,
 }: BrowseHeaderProps) {
   const openLocation = () => {
     rememberReturnRoute("/addresses", toCustomerReturnRoute(returnPath));
     onOpenLocation();
   };
+
+  // The bell's red count; guests have no inbox, so nothing is asked for them.
+  const signedIn = useSyncExternalStore(subscribeSession, () => Boolean(getSession()), () => false);
+  const unread = useCustomerUnreadCount(signedIn);
 
   // Compact search bar slides in while scrolling back up (shared chrome controller).
   const { compact: mobileCompact } = useScrollChrome();
@@ -152,7 +161,7 @@ export function BrowseHeader({
               <FaMapMarkerAlt className="h-3.5 w-3.5 lg:h-4 lg:w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
+              <span className="block text-xs font-bold text-[#6B6B6B]">
                 {locationTypeLabel}
               </span>
               <span className="block truncate text-xs font-extrabold text-[#1A1A1A]">
@@ -170,7 +179,7 @@ export function BrowseHeader({
               onClick={onSearchActivate}
               onKeyDown={submitSearch}
               onChange={(event) => onSearchTermChange(event.target.value)}
-              placeholder="Search homemade dishes or kitchens"
+              placeholder={searchPlaceholder ?? "Search homemade dishes or kitchens"}
               data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-xs font-semibold text-[#1A1A1A] lg:text-sm shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"
@@ -201,11 +210,12 @@ export function BrowseHeader({
 
           <Link
             to="/notifications"
-            className={"flex shrink-0 " + headerIconActionClass}
-            aria-label="Open notifications"
+            className={"relative flex shrink-0 " + headerIconActionClass}
+            aria-label={notificationsLabel(unread)}
             title="Notifications"
           >
             <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+            <UnreadBadge count={unread} />
           </Link>
 
           <Link
@@ -267,7 +277,7 @@ export function BrowseHeader({
                   <span className="truncate">{locationTypeLabel}</span>
                   <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#F62E18]" aria-hidden="true" />
                 </span>
-                <span className="mt-1.5 block truncate text-[0.7rem] font-semibold leading-none text-[#6B6B6B]">
+                <span className="mt-1.5 block truncate text-xs font-semibold leading-none text-[#6B6B6B]">
                   {locationLabel}
                 </span>
               </span>
@@ -275,11 +285,12 @@ export function BrowseHeader({
 
             <Link
               to="/notifications"
-              className={"flex shrink-0 " + headerIconActionClass}
-              aria-label="Open notifications"
+              className={"relative flex shrink-0 " + headerIconActionClass}
+              aria-label={notificationsLabel(unread)}
               title="Notifications"
             >
               <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+              <UnreadBadge count={unread} />
             </Link>
 
           </div>
@@ -294,7 +305,7 @@ export function BrowseHeader({
                 onClick={onSearchActivate}
                 onKeyDown={submitSearch}
                 onChange={(event) => onSearchTermChange(event.target.value)}
-                placeholder="Search dishes, kitchens"
+                placeholder={searchPlaceholder ?? "Search dishes, kitchens"}
                 data-craves-bare-input
                 className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
                 type="text"
@@ -338,7 +349,7 @@ export function BrowseHeader({
               onClick={onSearchActivate}
               onKeyDown={submitSearch}
               onChange={(event) => onSearchTermChange(event.target.value)}
-              placeholder="Search dishes or kitchens"
+              placeholder={searchPlaceholder ?? "Search dishes or kitchens"}
               data-craves-bare-input
               className="w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-[#1A1A1A] shadow-none outline-none placeholder:text-[#6B6B6B] focus:border-0 focus:outline-none focus:ring-0"
               type="text"

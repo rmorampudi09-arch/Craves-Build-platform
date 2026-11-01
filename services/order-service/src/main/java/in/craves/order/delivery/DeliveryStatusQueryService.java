@@ -12,16 +12,22 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DeliveryStatusQueryService {
     private final JdbcTemplate jdbcTemplate;
+    private final DeliveryCodeService deliveryCodes;
 
-    public DeliveryStatusQueryService(JdbcTemplate jdbcTemplate) {
+    public DeliveryStatusQueryService(JdbcTemplate jdbcTemplate, DeliveryCodeService deliveryCodes) {
         this.jdbcTemplate = jdbcTemplate;
+        this.deliveryCodes = deliveryCodes;
     }
 
+    // One connection for the order, history and code reads, which run inside the outer row mapper; without it each
+    // request holds two pool connections at once, and a few parallel polls can exhaust a small Hikari pool.
+    @Transactional(readOnly = true)
     public DeliveryStatusResponse getForCustomer(CravesPrincipal principal, UUID orderId) {
         if (principal == null || !principal.hasRole("CUSTOMER")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer role is required");
@@ -63,14 +69,18 @@ public class DeliveryStatusQueryService {
         ResultSet resultSet,
         List<DeliveryStatusHistoryResponse> history
     ) throws SQLException {
+        UUID orderId = resultSet.getObject("id", UUID.class);
+        String providerId = resultSet.getString("delivery_provider_id");
+        String status = resultSet.getString("delivery_status");
         return new DeliveryStatusResponse(
-            resultSet.getObject("id", UUID.class),
+            orderId,
             resultSet.getObject("delivery_job_id", UUID.class),
-            resultSet.getString("delivery_provider_id"),
-            resultSet.getString("delivery_status"),
+            providerId,
+            status,
             resultSet.getString("delivery_tracking_url"),
             instant(resultSet, "delivery_status_observed_at"),
-            history
+            history,
+            deliveryCodes.codeForCustomer(orderId, providerId, status)
         );
     }
 

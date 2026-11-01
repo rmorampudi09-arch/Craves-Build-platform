@@ -1,8 +1,8 @@
 package in.craves.subscription.lifecycle;
 
 import in.craves.subscription.billing.SubscriptionBillingProperties;
-import in.craves.subscription.billing.SubscriptionBillingRepository;
 import in.craves.subscription.capacity.CapacityService;
+import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.AdminSubscriptionPage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.CustomerOccurrenceResponse;
@@ -10,7 +10,9 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.ResumeSubscr
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipRequestResponse;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SkipSubscriptionDateRequest;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleModels.SubscriptionStatusHistoryResponse;
+import in.craves.subscription.lifecycle.PauseAllowance.PauseStatus;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.OwnedSubscription;
+import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.PauseUsage;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository.ScheduleClock;
 import in.craves.subscription.policy.SubscriptionPolicyModels.SubscriptionPolicyResponse;
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
@@ -25,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -38,13 +41,15 @@ public class SubscriptionLifecycleService {
     private static final Set<String> ADMIN_STATUSES = Set.of(
         "PENDING_PAYMENT", "ACTIVE", "PAUSED", "PAYMENT_FAILED", "EXPIRED", "CANCELLED"
     );
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH);
 
     private final SubscriptionLifecycleRepository lifecycleRepository;
     private final SubscriptionPolicyRepository policyRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final CapacityService capacityService;
     private final SubscriptionBillingProperties billing;
-    private final SubscriptionBillingRepository billingRepository;
+    private final DayCreditService dayCreditService;
     private final Clock clock;
 
     @Autowired
@@ -54,9 +59,9 @@ public class SubscriptionLifecycleService {
         SubscriptionRepository subscriptionRepository,
         CapacityService capacityService,
         SubscriptionBillingProperties billing,
-        SubscriptionBillingRepository billingRepository
+        DayCreditService dayCreditService
     ) {
-        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, billing, billingRepository, Clock.systemUTC());
+        this(lifecycleRepository, policyRepository, subscriptionRepository, capacityService, billing, dayCreditService, Clock.systemUTC());
     }
 
     SubscriptionLifecycleService(
@@ -65,7 +70,7 @@ public class SubscriptionLifecycleService {
         SubscriptionRepository subscriptionRepository,
         CapacityService capacityService,
         SubscriptionBillingProperties billing,
-        SubscriptionBillingRepository billingRepository,
+        DayCreditService dayCreditService,
         Clock clock
     ) {
         this.lifecycleRepository = lifecycleRepository;
@@ -73,7 +78,7 @@ public class SubscriptionLifecycleService {
         this.subscriptionRepository = subscriptionRepository;
         this.capacityService = capacityService;
         this.billing = billing;
-        this.billingRepository = billingRepository;
+        this.dayCreditService = dayCreditService;
         this.clock = clock;
     }
 
@@ -90,12 +95,21 @@ public class SubscriptionLifecycleService {
         }
         enforceNextServiceCutoff(subscription, policy.pauseCutoffMinutes(), "SUBSCRIPTION_PAUSE_CUTOFF");
         SubscriptionResponse full = requireSubscription(subscriptionId);
-        if (!lifecycleRepository.pause(subscriptionId, user.identityId(), trim(reason))) {
+        LocalDate pausedFrom = lifecycleRepository.firstUnservedDate(subscriptionId, LocalDate.ofInstant(clock.instant(), BUSINESS_ZONE));
+        LocalDate billStart = lifecycleRepository.currentBillStart(subscriptionId, pausedFrom);
+        PauseUsage usage = lifecycleRepository.pauseUsage(subscriptionId);
+        int perBill = PauseAllowance.daysPerBill(full.billingPeriod());
+        int left = PauseAllowance.daysLeft(perBill, billStart, usage.billStart(), usage.usedDays());
+        if (left <= 0) {
+            throw ApiException.conflict("SUBSCRIPTION_PAUSE_ALLOWANCE_USED", perBill == 1
+                ? "You've used your pause day for this bill."
+                : "You've used all " + perBill + " pause days for this bill.");
+        }
+        int used = billStart.equals(usage.billStart()) ? usage.usedDays() : 0;
+        // The chef's spot is kept: the pause is short and ends by itself, so resuming never finds it sold.
+        if (!lifecycleRepository.pause(subscriptionId, user.identityId(), trim(reason), pausedFrom, billStart, used, pausedFrom.plusDays(left))) {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before pause could be applied");
         }
-        capacityService.releaseForPauseOrTerminal(
-            full, LocalDate.now(clock), "Customer paused the subscription"
-        );
         return current(subscriptionId);
     }
 
@@ -141,11 +155,20 @@ public class SubscriptionLifecycleService {
         if (request.resumeDate().isBefore(LocalDate.now(clock))) {
             throw ApiException.badRequest("INVALID_RESUME_DATE", "resumeDate cannot be in the past");
         }
+        LocalDate autoResumeDate = lifecycleRepository.pauseUsage(subscriptionId).autoResumeDate();
+        // An overdue restart (switched off or failed) must never lock the customer in, so the limit holds only while it is ahead.
+        if (autoResumeDate != null && !autoResumeDate.isBefore(LocalDate.ofInstant(clock.instant(), BUSINESS_ZONE))
+            && request.resumeDate().isAfter(autoResumeDate)) {
+            throw ApiException.badRequest("RESUME_AFTER_AUTO_RESTART",
+                "Your plan restarts by itself on " + autoResumeDate.format(SHORT_DATE) + ".");
+        }
         ScheduleClock schedule = activeSchedule(subscription.planId());
         Instant resumeAt = serviceAt(request.resumeDate(), schedule);
         enforceCutoff(resumeAt, policy.resumeLeadMinutes(), "SUBSCRIPTION_RESUME_LEAD");
         SubscriptionResponse full = requireSubscription(subscriptionId);
-        capacityService.reacquireForResume(full, request.resumeDate());
+        if (!capacityService.hasCommittedCapacity(subscriptionId)) {
+            capacityService.reacquireForResume(full, request.resumeDate());
+        }
         if (!lifecycleRepository.resume(
             subscriptionId,
             user.identityId(),
@@ -154,8 +177,26 @@ public class SubscriptionLifecycleService {
         )) {
             throw ApiException.conflict("SUBSCRIPTION_STATE_CHANGED", "Subscription state changed before resume could be applied");
         }
-        billingRepository.applyPauseCredit(subscriptionId, request.resumeDate());
+        lifecycleRepository.closePause(subscriptionId, request.resumeDate());
+        dayCreditService.creditPausedDays(subscriptionId, request.resumeDate());
         return current(subscriptionId);
+    }
+
+    /**
+     * Restarts a plan whose pause days ran out. No policy, lead-time or allowance checks: the customer chose the
+     * pause, and the restart date was fixed when they paused. Returns false if the plan is no longer paused.
+     */
+    @Transactional
+    public boolean autoResume(UUID subscriptionId, UUID customerIdentityId, LocalDate resumeDate) {
+        if (!lifecycleRepository.resume(subscriptionId, customerIdentityId, resumeDate, "Pause days used up; plan restarted automatically")) {
+            return false;
+        }
+        if (!capacityService.hasCommittedCapacity(subscriptionId)) {
+            capacityService.restoreForAutoResume(requireSubscription(subscriptionId));
+        }
+        lifecycleRepository.closePause(subscriptionId, resumeDate);
+        dayCreditService.creditPausedDays(subscriptionId, resumeDate);
+        return true;
     }
 
     @Transactional
@@ -316,14 +357,21 @@ public class SubscriptionLifecycleService {
 
     private CustomerSubscriptionResponse current(UUID subscriptionId) {
         SubscriptionResponse value = requireSubscription(subscriptionId);
+        LocalDate today = LocalDate.ofInstant(clock.instant(), BUSINESS_ZONE);
+        PauseStatus pause = pauseStatus(lifecycleRepository, value, today);
         return new CustomerSubscriptionResponse(
             value.id(), value.planId(), value.status(), value.startDate(), value.endDate(),
             value.nextServiceDate(), value.deliveryAddressId(), value.notes(), value.createdAt(), value.updatedAt(),
             value.planName(), value.billingPeriod(), value.amount(), value.currency(),
-            SubscriptionService.nextChargeDate(
-                value.nextBillingDate(), billing, LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Kolkata"))
-            ),
-            value.planImageUrl()
+            SubscriptionService.nextChargeDate(value.nextBillingDate(), billing, today),
+            value.planImageUrl(), pause.perBill(), pause.left(), pause.autoResumeDate(),
+            dayCreditService.forCustomer(value.id())
+        );
+    }
+
+    public static PauseStatus pauseStatus(SubscriptionLifecycleRepository repository, SubscriptionResponse value, LocalDate today) {
+        return PauseAllowance.status(
+            value.billingPeriod(), value.status(), repository.currentBillStart(value.id(), today), repository.pauseUsage(value.id())
         );
     }
 

@@ -23,37 +23,37 @@ steps:
   - task: AzureCLI@2
     displayName: Preflight exact live image and cart gateway ownership
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
         set +x
-        python3 scripts/apim/device-safe-cart-routes.py --expected-image cravesprodlowacr82121.azurecr.io/craves/order-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324
+        python3 scripts/apim/device-safe-cart-routes.py --expected-image cravesrm09prodlow6bf632.azurecr.io/craves/order-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324
   - task: AzureCLI@2
     displayName: Build and publish immutable tested Order image
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
         set +x
-        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
-        az acr login --name cravesprodlowacr82121 --only-show-errors
+        IMAGE="cravesrm09prodlow6bf632.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
+        az acr login --name cravesrm09prodlow6bf632 --only-show-errors
         docker build --pull -t "$IMAGE" services/order-service
         docker push "$IMAGE"
   - task: AzureCLI@2
     displayName: Deploy Order only, preserving runtime and guarded rollback
     inputs:
-      azureSubscription: Craves-Dev-Service-Connection
+      azureSubscription: Craves-RMORAMPUDI09-Service-Connection
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
         set -euo pipefail
         set +x
-        IMAGE="cravesprodlowacr82121.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
-        export EXPECTED_PREVIOUS_IMAGE=cravesprodlowacr82121.azurecr.io/craves/order-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324
+        IMAGE="cravesrm09prodlow6bf632.azurecr.io/craves/order-service:device-cart-$(Build.SourceVersion)"
+        export EXPECTED_PREVIOUS_IMAGE=cravesrm09prodlow6bf632.azurecr.io/craves/order-service:referral-151c36cb2afaaf7b8482ee784704d983f7d87324
         export READY_ATTEMPTS=150 READY_SLEEP_SECONDS=10
         DEPLOY_LOG=$(mktemp)
         if bash scripts/release/deploy-single-service-preserve-runtime.sh rg-craves-prodlow-centralindia ca-craves-order-service-prodlow "$IMAGE" order >"$DEPLOY_LOG" 2>&1; then

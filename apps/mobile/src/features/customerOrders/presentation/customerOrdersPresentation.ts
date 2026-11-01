@@ -4,6 +4,7 @@ import type {
   CustomerOrderStatus,
   CustomerOrdersSnapshot,
 } from '../domain/customerOrderTypes';
+import {shortOrderNumber} from '../../../utils/orderNumber';
 
 export type CustomerOrdersTabKey =
   | 'ALL'
@@ -236,7 +237,7 @@ export function formatCustomerOrderMoney(money: CustomerOrderMoney): string {
 }
 
 export function getCustomerOrderDisplayReference(orderId: string): string {
-  return orderId.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return shortOrderNumber(orderId);
 }
 
 function isSameCalendarDay(left: Date, right: Date): boolean {

@@ -8,6 +8,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/craves_business_db}
     username: ${SPRING_DATASOURCE_USERNAME:cravesadmin}
     password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      # Shared database budget: scripts/release/check-db-connection-budget.py
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE:2}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MIN_IDLE:1}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -25,6 +29,13 @@ management:
         enabled: true
 
 craves:
+  # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
+  internal-auth:
+    service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}
+    signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
+    caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
+    enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/notifications=order|user-chef;/internal/v1/auth-email/**=auth;/internal/v1/push/**=integration;/internal/v1/ops-alerts=integration}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
@@ -39,6 +50,8 @@ craves:
     delivery:
       worker-enabled: ${CRAVES_NOTIFICATION_DELIVERY_WORKER_ENABLED:false}
       push-enabled: ${CRAVES_NOTIFICATION_PUSH_ENABLED:false}
+      # Rider offer pushes, sent synchronously by POST /internal/v1/push/realtime (PLAN F11).
+      realtime-push-enabled: ${CRAVES_REALTIME_PUSH_ENABLED:false}
       email-enabled: ${CRAVES_NOTIFICATION_EMAIL_ENABLED:false}
       batch-size: ${CRAVES_NOTIFICATION_DELIVERY_BATCH_SIZE:50}
       max-attempts: ${CRAVES_NOTIFICATION_DELIVERY_MAX_ATTEMPTS:8}
@@ -51,6 +64,9 @@ craves:
       acs-email-reply-to-address: ${ACS_EMAIL_REPLY_TO_ADDRESS:support@craves.in}
       auth-internal-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
       auth-internal-service-secret: ${CRAVES_AUTH_INTERNAL_SERVICE_SECRET:}
+    # Ops leads emailed by POST /internal/v1/ops-alerts (rider SOS, dispatch queue); comma-separated, empty = off.
+    ops-alert:
+      emails: ${CRAVES_OPS_ALERT_EMAILS:}
     important-email:
       enabled: ${CRAVES_NOTIFICATION_IMPORTANT_EMAIL_ENABLED:false}
       event-types: ${CRAVES_NOTIFICATION_IMPORTANT_EMAIL_EVENT_TYPES:ORDER_CREATED,PAYMENT_SUCCEEDED,CHEF_ACCEPTED_ORDER,CHEF_REJECTED,CHEF_ACCEPTANCE_TIMEOUT,REFUND_PENDING,REFUNDED,REFUND_FAILED,DELIVERY_COURIER_ASSIGNED,DELIVERY_PICKED_UP,DELIVERY_IN_TRANSIT,DELIVERY_DELIVERED,DELIVERY_DELAYED,DELIVERY_CANCELLED,DELIVERY_FAILED,DELIVERY_RETURNING,DELIVERY_RETURNED,CHEF_APPLICATION_SUBMITTED,CHEF_APPLICATION_APPROVED,CHEF_APPLICATION_REJECTED}

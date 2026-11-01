@@ -1,30 +1,30 @@
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import {
-  ChefHat,
-  MapPin,
-  PackageCheck,
-  Star,
-  UtensilsCrossed,
-} from "lucide-react";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { MapPin, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { hasHomeReturnState } from "@/features/home/lib/home-return-state";
 import { useReturnScroll } from "@/shared/lib/return-scroll";
+import { rememberReturnRoute } from "@/shared/lib/return-navigation";
 import type { KitchenReviewSummary } from "@/features/dish/lib/review-summary-contract";
-import {
-  getChef,
-  getDishesByChef,
-  type Chef,
-} from "@/features/chefs/api/chefs";
-import { loadKitchenMenu } from "@/features/dish/api/dishes";
+import { loadKitchenMenu, type Dish } from "@/features/dish/api/dishes";
 import { discoverKitchens } from "@/features/chefs/api/kitchens";
+import { loadCart } from "@/features/cart/api/cravesCart";
 import { loadKitchenReviewSummary } from "@/features/dish/api/reviews";
 import {
   loadSelectedAddress,
   loadSession,
+  type CravesAddress,
 } from "@/features/auth/api/cravesAuth";
 import { DetailBrowseHeader } from "@/features/customer-shell/components/DetailBrowseHeader";
-import { ChefDishesGrid } from "@/features/chefs/components/ChefDishesGrid";
+import { KitchenHeader } from "@/features/chefs/components/KitchenHeader";
+import { KitchenMenu } from "@/features/chefs/components/KitchenMenu";
+import { kitchenFoodMixLabel, kitchenJoinedLabel, kitchenLocation } from "@/features/chefs/lib/kitchen-menu";
+import { useFavoriteKitchen } from "@/shared/hooks/use-favorite-kitchen";
+import { getKitchenProfile } from "@/shared/lib/kitchen-profile-client";
+import type { KitchenProfile } from "@/shared/lib/kitchen-profile-contract";
+import { formatPreparationTime } from "@/shared/lib/kitchen-dish-summary";
+import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { CustomerReviewsSection } from "@/features/dish/components/CustomerReviewsSection";
 import {
@@ -32,41 +32,84 @@ import {
   useCustomerCartSummary,
 } from "@/features/cart/components/CustomerFloatingCart";
 
-export const routeMeta = {
-  head: ({ params }: { params: { id: string } }) => {
-    const chef = getChef(params.id);
-    return {
-      meta: [
-        { title: chef ? `${chef.name} – Craves` : "Home Kitchen – Craves" },
-        {
-          name: "description",
-          content: chef
-            ? `${chef.name} · Active home kitchen on Craves.`
-            : "Live home kitchen on Craves.",
-        },
-        { name: "robots", content: "noindex" },
-      ],
-    };
-  },
-};
+/** Whether the kitchen delivers to the selected address: "unknown" never turns Add off (checkout checks again). */
+type Delivery = "yes" | "no" | "unknown" | "no-address";
+type KitchenPage =
+  | { kind: "ready"; profile: KitchenProfile; dishes: Dish[]; delivery: Delivery; address: CravesAddress | null }
+  | { kind: "not-found" }
+  | { kind: "error" };
 
 const routeApi = getRouteApi("/kitchen/$id");
+
+/** Is the kitchen among those within 10 km of the selected address (what Home and the Chefs tab list)? */
+async function deliveryTo(kitchenId: string): Promise<{ delivery: Delivery; address: CravesAddress | null }> {
+  const address = await loadSelectedAddress().catch(() => null);
+  if (typeof address?.lat !== "number" || typeof address.lng !== "number") return { delivery: "no-address", address };
+  try {
+    const nearby = await discoverKitchens(address.lat, address.lng, DEFAULT_DISCOVERY_RADIUS_METERS);
+    if (nearby.kitchens.some((kitchen) => kitchen.id.toLowerCase() === kitchenId.toLowerCase())) return { delivery: "yes", address };
+    // shortcut: reads the 50 nearest kitchens; a kitchen past them counts as unknown (Add stays on, checkout checks); page on when a place has more than 50 in reach.
+    return { delivery: nearby.hasNext ? "unknown" : "no", address };
+  } catch {
+    return { delivery: "unknown", address };
+  }
+}
+
+/** The place in "doesn't deliver to …": the area, else the city, else the address's own label. */
+function placeName(address: CravesAddress | null): string {
+  return address?.mandal?.trim() || address?.city?.trim() || address?.label?.trim() || "your address";
+}
+
+/** The menu's empty state, as in the app (1.35): see other home chefs, or save this kitchen to find it again. */
+function NoDishes({ kitchenId, name }: { kitchenId: string; name: string }) {
+  const { saved, busy, toggle } = useFavoriteKitchen(kitchenId);
+  return (
+    <EmptyState
+      compact
+      illustration="kitchenNoDishes"
+      title="No dishes right now"
+      message={`${name} hasn't put up today's dishes yet. Save this kitchen to find it again, or see other home chefs.`}
+    >
+      <Link to="/chefs" className="craves-primary-action">
+        See other home chefs
+      </Link>
+      {saved ? null : (
+        // The shared class needs "!" on a button, where the site's base button colours otherwise win.
+        <button type="button" onClick={() => void toggle()} disabled={busy} className={`${emptyStateSecondaryAction} !border-[#F62E18] !bg-white !text-[#D92714] !shadow-none hover:!bg-[#FDEAE8]`}>
+          Save this kitchen
+        </button>
+      )}
+    </EmptyState>
+  );
+}
 
 function ChefProfilePage() {
   const { id } = routeApi.useParams();
   const navigate = useNavigate();
-  const [chef, setChef] = useState<Chef | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+  const [page, setPage] = useState<KitchenPage | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [reviewSummary, setReviewSummary] = useState<KitchenReviewSummary | null>(null);
   const cartSummary = useCustomerCartSummary();
-  const rememberScroll = useReturnScroll(!loading);
+  const rememberScroll = useReturnScroll(page !== null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [pastTitle, setPastTitle] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
+
+  // The kitchen bar (h-16) turns white and shows the kitchen once its name has scrolled under the bar.
+  useEffect(() => {
+    const title = titleRef.current;
+    if (!title || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setPastTitle(Boolean(entry && !entry.isIntersecting && entry.boundingClientRect.top < 64)),
+      { rootMargin: "-64px 0px 0px 0px" },
+    );
+    observer.observe(title);
+    return () => observer.disconnect();
+  }, [page]);
 
   useEffect(() => {
     let active = true;
-    setChef(undefined);
-    setLoading(true);
-    setMessage("");
+    setPage(null);
     setReviewSummary(null);
 
     void (async () => {
@@ -76,64 +119,41 @@ function ChefProfilePage() {
         return;
       }
 
-      const address = await loadSelectedAddress();
-      if (
-        typeof address?.lat !== "number" ||
-        typeof address.lng !== "number"
-      ) {
-        throw new Error(
-          "Choose a delivery address before opening this home kitchen.",
-        );
-      }
-
-      const discovery = await discoverKitchens(
-        address.lat,
-        address.lng,
-        DEFAULT_DISCOVERY_RADIUS_METERS,
-      );
-      const nearbyKitchen = discovery.kitchens.find(
-        (kitchen) => kitchen.id === id,
-      );
-      if (!nearbyKitchen) {
-        throw new Error(
-          "This home kitchen is outside the 50 km Craves browsing area for your selected address.",
-        );
-      }
-
-      await loadKitchenMenu(id);
-      const resolved = getChef(id);
-      if (!resolved) {
-        throw new Error(
-          "This home kitchen has no active dishes available right now.",
-        );
-      }
-
+      // Opened straight from a link, the cart isn't loaded yet: the menu's steppers show what is in it.
+      void loadCart().catch(() => undefined);
+      // Any kitchen opens by its id, as in the app, near or not: the public profile and menu, read
+      // without adding them to the nearby dishes Home lists. Delivery is checked beside them.
+      const [profile, menu, delivery] = await Promise.allSettled([
+        getKitchenProfile(id),
+        loadKitchenMenu(id, { remember: false }),
+        deliveryTo(id),
+      ]);
       if (!active) return;
-      setChef(resolved);
-      setLoading(false);
+      if (profile.status === "fulfilled" && profile.value === null) {
+        setPage({ kind: "not-found" });
+        return;
+      }
+      if (profile.status !== "fulfilled" || !profile.value || menu.status !== "fulfilled" || delivery.status !== "fulfilled") {
+        setPage({ kind: "error" });
+        return;
+      }
+      setPage({ kind: "ready", profile: profile.value, dishes: menu.value, ...delivery.value });
 
-      void loadKitchenReviewSummary(resolved.id)
+      void loadKitchenReviewSummary(profile.value.id)
         .then((summary) => {
           if (active) setReviewSummary(summary);
         })
         .catch(() => {
           if (active) setReviewSummary(null);
         });
-    })().catch((error) => {
-      if (!active) return;
-      setChef(undefined);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Kitchen details could not be loaded.",
-      );
-      setLoading(false);
+    })().catch(() => {
+      if (active) setPage({ kind: "error" });
     });
 
     return () => {
       active = false;
     };
-  }, [id, navigate]);
+  }, [id, navigate, attempt]);
 
   const handleBack = () => {
     if (
@@ -148,110 +168,152 @@ function ChefProfilePage() {
     navigate({ to: "/home" });
   };
 
-  if (loading) {
+  const changeAddress = () => {
+    rememberReturnRoute("/addresses", `/kitchen/${id}`);
+    navigate({ to: "/addresses" });
+  };
+
+  if (!page) {
     return <CustomerPageSkeleton variant="kitchen" label="Loading this home kitchen" />;
   }
 
-  if (!chef) {
+  if (page.kind !== "ready") {
     return (
       <div className="min-h-screen bg-white">
         <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
-        <main className="flex min-h-[70vh] items-center justify-center px-4 text-center">
-          <div className="max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-8">
-            <h1 className="font-display text-2xl font-black text-[#1A1A1A]">
-              Home kitchen not found
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">
-              {message || "This kitchen is not currently available in the live Craves catalog."}
-            </p>
-            <button
-              type="button"
-              onClick={handleBack}
-              className="!mt-6 !inline-flex !min-h-11 !items-center !rounded-full !bg-[#F62E18] !px-5 !text-sm !font-black !text-white"
+        <main className="flex min-h-[70vh] items-center justify-center">
+          {page.kind === "not-found" ? (
+            <EmptyState
+              heading="h1"
+              illustration="search"
+              title="This kitchen isn't on Craves right now"
+              message="It may have closed or stopped taking orders. Other home chefs are cooking near you."
             >
-              Back to home
-            </button>
-          </div>
+              <Link to="/chefs" className="craves-primary-action">
+                See other home chefs
+              </Link>
+            </EmptyState>
+          ) : (
+            <EmptyState
+              heading="h1"
+              role="alert"
+              illustration="loadError"
+              title="This kitchen could not be loaded"
+              message="Check your connection and try again."
+            >
+              <button type="button" onClick={() => setAttempt((value) => value + 1)} className="craves-primary-action">
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                Try again
+              </button>
+            </EmptyState>
+          )}
         </main>
       </div>
     );
   }
 
-  const dishes = getDishesByChef(chef.name);
-  const fallbackDescription = chef.specialties.length
-    ? `Explore ${chef.specialties.join(", ")} and other home-cooked dishes currently available from this kitchen.`
-    : "Explore the home-cooked dishes currently available from this kitchen on Craves.";
+  const { profile, dishes, delivery, address } = page;
+  const name = profile.displayName || profile.kitchenName;
+  const location = kitchenLocation([profile.areaName, profile.city, profile.state]);
+  const subtitle = [
+    profile.displayName && profile.displayName !== profile.kitchenName ? profile.kitchenName : null,
+    location,
+    kitchenJoinedLabel(profile.createdAt),
+  ].filter(Boolean).join(" · ");
+  const facts = [
+    dishes.length ? `${dishes.length} ${dishes.length === 1 ? "dish" : "dishes"}` : null,
+    kitchenFoodMixLabel(dishes),
+    formatPreparationTime(dishes),
+    reviewSummary && reviewSummary.reviewCount > 0 && reviewSummary.overallAverage !== null
+      ? `${reviewSummary.overallAverage.toFixed(1)} ★ · ${reviewSummary.reviewCount} ${reviewSummary.reviewCount === 1 ? "review" : "reviews"}`
+      : null,
+  ].filter((fact): fact is string => Boolean(fact));
+  const bio = profile.description;
+  const reviews = dishes.flatMap((dish) => dish.reviews ?? []);
 
   return (
     <div
       className={`min-h-screen bg-white text-[#1A1A1A] ${cartSummary.itemCount > 0 ? "pb-32" : "pb-14"}`}
       onClickCapture={rememberScroll}
     >
-      <DetailBrowseHeader returnPath={`/kitchen/${id}`} onBack={handleBack} />
+      <KitchenHeader
+        kitchenId={profile.id}
+        name={name}
+        chefPhotoUrl={profile.chefPhotoUrl}
+        photos={profile.kitchenPhotoUrls}
+        solid={pastTitle}
+        onBack={handleBack}
+      />
 
-      <main className="mx-auto max-w-6xl px-4 pt-5 md:px-6 md:pt-7">
-        <section className="rounded-[1.75rem] border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(26,26,26,0.045)] sm:p-6 md:rounded-[2rem] md:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
-                {chef.name}
-              </h1>
-              {chef.location ? (
-                <p className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-[#6B6B6B]">
-                  <MapPin className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                  {chef.location}
-                </p>
+      <main className="mx-auto max-w-6xl px-4 md:px-6">
+        <section className="relative z-10">
+          <ChefFace
+            photoUrl={profile.chefPhotoUrl}
+            name={name}
+            size={92}
+            className="-mt-[46px] flex bg-[#FFF5E9] font-extrabold text-[#D92714] shadow-[0_6px_14px_rgba(38,26,21,0.08)]"
+          />
+          <h1 ref={titleRef} className="mt-2 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
+            {name}
+          </h1>
+          {subtitle ? <p className="mt-1 text-sm font-semibold text-[#6B6B6B]">{subtitle}</p> : null}
+          {facts.length ? (
+            <ul className="mt-3 flex flex-wrap gap-2" aria-label="About this kitchen">
+              {facts.map((fact) => (
+                <li key={fact} className="rounded-full bg-[#F1F3F5] px-3 py-1.5 text-xs font-bold text-[#1A1A1A]">{fact}</li>
+              ))}
+            </ul>
+          ) : null}
+          {bio ? (
+            <>
+              <p id="kitchen-bio" className={`mt-3 max-w-3xl text-sm leading-6 text-[#1A1A1A] sm:text-[0.95rem] ${bioExpanded ? "" : "line-clamp-3"}`}>{bio}</p>
+              {bio.length > 180 ? (
+                <button
+                  type="button"
+                  onClick={() => setBioExpanded((value) => !value)}
+                  aria-expanded={bioExpanded}
+                  aria-controls="kitchen-bio"
+                  className="mt-1 !min-h-10 !min-w-0 !border-0 !bg-transparent !p-0 text-sm font-black text-[#C4200F] !shadow-none"
+                >
+                  {bioExpanded ? "Show less" : "Read more"}
+                </button>
               ) : null}
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-[#6B6B6B] sm:text-[0.95rem]">
-                {chef.bio || fallbackDescription}
-              </p>
-            </div>
-
-            <div className="grid shrink-0 grid-cols-2 gap-2.5 lg:w-[27rem]">
-              <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
-                <UtensilsCrossed className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                <p className="mt-2 text-lg font-black text-[#1A1A1A]">{chef.activeDishCount}</p>
-                <p className="text-[0.68rem] font-bold text-[#6B6B6B]">Dishes available</p>
-              </div>
-              <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
-                <PackageCheck className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                <p className="mt-2 text-sm font-black text-[#1A1A1A]">Made to order</p>
-                <p className="mt-1 text-[0.68rem] font-bold text-[#6B6B6B]">Prepared after you order</p>
-              </div>
-              {/* Full width only when it is the odd tile out (no reviews yet), so the grid has no hole. */}
-              <div className={`${reviewSummary ? "" : "col-span-2 "}rounded-2xl bg-[#F1F3F5] p-3.5`}>
-                <ChefHat className="h-4 w-4 text-[#F62E18]" aria-hidden="true" />
-                <p className="mt-2 text-sm font-black text-[#1A1A1A]">
-                  {chef.specialties.length > 0
-                    ? chef.specialties.slice(0, 2).join(" · ")
-                    : "Home-cooked dishes"}
+            </>
+          ) : null}
+          {delivery === "no" || delivery === "no-address" ? (
+            // Said plainly, and Add stays off while the kitchen is out of reach.
+            <div role="status" className="mt-4 flex max-w-3xl items-start gap-3 rounded-2xl bg-[#FDEAE8] p-4">
+              <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#D92714]" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-[0.9375rem] font-bold text-[#261A15]">
+                  {delivery === "no"
+                    ? `This kitchen doesn't deliver to ${placeName(address)} yet`
+                    : "Choose a delivery address to order from this kitchen"}
                 </p>
-                <p className="mt-1 text-[0.68rem] font-bold text-[#6B6B6B]">Specialities</p>
+                <p className="mt-1 text-sm leading-6 text-[#6B6B6B]">
+                  {delivery === "no"
+                    ? "It's outside the 10 km Craves browsing area for your selected address. You can still look at the menu."
+                    : "We'll check that it delivers to you."}
+                </p>
+                <button
+                  type="button"
+                  onClick={changeAddress}
+                  className="mt-1 !min-h-11 !min-w-0 !border-0 !bg-transparent !p-0 text-[0.9375rem] font-bold !text-[#D92714] underline-offset-4 !shadow-none hover:underline"
+                >
+                  {delivery === "no" ? "Change delivery address" : "Choose location"}
+                </button>
               </div>
-              {reviewSummary ? (
-                <div className="rounded-2xl bg-[#F1F3F5] p-3.5">
-                  <Star
-                    className="h-4 w-4 fill-[#F62E18] text-[#F62E18]"
-                    aria-hidden="true"
-                  />
-                  <p className="mt-2 text-lg font-black text-[#1A1A1A]">
-                    {reviewSummary.overallAverage !== null
-                      ? reviewSummary.overallAverage.toFixed(1)
-                      : "—"}
-                  </p>
-                  <p className="text-[0.68rem] font-bold text-[#6B6B6B]">
-                    {reviewSummary.reviewCount}{" "}
-                    {reviewSummary.reviewCount === 1 ? "review" : "reviews"}
-                  </p>
-                </div>
-              ) : null}
             </div>
-          </div>
+          ) : null}
         </section>
 
-        <ChefDishesGrid chefName={chef.name} dishes={dishes} />
-        {chef.reviews.length > 0 ? (
-          <CustomerReviewsSection reviews={chef.reviews} />
+        {dishes.length ? (
+          <KitchenMenu dishes={dishes} orderable={delivery !== "no" && delivery !== "no-address"} />
+        ) : (
+          <NoDishes kitchenId={profile.id} name={name} />
+        )}
+        {reviews.length > 0 ? (
+          <CustomerReviewsSection reviews={reviews} />
         ) : null}
       </main>
 

@@ -1,5 +1,7 @@
 # Interactive Ola maps (web live, APK ready) — 2026-10-10
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #14 `Craves (14)` named below is turned off on purpose: do not run, re-enable or recreate it. Use #23 `Craves-Chef-Onboarding-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 ## TL;DR
 
 | Question | Answer |
@@ -68,7 +70,7 @@ import {OlaMapPicker} from '../../maps/OlaMapPicker';
 />
 ```
 
-Then build the APK as usual: `cd apps/mobile && npm ci && cd android && ./gradlew assembleRelease` with the existing signing variables. For iOS, run `cd ios && pod install`.
+Then build the APK as usual: `cd apps/mobile && npm ci && cd android && ./gradlew assembleCustomerRelease` (the rider app is `assembleRiderRelease`) with the existing signing variables. For iOS, run `cd ios && pod install`.
 
 ## Release runbook
 

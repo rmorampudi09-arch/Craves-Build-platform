@@ -1,5 +1,7 @@
 # Active Azure address/readiness release
 
+> **Pipelines changed 27 Oct 2026.** Azure DevOps pipeline #3 `Craves-RMORAMPUDI09-Product-Activation` named below is turned off on purpose: do not run, re-enable or recreate it. Use #17 `Craves-User-Chef-Release` instead (built from GitHub `main`). Current list: `docs/runbooks/production-environment.md`.
+
 A GitHub merge updates source control. It does not automatically update the live
 Azure site. The active Azure pipeline was reading a different repository branch.
 This release bridge builds the reviewed GitHub commit directly and uses the

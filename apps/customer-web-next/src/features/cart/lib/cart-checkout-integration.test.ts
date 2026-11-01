@@ -33,10 +33,11 @@ test("cart and checkout do not block first render on prep-time enrichment", () =
   const cart = source("../screens/Cart.tsx");
   const checkout = source("../../checkout/screens/Checkout.tsx");
 
-  assert.match(cart, /async function resolveLeadMinutes/);
+  // The cart reads each dish for its prep time, course and veg mark after the first render.
+  assert.match(cart, /async function resolveDishDetails/);
   assert.match(
     cart,
-    /setItems\(nextItems\)[\s\S]{0,420}setLoading\(false\)[\s\S]{0,220}void resolveLeadMinutes\(nextItems\)/,
+    /setItems\(nextItems\)[\s\S]{0,420}setLoading\(false\)[\s\S]{0,220}void resolveDishDetails\(nextItems\)/,
   );
   assert.match(checkout, /async function resolveLeadMinutes/);
   assert.match(
@@ -86,16 +87,16 @@ test("Razorpay payment is contract validated and backend verified", () => {
   assert.match(payment, /sessionFetch/);
   assert.match(payment, /const session = await loadSession\(\)/);
   assert.match(payment, /if \(!checkout\) \{[\s\S]*await ensureCheckout\(\);[\s\S]*return;/);
-  assert.match(payment, /Preparing total/);
+  assert.match(payment, /"Review total"/);
   assert.match(payment, /craves-primary-action/);
-  assert.doesNotMatch(payment, /"Review total"/);
+  assert.doesNotMatch(payment, /Preparing total/);
   assert.match(payment, /\/verify/);
   assert.doesNotMatch(
     payment,
     /<(input|textarea)[^>]*(name|id|autoComplete)=[^>]*(card|cvv|upi[-_ ]?pin)/i,
   );
   assert.match(payment, /amount:\s*payment\.amountPaise/);
-  assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\`\)/);
+  assert.match(payment, /router\.replace\(\`\/orders\/\$\{orderId\}\?paid=1\`\)/);
   assert.doesNotMatch(payment, /amount\s*:\s*Math\.round\(/);
 });
 

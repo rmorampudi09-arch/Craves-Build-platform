@@ -50,6 +50,7 @@ class ChefCatalogDatabaseTest {
         media=mock(MediaStorageService.class);
         when(media.uploadKitchenImage(any(),any(),any())).thenAnswer(i->{String blob="public/kitchens/"+i.getArgument(0)+"/"+i.getArgument(1).toString().toLowerCase()+"/"+UUID.randomUUID();return new StoredMedia("media",blob,"image/png",1,"https://media.example/"+blob);});
         when(media.uploadMenuImage(any(),any(),any())).thenAnswer(i->{String blob="public/dishes/"+UUID.randomUUID();return new StoredMedia("media",blob,"image/png",1,"https://media.example/"+blob);});
+        when(media.chefAvatarUrl(any())).thenAnswer(i->"https://media.example/public/chef-avatars/"+i.getArgument(0)+".jpg");
         finance=mock(CatalogFinanceEligibility.class);
         when(finance.current()).thenReturn(new CatalogFinanceEligibility.Snapshot(UUID.randomUUID(),Instant.now(),true,UUID.randomUUID(),1,UUID.randomUUID().toString().replace("-","").repeat(2),List.of(chef,otherChef)));
         catalog=new CatalogService(jdbc,media,new CatalogDiscoveryProperties(),finance);
@@ -74,7 +75,7 @@ class ChefCatalogDatabaseTest {
 
     @Test void oldShapePutKeepsStoredCuisinesAreasSocialLinksPhotosAndSettings() throws Exception {
         catalog.upsertMyKitchen(owner,request("Chef kitchen",List.of("North Indian","Hyderabadi"),List.of("Gachibowli","Madhapur"),new SocialLinks("https://instagram.com/chef",null,null,"https://chef.example")));
-        catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.CHEF,file);
+        catalog.setChefAvatar(owner,"chef-avatar-01");
         catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
         catalog.updateKitchenSettings(owner,new KitchenSettings(true,30));
         var before=catalog.getMyKitchen(owner);
@@ -148,36 +149,118 @@ class ChefCatalogDatabaseTest {
 
     // ---- kitchen photos ----
 
-    @Test void photoUploadStoresTheUrlPerKindAndDeleteClearsOnlyThatKind() {
-        var withKitchenPhoto=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+    @Test void uploadsFillSlotsInOrderThenLock() {
+        var first=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
         verify(media).uploadKitchenImage(kitchen,KitchenPhotoKind.KITCHEN,file);
-        assertNotNull(withKitchenPhoto.kitchenPhotoUrl()); assertTrue(withKitchenPhoto.kitchenPhotoUrl().startsWith("https://media.example/public/kitchens/"+kitchen+"/kitchen/"));
-        assertNull(withKitchenPhoto.chefPhotoUrl());
-        assertEquals(withKitchenPhoto.kitchenPhotoUrl(),catalog.getMyKitchen(owner).kitchenPhotoUrl());
+        assertTrue(first.kitchenPhotoUrl().startsWith("https://media.example/public/kitchens/"+kitchen+"/kitchen/"));
+        assertEquals(List.of(first.kitchenPhotoUrl()),first.kitchenPhotoUrls());
+        assertNull(first.chefPhotoUrl());
 
-        var both=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.CHEF,file);
-        assertNotNull(both.chefPhotoUrl()); assertEquals(withKitchenPhoto.kitchenPhotoUrl(),both.kitchenPhotoUrl());
+        var withFace=catalog.setChefAvatar(owner,"chef-avatar-01");
+        assertEquals(first.kitchenPhotoUrls(),withFace.kitchenPhotoUrls());
 
-        var replaced=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
-        assertNotEquals(withKitchenPhoto.kitchenPhotoUrl(),replaced.kitchenPhotoUrl());
-        verify(media).deleteByPublicUrl(withKitchenPhoto.kitchenPhotoUrl());
+        var second=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+        assertEquals(first.kitchenPhotoUrl(),second.kitchenPhotoUrl());
+        assertEquals(2,second.kitchenPhotoUrls().size());
+        assertEquals(first.kitchenPhotoUrl(),second.kitchenPhotoUrls().get(0));
 
-        var cleared=catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.KITCHEN);
-        assertNull(cleared.kitchenPhotoUrl()); assertEquals(both.chefPhotoUrl(),cleared.chefPhotoUrl());
-        verify(media).deleteByPublicUrl(replaced.kitchenPhotoUrl());
-        assertNull(catalog.getMyKitchen(owner).kitchenPhotoUrl());
-        assertNull(catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.KITCHEN).kitchenPhotoUrl()); // nothing left: still fine
-        verify(media,never()).deleteByPublicUrl(both.chefPhotoUrl());
-        // other chef's kitchen was never touched
-        assertNull(catalog.getMyKitchen(stranger).kitchenPhotoUrl());
+        var full=rejected(()->catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file));
+        assertEquals("KITCHEN_PHOTOS_LOCKED",full.getCode()); assertEquals(409,full.getStatus());
+        assertEquals("KITCHEN_PHOTOS_LOCKED",rejected(()->catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.KITCHEN)).getCode());
+        verify(media,times(2)).uploadKitchenImage(any(),any(),any()); // the locked upload stored nothing
+        verify(media,never()).deleteByPublicUrl(second.kitchenPhotoUrls().get(1));
+        assertEquals(second.kitchenPhotoUrls(),catalog.getMyKitchen(owner).kitchenPhotoUrls());
+        assertTrue(catalog.getMyKitchen(stranger).kitchenPhotoUrls().isEmpty()); // other chef's kitchen untouched
+    }
+
+    @Test void clearSlotEmptiesItAndDeletesBlobAfterCommit() {
+        catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+        var full=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file);
+        String slot1=full.kitchenPhotoUrls().get(0), slot2=full.kitchenPhotoUrls().get(1);
+
+        catalog.clearKitchenPhotoSlot(kitchen,1);
+        verify(media).deleteByPublicUrl(slot1);
+        var cleared=catalog.getMyKitchen(owner);
+        assertNull(cleared.kitchenPhotoUrl()); assertEquals(List.of(slot2),cleared.kitchenPhotoUrls());
+
+        var refilled=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file); // the chef adds a new photo into slot 1
+        assertEquals(2,refilled.kitchenPhotoUrls().size()); assertEquals(slot2,refilled.kitchenPhotoUrls().get(1));
+        catalog.clearKitchenPhotoSlot(kitchen,2); catalog.clearKitchenPhotoSlot(kitchen,2); // clearing an empty slot is fine
+        verify(media).deleteByPublicUrl(slot2);
+        assertEquals(List.of(refilled.kitchenPhotoUrl()),catalog.getMyKitchen(owner).kitchenPhotoUrls());
+    }
+
+    @Test void newKitchenImportsRegistrationPhotosOnceAndRegistrationWins() {
+        var client=mock(UserChefKitchenPhotoClient.class);
+        when(client.fetch(chef,1)).thenReturn(java.util.Optional.of(new UserChefKitchenPhotoClient.Photo(new byte[]{1},"image/png")));
+        when(client.fetch(chef,2)).thenReturn(java.util.Optional.of(new UserChefKitchenPhotoClient.Photo(new byte[]{2},"image/jpeg")));
+        when(media.storeKitchenImage(any(),anyString(),any(),anyString())).thenAnswer(i->{
+            String blob="public/kitchens/"+i.getArgument(0)+"/kitchen/"+i.getArgument(1);
+            return new StoredMedia("media",blob,i.getArgument(3),1,"https://media.example/"+blob);
+        });
+        String chefUpload=catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.KITCHEN,file).kitchenPhotoUrl();
+        var importer=new KitchenPhotoImporter(jdbc,
+            new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource())),
+            media,client,mock(DiscoveryCacheService.class));
+
+        assertTrue(importer.importKitchen(kitchen));
+        assertEquals(List.of("https://media.example/public/kitchens/"+kitchen+"/kitchen/registration-1.png",
+            "https://media.example/public/kitchens/"+kitchen+"/kitchen/registration-2.jpg"),catalog.getMyKitchen(owner).kitchenPhotoUrls());
+        verify(media).deleteByPublicUrl(chefUpload);
+
+        assertFalse(importer.importKitchen(kitchen)); // once per kitchen
+        verify(client,times(2)).fetch(any(),anyInt());
+        var backfill=importer.backfill(); // only the other kitchen is left; its chef has no approved photos
+        assertEquals(1,backfill.checked()); assertEquals(0,backfill.imported()); assertEquals(0,backfill.failed());
+        assertEquals(0,importer.backfill().checked());
+        assertTrue(catalog.getMyKitchen(stranger).kitchenPhotoUrls().isEmpty());
+    }
+
+    @Test void chefFaceCanStillBeRemoved() {
+        catalog.setChefAvatar(owner,"chef-avatar-01");
+        assertNull(catalog.deleteKitchenPhoto(owner,KitchenPhotoKind.CHEF).chefPhotoUrl());
     }
 
     @Test void photoRoutesAreChefOnlyAndNeedAKitchen() {
-        assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),KitchenPhotoKind.CHEF,file)).getCode());
+        assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),KitchenPhotoKind.KITCHEN,file)).getCode());
         assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.deleteKitchenPhoto(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),KitchenPhotoKind.CHEF)).getCode());
         var newcomer=new CravesPrincipal(UUID.randomUUID(),"",Set.of("CHEF"));
-        assertEquals("KITCHEN_PROFILE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(newcomer,KitchenPhotoKind.CHEF,file)).getCode());
+        assertEquals("KITCHEN_PROFILE_REQUIRED",rejected(()->catalog.uploadKitchenPhoto(newcomer,KitchenPhotoKind.KITCHEN,file)).getCode());
         verify(media,never()).uploadKitchenImage(any(),any(),any());
+    }
+
+    @Test void aChefPicksASharedFaceAndCanSwitchIt() {
+        assertEquals("https://media.example/public/chef-avatars/chef-avatar-04.jpg",catalog.setChefAvatar(owner,"chef-avatar-04").chefPhotoUrl());
+        assertEquals("https://media.example/public/chef-avatars/chef-avatar-17.jpg",catalog.setChefAvatar(owner,"chef-avatar-17").chefPhotoUrl());
+        verify(media).deleteByPublicUrl("https://media.example/public/chef-avatars/chef-avatar-04.jpg"); // MediaStorageService ignores shared faces
+        assertNull(catalog.getMyKitchen(stranger).chefPhotoUrl());
+    }
+
+    /** The nearby list needs PostGIS, so it only runs in the CI service container. */
+    @Test void bothCustomerKitchenListsCarryTheChefPicture() {
+        String face="https://media.example/public/chef-avatars/chef-avatar-04.jpg";
+        catalog.setChefAvatar(owner,"chef-avatar-04");
+        var nearbyFaces=new HashMap<UUID,String>(); var cityFaces=new HashMap<UUID,String>(); var distanceFaces=new HashMap<UUID,String>();
+        new NearbyDiscoveryService(jdbc,new CatalogDiscoveryProperties(),finance).discoverKitchens(latitude,longitude,1000,0,10).kitchens().forEach(k->nearbyFaces.put(k.id(),k.chefPhotoUrl()));
+        catalog.discoverKitchens(null,null,"Hyderabad",null,null).kitchens().forEach(k->cityFaces.put(k.id(),k.chefPhotoUrl()));
+        catalog.discoverKitchens(latitude,longitude,"Hyderabad",null,null).kitchens().forEach(k->distanceFaces.put(k.id(),k.chefPhotoUrl()));
+        for (var faces : List.of(nearbyFaces,cityFaces,distanceFaces)) {
+            assertEquals(face,faces.get(kitchen));
+            assertTrue(faces.containsKey(otherKitchen)); assertNull(faces.get(otherKitchen)); // a chef who has not picked a face has none
+        }
+    }
+
+    @Test void unknownFacesRoleAndKitchenAreChecked() {
+        assertEquals("CHEF_AVATAR_UNKNOWN",rejected(()->catalog.setChefAvatar(owner,"chef-avatar-19")).getCode());
+        assertEquals("CHEF_AVATAR_UNKNOWN",rejected(()->catalog.setChefAvatar(owner,"../kitchens/x")).getCode());
+        assertNull(catalog.getMyKitchen(owner).chefPhotoUrl());
+        assertEquals("CHEF_ROLE_REQUIRED",rejected(()->catalog.setChefAvatar(new CravesPrincipal(chef,"",Set.of("CUSTOMER")),"chef-avatar-01")).getCode());
+        assertEquals("KITCHEN_PROFILE_REQUIRED",rejected(()->catalog.setChefAvatar(new CravesPrincipal(UUID.randomUUID(),"",Set.of("CHEF")),"chef-avatar-01")).getCode());
+    }
+
+    @Test void realChefPhotosAreRefused() {
+        assertEquals("CHEF_PHOTO_UPLOAD_DISABLED",rejected(()->catalog.uploadKitchenPhoto(owner,KitchenPhotoKind.CHEF,file)).getCode());
+        verify(media,never()).uploadKitchenImage(any(),eq(KitchenPhotoKind.CHEF),any());
     }
 
     // ---- chef settings ----

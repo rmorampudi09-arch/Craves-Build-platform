@@ -1,3 +1,5 @@
+> Historical: written for the retired subscription 4f897b61 (names ending l3ing6). Current production: docs/runbooks/production-environment.md.
+
 # Admin explorer Consumption-compatible activation
 
 Status: ACTIVE. All three scoped backend deployments, gateway operations and Explorer flags are live. Admin production run 38987 succeeded, and the authenticated production UI checks below passed.

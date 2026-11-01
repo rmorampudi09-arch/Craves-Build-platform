@@ -27,7 +27,7 @@ import {
   parseCheckoutOperationResponse,
 } from "@/features/checkout/lib/checkout-operation-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
-import { sessionFetch } from "@/features/auth/api/sessionFetch";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import {
   cartCurrency,
   cartTotal,
@@ -274,7 +274,6 @@ async function resolveLeadMinutes(items: CartItem[]): Promise<number | null> {
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const prepareStartedRef = useRef(false);
-  const autoReviewKeyRef = useRef("");
   const [items, setItems] = useState<CartItem[]>([]);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -290,7 +289,6 @@ export default function CheckoutPage() {
   const [paymentFailure, setPaymentFailure] =
     useState<CheckoutPaymentFailure>(null);
   const [loading, setLoading] = useState(true);
-  const [reviewing, setReviewing] = useState(false);
   const [addressChangeBusy, setAddressChangeBusy] = useState(false);
   // While Razorpay is open or a payment is being confirmed, a new address would start a second checkout.
   const [paymentLocked, setPaymentLocked] = useState(false);
@@ -450,7 +448,6 @@ export default function CheckoutPage() {
         return;
       }
 
-      autoReviewKeyRef.current = "";
       setSelectedId(id);
       window.sessionStorage.setItem(ADDRESS_KEY, id);
       window.sessionStorage.removeItem(CHECKOUT_OPERATION_ID_KEY);
@@ -472,6 +469,8 @@ export default function CheckoutPage() {
     setEditorOpen(true);
   }
 
+  // Review total: the checkout (an unpaid order, which empties the server cart) is created on that tap only,
+  // never on page load or an address change, like the Android app.
   const ensureCheckout = useCallback(async (): Promise<CustomerCheckout> => {
     if (checkout) return checkout;
     if (!selectedId) {
@@ -494,41 +493,6 @@ export default function CheckoutPage() {
     return prepared;
   }, [checkout, instructions, selectedId]);
 
-  useEffect(() => {
-    if (
-      loading ||
-      reviewing ||
-      addressChangeBusy ||
-      checkout ||
-      !selectedId ||
-      items.length === 0 ||
-      paymentFailure
-    ) {
-      return;
-    }
-
-    const reviewKey = `${selectedId}:${instructions.trim()}`;
-    if (autoReviewKeyRef.current === reviewKey) return;
-    autoReviewKeyRef.current = reviewKey;
-
-    setReviewing(true);
-    void ensureCheckout()
-      .catch((caught) => {
-        setPaymentFailure({ ...checkoutProblem(caught), retryAllowed: true });
-      })
-      .finally(() => setReviewing(false));
-  }, [
-    addressChangeBusy,
-    checkout,
-    ensureCheckout,
-    instructions,
-    items.length,
-    loading,
-    paymentFailure,
-    reviewing,
-    selectedId,
-  ]);
-
   const selectedAddress = addresses.find((address) => address.id === selectedId);
   const { unavailableItems } = useCartAddressAvailability({
     items,
@@ -540,6 +504,8 @@ export default function CheckoutPage() {
   const noItemReachesAddress = items.length > 0 && unavailableItems.length === items.length;
 
   async function handleBackToCart() {
+    // While a payment opens or is being confirmed, Back keeps the customer here with its message.
+    if (paymentLocked) return;
     setError("");
 
     const currentCheckout = checkout;
@@ -643,7 +609,7 @@ export default function CheckoutPage() {
                     Delivery & payment
                   </h2>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6B6B6B]">
-                    Choose where to deliver. Craves calculates the final total automatically before payment.
+                    Choose where to deliver, then review your total before you pay.
                   </p>
                 </div>
                 <span className="rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#6B6B6B] shadow-[0_2px_8px_rgba(26,26,26,0.04)]">
@@ -876,9 +842,7 @@ export default function CheckoutPage() {
                         <div className="mt-3 flex items-start gap-2 border-t border-[#E5E7EB] pt-4">
                           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#6B6B6B]" aria-hidden="true" />
                           <p className="text-xs leading-5 text-[#6B6B6B]">
-                            {reviewing
-                              ? "Calculating delivery fee, tax and your final total…"
-                              : "Your final total is calculated automatically for the selected address."}
+                            Tap Review total to see the delivery fee, tax and your final total.
                           </p>
                         </div>
                       )}
@@ -916,15 +880,19 @@ export default function CheckoutPage() {
                         previewAmount={subtotal}
                         currency={currency}
                         disabled={
-                          reviewing ||
                           addressChangeBusy ||
                           noItemReachesAddress ||
                           (!checkout && !selectedAddress)
                         }
                         failure={paymentFailure}
-                        ensureCheckout={ensureCheckout}
+                        ensureCheckout={() =>
+                          ensureCheckout().catch((caught) =>
+                            setPaymentFailure({ ...checkoutProblem(caught), retryAllowed: true }),
+                          )
+                        }
                         onFailure={setPaymentFailure}
                         onPaymentLockChange={setPaymentLocked}
+                        onReviewCart={() => void handleBackToCart()}
                       />
                     ) : null}
                   </div>

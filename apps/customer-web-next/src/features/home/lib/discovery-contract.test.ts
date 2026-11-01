@@ -68,3 +68,18 @@ test("rejects malformed coordinates and identifiers", () => {
     kitchens: [{ id: "not-a-uuid", kitchenName: "Kitchen", city: "Hyderabad", state: "Telangana", distanceMeters: 10, activeMenuItemCount: 1 }]
   }), null);
 });
+
+test("keeps only https kitchen and chef photos, each once, at most 12", () => {
+  const kitchen = { id: "11111111-1111-4111-8111-111111111111", kitchenName: "Kitchen", city: "Hyderabad", state: "Telangana", distanceMeters: 10, activeMenuItemCount: 1 };
+  const photo = (n: number) => `https://img.craves.test/k${n}.webp`;
+  const parsed = parseKitchenDiscovery({ latitude: 17, longitude: 78, radiusMeters: 10_000, page, kitchens: [
+    { ...kitchen, chefPhotoUrl: "https://img.craves.test/chef.webp", kitchenPhotoUrls: [photo(1), "http://img.craves.test/plain.webp", " ", 7, photo(1), ...Array.from({ length: 14 }, (_, n) => photo(n + 2))] },
+    { ...kitchen, chefPhotoUrl: "javascript:alert(1)" },
+  ] });
+  assert.ok(parsed);
+  assert.equal(parsed.kitchens[0]?.chefPhotoUrl, "https://img.craves.test/chef.webp");
+  assert.deepEqual(parsed.kitchens[0]?.kitchenPhotoUrls, Array.from({ length: 12 }, (_, n) => photo(n + 1)));
+  assert.equal(parsed.kitchens[1]?.chefPhotoUrl, null);
+  assert.deepEqual(parsed.kitchens[1]?.kitchenPhotoUrls, []);
+  assert.equal(parseKitchenDiscovery({ latitude: 17, longitude: 78, radiusMeters: 10_000, page, kitchens: [{ ...kitchen, kitchenPhotoUrls: "https://img.craves.test/k.webp" }] }), null);
+});

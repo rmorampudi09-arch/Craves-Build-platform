@@ -71,9 +71,9 @@ The webhook APIM policy has no Bearer guard and does not use `set-body`; the Int
 - Subscription Container App: `ca-craves-subscription-service-p`
 - Integration Container App: `ca-craves-integration-service-pr`
 - Order Container App: `ca-craves-order-service-prodlow`
-- Service Bus namespace: `sb-craves-prodlow-l3ing6`
+- Service Bus namespace: `sb-craves-prodlow-kmqgfy`
 - Topic: `craves-domain-events`
-- APIM: `apim-craves-prodlow-l3ing6`
+- APIM: `apim-craves-prodlow-kmqgfy`
 
 No new Service Bus namespace, APIM service, Container App, PostgreSQL server, Redis resource, or Key Vault is provisioned. The activation does create/reconcile three topic subscriptions/rules inside the existing Service Bus namespace.
 
@@ -120,7 +120,7 @@ After this package is merged to `main`, deploy all three participating service i
 2. `azure-pipelines-integration-service.yml`
 3. `azure-pipelines-order-service.yml`
 
-Use `AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection`.
+Use `AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection`.
 
 This ensures the running images actually contain the callback security correction and the already-developed subscription payment/order workers.
 
@@ -179,7 +179,7 @@ Rollback order disables upstream generation/publishing first, then provider exec
 
 ## Manual steps required
 
-- Azure DevOps: run the listed pipelines and keep `AZURE_SERVICE_CONNECTION=Craves-Dev-Service-Connection`.
+- Azure DevOps: run the listed pipelines and keep `AZURE_SERVICE_CONNECTION=Craves-RMORAMPUDI09-Service-Connection`.
 - Secrets: if preflight reports a missing secret binding, wire the existing value through Azure Key Vault/Container App secret references. Never paste the value into chat.
 - Cashfree dashboard: no production KYC/go-live action is required for this sandbox rollout. A real sandbox checkout later requires the existing sandbox merchant credentials and a Craves customer access token.
 - No DNS, mobile-store, Firebase Console, new Azure resource, or production Cashfree action is required by this activation package.

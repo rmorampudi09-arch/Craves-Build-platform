@@ -66,7 +66,7 @@ azure-pipelines-customer-favorites-apim.yml
 Use the existing service connection:
 
 ```text
-Craves-Dev-Service-Connection
+Craves-RMORAMPUDI09-Service-Connection
 ```
 
 The pipeline is intentionally manual/guarded and defaults to no APIM write. It first validates Bash/XML assets and runs `mvn clean verify` for User/Chef Service. APIM mutation requires:
@@ -107,7 +107,7 @@ Source completion does **not** prove that the live APIM instance, deployed User/
 
 ## Manual steps required
 
-- **Azure DevOps:** register/use the YAML with display name exactly `azure-pipelines-customer-favorites-apim.yml`; use `Craves-Dev-Service-Connection`; set the guarded APIM confirmation only during the approved rollout.
+- **Azure DevOps:** register/use the YAML with display name exactly `azure-pipelines-customer-favorites-apim.yml`; use `Craves-RMORAMPUDI09-Service-Connection`; set the guarded APIM confirmation only during the approved rollout.
 - **Azure Portal:** no new resource creation is required for this P0 package. Existing Container Apps, APIM and PostgreSQL are reused.
 - **Secrets:** no new secret is introduced. Do not paste tokens or database credentials into pipeline YAML or chat.
 - **Mobile:** run the exact Android release candidate on a real/test device and capture request/correlation evidence.

@@ -15,7 +15,7 @@ import urllib.request
 
 RG='rg-craves-prodlow-centralindia'
 APP='ca-craves-integration-service-pr'
-SUB='4f897b61-9b52-44b4-8cf1-bdac281cc1aa'
+SUB='721906c9-4a72-4606-830b-d3e7ace093ff'
 PROTOCOL='RAZORPAY_REFUND_IDEMPOTENCY_V1'
 FLAGS={
  'consumer':'CRAVES_REFUND_CONSUMER_ENABLED','publisher':'CRAVES_REFUND_STATUS_PUBLISHER_ENABLED',
@@ -101,7 +101,7 @@ def internal_key(app):
  ref=entry.get('secretRef')
  secrets={s['name']:s for s in (app['properties']['configuration'].get('secrets') or [])}
  url=secrets.get(ref,{}).get('keyVaultUrl','');p=urllib.parse.urlsplit(url)
- if p.scheme!='https' or p.hostname!='kvcravesprodlowl3ing6.vault.azure.net' or not re.fullmatch(r'/secrets/[A-Za-z0-9-]+(?:/[a-f0-9]+)?',p.path) or p.query or p.fragment:
+ if p.scheme!='https' or p.hostname!='kvcravesprodlowkmqgfy.vault.azure.net' or not re.fullmatch(r'/secrets/[A-Za-z0-9-]+(?:/[a-f0-9]+)?',p.path) or p.query or p.fragment:
   raise GuardError('EXISTING_SECURE_INTERNAL_REFERENCE_REQUIRED')
  value=az('keyvault','secret','show','--id',url).get('value')
  if not isinstance(value,str) or not value:raise GuardError('INTERNAL_REFERENCE_EMPTY')

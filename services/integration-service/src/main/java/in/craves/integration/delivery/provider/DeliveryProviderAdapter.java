@@ -212,8 +212,21 @@ public interface DeliveryProviderAdapter {
         String providerStatus,
         String trackingUrl,
         Instant observedAt,
-        JsonNode providerMetadata
+        JsonNode providerMetadata,
+        Courier courier
     ) {
+        public ProviderStatusUpdate(String providerId,
+                                    String providerOrderId,
+                                    String providerDeliveryId,
+                                    DeliveryStatus status,
+                                    String providerStatus,
+                                    String trackingUrl,
+                                    Instant observedAt,
+                                    JsonNode providerMetadata) {
+            this(providerId, providerOrderId, providerDeliveryId, status, providerStatus,
+                trackingUrl, observedAt, providerMetadata, null);
+        }
+
         public ProviderStatusUpdate {
             Objects.requireNonNull(providerId, "providerId is required");
             Objects.requireNonNull(providerOrderId, "providerOrderId is required");
@@ -244,7 +257,8 @@ public interface DeliveryProviderAdapter {
                     observedAt,
                     "tracking observedAt is required"
                 ),
-                delivery.providerMetadata()
+                delivery.providerMetadata(),
+                snapshot.courier()
             );
         }
     }

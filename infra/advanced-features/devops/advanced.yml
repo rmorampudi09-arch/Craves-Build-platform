@@ -1,0 +1,25 @@
+# Release pipeline for advanced-features (Azure DevOps ravitejamm6/Craves-New-Original, repo craves-pipelines, file /advanced.yml,
+# pipeline release/release-advanced). Same template as every other feature: build from the mirrored main, 10 % canary, 100 %,
+# automatic rollback. Needs service connection sc-craves-advanced (Contributor on rg-craves-advanced-prod only).
+trigger: none
+pr: none
+resources:
+  repositories:
+    - repository: code
+      type: git
+      name: Craves-New-Original/craves-code
+      ref: refs/heads/main
+      trigger:
+        branches: { include: [main] }
+        paths: { include: [services/advanced-features-service ] }
+extends:
+  template: templates/release.yml
+  parameters:
+    feature: advanced
+    imageRepo: craves/advanced-features-service
+    context: services/advanced-features-service
+    dockerfile: services/advanced-features-service/Dockerfile
+    apps: [ca-craves-advanced-prod]
+    healthPath: /actuator/health
+    buildArgsFromApp: ''
+    extraBuildArgs: ''

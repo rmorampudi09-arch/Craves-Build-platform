@@ -189,7 +189,7 @@ describe('rider app in live mode', () => {
     const accept = calls.find(c => c.url === '/api/v1/rider/terms/accept');
     expect(JSON.parse(accept?.data)).toEqual({version: 'v2'});
     const device = calls.find(c => c.url === '/api/v1/rider/devices');
-    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.3.0'});
+    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.3.1'});
     expect(calls.every(c => c.baseURL === 'https://api.example.invalid')).toBe(true);
   });
 

@@ -7,7 +7,7 @@ The server records what these tests measure: when each offer rang and by which c
 ## Before each phone
 
 1. Install the live APK (`craves-rider-live-<sha>.apk`) from the "craves-rider-apk" artifact: run the "Craves Rider APK" workflow by hand on `main` (live is the default), or set the repo variable `CRAVES_RIDER_API_MODE=live` for PR builds.
-2. Sign in, accept the terms, and finish **Phone setup** (all checks green, including autostart, battery "no restrictions" and "lock Craves in recent apps").
+2. Sign in, accept the terms, and finish **Phone setup** (all checks green, including autostart, battery "no restrictions" and "lock Craves in recent apps"). From app 1.3.1 the battery button asks once with Android's "Allow" dialog, and location must be "Precise".
 3. Charge to at least 80%, Wi-Fi off, mobile data on, location on.
 4. Connect adb if you can and keep `adb logcat -s CravesRiderOffer CravesRiderOnline > <brand>.log` running.
 5. Note the model, Android version and OEM skin (MIUI/HyperOS, ColorOS, Funtouch/OriginOS, realme UI, One UI).
@@ -31,6 +31,7 @@ Also try once per phone (record, not pass/fail):
 
 - Reboot while online: the service doesn't come back on its own (no background location by design). Opening the app resumes it without a new selfie while the shift is valid.
 - Force stop in Settings, then open the app: same as reboot.
+- Selfie face check (app 1.3.1): go online with the helmet on, with a second person in the photo, and with eyes shut. Each asks to take the selfie again and says why; a plain selfie goes straight through. Write down any plain selfie it refused.
 - Airplane mode for 2 minutes, then off: uploads resume within 10 s and the fixes from the gap arrive (all of the first minute, then one per 30 s; P2-03), oldest first.
 - Trip cancelled with the screen off: on a test trip, lock the phone and have ops cancel the trip in the console. The "Trip cancelled" notification appears within 15 s, and tapping it opens the app on the cancelled trip.
 

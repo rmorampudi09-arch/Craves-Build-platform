@@ -19,9 +19,14 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /** Phone checks for the rider setup screen. Android can't report autostart, so the app asks the rider. */
 class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
@@ -49,10 +54,15 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  /** Opens the system list; Play restricts the direct "ignore optimisations" dialog. */
+  /**
+   * The system's one-tap "Allow" dialog, as Swiggy and Zomato ask: Xiaomi, Oppo and Vivo hide the list, and their own
+   * "No restrictions" doesn't always clear Android's optimisation, so the setup row stayed red. Then the list, then app
+   * details. On Play this dialog needs the offers-while-asleep reason in the app's declarations.
+   */
   @ReactMethod
   fun openBatterySettings(promise: Promise) {
-    promise.resolve(start(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) || openAppDetails())
+    val allow = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.fromParts("package", reactContext.packageName, null))
+    promise.resolve(start(allow) || start(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) || openAppDetails())
   }
 
   /** Resolves true when a vendor autostart screen opened, false when it fell back to app details. */
@@ -115,45 +125,100 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(deleteKeptPhoto(reactContext, uri))
   }
 
+  /**
+   * The faces in a selfie, found by ML Kit's bundled model (the photo never leaves the phone): for each, its width
+   * against the photo's short edge, head turn (yaw) and tilt (roll) in degrees, and the chance each eye is open when
+   * known. JS decides what passes (domain/selfieFace.ts). On its own thread, like keepPhoto.
+   */
+  @ReactMethod
+  fun checkFace(uri: String, promise: Promise) {
+    Thread {
+      try {
+        val photo = decodeUpright(Uri.parse(uri), FACE_EDGE)
+        try {
+          val options = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+            .build()
+          val detector = FaceDetection.getClient(options)
+          val found = try {
+            Tasks.await(detector.process(InputImage.fromBitmap(photo, 0)), FACE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+          } finally {
+            detector.close()
+          }
+          val shortEdge = minOf(photo.width, photo.height).toDouble()
+          val faces = Arguments.createArray()
+          found.forEach { face ->
+            faces.pushMap(Arguments.createMap().apply {
+              putDouble("widthRatio", face.boundingBox.width() / shortEdge)
+              putDouble("yaw", face.headEulerAngleY.toDouble())
+              putDouble("roll", face.headEulerAngleZ.toDouble())
+              face.leftEyeOpenProbability?.let { putDouble("leftEye", it.toDouble()) }
+              face.rightEyeOpenProbability?.let { putDouble("rightEye", it.toDouble()) }
+            })
+          }
+          promise.resolve(faces)
+        } finally {
+          photo.recycle()
+        }
+      } catch (error: Throwable) {
+        // Any failure, a missing native library too, rejects: JS then lets the selfie through instead of crashing the app.
+        promise.reject("RIDER_FACE_CHECK", error)
+      }
+    }.start()
+  }
+
   // shortcut: a photo kept just before the app died, never queued, stays in rider-photos; sweep old files if that shows up.
   private fun keep(source: Uri): File {
-    val resolver = reactContext.contentResolver
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(source).use { BitmapFactory.decodeStream(it, null, bounds) }
-    require(bounds.outWidth > 0 && bounds.outHeight > 0) { "not an image: $source" }
-    // The largest power-of-two step down that keeps the long edge at 1600 px or more; the matrix scales the rest.
-    var sample = 1
-    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_PHOTO_EDGE) sample *= 2
-    val decoded = resolver.openInputStream(source).use {
-      BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
-    } ?: error("unreadable image: $source")
-    val degrees = resolver.openInputStream(source).use { input ->
-      when (ExifInterface(input ?: error("unreadable image: $source"))
-        .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-        else -> 0f
-      }
-    }
-    val scale = minOf(1f, MAX_PHOTO_EDGE.toFloat() / maxOf(decoded.width, decoded.height))
-    val matrix = Matrix().apply {
-      postScale(scale, scale)
-      postRotate(degrees)
-    }
-    val upright = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+    val photo = decodeUpright(source, MAX_PHOTO_EDGE)
     val file = File(File(reactContext.filesDir, PHOTO_DIR).apply { mkdirs() }, "${UUID.randomUUID()}.jpg")
     try {
       // A failed or partial write leaves no file behind: JS then queues the camera's own photo.
-      check(FileOutputStream(file).use { upright.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }) { "JPEG not written" }
+      check(FileOutputStream(file).use { photo.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }) { "JPEG not written" }
     } catch (error: Throwable) {
       file.delete() // out of memory too: no partial file stays behind
       throw error
     } finally {
-      if (upright !== decoded) upright.recycle()
-      decoded.recycle()
+      photo.recycle()
     }
     return file
+  }
+
+  /** The photo upright (the camera's EXIF rotation applied), its long edge at most maxEdge px. */
+  private fun decodeUpright(source: Uri, maxEdge: Int): Bitmap {
+    val resolver = reactContext.contentResolver
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(source).use { BitmapFactory.decodeStream(it, null, bounds) }
+    require(bounds.outWidth > 0 && bounds.outHeight > 0) { "not an image: $source" }
+    // The largest power-of-two step down that keeps the long edge at maxEdge px or more; the matrix scales the rest.
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxEdge) sample *= 2
+    val decoded = resolver.openInputStream(source).use {
+      BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+    } ?: error("unreadable image: $source")
+    try {
+      val degrees = resolver.openInputStream(source).use { input ->
+        when (ExifInterface(input ?: error("unreadable image: $source"))
+          .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+          ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+          ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+          ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+          else -> 0f
+        }
+      }
+      val scale = minOf(1f, maxEdge.toFloat() / maxOf(decoded.width, decoded.height))
+      val matrix = Matrix().apply {
+        postScale(scale, scale)
+        postRotate(degrees)
+      }
+      val upright = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+      // Nothing to scale or turn hands back the same bitmap: that one is the result.
+      if (upright !== decoded) decoded.recycle()
+      return upright
+    } catch (error: Throwable) {
+      decoded.recycle()
+      throw error
+    }
   }
 
   private fun openAppDetails(): Boolean =
@@ -181,6 +246,10 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
     private const val PHOTO_DIR = "rider-photos"
     private const val MAX_PHOTO_EDGE = 1600
     private const val JPEG_QUALITY = 80
+    // A selfie face then spans a few hundred pixels: plenty for ML Kit (it asks for 100), and quick on a cheap phone.
+    private const val FACE_EDGE = 1024
+    // A check takes well under a second; one stuck this long is given up and the selfie goes as it is.
+    private const val FACE_TIMEOUT_SECONDS = 10L
 
     // Xiaomi, Oppo/Realme (ColorOS and the newer OPlus package) and Vivo/iQOO, per dontkillmyapp.com.
     private val AUTOSTART_SCREENS = listOf(

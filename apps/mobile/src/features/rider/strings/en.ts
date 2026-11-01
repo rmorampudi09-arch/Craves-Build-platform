@@ -285,11 +285,12 @@ export const en = {
     recents: 'Lock Craves Rider in recent apps',
     testRing: 'Test ring',
     rang: 'Your phone rang and vibrated',
-    locationSteps: 'Tap the button and allow location while using the app.',
+    locationSteps: 'Tap the button and allow location while using the app, with Precise on.',
     notificationsSteps: 'Tap the button and allow notifications.',
     lockScreenSteps:
       'Tap the button and allow full screen notifications for Craves Rider. A new offer then opens by itself, even when the phone is locked.',
-    batterySteps: 'Tap the button, find Craves Rider and choose "Don\'t optimise" or "No restrictions".',
+    batterySteps:
+      'Tap the button and choose "Allow". If a list opens instead, find Craves Rider and choose "Don\'t optimise" or "No restrictions".',
     ringSteps: 'Your phone rings and vibrates the way it does for an offer.',
     // Per manufacturer family: Xiaomi/Redmi/Poco, Oppo/Realme/OnePlus (ColorOS), Vivo/iQOO, Samsung, other.
     autostartSteps: {
@@ -387,6 +388,15 @@ export const en = {
     openSettings: 'Open settings',
     noAlerts: "This phone can't get order alerts yet. Finish phone setup, then go online.",
     photoTooBig: 'That photo is too large to send. Take it again.',
+    faceTitle: 'Take the selfie again',
+    retake: 'Take again',
+    face: {
+      none: "We couldn't see your face. Take off your helmet, mask and dark glasses, face the light and look at the camera.",
+      many: 'Only you should be in the selfie.',
+      far: 'Hold the phone closer, so your face fills most of the photo.',
+      turned: 'Look straight at the camera, with your head upright.',
+      eyes: 'Keep your eyes open, and take off dark glasses.',
+    },
   },
   offer: {
     title: 'New order',

@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {Linking, Pressable, StatusBar, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Svg, {Circle, ClipPath, Defs, Ellipse, G} from 'react-native-svg';
@@ -65,8 +65,14 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
   const supportPhone = useRiderMe().data?.supportPhone;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{text: string; action?: 'settings' | 'setup' | 'support'} | null>(null);
+  // One selfie at a time: a second tap while the phone checks the face would open another camera.
+  const taking = useRef(false);
 
   async function takeSelfie() {
+    if (taking.current) {
+      return;
+    }
+    taking.current = true;
     setProblem(null);
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -80,7 +86,7 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         setProblem({text: g.noAlerts, action: 'setup'});
         return;
       }
-      const photo = await selfieShot();
+      const photo = await selfieShot({...g, cancel: strings.common.cancel});
       if (!photo?.uri) {
         return;
       }
@@ -112,6 +118,8 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
       setBusy(false);
       // A refusal may mean the account changed; /me decides where the rider lands.
       queryClient.invalidateQueries({queryKey: riderKeys.all});
+    } finally {
+      taking.current = false;
     }
   }
 

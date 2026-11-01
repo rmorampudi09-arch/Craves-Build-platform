@@ -244,9 +244,11 @@ spaces), and Send code asks auth-service (`POST /api/v1/auth/otp/send`), which s
 `RiderSmsCodeModule`) waits up to 5 minutes for the SMS: when it comes, Android asks in its own sheet whether Craves Rider
 may read that one message, and Allow fills in the code. The sixth digit checks the code by itself, also typed or pasted (a
 whole SMS works); Verify stays for a retry. Deny, a phone without Play services, or 5 minutes without the SMS: the rider
-types it, as before. Resend waits for the new SMS. The app asks for no SMS permission and MSG91's template stays as it is
-(the no-tap SMS Retriever API would need the app's hash in the message). The customer app reads its code through Firebase
-phone auth instead, which the rider app does not use.
+types it, as before. Resend waits for the new SMS. The app asks for no SMS permission. Once auth-service has a rider-only
+MSG91 template whose text ends with the app's hash (`GO-LIVE.md` §11), it answers `autoRead` and the app reads the code
+with the SMS Retriever API instead: no sheet and no tap, never both. The app sends its install ID with both calls, for
+auth-service's per-install limits. The customer app reads its code through Firebase phone auth instead, which the rider
+app does not use.
 
 **The way back on every screen.**
 

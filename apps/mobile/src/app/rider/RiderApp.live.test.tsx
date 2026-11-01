@@ -157,11 +157,15 @@ describe('rider app in live mode', () => {
     // The SMS goes out by MSG91 from auth-service, never by Firebase phone auth.
     expect(signInWithPhoneNumber).not.toHaveBeenCalled();
     expect(JSON.parse(calls[0].data)).toEqual({phoneNumber: '9848012345', countryCode: '91'});
+    // The rider app names itself (its own SMS template) and its install (auth-service's per-install OTP limits).
+    expect(calls[0].headers.get('X-Craves-App')).toBe('rider');
+    expect(calls[0].headers.get('X-Craves-Installation-Id')).toBe('android-id-1');
 
     // The sixth digit checks the code by itself (typed, pasted or filled in from the SMS); no Verify tap.
     await act(async () => input('rider-code-input').props.onChangeText('482913'));
     await settle();
     expect(JSON.parse(calls[1].data)).toEqual({challengeId: CHALLENGE, otp: '482913'});
+    expect(calls[1].headers.get('X-Craves-Installation-Id')).toBe('android-id-1');
     expect(signInWithCustomToken).toHaveBeenCalledWith(expect.anything(), CUSTOM_TOKEN);
     expect(JSON.parse(calls[2].data)).toEqual({firebaseIdToken: 'firebase-id-token'});
 

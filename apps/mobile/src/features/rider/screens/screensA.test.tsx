@@ -28,7 +28,10 @@ import {PrivacyNoticeScreen} from './PrivacyNoticeScreen';
 import {TermsScreen} from './TermsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn(), isFocused: () => true};
-const mockSession = {beginPhone: jest.fn(async (_phone: string) => undefined), confirmOtp: jest.fn(async (_code: string) => undefined)};
+const mockSession = {
+  beginPhone: jest.fn(async (_phone: string) => ({autoRead: false})),
+  confirmOtp: jest.fn(async (_code: string) => undefined),
+};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/native', () => ({
@@ -152,7 +155,7 @@ const flush = () =>
 beforeEach(() => {
   jest.clearAllMocks();
   // clearAllMocks keeps unused mock*Once values; never let one leak into the next test.
-  mockSession.beginPhone.mockReset().mockResolvedValue(undefined);
+  mockSession.beginPhone.mockReset().mockResolvedValue({autoRead: false});
   mockSession.confirmOtp.mockReset().mockResolvedValue(undefined);
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
@@ -177,7 +180,7 @@ describe('Sign in', () => {
     await act(async () => input('rider-phone-input').props.onChangeText('98480 12345'));
     await act(async () => press('rider-send-code').props.onPress());
     expect(mockSession.beginPhone).toHaveBeenCalledWith('+919848012345');
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('Otp', {phone: '+919848012345'});
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Otp', {phone: '+919848012345', autoRead: false});
   });
 
   it('takes a number pasted or filled in with +91, 0 or spaces, and never lets Android cut it short', async () => {

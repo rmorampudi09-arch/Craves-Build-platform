@@ -1,12 +1,16 @@
-// A live build fills in the sign-in code from its SMS (SMS User Consent API, RiderSmsCodeModule) and checks it at once.
+// A live build fills in the sign-in code from its SMS (SMS User Consent API, or with no tap the SMS Retriever for the
+// rider template; RiderSmsCodeModule) and checks it at once.
 import React from 'react';
 import {Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {AppApiError} from '../../../core/http/apiError';
 import {RiderOtpScreen} from './RiderOtpScreen';
 
-const mockSession = {beginPhone: jest.fn(async (_phone: string) => undefined), confirmOtp: jest.fn(async (_code: string) => undefined)};
-const mockSms = {onCode: (_code: string) => undefined as void, started: true, starts: 0, stops: 0};
+const mockSession = {
+  beginPhone: jest.fn(async (_phone: string) => ({autoRead: false})),
+  confirmOtp: jest.fn(async (_code: string) => undefined),
+};
+const mockSms = {onCode: (_code: string) => undefined as void, started: true, starts: 0, stops: 0, modes: [] as boolean[]};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../useRiderSession', () => ({useRiderSession: () => mockSession}));
@@ -16,9 +20,10 @@ jest.mock('../../../features/rider/riderConfig', () => ({
   isDemo: false,
 }));
 jest.mock('../../../features/rider/native/smsCode', () => ({
-  listenForSmsCode: (onCode: (code: string) => void) => {
+  listenForSmsCode: (onCode: (code: string) => void, autoRead = false) => {
     mockSms.onCode = onCode;
     mockSms.starts += 1;
+    mockSms.modes.push(autoRead);
     return {started: Promise.resolve(mockSms.started), stop: () => (mockSms.stops += 1)};
   },
 }));
@@ -37,9 +42,10 @@ const allText = () =>
 const press = (testID: string) => tree!.root.findAll(node => node.props.testID === testID && typeof node.props.onPress === 'function')[0];
 const codeInput = () => tree!.root.findByProps({testID: 'rider-code-input'});
 
-async function render() {
+async function render(autoRead?: boolean) {
+  const route = {...props.route, params: {...props.route.params, autoRead}};
   await act(async () => {
-    tree = renderer.create(<RiderOtpScreen {...props} />);
+    tree = renderer.create(<RiderOtpScreen {...props} route={route} />);
   });
 }
 
@@ -50,8 +56,8 @@ function close() {
 
 beforeEach(() => {
   mockSession.confirmOtp.mockReset().mockResolvedValue(undefined);
-  mockSession.beginPhone.mockReset().mockResolvedValue(undefined);
-  Object.assign(mockSms, {started: true, starts: 0, stops: 0});
+  mockSession.beginPhone.mockReset().mockResolvedValue({autoRead: false});
+  Object.assign(mockSms, {started: true, starts: 0, stops: 0, modes: []});
 });
 
 afterEach(close);
@@ -110,6 +116,35 @@ it('never checks the same code twice by itself; Verify asks again', async () => 
   expect(mockSession.confirmOtp).toHaveBeenCalledTimes(2);
 });
 
+it('reads the rider template SMS with no tap and no Allow sheet, and never asks for both', async () => {
+  await render(true);
+  expect(mockSms.modes).toEqual([true]);
+  expect(allText()).not.toContain('tap Allow');
+  await act(async () => mockSms.onCode('482615'));
+  expect(codeInput().props.value).toBe('482615');
+  expect(mockSession.confirmOtp).toHaveBeenCalledWith('482615');
+});
+
+it('follows the server after a resend: one-tap Allow when the SMS no longer carries the app hash', async () => {
+  jest.useFakeTimers();
+  try {
+    await render(true);
+    for (let i = 0; i < 31; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    await act(async () => press('rider-resend').props.onPress());
+    // Listening restarts in the mode the new answer gives; every earlier listener has stopped (never two at once).
+    expect(mockSms.modes[0]).toBe(true);
+    expect(mockSms.modes[mockSms.modes.length - 1]).toBe(false);
+    expect(mockSms.stops).toBe(mockSms.starts - 1);
+    expect(allText()).toContain('tap Allow');
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 it('says nothing about the SMS where the phone cannot read it, and the rider types the code', async () => {
   mockSms.started = false;
   await render();
@@ -123,10 +158,11 @@ describe('listenForSmsCode on a phone', () => {
     jest.isolateModules(() => {
       const rn = require('react-native');
       const start = jest.fn(async () => true);
+      const startRetriever = jest.fn(async () => true);
       const stop = jest.fn();
       const os = rn.Platform.OS;
       rn.Platform.OS = 'android';
-      rn.NativeModules.CravesRiderSmsCode = {start, stop};
+      rn.NativeModules.CravesRiderSmsCode = {start, startRetriever, stop};
       try {
         // The real module (this file mocks it for the screen tests above).
         const {listenForSmsCode, SMS_CODE_EVENT} = jest.requireActual('../../../features/rider/native/smsCode');
@@ -141,6 +177,11 @@ describe('listenForSmsCode on a phone', () => {
         rn.DeviceEventEmitter.emit(SMS_CODE_EVENT, '111111');
         expect(codes).toEqual(['482615']);
         expect(stop).toHaveBeenCalled();
+        // The rider template's SMS: the Retriever only, never the Allow sheet too.
+        expect(startRetriever).not.toHaveBeenCalled();
+        listenForSmsCode(() => undefined, true).stop();
+        expect(startRetriever).toHaveBeenCalledTimes(1);
+        expect(start).toHaveBeenCalledTimes(1);
       } finally {
         delete rn.NativeModules.CravesRiderSmsCode;
         rn.Platform.OS = os;

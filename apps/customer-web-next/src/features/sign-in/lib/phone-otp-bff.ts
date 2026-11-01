@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import { boundBffRequest } from "../../../shared/lib/bff-request-limits";
 import { boundedFetch } from "../../../shared/lib/bounded-fetch";
@@ -12,6 +13,17 @@ const SAFE_ERRORS = new Set([
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+/**
+ * The browser's address, for auth-service's per-IP OTP limits: every web sign-in reaches it from this server's one
+ * address, so it trusts X-Craves-Client-Ip from here (CRAVES_CENTRAL_OTP_FORWARDING_IPS). Front Door sets
+ * X-Azure-ClientIP itself (as in support guest chat). Only a literal IP is sent; unknown sends nothing.
+ */
+function clientIpHeader(request: NextRequest): Record<string, string> {
+  const ip = request.headers.get("x-azure-clientip")?.trim()
+    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return ip && isIP(ip) ? { "X-Craves-Client-Ip": ip } : {};
 }
 
 /** Restores the existing central MSG91 challenge contract without changing identity or session creation. */
@@ -37,7 +49,7 @@ export async function centralOtpProxy(request: NextRequest, action: "send" | "ve
   try {
     const response = await boundedFetch(`${apiBaseUrl()}/auth/otp/${action}`, {
       method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000),
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...clientIpHeader(request) },
       body: JSON.stringify(payload),
     }, 15_000, 24_000);
     const body = record(await response.json().catch(() => null));

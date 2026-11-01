@@ -51,6 +51,8 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
   const [error, setError] = useState<string>();
   const [sentAt, setSentAt] = useState(Date.now);
   const [busy, setBusy] = useState(false);
+  // The rider template's SMS ends with this app's hash: the code fills in with no tap and no sheet (SMS Retriever).
+  const [autoRead, setAutoRead] = useState(route.params.autoRead === true);
   // True once Android waits for the SMS: the rider taps Allow on its sheet and the code fills in (RiderSmsCodeModule).
   const [listening, setListening] = useState(false);
   const tried = useRef('');
@@ -83,25 +85,27 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
     }
   }, [code, busy, verify]);
 
-  // Each code sent (and each resend) is one SMS to wait for; demo builds send none.
+  // Each code sent (and each resend) is one SMS to wait for; demo builds send none. A resend starts listening before its
+  // SMS can arrive. shortcut: the first code's listener starts once the send has answered, as User Consent always has; an
+  // SMS faster than that is typed. Start the Retriever before the first send if PHONE-TESTS shows misses.
   useEffect(() => {
     if (isDemo) {
       return;
     }
-    const sms = listenForSmsCode(setCode);
+    const sms = listenForSmsCode(setCode, autoRead);
     let mounted = true;
     sms.started.then(ok => mounted && setListening(ok));
     return () => {
       mounted = false;
       sms.stop();
     };
-  }, [sentAt]);
+  }, [sentAt, autoRead]);
 
   async function resend() {
     setSentAt(Date.now());
     setError(undefined);
     try {
-      await session.beginPhone(phone);
+      setAutoRead((await session.beginPhone(phone)).autoRead);
     } catch (failure) {
       setError(failure instanceof AppApiError ? failure.message : strings.common.error);
     }
@@ -142,7 +146,7 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
         error={error}
         testID="rider-code-input"
       />
-      {listening ? <Label>{s.smsHint}</Label> : null}
+      {listening && !autoRead ? <Label>{s.smsHint}</Label> : null}
       {isDemo ? <Label>{s.demoHint}</Label> : null}
     </SignInFrame>
   );

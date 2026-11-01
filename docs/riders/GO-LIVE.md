@@ -142,6 +142,7 @@ The pilot goes live without these. Each is off and waits for a check that a pers
 | `CRAVES_FLEET_ENGINE_MODE` (`off`, `shadow`, `live`) | The fleet engine (Phase 5) hears every rider and order. In shadow it only compares its rankings with dispatch's; live, dispatch asks it first and ranks riders itself when it doesn't answer within 300 ms. Both need road ranking off: with `CRAVES_FLEET_ROAD_RANKING_ENABLED` on, dispatch leaves the engine out. | §9. | P5-02, P5-03 |
 | `CRAVES_FLEET_ENGINE_JOINT` | With the engine live, orders asked at the same moment near each other are shared out together, so more of them get a rider. | `jointChanged` (orders whose riders sharing out together would change, against first come; counted in shadow and live) is 5% or more of peak orders for two weeks (the query in §9, step 6), and riders had 14 days' notice (*legal*: it changes who gets offers). | P5-02 |
 | `CRAVES_FLEET_ETA_MODE` (`off`, `shadow`, `live`) and `CRAVES_FLEET_ETA_MODEL_VERSION` | The travel-time model (Phase 5): live, the offer shows the model's minutes and the chef's "rider arrives at" uses them. Riders are ranked by its minutes only where the dispatch policy's "rank by travel time" rule says so (an offer rule, below). Shadow only logs what it would change. | §10. | P5-07 |
+| `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER` and `CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID` (auth-service) | Sign-in codes are limited per caller's address; riders' codes fill in with no tap. | §11. | R16 items 6 and 14 |
 | Offer rules (in the dispatch policy, not a switch) | How many riders see an order at once, the rounds, fair turns (`DISPATCH.md` §2 and §3), and from Phase 5 whether riders are ranked by travel time (§10, step 6). | Before the first rate card, set them at once (step 6.1.1). After it, only with a start at least 14 days away: the console asks for one, and riders see the new rules under Terms meanwhile. Change them only when the pilot-health queries in `DISPATCH.md` §7 say so. | P4-01 |
 
 - **Notice first.** Once dispatch is live, road ranking changes who gets offers, and `ORDER_HANDED_OVER` changes when a trip is taken away. Give riders 14 days' notice before any of them (*legal*; WORKPLAN rule 9). The offer rules enforce their own notice. Rider choices only add freedoms, but tell riders before turning them on.
@@ -206,6 +207,46 @@ The model predicts the minutes a rider needs to reach the kitchen, and from the 
 7. **Each month,** check the model on the last month's trips (`python -m fleet_eta evaluate`, `DISPATCH.md` §8). If it no longer beats today's rule, retrain it, and publish and shadow the new version the same way.
 8. **Stop:** set the mode to `off`, or the version back to the previous one. Old versions stay in the table. Ranking falls back to distance at once; the policy rule stays until a new version, with notice, takes it out.
 
+## 11. Phone sign-in: limits per caller, and codes with no tap
+
+The pilot doesn't need these. Each setting is off until set, so a deploy changes nothing. They are auth-service settings: set one as in §8 with `-g rg-craves-auth-prod -n ca-craves-auth-prod`, and undo it with `--remove-env-vars NAME`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER` | empty: the caller's address is unknown, so there is no per-IP limit | The header with the caller's address. In production: `X-Azure-ClientIP`, which Front Door sets. |
+| `CRAVES_CENTRAL_OTP_FORWARDING_IPS` | empty | The web server's outbound addresses, comma-separated: today `20.198.84.102` (`docs/runbooks/production-environment.md`). Every web sign-in comes from there, so for these the address the web server sends in `X-Craves-Client-Ip` (the browser's) counts instead. Anyone else's `X-Craves-Client-Ip` is ignored. A value that isn't an IP address stops auth-service from starting. |
+| `CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID` | empty: riders get the usual template | The MSG91 template for rider sign-ins. With it, the rider app reads the code with no tap. |
+
+**The limits.** They come on top of today's 100 codes a minute for everyone and 5 an hour per phone. A refused request counts nowhere and gets `429 OTP_RATE_LIMIT`, as today.
+- Sending codes: 20 an hour per address, and 10 an hour per rider app install (the app sends its install ID from this release on; no setting needed).
+- Checking codes: 60 an hour per address, and 30 an hour per install. A check refused here doesn't use up one of the code's 5 tries.
+- An IPv6 address counts as its /64, the block one phone or home gets.
+
+**Turning on the per-IP limits safely.**
+1. Set `CRAVES_CENTRAL_OTP_FORWARDING_IPS=20.198.84.102`, after checking it is still the web app's outbound address. On its own it changes nothing.
+2. At a quiet hour, set `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER=X-Azure-ClientIP`. Nobody can be refused before one address has asked for 20 codes in the hour, so watch auth-service's `OTP_SEND` lines (one per code the limits let through; they hold no phone, address or install) for that first hour:
+   - `ipKnown=true` on every line. `false` means the header doesn't reach auth-service: nothing is limited, so the setting does nothing.
+   - `viaForwarder=true` on web sign-ins. If they show `false`, all web sign-ins share the web server's 20: remove the setting at once.
+   - `ipSendsThisHour` mostly 1 or 2. A number that keeps climbing across different people means the header holds one shared address, not each caller's: remove the setting.
+
+   ```kusto
+   ContainerAppConsoleLogs_CL
+   | where ContainerAppName_s == "ca-craves-auth-prod" and Log_s has "OTP_SEND"
+   | extend ip = extract('ipKnown=([a-z]+)', 1, Log_s), web = extract('viaForwarder=([a-z]+)', 1, Log_s),
+       sends = toint(extract('ipSendsThisHour=([0-9]+)', 1, Log_s))
+   | summarize codes = count(), most = max(sends) by ip, web, hour = bin(TimeGenerated, 1h)
+   ```
+3. Keep watching `OTP_RATE_LIMIT` refusals for a week. People on one mobile network can share an address, and then they share its 20. If real riders or customers are refused, remove the setting.
+
+The per-IP limit holds only for callers that come through Front Door: one that can reach the gateway directly can write its own `X-Azure-ClientIP`. The phone and global limits hold either way.
+
+**Codes with no tap for riders.**
+1. Get the app's hash: `scripts/riders/app-hash.sh <keystore file> <alias>`, with the rider signing keystore (GitHub secret `RIDER_KEYSTORE_BASE64`, decoded to a file) and its alias (`RIDER_KEY_ALIAS`). It prints 11 characters, such as `FA+9qCX9VSu`. For an app installed from Google Play with Play App Signing, use the certificate Play signs with instead (Play Console, App integrity): `scripts/riders/app-hash.sh --cert deployment_cert.der`.
+2. Register a new, rider-only OTP template on DLT, at most 140 characters, whose fixed text ends with the hash on its own line. For example: "{#numeric#} is your Craves Rider sign-in code. It expires in 10 minutes." then a new line and the hash. The hash is fixed text, never a variable (it can contain `+` and `/`), and the code is tagged `#numeric#`, as in the usual template.
+3. Once DLT approves it, add the same text in MSG91 as an OTP template with that DLT template ID.
+4. Set `CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID` on auth-service to the new MSG91 template ID (24 characters). Only the rider app sends `X-Craves-App: rider`, so only its sign-ins use the new template, and only they are told to read the code with no tap. The web and older rider apps keep the usual template and the one-tap Allow sheet.
+5. Sign in on a rider phone with the live APK: the code fills in by itself, with no Allow sheet. If it doesn't (a wrong hash or text), the rider can still type the code: remove the setting, fix the template and try again. A demo or debug build has another hash.
+
 ## Stopping
 
 | What | How | Effect |
@@ -221,7 +262,7 @@ The model predicts the minutes a rider needs to reach the kitchen, and from the 
 
 | Where | What to do | Needed for |
 |---|---|---|
-| **MSG91** (your existing account) | Riders sign in with the same phone OTP as the web: the app calls auth-service, which sends the SMS by MSG91 and checks the code. Nothing new is needed if web sign-in works today: the same auth key, the same DLT-registered sender ID and the same approved OTP template. Check the template's wording suits riders too (it should just say "<code> is your Craves verification code"), and that its code variable is tagged `#numeric#` on DLT: since TRAI's 18 Nov 2025 direction, untagged variables are rejected once the logging period ends, which would stop every sign-in. Codes live 10 minutes (auth-service sends `otp_expiry=10`). Alert on SMS pumping in Log Analytics (auth-service): `MSG91 OTP verified` lines ÷ `MSG91 OTP accepted` lines per hour, falling under 0.3 for an hour with more than 30 sends; if you want a rider-specific text, register a new DLT template and put its MSG91 template ID in `CRAVES_MSG91_OTP_TEMPLATE_ID` (it is one setting for all phone sign-ins). Keep enough SMS credit for the pilot riders. | Rider sign-in |
+| **MSG91** (your existing account) | Riders sign in with the same phone OTP as the web: the app calls auth-service, which sends the SMS by MSG91 and checks the code. Nothing new is needed if web sign-in works today: the same auth key, the same DLT-registered sender ID and the same approved OTP template. Check the template's wording suits riders too (it should just say "<code> is your Craves verification code"), and that its code variable is tagged `#numeric#` on DLT: since TRAI's 18 Nov 2025 direction, untagged variables are rejected once the logging period ends, which would stop every sign-in. Codes live 10 minutes (auth-service sends `otp_expiry=10`). Alert on SMS pumping in Log Analytics (auth-service): `MSG91 OTP verified` lines ÷ `MSG91 OTP accepted` lines per hour, falling under 0.3 for an hour with more than 30 sends. A rider-only template, for codes the app reads with no tap, has its own setting (§11). Keep enough SMS credit for the pilot riders. | Rider sign-in |
 | **Firebase** (the same project as the customer app, the one auth-service's `FIREBASE_PROJECT_ID` names) | Add an Android app with package `com.cravesapp.rider` and download its `google-services.json` into the GitHub secret `RIDER_GOOGLE_SERVICES_JSON`. Firebase does not send rider SMS: after the MSG91 code is checked, auth-service gives the app a Firebase sign-in token, and Firebase Messaging rings offers. No SHA fingerprints are needed for this. | Sign-in session, offer pushes |
 | **GitHub** (repo secrets) | `RIDER_KEYSTORE_BASE64`, `RIDER_KEYSTORE_PASSWORD`, `RIDER_KEY_ALIAS` for one fixed rider signing key. Keep the key safe and never change it: the phone binding depends on it. | Live APK |
 | **Google Play Console** (when going beyond side-loaded APKs) | New app "Craves Rider" (`com.cravesapp.rider`) with Play App Signing; upload with the same key. Fill in the Data safety form (location, photos, phone number), the foreground-service location declaration with a short video of going online, the privacy policy URL and the content rating. Start on internal testing. | Store distribution |

@@ -21,6 +21,14 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 | Order amendments and substitutions (E17) | `orderamendments` | `adv_order_amendments` | `/api/v1/advanced/order-amendments` | `order-amendments-v1.yaml` | `CRAVES_ADV_ORDER_AMENDMENTS_ENABLED` |
 | Reports, disputes and risk flags (E29) | `trust` | `adv_trust` | `/api/v1/advanced/trust` | `trust-v1.yaml` | `CRAVES_ADV_TRUST_ENABLED` |
 | Experiments and product analytics (E30) | `experiments` | `adv_experiments` | `/api/v1/advanced/experiments` | `experiments-v1.yaml` | `CRAVES_ADV_EXPERIMENTS_ENABLED` |
+| Post-order partner offers (E36) | `partner-offers` | `adv_partner_offers` | `/api/v1/advanced/partner-offers` | `partner-offers-v1.yaml` | `CRAVES_ADV_PARTNER_OFFERS_ENABLED` |
+| Chef business analytics (E21) | `chef-insights` | `adv_chef_insights` (no tables) | `/api/v1/advanced/chef-insights` | `chef-insights-v1.yaml` | `CRAVES_ADV_CHEF_INSIGHTS_ENABLED` |
+| Demand forecasting (E22) | `demand-forecast` | `adv_demand_forecast` (no tables) | `/api/v1/advanced/demand-forecast` | `demand-forecast-v1.yaml` | `CRAVES_ADV_DEMAND_FORECAST_ENABLED` |
+| Saved feed, recovery, familiarity (E01, E02, E06) | `savedfeed` | `adv_saved_feed` | `/api/v1/advanced/saved-feed` | `saved-feed-v1.yaml` | `CRAVES_ADV_SAVED_FEED_ENABLED` |
+| Personalized ranking (E07) | `personalized` | `adv_personalized` (no tables) | `/api/v1/advanced/personalized` | `personalized-v1.yaml` | `CRAVES_ADV_PERSONALIZED_ENABLED` |
+| Semantic search (E09) | `semanticsearch` | `adv_semantic_search` | `/api/v1/advanced/semantic-search` | `semantic-search-v1.yaml` | `CRAVES_ADV_SEMANTIC_SEARCH_ENABLED` |
+| Live order activity (E39) | `liveactivities` | `adv_live_activities` | `/api/v1/advanced/live-activities` | `live-activities-v1.yaml` | `CRAVES_ADV_LIVE_ACTIVITIES_ENABLED` |
+| Policies: serviceability, cancellation/refund, provider ranking, notification frequency (015, 062, 072, 088) | `policies` | `adv_policies` | `/api/v1/advanced/policies` | `policies-v1.yaml` | `CRAVES_ADV_POLICIES_ENABLED` |
 | Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
 | Feature switches | `platform.module` | – | `/api/v1/advanced/features` (public), `/modules` (staff) | `advanced-v1.yaml` | – |
 

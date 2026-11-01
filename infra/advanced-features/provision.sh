@@ -122,12 +122,21 @@ vault() {
   az keyvault network-rule add -n "$KV" --ip-address "$(nat_ip)/32" -o none
   sleep 30 # role assignments propagate
   copy_secret "$(template_secret_url CRAVES_JWT_VERIFICATION_PEM_BASE64)" craves-jwt-verification-pem-base64
+  local tmp; tmp=$(mktemp); chmod 600 "$tmp"
   if ! with_kv_access "$KV" az keyvault secret show --vault-name "$KV" -n adv-db-password -o none 2>/dev/null; then
-    local tmp; tmp=$(mktemp); chmod 600 "$tmp"
-    openssl rand -base64 48 | tr -d '\n/+=' | cut -c1-40 > "$tmp"
+    openssl rand -base64 48 | tr -d '\n/+=' | cut -c1-40 | tr -d '\n' > "$tmp"
     with_kv_access "$KV" az keyvault secret set --vault-name "$KV" -n adv-db-password --file "$tmp" -o none
-    rm -f "$tmp"
+  else
+    # Runs before 31 Oct 17:00 UTC stored it with cut's trailing newline: the app sends that newline, the database
+    # step set the password without it, so Postgres refused the login. Store it once more without the newline.
+    with_kv_access "$KV" bash -c "az keyvault secret show --vault-name '$KV' -n adv-db-password --query value -o json > '$tmp'"
+    if grep -q '\\n"$' "$tmp"; then
+      python3 -c 'import json, sys; p = sys.argv[1]; v = json.load(open(p)); open(p, "w").write(v.rstrip("\n"))' "$tmp"
+      with_kv_access "$KV" az keyvault secret set --vault-name "$KV" -n adv-db-password --file "$tmp" -o none
+      echo "adv-db-password stored without its trailing newline; the app restarts within 30 minutes to read it"
+    fi
   fi
+  rm -f "$tmp"
   echo "Secrets in $KV: craves-jwt-verification-pem-base64, adv-db-password"
 }
 
@@ -199,7 +208,8 @@ image() {
   local tag=${commit:0:12}
   log "Image $IMAGE_REPO:$tag"
   if az acr repository show -n "$ACR" --image "$IMAGE_REPO:$tag" -o none 2>/dev/null; then echo "exists"; return; fi
-  az acr build -r "$ACR" -t "$IMAGE_REPO:$tag" -f Dockerfile "$(source_dir "$commit")" --no-logs -o none
+  # No -f: az acr build resolves -f against the current directory; without it, it uses <source>/Dockerfile.
+  az acr build -r "$ACR" -t "$IMAGE_REPO:$tag" "$(source_dir "$commit")" --no-logs -o none
 }
 
 app() {

@@ -24,3 +24,14 @@ in.craves.advanced.trust.TrustController
 in.craves.advanced.trust.TrustAdminController
 in.craves.advanced.experiments.ExperimentController
 in.craves.advanced.experiments.ExperimentAdminController
+in.craves.advanced.partneroffers.PartnerOfferController
+in.craves.advanced.partneroffers.PartnerOfferAdminController
+in.craves.advanced.chefinsights.ChefInsightsController
+in.craves.advanced.demandforecast.DemandForecastController
+in.craves.advanced.savedfeed.SavedFeedController
+in.craves.advanced.personalized.PersonalizedController
+in.craves.advanced.semanticsearch.SemanticSearchController
+in.craves.advanced.semanticsearch.SemanticSearchAdminController
+in.craves.advanced.liveactivities.LiveActivityController
+in.craves.advanced.policies.PolicyController
+in.craves.advanced.policies.PolicyAdminController

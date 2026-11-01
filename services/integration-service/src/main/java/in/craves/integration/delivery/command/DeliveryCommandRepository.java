@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -29,14 +30,16 @@ public class DeliveryCommandRepository {
     public CommandRecord createOrFind(DeliveryCommandMessage message) {
         jdbc.update("""
             INSERT INTO delivery_schema.delivery_command
-                (id, chef_sub_order_id, order_id, command_type, status, ready_at, dispatch_at,
+                (id, chef_sub_order_id, order_id, command_type, status, ready_at, promised_ready_at, dispatch_at,
                  idempotency_key, payload, source_event_id, created_at, updated_at)
-            VALUES (?, ?, ?, 'QUOTE_AND_CREATE', 'SCHEDULED', ?, ?, ?, ?::jsonb, ?, now(), now())
+            VALUES (?, ?, ?, 'QUOTE_AND_CREATE', 'SCHEDULED', ?, ?, ?, ?, ?::jsonb, ?, now(), now())
             ON CONFLICT (chef_sub_order_id) DO NOTHING
             """,
             message.commandId(),
             message.chefSubOrderId(),
             message.orderId(),
+            toDatabaseTimestamp(message.readyAt()),
+            // The promise stays as accepted; an early ready tap moves only ready_at (accelerateScheduled).
             toDatabaseTimestamp(message.readyAt()),
             toDatabaseTimestamp(message.dispatchAt()),
             message.idempotencyKey(),
@@ -69,6 +72,23 @@ public class DeliveryCommandRepository {
             FROM delivery_schema.delivery_command
             WHERE id = ?
             """, commandId);
+    }
+
+    /**
+     * How late this order's kitchen usually taps "ready" against the time it promised on accepting: the median over its
+     * orders of the last 14 days, from 10 orders on; empty below that (R16 10, the per-kitchen correction). A kitchen is
+     * its chef on the order's finance snapshot; the taps are the fleet's record of ORDER_READY_FOR_PICKUP.
+     */
+    public Optional<Duration> kitchenReadyLateness(UUID chefSubOrderId) {
+        return jdbc.query("""
+            SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM r.ready_at - c.promised_ready_at)) AS late_s
+            FROM payment_schema.finance_issued_snapshot mine
+            JOIN payment_schema.finance_issued_snapshot f ON f.chef_identity_id = mine.chef_identity_id
+            JOIN delivery_schema.delivery_command c ON c.chef_sub_order_id = f.chef_order_id
+            JOIN fleet_schema.chef_ready r ON r.chef_sub_order_id = c.chef_sub_order_id
+            WHERE mine.chef_order_id = ? AND c.promised_ready_at > now() - INTERVAL '14 days'
+            HAVING count(*) >= 10
+            """, (rs, row) -> Duration.ofSeconds(Math.round(rs.getDouble("late_s"))), chefSubOrderId).stream().findFirst();
     }
 
     public boolean recordScheduled(UUID commandId, long sequenceNumber, String serviceBusMessageId) {

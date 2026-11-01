@@ -623,6 +623,7 @@ public class FleetDispatcher implements FleetStage {
     private List<RingingOffer> nextRound(UUID tripId, DispatchPolicy policy, Supplier<OptionalLong> courierQuotePaise) {
         Map<String, Object> trip = jdbc.queryForMap("""
             SELECT t.chef_sub_order_id, t.kitchen_lat, t.kitchen_lng, t.drop_lat, t.drop_lng, t.drop_distance_m, t.rate_card_version,
+                   t.courier_quote_paise,
                    (SELECT COALESCE(MAX(o.round), 0) FROM fleet_schema.trip_offer o WHERE o.trip_id = t.id) AS rounds
             FROM fleet_schema.trip t WHERE t.id = ?""", tripId);
         int rounds = ((Number) trip.get("rounds")).intValue();
@@ -640,8 +641,15 @@ public class FleetDispatcher implements FleetStage {
         if (riders.isEmpty() || card == null) {
             return List.of();
         }
-        // shortcut: a fresh courier quote each round sent (and on a rare raced attempt); keep the first on the trip if couriers limit quotes.
-        Choice choice = choose(riders, policy, card, dropM, courierQuotePaise.get(), rounds + 1, lat, lng,
+        // One courier quote per order (R16 17): round 1's, kept on the trip. Asked here only when round 1 had none (nobody
+        // was in range, or the couriers didn't answer), and kept once it comes.
+        Object kept = trip.get("courier_quote_paise");
+        OptionalLong courier = kept != null ? OptionalLong.of(((Number) kept).longValue()) : courierQuotePaise.get();
+        if (kept == null && courier.isPresent()) {
+            jdbc.update("UPDATE fleet_schema.trip SET courier_quote_paise = ? WHERE id = ? AND courier_quote_paise IS NULL",
+                courier.getAsLong(), tripId);
+        }
+        Choice choice = choose(riders, policy, card, dropM, courier, rounds + 1, lat, lng,
             ((Number) trip.get("drop_lat")).doubleValue(), ((Number) trip.get("drop_lng")).doubleValue());
         if (choice.offers().isEmpty()) {
             return List.of();
@@ -776,9 +784,9 @@ public class FleetDispatcher implements FleetStage {
         int created = jdbc.update("""
             INSERT INTO fleet_schema.trip (id, chef_sub_order_id, order_id, chef_id, order_code, items_count, kitchen_name, kitchen_area,
               kitchen_address, kitchen_landmark, kitchen_lat, kitchen_lng, chef_phone, customer_first_name, customer_phone, drop_area,
-              drop_address, drop_landmark, drop_lat, drop_lng, drop_distance_m, rate_card_version, chef_ready_at)
+              drop_address, drop_landmark, drop_lat, drop_lng, drop_distance_m, rate_card_version, chef_ready_at, courier_quote_paise)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    (SELECT ready_at FROM fleet_schema.chef_ready WHERE chef_sub_order_id = ?))
+                    (SELECT ready_at FROM fleet_schema.chef_ready WHERE chef_sub_order_id = ?), ?)
             ON CONFLICT (chef_sub_order_id) WHERE replaced_at IS NULL DO NOTHING""",
             tripId, command.chefSubOrderId(), command.orderId(), plan.chefId(), orderCode(command.chefSubOrderId()), itemsCount(request),
             text(kitchen.contactName(), 160, "Kitchen"), text(kitchen.area() != null ? kitchen.area() : command.area(), 160, ""),
@@ -786,7 +794,7 @@ public class FleetDispatcher implements FleetStage {
             kitchen.longitude().doubleValue(), text(kitchen.contactPhone(), 16, ""), firstName(drop.contactName()),
             text(drop.contactPhone(), 16, ""), text(drop.area(), 160, ""), text(drop.address(), 500, ""), text(drop.landmark(), 200, null),
             drop.latitude().doubleValue(), drop.longitude().doubleValue(), plan.dropDistanceM(), plan.rateCardVersion(),
-            command.chefSubOrderId());
+            command.chefSubOrderId(), plan.courierQuotePaise());
         if (created != 1) {
             return null;
         }

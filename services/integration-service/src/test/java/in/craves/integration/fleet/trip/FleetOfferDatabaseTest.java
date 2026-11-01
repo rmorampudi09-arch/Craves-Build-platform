@@ -12,8 +12,11 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import in.craves.integration.delivery.command.DeliveryCommandWake;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
+import in.craves.integration.delivery.command.DeliveryServiceBusPublisher;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.FleetApiException;
@@ -35,6 +38,7 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,6 +47,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Offers (PLAN F9) against a real database: one conditional update decides the first accept. */
@@ -86,6 +91,36 @@ class FleetOfferDatabaseTest {
     @AfterEach
     void stop() {
         threads.shutdownNow();
+    }
+
+    /** R16 5c: the next round starts from the decline, after it commits, instead of at the order's next check. */
+    @Test
+    void aDeclineMakesItsWaitingOrderDueAtOnceAndSendsOneMessageForTheNextRound() throws Exception {
+        new DeliveryCommandRepository(fleet.db, json).createOrFind(FleetDispatchFixtures.command(chefSubOrderId));
+        fleet.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', provider_wait_started_at = now(), "
+            + "next_provider_retry_at = now() + INTERVAL '5 seconds' WHERE chef_sub_order_id = ?", chefSubOrderId);
+        List<String> sent = new CopyOnWriteArrayList<>();
+        @SuppressWarnings("unchecked")
+        DeliveryServiceBusPublisher publisher = new DeliveryServiceBusPublisher(mock(ObjectProvider.class), mock(ObjectProvider.class), json) {
+            @Override
+            public void publishNow(DeliveryCommandMessage command, String messageId) {
+                sent.add(command.chefSubOrderId() + " " + messageId);
+            }
+        };
+        trips.setCommandWake(new DeliveryCommandWake(fleet.db, publisher, json));
+        UUID offer = offerOf(first);
+
+        transaction.executeWithoutResult(status -> trips.decline(firstIdentity, offer));
+        for (int i = 0; i < 100 && sent.isEmpty(); i++) {
+            Thread.sleep(20); // the wake runs after commit, on its own thread
+        }
+
+        assertThat(sent).containsExactly(chefSubOrderId + " fleet-decline:" + offer);
+        assertThat(fleet.db.queryForObject("SELECT next_provider_retry_at <= now() FROM delivery_schema.delivery_command "
+            + "WHERE chef_sub_order_id = ?", Boolean.class, chefSubOrderId)).as("due now").isTrue();
+        transaction.executeWithoutResult(status -> trips.decline(firstIdentity, offer));
+        Thread.sleep(200);
+        assertThat(sent).as("declining again changes nothing and sends nothing").hasSize(1);
     }
 
     @Test

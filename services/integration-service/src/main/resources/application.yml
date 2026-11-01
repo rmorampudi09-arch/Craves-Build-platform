@@ -164,6 +164,8 @@ craves:
     chef-accepted-subscription-name: ${SERVICE_BUS_CHEF_ACCEPTED_SUBSCRIPTION:integration-service-chef-accepted}
     queue-name: ${SERVICE_BUS_DELIVERY_COMMAND_QUEUE:delivery-command}
     lead-time-minutes: ${CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES:10}
+    # R16 10: off until 2 to 4 weeks of ready taps (pilot_health.sql ready_vs_promise); docs/riders/GO-LIVE.md.
+    ready-correction-enabled: ${CRAVES_DELIVERY_READY_CORRECTION_ENABLED:false}
     quote-timeout-seconds: ${CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS:4}
     max-provider-attempts: ${CRAVES_DELIVERY_MAX_PROVIDER_ATTEMPTS:3}
     max-delivery-attempts: ${CRAVES_DELIVERY_MAX_DELIVERY_ATTEMPTS:5}

@@ -9,6 +9,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequ
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -29,10 +30,35 @@ public class DeliveryCommandScheduler {
     private static final ZoneId DELIVERY_CONTEXT_ZONE = ZoneId.of("Asia/Kolkata");
     private static final double EARTH_RADIUS_KM = 6371.0088;
 
+    /** The most a kitchen's habit may move its dispatch later (R16 10). */
+    static final Duration MAX_READY_CORRECTION = Duration.ofMinutes(15);
+
     private final DeliveryCommandRepository repository;
     private final DeliveryServiceBusPublisher publisher;
     private final DeliveryCommandProperties properties;
     private final Clock clock;
+
+    /**
+     * Behind craves.delivery-command.ready-correction-enabled (off until 2 to 4 weeks of ready taps exist): a kitchen that
+     * usually taps "ready" late gets its riders later by its median lateness, 0 to 15 minutes, so they wait less at the
+     * door. Never earlier than the promise; the chef's ready tap still brings dispatch forward. Any failure: no correction.
+     */
+    private Duration readyCorrection(UUID chefSubOrderId) {
+        if (!properties.isReadyCorrectionEnabled()) {
+            return Duration.ZERO;
+        }
+        try {
+            Duration late = repository.kitchenReadyLateness(chefSubOrderId).orElse(Duration.ZERO);
+            Duration correction = late.isNegative() ? Duration.ZERO : late.compareTo(MAX_READY_CORRECTION) > 0 ? MAX_READY_CORRECTION : late;
+            if (!correction.isZero()) {
+                log.info("DELIVERY_READY_CORRECTION chefSubOrderId={} seconds={}", chefSubOrderId, correction.toSeconds());
+            }
+            return correction;
+        } catch (RuntimeException exception) {
+            log.warn("DELIVERY_READY_CORRECTION chefSubOrderId={} failed: {}", chefSubOrderId, exception.getClass().getSimpleName());
+            return Duration.ZERO;
+        }
+    }
 
     @Autowired
     public DeliveryCommandScheduler(DeliveryCommandRepository repository,
@@ -55,7 +81,8 @@ public class DeliveryCommandScheduler {
         validate(event);
         ChefAcceptedOrderData data = event.data();
         RoutingContext routingContext = routingContext(event, data);
-        Instant dispatchAt = data.readyAt().minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
+        Instant dispatchAt = data.readyAt().plus(readyCorrection(data.chefSubOrderId()))
+            .minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
         Instant minimumDispatchAt = clock.instant().plusSeconds(5);
         if (dispatchAt.isBefore(minimumDispatchAt)) {
             dispatchAt = minimumDispatchAt;

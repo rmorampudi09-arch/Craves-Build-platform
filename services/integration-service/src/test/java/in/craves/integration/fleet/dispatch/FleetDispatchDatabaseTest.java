@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -370,6 +372,28 @@ class FleetDispatchDatabaseTest {
         assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer", UUID.class)).doesNotContain(fourth).hasSize(3);
         assertThat(fleet.db.queryForObject("SELECT provider FROM fleet_schema.trip WHERE chef_sub_order_id = ?", String.class, chefSubOrderId))
             .isEqualTo("BORZO");
+    }
+
+    /** R16 17: round 1's courier quote is kept on the trip, and every later round's cost guard reuses it. */
+    @Test
+    void theCouriersAreAskedForOneQuotePerOrderNotOnePerRound() {
+        fairPolicy(0);
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        AtomicInteger quotes = new AtomicInteger();
+        Supplier<OptionalLong> couriers = () -> {
+            quotes.incrementAndGet();
+            return OptionalLong.of(9000);
+        };
+
+        assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        assertThat(count("fleet_schema.trip_offer")).as("two rounds went out").isEqualTo(2);
+        assertThat(quotes.get()).as("one quote, asked for round 1").isEqualTo(1);
+        assertThat(fleet.db.queryForObject("SELECT courier_quote_paise FROM fleet_schema.trip WHERE chef_sub_order_id = ?", Long.class,
+            chefSubOrderId)).isEqualTo(9000L);
     }
 
     /**

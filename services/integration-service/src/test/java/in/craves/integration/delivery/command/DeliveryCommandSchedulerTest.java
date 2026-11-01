@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,8 +18,10 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequ
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -111,6 +114,39 @@ class DeliveryCommandSchedulerTest {
         assertThat(messageId.getValue()).startsWith("delivery-ready:" + original.chefSubOrderId());
         verify(publisher).publishNow(accelerated.getValue(), messageId.getValue());
         verify(publisher).cancelScheduled(7001L);
+    }
+
+    @Test
+    void aKitchenThatUsuallyTapsReadyLateGetsItsRidersLaterByItsMedianWhenSwitchedOn() {
+        DeliveryCommandRepository repository = mock(DeliveryCommandRepository.class);
+        DeliveryServiceBusPublisher publisher = mock(DeliveryServiceBusPublisher.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setLeadTimeMinutes(10);
+        properties.setReadyCorrectionEnabled(true);
+        Instant now = Instant.parse("2026-07-14T12:00:00Z");
+        DeliveryCommandScheduler scheduler = new DeliveryCommandScheduler(
+            repository, publisher, properties, Clock.fixed(now, ZoneOffset.UTC)
+        );
+        EventEnvelope<ChefAcceptedOrderData> event = event(now.plusSeconds(30 * 60));
+        UUID order = event.data().chefSubOrderId();
+        when(repository.createOrFind(any())).thenAnswer(invocation -> commandRecord(invocation.getArgument(0), null));
+        when(publisher.schedule(any())).thenReturn(
+            new DeliveryServiceBusPublisher.ScheduledMessage(7002L, "delivery-command:test")
+        );
+        when(repository.recordScheduled(any(), anyLong(), any())).thenReturn(true);
+
+        when(repository.kitchenReadyLateness(order)).thenReturn(Optional.of(Duration.ofMinutes(6)));
+        assertThat(scheduler.schedule(event).dispatchAt()).as("ready, plus 6 late, less 10").isEqualTo(now.plusSeconds(26 * 60));
+        when(repository.kitchenReadyLateness(order)).thenReturn(Optional.of(Duration.ofMinutes(40)));
+        assertThat(scheduler.schedule(event).dispatchAt()).as("at most 15 minutes").isEqualTo(now.plusSeconds(35 * 60));
+        when(repository.kitchenReadyLateness(order)).thenReturn(Optional.of(Duration.ofMinutes(-8)));
+        assertThat(scheduler.schedule(event).dispatchAt()).as("never before the promise").isEqualTo(now.plusSeconds(20 * 60));
+        when(repository.kitchenReadyLateness(order)).thenThrow(new IllegalStateException("database down"));
+        assertThat(scheduler.schedule(event).dispatchAt()).as("no correction on a failure").isEqualTo(now.plusSeconds(20 * 60));
+
+        properties.setReadyCorrectionEnabled(false);
+        scheduler.schedule(event);
+        verify(repository, times(4)).kitchenReadyLateness(order);
     }
 
     private static EventEnvelope<ChefAcceptedOrderData> event(Instant readyAt) {

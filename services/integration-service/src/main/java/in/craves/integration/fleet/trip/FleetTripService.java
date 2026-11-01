@@ -3,6 +3,7 @@ package in.craves.integration.fleet.trip;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.delivery.command.DeliveryCommandWake;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
@@ -116,6 +117,14 @@ public class FleetTripService {
         this.engineFeed = feed.on() ? feed : null;
     }
 
+    /** Present with the delivery commands (craves.delivery-command.enabled): a decline starts the next round at once. */
+    private DeliveryCommandWake commandWake;
+
+    @Autowired(required = false)
+    public void setCommandWake(DeliveryCommandWake wake) {
+        this.commandWake = wake;
+    }
+
     /**
      * 200 with the trip for the winner; 409 OFFER_TAKEN for a lost race; 409 ORDER_CANCELLED once the order is cancelled;
      * 410 OFFER_EXPIRED; a repeat by the winner gets the trip.
@@ -173,15 +182,19 @@ public class FleetTripService {
     @Transactional
     public void decline(UUID identityId, UUID offerId) {
         Rider rider = rider(identityId);
-        if (jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE id = ? AND rider_id = ? "
-            + "AND state = 'ACTIVE'", offerId, rider.id()) == 0
-            && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE id = ? AND rider_id = ?)",
-                Boolean.class, offerId, rider.id()))) {
+        boolean declined = jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE id = ? "
+            + "AND rider_id = ? AND state = 'ACTIVE'", offerId, rider.id()) == 1;
+        if (!declined && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE id = ? "
+            + "AND rider_id = ?)", Boolean.class, offerId, rider.id()))) {
             throw offerNotFound();
         }
         // Free again at once for the next order, in the engine too (a decline costs the rider nothing).
         if (engineFeed != null) {
             engineFeed.refresh(rider.id());
+        }
+        // The order's next rider hears now, not at its next check a few seconds later (R16 5c).
+        if (declined && commandWake != null) {
+            commandWake.afterDecline(offerId);
         }
     }
 

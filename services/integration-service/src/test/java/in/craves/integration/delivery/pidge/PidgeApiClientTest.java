@@ -36,6 +36,73 @@ class PidgeApiClientTest {
         return new Stop("Test address", name, "+919000000001", new BigDecimal("17.44"), new BigDecimal("78.38"),
             null, null, null, "Test address", null, null, null, "Hyderabad", "Telangana", pin, "IN");
     }
+    Stop stopWithLocation(Stop source, String city, BigDecimal latitude, BigDecimal longitude) {
+        return new Stop(source.address(), source.contactName(), source.contactPhone(), latitude, longitude,
+            source.requiredStart(), source.requiredFinish(), source.note(), source.addressLine1(), source.addressLine2(),
+            source.landmark(), source.area(), city, source.state(), source.postalCode(), source.country());
+    }
+    QuoteRequest withStops(QuoteRequest source, Stop pickup, Stop dropoff) {
+        return new QuoteRequest(source.matter(), source.totalWeightGrams(), source.thermoboxRequired(), pickup, dropoff,
+            source.items(), source.declaredGoodsValue(), source.paymentCollectionMode(), source.pickupLocationReference());
+    }
+    @Test void cityAliasesDoNotBlockCoordinateQuoteOrBookingPayload() throws Exception {
+        QuoteRequest source = request();
+        Stop pickup = stopWithLocation(source.pickup(), "HYD", new BigDecimal("17.4489"), new BigDecimal("78.3908"));
+        Stop dropoff = stopWithLocation(source.dropoff(), "Hyderabad", new BigDecimal("17.4401"), new BigDecimal("78.3489"));
+        QuoteRequest aliased = withStops(source, pickup, dropoff);
+        when(transport.quote(any())).thenReturn(quote("59", true));
+        assertTrue(client.quote(aliased).available());
+        verify(transport).quote(argThat(body -> body.at("/pickup/coordinates/latitude").decimalValue().equals(pickup.latitude())
+            && body.at("/pickup/coordinates/longitude").decimalValue().equals(pickup.longitude())
+            && body.at("/drop/0/location/coordinates/latitude").decimalValue().equals(dropoff.latitude())
+            && body.at("/drop/0/location/coordinates/longitude").decimalValue().equals(dropoff.longitude())
+            && "500081".equals(body.at("/pickup/pincode").asText())
+            && "500032".equals(body.at("/drop/0/location/pincode").asText())
+            && !body.path("pickup").has("city")));
+        var booking = client.buildOrder("ref-1", aliased);
+        assertEquals(pickup.latitude(), booking.at("/sender_detail/address/latitude").decimalValue());
+        assertEquals(dropoff.longitude(), booking.at("/trips/0/receiver_detail/address/longitude").decimalValue());
+        assertEquals("HYD", booking.at("/sender_detail/address/city").asText());
+        verifyNoInteractions(bookings);
+    }
+    @Test void geographicServiceabilityIsNotAssumedFromMatchingCityLabels() throws Exception {
+        QuoteRequest source = request();
+        Stop remote = stopWithLocation(source.dropoff(), "Hyderabad", new BigDecimal("28.6139"), new BigDecimal("77.2090"));
+        when(transport.quote(any())).thenReturn(mapper.readTree("{\"data\":{\"items\":[]}}"));
+        assertFalse(client.quote(withStops(source, source.pickup(), remote)).available());
+        verify(transport).quote(any());
+        verify(transport, never()).mutate(anyString(), any());
+        verifyNoInteractions(bookings);
+    }
+    @Test void coordinateServiceabilityDoesNotRequireIdenticalAdministrativeCityLabels() throws Exception {
+        QuoteRequest source = request();
+        Stop dropoff = stopWithLocation(source.dropoff(), "Secunderabad", source.dropoff().latitude(), source.dropoff().longitude());
+        when(transport.quote(any())).thenReturn(quote("59", true));
+        assertTrue(client.quote(withStops(source, source.pickup(), dropoff)).available());
+    }
+    @Test void invalidCoordinatesFailBeforeAnyProviderCall() {
+        QuoteRequest source = request();
+        for (Stop invalid : List.of(
+            stopWithLocation(source.pickup(), "HYD", null, new BigDecimal("78.38")),
+            stopWithLocation(source.pickup(), "HYD", new BigDecimal("17.44"), null),
+            stopWithLocation(source.pickup(), "HYD", new BigDecimal("91"), new BigDecimal("78.38")),
+            stopWithLocation(source.pickup(), "HYD", new BigDecimal("17.44"), new BigDecimal("181")),
+            stopWithLocation(source.pickup(), "HYD", BigDecimal.ZERO, BigDecimal.ZERO))) {
+            assertThrows(IllegalArgumentException.class, () -> client.quote(withStops(source, invalid, source.dropoff())));
+            assertThrows(IllegalArgumentException.class, () -> client.quote(withStops(source, source.pickup(), invalid)));
+        }
+        verifyNoInteractions(transport, bookings);
+    }
+    @Test void packageAndPrepaidGatesRemainRequired() {
+        QuoteRequest source = request();
+        assertThrows(IllegalArgumentException.class, () -> client.quote(new QuoteRequest(source.matter(), 0, false,
+            source.pickup(), source.dropoff(), source.items(), source.declaredGoodsValue(), "PREPAID", null)));
+        assertThrows(IllegalArgumentException.class, () -> client.quote(new QuoteRequest(source.matter(), 500, true,
+            source.pickup(), source.dropoff(), source.items(), source.declaredGoodsValue(), "PREPAID", null)));
+        assertThrows(IllegalArgumentException.class, () -> client.quote(new QuoteRequest(source.matter(), 500, false,
+            source.pickup(), source.dropoff(), source.items(), source.declaredGoodsValue(), "COD", null)));
+        verifyNoInteractions(transport, bookings);
+    }
     JsonNode quote(String price, boolean now) throws Exception {
         return mapper.readTree("{\"data\":{\"items\":[{\"network_id\":\"6\",\"network_name\":\"Partner\",\"service\":\"porter\",\"pickup_now\":"
             + now + ",\"quote\":{\"price\":" + price + "},\"token\":\"ephemeral-secret\"}]}}");

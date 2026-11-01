@@ -9,12 +9,16 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** No automatic retries: quote calls are chargeable and mutations are not idempotent. */
 @Component
 public class PidgeTransport {
+    private static final Logger log = LoggerFactory.getLogger(PidgeTransport.class);
     private final PidgeProperties properties;
     private final ObjectMapper mapper;
     private final HttpClient client;
@@ -53,22 +57,49 @@ public class PidgeTransport {
         try {
             HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
-            if (status < 200 || status >= 300)
-                throw new ApiException("Pidge API HTTP " + status,
+            if (status < 200 || status >= 300) {
+                String category = failureCategory(response.body());
+                log.warn("Pidge HTTP failure operation={} status={} category={}", operation(path, mutation), status, category);
+                throw new ApiException("Pidge API HTTP " + status + " (" + category + ")",
                     mutation && (status >= 500 || status == 408 || status == 429 || status < 400));
+            }
             JsonNode parsed;
             try { parsed = mapper.readTree(response.body()); }
             catch (Exception ex) { throw new ApiException("Pidge returned invalid JSON", mutation); }
             if (parsed == null || !parsed.isObject())
                 throw new ApiException("Pidge returned an invalid response object", mutation);
-            if (parsed.hasNonNull("error")) throw new ApiException("Pidge reported an API error", mutation);
+            if (parsed.hasNonNull("error")) {
+                String category = failureCategory(parsed.path("error").toString());
+                log.warn("Pidge API failure operation={} status={} category={}", operation(path, mutation), status, category);
+                throw new ApiException("Pidge reported an API error (" + category + ")", mutation);
+            }
+            if (path.endsWith("/quote")) log.info("Pidge quote HTTP response status={}", status);
             return parsed;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            log.warn("Pidge request interrupted operation={}", operation(path, mutation));
             throw new ApiException("Pidge request interrupted", mutation);
         } catch (IOException ex) {
+            log.warn("Pidge transport failure operation={} type={}", operation(path, mutation), ex.getClass().getSimpleName());
             throw new ApiException("Pidge response was not received", mutation);
         }
+    }
+
+    private static String operation(String path, boolean mutation) {
+        return path.endsWith("/quote") ? "quote" : mutation ? "mutation" : "read";
+    }
+
+    static String failureCategory(String body) {
+        if (body == null || body.length() > 8192) return "UNCLASSIFIED";
+        String normalized = body.toLowerCase(Locale.ROOT);
+        if ((normalized.contains("insufficient") || normalized.contains("inadequate") || normalized.contains("exceeded"))
+            && (normalized.contains("balance") || normalized.contains("wallet") || normalized.contains("credit")))
+            return "WALLET_OR_CREDIT_LIMIT";
+        if (normalized.contains("unauthorized") || normalized.contains("unauthorised") || normalized.contains("invalid token")
+            || normalized.contains("expired token")) return "AUTHORIZATION";
+        if (normalized.contains("not serviceable") || normalized.contains("unserviceable") || normalized.contains("no partner"))
+            return "SERVICEABILITY";
+        return "UNCLASSIFIED";
     }
 
     public static class ApiException extends RuntimeException {

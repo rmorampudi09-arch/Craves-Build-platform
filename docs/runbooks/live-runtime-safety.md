@@ -43,6 +43,10 @@ How it was checked: the restored source, compiled against the libraries in the `
 
 New Auth changes go through `main` like every other service.
 
+## Integration: Pidge coordinate fix (lost 10 Oct 2026, restored to `main` 14 Oct)
+
+On 2 Oct an overlay (`pidge-coordinates-20261002-v1`, image `sha256:9c0919f6…`, source `KUSHIRAVI-app-build` `bfc870c2a`) stopped `PidgeApiClient` from rejecting quotes whose pickup and drop city labels differ (for example `HYD` and `Hyderabad`). It never reached `main`, so the backend releases of 8–10 Oct, which rebuild Integration from `main`, silently removed it. The lock could not catch this: the classes still existed, only their behaviour changed. The fix is now on `main`; its classes compile to bytecode identical to the 2 Oct image.
+
 ## Limits
 
 - The lock protects builds that include it, which means every build from `main` from now on. It cannot stop someone from redeploying an old image or a branch that predates it. Rule 1 covers that case.

@@ -23,4 +23,10 @@ public interface OrderGateway {
 
     /** An order of the signed-in chef's kitchen; empty when it does not exist or belongs to another kitchen. */
     Optional<Order> chefOrder(String chefBearerToken, UUID orderId);
+
+    /** One page of the signed-in chef's kitchen's orders, newest first; nextCursor is null on the last page. */
+    record OrderPage(List<Order> orders, String nextCursor) { }
+
+    /** Order service's chef history ({@code GET /api/v1/chef/orders/page}, at most 100 a page); cursor null for the first page. */
+    OrderPage chefOrderPage(String chefBearerToken, String cursor);
 }

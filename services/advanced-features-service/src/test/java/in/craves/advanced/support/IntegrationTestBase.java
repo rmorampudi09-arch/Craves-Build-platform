@@ -1,8 +1,10 @@
 package in.craves.advanced.support;
 
 import in.craves.advanced.platform.clients.CatalogGateway;
+import in.craves.advanced.platform.clients.MenuSearchGateway;
 import in.craves.advanced.platform.clients.OrderCartGateway;
 import in.craves.advanced.platform.clients.OrderGateway;
+import in.craves.advanced.platform.clients.SavedFeedGateway;
 import in.craves.advanced.platform.module.FeatureModule;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -34,6 +36,8 @@ public abstract class IntegrationTestBase {
     protected static final FakeCart CART = new FakeCart();
     protected static final MutableClock CLOCK = new MutableClock();
     protected static final FakeOrders ORDERS = new FakeOrders(CATALOG, CLOCK);
+    protected static final FakeSavedFeed SAVED = new FakeSavedFeed();
+    protected static final FakeMenuSearch MENU_SEARCH = new FakeMenuSearch();
 
     @Autowired
     protected MockMvc mvc;
@@ -43,6 +47,8 @@ public abstract class IntegrationTestBase {
         @Bean @Primary CatalogGateway testCatalog() { return CATALOG; }
         @Bean @Primary OrderCartGateway testCart() { return CART; }
         @Bean @Primary OrderGateway testOrders() { return ORDERS; }
+        @Bean @Primary SavedFeedGateway testSavedFeed() { return SAVED; }
+        @Bean @Primary MenuSearchGateway testMenuSearch() { return MENU_SEARCH; }
         @Bean @Primary Clock testClock() { return CLOCK; }
 
         /** A deliberately broken module: proves one failing feature cannot take the others down. */
@@ -73,6 +79,8 @@ public abstract class IntegrationTestBase {
         CATALOG.reset();
         CART.carts.clear();
         ORDERS.reset();
+        SAVED.reset();
+        MENU_SEARCH.reset();
         CLOCK.reset();
     }
 

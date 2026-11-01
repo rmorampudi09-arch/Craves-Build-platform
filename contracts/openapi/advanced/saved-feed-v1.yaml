@@ -1,0 +1,141 @@
+components:
+  schemas:
+    SavedDishAlternative:
+      properties:
+        menuItemId:
+          format: uuid
+          type: string
+        name:
+          type: string
+        pricePaise:
+          format: int64
+          type: integer
+      type: object
+    SavedDishCard:
+      properties:
+        available:
+          type: boolean
+        familiarity:
+          $ref: "#/components/schemas/SavedDishFamiliarity"
+        kitchenId:
+          format: uuid
+          type: string
+        menuItemId:
+          format: uuid
+          type: string
+        name:
+          type: string
+        pricePaise:
+          format: int64
+          type: integer
+        recovery:
+          $ref: "#/components/schemas/SavedDishRecovery"
+        savedAt:
+          format: date-time
+          type: string
+      type: object
+    SavedDishFamiliarity:
+      properties:
+        lastOrderedAt:
+          format: date-time
+          type: string
+        timesOrdered:
+          format: int32
+          type: integer
+      type: object
+    SavedDishRecovery:
+      properties:
+        alternatives:
+          items:
+            $ref: "#/components/schemas/SavedDishAlternative"
+          type: array
+        kitchenCookingState:
+          type: string
+        kitchenId:
+          format: uuid
+          type: string
+        kitchenName:
+          type: string
+        nextAvailabilityAt:
+          format: date-time
+          type: string
+      type: object
+    SavedFeedView:
+      properties:
+        dishes:
+          items:
+            $ref: "#/components/schemas/SavedDishCard"
+          type: array
+        evaluatedAt:
+          format: date-time
+          type: string
+        familiarityComplete:
+          type: boolean
+        kitchens:
+          items:
+            $ref: "#/components/schemas/SavedKitchenCard"
+          type: array
+        regulars:
+          items:
+            $ref: "#/components/schemas/SavedKitchenCard"
+          type: array
+      type: object
+    SavedKitchenCard:
+      properties:
+        acceptingOrders:
+          type: boolean
+        availableDishCount:
+          format: int32
+          type: integer
+        cookingState:
+          type: string
+        deliveredOrders:
+          format: int32
+          type: integer
+        exists:
+          type: boolean
+        kitchenId:
+          format: uuid
+          type: string
+        lastOrderedAt:
+          format: date-time
+          type: string
+        name:
+          type: string
+        nextAvailabilityAt:
+          format: date-time
+          type: string
+        savedAt:
+          format: date-time
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_SAVED_FEED_ENABLED."
+  title: Craves saved-feed API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/saved-feed:
+    get:
+      operationId: savedFeed
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SavedFeedView"
+          description: OK
+      tags:
+      - saved-feed-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

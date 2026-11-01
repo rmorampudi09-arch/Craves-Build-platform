@@ -46,6 +46,7 @@ public final class FakeOrders implements OrderGateway {
     public void reset() {
         orders.clear();
         down = false;
+        pageSize = 100;
     }
 
     @Override
@@ -60,6 +61,20 @@ public final class FakeOrders implements OrderGateway {
         check();
         UUID kitchen = catalog.chefKitchens.get(chefBearerToken);
         return Optional.ofNullable(orders.get(orderId)).filter(order -> order.kitchenId().equals(kitchen));
+    }
+
+    /** Pages of {@code pageSize}, newest first, like Order service; the cursor is the index of the next order. */
+    public volatile int pageSize = 100;
+
+    @Override
+    public OrderPage chefOrderPage(String chefBearerToken, String cursor) {
+        check();
+        UUID kitchen = catalog.chefKitchens.get(chefBearerToken); // a chef without a kitchen gets an empty page, as from Order service
+        List<Order> mine = orders.values().stream().filter(order -> order.kitchenId().equals(kitchen))
+                .sorted(java.util.Comparator.comparing(Order::createdAt).thenComparing(Order::id).reversed()).toList();
+        int from = cursor == null ? 0 : Integer.parseInt(cursor);
+        int to = Math.min(mine.size(), from + pageSize);
+        return new OrderPage(mine.subList(from, to), to < mine.size() ? String.valueOf(to) : null);
     }
 
     private void check() {

@@ -19,6 +19,8 @@ public class CentralOtpStore {
     record Claim(String phone, String challenge, UUID operation, long expiresAt, long resendAt) {
         @Override public String toString() { return "Claim[redacted]"; }
     }
+    /** How long a code works: 10 minutes (NIST SP 800-63B-4); MSG91 is told the same (CentralOtpProvider). */
+    static final long CODE_LIFE_MS = 600_000;
     private final JdbcTemplate db;
     private final TransactionTemplate transaction;
     private final SecureRandom random = new SecureRandom();
@@ -43,8 +45,10 @@ public class CentralOtpStore {
             }
             int resends = 0;
             if (previous != null) {
+                // A new code never resets the failed tries (NIST SP 800-63B-4): a resend after 5 starts again instead.
                 if (!hash(previous).equals(row.get("challenge_hash"))
-                        || !"ACTIVE".equals(row.get("state")) || (long) row.get("expires_at") <= now) {
+                        || !"ACTIVE".equals(row.get("state")) || (long) row.get("expires_at") <= now
+                        || (int) row.get("attempts") >= 5) {
                     throw restart();
                 }
                 resends = (int) row.get("resends") + 1;
@@ -57,9 +61,10 @@ public class CentralOtpStore {
             byte[] bytes = new byte[32]; random.nextBytes(bytes);
             String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
             UUID operation = UUID.randomUUID();
+            // Codes live 10 minutes (NIST); a resend keeps the session's failed tries, a fresh start clears them.
             db.update("UPDATE auth_phone_otp SET challenge_hash=?,state='SENDING',operation_id=?,lease_until=?,"
-                    + "expires_at=?,resend_at=?,attempts=0,resends=?,updated_at=? WHERE phone_hash=?",
-                    hash(challenge), operation, now + 30000, now + 900000, now + 30000, resends, now, hash(phone));
+                    + "expires_at=?,resend_at=?,attempts=CASE WHEN ? THEN attempts ELSE 0 END,resends=?,updated_at=? WHERE phone_hash=?",
+                    hash(challenge), operation, now + 30000, now + CODE_LIFE_MS, now + 30000, previous != null, resends, now, hash(phone));
             // Commit replacement before contacting MSG91: an ambiguous timeout must never revive an old challenge.
             db.update("DELETE FROM auth_phone_otp_limits WHERE (scope,bucket) IN "
                     + "(SELECT scope,bucket FROM auth_phone_otp_limits WHERE "
@@ -67,7 +72,7 @@ public class CentralOtpStore {
                     now / 60000 - 2880, now / 3600000 - 48);
             db.update("DELETE FROM auth_phone_otp WHERE phone_hash IN "
                     + "(SELECT phone_hash FROM auth_phone_otp WHERE updated_at < ? LIMIT 500)", now - 172800000);
-            return new Claim(phone, challenge, operation, now + 900000, now + 30000);
+            return new Claim(phone, challenge, operation, now + CODE_LIFE_MS, now + 30000);
         }));
     }
 

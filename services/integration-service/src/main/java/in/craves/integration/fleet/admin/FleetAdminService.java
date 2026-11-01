@@ -119,7 +119,9 @@ public class FleetAdminService {
     private static final String EVENT = "SELECT id, kind, reason, evidence_summary, deadline, review_by, appeal_phone, approver_name, "
         + "created_at, status_after FROM fleet_schema.rider_status_event ";
     private static final String SELFIE = "SELECT s.id, s.rider_id, r.name, s.started_at, s.selfie_state, s.selfie_reason, "
-        + "s.selfie_reviewed_by_name, s.selfie_reviewed_at FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id ";
+        + "s.selfie_reviewed_by_name, s.selfie_reviewed_at, (SELECT d.id FROM fleet_schema.rider_document d WHERE d.rider_id = s.rider_id "
+        + "AND d.type = 'PHOTO' AND d.status <> 'REJECTED' ORDER BY d.status = 'VERIFIED' DESC, d.uploaded_at DESC LIMIT 1) AS reference_photo_id "
+        + "FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id ";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -766,7 +768,7 @@ public class FleetAdminService {
     private static SelfieReview selfie(ResultSet row) throws SQLException {
         return new SelfieReview(row.getObject("id", UUID.class), row.getObject("rider_id", UUID.class), row.getString("name"),
             instant(row, "started_at"), row.getString("selfie_state"), row.getString("selfie_reason"),
-            row.getString("selfie_reviewed_by_name"), instant(row, "selfie_reviewed_at"));
+            row.getString("selfie_reviewed_by_name"), instant(row, "selfie_reviewed_at"), row.getObject("reference_photo_id", UUID.class));
     }
 
     static Instant instant(ResultSet row, String column) throws SQLException {

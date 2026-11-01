@@ -1,14 +1,14 @@
 import {useEffect, useRef} from 'react';
-import {Alert, AppState, Platform} from 'react-native';
+import {Alert, AppState, DeviceEventEmitter, Platform} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
-import type {Offer} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {pickOffer, type ReceivedOffer} from '../domain/offerTiming';
 import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
-import {riderKeys} from '../state/riderQueries';
+import {connection} from '../state/connection';
+import {riderKeys, TRIP_ENDED_EVENT} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
 
@@ -70,9 +70,9 @@ export function RiderRuntime({
 
   useEffect(() => {
     let mounted = true;
-    // The countdown runs from receivedAtMs plus expiresInSec, never from the phone clock against expiresAt.
-    const show = (offer: Offer, receivedAtMs: number) => {
-      const next = pickOffer(shown.current, {offer, receivedAtMs}, Date.now());
+    // The countdown ends at the native deadline (the server's expiresAt on the phone's clock), else arrival plus expiresInSec.
+    const show = (received: ReceivedOffer) => {
+      const next = pickOffer(shown.current, received, Date.now());
       if (mounted && next && next !== shown.current) {
         shown.current = next;
         openOffer(next);
@@ -92,11 +92,16 @@ export function RiderRuntime({
         tripQueue.flush(riderId, {now: true}).catch(() => undefined);
       }
     };
-    riderOnlineService.pendingOffer().then(pending => pending && show(pending.offer, pending.receivedAtMs));
+    riderOnlineService.pendingOffer().then(pending => pending && show(pending));
+    // Ops ended the trip, or the order was cancelled (the TRIP_ENDED push): read it again now, not at the next upload.
+    const tripEnded = DeviceEventEmitter.addListener(TRIP_ENDED_EVENT, refreshTrip);
     const offs = [
+      () => tripEnded.remove(),
       riderOnlineService.onOffer(show),
       riderOnlineService.onTripChanged(refreshTrip),
       riderOnlineService.onStatus(status => {
+        // Every working screen shows whether the phone reaches Craves (OfflineBanner).
+        connection.update(status);
         if (status.state === 'ONLINE' || status.connected) {
           flushOnSignal();
         }
@@ -118,6 +123,8 @@ export function RiderRuntime({
     return () => {
       mounted = false;
       offs.forEach(off => off());
+      // Signed out or gone back to a gate: no stale "no connection" for whoever comes next.
+      connection.update({state: 'OFFLINE'});
       clearInterval(timer);
       appState.remove();
     };

@@ -13,13 +13,20 @@ export interface PhotoWords {
 // Below 1 the picker saves a new file: JPEG, or PNG for a PNG. Those are formats the server takes (riderApi.live).
 const QUALITY = 0.7;
 
-async function takePhoto(words: PhotoWords): Promise<string | null> {
+/** Asks for the camera; refused, it says how to allow it. */
+async function cameraAllowed(words: Pick<PhotoWords, 'cancel' | 'denied' | 'openSettings'>): Promise<boolean> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     Alert.alert(words.denied, undefined, [
       {text: words.cancel, style: 'cancel'},
       {text: words.openSettings, onPress: () => Linking.openSettings().catch(() => undefined)},
     ]);
+  }
+  return permission.granted;
+}
+
+async function takePhoto(words: PhotoWords): Promise<string | null> {
+  if (!(await cameraAllowed(words))) {
     return null;
   }
   const shot = await ImagePicker.launchCameraAsync({cameraType: ImagePicker.CameraType.back, mediaTypes: ['images'], quality: QUALITY});
@@ -53,4 +60,15 @@ export function chooseDocumentPhoto(words: PhotoWords): Promise<string | null> {
       {cancelable: true, onDismiss: () => resolve(null)},
     );
   });
+}
+
+/** A selfie, live from the front camera as JPEG: going online, and the reference one at sign-up. Null when cancelled. */
+export async function selfieShot(): Promise<ImagePicker.ImagePickerAsset | null> {
+  const shot = await ImagePicker.launchCameraAsync({cameraType: ImagePicker.CameraType.front, mediaTypes: ['images'], quality: 0.5});
+  return shot.canceled ? null : (shot.assets[0] ?? null);
+}
+
+/** The reference selfie at sign-up (document SELFIE): never from the gallery or a file. Null when cancelled or refused. */
+export async function takeSelfie(words: Pick<PhotoWords, 'cancel' | 'denied' | 'openSettings'>): Promise<string | null> {
+  return (await cameraAllowed(words)) ? ((await selfieShot())?.uri ?? null) : null;
 }

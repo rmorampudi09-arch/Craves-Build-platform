@@ -120,7 +120,7 @@ paths:
     post:
       summary: A new photo of one document; ops reviews it by hand and the document shows as PENDING until then
       description: Also for a PENDING rider. 422 DOCUMENT_TYPE_NOT_ALLOWED (not one of the types; Craves never collects Aadhaar) or DOCUMENT_FILE_INVALID (not a JPG, PNG or PDF, or over 10 MB).
-      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [type, photo], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, photo: {type: string, format: binary}}}}}}
+      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [type, photo], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK, SELFIE]}, photo: {type: string, format: binary}}}}}}
       responses: {'204': {description: Uploaded}, '422': {$ref: '#/components/responses/Error'}}
   /devices:
     post:
@@ -314,7 +314,7 @@ components:
         vehicle: {type: object, required: [label], properties: {label: {type: string}, regNumberMasked: {type: string}, kind: {type: string, enum: [PETROL, ELECTRIC, BICYCLE], description: As the rider signed up; absent for a rider ops added before sign-up existed}}}
         documents:
           type: array
-          items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED, MISSING]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
+          items: {type: object, required: [label, status], properties: {type: {type: string, enum: [DL, RC, INSURANCE, PUC, PAN, BANK, SELFIE]}, label: {type: string}, status: {type: string, enum: [VERIFIED, PENDING, REJECTED, EXPIRED, MISSING]}, expiresOn: {type: string, format: date}, reason: {type: string}}}
         payoutAccountMasked: {type: string, description: The account payouts go to (ops set or confirmed it)}
         preferences: {$ref: '#/components/schemas/OrderPreferences'}
         payoutAccountSubmitted: {type: string, description: An account the rider sent that ops has not confirmed yet}
@@ -436,7 +436,7 @@ components:
         offerId: {type: string}
         tripId: {type: string}
         expiresAt: {type: string, format: date-time}
-        expiresInSec: {type: integer, description: 'The app counts down from this, never from the phone clock'}
+        expiresInSec: {type: integer, description: 'Seconds left when sent. The app counts down to the earlier of arrival + expiresInSec and expiresAt corrected by the server clock offset it measures from the Date header of /locations replies, never from the phone clock alone'}
         payPaise: {$ref: '#/components/schemas/Paise'}
         pickupDistanceM: {type: integer}
         dropDistanceM: {type: integer}

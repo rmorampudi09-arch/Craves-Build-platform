@@ -154,6 +154,19 @@ class FleetSetupDatabaseTest {
             live.version())).as("published versions never change").isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    /** Decided 1 Nov 2026: the console sends only the mode, and every value and rule left out is the built-in one. */
+    @Test
+    void aModeAloneGetsTheBuiltInDispatch() {
+        DispatchPolicyVersion shadow = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("shadow", null, null, null, null, null, null, null, null)));
+        assertThat(List.of(shadow.offerSeconds(), shadow.fleetStageSeconds(), shadow.radiusM(), shadow.pickupDetourPercent(),
+            shadow.pidgeStageSeconds())).containsExactly(30, 120, 5000, 130, 600);
+        assertThat(rules(shadow)).as("one rider at a time, up to 3 rounds, fair turns within 1.5 km").isEqualTo(DispatchRules.BUILT_IN);
+        assertThat(tx(setup::setup).builtInDispatch()).isEqualTo(FleetAdminModels.BuiltInDispatch.current());
+        assertThat(FleetAdminModels.BuiltInDispatch.current().offerRounds() * FleetAdminModels.BuiltInDispatch.current().offerSeconds())
+            .as("every round gets its full time inside the fleet stage").isLessThanOrEqualTo(FleetAdminModels.BuiltInDispatch.current().fleetStageSeconds());
+    }
+
     /**
      * Phase 4: how orders are offered goes with the policy. Kept unless sent (an emergency stop never changes it), within its
      * bounds, rounds that fit the fleet stage, and once riders have terms a change needs 14 days' notice, in Java and in the table.
@@ -171,7 +184,7 @@ class FleetSetupDatabaseTest {
         assertThat(rules(fair)).as("3 rounds of 30 s fit a 90 s stage").isEqualTo(new DispatchRules(1, 3, 1500));
         DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
-        assertThat(rules(kept)).as("not sent: the rules riders are shown are kept").isEqualTo(new DispatchRules(1, 3, 1500));
+        assertThat(rules(kept)).as("not sent: the built-in rules").isEqualTo(DispatchRules.BUILT_IN);
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)), 400, "VALIDATION_FAILED");
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));

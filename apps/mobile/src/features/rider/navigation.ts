@@ -1,7 +1,7 @@
 import {createContext, useContext} from 'react';
 import type {NavigatorScreenParams} from '@react-navigation/native';
 import type {NativeStackNavigationProp, NativeStackScreenProps} from '@react-navigation/native-stack';
-import type {Offer} from './api/contract';
+import type {ReceivedOffer} from './domain/offerTiming';
 
 export type RiderStackParamList = {
   Phone: undefined;
@@ -12,7 +12,7 @@ export type RiderStackParamList = {
   Tabs: NavigatorScreenParams<RiderTabParamList> | undefined;
   PhoneSetup: undefined;
   GoOnline: undefined;
-  Offer: {offer: Offer; receivedAtMs: number};
+  Offer: ReceivedOffer;
   Trip: undefined;
   TripDetail: {tripId: string};
   Payouts: undefined;

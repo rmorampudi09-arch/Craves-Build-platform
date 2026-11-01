@@ -26,8 +26,10 @@ export interface RiderOnlineService {
   start(shift?: ShiftStart): Promise<void>;
   stop(): Promise<void>;
   testRing(): Promise<void>;
+  /** An offer rings until answered (app 1.3.0): Accept, Decline or its screen closing stops it. */
+  stopRinging(offerId: string): void;
   lastFix(): RiderFix | undefined;
-  onOffer(cb: (offer: Offer, receivedAtMs: number) => void): () => void;
+  onOffer(cb: (received: ReceivedOffer) => void): () => void;
   onTripChanged(cb: (change: TripChange) => void): () => void;
   onStatus(cb: (status: RiderOnlineStatus) => void): () => void;
   /** The FCM token for POST /devices; null when Firebase can't give one. */
@@ -57,7 +59,7 @@ function listeners<T extends unknown[]>() {
 
 /** Mock mode, Jest and the customer app: a JS loop that works only while the app is open, against the mock server. */
 function createJsOnlineService() {
-  const offers = listeners<[Offer, number]>();
+  const offers = listeners<[ReceivedOffer]>();
   const trips = listeners<[TripChange]>();
   const statuses = listeners<[RiderOnlineStatus]>();
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -90,7 +92,7 @@ function createJsOnlineService() {
       statuses.emit({state: 'ONLINE', lastFix: fix});
       response.offers.forEach(offer => {
         Vibration.vibrate(RING);
-        offers.emit(offer, Date.now());
+        offers.emit({offer, receivedAtMs: Date.now()});
       });
       const trip = response.activeTrip;
       const signature = trip ? `${trip.tripId}:${trip.version}` : '';
@@ -120,6 +122,7 @@ function createJsOnlineService() {
     async testRing() {
       Vibration.vibrate(RING);
     },
+    stopRinging: (_offerId: string) => undefined,
     lastFix: () => fix,
     onOffer: offers.add,
     onTripChanged: trips.add,
@@ -141,6 +144,7 @@ interface NativeRiderOnline {
   start(shiftCredential: string | null, expiresAtMs: number, apiBaseUrl: string): Promise<void>;
   stop(): Promise<void>;
   testRing(): Promise<void>;
+  stopRinging?(offerId: string): void;
   lastFix(): Promise<RiderFix | null>;
   getFcmToken(): Promise<string>;
   getPendingOffer(): Promise<NativeOffer | null>;
@@ -151,6 +155,8 @@ interface NativeRiderOnline {
 interface NativeOffer {
   offer: string;
   receivedAtMs: number;
+  /** When it ends by the phone's clock (RiderOffers.deadlineMs, app 1.3.0). */
+  deadlineMs?: number;
   channel: 'fcm' | 'locations';
 }
 
@@ -159,7 +165,7 @@ function parseOffer(event: NativeOffer): ReceivedOffer | null {
     const offer = JSON.parse(event.offer) as Offer;
     // A tapped offer comes from launch-intent extras, which any app can set, and its id goes into the accept URL.
     return typeof offer.offerId === 'string' && /^[\w-]{1,64}$/.test(offer.offerId) && typeof offer.expiresInSec === 'number'
-      ? {offer, receivedAtMs: event.receivedAtMs}
+      ? {offer, receivedAtMs: event.receivedAtMs, deadlineMs: Number.isFinite(event.deadlineMs) ? event.deadlineMs : undefined}
       : null;
   } catch {
     return null;
@@ -205,14 +211,15 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       native.start(shift?.shiftCredential ?? null, shift ? Date.parse(shift.expiresAt) : 0, getRuntimeConfig().apiBaseUrl),
     stop: () => native.stop(),
     testRing: () => native.testRing(),
+    stopRinging: (offerId: string) => native.stopRinging?.(offerId),
     lastFix: () =>
       fix && fix.ageMs !== undefined ? {...fix, ageMs: fix.ageMs + Math.max(0, Date.now() - fixArrivedAt)} : fix,
-    onOffer(cb: (offer: Offer, receivedAtMs: number) => void) {
+    onOffer(cb: (received: ReceivedOffer) => void) {
       listening += 1;
       const off = on<NativeOffer>('riderOffer', event => {
         const received = parseOffer(event);
         if (received) {
-          cb(received.offer, received.receivedAtMs);
+          cb(received);
         }
       });
       return () => {

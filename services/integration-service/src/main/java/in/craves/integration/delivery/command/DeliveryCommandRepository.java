@@ -112,6 +112,17 @@ public class DeliveryCommandRepository {
             chefSubOrderId));
     }
 
+    /**
+     * The promised ready time of a command that no worker has started and no ready tap has moved (accelerateScheduled moves
+     * ready_at off the promise); empty otherwise. Only such a command may wait for the food (R16 18).
+     */
+    public Optional<Instant> untappedPromise(UUID commandId) {
+        return jdbc.query("""
+            SELECT promised_ready_at FROM delivery_schema.delivery_command
+            WHERE id = ? AND status = 'SCHEDULED' AND attempt_count = 0 AND ready_at = promised_ready_at
+            """, (rs, row) -> rs.getObject("promised_ready_at", OffsetDateTime.class).toInstant(), commandId).stream().findFirst();
+    }
+
     public boolean recordScheduled(UUID commandId, long sequenceNumber, String serviceBusMessageId) {
         return jdbc.update("""
             UPDATE delivery_schema.delivery_command

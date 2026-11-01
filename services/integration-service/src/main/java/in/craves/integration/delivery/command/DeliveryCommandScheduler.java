@@ -16,6 +16,8 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,11 +35,18 @@ public class DeliveryCommandScheduler {
 
     /** The most a kitchen's habit may move its dispatch later (R16 10). */
     static final Duration MAX_READY_CORRECTION = Duration.ofMinutes(15);
+    /** R16 18: riders timed to the food are sent to reach the kitchen this long before it. */
+    static final Duration FOOD_BUFFER = Duration.ofMinutes(2);
+    /** R16 18: a due command waits for the food only if its riders would be more than this early, so each wait is longer. */
+    static final Duration HOLD_STEP = Duration.ofMinutes(3);
+    /** EtaModel.MAX_MINUTES: no leg is predicted longer, so a longer answer is not a ride. */
+    private static final double MAX_RIDE_MINUTES = 240;
 
     private final DeliveryCommandRepository repository;
     private final DeliveryServiceBusPublisher publisher;
     private final DeliveryCommandProperties properties;
     private final Clock clock;
+    private FleetStage fleetStage;
 
     /**
      * Behind craves.delivery-command.ready-correction-enabled (off until 2 to 4 weeks of ready taps exist): a kitchen that
@@ -78,9 +87,10 @@ public class DeliveryCommandScheduler {
         this.clock = clock;
     }
 
-    /** Present with CRAVES_FLEET_ENABLED: rain mode starts the search earlier (FleetStage.dispatchEarlier). */
-    private FleetStage fleetStage;
-
+    /**
+     * The Craves rider stage, while the fleet is on: rain mode starts the search earlier (R16 19), and where its free
+     * riders are times dispatch to the food (R16 18).
+     */
     @Autowired(required = false)
     public void setFleetStage(FleetStage fleetStage) {
         this.fleetStage = fleetStage;
@@ -94,6 +104,7 @@ public class DeliveryCommandScheduler {
             .minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
         // Rain mode (R16 19): riders and couriers ride slower, so the search starts 5 minutes earlier.
         dispatchAt = dispatchAt.minus(fleetStage == null ? Duration.ZERO : fleetStage.dispatchEarlier());
+        dispatchAt = foodTimed(data.chefSubOrderId(), data.deliveryRequest().pickup(), dispatchAt);
         Instant minimumDispatchAt = clock.instant().plusSeconds(5);
         if (dispatchAt.isBefore(minimumDispatchAt)) {
             dispatchAt = minimumDispatchAt;
@@ -245,6 +256,86 @@ public class DeliveryCommandScheduler {
             : event.occurredAt() != null ? event.occurredAt() : clock.instant();
         boolean first = repository.recordOrderCancelled(data.chefSubOrderId(), reason, cancelledAt);
         log.info("DELIVERY_ORDER_CANCELLED chefSubOrderId={} reason={} repeat={}", data.chefSubOrderId(), reason, !first);
+    }
+
+    /**
+     * The narrowing window (R16 18): when a command that no worker has started and no ready tap has moved comes due, the
+     * riders free near the kitchen are looked at again. If they would reach it more than HOLD_STEP before predicted ready −
+     * FOOD_BUFFER, it waits until predicted ready − their ride − FOOD_BUFFER (DeliveryCommandWorker defers its message; it
+     * stays SCHEDULED, so a ready tap still starts it at once). Each wait is longer than HOLD_STEP and none goes past
+     * predicted ready − FOOD_BUFFER, so a command waits only a few times. Empty: start now.
+     */
+    public Optional<Instant> holdUntil(DeliveryCommandMessage message) {
+        if (!properties.isFoodTimedDispatchEnabled() || fleetStage == null) {
+            return Optional.empty();
+        }
+        try {
+            Optional<Instant> promise = repository.untappedPromise(message.commandId());
+            if (promise.isEmpty()) {
+                return Optional.empty();
+            }
+            Instant now = clock.instant();
+            Stop kitchen = message.deliveryRequest() == null ? null : message.deliveryRequest().pickup();
+            OptionalDouble ride = rideMinutes(message.chefSubOrderId(), kitchen, now);
+            if (ride.isEmpty()) {
+                return Optional.empty();
+            }
+            Instant until = promise.get().plus(readyCorrection(message.chefSubOrderId())).minus(rideAndBuffer(ride.getAsDouble()));
+            if (!until.isAfter(now.plus(HOLD_STEP))) {
+                return Optional.empty();
+            }
+            log.info("FOOD_TIMED_DISPATCH chefSubOrderId={} rideMinutes={} dispatchAt={} held=true", message.chefSubOrderId(),
+                tenths(ride.getAsDouble()), until);
+            return Optional.of(until);
+        } catch (RuntimeException exception) {
+            log.warn("FOOD_TIMED_DISPATCH chefSubOrderId={} hold failed: {}", message.chefSubOrderId(), exception.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * R16 18, behind craves.delivery-command.food-timed-dispatch-enabled: start when the riders free near the kitchen would
+     * reach it FOOD_BUFFER before the food, at predicted ready (todays + the lead) − their predicted ride − FOOD_BUFFER. Only
+     * ever later than todays (today's rule), never past predicted ready − FOOD_BUFFER, and a step before this that moves
+     * todays moves the result as much. No live ranking model or free rider nearby: todays.
+     */
+    private Instant foodTimed(UUID chefSubOrderId, Stop kitchen, Instant todays) {
+        if (!properties.isFoodTimedDispatchEnabled()) {
+            return todays;
+        }
+        Instant now = clock.instant();
+        OptionalDouble ride = rideMinutes(chefSubOrderId, kitchen, todays.isAfter(now) ? todays : now);
+        if (ride.isEmpty()) {
+            return todays;
+        }
+        Instant timed = todays.plus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES).minus(rideAndBuffer(ride.getAsDouble()));
+        Instant dispatchAt = timed.isAfter(todays) ? timed : todays;
+        log.info("FOOD_TIMED_DISPATCH chefSubOrderId={} rideMinutes={} dispatchAt={}", chefSubOrderId, tenths(ride.getAsDouble()), dispatchAt);
+        return dispatchAt;
+    }
+
+    /** The fleet's predicted ride (FleetStage.rideMinutes), kept only when it can be one; empty without the fleet or the kitchen's place. */
+    private OptionalDouble rideMinutes(UUID chefSubOrderId, Stop kitchen, Instant at) {
+        if (fleetStage == null || !hasCoordinates(kitchen)) {
+            return OptionalDouble.empty();
+        }
+        try {
+            OptionalDouble ride = fleetStage.rideMinutes(chefSubOrderId, kitchen.latitude().doubleValue(),
+                kitchen.longitude().doubleValue(), at);
+            // NaN fails both comparisons.
+            return ride.isPresent() && ride.getAsDouble() >= 0 && ride.getAsDouble() <= MAX_RIDE_MINUTES ? ride : OptionalDouble.empty();
+        } catch (RuntimeException exception) {
+            log.warn("FOOD_TIMED_DISPATCH chefSubOrderId={} failed: {}", chefSubOrderId, exception.getClass().getSimpleName());
+            return OptionalDouble.empty();
+        }
+    }
+
+    private static Duration rideAndBuffer(double rideMinutes) {
+        return Duration.ofSeconds(Math.round(rideMinutes * 60)).plus(FOOD_BUFFER);
+    }
+
+    private static double tenths(double minutes) {
+        return Math.round(minutes * 10) / 10.0;
     }
 
     private static RoutingContext routingContext(EventEnvelope<ChefAcceptedOrderData> event,

@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
@@ -76,6 +77,8 @@ public class FleetDispatcher implements FleetStage {
     static final long FAIR_STEP_PAISE = 1_000;
     /** Riders ranked by road with CRAVES_FLEET_ROAD_RANKING_ENABLED (P3-06): one road-distance call each per order. */
     static final int ROAD_RANKED = 5;
+    /** Dispatch timed to the food (R16 18) reads the ride of this many free riders nearest the kitchen: a middle figure, few calls. */
+    static final int TIMING_RIDERS = 3;
     static final int SEEN_WITHIN_SECONDS = 45;
     static final int FIX_WITHIN_SECONDS = 180;
     /** Heading home (Phase 5): the drop must leave the rider at least this much nearer home (straight lines, metres). */
@@ -340,6 +343,29 @@ public class FleetDispatcher implements FleetStage {
         int radius = policies.currentDispatchPolicy().map(DispatchPolicy::radiusM).orElse(5000);
         return (int) nearbyRiders(lat, lng, radius, -1, 100, null, null).stream().filter(rider -> testMode.riderAllowed(rider.riderId()))
             .count();
+    }
+
+    /**
+     * R16 18 (FleetStage.rideMinutes): the model's middle figure for the TIMING_RIDERS free riders nearest the kitchen,
+     * only where this order would be offered to riders (dispatch live; a known chef whose kitchen test mode allows) and only
+     * with a live model judged to rank riders well (FleetEta.ranking).
+     */
+    @Override
+    public OptionalDouble rideMinutes(UUID chefSubOrderId, double kitchenLat, double kitchenLng, Instant at) {
+        EtaModel model = eta == null ? null : eta.ranking();
+        DispatchPolicy policy = model == null ? null
+            : policies.currentDispatchPolicy().filter(live -> "live".equals(live.mode())).orElse(null);
+        UUID chefId = policy == null ? null : jdbc.queryForList("SELECT chef_identity_id FROM payment_schema.finance_issued_snapshot "
+            + "WHERE chef_order_id = ?", UUID.class, chefSubOrderId).stream().findFirst().orElse(null);
+        if (chefId == null || !testMode.kitchenAllowed(chefId)) {
+            return OptionalDouble.empty();
+        }
+        double[] minutes = nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), -1, 100, null, null).stream()
+            .filter(rider -> testMode.riderAllowed(rider.riderId())).limit(TIMING_RIDERS)
+            .mapToDouble(rider -> model.minutes(EtaModel.PICKUP, rider.lat(), rider.lng(), kitchenLat, kitchenLng, at.toEpochMilli()))
+            .sorted().toArray();
+        return minutes.length == 0 ? OptionalDouble.empty()
+            : OptionalDouble.of((minutes[(minutes.length - 1) / 2] + minutes[minutes.length / 2]) / 2);
     }
 
     int pidgeSeconds() {

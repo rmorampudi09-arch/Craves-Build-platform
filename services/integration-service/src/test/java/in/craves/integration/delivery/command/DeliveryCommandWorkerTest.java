@@ -173,6 +173,42 @@ class DeliveryCommandWorkerTest {
         verifyNoInteractions(router, completion);
     }
 
+    /**
+     * R16 18's narrowing window: a command due before its riders would meet the food waits before any claim, so no attempt
+     * is counted and the chef's ready tap can still start it; once the scheduler says go, it runs as before.
+     */
+    @Test
+    void aCommandDueBeforeItsRidersWouldMeetTheFoodWaitsUnclaimed() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);
+        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
+        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxDeliveryAttempts(5);
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(
+            commands, deliveryJobs, router, completion, properties, retryProperties()
+        );
+        DeliveryCommandScheduler timing = mock(DeliveryCommandScheduler.class);
+        worker.setFoodTiming(timing);
+        DeliveryCommandMessage message = command();
+        Instant until = Instant.now().plusSeconds(270);
+        when(timing.holdUntil(message)).thenReturn(Optional.of(until));
+
+        assertThatThrownBy(() -> worker.process(message)).isInstanceOfSatisfying(DeliveryCommandDeferredException.class,
+            deferred -> {
+                assertThat(deferred.retryAt()).isEqualTo(until);
+                assertThat(deferred.retryKey()).as("a Service Bus message id of its own for each wait")
+                    .isEqualTo("food-timed-" + message.commandId() + "-" + until.toEpochMilli());
+            });
+        verifyNoInteractions(commands, deliveryJobs, router, completion);
+
+        when(timing.holdUntil(message)).thenReturn(Optional.empty());
+        UUID existingJobId = UUID.randomUUID();
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.of(commandRecord(message, "PROCESSING")));
+        when(deliveryJobs.findIdByChefSubOrderId(message.chefSubOrderId())).thenReturn(Optional.of(existingJobId));
+        assertThat(worker.process(message).deliveryJobId()).isEqualTo(existingJobId);
+    }
+
     private static DeliveryCommandRetryProperties retryProperties() {
         DeliveryCommandRetryProperties retry = new DeliveryCommandRetryProperties();
         retry.setBaseSeconds(30);

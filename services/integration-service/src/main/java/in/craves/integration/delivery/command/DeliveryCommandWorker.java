@@ -10,6 +10,7 @@ import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRou
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,6 +23,7 @@ public class DeliveryCommandWorker {
     private final DeliveryCommandCompletionService completionService;
     private final DeliveryCommandProperties properties;
     private final DeliveryCommandRetryProperties retryProperties;
+    private DeliveryCommandScheduler foodTiming;
 
     public DeliveryCommandWorker(DeliveryCommandRepository commands,
                                  DeliveryJobRepository deliveryJobs,
@@ -37,9 +39,23 @@ public class DeliveryCommandWorker {
         this.retryProperties = retryProperties;
     }
 
+    /** With delivery commands on: a command due before its riders would meet the food waits (R16 18, holdUntil). */
+    @Autowired(required = false)
+    public void setFoodTiming(DeliveryCommandScheduler scheduler) {
+        this.foodTiming = scheduler;
+    }
+
     public WorkerReceipt process(DeliveryCommandMessage message) {
         if (message == null || message.commandId() == null || message.chefSubOrderId() == null) {
             throw new DeliveryCommandNonRetryableException("Delivery command identity is missing");
+        }
+        // Before the claim, so a wait counts no attempt and the command stays SCHEDULED for the chef's ready tap.
+        // shortcut: a waiting command keeps its first dispatch_at (FOOD_TIMED_DISPATCH logs the wait); store the new
+        // time too once dispatch timing is analysed from the table.
+        Instant heldUntil = foodTiming == null ? null : foodTiming.holdUntil(message).orElse(null);
+        if (heldUntil != null) {
+            throw new DeliveryCommandDeferredException("Riders near the kitchen would arrive before the food", heldUntil,
+                "food-timed-" + message.commandId() + "-" + heldUntil.toEpochMilli());
         }
 
         Optional<CommandRecord> claimed = commands.claim(

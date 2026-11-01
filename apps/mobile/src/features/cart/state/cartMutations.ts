@@ -1,5 +1,6 @@
 import type {AppDispatch, RootState} from '../../../app/store/store';
 import {AppApiError, toAppApiError} from '../../../core/http/apiError';
+import {customerHaptics} from '../../../shared/haptics/customerHaptics';
 import {appSounds} from '../../../shared/sound/appSounds';
 import {cartApi} from '../api/cartApi';
 import type {CartSnapshot} from '../domain/cartTypes';
@@ -185,6 +186,7 @@ export function switchCartKitchen(
           command.expectedKitchenId,
         );
         void appSounds.play('addToCart');
+        void customerHaptics.addedToCart();
         return markMutationSucceeded(dispatch, key, requestId, snapshot);
       } catch (error) {
         return markMutationFailed(
@@ -222,6 +224,7 @@ export function addCartItem(command: AddCartItemCommand): CartMutationThunk {
       try {
         const snapshot = await cartApi.addItem(command.menuItemId, command.quantity);
         void appSounds.play('addToCart');
+        void customerHaptics.addedToCart();
         return markMutationSucceeded(dispatch, key, requestId, snapshot);
       } catch (error) {
         return markMutationFailed(

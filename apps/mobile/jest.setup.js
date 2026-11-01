@@ -116,8 +116,12 @@ jest.mock('@maplibre/maplibre-react-native', () => {
 
 jest.mock('expo-haptics', () => ({
   AndroidHaptics: {Segment_Tick: 'segment-tick'},
+  ImpactFeedbackStyle: {Medium: 'medium'},
+  NotificationFeedbackType: {Success: 'success'},
   performAndroidHapticsAsync: jest.fn(async () => undefined),
   selectionAsync: jest.fn(async () => undefined),
+  impactAsync: jest.fn(async () => undefined),
+  notificationAsync: jest.fn(async () => undefined),
 }));
 
 jest.mock('expo-audio', () => ({

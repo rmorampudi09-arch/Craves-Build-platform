@@ -91,6 +91,7 @@ import {refreshCartSnapshot} from '../state/cartRefresh';
 import {selectCartScreenModel} from '../state/cartSelectors';
 import {cartActions} from '../state/cartSlice';
 import {appSounds} from '../../../shared/sound/appSounds';
+import {customerHaptics} from '../../../shared/haptics/customerHaptics';
 import {formatCartMoney} from '../viewCartOverlayModel';
 
 const DELIVERY_RADIUS_KM = 10;
@@ -447,6 +448,7 @@ export function CustomerCartScreen() {
     (checkout: CheckoutSession) => {
       // Only called once Craves has verified the payment.
       void appSounds.play('orderPlaced');
+      void customerHaptics.orderPlaced();
       const tabs = navigation.getParent<BottomTabNavigationProp<CustomerTabParamList>>();
       if (!tabs) return false;
 

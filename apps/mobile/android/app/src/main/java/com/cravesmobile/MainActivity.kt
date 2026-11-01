@@ -9,7 +9,12 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
 
+  // True only when Android rebuilds the app from Recents after killing it in the background;
+  // a fresh launch (app swiped away or never opened) has no saved state.
+  private var restoredFromRecents = false
+
   override fun onCreate(savedInstanceState: Bundle?) {
+    restoredFromRecents = savedInstanceState != null
     super.onCreate(null)
   }
 
@@ -26,6 +31,9 @@ class MainActivity : ReactActivity() {
     ReactActivityDelegateWrapper(
       this,
       BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
-      object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {},
+      object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
+        override fun getLaunchOptions(): Bundle =
+          Bundle().apply { putBoolean("restoredFromRecents", restoredFromRecents) }
+      },
     )
 }

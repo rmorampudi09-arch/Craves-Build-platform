@@ -321,7 +321,7 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
   }
 }
 
-export function AppNavigator() {
+export function AppNavigator({restoreLastScreen = false}: {restoreLastScreen?: boolean}) {
   const status = useBootstrap();
   useSessionLifecycle();
   const auth = useAppSelector(state => state.auth);
@@ -454,6 +454,13 @@ export function AppNavigator() {
 
   React.useEffect(() => {
     let active = true;
+    // A fresh launch (app swiped out of Recents) always starts on the role's Home.
+    if (!restoreLastScreen) {
+      processRestorationStorage.clear().catch(() => undefined);
+      restorationLoadedRef.current = true;
+      flushPendingRestoration();
+      return;
+    }
     processRestorationStorage
       .read()
       .then(snapshot => {
@@ -472,7 +479,7 @@ export function AppNavigator() {
     return () => {
       active = false;
     };
-  }, [flushPendingRestoration]);
+  }, [flushPendingRestoration, restoreLastScreen]);
 
   React.useEffect(() => {
     flushPendingInboundRoute();

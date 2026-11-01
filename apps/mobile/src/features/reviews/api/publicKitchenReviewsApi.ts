@@ -4,9 +4,8 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TAG_CODE_PATTERN = /^[A-Z0-9_]{1,64}$/;
 
-// Order Service source exists, but public review APIM publication is not present on main yet.
-// Keep customer-facing review reads hidden until the gateway contract is published.
-export const PUBLIC_KITCHEN_REVIEWS_AVAILABLE = false;
+// Live on the gateway: both public review routes answered 200 on 26 Oct 2026.
+export const PUBLIC_KITCHEN_REVIEWS_AVAILABLE = true;
 
 export interface PublicKitchenReview {
   reviewId: string;

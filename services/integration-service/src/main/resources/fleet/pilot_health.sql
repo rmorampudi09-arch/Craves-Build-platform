@@ -338,6 +338,7 @@ ORDER BY p50_wait_min DESC, trips DESC;
 -- after 2 to 4 weeks, CRAVES_DELIVERY_READY_CORRECTION_ENABLED moves its dispatch later by its middle lateness (from 10
 -- orders, 0 to 15 minutes). A kitchen is the chef on the order's finance snapshot.
 SELECT CASE WHEN GROUPING(f.chef_identity_id) = 1 THEN 'all'
+            WHEN f.chef_identity_id IS NULL THEN 'no finance snapshot'
             ELSE COALESCE(max(c.payload #>> '{deliveryRequest,pickup,contactName}'), 'unknown') END AS kitchen,
        count(*) AS orders,
        round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM r.ready_at - c.promised_ready_at) / 60))::numeric, 1)

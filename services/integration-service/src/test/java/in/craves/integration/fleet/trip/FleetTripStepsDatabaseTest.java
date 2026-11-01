@@ -351,6 +351,93 @@ class FleetTripStepsDatabaseTest {
         assertThat(trips.active(otherIdentity)).isEmpty();
     }
 
+    /**
+     * Phase C: a key is bound to the request it first came with. Its retry is the same step though the tap comes again aged
+     * (ageMs and the fix's own ageMs), and so is a second "food not ready" tap, which keeps its key; another step under the
+     * key, or the accept's key, is 422 and changes nothing.
+     */
+    @Test
+    void aStepsKeyGetsItsFirstResultWithAnAgedTapAndIsRefusedForAnotherStep() {
+        RiderFix atTap = new RiderFix(KITCHEN_LAT + 0.001, KITCHEN_LNG, 9.0, Instant.now(), false, 63_000L);
+        Trip atKitchen = trips.step(identity, tripId, "arrived-pickup", "k1", new Tap(60_000L, atTap));
+        RiderFix aged = new RiderFix(atTap.lat(), atTap.lng(), atTap.accuracyM(), atTap.at(), atTap.mock(), 68_000L);
+        assertThat(trips.step(identity, tripId, "arrived-pickup", "k1", new Tap(65_000L, aged)).version())
+            .as("the queue's retry 5 s later").isEqualTo(atKitchen.version());
+        Trip notReady = trips.step(identity, tripId, "food-not-ready", "k2", tap(1, KITCHEN_LAT + 0.001, KITCHEN_LNG, false));
+        assertThat(trips.step(identity, tripId, "food-not-ready", "k2", tap(0, KITCHEN_LAT + 0.002, KITCHEN_LNG, true)).version())
+            .as("tapped again, a new tap under the same key").isEqualTo(notReady.version());
+
+        refused(() -> trips.step(identity, tripId, "picked-up", "k1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        String acceptKey = fleet.db.queryForObject("SELECT idempotency_key FROM fleet_schema.trip_event WHERE trip_id = ? AND kind = 'ACCEPTED'",
+            String.class, tripId);
+        refused(() -> trips.step(identity, tripId, "picked-up", acceptKey), 422, "IDEMPOTENCY_KEY_REUSED");
+        assertThat(trips.active(identity).orElseThrow().version()).as("nothing moved").isEqualTo(notReady.version());
+        assertThat(fleet.db.queryForObject("SELECT request_hash FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = 'k1'",
+            String.class, tripId)).isEqualTo(FleetTripService.requestHash("/trips/" + tripId + "/arrived-pickup"));
+        assertThatThrownBy(() -> trips.step(identity, tripId, "picked-up", "k1")).hasMessage(FleetTripService.KEY_REUSED);
+    }
+
+    /** The code is part of the request: the same code retried after the tap (capturedOffline, aged) gets the first answer. */
+    @Test
+    void aDeliveryCodesKeyIsBoundToItsCode() {
+        toDrop();
+        refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "d1", new Tap(2_000L, null)), 422, "OTP_INVALID");
+        assertThatThrownBy(() -> trips.deliveredByOtp(identity, tripId, "1111", "d1", new Tap(90_000L, null, true)))
+            .as("the same tap sent again once it was deferred").isInstanceOfSatisfying(FleetApiException.class,
+                error -> assertThat(error.attemptsLeft()).isEqualTo(4));
+        refused(() -> trips.deliveredByOtp(identity, tripId, "4821", "d1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        verify(codes, times(1)).verify(any(), anyString());
+
+        assertThat(trips.deliveredByOtp(identity, tripId, "4821", "d2").step()).isEqualTo("DELIVERED");
+        assertThat(trips.deliveredByOtp(identity, tripId, "4821", "d2", new Tap(30_000L, null, true)).step()).isEqualTo("DELIVERED");
+        refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "d2"), 422, "IDEMPOTENCY_KEY_REUSED");
+        verify(codes, times(2)).verify(any(), anyString());
+    }
+
+    /** The photo and the calls are part of the request; a retry without its photo still gets the delivered trip (P1-07). */
+    @Test
+    void aPhotoDeliverysKeyIsBoundToItsPhotoAndCalls() {
+        toDrop();
+        fleet.db.update("UPDATE fleet_schema.trip SET arrived_drop_at = now() - INTERVAL '11 minutes' WHERE id = ?", tripId);
+        MockMultipartFile photo = new MockMultipartFile("photo", "door.jpg", "image/jpeg", JPEG);
+        assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p1", new Tap(1_000L, null)).step()).isEqualTo("DELIVERED");
+        assertThat(trips.deliveredByPhoto(identity, tripId, 2, photo, "p1", new Tap(9_000L, null)).step())
+            .as("the same photo sent again, its tap aged").isEqualTo("DELIVERED");
+        MockMultipartFile another = new MockMultipartFile("photo", "door.jpg", "image/jpeg",
+            new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0x00, 0x02});
+        refused(() -> trips.deliveredByPhoto(identity, tripId, 2, another, "p1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        refused(() -> trips.deliveredByPhoto(identity, tripId, 3, photo, "p1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        assertThat(trips.deliveredByPhoto(identity, tripId, 2, null, "p1").step()).isEqualTo("DELIVERED");
+        verify(storage, times(1)).upload(anyString(), any(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void aFailuresKeyIsBoundToItsReasonAndNote() {
+        trips.step(identity, tripId, "arrived-pickup", "k1");
+        trips.step(identity, tripId, "picked-up", "k2");
+        assertThat(trips.failed(identity, tripId, "WRONG_ADDRESS", "Gate locked", "f1", new Tap(4_000L, null)).step()).isEqualTo("FAILED");
+        assertThat(trips.failed(identity, tripId, "WRONG_ADDRESS", "Gate locked", "f1", new Tap(60_000L, null)).step()).isEqualTo("FAILED");
+        refused(() -> trips.failed(identity, tripId, "UNSAFE", "Gate locked", "f1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        refused(() -> trips.failed(identity, tripId, "WRONG_ADDRESS", "Wrong flat", "f1"), 422, "IDEMPOTENCY_KEY_REUSED");
+        assertThat(events).hasSize(1);
+    }
+
+    /** Rows stored before V177 have no hash: a repeated key replays as it always did, whatever came with it. */
+    @Test
+    void aKeyStoredBeforeTheHashReplaysAsItAlwaysDid() {
+        toDrop();
+        refused(() -> trips.deliveredByOtp(identity, tripId, "1111", "d1"), 422, "OTP_INVALID");
+        fleet.db.update("UPDATE fleet_schema.trip_event SET request_hash = NULL WHERE trip_id = ?", tripId);
+
+        assertThat(trips.failed(identity, tripId, "UNSAFE", null, "k1").step()).as("the old key's trip, as before").isEqualTo("AT_DROP");
+        assertThatThrownBy(() -> trips.deliveredByOtp(identity, tripId, "4821", "d1")).as("the old key's first answer")
+            .isInstanceOfSatisfying(FleetApiException.class, error -> {
+                assertThat(error.code()).isEqualTo("OTP_INVALID");
+                assertThat(error.attemptsLeft()).isEqualTo(4);
+            });
+        verify(codes, times(1)).verify(any(), anyString());
+    }
+
     private void toDrop() {
         trips.step(identity, tripId, "arrived-pickup", "k1");
         trips.step(identity, tripId, "picked-up", "k2");

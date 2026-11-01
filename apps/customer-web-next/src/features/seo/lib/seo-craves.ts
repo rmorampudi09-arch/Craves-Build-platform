@@ -1,6 +1,11 @@
 export const siteUrl = "https://craves.in";
 export const cravesLogoUrl = `${siteUrl}/brand/craves-logo-20260805.png`;
-export const socialProfiles = ["https://www.instagram.com/craves.in_/"];
+export const socialProfiles = [
+  "https://www.instagram.com/craves.in_/",
+  "https://www.youtube.com/@Craves_in",
+  "https://www.facebook.com/profile.php?id=61594485405454",
+  "https://www.linkedin.com/company/145186832/",
+];
 // Bump when SEO page copy changes; a lastmod that changes on every request is ignored by search engines.
 export const seoContentUpdated = new Date("2026-10-11");
 // Served by app/opengraph-image.tsx; child pages that set openGraph must list it or they lose the preview image.

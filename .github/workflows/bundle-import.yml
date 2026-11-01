@@ -34,12 +34,21 @@ jobs:
           deletes=(.bundles/*.delete)
           if [ ${#bundles[@]} -eq 0 ] && [ ${#deletes[@]} -eq 0 ]; then echo "Nothing to import"; exit 0; fi
           python3 - "${bundles[@]}" "${deletes[@]}" <<'PY'
-          import re, sys, tarfile
+          import os, re, sys, tarfile
           allowed = re.compile(r'^(services/advanced-features-service/|contracts/openapi/advanced/|infra/advanced-features/'
                                r'|infra/apim/advanced-features/|docs/advanced-features/|scripts/advanced-features/)'
                                r'[A-Za-z0-9._/-]+$')
-          def check(path):
-              if path.startswith('/') or '..' in path.split('/') or not allowed.match(path):
+          # M24/M25 hook into order-service and integration-service: additive only there
+          # (no deletions, never rewrite a Flyway migration that already exists).
+          hooks = re.compile(r'^services/(order-service|integration-service)/[A-Za-z0-9._/-]+$')
+          def check(path, delete=False):
+              if path.startswith('/') or '..' in path.split('/'):
+                  sys.exit(f'Refused path: {path}')
+              if hooks.match(path):
+                  if delete or ('/db/migration/' in path and os.path.exists(path)):
+                      sys.exit(f'Refused (additive only in {path.split("/")[1]}): {path}')
+                  return
+              if not allowed.match(path):
                   sys.exit(f'Refused path: {path}')
           for name in sys.argv[1:]:
               if name.endswith('.tgz'):
@@ -54,7 +63,7 @@ jobs:
               else:
                   for line in open(name, encoding='utf-8'):
                       if line.strip():
-                          check(line.strip())
+                          check(line.strip(), delete=True)
           print('All bundle paths are inside the advanced-features allow-list.')
           PY
           for d in "${deletes[@]}"; do
@@ -68,7 +77,8 @@ jobs:
             names="$names $(basename "$b")"
           done
           for p in services/advanced-features-service contracts/openapi/advanced infra/advanced-features \
-                   infra/apim/advanced-features docs/advanced-features scripts/advanced-features; do
+                   infra/apim/advanced-features docs/advanced-features scripts/advanced-features \
+                   services/order-service services/integration-service; do
             if [ -e "$p" ]; then git add -A -- "$p"; fi
           done
           git -c user.name="craves-bundle-import" -c user.email="bundle-import@users.noreply.github.com" \

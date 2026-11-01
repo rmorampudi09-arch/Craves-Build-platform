@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -17,6 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class DeliveryCommandRepository {
+    /**
+     * SQL true when the chef order whose id is %1$s is cancelled (R16 item 11): order-service's ORDER_CANCELLED, or a refund
+     * it requested for the order, the only signal before that event existed.
+     * shortcut: any refund counts as a cancel (today refunds come only before the chef accepts); drop the refund half before
+     * order-service ships item-level refunds, or a partial refund ends a delivery.
+     */
+    public static final String CANCELLED_ORDER = "(EXISTS (SELECT 1 FROM delivery_schema.order_cancelled oc WHERE oc.chef_sub_order_id = %1$s) "
+        + "OR EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = %1$s))";
+
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
@@ -29,14 +39,16 @@ public class DeliveryCommandRepository {
     public CommandRecord createOrFind(DeliveryCommandMessage message) {
         jdbc.update("""
             INSERT INTO delivery_schema.delivery_command
-                (id, chef_sub_order_id, order_id, command_type, status, ready_at, dispatch_at,
+                (id, chef_sub_order_id, order_id, command_type, status, ready_at, promised_ready_at, dispatch_at,
                  idempotency_key, payload, source_event_id, created_at, updated_at)
-            VALUES (?, ?, ?, 'QUOTE_AND_CREATE', 'SCHEDULED', ?, ?, ?, ?::jsonb, ?, now(), now())
+            VALUES (?, ?, ?, 'QUOTE_AND_CREATE', 'SCHEDULED', ?, ?, ?, ?, ?::jsonb, ?, now(), now())
             ON CONFLICT (chef_sub_order_id) DO NOTHING
             """,
             message.commandId(),
             message.chefSubOrderId(),
             message.orderId(),
+            toDatabaseTimestamp(message.readyAt()),
+            // The promise stays as accepted; an early ready tap moves only ready_at (accelerateScheduled).
             toDatabaseTimestamp(message.readyAt()),
             toDatabaseTimestamp(message.dispatchAt()),
             message.idempotencyKey(),
@@ -69,6 +81,51 @@ public class DeliveryCommandRepository {
             FROM delivery_schema.delivery_command
             WHERE id = ?
             """, commandId);
+    }
+
+    /**
+     * How late this order's kitchen usually taps "ready" against the time it promised on accepting: the median over its
+     * orders of the last 14 days, from 10 orders on; empty below that (R16 10, the per-kitchen correction). A kitchen is
+     * its chef on the order's finance snapshot; the taps are the fleet's record of ORDER_READY_FOR_PICKUP.
+     */
+    public Optional<Duration> kitchenReadyLateness(UUID chefSubOrderId) {
+        return jdbc.query("""
+            SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM r.ready_at - c.promised_ready_at)) AS late_s
+            FROM payment_schema.finance_issued_snapshot mine
+            JOIN payment_schema.finance_issued_snapshot f ON f.chef_identity_id = mine.chef_identity_id
+            JOIN delivery_schema.delivery_command c ON c.chef_sub_order_id = f.chef_order_id
+            JOIN fleet_schema.chef_ready r ON r.chef_sub_order_id = c.chef_sub_order_id
+            WHERE mine.chef_order_id = ? AND c.promised_ready_at > now() - INTERVAL '14 days'
+              -- An order is issued at checkout, before its promise: this bounds the chef's history to an index range (V180).
+              AND f.issued_at > now() - INTERVAL '21 days'
+            HAVING count(*) >= 10
+            """, (rs, row) -> Duration.ofSeconds(Math.round(rs.getDouble("late_s"))), chefSubOrderId).stream().findFirst();
+    }
+
+    /** order-service cancelled the chef order (ORDER_CANCELLED): stored once, the first cancel's reason kept. True the first time. */
+    public boolean recordOrderCancelled(UUID chefSubOrderId, String reason, Instant cancelledAt) {
+        return jdbc.update("INSERT INTO delivery_schema.order_cancelled (chef_sub_order_id, reason, cancelled_at) VALUES (?, ?, ?) "
+            + "ON CONFLICT (chef_sub_order_id) DO NOTHING", chefSubOrderId, reason, toDatabaseTimestamp(cancelledAt)) == 1;
+    }
+
+    /**
+     * Whether order-service cancelled the chef order (ORDER_CANCELLED), so its delivery command books nobody. Never a refund
+     * alone, unlike CANCELLED_ORDER: one may have failed or be partial, and the food must still go.
+     */
+    public boolean orderCancelled(UUID chefSubOrderId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM delivery_schema.order_cancelled WHERE "
+            + "chef_sub_order_id = ?)", Boolean.class, chefSubOrderId));
+    }
+
+    /**
+     * The promised ready time of a command that no worker has started and no ready tap has moved (accelerateScheduled moves
+     * ready_at off the promise); empty otherwise. Only such a command may wait for the food (R16 18).
+     */
+    public Optional<Instant> untappedPromise(UUID commandId) {
+        return jdbc.query("""
+            SELECT promised_ready_at FROM delivery_schema.delivery_command
+            WHERE id = ? AND status = 'SCHEDULED' AND attempt_count = 0 AND ready_at = promised_ready_at
+            """, (rs, row) -> rs.getObject("promised_ready_at", OffsetDateTime.class).toInstant(), commandId).stream().findFirst();
     }
 
     public boolean recordScheduled(UUID commandId, long sequenceNumber, String serviceBusMessageId) {

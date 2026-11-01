@@ -9,10 +9,11 @@ import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { formatPaise } from "@/features/admin/fleet/lib/payout-contract";
 import { riderPageSchema, type RiderSummary } from "@/features/admin/fleet/lib/rider-contract";
 import {
-  builtInText, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicySchema, draftFromForm,
-  fleetSetupSchema, isScheduled, noticeFor, noticeHelp, noticeStart, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema,
-  rulesText, toUnitText, versionState,
-  type DispatchMode, type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RateCard, type Unit, type UnitInput,
+  builtInText, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicySchema, DRAFT_INPUTS, draftFromForm,
+  fleetSetupSchema, isScheduled, noticeFor, noticeHelp, noticeStart, pilotKitchenSchema, pilotRiderSchema, RAIN_LEVELS, rainModeSchema, RATE_CARD_INPUTS,
+  rateCardForm, rateCardSchema, rulesText, toUnitText, versionState,
+  type DispatchMode, type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RainLevel, type RainMode, type RateCard, type Unit,
+  type UnitInput,
 } from "@/features/admin/fleet/lib/setup-contract";
 import { ActionMessage, fieldClass, labelClass, useFleetAction, type FleetAction } from "./fleet-action";
 
@@ -20,6 +21,8 @@ const MODE_LABEL = { off: "Off", shadow: "Shadow — logs only", live: "Live" } 
 const LIVE_WARNING = "Riders will get real orders now (only the pilot riders while test mode is on). Borzo and Pidge still take any order a rider doesn't accept in time.";
 const STOP_WARNING = "Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.";
 const ALLOW_LIST = "The list applies only while test mode is on; production runs with test mode off, so orders from every kitchen go to every eligible rider.";
+const RAIN_LABEL = { off: "Off", on: "On", severe: "Severe — new orders straight to Borzo or Pidge" } as const;
+const RAIN_NOTICE = "Rain mode changes how orders are offered, so riders must have been told about it 14 days before its first use. Switch it on only once that notice has gone out.";
 const STEP: Record<Unit, string> = { rupees: "0.01", km: "0.1", minutes: "1", seconds: "1", percent: "1", count: "1" };
 const DAY = 86_400_000;
 const noteBody = (note: string) => note.trim() ? { note: note.trim() } : undefined;
@@ -43,6 +46,7 @@ export function FleetSetup() {
     {setup && <>
       <SetupStatus setup={setup} />
       <DispatchPanel setup={setup} onDone={load} />
+      <RainPanel />
       <RateCards setup={setup} onDone={load} />
       <PilotRiders riders={setup.pilotRiders} testMode={setup.testMode} onDone={load} />
       <PilotKitchens kitchens={setup.pilotKitchens} testMode={setup.testMode} onDone={load} />
@@ -165,6 +169,56 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
   </section>;
 }
 
+/** Rain mode (R16 19): its own read, so the rest of the page works while the gateway doesn't have the route yet. */
+function RainPanel() {
+  const [rain, setRain] = useState<RainMode | null>(null);
+  const [level, setLevel] = useState<RainLevel>("off");
+  const [message, setMessage] = useState("Loading rain mode…");
+  const save = useFleetAction();
+
+  const load = useCallback(async () => {
+    try {
+      const mode = await fleetGet("rain-mode", rainModeSchema);
+      setRain(mode);
+      setLevel(mode.level);
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Rain mode is unavailable.");
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const ask = level === "on" ? "Switch rain mode on?" : level === "severe" ? "Switch rain mode to severe? New orders go straight to Borzo or Pidge." : "";
+    if (ask && !window.confirm(`${ask} ${RAIN_NOTICE}`)) return;
+    const saved = await save.run("PUT", "rain-mode", rainModeSchema, { level }, "Rain mode saved.");
+    if (saved) setRain(saved);
+  }
+
+  return <section className="cr-panel space-y-4" aria-labelledby="setup-rain-title">
+    <h2 id="setup-rain-title" className="text-lg font-bold">Rain mode</h2>
+    <p className="cr-muted">While it is on, riders get at least 45 s to accept and an order at most 2 rounds, the search for a rider starts 5 minutes earlier, and each offer adds the rain top-up of the rate card in force. Severe also sends new orders straight to Borzo or Pidge.</p>
+    <p className="cr-alert">{RAIN_NOTICE}</p>
+    {message && <p className="cr-empty" role="status">{message}</p>}
+    {rain && <form noValidate className="space-y-3" onSubmit={event => void submit(event)}>
+      <p className="text-sm font-bold">In force now: {RAIN_LABEL[rain.inForce]}{rain.inForce !== rain.level ? ", switched on by itself: the last 30 minutes' rides to the door took 1.3 times their predicted minutes." : ""}</p>
+      <p className="cr-muted">{rain.setAt ? `Set to ${RAIN_LABEL[rain.level]} by ${rain.setByName ?? "an admin"}, ${formatAdminTimestamp(rain.setAt)}.` : "Never switched on."} {rain.auto
+        ? "The automatic switch is on: while this is Off, rain mode comes on by itself when rides run 1.3 times their predicted minutes."
+        : "The automatic switch is off. It is a server setting; this page can't change it."}</p>
+      <p className="cr-muted">{rain.rainTopUpPaise > 0 ? `Rain top-up on the rate card in force: ${formatPaise(rain.rainTopUpPaise)} an order.` : "The rate card in force has no rain top-up, so offers add none."}</p>
+      <fieldset>
+        <legend className={labelClass}>Rain mode</legend>
+        <div className="mt-1 flex flex-wrap gap-4">{RAIN_LEVELS.map(option => <label key={option} className="flex items-center gap-2 text-sm">
+          <input type="radio" name="rain-mode" value={option} checked={level === option} onChange={() => setLevel(option)} />{RAIN_LABEL[option]}
+        </label>)}</div>
+      </fieldset>
+      <button type="submit" className="cr-button cr-primary" disabled={save.busy}>Save rain mode</button>
+      <ActionMessage state={save.state} />
+    </form>}
+  </section>;
+}
+
 function RateCards({ setup, onDone }: { setup: Setup; onDone: () => Promise<void> }) {
   const published = setup.rateCards.some(card => card.status === "PUBLISHED");
   return <section className="cr-panel space-y-4" aria-labelledby="setup-rate-title">
@@ -217,7 +271,7 @@ function NewDraft({ newest, published, onDone }: { newest: RateCard | null; publ
   return <form noValidate className="space-y-3 border-t border-slate-200 pt-4" aria-labelledby="setup-draft-title" onSubmit={event => void submit(event)}>
     <h3 id="setup-draft-title" className="font-bold">New draft</h3>
     <p className="cr-muted">Filled in from the newest version. Amounts in ₹, distances in km.</p>
-    <NumberInputs inputs={RATE_CARD_INPUTS} values={form} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
+    <NumberInputs inputs={DRAFT_INPUTS} values={form} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
     {!published && <fieldset className="space-y-2">
       <legend className="font-bold">Allowed ranges</legend>
       <p className="cr-muted">The first rate card sets the lowest and highest each value may ever be. Every later card must stay inside them, and they can&apos;t change after the first card is published.</p>

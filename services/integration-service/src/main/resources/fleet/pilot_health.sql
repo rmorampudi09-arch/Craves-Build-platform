@@ -1,4 +1,5 @@
--- Craves Rider pilot health (docs/riders/PILOT-HEALTH.md). Read-only: every query only reads fleet_schema.
+-- Craves Rider pilot health (docs/riders/PILOT-HEALTH.md). Read-only: every query reads fleet_schema, and the two
+-- dispatch-timing queries (ready_vs_promise, courier_assign_minutes) also delivery_schema and payment_schema.
 -- The ops console's Pilot health page runs these (FleetPilotHealth, GET /api/v1/admin/fleet/pilot-health). By hand, on
 -- a read-only connection to the integration database, the whole file or one query at a time:
 --   psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1 -f services/integration-service/src/main/resources/fleet/pilot_health.sql
@@ -329,6 +330,59 @@ FROM fleet_schema.trip t
 WHERE t.picked_up_at > now() - INTERVAL '14 days' AND t.arrived_kitchen_at IS NOT NULL AND t.picked_up_at >= t.arrived_kitchen_at
 GROUP BY t.chef_id
 ORDER BY p50_wait_min DESC, trips DESC;
+
+-- name: ready_vs_promise
+-- Each kitchen's "ready" tap against the ready time its chef promised on accepting, over the last 14 days, for every
+-- order (Craves riders, Borzo or Pidge, dispatch live or not): orders, the middle (p50) and p90 minutes late (negative is
+-- early), how many were over 5 minutes late; then all kitchens ("all"). A kitchen usually late keeps riders waiting:
+-- after 2 to 4 weeks, CRAVES_DELIVERY_READY_CORRECTION_ENABLED moves its dispatch later by its middle lateness (from 10
+-- orders, 0 to 15 minutes). A kitchen is the chef on the order's finance snapshot.
+SELECT CASE WHEN GROUPING(f.chef_identity_id) = 1 THEN 'all'
+            WHEN f.chef_identity_id IS NULL THEN 'no finance snapshot'
+            ELSE COALESCE(max(c.payload #>> '{deliveryRequest,pickup,contactName}'), 'unknown') END AS kitchen,
+       count(*) AS orders,
+       round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM r.ready_at - c.promised_ready_at) / 60))::numeric, 1)
+           AS p50_late_min,
+       round((percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM r.ready_at - c.promised_ready_at) / 60))::numeric, 1)
+           AS p90_late_min,
+       count(*) FILTER (WHERE r.ready_at > c.promised_ready_at + INTERVAL '5 minutes') AS over_5_min_late
+FROM delivery_schema.delivery_command c
+JOIN fleet_schema.chef_ready r ON r.chef_sub_order_id = c.chef_sub_order_id
+LEFT JOIN payment_schema.finance_issued_snapshot f ON f.chef_order_id = c.chef_sub_order_id
+WHERE c.promised_ready_at > now() - INTERVAL '14 days'
+GROUP BY ROLLUP (f.chef_identity_id)
+ORDER BY GROUPING(f.chef_identity_id) DESC, p50_late_min DESC NULLS LAST, orders DESC;
+
+-- name: courier_assign_minutes
+-- Orders booked with Borzo or Pidge over the last 14 days: from booking to their courier being assigned, the middle (p50)
+-- and p90 minutes, and bookings never assigned; by courier, then both ("all"). A Borzo booking switched to Pidge (no
+-- courier within its 120 s) counts as Borzo's, never assigned, and the Pidge booking as Pidge's. If food waits for their
+-- courier, book earlier: the lead before the promised ready time is CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES (10).
+SELECT CASE WHEN GROUPING(b.provider_id) = 1 THEN 'all' ELSE b.provider_id END AS courier,
+       count(*) AS bookings,
+       count(b.assigned_at) AS assigned,
+       round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
+           AS p50_assign_min,
+       round((percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
+           AS p90_assign_min,
+       count(*) - count(b.assigned_at) AS never_assigned
+FROM (
+    -- The job's current booking. A switch rewrites the job (provider, booked_at) and keeps the earlier courier's events:
+    -- only its own courier's count.
+    SELECT j.provider_id, j.booked_at, a.assigned_at
+    FROM delivery_schema.delivery_job j
+    LEFT JOIN LATERAL (SELECT min(e.occurred_at) AS assigned_at FROM delivery_schema.delivery_event e
+                       WHERE e.delivery_job_id = j.id AND e.provider_id = j.provider_id
+                         AND e.normalized_status = 'COURIER_ASSIGNED') a ON true
+    WHERE j.provider_id IN ('borzo', 'pidge') AND j.booked_at > now() - INTERVAL '14 days'
+    UNION ALL
+    -- The Borzo booking a completed switch to Pidge replaced (BorzoPidgeHandoff), from its window's start.
+    SELECT 'borzo', h.started_at, NULL
+    FROM delivery_schema.delivery_borzo_pidge_handoff h
+    WHERE h.state = 'COMPLETED' AND h.started_at > now() - INTERVAL '14 days'
+) b
+GROUP BY ROLLUP (b.provider_id)
+ORDER BY GROUPING(b.provider_id) DESC, courier;
 
 -- name: track_size
 -- trip_track on disk: its day partitions and the default one. Thinning old tracks (P2-11) is worth doing past about 5 GB.

@@ -3,6 +3,8 @@ package in.craves.integration.fleet.trip;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import in.craves.integration.delivery.command.DeliveryCommandWake;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
@@ -15,15 +17,20 @@ import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels.Customer;
 import in.craves.integration.fleet.trip.FleetTripModels.Kitchen;
 import in.craves.integration.fleet.trip.FleetTripModels.Trip;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,8 +49,8 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Offers and trips for riders (PLAN F9, F9b; rider-v1 /offers and /trips). An accept is decided by one conditional
  * UPDATE: it closes the trip's open fleet stage for a live offer, so of two accepts exactly one wins and an accept after
- * the stage closed is refused. Declining changes nothing but that offer. Steps are idempotent and in order; every paid
- * end stores the final pay lines and publishes FleetTripPayFinalized.
+ * the stage closed is refused. Declining changes nothing but that offer. Steps are idempotent (each key bound to the request
+ * it first came with, requestHash) and in order; every paid end stores the final pay lines and publishes FleetTripPayFinalized.
  */
 @Service
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -73,9 +80,8 @@ public class FleetTripService {
     static final String PHOTO_HOLD = "Delivered with a photo. Ops checks the photo before this pay is released.";
     /** The cancel reason riders see when the customer or the chef cancelled the order. */
     public static final String ORDER_CANCELLED = "The order was cancelled.";
-    // shortcut: integration-service hears of a cancelled order only as the refund order-service requests for it, so that
-    // is the signal; switch to an order-cancelled event if order-service ever cancels without a refund (meal-plan orders).
-    public static final String ORDER_REFUNDED = "EXISTS (SELECT 1 FROM payment_schema.refund r WHERE r.chef_sub_order_id = t.chef_sub_order_id)";
+    /** SQL true when trip t's order is cancelled: order-service's ORDER_CANCELLED or a refund (DeliveryCommandRepository.CANCELLED_ORDER). */
+    public static final String ORDER_IS_CANCELLED = DeliveryCommandRepository.CANCELLED_ORDER.formatted("t.chef_sub_order_id");
     static final String FAILED_HOLD = "Ops checks failed deliveries before this pay is released.";
     public static final String NOT_RECEIVED = "The customer told Craves ops they didn't get the food.";
     public static final String NOT_RECEIVED_HOLD = "The customer says they didn't get the food. Ops checks with you before this pay is released.";
@@ -85,6 +91,9 @@ public class FleetTripService {
     private static final Map<String, String[]> STEPS = Map.of("arrived-pickup", new String[] {"ASSIGNED", "AT_PICKUP"},
         "food-not-ready", new String[] {"AT_PICKUP", "AT_PICKUP"}, "picked-up", new String[] {"AT_PICKUP", "PICKED_UP"},
         "arrived-drop", new String[] {"PICKED_UP", "AT_DROP"});
+    static final String KEY_REUSED = "This step was already sent with different details. Open the trip again.";
+    /** A mapper of its own: a stored request's hash must not change when the app's JSON settings do. */
+    private static final ObjectMapper CANONICAL = new ObjectMapper();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FleetTripService.class);
     private final JdbcTemplate jdbc;
@@ -116,6 +125,14 @@ public class FleetTripService {
         this.engineFeed = feed.on() ? feed : null;
     }
 
+    /** Present with the delivery commands (craves.delivery-command.enabled): a decline starts the next round at once. */
+    private DeliveryCommandWake commandWake;
+
+    @Autowired(required = false)
+    public void setCommandWake(DeliveryCommandWake wake) {
+        this.commandWake = wake;
+    }
+
     /**
      * 200 with the trip for the winner; 409 OFFER_TAKEN for a lost race; 409 ORDER_CANCELLED once the order is cancelled;
      * 410 OFFER_EXPIRED; a repeat by the winner gets the trip.
@@ -134,7 +151,7 @@ public class FleetTripService {
             FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
             WHERE o.id = ? AND o.rider_id = ? AND o.state = 'ACTIVE' AND o.expires_at > now()
               AND s.trip_id = o.trip_id AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN' AND s.deadline_at > now()
-              AND\s""" + FleetShiftService.ON_SHIFT.formatted("o.rider_id") + " AND NOT " + ORDER_REFUNDED + " RETURNING s.trip_id",
+              AND\s""" + FleetShiftService.ON_SHIFT.formatted("o.rider_id") + " AND NOT " + ORDER_IS_CANCELLED + " RETURNING s.trip_id",
             UUID.class, offerId, rider.id());
         if (won.isEmpty()) {
             return notWon(offerId, rider);
@@ -158,7 +175,8 @@ public class FleetTripService {
         } catch (DuplicateKeyException activeTrip) {
             throw FleetApiException.conflict("TRIP_IN_PROGRESS", "Finish your current trip before you take another order.");
         }
-        event(tripId, "ACCEPTED", rider.id(), idempotencyKey, Map.of("offerId", offerId.toString()));
+        event(tripId, "ACCEPTED", rider.id(), idempotencyKey, requestHash("/offers/" + offerId + "/accept"),
+            Map.of("offerId", offerId.toString()));
         if (!bridge.assigned(tripId)) {
             throw taken();
         }
@@ -173,15 +191,19 @@ public class FleetTripService {
     @Transactional
     public void decline(UUID identityId, UUID offerId) {
         Rider rider = rider(identityId);
-        if (jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE id = ? AND rider_id = ? "
-            + "AND state = 'ACTIVE'", offerId, rider.id()) == 0
-            && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE id = ? AND rider_id = ?)",
-                Boolean.class, offerId, rider.id()))) {
+        boolean declined = jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE id = ? "
+            + "AND rider_id = ? AND state = 'ACTIVE'", offerId, rider.id()) == 1;
+        if (!declined && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE id = ? "
+            + "AND rider_id = ?)", Boolean.class, offerId, rider.id()))) {
             throw offerNotFound();
         }
         // Free again at once for the next order, in the engine too (a decline costs the rider nothing).
         if (engineFeed != null) {
             engineFeed.refresh(rider.id());
+        }
+        // The order's next rider hears now, not at its next check a few seconds later (R16 5c).
+        if (declined && commandWake != null) {
+            commandWake.afterDecline(offerId);
         }
     }
 
@@ -216,7 +238,9 @@ public class FleetTripService {
         }
         Rider rider = rider(identityId);
         Locked trip = lock(tripId, rider);
-        if (replayed(tripId, key).isPresent() || (trip.state().equals(move[1]) && !"food-not-ready".equals(action))) {
+        // The body is only the tap, so the step itself is the request: a second food-not-ready tap keeps its key.
+        String request = requestHash("/trips/" + tripId + "/" + action);
+        if (replayed(tripId, key, request).isPresent() || (trip.state().equals(move[1]) && !"food-not-ready".equals(action))) {
             return view(tripId);
         }
         requireState(trip, move[0], "This trip has moved on. Refreshing it now.");
@@ -245,7 +269,7 @@ public class FleetTripService {
             detail.put("metresFromKitchen", Math.round(fromKitchen));
             detail.put("insideKitchenZone", inZone);
         }
-        event(tripId, action.toUpperCase(java.util.Locale.ROOT).replace('-', '_'), rider.id(), key, withTap(detail, tap), tap.fix());
+        event(tripId, action.toUpperCase(java.util.Locale.ROOT).replace('-', '_'), rider.id(), key, request, withTap(detail, tap), tap.fix());
         if (!"food-not-ready".equals(action)) {
             bridge.publish(tripId);
         }
@@ -308,9 +332,11 @@ public class FleetTripService {
             throw FleetApiException.invalid("Enter the 4-digit OTP the customer reads out.");
         }
         Rider rider = rider(identityId);
+        // Never the code: the hash is stored beside the trip id, so its 4 digits could be recovered from it.
+        String request = requestHash("/trips/" + tripId + "/delivered", "method", "OTP");
         Locked trip = transaction.execute(status -> {
             Locked locked = lock(tripId, rider);
-            replay(tripId, key);
+            replay(tripId, key, request);
             return locked;
         });
         if ("DELIVERED".equals(trip.state())) {
@@ -329,17 +355,19 @@ public class FleetTripService {
         }
         Optional<FleetApiException> refusal = transaction.execute(status -> {
             Locked now = lock(tripId, rider);
+            // The same key may have landed while order-service checked the code: that answer, or 422 for another request.
+            replay(tripId, key, request);
             if ("DELIVERED".equals(now.state())) {
                 return Optional.<FleetApiException>empty();
             }
             requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
             if (result.outcome() == DeliveryCodeClient.Outcome.VERIFIED) {
-                deliver(tripId, rider.id(), key, withTap(Map.of("method", "OTP"), tap), tap.fix(), false, null);
+                deliver(tripId, rider.id(), key, request, withTap(Map.of("method", "OTP"), tap), tap.fix(), false, null);
                 return Optional.<FleetApiException>empty();
             }
             String reason = result.outcome() == DeliveryCodeClient.Outcome.NOT_FOUND ? NO_CODE : "";
             boolean lockedNow = !reason.isEmpty() || result.outcome() == DeliveryCodeClient.Outcome.LOCKED || result.attemptsLeft() < 1;
-            event(tripId, lockedNow ? "OTP_LOCKED" : "OTP_INVALID", rider.id(), key,
+            event(tripId, lockedNow ? "OTP_LOCKED" : "OTP_INVALID", rider.id(), key, request,
                 !lockedNow ? Map.of("attemptsLeft", result.attemptsLeft()) : reason.isEmpty() ? Map.of() : Map.of("reason", reason));
             return Optional.of(lockedNow ? otpLockedError(reason) : otpInvalid(result.attemptsLeft()));
         });
@@ -380,15 +408,18 @@ public class FleetTripService {
     /** As above; the unreachable wait is measured to when the photo was taken (the tap), not to when it reached us. */
     public Trip deliveredByPhoto(UUID identityId, UUID tripId, Integer callsMade, MultipartFile photo, String key, Tap tap) {
         Rider rider = rider(identityId);
+        byte[] read = readPhoto(photo);
+        // Never the photo or callsMade: a retry may re-encode the photo, count the calls again or come without it (P1-07).
+        String request = requestHash("/trips/" + tripId + "/delivered", "method", "PHOTO");
         Locked trip = transaction.execute(status -> {
             Locked locked = lock(tripId, rider);
-            replay(tripId, key);
+            replay(tripId, key, request);
             return locked;
         });
         if ("DELIVERED".equals(trip.state())) {
             return view(tripId); // a retry whose answer was lost gets the trip, with or without the photo it no longer has
         }
-        byte[] bytes = photoBytes(photo);
+        byte[] bytes = photoBytes(photo, read);
         requireState(trip, "AT_DROP", "Tap \"I've reached the customer\" first.");
         Map<String, Object> detail = new java.util.HashMap<>(Map.of("method", "PHOTO", "callsMade", callsMade == null ? 0 : callsMade));
         if (!otpLocked(tripId)) {
@@ -403,10 +434,11 @@ public class FleetTripService {
         storage.upload(blob, bytes, photo.getContentType(), false);
         transaction.executeWithoutResult(status -> {
             Locked now = lock(tripId, rider);
+            replay(tripId, key, request); // the same key may have landed during the upload
             if (!"DELIVERED".equals(now.state())) {
                 requireState(now, "AT_DROP", "Tap \"I've reached the customer\" first.");
                 detail.put("photoBlob", blob);
-                deliver(tripId, rider.id(), key, withTap(detail, tap), tap.fix(), true, PHOTO_HOLD);
+                deliver(tripId, rider.id(), key, request, withTap(detail, tap), tap.fix(), true, PHOTO_HOLD);
             }
         });
         return view(tripId);
@@ -429,7 +461,8 @@ public class FleetTripService {
         }
         Rider rider = rider(identityId);
         Locked trip = lock(tripId, rider);
-        if (replayed(tripId, key).isPresent() || "FAILED".equals(trip.state())) {
+        String request = requestHash("/trips/" + tripId + "/failed", "reason", reason, "note", note == null || note.isBlank() ? null : note);
+        if (replayed(tripId, key, request).isPresent() || "FAILED".equals(trip.state())) {
             return view(tripId);
         }
         if (!"PICKED_UP".equals(trip.state()) && !"AT_DROP".equals(trip.state())) {
@@ -447,7 +480,7 @@ public class FleetTripService {
         if (note != null && !note.isBlank()) {
             detail.put("note", note.length() > 500 ? note.substring(0, 500) : note);
         }
-        event(tripId, "FAILED", rider.id(), key, withTap(detail, tap), tap.fix());
+        event(tripId, "FAILED", rider.id(), key, request, withTap(detail, tap), tap.fix());
         pay.finalizePay(tripId, unreachable ? Ending.CUSTOMER_UNREACHABLE : Ending.FAILED_AFTER_PICKUP, true, FAILED_HOLD);
         bridge.publish(tripId);
         return view(tripId);
@@ -461,15 +494,16 @@ public class FleetTripService {
     public void checkedByOps(UUID tripId, boolean delivered) {
         jdbc.update("UPDATE fleet_schema.trip SET state = ?, cancel_reason = ?, finished_at = now(), version = version + 1, updated_at = now() "
             + "WHERE id = ?", delivered ? "DELIVERED" : "FAILED", delivered ? null : NOT_RECEIVED, tripId);
-        event(tripId, delivered ? "DELIVERED" : "FAILED", null, null, Map.of("method", "OPS_CHECKED"));
+        event(tripId, delivered ? "DELIVERED" : "FAILED", null, null, null, Map.of("method", "OPS_CHECKED"));
         pay.finalizePay(tripId, Ending.DELIVERED, !delivered, delivered ? null : NOT_RECEIVED_HOLD);
         bridge.publish(tripId);
     }
 
-    private void deliver(UUID tripId, UUID riderId, String key, Map<String, ?> detail, RiderFix fix, boolean held, String holdReason) {
+    private void deliver(UUID tripId, UUID riderId, String key, String request, Map<String, ?> detail, RiderFix fix, boolean held,
+                         String holdReason) {
         jdbc.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', finished_at = now(), version = version + 1, updated_at = now() "
             + "WHERE id = ?", tripId);
-        event(tripId, "DELIVERED", riderId, key, detail, fix);
+        event(tripId, "DELIVERED", riderId, key, request, detail, fix);
         pay.finalizePay(tripId, Ending.DELIVERED, held, holdReason);
         bridge.publish(tripId);
     }
@@ -500,7 +534,7 @@ public class FleetTripService {
         }
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
             + "updated_at = now() WHERE id = ?", reason, tripId);
-        event(tripId, "CANCELLED", null, null, Map.of("stateBefore", state));
+        event(tripId, "CANCELLED", null, null, null, Map.of("stateBefore", state));
         if ("SEARCHING".equals(state)) {
             return Optional.of("CANCELLED"); // no rider took it: nothing to pay
         }
@@ -595,8 +629,8 @@ public class FleetTripService {
     }
 
     /** The first answer for a repeated Idempotency-Key: a stored wrong-OTP refusal is thrown again. */
-    private void replay(UUID tripId, String key) {
-        Optional<Map<String, Object>> earlier = replayed(tripId, key);
+    private void replay(UUID tripId, String key, String request) {
+        Optional<Map<String, Object>> earlier = replayed(tripId, key, request);
         if (earlier.isPresent() && "OTP_INVALID".equals(earlier.get().get("kind"))) {
             throw otpInvalid(((Number) earlier.get().get("attempts_left")).intValue());
         }
@@ -605,10 +639,50 @@ public class FleetTripService {
         }
     }
 
-    private Optional<Map<String, Object>> replayed(UUID tripId, String key) {
-        return key == null ? Optional.empty() : jdbc.queryForList("SELECT kind, (detail ->> 'attemptsLeft')::int AS attempts_left, "
-            + "COALESCE(detail ->> 'reason', '') AS reason FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = ?", tripId, key)
-            .stream().findFirst();
+    /**
+     * The event a repeated Idempotency-Key stored, if any. The key is bound to the request it first came with
+     * (requestHash): another request with it is 422 IDEMPOTENCY_KEY_REUSED. A row from before V177 replays as it always did.
+     */
+    private Optional<Map<String, Object>> replayed(UUID tripId, String key, String request) {
+        Optional<Map<String, Object>> earlier = key == null ? Optional.empty() : jdbc.queryForList("SELECT kind, "
+            + "(detail ->> 'attemptsLeft')::int AS attempts_left, COALESCE(detail ->> 'reason', '') AS reason, request_hash "
+            + "FROM fleet_schema.trip_event WHERE trip_id = ? AND idempotency_key = ?", tripId, key).stream().findFirst();
+        Object first = earlier.map(row -> row.get("request_hash")).orElse(null);
+        if (first != null && !request.equals(first)) {
+            // The app never does this: one means a client bug that dropped a rider's queued steps.
+            LOGGER.warn("FLEET_IDEMPOTENCY_KEY_REUSED trip={} key={}", tripId, key);
+            throw FleetApiException.unprocessable("IDEMPOTENCY_KEY_REUSED", KEY_REUSED);
+        }
+        return earlier;
+    }
+
+    /**
+     * The request a rider's Idempotency-Key is bound to (Phase C): SHA-256 hex of the method, the path under /api/v1/rider
+     * (it names the step) and, as canonical JSON (keys sorted, nulls left out), the body fields that decide it, given as
+     * name, value pairs: a delivery's method (OTP or PHOTO), a failure's reason and note. Never the delivery code (unsalted,
+     * beside a known trip id, 4 digits are found in 10,000 tries), the photo or callsMade (a retry may re-encode the photo
+     * or count the calls again), nor the tap (ageMs, fix, capturedOffline): the app sends it again, aged, with every retry.
+     */
+    static String requestHash(String path, Object... fields) {
+        Map<String, Object> body = new TreeMap<>();
+        for (int i = 0; i < fields.length; i += 2) {
+            if (fields[i + 1] != null) {
+                body.put((String) fields[i], fields[i + 1]);
+            }
+        }
+        try {
+            return sha256(("POST /api/v1/rider" + path + "\n" + CANONICAL.writeValueAsString(body)).getBytes(StandardCharsets.UTF_8));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("A rider request could not be hashed", exception);
+        }
+    }
+
+    static String sha256(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private boolean otpLocked(UUID tripId) {
@@ -653,20 +727,26 @@ public class FleetTripService {
             .stream().findFirst().orElse(null);
     }
 
-    private static byte[] photoBytes(MultipartFile photo) {
-        if (photo == null || photo.isEmpty() || photo.getSize() > MAX_PHOTO_BYTES
-            || photo.getContentType() == null || !List.of("image/jpeg", "image/png").contains(photo.getContentType())) {
-            throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
+    /** The photo as sent, read once (up to one byte over the limit); null without one, or when it can't be read. */
+    private static byte[] readPhoto(MultipartFile photo) {
+        if (photo == null || photo.isEmpty() || photo.getSize() > MAX_PHOTO_BYTES) {
+            return null;
         }
         try (java.io.InputStream input = photo.getInputStream()) {
-            byte[] bytes = input.readNBytes(MAX_PHOTO_BYTES + 1);
-            if (bytes.length != photo.getSize() || !FleetStorage.signatureMatches(photo.getContentType(), bytes)) {
-                throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
-            }
-            return bytes;
+            return input.readNBytes(MAX_PHOTO_BYTES + 1);
         } catch (java.io.IOException exception) {
+            return null;
+        }
+    }
+
+    /** The bytes readPhoto read, once they are the whole JPEG or PNG under 10 MB; else 422 PHOTO_REQUIRED. */
+    private static byte[] photoBytes(MultipartFile photo, byte[] bytes) {
+        if (bytes == null || bytes.length != photo.getSize() || photo.getContentType() == null
+            || !List.of("image/jpeg", "image/png").contains(photo.getContentType())
+            || !FleetStorage.signatureMatches(photo.getContentType(), bytes)) {
             throw FleetApiException.unprocessable("PHOTO_REQUIRED", "Take a clear photo of the order at the door, under 10 MB.");
         }
+        return bytes;
     }
 
     static FleetApiException otpInvalid(int attemptsLeft) {
@@ -684,7 +764,7 @@ public class FleetTripService {
 
     private Trip notWon(UUID offerId, Rider rider) {
         Map<String, Object> offer = jdbc.queryForList("SELECT o.state, o.trip_id, t.rider_id AS trip_rider, t.state AS trip_state, "
-            + ORDER_REFUNDED + " AS order_cancelled FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + ORDER_IS_CANCELLED + " AS order_cancelled FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
             + "WHERE o.id = ? AND o.rider_id = ?", offerId, rider.id())
             .stream().findFirst().orElseThrow(FleetTripService::offerNotFound);
         if ("ACCEPTED".equals(offer.get("state"))) {
@@ -700,19 +780,22 @@ public class FleetTripService {
         throw expired();
     }
 
-    void event(UUID tripId, String kind, UUID riderId, String idempotencyKey, Map<String, ?> detail) {
-        event(tripId, kind, riderId, idempotencyKey, detail, null);
+    void event(UUID tripId, String kind, UUID riderId, String idempotencyKey, String requestHash, Map<String, ?> detail) {
+        event(tripId, kind, riderId, idempotencyKey, requestHash, detail, null);
     }
 
-    /** With the fix the rider's phone had when they tapped, if it sent one with sane coordinates. */
-    void event(UUID tripId, String kind, UUID riderId, String idempotencyKey, Map<String, ?> detail, RiderFix fix) {
+    /**
+     * With the fix the rider's phone had when they tapped, if it sent one with sane coordinates. The key's requestHash is
+     * kept beside it, so a repeat of the key is checked against the request it came with.
+     */
+    void event(UUID tripId, String kind, UUID riderId, String idempotencyKey, String requestHash, Map<String, ?> detail, RiderFix fix) {
         boolean located = fix != null && fix.lat() != null && fix.lng() != null && Math.abs(fix.lat()) <= 90 && Math.abs(fix.lng()) <= 180;
         try {
-            jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, idempotency_key, trip_version, detail, "
-                + "lat, lng, mock) SELECT ?, id, ?, ?, ?, ?, version, CAST(? AS jsonb), ?, ?, ? FROM fleet_schema.trip WHERE id = ? "
-                + "ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING", UUID.randomUUID(), kind,
-                riderId == null ? "SYSTEM" : "RIDER", riderId, idempotencyKey, json.writeValueAsString(detail), located ? fix.lat() : null,
-                located ? fix.lng() : null, located ? Boolean.TRUE.equals(fix.mock()) : null, tripId);
+            jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, actor_id, idempotency_key, request_hash, "
+                + "trip_version, detail, lat, lng, mock) SELECT ?, id, ?, ?, ?, ?, ?, version, CAST(? AS jsonb), ?, ?, ? FROM fleet_schema.trip "
+                + "WHERE id = ? ON CONFLICT (trip_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING", UUID.randomUUID(), kind,
+                riderId == null ? "SYSTEM" : "RIDER", riderId, idempotencyKey, requestHash, json.writeValueAsString(detail),
+                located ? fix.lat() : null, located ? fix.lng() : null, located ? Boolean.TRUE.equals(fix.mock()) : null, tripId);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Trip event could not be stored", exception);
         }

@@ -95,6 +95,26 @@ it.each([false, true])("sends only the recovered phone/challenge fields, includi
   expect(JSON.parse(String(init.body))).toEqual(payload);
 });
 
+it.each([
+  [{ "x-azure-socketip": "203.0.113.7", "x-azure-clientip": "198.51.100.9", "x-forwarded-for": "198.51.100.1" }, "203.0.113.7"],
+  [{ "x-azure-socketip": "2001:db8::7" }, "2001:db8::7"],
+  // The caller can write these two, so without Front Door's socket IP nothing is sent.
+  [{ "x-azure-clientip": "198.51.100.9", "x-forwarded-for": "198.51.100.1, 10.0.0.1" }, undefined],
+  [{ "x-azure-socketip": "spoof-1" }, undefined],
+  [{ "x-azure-socketip": "localhost" }, undefined],
+])("forwards only Front Door's literal socket IP, for auth-service's per-IP limits: %j", async (headers, ip) => {
+  const fetcher = vi.fn(async () => Response.json({ ...challenge, firebaseCustomToken: customToken }));
+  vi.stubGlobal("fetch", fetcher);
+  expect((await send(request("send", sendBody, headers))).status).toBe(200);
+  expect((await verify(request("verify", verifyBody, headers))).status).toBe(200);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  for (const [, init] of fetcher.mock.calls as unknown as [string, RequestInit][]) {
+    expect(init.headers).toEqual({
+      "Content-Type": "application/json", Accept: "application/json", ...(ip ? { "X-Craves-Client-Ip": ip } : {}),
+    });
+  }
+});
+
 it("verifies the existing challenge and preserves leading-zero OTP without setting a session", async () => {
   const fetcher = vi.fn(async () => Response.json({ firebaseCustomToken: customToken, uid: "server-private" }));
   vi.stubGlobal("fetch", fetcher);

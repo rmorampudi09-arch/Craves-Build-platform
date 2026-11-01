@@ -536,8 +536,11 @@ public class FleetRiderService {
             new LabelValue("Order cancelled after pickup: return to the kitchen, each km", rupees(card.returnPerKmPaise())),
             new LabelValue("Customer not answering: full pay after two calls and a wait of",
                 card.unreachableWaitMinutes() + " minutes"),
-            new LabelValue("Guaranteed minimum in a booked slot", rupees(card.slotGuaranteePerHourPaise()) + " an hour"),
-            new LabelValue("Declining or missing an offer", "Free")));
+            new LabelValue("Guaranteed minimum in a booked slot", rupees(card.slotGuaranteePerHourPaise()) + " an hour")));
+        if (card.rainTopUpPaise() > 0) {
+            lines.add(new LabelValue("Rain top-up, each order offered while rain mode is on", rupees(card.rainTopUpPaise())));
+        }
+        lines.add(new LabelValue("Declining or missing an offer", "Free"));
         return lines;
     }
 

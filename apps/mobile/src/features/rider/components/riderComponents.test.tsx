@@ -11,6 +11,7 @@ import {Banner} from './Banner';
 import {BottomAction} from './BottomAction';
 import {CountdownBar} from './CountdownBar';
 import {RiderHeader} from './RiderHeader';
+import {RiderSplash} from './RiderSplash';
 import {STATUS_TONE, StatusBadge} from './StatusBadge';
 import {StepBar} from './StepBar';
 import {Card, HeroCard, RateRow} from './ui';
@@ -222,7 +223,7 @@ describe('StatusBadge', () => {
 describe('BottomAction', () => {
   it('is 56 dp with no shadow, and 64 dp when tall', async () => {
     await render(<BottomAction label="Go online" onPress={jest.fn()} testID="go" />);
-    expect(style('go')).toMatchObject({minHeight: 56, borderRadius: radius.md, backgroundColor: colors.flameRedAccessible});
+    expect(style('go')).toMatchObject({minHeight: 56, borderRadius: radius.md, backgroundColor: colors.flameRed});
     expect(style('go').elevation).toBeUndefined();
     await render(<BottomAction label="Accept" size="tall" onPress={jest.fn()} testID="go" />);
     expect(style('go').minHeight).toBe(64);
@@ -280,5 +281,26 @@ describe('cards and rows', () => {
     const [label, value] = tree.root.findAllByType(Text).map(n => StyleSheet.flatten(n.props.style));
     expect(label).toMatchObject({flex: 1, color: colors.textPrimary, fontWeight: '700'});
     expect(value).toMatchObject({textAlign: 'right', fontWeight: '700'});
+  });
+});
+
+describe('RiderSplash', () => {
+  it('shows a rider riding on the brand red, reads as loading, and keeps still with Reduce motion on', async () => {
+    const loop = jest.spyOn(Animated, 'loop');
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(false);
+    await render(<RiderSplash />);
+    expect(tree.root.find(node => node.props.accessibilityRole === 'progressbar').props.accessibilityLabel).toBe('Loading…');
+    expect(tree.root.findAllByType(Text).map(node => node.props.children)).toContain('Craves Riders');
+    expect(StyleSheet.flatten(tree.root.find(node => node.props.testID === 'rider-splash').props.style)).toMatchObject({
+      backgroundColor: colors.flameRed,
+    });
+    expect(loop).toHaveBeenCalledTimes(2);
+
+    act(() => tree.unmount());
+    loop.mockClear();
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(true);
+    await render(<RiderSplash />);
+    expect(loop).not.toHaveBeenCalled();
+    loop.mockRestore();
   });
 });

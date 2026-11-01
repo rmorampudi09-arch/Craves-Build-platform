@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -59,10 +60,17 @@ public class FleetPolicyStore {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
+    /** Rain mode (R16 19): while it is on, the policy in force runs with its rules (FleetRain.inRain). */
+    private FleetRain rain;
 
     public FleetPolicyStore(JdbcTemplate jdbc, ObjectMapper json) {
         this.jdbc = jdbc;
         this.json = json;
+    }
+
+    @Autowired(required = false)
+    public void setRain(FleetRain rain) {
+        this.rain = rain;
     }
 
     /**
@@ -79,9 +87,12 @@ public class FleetPolicyStore {
             LIMIT 1""", (row, n) -> rateCard(row)).stream().findFirst();
     }
 
-    /** The policy in force. Empty means dispatch is off: drafts and withdrawn versions never drive dispatch. */
+    /**
+     * The policy in force. Empty means dispatch is off: drafts and withdrawn versions never drive dispatch. While rain mode
+     * is on, every round sent runs with its rules (at least 45 s to accept, at most 2 rounds); riders' terms keep the policy's.
+     */
     public Optional<DispatchPolicy> currentDispatchPolicy() {
-        return jdbc.query("""
+        Optional<DispatchPolicy> policy = jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
                    per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m,
                    rank_by_travel_time
@@ -94,6 +105,7 @@ public class FleetPolicyStore {
                 row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"),
                 row.getBoolean("rank_by_travel_time")))
             .stream().findFirst();
+        return rain != null && policy.isPresent() && rain.raining() ? policy.map(FleetRain::inRain) : policy;
     }
 
     /** A rate card by version, for pay locked on an offer. */
@@ -349,7 +361,7 @@ public class FleetPolicyStore {
                 row.getInt("wait_free_minutes"), row.getLong("wait_per_minute_paise"), row.getLong("slot_guarantee_per_hour_paise"),
                 json.readValue(row.getString("ranges"), RANGES), json.readValue(row.getString("summary_of_changes"), TEXT),
                 row.getString("full_text_url"), row.getLong("cancellation_fee_paise"), row.getLong("return_per_km_paise"),
-                row.getInt("unreachable_wait_minutes"));
+                row.getInt("unreachable_wait_minutes"), row.getLong("rain_top_up_paise"));
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             throw new IllegalStateException("Rate card " + row.getString("version") + " has unreadable JSON", exception);
         }
@@ -367,14 +379,27 @@ public class FleetPolicyStore {
         }
     }
 
-    /** cancellationFeePaise and returnPerKmPaise are the event fees; unreachableWaitMinutes the wait before the photo or "failed". */
+    /**
+     * cancellationFeePaise and returnPerKmPaise are the event fees; unreachableWaitMinutes the wait before the photo or "failed";
+     * rainTopUpPaise is added to each offer while rain mode is on (FleetRain; 0: none).
+     */
     public record RateCard(
         String version, boolean draft, Instant effectiveFrom,
         long basePaise, int baseDropM, long dropPerKmPaise, int pickupFreeM, long pickupPerKmPaise,
         int waitFreeMinutes, long waitPerMinutePaise, long slotGuaranteePerHourPaise,
         Map<String, List<Long>> ranges, Map<String, List<String>> summaryOfChanges, String fullTextUrl,
-        long cancellationFeePaise, long returnPerKmPaise, int unreachableWaitMinutes
+        long cancellationFeePaise, long returnPerKmPaise, int unreachableWaitMinutes, long rainTopUpPaise
     ) {
+        /** A card from before rain mode: no rain top-up. */
+        public RateCard(String version, boolean draft, Instant effectiveFrom, long basePaise, int baseDropM, long dropPerKmPaise,
+                        int pickupFreeM, long pickupPerKmPaise, int waitFreeMinutes, long waitPerMinutePaise,
+                        long slotGuaranteePerHourPaise, Map<String, List<Long>> ranges, Map<String, List<String>> summaryOfChanges,
+                        String fullTextUrl, long cancellationFeePaise, long returnPerKmPaise, int unreachableWaitMinutes) {
+            this(version, draft, effectiveFrom, basePaise, baseDropM, dropPerKmPaise, pickupFreeM, pickupPerKmPaise, waitFreeMinutes,
+                waitPerMinutePaise, slotGuaranteePerHourPaise, ranges, summaryOfChanges, fullTextUrl, cancellationFeePaise,
+                returnPerKmPaise, unreachableWaitMinutes, 0);
+        }
+
         /** The P1 shape, with the seeded draft's event fees. */
         public RateCard(String version, boolean draft, Instant effectiveFrom, long basePaise, int baseDropM, long dropPerKmPaise,
                         int pickupFreeM, long pickupPerKmPaise, int waitFreeMinutes, long waitPerMinutePaise,

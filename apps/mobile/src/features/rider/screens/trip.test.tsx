@@ -16,6 +16,8 @@ import {RiderRuntime} from '../components/RiderRuntime';
 import {TripScreen} from './TripScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn()};
+// False while SOS or an offer is open over the trip.
+const mockFocus = {focused: true};
 // Offline, the queue keeps what the screen sends; the screen shows the step those entries lead to (P1-06).
 const mockPending = {offline: false, entries: [] as MockEntry[], listeners: new Set<() => void>()};
 type MockEntry = {action: string; tripId: string; deferred?: boolean; body?: unknown};
@@ -28,6 +30,7 @@ jest.mock('react-native-safe-area-context', () => require('react-native-safe-are
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => mockNavigation,
+  useIsFocused: () => mockFocus.focused,
 }));
 jest.mock('expo-image-picker', () => ({
   requestCameraPermissionsAsync: jest.fn(async () => ({granted: true})),
@@ -171,6 +174,7 @@ const press = (testID: string) => act(async () => byId(testID).props.onPress());
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocus.focused = true;
   mockPending.offline = false;
   mockPending.entries = [];
   mockRefusals.list = [];
@@ -209,6 +213,70 @@ describe('Trip: loading, error and ended', () => {
   it('says the trip has ended when there is none', async () => {
     await render(null);
     expect(allText()).toContain('This trip has ended.');
+  });
+
+  // Ops cancelled, released or handed over the trip: /trips/active answers 204 while the screen is open.
+  it('goes back to waiting when the server no longer lists the trip in progress, asked once more', async () => {
+    await render(trip);
+    expect(has('rider-to-kitchen')).toBe(true);
+    (riderApi.getActiveTrip as jest.Mock).mockResolvedValueOnce(null);
+    await act(async () => {
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(riderApi.getActiveTrip).toHaveBeenCalled();
+    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs');
+  });
+
+  // An answer from a fetch that started before Accept cached the trip.
+  it('stays when asking again still finds the trip', async () => {
+    await render(trip);
+    (riderApi.getActiveTrip as jest.Mock).mockResolvedValueOnce(trip);
+    await act(async () => {
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(riderApi.getActiveTrip).toHaveBeenCalledTimes(1);
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
+    expect(has('rider-to-kitchen')).toBe(true);
+  });
+
+  it('stays while SOS or an offer is open over it', async () => {
+    mockFocus.focused = false;
+    await render(trip);
+    await act(async () => {
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(riderApi.getActiveTrip).not.toHaveBeenCalled();
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
+  });
+
+  it('stays while a step is on its way to the server', async () => {
+    let answer: (outcome: {kind: string}) => void = () => undefined;
+    (tripQueue.enqueue as jest.Mock).mockImplementationOnce(() => new Promise(resolve => (answer = resolve)));
+    await render(trip);
+    await act(async () => {
+      byId('rider-reached-kitchen').props.onPress();
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(riderApi.getActiveTrip).not.toHaveBeenCalled();
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
+    (riderApi.getActiveTrip as jest.Mock).mockResolvedValueOnce(null);
+    await act(async () => answer({kind: 'rejected'}));
+    await settle();
+    expect(mockNavigation.popTo).toHaveBeenCalledWith('Tabs');
+  });
+
+  it('stays while a step of that trip still waits to send', async () => {
+    await render(trip);
+    await act(async () => mockSetEntries([{action: 'arrived-pickup', tripId: trip.tripId, deferred: true}]));
+    await act(async () => {
+      client.setQueryData(riderKeys.activeTrip, null);
+    });
+    await settle();
+    expect(mockNavigation.popTo).not.toHaveBeenCalled();
   });
 });
 

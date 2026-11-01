@@ -5,7 +5,8 @@ import type {ReceivedOffer} from './domain/offerTiming';
 
 export type RiderStackParamList = {
   Phone: undefined;
-  Otp: {phone: string};
+  /** autoRead: the SMS can be read with no tap (the rider template, RiderSmsCodeModule.startRetriever). */
+  Otp: {phone: string; autoRead?: boolean};
   AccountStatus: undefined;
   Terms: {mode: 'accept' | 'view'};
   Privacy: undefined;

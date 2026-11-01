@@ -112,7 +112,7 @@ function CreateRider({ onCreated }: { onCreated: () => void }) {
 
   return <form className="cr-panel space-y-3" onSubmit={event => void submit(event)}>
     <h2 className="text-lg font-bold">Add a rider</h2>
-    <p className="cr-muted">Only for someone at the office who can&apos;t apply in the app. Everyone else applies in the Craves Rider app.</p>
+    <p className="cr-muted">Only for someone at the office who can&apos;t apply in the app. Everyone else applies in the Craves Riders app.</p>
     <label className={labelClass}>Name as on their documents<input className={fieldClass} value={form.name} maxLength={120} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
     <label className={labelClass}>Phone<input className={fieldClass} value={form.phone} inputMode="tel" maxLength={13} onChange={event => setForm({ ...form, phone: event.target.value.replace(/\s/g, "") })} /></label>
     <label className={labelClass}>Language<select className={fieldClass} value={form.language} onChange={event => setForm({ ...form, language: event.target.value })}>

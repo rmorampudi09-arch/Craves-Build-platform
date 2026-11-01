@@ -40,7 +40,7 @@ export function BottomAction({
     : variant === 'primary'
       ? colors.white
       : variant === 'ghost'
-        ? colors.flameRedAccessible
+        ? colors.flameRed
         : colors.textPrimary;
 
   return (
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.md,
   },
-  primary: {backgroundColor: colors.flameRedAccessible},
+  primary: {backgroundColor: colors.flameRed},
   outline: {backgroundColor: colors.white, borderWidth: borderWidth.standard, borderColor: colors.borderStrong},
   ghost: {minHeight: touchTarget.minimum, paddingHorizontal: spacing.xs},
   neutral: {minHeight: touchTarget.minimum, paddingHorizontal: spacing.xs},

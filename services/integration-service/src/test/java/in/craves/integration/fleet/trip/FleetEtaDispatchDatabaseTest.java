@@ -4,6 +4,7 @@ import static in.craves.integration.fleet.dispatch.FleetDispatchFixtures.KITCHEN
 import static in.craves.integration.fleet.dispatch.FleetDispatchFixtures.KITCHEN_LNG;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -14,10 +15,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import in.craves.integration.delivery.command.DeliveryCommandScheduler;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
+import in.craves.integration.delivery.command.DeliveryServiceBusPublisher;
 import in.craves.integration.delivery.status.DeliveryStatusRepository;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.FleetDatabase;
@@ -33,6 +37,7 @@ import in.craves.integration.fleet.eta.FleetEta;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
@@ -218,5 +223,73 @@ class FleetEtaDispatchDatabaseTest {
         Offer shown = shown();
         assertThat(shown.estMinutes()).as("20 km/h on the offer's distances").isEqualTo(FleetTripModels.estMinutes(shown.pickupDistanceM(),
             shown.dropDistanceM()));
+    }
+
+    /**
+     * Dispatch timed to the food (R16 18) reads the model's middle minutes for the free riders nearest the kitchen: only with
+     * a live model whose ranking passed, dispatch live, a known chef whose kitchen test mode lets riders take, and a rider
+     * free inside the radius.
+     */
+    @Test
+    void dispatchTimedToTheFoodReadsTheMiddleRideOfTheFreeRidersNearestTheKitchen() {
+        Instant now = Instant.now();
+        model("better");
+        dispatcher.setEta(new FleetEta(fleet.db, "live", "split-1"));
+        assertThat(dispatcher.rideMinutes(chefSubOrderId, KITCHEN_LAT, KITCHEN_LNG, now)).as("no dispatch policy in force").isEmpty();
+
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        assertThat(dispatcher.rideMinutes(chefSubOrderId, KITCHEN_LAT, KITCHEN_LNG, now)).as("north 9 and south 2 minutes").hasValue(5.5);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT - 0.008, KITCHEN_LNG, 5, false); // 890 m, 2 minutes
+        assertThat(dispatcher.rideMinutes(chefSubOrderId, KITCHEN_LAT, KITCHEN_LNG, now)).as("9, 2 and 2").hasValue(2.0);
+
+        UUID elsewhere = UUID.fromString("0bde0202-2222-4222-8222-222222222222");
+        FleetDispatchFixtures.kitchen(fleet.db, elsewhere, false);
+        assertThat(dispatcher.rideMinutes(elsewhere, KITCHEN_LAT, KITCHEN_LNG, now)).as("test mode keeps riders from this kitchen").isEmpty();
+        assertThat(dispatcher.rideMinutes(UUID.randomUUID(), KITCHEN_LAT, KITCHEN_LNG, now)).as("a chef nobody knows").isEmpty();
+        assertThat(dispatcher.rideMinutes(chefSubOrderId, KITCHEN_LAT + 0.2, KITCHEN_LNG, now)).as("nobody free within 5 km").isEmpty();
+        dispatcher.setEta(new FleetEta(fleet.db, "shadow", "split-1"));
+        assertThat(dispatcher.rideMinutes(chefSubOrderId, KITCHEN_LAT, KITCHEN_LNG, now)).as("the model in shadow").isEmpty();
+    }
+
+    @Test
+    void dispatchTimedToTheFoodNeedsAVersionWhoseRankingPassed() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        model("not-better");
+        dispatcher.setEta(new FleetEta(fleet.db, "live", "split-1"));
+        assertThat(dispatcher.rideMinutes(chefSubOrderId, KITCHEN_LAT, KITCHEN_LNG, Instant.now())).isEmpty();
+    }
+
+    /**
+     * R16 18's narrowing window against the database: a command coming due 12 minutes before the food, whose riders are 5.5
+     * minutes away, waits 4.5 minutes; once a worker started it, or the chef's ready tap moved it, it starts at once.
+     */
+    @Test
+    void aCommandDueWellBeforeItsRidersWouldMeetTheFoodWaitsUnlessStartedOrReady() {
+        FleetDispatchFixtures.policy(fleet.db, "live");
+        model("better");
+        dispatcher.setEta(new FleetEta(fleet.db, "live", "split-1"));
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setFoodTimedDispatchEnabled(true);
+        DeliveryCommandRepository commands = new DeliveryCommandRepository(fleet.db, json);
+        DeliveryCommandScheduler scheduler = new DeliveryCommandScheduler(commands, mock(DeliveryServiceBusPublisher.class), properties);
+        scheduler.setFleetStage(dispatcher);
+
+        DeliveryCommandMessage started = FleetDispatchFixtures.command(chefSubOrderId); // ready in 12 minutes
+        commands.createOrFind(started);
+        assertThat(scheduler.holdUntil(started)).as("12 − 5.5 − 2 minutes on").hasValueSatisfying(until ->
+            assertThat(until).isCloseTo(started.readyAt().minusSeconds(450), within(1, ChronoUnit.MILLIS)));
+        assertThat(commands.claim(started.commandId(), 5)).isPresent();
+        assertThat(scheduler.holdUntil(started)).as("a worker started it").isEmpty();
+
+        UUID tappedOrder = UUID.fromString("0bde0303-3333-4333-8333-333333333333");
+        FleetDispatchFixtures.kitchen(fleet.db, tappedOrder, true);
+        DeliveryCommandMessage tapped = FleetDispatchFixtures.command(tappedOrder);
+        commands.createOrFind(tapped);
+        assertThat(scheduler.holdUntil(tapped)).isPresent();
+        Instant tap = Instant.now();
+        assertThat(commands.accelerateScheduled(tapped.commandId(), new DeliveryCommandMessage(tapped.commandId(), UUID.randomUUID(),
+            tapped.correlationId(), tapped.orderId(), tappedOrder, tap, tap, tapped.idempotencyKey(), tapped.distanceKm(), tapped.area(),
+            tapped.orderHour(), tapped.dayOfWeek(), tapped.deliveryRequest()), "delivery-ready:" + tappedOrder)).isTrue();
+        assertThat(scheduler.holdUntil(tapped)).as("the chef tapped ready").isEmpty();
     }
 }

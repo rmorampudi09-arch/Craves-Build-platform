@@ -43,6 +43,15 @@ Any other value fails the build. To switch pull request builds to live, set the 
 
 **Never change the rider signing key.** The app binds each rider to one phone by `ANDROID_ID` (`X-Craves-Installation-Id`), and Android gives each signing key a different `ANDROID_ID`. A build signed with another key can't install over the old one, and after a reinstall every rider's phone counts as new and needs ops approval again. That is why live builds refuse to run without the keystore secret. Keep a copy of the keystore and its password in the company password manager, not only in GitHub. The decoded key is written to the runner's temp folder, never to the Actions cache.
 
+### "App not installed as package conflicts with an existing package"
+
+Android shows this when the phone already has a `com.cravesapp.rider` it can't update with this APK. Three causes, all fixed by uninstalling the old copy once (the rider signs in again; trip steps still waiting on that phone are lost, so do it between trips):
+- **Another signing key.** An APK built before the live key secret existed, or one built on a laptop (`riderDebug` uses the debug key). Each run of "Craves Rider APK" prints its key in the run summary ("signing key SHA-256 …"): every live build must show the same one.
+- **An older build over a newer one.** The version code is the workflow's run number, and many phones (Xiaomi, Oppo, Vivo) show this same message for a downgrade. Share the newest live APK only.
+- **The demo app is separate** (`com.cravesapp.rider.demo`, "Craves Riders Demo") and never conflicts with the real one.
+
+To see which it is with adb: `adb shell dumpsys package com.cravesapp.rider | grep -E "versionCode|signatures"`, then `adb uninstall com.cravesapp.rider` and `adb install craves-rider-live-<sha>.apk`.
+
 ## Review builds: Firebase App Distribution
 
 For reviewers and the team, not for riders on the live pilot.

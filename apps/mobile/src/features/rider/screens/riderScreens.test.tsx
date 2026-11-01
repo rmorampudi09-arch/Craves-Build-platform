@@ -24,6 +24,7 @@ jest.mock('react-native-safe-area-context', () => require('react-native-safe-are
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => mockNavigation,
+  useIsFocused: () => true,
 }));
 jest.mock('expo-image-picker', () => ({
   CameraType: {front: 'front', back: 'back'},

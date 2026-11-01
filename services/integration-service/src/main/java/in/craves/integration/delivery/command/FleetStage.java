@@ -1,8 +1,10 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -28,5 +30,20 @@ public interface FleetStage {
 
     /** The chef handed the food to the order's rider (P2-05): the watchdog never hands that trip back after it. */
     default void chefHandedOver(UUID chefSubOrderId, Instant handedOverAt) {
+    }
+
+    /** How much earlier than usual the search for a courier starts now: 5 minutes while rain mode is on (R16 19), else none. */
+    default Duration dispatchEarlier() {
+        return Duration.ZERO;
+    }
+
+    /**
+     * Dispatch timed to the food (R16 18, DeliveryCommandScheduler): the travel-time model's minutes to this kitchen for a
+     * ride starting at {@code at}, from where the free riders nearest it are now (the middle figure of the nearest few
+     * inside the dispatch radius). Empty, so dispatch keeps today's lead, unless a live model whose ranking passed is
+     * loaded, dispatch is live, riders may take this kitchen's orders and one is free nearby.
+     */
+    default OptionalDouble rideMinutes(UUID chefSubOrderId, double kitchenLat, double kitchenLng, Instant at) {
+        return OptionalDouble.empty();
     }
 }

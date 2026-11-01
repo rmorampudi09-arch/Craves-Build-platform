@@ -21,6 +21,10 @@ public class DeliveryCommandProperties {
     private String chefAcceptedSubscriptionName = "integration-service-chef-accepted";
     private String queueName = "delivery-command";
     private int leadTimeMinutes = 10;
+    /** R16 10: move a habitually late kitchen's dispatch later by its median lateness (DeliveryCommandScheduler). */
+    private boolean readyCorrectionEnabled = false;
+    /** R16 18: start when riders free near the kitchen would meet the food (DeliveryCommandScheduler; needs a live ranking model). */
+    private boolean foodTimedDispatchEnabled = false;
     private int quoteTimeoutSeconds = 4;
     private int maxProviderAttempts = 3;
     private int maxDeliveryAttempts = 5;
@@ -181,6 +185,10 @@ public class DeliveryCommandProperties {
     public void setQueueName(String queueName) { this.queueName = queueName; }
     public int getLeadTimeMinutes() { return leadTimeMinutes; }
     public void setLeadTimeMinutes(int leadTimeMinutes) { this.leadTimeMinutes = leadTimeMinutes; }
+    public boolean isReadyCorrectionEnabled() { return readyCorrectionEnabled; }
+    public void setReadyCorrectionEnabled(boolean readyCorrectionEnabled) { this.readyCorrectionEnabled = readyCorrectionEnabled; }
+    public boolean isFoodTimedDispatchEnabled() { return foodTimedDispatchEnabled; }
+    public void setFoodTimedDispatchEnabled(boolean foodTimedDispatchEnabled) { this.foodTimedDispatchEnabled = foodTimedDispatchEnabled; }
     public int getQuoteTimeoutSeconds() { return quoteTimeoutSeconds; }
     public void setQuoteTimeoutSeconds(int quoteTimeoutSeconds) { this.quoteTimeoutSeconds = quoteTimeoutSeconds; }
     public int getMaxProviderAttempts() { return maxProviderAttempts; }

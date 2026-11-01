@@ -44,7 +44,7 @@ export const en = {
   // The app's words for the server's refusals, by code (riderMessage). English shows the server's own words instead.
   errors: {
     AMOUNT_OVER_BALANCE: "That's more than you can withdraw now. Check your balance and try again.",
-    APP_UPDATE_REQUIRED: 'Update the Craves Rider app to go online.',
+    APP_UPDATE_REQUIRED: 'Update the Craves Riders app to go online.',
     DEVICE_NOT_BOUND: "This phone isn't approved for your rider account. Call rider support to approve it.",
     DOCUMENT_FILE_INVALID: 'Send a clear photo of the document, under 10 MB.',
     DOCUMENT_TYPE_NOT_ALLOWED: "This document can't be sent from the app. Call rider support.",
@@ -83,7 +83,7 @@ export const en = {
     tripStep: (step: number) => `Trip step ${step} of 4`,
   },
   signIn: {
-    brand: 'Craves Rider',
+    brand: 'Craves Riders',
     title: 'Enter your mobile number',
     phoneLabel: 'Mobile number',
     phoneHint: "We'll send a 6-digit code by SMS.",
@@ -280,32 +280,33 @@ export const en = {
     location: 'Location while using the app',
     notifications: 'Notifications',
     lockScreen: 'Show offers over the lock screen',
-    battery: 'Battery: no restrictions for Craves Rider',
+    battery: 'Battery: no restrictions for Craves Riders',
     autostart: 'Autostart on',
-    recents: 'Lock Craves Rider in recent apps',
+    recents: 'Lock Craves Riders in recent apps',
     testRing: 'Test ring',
     rang: 'Your phone rang and vibrated',
-    locationSteps: 'Tap the button and allow location while using the app.',
+    locationSteps: 'Tap the button and allow location while using the app, with Precise on.',
     notificationsSteps: 'Tap the button and allow notifications.',
     lockScreenSteps:
-      'Tap the button and allow full screen notifications for Craves Rider. A new offer then opens by itself, even when the phone is locked.',
-    batterySteps: 'Tap the button, find Craves Rider and choose "Don\'t optimise" or "No restrictions".',
+      'Tap the button and allow full screen notifications for Craves Riders. A new offer then opens by itself, even when the phone is locked.',
+    batterySteps:
+      'Tap the button and choose "Allow". If a list opens instead, find Craves Riders and choose "Don\'t optimise" or "No restrictions".',
     ringSteps: 'Your phone rings and vibrates the way it does for an offer.',
     // Per manufacturer family: Xiaomi/Redmi/Poco, Oppo/Realme/OnePlus (ColorOS), Vivo/iQOO, Samsung, other.
     autostartSteps: {
-      xiaomi: 'On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Rider.',
-      coloros: 'On your Oppo, Realme or OnePlus: open Settings, then Apps, then Auto launch, and turn on Craves Rider.',
-      vivo: 'On your Vivo or iQOO: open i Manager, then App manager, then Autostart manager, and turn on Craves Rider.',
+      xiaomi: 'On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Riders.',
+      coloros: 'On your Oppo, Realme or OnePlus: open Settings, then Apps, then Auto launch, and turn on Craves Riders.',
+      vivo: 'On your Vivo or iQOO: open i Manager, then App manager, then Autostart manager, and turn on Craves Riders.',
       samsung:
-        'On your Samsung: open Settings, then Battery, then Background usage limits, then Never sleeping apps, and add Craves Rider.',
-      other: 'Open Settings, then Apps, then Craves Rider. If you see Autostart or Auto launch, turn it on.',
+        'On your Samsung: open Settings, then Battery, then Background usage limits, then Never sleeping apps, and add Craves Riders.',
+      other: 'Open Settings, then Apps, then Craves Riders. If you see Autostart or Auto launch, turn it on.',
     },
     recentsSteps: {
-      xiaomi: 'Open recent apps, press and hold the Craves Rider card, then tap the lock.',
-      coloros: 'Open recent apps, tap the menu on the Craves Rider card, then tap Lock.',
-      vivo: 'Open recent apps, pull the Craves Rider card down, then tap Lock.',
-      samsung: 'Open recent apps, tap the Craves Rider icon above its card, then tap Keep open.',
-      other: 'Open recent apps, press and hold the Craves Rider card, then tap the lock.',
+      xiaomi: 'Open recent apps, press and hold the Craves Riders card, then tap the lock.',
+      coloros: 'Open recent apps, tap the menu on the Craves Riders card, then tap Lock.',
+      vivo: 'Open recent apps, pull the Craves Riders card down, then tap Lock.',
+      samsung: 'Open recent apps, tap the Craves Riders icon above its card, then tap Keep open.',
+      other: 'Open recent apps, press and hold the Craves Riders card, then tap the lock.',
     },
     allowLocation: 'Allow location',
     allowNotifications: 'Allow notifications',
@@ -387,6 +388,15 @@ export const en = {
     openSettings: 'Open settings',
     noAlerts: "This phone can't get order alerts yet. Finish phone setup, then go online.",
     photoTooBig: 'That photo is too large to send. Take it again.',
+    faceTitle: 'Take the selfie again',
+    retake: 'Take again',
+    face: {
+      none: "We couldn't see your face. Take off your helmet, mask and dark glasses, face the light and look at the camera.",
+      many: 'Only you should be in the selfie.',
+      far: 'Hold the phone closer, so your face fills most of the photo.',
+      turned: 'Look straight at the camera, with your head upright.',
+      eyes: 'Keep your eyes open, and take off dark glasses.',
+    },
   },
   offer: {
     title: 'New order',
@@ -521,11 +531,12 @@ export const en = {
   },
   // The server's pay lines by component (FleetPay); a line the app doesn't know keeps the server's words.
   pay: {
-    offer: {base: 'base', 'drop-km': 'drop distance', 'pickup-km': 'ride to the kitchen'} as Record<string, string>,
+    offer: {base: 'base', 'drop-km': 'drop distance', 'pickup-km': 'ride to the kitchen', rain: 'rain top-up'} as Record<string, string>,
     final: {
       base: 'Base pay',
       'drop-km': 'Drop distance',
       'pickup-km': 'Ride to the kitchen',
+      rain: 'Rain top-up',
       waiting: 'Waiting at the kitchen',
       cancellation: 'Cancellation fee',
       'return-km': 'Return to the kitchen',

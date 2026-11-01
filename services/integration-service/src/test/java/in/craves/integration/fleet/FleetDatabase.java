@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import java.time.Instant;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -69,7 +72,13 @@ public final class FleetDatabase {
         return id;
     }
 
-    /** The refund order-service requests when the customer or the chef cancels the order: the fleet's cancellation signal. */
+    /** order-service's ORDER_CANCELLED for the order, recorded as DeliveryServiceBusProcessors records it (R16 item 11). */
+    public void orderCancelled(UUID chefSubOrderId) {
+        assertTrue(new DeliveryCommandRepository(db, new ObjectMapper()).recordOrderCancelled(chefSubOrderId, "CUSTOMER_CANCELLED",
+            Instant.now()));
+    }
+
+    /** A refund order-service requested for the order: still a cancellation signal, as well as ORDER_CANCELLED. */
     public void refundRequested(UUID chefSubOrderId) {
         db.update("INSERT INTO payment_schema.refund (id, refund_ref, amount, currency, status, reason, chef_sub_order_id, created_at, "
             + "updated_at) VALUES (?, ?, 140.00, 'INR', 'REQUESTED', 'Order cancelled', ?, now(), now())", UUID.randomUUID(),

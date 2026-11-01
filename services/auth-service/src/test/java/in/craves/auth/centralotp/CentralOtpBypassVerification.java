@@ -73,7 +73,7 @@ public class CentralOtpBypassVerification {
             CentralOtpProvider normalProvider = new CentralOtpProvider(new Msg91Properties(true, "test-provider-key"),
                     "aaaaaaaaaaaaaaaaaaaaaaaa", base);
             reply.set("{\"type\":\"success\",\"request_id\":\"fixture-request\"}");
-            normalProvider.send(normal);
+            normalProvider.send(normal, false);
             reply.set("{\"type\":\"success\",\"message\":\"OTP verified success\"}");
             normalProvider.verify(normal, CODE);
             reply.set("{\"type\":\"error\",\"message\":\"OTP not match\"}");
@@ -81,7 +81,7 @@ public class CentralOtpBypassVerification {
             reply.set("{\"type\":\"error\",\"message\":\"OTP expired\"}");
             reject(() -> normalProvider.verify(normal, CODE), "OTP_EXPIRED");
             reply.set("{\"type\":\"error\",\"code\":\"418\"}");
-            reject(() -> normalProvider.send(normal), "OTP_UNAVAILABLE");
+            reject(() -> normalProvider.send(normal, false), "OTP_UNAVAILABLE");
             check(networkCalls.get() == 5, "Normal paths still invoke provider");
             if (args.length > 1 && args[1].equals("baseline")) {
                 System.out.println("PASS original runtime normal-provider checks=" + checks);
@@ -95,7 +95,7 @@ public class CentralOtpBypassVerification {
             int before = networkCalls.get();
             for (String phone : phones.keySet()) {
                 check(policy.contains(phone), "Exact listed number is included");
-                bypassProvider.send(phone);
+                bypassProvider.send(phone, false);
                 bypassProvider.verify(phone, CODE);
             }
             reject(() -> bypassProvider.verify(sample, "000000"), "OTP_INVALID");
@@ -105,16 +105,16 @@ public class CentralOtpBypassVerification {
             check(!policy.contains(sample + "0"), "No suffix matching");
             check(!policy.contains(null), "Null is not whitelisted");
             reply.set("{\"type\":\"success\",\"request_id\":\"fixture-request\"}");
-            bypassProvider.send(normal);
+            bypassProvider.send(normal, false);
             check(networkCalls.get() == before + 1, "Non-whitelist still calls provider while enabled");
             clock.now = Instant.parse(expiry);
-            reject(() -> bypassProvider.send(sample), "OTP_UNAVAILABLE");
+            reject(() -> bypassProvider.send(sample, false), "OTP_UNAVAILABLE");
             reject(() -> bypassProvider.verify(sample, CODE), "OTP_UNAVAILABLE");
             check(networkCalls.get() == before + 1, "Expired synthetic numbers do not send SMS");
             CentralOtpProvider off = provider(base, new CentralOtpTestBypass(false, whitelist, CODE, expiry, "prodlow", clock));
-            reject(() -> off.send(sample), "OTP_UNAVAILABLE");
+            reject(() -> off.send(sample, false), "OTP_UNAVAILABLE");
             reject(() -> off.verify(sample, CODE), "OTP_UNAVAILABLE");
-            off.send(normal);
+            off.send(normal, false);
             check(networkCalls.get() == before + 2, "Disabled bypass leaves normal numbers working");
             for (String bad : new String[]{"{\"+91999999999*\":\"CUST-E2E-001\"}", "{", "{}"}) {
                 try {
@@ -134,7 +134,7 @@ public class CentralOtpBypassVerification {
                 spring.registerBean(Msg91Properties.class, () -> new Msg91Properties(false, ""));
                 spring.register(CentralOtpTestBypass.class, CentralOtpProvider.class);
                 spring.refresh();
-                spring.getBean(CentralOtpProvider.class).send(sample);
+                spring.getBean(CentralOtpProvider.class).send(sample, false);
                 spring.getBean(CentralOtpProvider.class).verify(sample, CODE);
                 checks += 2;
             }

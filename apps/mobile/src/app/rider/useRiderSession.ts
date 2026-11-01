@@ -11,6 +11,7 @@ import {authService} from '../../features/auth/state/authService';
 import {completeLogout} from '../../features/auth/state/logoutCoordinator';
 import type {RiderMe} from '../../features/rider/api/contract';
 import {riderApi} from '../../features/rider/api/riderApi';
+import {riderDevice} from '../../features/rider/native/riderDevice';
 import {riderOnlineService} from '../../features/rider/native/riderOnlineService';
 import {riderApiMode} from '../../features/rider/riderConfig';
 import {riderKeys} from '../../features/rider/state/riderQueries';
@@ -25,7 +26,8 @@ export interface RiderSession {
    * the phone saved last time (rider, Home, active trip) while the session is checked again (WORKPLAN P2-12).
    */
   status: RiderSessionStatus;
-  beginPhone(e164Phone: string): Promise<void>;
+  /** autoRead: the SMS ends with this app's hash, so the SMS Retriever reads its code with no tap. */
+  beginPhone(e164Phone: string): Promise<{autoRead: boolean}>;
   confirmOtp(code: string): Promise<void>;
   signOut(): Promise<void>;
   /** After 'error' (the saved session couldn't be checked, e.g. no signal at start): try again without signing out. */
@@ -70,7 +72,10 @@ function useDemoSession(): RiderSession {
   return useMemo(
     () => ({
       status,
-      beginPhone: async (e164Phone: string) => setPhone(e164Phone),
+      async beginPhone(e164Phone: string) {
+        setPhone(e164Phone);
+        return {autoRead: false};
+      },
       async confirmOtp(code: string) {
         if (code !== DEMO_SMS_CODE) {
           throw new Error('WRONG_CODE');
@@ -91,6 +96,11 @@ function useDemoSession(): RiderSession {
   );
 }
 
+/** The rider app's own SMS template, and auth-service's per-install OTP limits (the phone's ANDROID_ID, when known). */
+async function riderOtpClient() {
+  return {app: 'rider' as const, installationId: await riderDevice.installationId()};
+}
+
 /** Phone OTP by MSG91 (auth-service's central OTP, as on the web), then the customer app's Firebase sign-in and Craves token exchange. */
 function useLiveSession(): RiderSession {
   const dispatch = useAppDispatch();
@@ -101,10 +111,13 @@ function useLiveSession(): RiderSession {
     authStatus === 'authenticated' ? 'authenticated' : authStatus === 'anonymous' ? 'anonymous' : authStatus === 'error' ? 'error' : 'restoring';
 
   // The rider role is checked by GET /rider/me, not at sign-in.
-  const beginPhone = useCallback((e164Phone: string) => authService.beginMsg91Phone(e164Phone), []);
+  const beginPhone = useCallback(
+    async (e164Phone: string) => authService.beginMsg91Phone(e164Phone, await riderOtpClient()),
+    [],
+  );
   const confirmOtp = useCallback(
     async (code: string) => {
-      const tokens = await authService.confirmMsg91Otp(code);
+      const tokens = await authService.confirmMsg91Otp(code, await riderOtpClient());
       dispatch(authActions.authenticated(tokens.identity));
     },
     [dispatch],

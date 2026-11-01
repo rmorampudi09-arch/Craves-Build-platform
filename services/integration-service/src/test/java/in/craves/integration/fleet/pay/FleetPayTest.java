@@ -88,6 +88,30 @@ class FleetPayTest {
             .isEqualTo(new PayLine("base", "Base pay", 4000));
     }
 
+    /** Rain mode (R16 19): the card's top-up is a line of the locked offer, in its total, and paid with full pay. */
+    @Test
+    void rainModeAddsTheCardsTopUpAsALineOfItsOwnOnlyWhenTheCardHasOne() {
+        RateCard rainy = new RateCard("2026-12-v2", false, DRAFT.effectiveFrom(), 4000, 2000, 900, 1000, 900, 8, 150, 8000, Map.of(),
+            Map.of(), null, 2000, 900, 10, 2000);
+        PayQuote quote = FleetPay.quote(rainy, 3500, 1800, true);
+        assertThat(quote.lines()).containsExactly(new PayLine("base", "base", 4000), new PayLine("drop-km", "drop distance", 1350),
+            new PayLine("pickup-km", "ride to the kitchen", 720), new PayLine("rain", "rain top-up", 2000));
+        assertThat(quote.totalPaise()).isEqualTo(8070);
+        assertThat(FleetPay.quote(rainy, 3500, 1800, false).totalPaise()).as("not raining").isEqualTo(6070);
+        assertThat(FleetPay.quote(rainy, 3500, 1800).lines()).extracting(PayLine::component).doesNotContain("rain");
+        assertThat(FleetPay.quote(DRAFT, 3500, 1800, true).lines()).as("a card without a top-up shows no line")
+            .extracting(PayLine::component).containsExactly("base", "drop-km", "pickup-km");
+
+        // The trip pays the top-up its accepted offer locked, with full pay; a cancellation before pickup doesn't.
+        assertThat(FleetPay.finalLines(DRAFT, Ending.DELIVERED, 3500, 1800, 11 * 60, 2000)).containsExactly(line("base", 4000),
+            line("drop-km", 1350), line("pickup-km", 720), new PayLine("rain", "Rain top-up", 2000), line("waiting", 450));
+        assertThat(FleetPay.finalLines(DRAFT, Ending.FAILED_AFTER_PICKUP, 3500, 1800, 0, 2000)).extracting(PayLine::component)
+            .containsExactly("base", "drop-km", "pickup-km", "rain", "return-km");
+        assertThat(FleetPay.finalLines(DRAFT, Ending.CANCELLED_AT_KITCHEN, 3500, 1800, 0, 2000)).extracting(PayLine::component)
+            .containsExactly("cancellation", "pickup-km");
+        assertThat(FleetPay.finalLines(DRAFT, Ending.DELIVERED, 3500, 1800, 0, 0)).extracting(PayLine::component).doesNotContain("rain");
+    }
+
     @Test
     void theCostGuardOffersOnlyWhenPayAndOverheadStayWithinTheThirdPartyQuoteAndPremium() {
         assertThat(FleetPay.costGuardPasses(6070, 500, OptionalLong.of(5800), 1000)).isTrue(); // 6570 <= 6800

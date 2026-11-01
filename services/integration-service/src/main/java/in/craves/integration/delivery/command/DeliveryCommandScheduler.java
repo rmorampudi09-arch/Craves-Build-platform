@@ -3,17 +3,21 @@ package in.craves.integration.delivery.command;
 import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAcceptedOrderData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
+import in.craves.integration.delivery.command.DeliveryCommandModels.OrderCancelledData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.OrderReadyForPickupData;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,10 +33,42 @@ public class DeliveryCommandScheduler {
     private static final ZoneId DELIVERY_CONTEXT_ZONE = ZoneId.of("Asia/Kolkata");
     private static final double EARTH_RADIUS_KM = 6371.0088;
 
+    /** The most a kitchen's habit may move its dispatch later (R16 10). */
+    static final Duration MAX_READY_CORRECTION = Duration.ofMinutes(15);
+    /** R16 18: riders timed to the food are sent to reach the kitchen this long before it. */
+    static final Duration FOOD_BUFFER = Duration.ofMinutes(2);
+    /** R16 18: a due command waits for the food only if its riders would be more than this early, so each wait is longer. */
+    static final Duration HOLD_STEP = Duration.ofMinutes(3);
+    /** EtaModel.MAX_MINUTES: no leg is predicted longer, so a longer answer is not a ride. */
+    private static final double MAX_RIDE_MINUTES = 240;
+
     private final DeliveryCommandRepository repository;
     private final DeliveryServiceBusPublisher publisher;
     private final DeliveryCommandProperties properties;
     private final Clock clock;
+    private FleetStage fleetStage;
+
+    /**
+     * Behind craves.delivery-command.ready-correction-enabled (off until 2 to 4 weeks of ready taps exist): a kitchen that
+     * usually taps "ready" late gets its riders later by its median lateness, 0 to 15 minutes, so they wait less at the
+     * door. Never earlier than the promise; the chef's ready tap still brings dispatch forward. Any failure: no correction.
+     */
+    private Duration readyCorrection(UUID chefSubOrderId) {
+        if (!properties.isReadyCorrectionEnabled()) {
+            return Duration.ZERO;
+        }
+        try {
+            Duration late = repository.kitchenReadyLateness(chefSubOrderId).orElse(Duration.ZERO);
+            Duration correction = late.isNegative() ? Duration.ZERO : late.compareTo(MAX_READY_CORRECTION) > 0 ? MAX_READY_CORRECTION : late;
+            if (!correction.isZero()) {
+                log.info("DELIVERY_READY_CORRECTION chefSubOrderId={} seconds={}", chefSubOrderId, correction.toSeconds());
+            }
+            return correction;
+        } catch (RuntimeException exception) {
+            log.warn("DELIVERY_READY_CORRECTION chefSubOrderId={} failed: {}", chefSubOrderId, exception.getClass().getSimpleName());
+            return Duration.ZERO;
+        }
+    }
 
     @Autowired
     public DeliveryCommandScheduler(DeliveryCommandRepository repository,
@@ -51,11 +87,24 @@ public class DeliveryCommandScheduler {
         this.clock = clock;
     }
 
+    /**
+     * The Craves rider stage, while the fleet is on: rain mode starts the search earlier (R16 19), and where its free
+     * riders are times dispatch to the food (R16 18).
+     */
+    @Autowired(required = false)
+    public void setFleetStage(FleetStage fleetStage) {
+        this.fleetStage = fleetStage;
+    }
+
     public ScheduleReceipt schedule(EventEnvelope<ChefAcceptedOrderData> event) {
         validate(event);
         ChefAcceptedOrderData data = event.data();
         RoutingContext routingContext = routingContext(event, data);
-        Instant dispatchAt = data.readyAt().minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
+        Instant dispatchAt = data.readyAt().plus(readyCorrection(data.chefSubOrderId()))
+            .minus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES);
+        // Rain mode (R16 19): riders and couriers ride slower, so the search starts 5 minutes earlier.
+        dispatchAt = dispatchAt.minus(fleetStage == null ? Duration.ZERO : fleetStage.dispatchEarlier());
+        dispatchAt = foodTimed(data.chefSubOrderId(), data.deliveryRequest().pickup(), dispatchAt);
         Instant minimumDispatchAt = clock.instant().plusSeconds(5);
         if (dispatchAt.isBefore(minimumDispatchAt)) {
             dispatchAt = minimumDispatchAt;
@@ -187,6 +236,115 @@ public class DeliveryCommandScheduler {
         }
 
         return new ReadyAccelerationReceipt(command.id(), dispatchAt, true, false);
+    }
+
+    /**
+     * ORDER_CANCELLED (R16 item 11), stored once (delivery_schema.order_cancelled). From then on the order's delivery command
+     * books nobody (DeliveryCommandWorker), no rider can accept it, the fleet's dispatch tick ends its trip and tells the
+     * rider, and a Borzo or Pidge courier already booked is cancelled (FleetCourierCancel). Only the order is required: an
+     * event without one, or whose subject or aggregateId (the Service Bus property, null without one) names another order,
+     * is dead-lettered as invalid. The reason is kept only as a code such as CUSTOMER_CANCELLED, else stored as OTHER.
+     */
+    public void orderCancelled(EventEnvelope<OrderCancelledData> event, String aggregateId) {
+        OrderCancelledData data = event == null ? null : event.data();
+        if (event == null || event.eventId() == null || !DeliveryCommandModels.ORDER_CANCELLED.equals(event.eventType())
+            || data == null || data.chefSubOrderId() == null) {
+            throw new DeliveryMessageValidationException("ORDER_CANCELLED needs eventId, eventType and data.chefSubOrderId");
+        }
+        String order = data.chefSubOrderId().toString();
+        if ((StringUtils.hasText(event.subject()) && !order.equalsIgnoreCase(event.subject()))
+            || (StringUtils.hasText(aggregateId) && !order.equalsIgnoreCase(aggregateId))) {
+            throw new DeliveryMessageValidationException("ORDER_CANCELLED subject and aggregateId must be data.chefSubOrderId");
+        }
+        // Stored and logged, so only a code: free text could carry a CR or LF that forges a log line.
+        String reason = data.reason() != null && data.reason().trim().matches("[A-Z0-9_]{1,40}") ? data.reason().trim() : "OTHER";
+        Instant cancelledAt = data.cancelledAt() != null ? data.cancelledAt()
+            : event.occurredAt() != null ? event.occurredAt() : clock.instant();
+        boolean first = repository.recordOrderCancelled(data.chefSubOrderId(), reason, cancelledAt);
+        log.info("DELIVERY_ORDER_CANCELLED chefSubOrderId={} reason={} repeat={}", data.chefSubOrderId(), reason, !first);
+    }
+
+    /**
+     * The narrowing window (R16 18): when a command that no worker has started and no ready tap has moved comes due, the
+     * riders free near the kitchen are looked at again. If they would reach it more than HOLD_STEP before predicted ready −
+     * FOOD_BUFFER, it waits until predicted ready − their ride − FOOD_BUFFER, less rain mode's earlier start as schedule()
+     * took it (DeliveryCommandWorker defers its message; it stays SCHEDULED, so a ready tap still starts it at once). Each
+     * wait is longer than HOLD_STEP and none goes past predicted ready − FOOD_BUFFER, so a command waits only a few times.
+     * Empty: start now.
+     */
+    public Optional<Instant> holdUntil(DeliveryCommandMessage message) {
+        if (!properties.isFoodTimedDispatchEnabled() || fleetStage == null) {
+            return Optional.empty();
+        }
+        try {
+            Optional<Instant> promise = repository.untappedPromise(message.commandId());
+            if (promise.isEmpty()) {
+                return Optional.empty();
+            }
+            Instant now = clock.instant();
+            Stop kitchen = message.deliveryRequest() == null ? null : message.deliveryRequest().pickup();
+            OptionalDouble ride = rideMinutes(message.chefSubOrderId(), kitchen, now);
+            if (ride.isEmpty()) {
+                return Optional.empty();
+            }
+            // Less rain's earlier start too, as schedule() took it, or the hold would undo it.
+            Instant until = promise.get().plus(readyCorrection(message.chefSubOrderId())).minus(fleetStage.dispatchEarlier())
+                .minus(rideAndBuffer(ride.getAsDouble()));
+            if (!until.isAfter(now.plus(HOLD_STEP))) {
+                return Optional.empty();
+            }
+            log.info("FOOD_TIMED_DISPATCH chefSubOrderId={} rideMinutes={} dispatchAt={} held=true", message.chefSubOrderId(),
+                tenths(ride.getAsDouble()), until);
+            return Optional.of(until);
+        } catch (RuntimeException exception) {
+            log.warn("FOOD_TIMED_DISPATCH chefSubOrderId={} hold failed: {}", message.chefSubOrderId(), exception.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * R16 18, behind craves.delivery-command.food-timed-dispatch-enabled: start when the riders free near the kitchen would
+     * reach it FOOD_BUFFER before the food, at predicted ready (todays + the lead) − their predicted ride − FOOD_BUFFER. Only
+     * ever later than todays (today's rule), never past predicted ready − FOOD_BUFFER, and a step before this that moves
+     * todays moves the result as much. No live ranking model or free rider nearby: todays.
+     */
+    private Instant foodTimed(UUID chefSubOrderId, Stop kitchen, Instant todays) {
+        if (!properties.isFoodTimedDispatchEnabled()) {
+            return todays;
+        }
+        Instant now = clock.instant();
+        OptionalDouble ride = rideMinutes(chefSubOrderId, kitchen, todays.isAfter(now) ? todays : now);
+        if (ride.isEmpty()) {
+            return todays;
+        }
+        Instant timed = todays.plus(properties.getLeadTimeMinutes(), ChronoUnit.MINUTES).minus(rideAndBuffer(ride.getAsDouble()));
+        Instant dispatchAt = timed.isAfter(todays) ? timed : todays;
+        log.info("FOOD_TIMED_DISPATCH chefSubOrderId={} rideMinutes={} dispatchAt={}", chefSubOrderId, tenths(ride.getAsDouble()), dispatchAt);
+        return dispatchAt;
+    }
+
+    /** The fleet's predicted ride (FleetStage.rideMinutes), kept only when it can be one; empty without the fleet or the kitchen's place. */
+    private OptionalDouble rideMinutes(UUID chefSubOrderId, Stop kitchen, Instant at) {
+        if (fleetStage == null || !hasCoordinates(kitchen)) {
+            return OptionalDouble.empty();
+        }
+        try {
+            OptionalDouble ride = fleetStage.rideMinutes(chefSubOrderId, kitchen.latitude().doubleValue(),
+                kitchen.longitude().doubleValue(), at);
+            // NaN fails both comparisons.
+            return ride.isPresent() && ride.getAsDouble() >= 0 && ride.getAsDouble() <= MAX_RIDE_MINUTES ? ride : OptionalDouble.empty();
+        } catch (RuntimeException exception) {
+            log.warn("FOOD_TIMED_DISPATCH chefSubOrderId={} failed: {}", chefSubOrderId, exception.getClass().getSimpleName());
+            return OptionalDouble.empty();
+        }
+    }
+
+    private static Duration rideAndBuffer(double rideMinutes) {
+        return Duration.ofSeconds(Math.round(rideMinutes * 60)).plus(FOOD_BUFFER);
+    }
+
+    private static double tenths(double minutes) {
+        return Math.round(minutes * 10) / 10.0;
     }
 
     private static RoutingContext routingContext(EventEnvelope<ChefAcceptedOrderData> event,

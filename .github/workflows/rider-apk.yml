@@ -7,7 +7,7 @@ name: Craves Rider APK
 # (auth-service), then Firebase, and call CRAVES_API_BASE_URL; they need RIDER_GOOGLE_SERVICES_JSON.
 # Which one: a manual run picks api_mode (default live, the APK riders install; live builds run only from main);
 # pull requests use the repo variable CRAVES_RIDER_API_MODE (mock when unset). The mode is in the APK's name and the
-# PR comment. A mock build is its own app, com.cravesapp.rider.demo named "Craves Rider Demo", installed beside the real
+# PR comment. A mock build is its own app, com.cravesapp.rider.demo named "Craves Riders Demo", installed beside the real
 # one, so it can never replace or pass for the rider app; a check below fails a live APK that isn't com.cravesapp.rider.
 # Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
 # RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key).
@@ -219,7 +219,7 @@ jobs:
           # A live build from main also makes the Play bundle (P2-07), from the same R8 output and key.
           tasks=(assembleRiderRelease testRiderReleaseUnitTest)
           if [[ "$PLAY_BUNDLE" == true ]]; then tasks+=(bundleRiderRelease); fi
-          # A mock build is the separate demo app (cravesRiderDemo: com.cravesapp.rider.demo, "Craves Rider Demo").
+          # A mock build is the separate demo app (cravesRiderDemo: com.cravesapp.rider.demo, "Craves Riders Demo").
           ./gradlew "${tasks[@]}" -PreactNativeArchitectures=arm64-v8a,armeabi-v7a -PcravesRiderDemo="$([[ "$MODE" == mock ]] && echo true || echo false)" \
             -PcravesRiderMinify=true -PcravesVersionCode="$RUN_NUMBER" -Pandroid.enableR8.fullMode=false \
             --no-daemon --stacktrace 2>&1 | tee ../rider-build.log
@@ -258,7 +258,14 @@ jobs:
           abis="$(unzip -Z1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')"
           [[ "$abis" == "arm64-v8a armeabi-v7a " ]] || { echo "ERROR: native code for: $abis" >&2; exit 1; }
           test -s "${APK%.apk}-mapping.txt" || { echo 'ERROR: no R8 mapping: R8 did not run' >&2; exit 1; }
-          echo "Signed; $package; versionCode $code; native code for $abis; R8 mapping present."
+          # Android installs an update only over the same key: another key is "App not installed as package conflicts
+          # with an existing package" (docs/riders/RELEASE.md). Every build shows its key so a change is seen at once.
+          # Newer apksigner prints "V2 Signer: certificate …" per scheme, older "Signer #1 certificate …": the first one.
+          signer="$("$tools/apksigner" verify --print-certs "$APK" |
+            awk '/^(Signer #1|V[0-9.]+ Signer:) certificate SHA-256 digest: / && !n++ {print $NF}')"
+          [[ -n "$signer" ]] || { echo "::error::apksigner printed no signing certificate digest" >&2; exit 1; }
+          echo "Signed by key $signer; $package; versionCode $code; native code for $abis; R8 mapping present."
+          echo "Rider APK: $package, versionCode $code, signing key SHA-256 $signer" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Name and check the Play bundle (signed, ARM only)
         id: aab

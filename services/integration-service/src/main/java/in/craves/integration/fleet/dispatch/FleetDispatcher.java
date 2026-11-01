@@ -11,6 +11,7 @@ import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
+import in.craves.integration.fleet.FleetRain;
 import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.engine.FleetEngineClient;
 import in.craves.integration.fleet.engine.FleetEngineFeed;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
@@ -75,6 +77,8 @@ public class FleetDispatcher implements FleetStage {
     static final long FAIR_STEP_PAISE = 1_000;
     /** Riders ranked by road with CRAVES_FLEET_ROAD_RANKING_ENABLED (P3-06): one road-distance call each per order. */
     static final int ROAD_RANKED = 5;
+    /** Dispatch timed to the food (R16 18) reads the ride of this many free riders nearest the kitchen: a middle figure, few calls. */
+    static final int TIMING_RIDERS = 3;
     static final int SEEN_WITHIN_SECONDS = 45;
     static final int FIX_WITHIN_SECONDS = 180;
     /** Heading home (Phase 5): the drop must leave the rider at least this much nearer home (straight lines, metres). */
@@ -112,6 +116,14 @@ public class FleetDispatcher implements FleetStage {
     private final ObjectMapper json;
     private final boolean roadRanking;
     private final boolean riderChoices;
+    /**
+     * R16 16, CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS (0: off): an ACTIVE offer whose phone hasn't reported ringing
+     * (rang_at, sent with the phone's next /locations call) this many seconds after it went out no longer holds up the next
+     * round. It stays open until it expires, and the first accept wins. heardOrYoung is the SQL for an offer that still
+     * holds rounds up, "" while off, so every query is today's.
+     */
+    private final int unheardSeconds;
+    private final String heardOrYoung;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -120,6 +132,8 @@ public class FleetDispatcher implements FleetStage {
     /** Phase 5, the travel-time model (craves.fleet.eta.*): quotes predicted minutes while live, and ranks where the policy says. */
     private FleetEta eta;
     private final AtomicLong notRankingAlertedAt = new AtomicLong();
+    /** Rain mode (R16 19): the rain top-up on offers, the earlier search, and severe weather's straight to Borzo or Pidge. */
+    private FleetRain rain;
 
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json) {
@@ -132,11 +146,18 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /** riderChoices (Phase 4, CRAVES_FLEET_RIDER_CHOICES_ENABLED): honour each rider's farthest pickup and drop. */
+    public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
+                           RoadDistanceClient roads, RiderPushClient push, ObjectMapper json, boolean roadRanking, boolean riderChoices) {
+        this(jdbc, transactions, policies, testMode, roads, push, json, roadRanking, riderChoices, 0);
+    }
+
+    /** unheardSeconds (R16 16, CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS): the next round past an offer that never rang; 0 is off. */
     @Autowired
     public FleetDispatcher(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            RoadDistanceClient roads, RiderPushClient push, ObjectMapper json,
                            @Value("${craves.fleet.road-ranking-enabled:false}") boolean roadRanking,
-                           @Value("${craves.fleet.rider-choices-enabled:false}") boolean riderChoices) {
+                           @Value("${craves.fleet.rider-choices-enabled:false}") boolean riderChoices,
+                           @Value("${craves.fleet.unheard-next-rider-seconds:0}") int unheardSeconds) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.policies = policies;
@@ -146,6 +167,9 @@ public class FleetDispatcher implements FleetStage {
         this.json = json;
         this.roadRanking = roadRanking;
         this.riderChoices = riderChoices;
+        this.unheardSeconds = Math.max(0, unheardSeconds); // a negative value is off, never "every offer is unheard"
+        this.heardOrYoung = this.unheardSeconds == 0 ? ""
+            : " AND (rang_at IS NOT NULL OR offered_at > now() - make_interval(secs => " + this.unheardSeconds + "))";
     }
 
     @Autowired(required = false)
@@ -160,6 +184,22 @@ public class FleetDispatcher implements FleetStage {
         this.eta = eta;
     }
 
+    @Autowired(required = false)
+    public void setRain(FleetRain rain) {
+        this.rain = rain;
+    }
+
+    /** Rain mode is on: offers, and trips ops give to a rider, carry the rate card's rain top-up. */
+    boolean raining() {
+        return rain != null && rain.raining();
+    }
+
+    /** Rain mode: riders and couriers ride slower, so the search starts 5 minutes earlier. */
+    @Override
+    public Duration dispatchEarlier() {
+        return raining() ? FleetRain.EARLIER : Duration.ZERO;
+    }
+
     @Override
     public Optional<UUID> run(DeliveryCommandMessage command, Supplier<OptionalLong> courierQuotePaise, boolean borzoNext) {
         Optional<TripState> existing = trip(command.chefSubOrderId());
@@ -169,6 +209,11 @@ public class FleetDispatcher implements FleetStage {
         }
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
         if (policy == null || "off".equals(policy.mode())) {
+            return Optional.empty();
+        }
+        if (rain != null && rain.severe()) {
+            // Severe weather: new orders go straight to Borzo or Pidge; orders riders already hold carry on above.
+            LOGGER.info("FLEET_SKIPPED chefSubOrderId={} reason=RAIN_SEVERE", command.chefSubOrderId());
             return Optional.empty();
         }
         Plan plan = plan(command, policy, courierQuotePaise);
@@ -188,13 +233,13 @@ public class FleetDispatcher implements FleetStage {
         }
         if (opened.offers().isEmpty()) {
             if (opened.waiting()) {
-                throw riderDeciding(opened.deadline(), policy);
+                throw riderDeciding(opened.deadline(), policy, opened.tripId());
             }
             return Optional.empty();
         }
         refreshEngine(opened.offers());
         opened.offers().forEach(offer -> Thread.ofVirtual().name("fleet-offer-push").start(() -> ring(offer)));
-        throw riderDeciding(opened.deadline(), policy);
+        throw riderDeciding(opened.deadline(), policy, opened.tripId());
     }
 
     @Override
@@ -225,11 +270,12 @@ public class FleetDispatcher implements FleetStage {
         }
         Instant deadline = jdbc.query("SELECT deadline_at FROM fleet_schema.trip_stage WHERE trip_id = ? AND provider = 'CRAVES_FLEET' "
             + "AND state = 'OPEN'", (row, n) -> row.getTimestamp("deadline_at").toInstant(), trip.id()).stream().findFirst().orElse(null);
+        // An offer that never rang in time (heardOrYoung, while on) holds up no round: it stays open, and the next one goes.
         boolean anyOfferOpen = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
-            + "AND state = 'ACTIVE' AND expires_at > now())", Boolean.class, trip.id()));
+            + "AND state = 'ACTIVE' AND expires_at > now()" + heardOrYoung + ")", Boolean.class, trip.id()));
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
         if (deadline != null && Instant.now().isBefore(deadline) && anyOfferOpen) {
-            throw riderDeciding(deadline, policy);
+            throw riderDeciding(deadline, policy, trip.id());
         }
         if (deadline != null && Instant.now().isBefore(deadline) && policy != null && "live".equals(policy.mode()) && policy.offerRounds() > 1) {
             List<RingingOffer> round = nextRound(trip.id(), policy, courierQuotePaise);
@@ -237,7 +283,7 @@ public class FleetDispatcher implements FleetStage {
                 // Sent now, or another worker sent this round a moment ago: either way riders are deciding.
                 (round == null ? List.<RingingOffer>of() : round).forEach(offer -> Thread.ofVirtual().name("fleet-offer-push")
                     .start(() -> ring(offer)));
-                throw riderDeciding(deadline, policy);
+                throw riderDeciding(deadline, policy, trip.id());
             }
         }
         String outcome = deadline == null || !Instant.now().isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
@@ -257,10 +303,11 @@ public class FleetDispatcher implements FleetStage {
     boolean closeUnlessDeciding(UUID tripId, String outcome, boolean borzoNext, DispatchPolicy policy) {
         List<Instant> open = jdbc.query("SELECT deadline_at FROM fleet_schema.trip_stage WHERE trip_id = ? AND provider = 'CRAVES_FLEET' "
             + "AND state = 'OPEN' AND deadline_at > now() FOR UPDATE", (row, n) -> row.getTimestamp("deadline_at").toInstant(), tripId);
-        // A statement of its own, so it sees the offers a worker committed while this one waited for the lock.
+        // A statement of its own, so it sees the offers a worker committed while this one waited for the lock. Any open offer
+        // counts here, one that never rang too: it stays open until it expires.
         if (!open.isEmpty() && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
             + "AND state = 'ACTIVE' AND expires_at > now())", Boolean.class, tripId))) {
-            throw riderDeciding(open.get(0), policy);
+            throw riderDeciding(open.get(0), policy, tripId);
         }
         return closeFleetStage(tripId, outcome, borzoNext, pidgeSeconds());
     }
@@ -296,6 +343,29 @@ public class FleetDispatcher implements FleetStage {
         int radius = policies.currentDispatchPolicy().map(DispatchPolicy::radiusM).orElse(5000);
         return (int) nearbyRiders(lat, lng, radius, -1, 100, null, null).stream().filter(rider -> testMode.riderAllowed(rider.riderId()))
             .count();
+    }
+
+    /**
+     * R16 18 (FleetStage.rideMinutes): the model's middle figure for the TIMING_RIDERS free riders nearest the kitchen,
+     * only where this order would be offered to riders (dispatch live; a known chef whose kitchen test mode allows) and only
+     * with a live model judged to rank riders well (FleetEta.ranking).
+     */
+    @Override
+    public OptionalDouble rideMinutes(UUID chefSubOrderId, double kitchenLat, double kitchenLng, Instant at) {
+        EtaModel model = eta == null ? null : eta.ranking();
+        DispatchPolicy policy = model == null ? null
+            : policies.currentDispatchPolicy().filter(live -> "live".equals(live.mode())).orElse(null);
+        UUID chefId = policy == null ? null : jdbc.queryForList("SELECT chef_identity_id FROM payment_schema.finance_issued_snapshot "
+            + "WHERE chef_order_id = ?", UUID.class, chefSubOrderId).stream().findFirst().orElse(null);
+        if (chefId == null || !testMode.kitchenAllowed(chefId)) {
+            return OptionalDouble.empty();
+        }
+        double[] minutes = nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), -1, 100, null, null).stream()
+            .filter(rider -> testMode.riderAllowed(rider.riderId())).limit(TIMING_RIDERS)
+            .mapToDouble(rider -> model.minutes(EtaModel.PICKUP, rider.lat(), rider.lng(), kitchenLat, kitchenLng, at.toEpochMilli()))
+            .sorted().toArray();
+        return minutes.length == 0 ? OptionalDouble.empty()
+            : OptionalDouble.of((minutes[(minutes.length - 1) / 2] + minutes[minutes.length / 2]) / 2);
     }
 
     int pidgeSeconds() {
@@ -580,13 +650,15 @@ public class FleetDispatcher implements FleetStage {
                           double kitchenLat, double kitchenLng, double dropLat, double dropLng) {
         EtaModel model = eta == null ? null : eta.shown();
         boolean soonest = rankingModel(policy) != null; // ranked by travel time: the offer says "soonest", not "nearest"
+        boolean raining = raining();
         long now = System.currentTimeMillis();
         List<Planned> offers = new ArrayList<>();
         String outcome = "NO_RIDERS";
         int band = (int) riders.stream().filter(rider -> rider.standing() != null).count();
         for (int place = 1; place <= riders.size() && offers.size() < policy.offersAtOnce(); place++) {
             Candidate rider = riders.get(place - 1);
-            PayQuote quote = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(rider.straightLineM(), policy.pickupDetourPercent()));
+            PayQuote quote = FleetPay.quote(card, dropM, FleetPay.pickupDistanceM(rider.straightLineM(), policy.pickupDetourPercent()),
+                raining);
             if (!FleetPay.costGuardPasses(quote.totalPaise(), policy.perOrderOverheadPaise(), courier, policy.costGuardPremiumPaise())) {
                 outcome = "COST_GUARD";
                 continue;
@@ -623,6 +695,7 @@ public class FleetDispatcher implements FleetStage {
     private List<RingingOffer> nextRound(UUID tripId, DispatchPolicy policy, Supplier<OptionalLong> courierQuotePaise) {
         Map<String, Object> trip = jdbc.queryForMap("""
             SELECT t.chef_sub_order_id, t.kitchen_lat, t.kitchen_lng, t.drop_lat, t.drop_lng, t.drop_distance_m, t.rate_card_version,
+                   t.courier_quote_paise,
                    (SELECT COALESCE(MAX(o.round), 0) FROM fleet_schema.trip_offer o WHERE o.trip_id = t.id) AS rounds
             FROM fleet_schema.trip t WHERE t.id = ?""", tripId);
         int rounds = ((Number) trip.get("rounds")).intValue();
@@ -640,8 +713,16 @@ public class FleetDispatcher implements FleetStage {
         if (riders.isEmpty() || card == null) {
             return List.of();
         }
-        // shortcut: a fresh courier quote each round sent (and on a rare raced attempt); keep the first on the trip if couriers limit quotes.
-        Choice choice = choose(riders, policy, card, dropM, courierQuotePaise.get(), rounds + 1, lat, lng,
+        // One courier quote per order (R16 17): round 1's, kept on the trip. Asked here only when round 1 had none (nobody
+        // was in range, or the couriers didn't answer), and kept once it comes: the first stored wins, and a worker that
+        // lost the race decides with it, not its own.
+        Object kept = trip.get("courier_quote_paise");
+        OptionalLong courier = kept != null ? OptionalLong.of(((Number) kept).longValue()) : courierQuotePaise.get();
+        if (kept == null && courier.isPresent()) {
+            courier = OptionalLong.of(jdbc.queryForObject("UPDATE fleet_schema.trip SET courier_quote_paise = COALESCE(courier_quote_paise, ?) "
+                + "WHERE id = ? RETURNING courier_quote_paise", Long.class, courier.getAsLong(), tripId));
+        }
+        Choice choice = choose(riders, policy, card, dropM, courier, rounds + 1, lat, lng,
             ((Number) trip.get("drop_lat")).doubleValue(), ((Number) trip.get("drop_lng")).doubleValue());
         if (choice.offers().isEmpty()) {
             return List.of();
@@ -656,18 +737,26 @@ public class FleetDispatcher implements FleetStage {
             }
             jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE state = 'ACTIVE' AND expires_at <= now()");
             boolean busy = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
-                + "AND state = 'ACTIVE')", Boolean.class, tripId));
+                + "AND state = 'ACTIVE'" + heardOrYoung + ")", Boolean.class, tripId));
             Integer sent = jdbc.queryForObject("SELECT COALESCE(MAX(round), 0) FROM fleet_schema.trip_offer WHERE trip_id = ?",
                 Integer.class, tripId);
             if (busy || sent == null || sent != rounds) {
                 return null;
             }
+            // Not busy, so any offer still open is one that never rang in time (R16 16): it stays open beside this round.
+            List<UUID> unheard = unheardSeconds == 0 ? List.of() : jdbc.queryForList("SELECT id FROM fleet_schema.trip_offer "
+                + "WHERE trip_id = ? AND state = 'ACTIVE' ORDER BY offered_at", UUID.class, tripId);
             int inserted = insertOffers(tripId, policy, choice.offers(), rounds + 1);
             if (inserted == 0) {
                 return null;
             }
             LOGGER.info("FLEET_OFFERED trip={} round={} offers={}", tripId, rounds + 1, inserted);
-            return ringing(tripId);
+            if (unheard.isEmpty()) {
+                return ringing(tripId);
+            }
+            LOGGER.info("FLEET_UNHEARD_NEXT trip={} offer={}", tripId, unheard.stream().map(UUID::toString).collect(Collectors.joining(",")));
+            // Only the new round rings: pushing the unheard offers again would also overwrite their push receipts.
+            return ringing(tripId).stream().filter(offer -> !unheard.contains(UUID.fromString(offer.offer().offerId()))).toList();
         });
         if (newRound != null) {
             refreshEngine(newRound);
@@ -776,9 +865,9 @@ public class FleetDispatcher implements FleetStage {
         int created = jdbc.update("""
             INSERT INTO fleet_schema.trip (id, chef_sub_order_id, order_id, chef_id, order_code, items_count, kitchen_name, kitchen_area,
               kitchen_address, kitchen_landmark, kitchen_lat, kitchen_lng, chef_phone, customer_first_name, customer_phone, drop_area,
-              drop_address, drop_landmark, drop_lat, drop_lng, drop_distance_m, rate_card_version, chef_ready_at)
+              drop_address, drop_landmark, drop_lat, drop_lng, drop_distance_m, rate_card_version, chef_ready_at, courier_quote_paise)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    (SELECT ready_at FROM fleet_schema.chef_ready WHERE chef_sub_order_id = ?))
+                    (SELECT ready_at FROM fleet_schema.chef_ready WHERE chef_sub_order_id = ?), ?)
             ON CONFLICT (chef_sub_order_id) WHERE replaced_at IS NULL DO NOTHING""",
             tripId, command.chefSubOrderId(), command.orderId(), plan.chefId(), orderCode(command.chefSubOrderId()), itemsCount(request),
             text(kitchen.contactName(), 160, "Kitchen"), text(kitchen.area() != null ? kitchen.area() : command.area(), 160, ""),
@@ -786,7 +875,7 @@ public class FleetDispatcher implements FleetStage {
             kitchen.longitude().doubleValue(), text(kitchen.contactPhone(), 16, ""), firstName(drop.contactName()),
             text(drop.contactPhone(), 16, ""), text(drop.area(), 160, ""), text(drop.address(), 500, ""), text(drop.landmark(), 200, null),
             drop.latitude().doubleValue(), drop.longitude().doubleValue(), plan.dropDistanceM(), plan.rateCardVersion(),
-            command.chefSubOrderId());
+            command.chefSubOrderId(), plan.courierQuotePaise());
         if (created != 1) {
             return null;
         }
@@ -798,13 +887,13 @@ public class FleetDispatcher implements FleetStage {
         if (offers.isEmpty()) {
             if (!plan.offers().isEmpty() && policy.offerRounds() > 1) {
                 // The riders chosen took another order a moment ago: with rounds, the next look offers it to the riders free then.
-                return new Opened(List.of(), deadline, true);
+                return new Opened(tripId, List.of(), deadline, true);
             }
             closeFleetStage(tripId, plan.offers().isEmpty() ? plan.outcome() : "RIDERS_BUSY", borzoNext, policy.pidgeStageSeconds());
-            return new Opened(List.of(), deadline, false);
+            return new Opened(tripId, List.of(), deadline, false);
         }
         LOGGER.info("FLEET_OFFERED chefSubOrderId={} trip={} offers={} deadline={}", command.chefSubOrderId(), tripId, offers.size(), deadline);
-        return new Opened(List.copyOf(offers), deadline, false);
+        return new Opened(tripId, List.copyOf(offers), deadline, false);
     }
 
     /**
@@ -902,8 +991,21 @@ public class FleetDispatcher implements FleetStage {
             (row, n) -> new RingingOffer(row.getObject("rider_id", UUID.class), FleetTripModels.offer(row, json)), tripId);
     }
 
-    private static DeliveryProviderTemporarilyUnavailableException riderDeciding(Instant deadline, DispatchPolicy policy) {
+    /**
+     * Riders are deciding on the trip's offers: look again at the stage deadline or the next check, whichever comes first,
+     * and with unheardSeconds on (rounds only), when the trip's next offer turns unheard, so its next rider hears on time.
+     */
+    private DeliveryProviderTemporarilyUnavailableException riderDeciding(Instant deadline, DispatchPolicy policy, UUID tripId) {
         Instant check = Instant.now().plus(policy != null && policy.offerRounds() > 1 ? ROUND_CHECK_EVERY : CHECK_EVERY);
+        if (unheardSeconds > 0 && policy != null && policy.offerRounds() > 1) {
+            // Only offers not yet past it: one already unheard was just looked at, and waking for it again would spin.
+            Timestamp unheard = jdbc.queryForObject("SELECT MIN(offered_at) + make_interval(secs => ?) FROM fleet_schema.trip_offer "
+                + "WHERE trip_id = ? AND state = 'ACTIVE' AND rang_at IS NULL AND offered_at > now() - make_interval(secs => ?)",
+                Timestamp.class, unheardSeconds, tripId, unheardSeconds);
+            if (unheard != null && unheard.toInstant().isBefore(check)) {
+                check = unheard.toInstant();
+            }
+        }
         return new DeliveryProviderTemporarilyUnavailableException("Craves riders are deciding on the order",
             deadline.isBefore(check) ? deadline : check);
     }
@@ -971,6 +1073,6 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /** waiting: no offer went out, but the stage stays open for the next round (the riders chosen became busy). */
-    private record Opened(List<RingingOffer> offers, Instant deadline, boolean waiting) {
+    private record Opened(UUID tripId, List<RingingOffer> offers, Instant deadline, boolean waiting) {
     }
 }

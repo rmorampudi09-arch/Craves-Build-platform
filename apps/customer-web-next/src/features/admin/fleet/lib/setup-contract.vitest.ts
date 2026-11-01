@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { matchFleetRoute } from "./fleet-common";
 import {
   builtInText, dispatchForm, dispatchFromForm, dispatchPolicyInputSchema, dispatchPolicySchema, draftFromForm, fleetSetupSchema, fromUnitText, isScheduled, noticeFor,
-  noticeHelp, noticeStart, pilotKitchenSchema, pilotNoteSchema, pilotRiderSchema, rateCardDraftSchema, rateCardForm, rateCardSchema, rulesText, SETUP_ROUTES, toUnitText,
-  versionState,
+  noticeHelp, noticeStart, pilotKitchenSchema, pilotNoteSchema, pilotRiderSchema, rainModeInputSchema, rainModeSchema, rateCardDraftSchema, rateCardForm, rateCardSchema,
+  rulesText, SETUP_ROUTES, toUnitText, versionState,
 } from "./setup-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
@@ -37,7 +37,8 @@ const builtIn = {
 describe("pilot setup parsers", () => {
   it("accept the contract shape and drop unknown fields", () => {
     const parsed = fleetSetupSchema.parse({ ...setup, zone: "Madhapur", rateCards: [{ ...card, published_by: "x" }] });
-    expect(parsed.rateCards[0]).toEqual(card);
+    // A card from a server before rain mode has no rain top-up.
+    expect(parsed.rateCards[0]).toEqual({ ...card, rainTopUpPaise: 0 });
     // A version from a server before Phase 4 ran the three nearest at once, one round: the table describes it so.
     expect(parsed.dispatchPolicy).toEqual({ ...policy, offersAtOnce: 3, offerRounds: 1, fairBandM: 0, rankByTravelTime: false });
     expect(parsed.pilotKitchens).toEqual([{ chefId: CHEF, addedAt: at }]);
@@ -82,6 +83,19 @@ describe("pilot setup parsers", () => {
     expect(matchFleetRoute(SETUP_ROUTES, "POST", ["rate-cards", RIDER, "publish"])).toBeNull();
     expect(matchFleetRoute(SETUP_ROUTES, "DELETE", ["pilot", "kitchens", CHEF])?.ids).toEqual([CHEF]);
     expect(matchFleetRoute(SETUP_ROUTES, "DELETE", ["pilot", "kitchens", "2026-10-v1"])).toBeNull();
+    expect(matchFleetRoute(SETUP_ROUTES, "GET", ["rain-mode"])?.route.response).toBe(rainModeSchema);
+    expect(matchFleetRoute(SETUP_ROUTES, "PUT", ["rain-mode"])?.route.body).toBe(rainModeInputSchema);
+    expect(matchFleetRoute(SETUP_ROUTES, "POST", ["rain-mode"])).toBeNull();
+  });
+
+  it("read rain mode and send only off, on or severe", () => {
+    const rain = { level: "off", inForce: "on", auto: true, setByName: "Admin +91 98xxxxx210", setAt: at, rainTopUpPaise: 2000 };
+    expect(rainModeSchema.parse({ ...rain, setBy: RIDER })).toEqual(rain);
+    expect(rainModeSchema.parse({ ...rain, setByName: null, setAt: null }).setAt).toBeNull();
+    for (const level of ["On", "storm", ""]) expect(rainModeSchema.safeParse({ ...rain, level }).success, level).toBe(false);
+    expect(rainModeSchema.safeParse({ ...rain, rainTopUpPaise: 20.5 }).success).toBe(false);
+    expect(rainModeInputSchema.parse({ level: "severe", by: "me" })).toEqual({ level: "severe" });
+    expect(rainModeInputSchema.safeParse({ level: "auto" }).success).toBe(false);
   });
 });
 
@@ -156,6 +170,7 @@ describe("rate card draft form", () => {
     expect(later).toEqual({
       ...Object.fromEntries(Object.entries(card).filter(([key]) => /Paise$|M$|Minutes$/.test(key))), basePaise: 4500,
       effectiveFrom: "2026-11-05T05:30:00.000Z", summaryOfChanges: { en: ["Base pay goes up to ₹45.", "Waiting is paid after 7 minutes."], hi: ["हिंदी"] },
+      rainTopUpPaise: 0,
     });
     expect(rateCardDraftSchema.safeParse(later).success).toBe(true);
     const first = draftFromForm({ ...filled, fullTextUrl: " https://craves.in/rider-terms " }, true, NOW);
@@ -174,6 +189,17 @@ describe("rate card draft form", () => {
     // Later cards need 14 days' notice (and the hour's margin); the first card may start at once.
     expect(draftFromForm({ ...filled, effectiveFrom: "2026-11-05T10:59" }, false, NOW)).toBe("Pick a start at least 14 days and 1 hour from now: riders get 14 days' notice.");
     expect(draftFromForm({ ...filled, effectiveFrom: "2026-10-22T10:00" }, true, NOW)).toMatchObject({ effectiveFrom: "2026-10-22T04:30:00.000Z" });
+  });
+
+  it("sends the rain top-up in paise, outside the ranges, at most ₹100", () => {
+    expect(rateCardForm(rateCardSchema.parse({ ...card, rainTopUpPaise: 2000 })).rainTopUpPaise).toBe("20.00");
+    expect(rateCardForm(null).rainTopUpPaise).toBe("0.00");
+    const first = draftFromForm({ ...filled, rainTopUpPaise: "15" }, true, NOW);
+    expect(first).toMatchObject({ rainTopUpPaise: 1500 });
+    expect(Object.keys((first as { ranges: object }).ranges)).not.toContain("rainTopUpPaise");
+    expect(draftFromForm({ ...filled, rainTopUpPaise: "100" }, false, NOW)).toMatchObject({ rainTopUpPaise: 10_000 });
+    expect(draftFromForm({ ...filled, rainTopUpPaise: "100.01" }, false, NOW)).toBe("Set the rain top-up to ₹0 to ₹100 an order.");
+    expect(draftFromForm({ ...filled, rainTopUpPaise: "" }, false, NOW)).toBe("Enter a number for “Rain top-up an order while rain mode is on, ₹”, like 40 or 40.50.");
   });
 });
 

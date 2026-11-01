@@ -1,6 +1,6 @@
 import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../api/sessionManager';
-import {authApi} from '../api/authApi';
+import {authApi, type OtpClient, type SentOtp} from '../api/authApi';
 import {firebaseAuth} from '../firebase/firebaseAuth';
 import {
   mapFirebaseAuthError,
@@ -10,9 +10,9 @@ import type {AuthRole, AuthTokenResponse} from '../domain/types';
 
 let otpChallenge: {phone: string; challengeId: string} | null = null;
 
-async function sendOtp(digits: string, challengeId?: string): Promise<string> {
+async function sendOtp(digits: string, challengeId?: string, client?: OtpClient): Promise<SentOtp> {
   try {
-    return await authApi.sendPhoneOtp(digits, challengeId);
+    return await authApi.sendPhoneOtp(digits, challengeId, client);
   } catch (error) {
     throw toAppApiError(error);
   }
@@ -62,13 +62,15 @@ export const authService = {
   },
   /**
    * Phone OTP sent by MSG91 through auth-service's central OTP, the web's flow. A resend to the same phone reuses
-   * the challenge; when the server no longer knows it (OTP_RESTART: expired or used) a new one starts.
+   * the challenge; when the server no longer knows it (OTP_RESTART: expired or used) a new one starts. The client
+   * (the rider app) is sent along for auth-service's per-install limits and the rider's own SMS template.
    */
-  async beginMsg91Phone(e164Phone: string): Promise<void> {
+  async beginMsg91Phone(e164Phone: string, client?: OtpClient): Promise<{autoRead: boolean}> {
     const digits = e164Phone.replace(/^\+91/, '');
     const previous = otpChallenge?.phone === e164Phone ? otpChallenge.challengeId : undefined;
+    let sent: SentOtp;
     try {
-      otpChallenge = {phone: e164Phone, challengeId: await sendOtp(digits, previous)};
+      sent = await sendOtp(digits, previous, client);
     } catch (error) {
       if (error instanceof AppApiError && error.code === 'OTP_RESEND_LIMIT') {
         otpChallenge = null; // the server's limit stands; the next tap after the wait starts a new challenge
@@ -77,21 +79,24 @@ export const authService = {
         throw error;
       }
       otpChallenge = null;
-      otpChallenge = {phone: e164Phone, challengeId: await sendOtp(digits)};
+      sent = await sendOtp(digits, undefined, client);
     }
+    otpChallenge = {phone: e164Phone, challengeId: sent.challengeId};
+    return {autoRead: sent.autoRead};
   },
-  async confirmMsg91Otp(code: string): Promise<AuthTokenResponse> {
+  async confirmMsg91Otp(code: string, client?: OtpClient): Promise<AuthTokenResponse> {
     const challenge = otpChallenge;
     if (!challenge) {
       throw new AppApiError('OTP_EXPIRED', 'This verification request has expired. Request a new code to continue.');
     }
     let customToken: string;
     try {
-      customToken = await authApi.verifyPhoneOtp(challenge.challengeId, code);
+      customToken = await authApi.verifyPhoneOtp(challenge.challengeId, code, client);
     } catch (error) {
       const mapped = toAppApiError(error);
-      // A wrong code keeps the challenge for another try; anything else needs a new code.
-      if (mapped.code !== 'OTP_INVALID') {
+      // A wrong code keeps the challenge for another try, and so does the rate limit (it spends no try); anything else
+      // needs a new code.
+      if (mapped.code !== 'OTP_INVALID' && mapped.code !== 'OTP_RATE_LIMIT') {
         otpChallenge = null;
       }
       throw mapped;

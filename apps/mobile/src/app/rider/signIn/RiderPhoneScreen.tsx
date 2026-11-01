@@ -26,8 +26,8 @@ export function RiderPhoneScreen({navigation}: RiderScreenProps<'Phone'>) {
     setError(undefined);
     try {
       const phone = `+91${digits}`;
-      await session.beginPhone(phone);
-      navigation.navigate('Otp', {phone});
+      const {autoRead} = await session.beginPhone(phone);
+      navigation.navigate('Otp', {phone, autoRead});
     } catch (failure) {
       setError(failure instanceof AppApiError ? failure.message : strings.common.error);
     }

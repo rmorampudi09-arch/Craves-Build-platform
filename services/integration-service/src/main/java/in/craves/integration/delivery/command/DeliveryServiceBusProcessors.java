@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.ChefAcceptedOrderData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelope;
+import in.craves.integration.delivery.command.DeliveryCommandModels.OrderCancelledData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.OrderHandedOverData;
 import in.craves.integration.delivery.command.DeliveryCommandModels.OrderReadyForPickupData;
 import in.craves.integration.delivery.command.DeliveryCommandScheduler.DeliveryMessageValidationException;
@@ -100,7 +101,7 @@ public class DeliveryServiceBusProcessors {
         );
     }
 
-    private void processDeliveryDomainEvent(ServiceBusReceivedMessageContext context) {
+    void processDeliveryDomainEvent(ServiceBusReceivedMessageContext context) {
         try {
             String rawBody = context.getMessage().getBody().toString();
             Object property = context.getMessage().getApplicationProperties().get("event_type");
@@ -121,6 +122,16 @@ public class DeliveryServiceBusProcessors {
                     EventEnvelope.class, OrderHandedOverData.class
                 );
                 recordHandedOver(objectMapper.readValue(rawBody, handedOverType));
+                context.complete();
+                return;
+            }
+            if (DeliveryCommandModels.ORDER_CANCELLED.equals(eventType)) {
+                JavaType cancelledType = objectMapper.getTypeFactory().constructParametricType(
+                    EventEnvelope.class, OrderCancelledData.class
+                );
+                Object aggregateId = context.getMessage().getApplicationProperties().get("aggregateId");
+                scheduler.orderCancelled(objectMapper.readValue(rawBody, cancelledType),
+                    aggregateId == null ? null : aggregateId.toString());
                 context.complete();
                 return;
             }

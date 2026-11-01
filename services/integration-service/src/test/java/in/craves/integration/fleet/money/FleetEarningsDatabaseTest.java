@@ -89,6 +89,28 @@ class FleetEarningsDatabaseTest {
         return trip;
     }
 
+    /** Rain mode (R16 19): the top-up the accepted offer locked is paid with the trip and credited as a line of its own. */
+    @Test
+    void theRainTopUpTheAcceptedOfferLockedIsPaidAndCreditedAsItsOwnLine() {
+        UUID trip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', rider_id = ?, rate_card_version = '2026-10-v1', "
+            + "pickup_distance_m = 1800, drop_distance_m = 4200, picked_up_at = now() - interval '20 minutes', finished_at = now() "
+            + "WHERE id = ?", rider, trip);
+        fleet.db.update("INSERT INTO fleet_schema.trip_offer (id, trip_id, rider_id, state, pay_paise, pay_lines, rate_card_version, "
+            + "pickup_distance_m, drop_distance_m, expires_at, decided_at) VALUES (?, ?, ?, 'ACCEPTED', 8700, CAST(? AS jsonb), '2026-10-v1', "
+            + "1800, 4200, now() + INTERVAL '40 seconds', now())", UUID.randomUUID(), trip, rider,
+            "[{\"component\":\"base\",\"label\":\"base\",\"amountPaise\":4000},{\"component\":\"rain\",\"label\":\"rain top-up\",\"amountPaise\":2000}]");
+        assertThat(pay.finalizePay(trip, Ending.DELIVERED, false, null)).extracting(line -> line.component())
+            .containsExactly("base", "drop-km", "pickup-km", "rain");
+        assertThat(fleet.db.queryForObject("SELECT final_pay_paise FROM fleet_schema.trip WHERE id = ?", Long.class, trip))
+            .as("₹40 + ₹19.80 + ₹7.20 + the ₹20 top-up").isEqualTo(8700L);
+        assertThat(fleet.db.queryForObject("SELECT net_paise FROM fleet_schema.rider_earning WHERE trip_id = ? AND component = 'rain'",
+            Long.class, trip)).isEqualTo(2000L);
+        // A trip whose offer had no top-up pays none.
+        assertThat(pay.finalizePay(deliveredTrip(false), Ending.DELIVERED, false, null)).extracting(line -> line.component())
+            .doesNotContain("rain");
+    }
+
     @Test
     void aDeliveredTripIsCreditedOncePendingForADayAndItsJournalsNetToZero() {
         UUID trip = deliveredTrip(false);

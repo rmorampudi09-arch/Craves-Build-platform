@@ -121,7 +121,8 @@ class FleetPilotHealthDatabaseTest {
         Map<String, String> queries = queries();
         assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
             "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes", "batching_candidates", "rider_busy_share",
-            "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "kitchen_wait", "track_size");
+            "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "kitchen_wait",
+            "ready_vs_promise", "courier_assign_minutes", "track_size");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
 
         assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
@@ -223,6 +224,44 @@ class FleetPilotHealthDatabaseTest {
         Map<String, Object> choices = fleet.db.queryForList(queries.get("rider_choices")).get(0);
         assertThat(number(choices, "with_farthest_drop")).isEqualTo(1);
         assertThat(number(choices, "with_farthest_pickup")).isZero();
+    }
+
+    /**
+     * courier_assign_minutes: a booking is timed by its own courier's events (a switch rewrites the job and keeps the earlier
+     * courier's), and a Borzo booking switched to Pidge counts as Borzo's, never assigned, beside the Pidge booking.
+     */
+    @Test
+    void eachCourierBookingIsTimedByItsOwnCourierAndABorzoBookingSwitchedToPidgeCountsAsNeverAssigned() {
+        UUID switched = courierJob("pidge", 10);
+        courierEvent(switched, "borzo", "SEARCHING", 12);
+        courierEvent(switched, "pidge", "COURIER_ASSIGNED", 6);
+        fleet.db.update("INSERT INTO delivery_schema.delivery_borzo_pidge_handoff (delivery_job_id, borzo_provider_delivery_id, started_at, "
+            + "due_at, state, next_attempt_at, pidge_provider_delivery_id, completed_at) VALUES (?, 'B-1', now() - INTERVAL '13 minutes', "
+            + "now() - INTERVAL '11 minutes', 'COMPLETED', now(), 'P-1', now() - INTERVAL '10 minutes')", switched);
+        // A rider's job given to Borzo: the rider's COURIER_ASSIGNED, from before the booking, stays on the job.
+        UUID fromRider = courierJob("borzo", 20);
+        courierEvent(fromRider, "craves_fleet", "COURIER_ASSIGNED", 30);
+        courierEvent(fromRider, "borzo", "COURIER_ASSIGNED", 17);
+
+        assertThat(fleet.db.queryForList(queries().get("courier_assign_minutes"))).extracting(row -> row.get("courier"),
+            row -> number(row, "bookings"), row -> number(row, "assigned"), row -> number(row, "p50_assign_min"),
+            row -> number(row, "never_assigned"))
+            .containsExactly(tuple("all", 3.0, 2.0, 3.5, 1.0), tuple("borzo", 2.0, 1.0, 3.0, 1.0), tuple("pidge", 1.0, 1.0, 4.0, 0.0));
+    }
+
+    /** A delivery job booked with a courier this many minutes ago. */
+    private UUID courierJob(String provider, int bookedMinutesAgo) {
+        UUID job = UUID.randomUUID();
+        fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, status, booked_at) "
+            + "VALUES (?, ?, ?, ?, 'COURIER_ASSIGNED', now() - make_interval(mins => ?))", job, UUID.randomUUID(), UUID.randomUUID(),
+            provider, bookedMinutesAgo);
+        return job;
+    }
+
+    private void courierEvent(UUID job, String provider, String status, int minutesAgo) {
+        fleet.db.update("INSERT INTO delivery_schema.delivery_event (id, delivery_job_id, provider_id, event_type, normalized_status, "
+            + "payload, occurred_at) VALUES (?, ?, ?, ?, ?, '{}', now() - make_interval(mins => ?))", UUID.randomUUID(), job, provider,
+            status, status, minutesAgo);
     }
 
     /** A closed shift yesterday (IST) from one time to another, for a new rider. */

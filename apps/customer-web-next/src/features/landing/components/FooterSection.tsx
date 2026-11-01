@@ -66,10 +66,11 @@ export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
 
           <div>
             <FooterHeading>SOCIAL</FooterHeading>
-            <div className="mt-5 grid gap-2.5" aria-label="Craves social channels pending public URLs">
-              <span className={mutedItemClass}>Instagram</span>
-              <span className={mutedItemClass}>LinkedIn</span>
-              <span className={mutedItemClass}>YouTube</span>
+            <div className="mt-5 grid gap-2.5" aria-label="Craves social channels">
+              <a href="https://www.instagram.com/craves.in_/" target="_blank" rel="noopener noreferrer" className={`${styles.footerLink} text-sm leading-6`}>Instagram</a>
+              <a href="https://www.linkedin.com/company/145186832/" target="_blank" rel="noopener noreferrer" className={`${styles.footerLink} text-sm leading-6`}>LinkedIn</a>
+              <a href="https://www.youtube.com/@Craves_in" target="_blank" rel="noopener noreferrer" className={`${styles.footerLink} text-sm leading-6`}>YouTube</a>
+              <a href="https://www.facebook.com/profile.php?id=61594485405454" target="_blank" rel="noopener noreferrer" className={`${styles.footerLink} text-sm leading-6`}>Facebook</a>
               <span className={mutedItemClass}>WhatsApp</span>
             </div>
           </div>

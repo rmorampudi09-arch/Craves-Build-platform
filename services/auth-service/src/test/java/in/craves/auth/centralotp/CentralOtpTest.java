@@ -85,6 +85,20 @@ class CentralOtpTest {
         for (int i=0;i<5;i++) { var claim = store.verify(sent.challenge()); assertTrue(store.finish(claim, "ACTIVE")); }
         assertThrows(AuthException.class, () -> store.verify(sent.challenge()));
     }
+    @Test void aResendKeepsTheFailedTriesAndCodesLiveTenMinutes() {
+        var sent = sent();
+        for (int i=0;i<4;i++) { var claim = store.verify(sent.challenge()); assertTrue(store.finish(claim, "ACTIVE")); }
+        cooldown();
+        long before = System.currentTimeMillis();
+        var next = store.send(phone, sent.challenge());
+        long after = System.currentTimeMillis();
+        assertTrue(store.finish(next, "ACTIVE"));
+        assertTrue(next.expiresAt() >= before + 600_000 && next.expiresAt() <= after + 600_000, "codes live 10 minutes");
+        var fifth = store.verify(next.challenge()); assertTrue(store.finish(fifth, "ACTIVE"));
+        assertThrows(AuthException.class, () -> store.verify(next.challenge()), "a resend keeps the 4 failed tries: the 5th ends it");
+        cooldown();
+        assertEquals("OTP_RESTART", assertThrows(AuthException.class, () -> store.send(phone, next.challenge())).getCode());
+    }
     @Test void twoResendsAndSharedPhoneHourlyLimitAreEnforced() {
         var first = sent(); cooldown();
         var second = store.send(phone, first.challenge()); store.finish(second, "ACTIVE"); cooldown();

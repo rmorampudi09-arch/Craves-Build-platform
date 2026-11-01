@@ -50,7 +50,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class FleetApplicationDatabaseTest {
-    static final List<String> PETROL = List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF");
+    static final List<String> PETROL = List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF", "PHOTO");
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final TransactionTemplate transaction = new TransactionTemplate(fleet.transactions);
@@ -85,14 +85,14 @@ class FleetApplicationDatabaseTest {
 
         assertThat(result.status()).isEqualTo("ACTIVE");
         assertThat(result.stage()).isEqualTo("ACTIVE");
-        assertThat(result.documentsVerified()).isEqualTo(6);
+        assertThat(result.documentsVerified()).isEqualTo(7);
         assertThat(result.payoutAccountConfirmed()).isTrue();
         assertThat(result.addedToPilot()).isTrue();
         // What the console tells ops next: without a rate card the rider waits for pay rates.
         assertThat(result.rateCardPublished()).isEqualTo(policies.currentRateCard().isPresent());
         assertThat(fleet.db.queryForList("SELECT type || ':' || status || ':' || COALESCE(expires_on::text, '-') FROM fleet_schema.rider_document "
             + "WHERE rider_id = ? ORDER BY type", String.class, rider)).containsExactly("BANK_PROOF:VERIFIED:-",
-            "DRIVING_LICENCE:VERIFIED:" + valid, "PAN:VERIFIED:-", "PUC:VERIFIED:" + valid, "VEHICLE_INSURANCE:VERIFIED:" + valid,
+            "DRIVING_LICENCE:VERIFIED:" + valid, "PAN:VERIFIED:-", "PHOTO:VERIFIED:-", "PUC:VERIFIED:" + valid, "VEHICLE_INSURANCE:VERIFIED:" + valid,
             "VEHICLE_RC:VERIFIED:" + valid);
         assertThat(fleet.db.queryForObject("SELECT state FROM fleet_schema.rider_payout_account WHERE rider_id = ?", String.class, rider))
             .isEqualTo("ACTIVE");
@@ -162,7 +162,7 @@ class FleetApplicationDatabaseTest {
         assertThat(result.status()).isEqualTo("PENDING");
         assertThat(result.stage()).isEqualTo("FIXES");
         assertThat(result.fixesAsked()).isEqualTo(2);
-        assertThat(result.documentsVerified()).isEqualTo(5);
+        assertThat(result.documentsVerified()).isEqualTo(6);
 
         RiderProfile profile = riders.profile(identity);
         assertThat(profile.payoutAccountReturned()).isTrue();
@@ -173,7 +173,7 @@ class FleetApplicationDatabaseTest {
                 assertThat(document.status()).isEqualTo("REJECTED");
                 assertThat(document.reason()).isEqualTo("The photo is blurry. Take it again in daylight.");
             });
-        assertThat(profile.documents()).filteredOn(document -> "VERIFIED".equals(document.status())).hasSize(5);
+        assertThat(profile.documents()).filteredOn(document -> "VERIFIED".equals(document.status())).hasSize(6);
         assertThat(fleet.db.queryForObject("SELECT summary FROM fleet_schema.admin_audit WHERE rider_id = ? AND action = 'APPLICATION_FIXES_ASKED'",
             String.class, rider)).startsWith("Asked for fixes: Driving licence: The photo is blurry.");
 
@@ -192,12 +192,12 @@ class FleetApplicationDatabaseTest {
         UUID applying = applicant(UUID.randomUUID(), "PETROL");
         send(applying, List.of("PAN"));
         UUID fixes = applicant(UUID.randomUUID(), "BICYCLE");
-        Map<String, UUID> sent = send(fixes, List.of("PAN", "BANK_PROOF"));
+        Map<String, UUID> sent = send(fixes, List.of("PAN", "BANK_PROOF", "PHOTO"));
         fleet.db.update("UPDATE fleet_schema.rider_document SET status = 'REJECTED', reason = 'Blurry', reviewed_at = now() WHERE id = ?",
             sent.get("PAN"));
         payoutSent(fixes, "Ravi Kumar");
         UUID review = applicant(UUID.randomUUID(), "ELECTRIC");
-        send(review, List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"));
+        send(review, List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF", "PHOTO"));
         payoutSent(review, "Ravi Kumar");
 
         RiderPage all = admin.listRiders(null, null, null, null);
@@ -209,14 +209,14 @@ class FleetApplicationDatabaseTest {
         assertThat(queue.get(0).missingDocuments()).isZero();
         List<FleetAdminModels.RiderSummary> still = admin.listRiders(null, "APPLYING", null, null).riders();
         assertThat(still).hasSize(1);
-        assertThat(still.get(0).missingDocuments()).isEqualTo(5);
+        assertThat(still.get(0).missingDocuments()).isEqualTo(6);
         assertThat(still.get(0).payoutAccountSent()).isFalse();
         assertThat(still.get(0).readySince()).isNull();
         List<FleetAdminModels.RiderSummary> toFix = admin.listRiders(null, "FIXES", null, null).riders();
         assertThat(toFix).hasSize(1);
         assertThat(toFix.get(0).documentsToFix()).isEqualTo(1);
         RiderDetail detail = admin.getRider(fixes);
-        assertThat(detail.requiredDocuments()).containsExactly("PAN", "BANK_PROOF");
+        assertThat(detail.requiredDocuments()).containsExactly("PAN", "BANK_PROOF", "PHOTO");
         assertThat(detail.rider().vehicleKind()).isEqualTo("BICYCLE");
         assertThat(detail.pilotRider()).isFalse();
     }
@@ -224,7 +224,7 @@ class FleetApplicationDatabaseTest {
     @Test
     void staleOrInconsistentDecisionsAreRefused() {
         UUID rider = applicant(UUID.randomUUID(), "BICYCLE");
-        Map<String, UUID> documents = send(rider, List.of("PAN", "BANK_PROOF"));
+        Map<String, UUID> documents = send(rider, List.of("PAN", "BANK_PROOF", "PHOTO"));
         payoutSent(rider, "Ravi Kumar");
         UUID newer = document(rider, "PAN");
 
@@ -254,7 +254,7 @@ class FleetApplicationDatabaseTest {
     @Test
     void aDecisionOnWhatTheRiderChangedSinceThePageLoadedIsRefused() {
         UUID rider = applicant(UUID.randomUUID(), "BICYCLE");
-        Map<String, UUID> documents = send(rider, List.of("PAN", "BANK_PROOF"));
+        Map<String, UUID> documents = send(rider, List.of("PAN", "BANK_PROOF", "PHOTO"));
         payoutSent(rider, "Ravi Kumar");
         String seen = admin.getRider(rider).applicationVersion();
         assertThat(seen).matches("[0-9a-f]{32}");
@@ -264,7 +264,7 @@ class FleetApplicationDatabaseTest {
         refused(() -> applications.decide(ops, true, UUID.randomUUID(), rider, new ApplicationDecision("APPROVE", allOk(documents),
             "CONFIRM", seen)), 409, "APPLICATION_CHANGED");
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.rider_document WHERE rider_id = ? AND status = 'PENDING'",
-            Integer.class, rider)).isEqualTo(2);
+            Integer.class, rider)).isEqualTo(3);
         assertThat(fleet.db.queryForObject("SELECT string_agg(state, ',' ORDER BY state) FROM fleet_schema.rider_payout_account "
             + "WHERE rider_id = ?", String.class, rider)).isEqualTo("REPLACED,SUBMITTED");
         // A new vehicle (or name) likewise, for fixes too.
@@ -386,7 +386,7 @@ class FleetApplicationDatabaseTest {
     /** OK for every document, with the expiry printed on the four riding documents. */
     private List<DocumentVerdict> allOk(Map<String, UUID> documents) {
         return documents.entrySet().stream().map(entry -> new DocumentVerdict(entry.getValue(), "OK",
-            List.of("PAN", "BANK_PROOF").contains(entry.getKey()) ? null : valid, null)).toList();
+            List.of("PAN", "BANK_PROOF", "PHOTO").contains(entry.getKey()) ? null : valid, null)).toList();
     }
 
     private String stage(UUID rider) {

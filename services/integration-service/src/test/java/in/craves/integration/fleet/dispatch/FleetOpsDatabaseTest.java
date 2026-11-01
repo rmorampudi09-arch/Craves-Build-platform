@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +64,7 @@ class FleetOpsDatabaseTest {
     final List<Object> events = new ArrayList<>();
     final Admin ops = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx210");
     final UUID chefSubOrderId = UUID.fromString("0bde0101-2222-4222-8222-222222222222");
+    final RiderPushClient alerts = mock(RiderPushClient.class);
     FleetDispatcher dispatcher;
     FleetTripService trips;
     FleetOpsService service;
@@ -83,7 +85,7 @@ class FleetOpsDatabaseTest {
         FleetStatusBridge bridge = new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands, statusUpdates, json);
         FleetTripPay pay = new FleetTripPay(fleet.db, policies, json, events::add);
         trips = new FleetTripService(fleet.db, pay, bridge, json, mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions,
-            mock(RiderPushClient.class));
+            alerts);
         FleetAdminService admin = new FleetAdminService(fleet.db, json, mock(FleetStorage.class), mock(FleetRoleClient.class),
             mock(BankDataCipher.class));
         service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, false);
@@ -401,8 +403,14 @@ class FleetOpsDatabaseTest {
     void cancellingARiderTripPaysByTheStateTableAndTellsThePipeline() {
         UUID tripId = accept(other);
         fleet.db.update("UPDATE fleet_schema.trip SET state = 'AT_PICKUP', arrived_kitchen_at = now() WHERE id = ?", tripId);
+        if (fleet.db.update("UPDATE fleet_schema.rider_device SET fcm_token = 'token-other' WHERE rider_id = ? AND state = 'BOUND'", other) == 0) {
+            fleet.db.update("INSERT INTO fleet_schema.rider_device (id, rider_id, fcm_token, app_version, model, state) "
+                + "VALUES (?, ?, 'token-other', '1.3.0', 'Redmi 13C', 'BOUND')", UUID.randomUUID(), other);
+        }
         events.clear();
         OpsTrip trip = (OpsTrip) service.cancel(ops, UUID.randomUUID(), tripId, "Customer cancelled the order");
+        // The rider hears at once, once the cancel has committed (R16 item 11), not on the next /locations call.
+        verify(alerts, timeout(5_000)).tripEnded("token-other", tripId, "CANCELLED");
 
         assertThat(trip.state()).isEqualTo("CANCELLED");
         assertThat(events).singleElement().isInstanceOfSatisfying(FleetTripPayFinalized.class, paid -> {

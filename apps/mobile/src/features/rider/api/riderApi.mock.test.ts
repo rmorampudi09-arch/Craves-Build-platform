@@ -32,8 +32,15 @@ describe('mock rider server', () => {
     let profile = await mock.api.getProfile();
     // The make and model is the vehicle's name; an electric scooter needs no PUC.
     expect(profile.vehicle).toMatchObject({ label: 'Ather 450X', kind: 'ELECTRIC' });
-    expect(profile.documents.map(doc => `${doc.type}:${doc.status}`)).toEqual(['DL:MISSING', 'RC:MISSING', 'INSURANCE:MISSING', 'PAN:MISSING', 'BANK:MISSING']);
-    for (const type of ['DL', 'RC', 'INSURANCE', 'PAN', 'BANK']) {
+    expect(profile.documents.map(doc => `${doc.type}:${doc.status}`)).toEqual([
+      'DL:MISSING',
+      'RC:MISSING',
+      'INSURANCE:MISSING',
+      'PAN:MISSING',
+      'BANK:MISSING',
+      'SELFIE:MISSING',
+    ]);
+    for (const type of ['DL', 'RC', 'INSURANCE', 'PAN', 'BANK', 'SELFIE']) {
       await mock.api.uploadDocument(type, `file:///${type}.jpg`);
     }
     await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'Ravi Kumar', upiId: 'ravi@okaxis' });

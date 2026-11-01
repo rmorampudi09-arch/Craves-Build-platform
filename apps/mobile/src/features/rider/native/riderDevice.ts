@@ -5,6 +5,8 @@ export interface DeviceState {
   powerSaveMode: boolean;
   locationEnabled: boolean;
   notificationsEnabled: boolean;
+  /** An offer may open over the lock screen: Android 14+ asks the rider; always true before (app 1.3.0). */
+  fullScreenAllowed: boolean;
   manufacturer: string;
 }
 
@@ -13,6 +15,7 @@ interface NativeRiderDevice {
   openBatterySettings(): Promise<boolean>;
   openAutostartSettings(): Promise<boolean>;
   openAppSettings(): Promise<boolean>;
+  openFullScreenSettings(): Promise<boolean>;
   getInstallationId(): Promise<string | null>;
   keepPhoto(uri: string): Promise<string>;
   deletePhoto(uri: string): Promise<boolean>;
@@ -39,6 +42,8 @@ export const riderDevice = {
   openBatterySettings: async () => (native ? native.openBatterySettings() : false),
   openAutostartSettings: async () => (native ? native.openAutostartSettings() : false),
   openAppSettings: async () => (native ? native.openAppSettings() : false),
+  /** Android 14+: where the rider lets offers open over the lock screen. */
+  openFullScreenSettings: async () => (native ? native.openFullScreenSettings() : false),
   /** Android's ANDROID_ID, which binds the rider to this phone; null without the rider native module (no made-up id). */
   async installationId(): Promise<string | null> {
     try {

@@ -12,6 +12,8 @@
          (Android 14+ requires ACCESS_NETWORK_STATE for that, and for the online service's network callback). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- A ringing offer opens over the lock screen (RiderOffers); Android 14+ also asks the rider (phone setup). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- riderLabel: "Craves Rider", or "Craves Rider Demo" for a demo build (build.gradle, cravesRiderDemo). -->
     <application android:label="${riderLabel}" tools:replace="android:label">

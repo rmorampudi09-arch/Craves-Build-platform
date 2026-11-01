@@ -48,7 +48,10 @@ export interface RiderProfile {
   /** kind: as the rider signed up; absent for a rider ops added before sign-up existed. */
   vehicle: {label: string; regNumberMasked?: string; kind?: VehicleKind};
   documents: {
-    /** DL, RC, INSURANCE, PUC, PAN or BANK; used to upload a new photo. */
+    /**
+     * DL, RC, INSURANCE, PUC, PAN, BANK or SELFIE (app 1.3.0: the reference selfie, every vehicle, front camera, JPEG only);
+     * used to upload a new photo.
+     */
     type?: string;
     label: string;
     /** MISSING: a rider still signing up has not sent this one yet. */
@@ -196,8 +199,12 @@ export interface HomeSummary {
 export interface Offer {
   offerId: string;
   tripId: string;
+  /**
+   * When the offer ends, ISO-8601 (as Jackson writes an Instant, e.g. 2026-11-01T06:10:40.123456Z). The native service moves
+   * it onto the phone's clock with the offset from /locations' Date header (app 1.3.0), so a late push counts down less.
+   */
   expiresAt: string;
-  /** The countdown uses this, never the phone clock. */
+  /** Seconds left when the server sent it: the countdown never runs past arrival plus this. */
   expiresInSec: number;
   /** Locked at offer time. */
   payPaise: Paise;

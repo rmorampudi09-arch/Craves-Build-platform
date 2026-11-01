@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   approveDocumentSchema, expiryProblem, payoutAccountInputSchema, riderDetailSchema, riderDocumentSchema, riderPageSchema, riderVehicleInputSchema, riderVehicleSchema,
-  statusEventProblem, type StatusEventInput,
+  selfieReviewSchema, statusEventProblem, type StatusEventInput,
 } from "./rider-contract";
 
 const RIDER = "11111111-1111-4111-8111-111111111111";
@@ -54,6 +54,15 @@ describe("rider parsers", () => {
     expect(riderDetailSchema.safeParse({ ...riderDetail, rider: { ...riderDetail.rider, riderId: "R1" } }).success).toBe(false);
     expect(riderDetailSchema.safeParse({ ...riderDetail, documents: [{ ...riderDetail.documents[0], type: "AADHAAR" }] }).success).toBe(false);
     expect(riderDetailSchema.safeParse({ ...riderDetail, devices: undefined }).success).toBe(false);
+  });
+
+  it("read a selfie review's sign-up selfie id, null or left out by an older server, and nothing but an id", () => {
+    const review = { shiftId: "44444444-4444-4444-8444-444444444444", riderId: RIDER, riderName: "Ravi Kumar", startedAt: at, state: "PENDING", reason: null, reviewedBy: null, reviewedAt: null };
+    expect(selfieReviewSchema.parse({ ...review, referencePhotoId: DOC }).referencePhotoId).toBe(DOC);
+    expect(selfieReviewSchema.parse({ ...review, referencePhotoId: null }).referencePhotoId).toBeNull();
+    expect(selfieReviewSchema.parse(review).referencePhotoId).toBeUndefined();
+    // It goes into the image's path.
+    expect(selfieReviewSchema.safeParse({ ...review, referencePhotoId: "../../shifts/x/selfie" }).success).toBe(false);
   });
 });
 

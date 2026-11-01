@@ -47,7 +47,19 @@ function SelfieCard({ item, onDone }: { item: SelfieReview; onDone: (notice: str
     if (done) await onDone(`${item.riderName}'s selfie ${verb === "approve" ? "approved" : "rejected"}.`);
   }
   return <article className="rounded-xl border border-slate-200 p-3 text-sm">
-    <img src={`/api/admin/fleet/shifts/${item.shiftId}/selfie`} alt={`Go-online selfie of ${item.riderName}`} className="aspect-square w-full rounded-lg object-cover" loading="lazy" />
+    {/* The content route serves a document inline with its own type, like the shift selfie. shortcut: a PDF PHOTO wouldn't render, fine while the app sends camera JPEGs. */}
+    <div className="grid grid-cols-2 gap-2">
+      <figure>
+        {item.referencePhotoId
+          ? <img src={`/api/admin/fleet/riders/${item.riderId}/documents/${item.referencePhotoId}/content`} alt={`Sign-up selfie of ${item.riderName}`} className="aspect-square w-full rounded-lg object-cover" loading="lazy" />
+          : <p className="cr-empty aspect-square">No sign-up selfie on file yet. Ask the rider to add one in the app.</p>}
+        <figcaption className="cr-muted mt-1">Sign-up selfie</figcaption>
+      </figure>
+      <figure>
+        <img src={`/api/admin/fleet/shifts/${item.shiftId}/selfie`} alt={`Go-online selfie of ${item.riderName}`} className="aspect-square w-full rounded-lg object-cover" loading="lazy" />
+        <figcaption className="cr-muted mt-1">Go-online selfie</figcaption>
+      </figure>
+    </div>
     <p className="mt-2"><Link className="font-bold underline" href={`/admin/riders/${item.riderId}`}>{item.riderName}</Link> · {formatAdminTimestamp(item.startedAt)}</p>
     {item.reviewedBy && <p className="cr-muted">{readableFleetValue(item.state)} by {item.reviewedBy}{item.reason ? `: ${item.reason}` : ""}</p>}
     {item.state === "PENDING" && <div className="mt-2 flex flex-wrap items-start gap-2">

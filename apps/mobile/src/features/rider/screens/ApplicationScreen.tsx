@@ -12,7 +12,7 @@ import {registerPhone} from '../components/RiderRuntime';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {CheckRow} from '../components/Choices';
-import {chooseDocumentPhoto} from '../components/DocumentPhoto';
+import {chooseDocumentPhoto, takeSelfie} from '../components/DocumentPhoto';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {StatusBadge} from '../components/StatusBadge';
@@ -296,14 +296,18 @@ function DocumentRow({doc, mode, divider, onSent}: {doc: Doc; mode: 'apply' | 'r
   async function send() {
     setError(null);
     try {
-      const uri = await chooseDocumentPhoto({
-        title: name,
-        take: ap.takePhoto,
-        gallery: ap.fromGallery,
-        cancel: strings.common.cancel,
-        denied: a.cameraDenied,
-        openSettings: a.openSettings,
-      });
+      // The reference selfie is taken live with the front camera, never picked from the gallery.
+      const uri =
+        type === 'SELFIE'
+          ? await takeSelfie({cancel: strings.common.cancel, denied: strings.goOnline.cameraDenied, openSettings: a.openSettings})
+          : await chooseDocumentPhoto({
+              title: name,
+              take: ap.takePhoto,
+              gallery: ap.fromGallery,
+              cancel: strings.common.cancel,
+              denied: a.cameraDenied,
+              openSettings: a.openSettings,
+            });
       if (!uri) {
         return;
       }

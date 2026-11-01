@@ -52,6 +52,7 @@ jest.mock('../native/riderOnlineService', () => ({
     start: jest.fn(async () => undefined),
     stop: jest.fn(async () => undefined),
     testRing: jest.fn(async () => undefined),
+    stopRinging: jest.fn(),
     lastFix: () => undefined,
   },
 }));
@@ -65,6 +66,7 @@ jest.mock('../native/riderDevice', () => ({
     openBatterySettings: jest.fn(async () => true),
     openAutostartSettings: jest.fn(async () => true),
     openAppSettings: jest.fn(async () => true),
+    openFullScreenSettings: jest.fn(async () => true),
     installationId: jest.fn(async () => 'android-id-1'),
   },
 }));
@@ -307,7 +309,7 @@ describe('Account status and the application', () => {
       text = allText();
       expect(text).toContain('Step 2 of 4 | Your vehicle');
       expect(text).toContain(
-        'Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PUC certificate, PAN card, Bank proof.',
+        'Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PUC certificate, PAN card, Bank proof, Selfie.',
       );
 
       await act(async () => input('rider-join-plate').props.onChangeText('TS 09'));
@@ -321,7 +323,7 @@ describe('Account status and the application', () => {
       await act(async () => press('rider-apply-next').props.onPress());
 
       await act(async () => press('rider-join-ELECTRIC').props.onPress());
-      expect(allText()).toContain('Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PAN card, Bank proof.');
+      expect(allText()).toContain('Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PAN card, Bank proof, Selfie.');
       (riderApi.signUp as jest.Mock).mockResolvedValueOnce(pending);
       (riderApi.getProfile as jest.Mock).mockResolvedValue({
         vehicle: {label: 'Ather 450X', kind: 'ELECTRIC', regNumberMasked: 'TS09xx1234'},
@@ -341,9 +343,9 @@ describe('Account status and the application', () => {
       expect(client.getQueryData(riderKeys.me)).toMatchObject({status: 'PENDING'});
       await flush();
       text = allText();
-      expect(text).toContain('Step 3 of 4 | Document photos | 0 of 5 sent');
+      expect(text).toContain('Step 3 of 4 | Document photos | 0 of 6 sent');
       expect(text).toContain('Driving licence | Not sent | Add photo');
-      expect(text).toContain('Send all 5 photos to go on. | Next: payout account');
+      expect(text).toContain('Send all 6 photos to go on. | Next: payout account');
       expect(press('rider-apply-next').props.disabled).toBe(true);
     });
 
@@ -355,7 +357,7 @@ describe('Account status and the application', () => {
       await act(async () => press('rider-join-BICYCLE').props.onPress());
       expect(none('rider-join-plate')).toBe(true);
       expect(none('rider-join-model')).toBe(true);
-      expect(allText()).toContain('Next, you send photos of: PAN card, Bank proof.');
+      expect(allText()).toContain('Next, you send photos of: PAN card, Bank proof, Selfie.');
       (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
         new AppApiError('PHONE_IN_USE', 'This number is already a Craves rider on another account. Call rider support.', 409),
       );
@@ -403,6 +405,23 @@ describe('Account status and the application', () => {
       addPhoto('PUC');
       await answer('Cancel');
       expect(riderApi.uploadDocument).toHaveBeenCalledTimes(2);
+    });
+
+    it('takes the reference selfie live with the front camera, never from the gallery', async () => {
+      const withSelfie = {...applying, documents: [...applying.documents, doc('SELFIE', 'MISSING')]};
+      (riderApi.getProfile as jest.Mock).mockResolvedValue(withSelfie);
+      await render(<AccountStatusScreen />, [[riderKeys.me, pending], [riderKeys.profile, withSelfie]]);
+      expect(allText()).toContain('2 of 7 sent');
+      expect(allText()).toContain(
+        'Selfie | Not sent | Face the camera with your helmet and dark glasses off. Ops compares it with the photo on your licence or PAN card, and later with your go-online selfies. Customers never see it. | Add photo',
+      );
+      (riderApi.uploadDocument as jest.Mock).mockResolvedValue(undefined);
+      await act(async () => press('rider-upload-SELFIE').props.onPress());
+      // No camera-or-gallery question: straight to the front camera.
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith({cameraType: 'front', mediaTypes: ['images'], quality: 0.5});
+      expect(ImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();
+      expect(riderApi.uploadDocument).toHaveBeenCalledWith('SELFIE', 'file:///photo.jpg');
     });
 
     it('asks for the camera when it is denied, and never uploads', async () => {
@@ -471,7 +490,7 @@ describe('Account status and the application', () => {
       expect(input('rider-payout-holder').props.value).toBe('Ravi Kumar');
       // Back to the photos, all in, and on again.
       await act(async () => press('rider-apply-back').props.onPress());
-      expect(allText()).toContain('6 of 6 sent');
+      expect(allText()).toContain('7 of 7 sent');
       expect(press('rider-apply-next').props.disabled).toBe(false);
       await act(async () => press('rider-apply-next').props.onPress());
 
@@ -922,6 +941,7 @@ describe('Privacy notice (P2-09)', () => {
   it('opens the text in the language on screen, then accepts that version', async () => {
     const client = await render(<PrivacyNoticeScreen />, [[riderKeys.me, {...me, status: 'PENDING', privacyNotice}]]);
     expect(allText()).toContain('Your privacy');
+    expect(allText()).toContain('Selfies: you take one when you sign up and each time you go online, so ops can check');
     expect(allText()).toContain('Version 2027-05-v1');
     await act(async () => press('rider-privacy-read').props.onPress());
     expect(Linking.openURL).toHaveBeenCalledWith('https://craves.in/riders/privacy/en');
@@ -950,6 +970,7 @@ describe('Phone setup', () => {
     powerSaveMode: false,
     locationEnabled: true,
     notificationsEnabled: true,
+    fullScreenAllowed: true,
   });
 
   it('knows each phone family', () => {
@@ -963,12 +984,24 @@ describe('Phone setup', () => {
     (riderDevice.state as jest.Mock).mockResolvedValueOnce(device('xiaomi'));
     await render(<PhoneSetupScreen {...props} />);
     const text = allText();
-    expect(text).toContain('3 of 6 done');
+    expect(text).toContain('4 of 7 done');
     expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Rider.');
     expect(text).toContain('Open recent apps, press and hold the Craves Rider card, then tap the lock.');
     expect(text).not.toContain('Allow location');
     await act(async () => tree.root.findByProps({label: "I've locked it"}).props.onPress());
-    expect(allText()).toContain('4 of 6 done');
+    expect(allText()).toContain('5 of 7 done');
+  });
+
+  it('advises showing offers over the lock screen, never needs it to go online, and opens its settings', async () => {
+    (riderDevice.state as jest.Mock).mockResolvedValueOnce({...device('xiaomi'), fullScreenAllowed: false});
+    await render(<PhoneSetupScreen {...props} />);
+    expect(allText()).toContain(
+      'Show offers over the lock screen | Recommended | Tap the button and allow full screen notifications for Craves Rider.',
+    );
+    expect(allText()).toContain('3 of 7 done');
+    expect(press('rider-setup-done')).toBeTruthy();
+    await act(async () => tree.root.findByProps({label: 'Allow over the lock screen'}).props.onPress());
+    expect(riderDevice.openFullScreenSettings).toHaveBeenCalled();
   });
 
   it('uses the Samsung steps on a Samsung', async () => {
@@ -1447,5 +1480,37 @@ describe('Offer', () => {
   it('shows just the lock when the server sends no breakdown', async () => {
     await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: {...offer, payLines: []}, receivedAtMs: Date.now()}}} />);
     expect(allText()).toContain('₹67 | Locked once you accept.');
+  });
+
+  it('stops the ring and holds Decline while Accept is on its way; with no answer, the offer stays and both come back', async () => {
+    let fail: (error: unknown) => void = () => undefined;
+    (riderApi.acceptOffer as jest.Mock).mockImplementationOnce(() => new Promise((_resolve, reject) => (fail = reject)));
+    await render(<OfferScreen {...props()} />);
+    await act(async () => {
+      press('rider-offer-accept').props.onPress();
+    });
+    expect(riderOnlineService.stopRinging).toHaveBeenCalledWith('o1');
+    expect(press('rider-offer-decline').props.disabled).toBe(true);
+    await act(async () => fail(new AppApiError('NETWORK', 'Offline', undefined, undefined, true)));
+    expect(allText()).toContain('No internet. Check your connection and try again. | Accept | Decline');
+    expect(press('rider-offer-accept').props.disabled).toBe(false);
+    expect(press('rider-offer-decline').props.disabled).toBe(false);
+    // A second accept may go (the server gives the same trip to a repeat).
+    (riderApi.acceptOffer as jest.Mock).mockResolvedValueOnce({tripId: 't1'});
+    await act(async () => press('rider-offer-accept').props.onPress());
+    expect(mockNavigation.replace).toHaveBeenCalledWith('Trip');
+  });
+
+  it('holds Accept once Decline is tapped', async () => {
+    await render(<OfferScreen {...props()} />);
+    await act(async () => press('rider-offer-decline').props.onPress());
+    expect(press('rider-offer-accept').props.disabled).toBe(true);
+  });
+
+  it('counts down to the native deadline, so a push that came 8 s late shows 32 s, not 40', async () => {
+    jest.useFakeTimers();
+    const now = Date.now();
+    await render(<OfferScreen {...props(now)} route={{...props(now).route, params: {offer, receivedAtMs: now, deadlineMs: now + 32_000}}} />);
+    expect(allText()).toMatch(/New order \| (32|31|30)s left/);
   });
 });

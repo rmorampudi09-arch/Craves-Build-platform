@@ -154,6 +154,19 @@ class FleetSetupDatabaseTest {
             live.version())).as("published versions never change").isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    /** Decided 1 Nov 2026: the console sends only the mode, and every value and rule left out is the built-in one. */
+    @Test
+    void aModeAloneGetsTheBuiltInDispatch() {
+        DispatchPolicyVersion shadow = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("shadow", null, null, null, null, null, null, null, null)));
+        assertThat(List.of(shadow.offerSeconds(), shadow.fleetStageSeconds(), shadow.radiusM(), shadow.pickupDetourPercent(),
+            shadow.pidgeStageSeconds())).containsExactly(30, 120, 5000, 130, 600);
+        assertThat(rules(shadow)).as("one rider at a time, up to 3 rounds, fair turns within 1.5 km").isEqualTo(DispatchRules.BUILT_IN);
+        assertThat(tx(setup::setup).builtInDispatch()).isEqualTo(FleetAdminModels.BuiltInDispatch.current());
+        assertThat(FleetAdminModels.BuiltInDispatch.current().offerRounds() * FleetAdminModels.BuiltInDispatch.current().offerSeconds())
+            .as("every round gets its full time inside the fleet stage").isLessThanOrEqualTo(FleetAdminModels.BuiltInDispatch.current().fleetStageSeconds());
+    }
+
     /**
      * Phase 4: how orders are offered goes with the policy. Kept unless sent (an emergency stop never changes it), within its
      * bounds, rounds that fit the fleet stage, and once riders have terms a change needs 14 days' notice, in Java and in the table.
@@ -171,8 +184,10 @@ class FleetSetupDatabaseTest {
         assertThat(rules(fair)).as("3 rounds of 30 s fit a 90 s stage").isEqualTo(new DispatchRules(1, 3, 1500));
         DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
-        assertThat(rules(kept)).as("not sent: the rules riders are shown are kept").isEqualTo(new DispatchRules(1, 3, 1500));
-        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)), 400, "VALIDATION_FAILED");
+        assertThat(rules(kept)).as("not sent: the built-in rules").isEqualTo(DispatchRules.BUILT_IN);
+        // 40 s for each of the 3 built-in rounds doesn't fit a 60 s fleet stage.
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("shadow", 40, 60, 5000, 130, 500L, 1000L, 600, null)), 400, "VALIDATION_FAILED");
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
         tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
@@ -203,9 +218,10 @@ class FleetSetupDatabaseTest {
         DispatchPolicyVersion first = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             travelTime("shadow", true, null)));
         assertThat(first.rankByTravelTime()).as("before any rate card riders have no terms: at once").isTrue();
-        DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+        DispatchPolicyVersion reset = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
-        assertThat(kept.rankByTravelTime()).as("not sent: kept as riders are shown it").isTrue();
+        assertThat(reset.rankByTravelTime()).as("not sent: the built-in rule, by distance").isFalse();
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), travelTime("shadow", true, null)));
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
         tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
@@ -371,7 +387,7 @@ class FleetSetupDatabaseTest {
     }
 
     private static DispatchPolicyInput policy(String mode, int detour, Instant effectiveFrom) {
-        return new DispatchPolicyInput(mode, 40, 60, 5000, detour, 500L, 1000L, 600, effectiveFrom);
+        return new DispatchPolicyInput(mode, 40, 120, 5000, detour, 500L, 1000L, 600, effectiveFrom);
     }
 
     /** Offers of 30 s in a 90 s fleet stage, with these rules (null: keep). */

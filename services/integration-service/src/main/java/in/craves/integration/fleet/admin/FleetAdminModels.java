@@ -1,6 +1,7 @@
 package in.craves.integration.fleet.admin;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -120,8 +121,9 @@ public final class FleetAdminModels {
                               String appealPhone, String approverName, Instant createdAt, String statusAfter) {
     }
 
+    /** referencePhotoId: the rider's sign-up selfie (a PHOTO document, verified first), shown beside this one; null when none. */
     public record SelfieReview(UUID shiftId, UUID riderId, String riderName, Instant startedAt, String state, String reason,
-                               String reviewedBy, Instant reviewedAt) {
+                               String reviewedBy, Instant reviewedAt, UUID referencePhotoId) {
     }
 
     public record SelfieQueue(List<SelfieReview> items) {
@@ -171,9 +173,30 @@ public final class FleetAdminModels {
     }
 
     /** What the pilot zone runs on. dispatchPolicy and rateCard are the versions in force, null when none is. */
+    /** builtInDispatch: the values and rules a version saved without them gets, shown read-only in the console. */
     public record FleetSetup(boolean testMode, DispatchPolicyVersion dispatchPolicy, List<DispatchPolicyVersion> dispatchPolicies,
                              RateCardVersion rateCard, List<RateCardVersion> rateCards, List<PilotRider> pilotRiders,
-                             List<PilotKitchen> pilotKitchens) {
+                             List<PilotKitchen> pilotKitchens, BuiltInDispatch builtInDispatch) {
+        public FleetSetup(boolean testMode, DispatchPolicyVersion dispatchPolicy, List<DispatchPolicyVersion> dispatchPolicies,
+                          RateCardVersion rateCard, List<RateCardVersion> rateCards, List<PilotRider> pilotRiders,
+                          List<PilotKitchen> pilotKitchens) {
+            this(testMode, dispatchPolicy, dispatchPolicies, rateCard, rateCards, pilotRiders, pilotKitchens, BuiltInDispatch.current());
+        }
+    }
+
+    /** How Craves dispatches by default (decided 1 Nov 2026): FleetPolicyStore.BUILT_IN_VALUES and DispatchRules.BUILT_IN. */
+    public record BuiltInDispatch(int offerSeconds, int fleetStageSeconds, int radiusM, int pickupDetourPercent, long perOrderOverheadPaise,
+                                  long costGuardPremiumPaise, int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM,
+                                  boolean rankByTravelTime) {
+        public static BuiltInDispatch current() {
+            Map<String, Number> values = FleetPolicyStore.BUILT_IN_VALUES;
+            FleetPolicyStore.DispatchRules rules = FleetPolicyStore.DispatchRules.BUILT_IN;
+            return new BuiltInDispatch(values.get("offer_seconds").intValue(), values.get("fleet_stage_seconds").intValue(),
+                values.get("radius_m").intValue(), values.get("pickup_detour_percent").intValue(),
+                values.get("per_order_overhead_paise").longValue(), values.get("cost_guard_premium_paise").longValue(),
+                values.get("pidge_stage_seconds").intValue(), rules.offersAtOnce(), rules.offerRounds(), rules.fairBandM(),
+                rules.byTravelTime());
+        }
     }
 
     /**

@@ -2,12 +2,17 @@ import type {Offer} from '../api/contract';
 
 export interface ReceivedOffer {
   offer: Offer;
-  /** Phone time when the offer arrived; the deadline is this plus expiresInSec, never expiresAt. */
+  /** Phone time when the offer arrived. */
   receivedAtMs: number;
+  /**
+   * Phone time when it ends, from the native service (app 1.3.0): the server's expiresAt moved onto the phone's clock, never
+   * later than arrival plus expiresInSec. Absent (mock builds, no server clock yet): arrival plus expiresInSec.
+   */
+  deadlineMs?: number;
 }
 
-export function offerDeadlineMs({offer, receivedAtMs}: ReceivedOffer): number {
-  return receivedAtMs + offer.expiresInSec * 1000;
+export function offerDeadlineMs({offer, receivedAtMs, deadlineMs}: ReceivedOffer): number {
+  return deadlineMs ?? receivedAtMs + offer.expiresInSec * 1000;
 }
 
 export function secondsLeft(received: ReceivedOffer, nowMs: number): number {

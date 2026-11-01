@@ -30,13 +30,14 @@ public final class FleetRules {
     public static final String VEHICLE_REGISTRATION = "^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$";
     /**
      * What a rider applying must send, by what they ride (V160): a bicycle needs no licence or RC, an electric bike no PUC.
-     * A rider ops added before sign-up has no kind and sends the petrol set. The rider's checklist, the ops review and the
-     * application stage all read this one list (docs/riders/FLOWS.md).
+     * Everyone sends PHOTO, a live front-camera selfie (app code SELFIE) that ops accept beside the licence photo and then
+     * compare every go-online selfie with (R16 item 7). A rider ops added before sign-up has no kind and sends the petrol set.
+     * The rider's checklist, the ops review and the application stage all read this one list (docs/riders/FLOWS.md).
      */
     public static final Map<String, List<String>> REQUIRED_DOCUMENTS = Map.of(
-        "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF"),
-        "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF"),
-        "BICYCLE", List.of("PAN", "BANK_PROOF"));
+        "PETROL", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC", "PAN", "BANK_PROOF", "PHOTO"),
+        "ELECTRIC", List.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PAN", "BANK_PROOF", "PHOTO"),
+        "BICYCLE", List.of("PAN", "BANK_PROOF", "PHOTO"));
     /** The four riding documents: verified only with the expiry date printed on them (/shift/start checks it). */
     public static final Set<String> EXPIRING_DOCUMENTS = Set.of("DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE", "PUC");
     /** REQUIRED_DOCUMENTS as SQL: the text[] of types for the rider row aliased r (built from the constants above). */

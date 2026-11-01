@@ -22,7 +22,7 @@ Changing any of these changes riders' terms. That needs the lawyer, and 14 days'
 
 ## 2. How an order is offered
 
-The rules live in the dispatch policy (console: Rider pilot setup → Dispatch). The defaults keep the old behaviour: 3 riders at once, one round, nearest first. Nothing changes until ops publishes a policy that says otherwise.
+The rules are built in (decided 1 Nov 2026, so riders get orders the way Swiggy and Zomato hand them out, with no settings to choose): one rider at a time, 30 s to accept, up to 3 rounds, fair turns within 1.5 km, within 5 km, then Borzo after at most 120 s (`FleetPolicyStore.BUILT_IN_VALUES`, `DispatchRules.BUILT_IN`). The console's Dispatch page only switches the mode (off, shadow, live) and records each version, because riders' terms change only with notice (§7).
 
 ### Who can hear of an order
 
@@ -32,7 +32,7 @@ A rider hears of an order only if all of these hold:
 - They are free: no trip in progress and no open offer.
 - The server has heard from them: the phone called in the last 45 s, with a real (not mock) fix under 3 minutes old, and it can ring.
 - They are inside the policy radius of the kitchen (5 km to start).
-- They are in the pilot zone (while test mode is on).
+- They are in the pilot zone, only while test mode is on (`CRAVES_FLEET_TEST_MODE`). Production runs with it off, so every eligible rider hears of every kitchen's orders.
 - With rider choices on: the ride to the kitchen and the drop are within the rider's own limits. The kitchen ride is measured as the offer shows it, straight line × detour.
 
 ### In what order
@@ -202,7 +202,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 
 ## 7. Choosing the rules
 
-### Recommended for the pilot
+### Built in (decided 1 Nov 2026)
 
 | Setting | Value | Why |
 |---|---|---|
@@ -216,7 +216,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 
 **Before choosing,** run the replay on the pilot area's recorded orders twice: once nearest first, once with these rules (`REPLAY.md`, "Comparing offer rules"). Compare the Gini and the spread of pay per hour against the mean pickup distance. If 1.5 km adds over 30% to the mean pickup, try 1 km.
 
-**To keep the old behaviour** (3 at once, nearest first), leave the rules alone. You can still switch later, with 14 days' notice.
+**Changing them** is a code change (`FleetPolicyStore`), and once a rate card is published it needs 14 days' notice to riders. The emergency stop (off, now) always works and keeps the values riders are shown.
 
 ### When to change them
 

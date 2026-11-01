@@ -80,9 +80,9 @@ On 30 Oct the fleet was already on in test mode (the move copied the settings), 
 ## 6. Set up the pilot in the console
 
 1. **Offer rules, then the rate card.**
-   1. **How orders are offered.** Under Dispatch, choose `shadow`, keep the other values, and under "How orders are offered" enter the rules. The recommended rules are in `DISPATCH.md` §7: run the replay on the pilot area first (`REPLAY.md`, "Comparing offer rules").
+   1. **How orders are offered.** Under Dispatch, choose `shadow` and save. Since 1 Nov 2026 the values are built in (`DISPATCH.md` §7): the console shows them and asks only for the mode, and the API fills in any value it isn't sent.
 
-      | Field | Recommended |
+      | Field | Built in |
       |---|---|
       | Riders who see an order at once | 1 |
       | Rounds of offers | 3 |
@@ -118,7 +118,7 @@ On 30 Oct the fleet was already on in test mode (the move copied the settings), 
 1. Register the rider app in Firebase and add the GitHub secrets (see "Accounts and listings").
 2. Run the GitHub workflow "Craves Rider APK" by hand on `main`. `api_mode` is `live` by default, and a live run anywhere but `main` stops.
 3. Install `craves-rider-live-<sha>.apk` from the run's artifact, or share it through Firebase App Distribution or Play internal testing (`RELEASE.md`).
-4. Run the phone tests in `PHONE-TESTS.md` before the first live order.
+4. Run the phone tests in `PHONE-TESTS.md` before the first live order. From app 1.3.0, Phone setup asks each rider to let offers show over the lock screen (Android 14+): a Play release needs the `USE_FULL_SCREEN_INTENT` declaration in Play Console. Offers ring until answered or until they expire, with Craves's own sound. Once riders have 1.3.0, set `CRAVES_FLEET_MIN_APP_VERSION=1.3.0` on integration-service.
 5. Drill SOS and support once with a pilot rider: press SOS in the app, check the ops lead gets the email with the full phone and a map link, and that the console's Rider support page shows the press as emailed. Then report a problem from the app, and acknowledge and fix it on the same page.
 
 A mock APK, from a pull request or a manual run with `mock`, shows "Demo data" on every screen and never talks to Craves.
@@ -221,7 +221,7 @@ The model predicts the minutes a rider needs to reach the kitchen, and from the 
 
 | Where | What to do | Needed for |
 |---|---|---|
-| **MSG91** (your existing account) | Riders sign in with the same phone OTP as the web: the app calls auth-service, which sends the SMS by MSG91 and checks the code. Nothing new is needed if web sign-in works today: the same auth key, the same DLT-registered sender ID and the same approved OTP template. Check the template's wording suits riders too (it should just say "<code> is your Craves verification code"); if you want a rider-specific text, register a new DLT template and put its MSG91 template ID in `CRAVES_MSG91_OTP_TEMPLATE_ID` (it is one setting for all phone sign-ins). Keep enough SMS credit for the pilot riders. | Rider sign-in |
+| **MSG91** (your existing account) | Riders sign in with the same phone OTP as the web: the app calls auth-service, which sends the SMS by MSG91 and checks the code. Nothing new is needed if web sign-in works today: the same auth key, the same DLT-registered sender ID and the same approved OTP template. Check the template's wording suits riders too (it should just say "<code> is your Craves verification code"), and that its code variable is tagged `#numeric#` on DLT: since TRAI's 18 Nov 2025 direction, untagged variables are rejected once the logging period ends, which would stop every sign-in. Codes live 10 minutes (auth-service sends `otp_expiry=10`). Alert on SMS pumping in Log Analytics (auth-service): `MSG91 OTP verified` lines ÷ `MSG91 OTP accepted` lines per hour, falling under 0.3 for an hour with more than 30 sends; if you want a rider-specific text, register a new DLT template and put its MSG91 template ID in `CRAVES_MSG91_OTP_TEMPLATE_ID` (it is one setting for all phone sign-ins). Keep enough SMS credit for the pilot riders. | Rider sign-in |
 | **Firebase** (the same project as the customer app, the one auth-service's `FIREBASE_PROJECT_ID` names) | Add an Android app with package `com.cravesapp.rider` and download its `google-services.json` into the GitHub secret `RIDER_GOOGLE_SERVICES_JSON`. Firebase does not send rider SMS: after the MSG91 code is checked, auth-service gives the app a Firebase sign-in token, and Firebase Messaging rings offers. No SHA fingerprints are needed for this. | Sign-in session, offer pushes |
 | **GitHub** (repo secrets) | `RIDER_KEYSTORE_BASE64`, `RIDER_KEYSTORE_PASSWORD`, `RIDER_KEY_ALIAS` for one fixed rider signing key. Keep the key safe and never change it: the phone binding depends on it. | Live APK |
 | **Google Play Console** (when going beyond side-loaded APKs) | New app "Craves Rider" (`com.cravesapp.rider`) with Play App Signing; upload with the same key. Fill in the Data safety form (location, photos, phone number), the foreground-service location declaration with a short video of going online, the privacy policy URL and the content rating. Start on internal testing. | Store distribution |

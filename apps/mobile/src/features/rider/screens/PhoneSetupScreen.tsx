@@ -19,7 +19,7 @@ export interface PhoneReadiness {
   notifications: boolean;
   device: DeviceState | null;
   answers: Answers;
-  /** Location and notifications block going online; the rest only warn. */
+  /** Location and notifications block going online; the rest (offers over the lock screen too) only advise. */
   ready: boolean;
   /** Location and notifications were read at least once; until then `ready` is false without meaning "not set up". */
   checked: boolean;
@@ -127,7 +127,7 @@ function SetupCheck({
   );
 }
 
-/** Six checks so offers ring with the screen off (04-PhoneSetup.png), with steps for the rider's phone brand. */
+/** Seven checks so offers ring with the screen off (04-PhoneSetup.png), with steps for the rider's phone brand. */
 export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
   const {strings} = useStrings();
   const s = strings.setup;
@@ -151,6 +151,7 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
   const checks = {
     location: phone.location,
     notifications: phone.notifications,
+    lockScreen: Boolean(phone.device?.fullScreenAllowed),
     battery: Boolean(phone.device?.ignoringBatteryOptimizations),
     autostart: Boolean(phone.answers.autostart),
     recents: Boolean(phone.answers.recents),
@@ -188,6 +189,14 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
           done={checks.notifications}
           steps={s.notificationsSteps}
           action={<Fix label={s.allowNotifications} onPress={() => allow(riderDevice.requestNotifications)} />}
+        />
+        <SetupCheck
+          testID="setup-lock-screen"
+          title={s.lockScreen}
+          sub={s.recommended}
+          done={checks.lockScreen}
+          steps={s.lockScreenSteps}
+          action={<Fix label={s.allowLockScreen} onPress={() => riderDevice.openFullScreenSettings()} />}
         />
         <SetupCheck
           testID="setup-battery"

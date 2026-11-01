@@ -185,7 +185,9 @@ class FleetSetupDatabaseTest {
         DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
         assertThat(rules(kept)).as("not sent: the built-in rules").isEqualTo(DispatchRules.BUILT_IN);
-        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), policy("shadow", 130, null)), 400, "VALIDATION_FAILED");
+        // 40 s for each of the 3 built-in rounds doesn't fit a 60 s fleet stage.
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("shadow", 40, 60, 5000, 130, 500L, 1000L, 600, null)), 400, "VALIDATION_FAILED");
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
         tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
@@ -216,9 +218,10 @@ class FleetSetupDatabaseTest {
         DispatchPolicyVersion first = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             travelTime("shadow", true, null)));
         assertThat(first.rankByTravelTime()).as("before any rate card riders have no terms: at once").isTrue();
-        DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+        DispatchPolicyVersion reset = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
-        assertThat(kept.rankByTravelTime()).as("not sent: kept as riders are shown it").isTrue();
+        assertThat(reset.rankByTravelTime()).as("not sent: the built-in rule, by distance").isFalse();
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), travelTime("shadow", true, null)));
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
         tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
@@ -384,7 +387,7 @@ class FleetSetupDatabaseTest {
     }
 
     private static DispatchPolicyInput policy(String mode, int detour, Instant effectiveFrom) {
-        return new DispatchPolicyInput(mode, 40, 60, 5000, detour, 500L, 1000L, 600, effectiveFrom);
+        return new DispatchPolicyInput(mode, 40, 120, 5000, detour, 500L, 1000L, 600, effectiveFrom);
     }
 
     /** Offers of 30 s in a 90 s fleet stage, with these rules (null: keep). */

@@ -353,7 +353,8 @@ class FleetRiderApiDatabaseTest {
         apply("cyclist", "{\"name\":\"Sita Devi\",\"language\":\"hi\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer cyclist")).andExpect(status().isOk())
-            .andExpect(jsonPath("$.documents.length()").value(2)).andExpect(jsonPath("$.documents[0].type").value("PAN"))
+            .andExpect(jsonPath("$.documents.length()").value(3)).andExpect(jsonPath("$.documents[0].type").value("PAN"))
+            .andExpect(jsonPath("$.documents[2].type").value("SELFIE"))
             .andExpect(jsonPath("$.vehicle.regNumberMasked").doesNotExist());
     }
 
@@ -429,7 +430,7 @@ class FleetRiderApiDatabaseTest {
             .andExpect(jsonPath("$.language").value("te"));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer gopi")).andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicle.kind").value("ELECTRIC")).andExpect(jsonPath("$.vehicle.regNumberMasked").value("TS08xx4821"))
-            .andExpect(jsonPath("$.documents.length()").value(5)).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist());
+            .andExpect(jsonPath("$.documents.length()").value(6)).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist());
 
         // An empty plate keeps the one on file.
         apply("gopi", "{\"name\":\"Kancharla Gopi\",\"language\":\"en\",\"vehicleKind\":\"PETROL\",\"vehicleRegNumber\":\"\",\"adult\":true}")

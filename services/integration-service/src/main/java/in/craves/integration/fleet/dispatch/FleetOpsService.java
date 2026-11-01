@@ -288,6 +288,9 @@ public class FleetOpsService {
 
     /** The trip that carries the order afterwards: this one, or a new trip when a rider's trip goes to another rider. */
     private UUID toRider(Current trip, UUID riderId, Admin by) {
+        // The rider row before the stage and the trip, the order accept takes them in (FleetTripService.accept), so ops
+        // giving an order to a rider who is accepting it waits instead of deadlocking.
+        jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE id = ? FOR NO KEY UPDATE", riderId);
         if (riderHandover && trip.riderOnTrip()) {
             return handOver(trip, riderId, by);
         }
@@ -344,6 +347,7 @@ public class FleetOpsService {
         jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), replaced_at = now(), "
             + "version = version + 1, updated_at = now() WHERE id = ?", HANDED_TO_RIDER, trip.id());
         event(trip.id(), "OPS_REASSIGNED", by);
+        trips.tellRider(trip.id(), "HANDED_TO_RIDER");
         pay.finalizePay(trip.id(), "AT_PICKUP".equals(trip.state()) ? Ending.CANCELLED_AT_KITCHEN : Ending.CANCELLED_TO_KITCHEN, false, null);
         UUID next = UUID.randomUUID();
         try {
@@ -419,6 +423,7 @@ public class FleetOpsService {
             jdbc.update("UPDATE fleet_schema.trip SET state = 'CANCELLED', cancel_reason = ?, finished_at = now(), version = version + 1, "
                 + "updated_at = now() WHERE id = ?", RELEASED, trip.id());
             event(trip.id(), "OPS_REASSIGNED", by);
+            trips.tellRider(trip.id(), "RELEASED");
             pay.finalizePay(trip.id(), "AT_PICKUP".equals(trip.state()) ? Ending.CANCELLED_AT_KITCHEN : Ending.CANCELLED_TO_KITCHEN, false, null);
             // The rider's delivery job stays; the dispatch tick books this stage's courier and hands the job over.
             dispatcher.openStage(trip.id(), provider, stageSeconds(provider));

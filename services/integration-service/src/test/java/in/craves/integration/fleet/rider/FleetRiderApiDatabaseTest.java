@@ -183,7 +183,8 @@ class FleetRiderApiDatabaseTest {
             .andExpect(jsonPath("$.documents[0].status").value("REJECTED")).andExpect(jsonPath("$.documents[0].reason").value("The photo is blurry"))
             .andExpect(jsonPath("$.documents[1].type").value("RC")).andExpect(jsonPath("$.documents[1].status").value("MISSING"))
             .andExpect(jsonPath("$.documents[4].type").value("PAN")).andExpect(jsonPath("$.documents[4].reason").doesNotExist())
-            .andExpect(jsonPath("$.documents[5].type").value("BANK")).andExpect(jsonPath("$.documents.length()").value(6))
+            .andExpect(jsonPath("$.documents[5].type").value("BANK")).andExpect(jsonPath("$.documents[6].type").value("SELFIE"))
+            .andExpect(jsonPath("$.documents[6].label").value("Sign-up selfie")).andExpect(jsonPath("$.documents.length()").value(7))
             .andExpect(jsonPath("$.payoutAccountMasked").value("ra****@okaxis")).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist())
             .andExpect(jsonPath("$.insurance.claimPhone").value("+914012345678"));
     }
@@ -247,6 +248,10 @@ class FleetRiderApiDatabaseTest {
         mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", "a.jpg", "image/jpeg", "not a jpeg".getBytes()))
                 .param("type", "DL").header("Authorization", "Bearer " + token))
             .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("DOCUMENT_FILE_INVALID"));
+        // The sign-up selfie is a photo taken with the camera, never a PDF.
+        mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", "a.pdf", "application/pdf",
+                "%PDF-1.4\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII))).param("type", "SELFIE").header("Authorization", "Bearer " + token))
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("SELFIE_INVALID"));
         mvc.perform(multipart("/api/v1/rider/documents").file(new MockMultipartFile("photo", "a.jpg", "image/jpeg", jpeg))
                 .param("type", "DL").header("Authorization", "Bearer " + token))
             .andExpect(status().isNoContent());
@@ -337,7 +342,7 @@ class FleetRiderApiDatabaseTest {
             .containsEntry("label", "Electric two-wheeler").containsEntry("status", "PENDING");
         // An electric two-wheeler needs no PUC; nothing is sent yet.
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer new")).andExpect(status().isOk())
-            .andExpect(jsonPath("$.documents.length()").value(5)).andExpect(jsonPath("$.documents[0].type").value("DL"))
+            .andExpect(jsonPath("$.documents.length()").value(6)).andExpect(jsonPath("$.documents[0].type").value("DL"))
             .andExpect(jsonPath("$.documents[3].type").value("PAN"))
             .andExpect(jsonPath("$.documents[*].status").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("MISSING"))))
             .andExpect(jsonPath("$.vehicle.label").value("Electric two-wheeler"));
@@ -348,7 +353,8 @@ class FleetRiderApiDatabaseTest {
         apply("cyclist", "{\"name\":\"Sita Devi\",\"language\":\"hi\",\"vehicleKind\":\"BICYCLE\",\"adult\":true}")
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer cyclist")).andExpect(status().isOk())
-            .andExpect(jsonPath("$.documents.length()").value(2)).andExpect(jsonPath("$.documents[0].type").value("PAN"))
+            .andExpect(jsonPath("$.documents.length()").value(3)).andExpect(jsonPath("$.documents[0].type").value("PAN"))
+            .andExpect(jsonPath("$.documents[2].type").value("SELFIE"))
             .andExpect(jsonPath("$.vehicle.regNumberMasked").doesNotExist());
     }
 
@@ -424,7 +430,7 @@ class FleetRiderApiDatabaseTest {
             .andExpect(jsonPath("$.language").value("te"));
         mvc.perform(get("/api/v1/rider/profile").header("Authorization", "Bearer gopi")).andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicle.kind").value("ELECTRIC")).andExpect(jsonPath("$.vehicle.regNumberMasked").value("TS08xx4821"))
-            .andExpect(jsonPath("$.documents.length()").value(5)).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist());
+            .andExpect(jsonPath("$.documents.length()").value(6)).andExpect(jsonPath("$.payoutAccountSubmitted").doesNotExist());
 
         // An empty plate keeps the one on file.
         apply("gopi", "{\"name\":\"Kancharla Gopi\",\"language\":\"en\",\"vehicleKind\":\"PETROL\",\"vehicleRegNumber\":\"\",\"adult\":true}")

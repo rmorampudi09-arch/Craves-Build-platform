@@ -9,16 +9,17 @@ import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { formatPaise } from "@/features/admin/fleet/lib/payout-contract";
 import { riderPageSchema, type RiderSummary } from "@/features/admin/fleet/lib/rider-contract";
 import {
-  DISPATCH_INPUTS, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicyInputSchema, dispatchPolicySchema, draftFromForm,
+  builtInText, DISPATCH_MODES, dispatchForm, dispatchFromForm, dispatchPolicySchema, draftFromForm,
   fleetSetupSchema, isScheduled, noticeFor, noticeHelp, noticeStart, pilotKitchenSchema, pilotRiderSchema, RATE_CARD_INPUTS, rateCardForm, rateCardSchema,
-  RULE_INPUTS, rulesText, toUnitText, versionState,
+  rulesText, toUnitText, versionState,
   type DispatchMode, type FleetSetup as Setup, type PilotKitchen, type PilotRider, type RateCard, type Unit, type UnitInput,
 } from "@/features/admin/fleet/lib/setup-contract";
 import { ActionMessage, fieldClass, labelClass, useFleetAction, type FleetAction } from "./fleet-action";
 
 const MODE_LABEL = { off: "Off", shadow: "Shadow — logs only", live: "Live" } as const;
-const LIVE_WARNING = "Pilot riders will get real orders now. Borzo and Pidge still take any order a rider doesn't accept in time.";
+const LIVE_WARNING = "Riders will get real orders now (only the pilot riders while test mode is on). Borzo and Pidge still take any order a rider doesn't accept in time.";
 const STOP_WARNING = "Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.";
+const ALLOW_LIST = "The list applies only while test mode is on; production runs with test mode off, so orders from every kitchen go to every eligible rider.";
 const STEP: Record<Unit, string> = { rupees: "0.01", km: "0.1", minutes: "1", seconds: "1", percent: "1", count: "1" };
 const DAY = 86_400_000;
 const noteBody = (note: string) => note.trim() ? { note: note.trim() } : undefined;
@@ -43,8 +44,8 @@ export function FleetSetup() {
       <SetupStatus setup={setup} />
       <DispatchPanel setup={setup} onDone={load} />
       <RateCards setup={setup} onDone={load} />
-      <PilotRiders riders={setup.pilotRiders} onDone={load} />
-      <PilotKitchens kitchens={setup.pilotKitchens} onDone={load} />
+      <PilotRiders riders={setup.pilotRiders} testMode={setup.testMode} onDone={load} />
+      <PilotKitchens kitchens={setup.pilotKitchens} testMode={setup.testMode} onDone={load} />
     </>}
   </div>;
 }
@@ -76,12 +77,12 @@ function SetupStatus({ setup }: { setup: Setup }) {
   </section>;
 }
 
-function NumberInputs<F extends string>({ inputs, values, onChange, disabled }: {
-  inputs: readonly UnitInput<F>[]; values: Record<F, string>; onChange: (field: F, value: string) => void; disabled?: boolean;
+function NumberInputs<F extends string>({ inputs, values, onChange }: {
+  inputs: readonly UnitInput<F>[]; values: Record<F, string>; onChange: (field: F, value: string) => void;
 }) {
   return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
     {inputs.map(({ field, label, unit }) => <label key={field} className={labelClass}>{label}
-      <input className={fieldClass} type="number" min={0} step={STEP[unit]} disabled={disabled} value={values[field]} onChange={event => onChange(field, event.target.value)} />
+      <input className={fieldClass} type="number" min={0} step={STEP[unit]} value={values[field]} onChange={event => onChange(field, event.target.value)} />
     </label>)}
   </div>;
 }
@@ -90,16 +91,14 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
   const inForce = setup.dispatchPolicy;
   // The values riders are shown: the policy in force (never a withdrawn one), else the newest draft.
   const shown = inForce ?? setup.dispatchPolicies.find(policy => policy.status === "DRAFT") ?? null;
-  // A detour change needs 14 days' notice only once riders have terms, that is a published rate card.
+  // A change for riders needs 14 days' notice only once riders have terms, that is a published rate card.
   const reference = setup.rateCard || setup.rateCards.some(card => card.status === "PUBLISHED") ? shown : null;
   const [form, setForm] = useState(() => dispatchForm(shown ?? setup.dispatchPolicies.find(policy => !policy.withdrawnAt) ?? null));
   const save = useFleetAction();
   const stop = useFleetAction();
   const off = form.mode === "off";
-  // Off shows the values it keeps in force, read-only.
-  const visible = off && shown ? dispatchForm(shown) : form;
-  // The detour and how orders are offered are rider terms: a change to either needs 14 days' notice.
-  const notice = off ? "" : noticeFor(form, reference);
+  // A new version gets the built-in values: where its detour or offer rules differ from what riders are shown, it needs 14 days' notice.
+  const notice = off ? "" : noticeFor(setup.builtInDispatch, reference);
 
   /** An off starting now withdraws every scheduled version; any other change now leaves the next one to take over on its date. */
   function scheduledNote(mode: DispatchMode) {
@@ -113,7 +112,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (off) return stopDispatch(save);
-    const input = dispatchFromForm(form, reference);
+    const input = dispatchFromForm(form, notice);
     if (typeof input === "string") return save.refuse(input);
     const warning = [input.mode === "live" ? LIVE_WARNING : "", input.effectiveFrom ? "" : scheduledNote(input.mode)].filter(Boolean).join(" ");
     if (warning && !window.confirm(warning)) return;
@@ -122,10 +121,8 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
 
   /** An off that starts now is the emergency stop: the server keeps the values riders are shown and withdraws scheduled versions. */
   async function stopDispatch(action: FleetAction) {
-    const input = shown ? dispatchPolicyInputSchema.parse({ ...shown, mode: "off", effectiveFrom: undefined }) : dispatchFromForm({ ...form, mode: "off" }, null);
-    if (typeof input === "string") return action.refuse(input);
     if (!window.confirm([STOP_WARNING, scheduledNote("off")].filter(Boolean).join(" "))) return;
-    if (await action.run("POST", "dispatch-policies", dispatchPolicySchema, input, "Dispatch is off.")) await onDone();
+    if (await action.run("POST", "dispatch-policies", dispatchPolicySchema, { mode: "off" }, "Dispatch is off.")) await onDone();
   }
 
   return <section className="cr-panel space-y-4" aria-labelledby="setup-dispatch-title">
@@ -138,7 +135,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
     {/* Outside the box, which goes once dispatch is off. */}
     <ActionMessage state={stop.state} />
     <form noValidate className="space-y-3" onSubmit={event => void submit(event)}>
-      <p className="cr-muted">A new version takes effect at once. Off: Craves riders get nothing. Shadow: dispatch only writes logs. Live: pilot riders get real offers; it needs a rate card in force.</p>
+      <p className="cr-muted">A new version takes effect at once. Off: Craves riders get nothing. Shadow: dispatch only writes logs. Live: riders get real offers (only the pilot riders while test mode is on); it needs a rate card in force.</p>
       <fieldset>
         <legend className={labelClass}>Mode</legend>
         <div className="mt-1 flex flex-wrap gap-4">{DISPATCH_MODES.map(mode => <label key={mode} className="flex items-center gap-2 text-sm">
@@ -146,19 +143,10 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
         </label>)}</div>
       </fieldset>
       {off && <p className="cr-muted">Off stops dispatch now and keeps today&apos;s values.</p>}
-      <NumberInputs inputs={DISPATCH_INPUTS} values={visible} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
-      <p className="cr-muted">The cost guard offers a trip to riders only when rider pay plus the overhead is at most the Borzo or Pidge quote plus the premium.</p>
-      <fieldset className="space-y-2">
-        <legend className="font-bold">How orders are offered</legend>
-        <p className="cr-muted">One rider at a time is calm: each rider gets the full time to decide, and the next rider not yet asked hears in the next round. A fair band above 0 gives the order first to the rider who has earned the least per online hour today among the free riders that close to the nearest. Declining is always free.</p>
-        <NumberInputs inputs={RULE_INPUTS} values={visible} disabled={off} onChange={(field, value) => setForm(current => ({ ...current, [field]: value }))} />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={visible.rankByTravelTime} disabled={off} aria-describedby="setup-travel-help"
-            onChange={event => setForm(current => ({ ...current, rankByTravelTime: event.target.checked }))} />
-          Rank by travel time: soonest at the kitchen first
-        </label>
-        <p id="setup-travel-help" className="cr-muted text-xs">The travel-time model decides who hears first, and a fair band counts its distance as minutes at 20 km/h. It applies only while the model is live and passed its ranking check; until then riders are ranked by distance and ops get an alert.</p>
-      </fieldset>
+      <div>
+        <p className="text-sm font-bold">{builtInText(setup.builtInDispatch)}</p>
+        <p className="cr-muted">These are built in: one rider at a time, nearest first, then the next rider — the way food delivery apps hand out orders. Changing them is a code change, and riders get 14 days&apos; notice.</p>
+      </div>
       {notice && reference && <div>
         <label className={labelClass}>New {notice} start{notice === "detour" ? "s" : ""} (IST)<input className={fieldClass} type="datetime-local" aria-describedby="setup-detour-help" value={form.effectiveFrom} onChange={event => setForm(current => ({ ...current, effectiveFrom: event.target.value }))} /></label>
         <p id="setup-detour-help" className="cr-muted mt-1 text-xs">{noticeHelp(notice, reference)}</p>
@@ -259,10 +247,10 @@ function NewDraft({ newest, published, onDone }: { newest: RateCard | null; publ
   </form>;
 }
 
-function PilotRiders({ riders, onDone }: { riders: PilotRider[]; onDone: () => Promise<void> }) {
+function PilotRiders({ riders, testMode, onDone }: { riders: PilotRider[]; testMode: boolean; onDone: () => Promise<void> }) {
   return <section className="cr-panel space-y-3" aria-labelledby="setup-riders-title">
     <h2 id="setup-riders-title" className="text-lg font-bold">Pilot riders</h2>
-    <p className="cr-muted">While test mode is on, only these riders get Craves offers.</p>
+    <p className="cr-muted">{testMode ? "Test mode is on: only these riders get Craves offers." : "Test mode is off: this list isn't used now."} {ALLOW_LIST}</p>
     {riders.length === 0 ? <p className="cr-empty">No pilot riders yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
       <thead><tr><th scope="col">Rider</th><th scope="col">Status</th><th scope="col">Note</th><th scope="col">Added</th><th scope="col">Action</th></tr></thead>
       <tbody>{riders.map(rider => <PilotRow key={rider.riderId} path={`pilot/riders/${rider.riderId}`} name={rider.name} addedAt={rider.addedAt} note={rider.note} onDone={onDone}
@@ -340,7 +328,7 @@ function AddPilotRider({ onDone }: { onDone: () => Promise<void> }) {
   </div>;
 }
 
-function PilotKitchens({ kitchens, onDone }: { kitchens: PilotKitchen[]; onDone: () => Promise<void> }) {
+function PilotKitchens({ kitchens, testMode, onDone }: { kitchens: PilotKitchen[]; testMode: boolean; onDone: () => Promise<void> }) {
   const [chefId, setChefId] = useState("");
   const [note, setNote] = useState("");
   const action = useFleetAction();
@@ -358,7 +346,7 @@ function PilotKitchens({ kitchens, onDone }: { kitchens: PilotKitchen[]; onDone:
 
   return <section className="cr-panel space-y-3" aria-labelledby="setup-kitchens-title">
     <h2 id="setup-kitchens-title" className="text-lg font-bold">Pilot kitchens</h2>
-    <p className="cr-muted">While test mode is on, only orders from these kitchens go to Craves riders.</p>
+    <p className="cr-muted">{testMode ? "Test mode is on: only orders from these kitchens go to Craves riders." : "Test mode is off: this list isn't used now."} {ALLOW_LIST}</p>
     {kitchens.length === 0 ? <p className="cr-empty">No pilot kitchens yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
       <thead><tr><th scope="col">Chef ID</th><th scope="col">Note</th><th scope="col">Added</th><th scope="col">Action</th></tr></thead>
       <tbody>{kitchens.map(kitchen => <PilotRow key={kitchen.chefId} path={`pilot/kitchens/${kitchen.chefId}`} name={`kitchen ${kitchen.chefId}`} note={kitchen.note} addedAt={kitchen.addedAt} onDone={onDone}

@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
@@ -32,6 +34,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -82,6 +86,7 @@ public class FleetTripService {
         "food-not-ready", new String[] {"AT_PICKUP", "AT_PICKUP"}, "picked-up", new String[] {"AT_PICKUP", "PICKED_UP"},
         "arrived-drop", new String[] {"PICKED_UP", "AT_DROP"});
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(FleetTripService.class);
     private final JdbcTemplate jdbc;
     private final FleetTripPay pay;
     private final FleetStatusBridge bridge;
@@ -118,6 +123,9 @@ public class FleetTripService {
     @Transactional
     public Trip accept(UUID identityId, UUID offerId, String idempotencyKey) {
         Rider rider = activeRider(identityId);
+        // One writer per rider (FleetDispatcher.insertOffers takes the same lock): an offer for another order waits for this
+        // accept to commit, then finds the rider busy, instead of ringing on a phone that can no longer take it.
+        jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE id = ? FOR NO KEY UPDATE", rider.id());
         // The one decisive statement: it closes the order's open fleet stage, only for a live offer of this rider, still on
         // shift, and an order still going. A second accept waits on the same stage row, then finds it closed. The stage's
         // deadline makes a late accept fail here too.
@@ -496,12 +504,47 @@ public class FleetTripService {
         if ("SEARCHING".equals(state)) {
             return Optional.of("CANCELLED"); // no rider took it: nothing to pay
         }
+        tellRider(tripId, ORDER_CANCELLED.equals(reason) ? "ORDER_CANCELLED" : "CANCELLED");
         pay.finalizePay(tripId, switch (state) {
             case "ASSIGNED" -> Ending.CANCELLED_TO_KITCHEN;
             case "AT_PICKUP" -> Ending.CANCELLED_AT_KITCHEN;
             default -> Ending.FAILED_AFTER_PICKUP;
         }, false, null);
         return Optional.of("CANCELLED");
+    }
+
+    /**
+     * Tells the trip's rider at once, after this transaction commits, that the trip ended without them (R16 item 11): ops
+     * cancelled it (CANCELLED), gave it to Borzo or Pidge (RELEASED) or to another rider (HANDED_TO_RIDER), or the order was
+     * cancelled (ORDER_CANCELLED). Before, the phone learnt it only on its next /locations call. Best effort: a failed push
+     * changes nothing, and /locations still carries the ended trip.
+     */
+    public void tellRider(UUID tripId, String reason) {
+        UUID riderId = jdbc.queryForList("SELECT rider_id FROM fleet_schema.trip WHERE id = ? AND rider_id IS NOT NULL", UUID.class, tripId)
+            .stream().findFirst().orElse(null);
+        if (riderId == null || alerts == null) {
+            return;
+        }
+        Runnable send = () -> Thread.ofVirtual().name("fleet-trip-ended-push").start(() -> {
+            try {
+                String token = jdbc.queryForList("SELECT fcm_token FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND' "
+                    + "AND fcm_token IS NOT NULL", String.class, riderId).stream().findFirst().orElse(null);
+                String result = token == null ? "NO_TOKEN" : alerts.tripEnded(token, tripId, reason);
+                LOGGER.info("FLEET_TRIP_ENDED_PUSH trip={} rider={} reason={} result={}", tripId, riderId, reason, result);
+            } catch (RuntimeException exception) {
+                LOGGER.warn("FLEET_TRIP_ENDED_PUSH trip={} failed: {}", tripId, exception.getClass().getSimpleName());
+            }
+        });
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
+        }
     }
 
     /** The rider-v1 Trip; payLines are the final ones once the trip ended with pay, else the locked offer lines. */

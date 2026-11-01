@@ -5,7 +5,12 @@ export const en = {
   common: {
     retry: 'Try again',
     loading: 'Loading…',
-    offline: "You're offline. Changes sync when you're back online.",
+    // A slim strip on every working screen while the phone can't reach Craves (OfflineBanner).
+    offline: 'No connection. Trying again.',
+    offlineWaiting: (count: number) =>
+      count === 1
+        ? 'No connection. 1 trip step is saved and will send by itself.'
+        : `No connection. ${count} trip steps are saved and will send by themselves.`,
     demoData: 'Demo data',
     savedWillSync: 'Saved · will sync',
     callSupport: 'Call support',
@@ -60,7 +65,7 @@ export const en = {
     PHONE_IN_USE: 'This number is already a Craves rider on another account. Call rider support.',
     RIDER_CHOICES_OFF: "Breaks, distance choices and heading home aren't switched on yet.",
     RIDER_NOT_ACTIVE: "Your account can't do this right now. Open your account page to see why.",
-    SELFIE_INVALID: 'Take a clear photo of your face and try again.',
+    SELFIE_INVALID: "That photo didn't upload properly. Take it again.",
     SHIFT_CREDENTIAL_INVALID: 'Your shift has ended. Go online again.',
     SHIFT_OPEN: "You're already online on another phone. Go offline there first.",
     TERMS_CHANGED: 'The terms changed. Read the new version.',
@@ -117,6 +122,8 @@ export const en = {
     /** Shown under a document the rider still has to send or send again. */
     docHints: {
       BANK: "A photo of your passbook's first page or a cancelled cheque. It must show your name and account number.",
+      SELFIE:
+        'Face the camera with your helmet and dark glasses off. Ops compares it with the photo on your licence or PAN card, and later with your go-online selfies. Customers never see it.',
     } as Record<string, string | undefined>,
     expiredReason: 'This document has expired. Take a photo of the new one.',
     join: {
@@ -211,6 +218,7 @@ export const en = {
         PUC: 'PUC certificate',
         PAN: 'PAN card',
         BANK: 'Bank proof',
+        SELFIE: 'Selfie',
       } as Record<string, string | undefined>,
     },
     cameraDenied: 'Allow the camera to take a photo of the document.',
@@ -271,6 +279,7 @@ export const en = {
     recommended: 'Recommended',
     location: 'Location while using the app',
     notifications: 'Notifications',
+    lockScreen: 'Show offers over the lock screen',
     battery: 'Battery: no restrictions for Craves Rider',
     autostart: 'Autostart on',
     recents: 'Lock Craves Rider in recent apps',
@@ -278,6 +287,8 @@ export const en = {
     rang: 'Your phone rang and vibrated',
     locationSteps: 'Tap the button and allow location while using the app.',
     notificationsSteps: 'Tap the button and allow notifications.',
+    lockScreenSteps:
+      'Tap the button and allow full screen notifications for Craves Rider. A new offer then opens by itself, even when the phone is locked.',
     batterySteps: 'Tap the button, find Craves Rider and choose "Don\'t optimise" or "No restrictions".',
     ringSteps: 'Your phone rings and vibrates the way it does for an offer.',
     // Per manufacturer family: Xiaomi/Redmi/Poco, Oppo/Realme/OnePlus (ColorOS), Vivo/iQOO, Samsung, other.
@@ -298,6 +309,7 @@ export const en = {
     },
     allowLocation: 'Allow location',
     allowNotifications: 'Allow notifications',
+    allowLockScreen: 'Allow over the lock screen',
     openBattery: 'Open battery settings',
     openAutostart: 'Open autostart settings',
     locked: "I've locked it",
@@ -713,6 +725,8 @@ export const en = {
     title: 'Your privacy',
     intro:
       'Before you go on, read how Craves uses your details: your phone number, documents, selfies, your location while you are online, and your pay.',
+    selfies:
+      'Selfies: you take one when you sign up and each time you go online, so ops can check the approved rider is the one working. Only Craves ops see them, never customers. A person compares them; software decides nothing. How long they are kept is in the full notice.',
     read: 'Read the privacy notice',
     version: (version: string) => `Version ${version}`,
     accept: 'I have read it and agree',

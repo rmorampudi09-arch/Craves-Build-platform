@@ -61,7 +61,7 @@ public class CentralOtpProvider {
     public void send(String phone) {
         if (testBypass.contains(phone)) { testBypass.send(phone); return; }
         JsonNode result = call("/api/v5/otp?template_id=" + template + "&mobile=" + phone.substring(1)
-                + "&otp_length=6&otp_expiry=15&realTimeResponse=1", HttpMethod.POST);
+                + "&otp_length=6&otp_expiry=" + CentralOtpStore.CODE_LIFE_MS / 60_000 + "&realTimeResponse=1", HttpMethod.POST);
         if (!"success".equals(result.path("type").asText())
                 || !result.path("request_id").asText().matches("[A-Za-z0-9_-]{1,200}")) {
             rejected("send", result);
@@ -76,7 +76,11 @@ public class CentralOtpProvider {
                 HttpMethod.GET);
         String type = result.path("type").asText();
         String message = result.path("message").asText();
-        if ("success".equals(type) && "OTP verified success".equals(message)) { return; }
+        if ("success".equals(type) && "OTP verified success".equals(message)) {
+            // With "MSG91 OTP accepted", the codes verified ÷ codes sent that docs/riders/GO-LIVE.md alerts on (SMS pumping lowers it).
+            log.info("MSG91 OTP verified");
+            return;
+        }
         if ("error".equals(type) && "OTP not match".equals(message)) {
             throw AuthException.badRequest("OTP_INVALID", "The code is incorrect. Please try again.");
         }

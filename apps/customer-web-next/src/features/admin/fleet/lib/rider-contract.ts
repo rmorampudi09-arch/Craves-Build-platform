@@ -114,6 +114,8 @@ export type ApplicationResult = z.infer<typeof applicationResultSchema>;
 export const selfieReviewSchema = z.object({
   shiftId: id, riderId: id, riderName: personName, startedAt: instant, state: z.enum(["PENDING", "APPROVED", "REJECTED"]),
   reason: z.string().max(1000).nullable(), reviewedBy: personName.nullable(), reviewedAt: instant.nullable(),
+  // The rider's sign-up selfie (their PHOTO document), null until they send one; optional so the queue still reads an older server.
+  referencePhotoId: id.nullish(),
 });
 export const auditEntrySchema = z.object({
   entryId: id, at: instant, actorName: personName, action: z.string().max(60),

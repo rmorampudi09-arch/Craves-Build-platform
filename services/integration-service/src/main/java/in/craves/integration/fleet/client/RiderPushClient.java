@@ -99,6 +99,27 @@ public class RiderPushClient {
             "ttlSeconds", 600, "collapseKey", "account"));
     }
 
+    /**
+     * The rider's trip ended without them (FleetTripService.tellRider): a data message of type TRIP_ENDED with the trip and
+     * the reason (CANCELLED, RELEASED, HANDED_TO_RIDER or ORDER_CANCELLED), so an open app re-reads its trip at once and a
+     * closed one shows a notice, worded by the phone in the rider's language. Alive 10 minutes. Returns as offer does.
+     */
+    public String tripEnded(String fcmToken, UUID tripId, String reason) {
+        if (client == null) {
+            return "OFF";
+        }
+        return realtime(Map.of("app", "rider", "token", fcmToken,
+            "data", Map.of("type", "TRIP_ENDED", "tripId", tripId.toString(), "reason", reason),
+            // English riders see these words (the phone words it for the others), as strings.xml rider_trip_ended_*.
+            "notification", Map.of("title", "Your trip has ended", "body", switch (reason) {
+                case "RELEASED" -> "Craves ops gave this order to Borzo or Pidge. You're paid for the trip so far.";
+                case "HANDED_TO_RIDER" -> "Craves ops gave this order to another rider. You're paid for the trip so far.";
+                case "ORDER_CANCELLED" -> "The customer's order was cancelled. You're paid for the trip so far.";
+                default -> "Craves ops cancelled this trip. You're paid for the trip so far.";
+            }),
+            "ttlSeconds", 600, "collapseKey", "trip-ended-" + tripId));
+    }
+
     private String realtime(Map<String, Object> request) {
         try {
             return client.post().uri("/internal/v1/push/realtime").header("X-Craves-Internal-Key", secret)

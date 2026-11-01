@@ -5,6 +5,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {Badge, Icon} from '../../../shared/components';
 import {colors, radius} from '../../../design/tokens';
 import type {HomeSummary, Trip} from '../api/contract';
+import {connection} from '../state/connection';
 import {riderKeys} from '../state/riderQueries';
 import {Banner} from './Banner';
 import {BottomAction} from './BottomAction';
@@ -23,6 +24,9 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../api/riderApi', () => ({
   riderApi: new Proxy({}, {get: () => jest.fn(() => new Promise(() => undefined))}),
 }));
+// Trip steps waiting on the phone, as the offline strip counts them.
+const mockQueue = {pending: 0};
+jest.mock('../state/tripQueue', () => ({usePendingActions: () => mockQueue.pending}));
 
 const offline: HomeSummary = {online: false, todayEarningsPaise: 0, todayTrips: 0};
 let tree: renderer.ReactTestRenderer;
@@ -102,6 +106,21 @@ describe('RiderHeader', () => {
     await render(<RiderHeader />, [[riderKeys.home, offline], [riderKeys.activeTrip, null]]);
     expect(has('rider-status-chip')).toBe(true);
     expect(tree.root.findAll(node => node.props.accessibilityRole === 'header')).toHaveLength(0);
+  });
+
+  it("adds a slim strip while the phone can't reach Craves, with the trip steps waiting, until an upload gets through", async () => {
+    await render(<RiderHeader title="Go to the kitchen" />, [[riderKeys.home, offline], [riderKeys.activeTrip, null]]);
+    expect(has('rider-offline')).toBe(false);
+    act(() => connection.update({state: 'ERROR'}));
+    expect(byId('rider-offline').props.accessibilityLabel).toBe('No connection. Trying again.');
+    act(() => connection.update({state: 'ONLINE'}));
+    expect(has('rider-offline')).toBe(false);
+    mockQueue.pending = 2;
+    act(() => connection.update({state: 'ERROR'}));
+    expect(texts()).toContain('No connection. 2 trip steps are saved and will send by themselves.');
+    act(() => connection.update({state: 'ERROR', connected: true})); // reached Craves; only offers can't ring
+    expect(has('rider-offline')).toBe(false);
+    mockQueue.pending = 0;
   });
 });
 

@@ -5,11 +5,14 @@ import type {RiderProfile, VehicleKind} from '../api/contract';
 
 type Doc = RiderProfile['documents'][number];
 
-/** The app's codes for FleetRules.REQUIRED_DOCUMENTS: what each vehicle needs; no kind (added by ops) is the petrol set. */
+/**
+ * The app's codes for FleetRules.REQUIRED_DOCUMENTS: what each vehicle needs, and from app 1.3.0 a reference selfie
+ * (SELFIE) from everyone; no kind (added by ops) is the petrol set.
+ */
 const REQUIRED: Record<VehicleKind, string[]> = {
-  PETROL: ['DL', 'RC', 'INSURANCE', 'PUC', 'PAN', 'BANK'],
-  ELECTRIC: ['DL', 'RC', 'INSURANCE', 'PAN', 'BANK'],
-  BICYCLE: ['PAN', 'BANK'],
+  PETROL: ['DL', 'RC', 'INSURANCE', 'PUC', 'PAN', 'BANK', 'SELFIE'],
+  ELECTRIC: ['DL', 'RC', 'INSURANCE', 'PAN', 'BANK', 'SELFIE'],
+  BICYCLE: ['PAN', 'BANK', 'SELFIE'],
 };
 
 export const requiredDocuments = (kind?: VehicleKind): string[] => REQUIRED[kind ?? 'PETROL'];
@@ -30,7 +33,11 @@ export interface Application {
 }
 
 export function applicationOf(profile: RiderProfile): Application {
-  const required = requiredDocuments(profile.vehicle.kind);
+  // The selfie counts once the server lists it (it lists every required document), so this app works with a server that
+  // doesn't ask for one yet.
+  const required = requiredDocuments(profile.vehicle.kind).filter(
+    type => type !== 'SELFIE' || profile.documents.some(doc => doc.type === 'SELFIE'),
+  );
   const documents = required.map(
     type => profile.documents.find(doc => doc.type === type) ?? {type, label: type, status: 'MISSING' as const},
   );

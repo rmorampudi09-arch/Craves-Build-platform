@@ -11,6 +11,7 @@ import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
+import {selfieShot} from '../components/DocumentPhoto';
 import {registerPhone} from '../components/RiderRuntime';
 import {riderMessage} from '../domain/problem';
 import {riderDevice} from '../native/riderDevice';
@@ -79,12 +80,7 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
         setProblem({text: g.noAlerts, action: 'setup'});
         return;
       }
-      const shot = await ImagePicker.launchCameraAsync({
-        cameraType: ImagePicker.CameraType.front,
-        mediaTypes: ['images'],
-        quality: 0.5,
-      });
-      const photo = shot.canceled ? undefined : shot.assets[0];
+      const photo = await selfieShot();
       if (!photo?.uri) {
         return;
       }

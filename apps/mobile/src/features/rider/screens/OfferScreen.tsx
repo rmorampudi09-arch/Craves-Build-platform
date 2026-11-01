@@ -9,11 +9,13 @@ import {idempotencyKey, riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {CountdownBar} from '../components/CountdownBar';
+import {OfflineBanner} from '../components/OfflineBanner';
 import {Card} from '../components/ui';
 import {formatKm, formatRupees} from '../domain/format';
 import {whyHome, whyOffer} from '../domain/offerRules';
 import {offerDeadlineMs, secondsLeft} from '../domain/offerTiming';
-import {riderMessage} from '../domain/problem';
+import {problemOf, riderMessage} from '../domain/problem';
+import {riderOnlineService} from '../native/riderOnlineService';
 import {payLabel} from './TripDetailScreen';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
@@ -53,9 +55,20 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   const {offer} = route.params;
   const deadline = offerDeadlineMs(route.params);
   const [ended, setEnded] = useState<string | null>(null);
+  // Accept or Decline on its way: the other one waits, so one tap can't follow the other (each button holds its own repeats).
+  const [answering, setAnswering] = useState<'accept' | 'decline' | null>(null);
+  // An accept that got no answer: the offer stays open and both buttons come back (a repeated accept gets the same trip).
+  const [failed, setFailed] = useState<string | null>(null);
 
   // A newer offer can replace this one on the same screen; start it fresh.
-  useEffect(() => setEnded(null), [offer.offerId]);
+  useEffect(() => {
+    setEnded(null);
+    setAnswering(null);
+    setFailed(null);
+  }, [offer.offerId]);
+
+  // The phone rings until the rider answers; the screen closing (accepted, declined, ended) stops it too.
+  useEffect(() => () => riderOnlineService.stopRinging(offer.offerId), [offer.offerId]);
 
   // Like an incoming call: Back never drops a live offer by accident (it couldn't be opened again); Accept or Decline
   // decide, and once the offer has ended, Back closes the screen.
@@ -86,12 +99,16 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
       setEnded(o.expired);
       return;
     }
+    setAnswering('accept');
+    setFailed(null);
+    riderOnlineService.stopRinging(offer.offerId);
     try {
       const trip = await riderApi.acceptOffer(offer.offerId, idempotencyKey('accept', offer.offerId, riderId));
       queryClient.setQueryData(riderKeys.activeTrip, trip);
       queryClient.invalidateQueries({queryKey: riderKeys.home});
       navigation.replace('Trip');
     } catch (error) {
+      setAnswering(null);
       const code = error instanceof AppApiError ? error.code : undefined;
       if (code === 'OFFER_TAKEN') {
         setEnded(o.taken);
@@ -99,15 +116,21 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
         setEnded(o.expired);
       } else {
         // No answer, or another refusal (a trip in progress, an inactive account): the server may have assigned the
-        // trip anyway, so Home re-checks; the rider reads why in their own language.
+        // trip anyway, so Home re-checks; the rider reads why in their own language. Only a refusal ends the offer.
         queryClient.invalidateQueries({queryKey: riderKeys.activeTrip});
         queryClient.invalidateQueries({queryKey: riderKeys.home});
-        setEnded(riderMessage(error, strings, language));
+        const problem = problemOf(error);
+        if (problem === 'offline' || problem === 'unavailable') {
+          setFailed(riderMessage(error, strings, language));
+        } else {
+          setEnded(riderMessage(error, strings, language));
+        }
       }
     }
   }
 
   function decline() {
+    setAnswering('decline');
     riderApi.declineOffer(offer.offerId, idempotencyKey('decline', offer.offerId, riderId)).catch(() => undefined);
     navigation.goBack();
   }
@@ -121,6 +144,7 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID="rider-offer">
+      <OfflineBanner />
       <ScrollView contentContainerStyle={styles.content}>
         <CountdownBar deadlineMs={deadline} totalMs={offer.expiresInSec * 1000} testID="rider-offer-countdown" />
         <View style={styles.titleRow}>
@@ -170,8 +194,21 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
       </ScrollView>
       {ended ? null : (
         <View style={styles.footer}>
-          <BottomAction label={o.accept} size="tall" onPress={accept} testID="rider-offer-accept" />
-          <BottomAction label={o.decline} variant="outline" onPress={decline} testID="rider-offer-decline" />
+          {failed ? <Banner tone="warning" text={failed} testID="rider-offer-failed" /> : null}
+          <BottomAction
+            label={o.accept}
+            size="tall"
+            onPress={accept}
+            disabled={answering === 'decline'}
+            testID="rider-offer-accept"
+          />
+          <BottomAction
+            label={o.decline}
+            variant="outline"
+            onPress={decline}
+            disabled={answering === 'accept'}
+            testID="rider-offer-decline"
+          />
         </View>
       )}
     </SafeAreaView>

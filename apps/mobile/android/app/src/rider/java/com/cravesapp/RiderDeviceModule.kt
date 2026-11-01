@@ -40,6 +40,8 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
       state.putBoolean("locationEnabled", LocationManagerCompat.isLocationEnabled(location))
       // Offers must be able to ring: notifications on and the offers channel still high (blueprint A9).
       state.putBoolean("notificationsEnabled", RiderOffers.canRing(reactContext))
+      // An offer opens over the lock screen; Android 14+ asks the rider, so setup advises it (never required).
+      state.putBoolean("fullScreenAllowed", RiderOffers.canShowFullScreen(reactContext))
       state.putString("manufacturer", Build.MANUFACTURER.lowercase())
       promise.resolve(state)
     } catch (error: Exception) {
@@ -66,6 +68,17 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod
   fun openAppSettings(promise: Promise) {
     promise.resolve(openAppDetails())
+  }
+
+  /** Android 14+: where the rider lets offers open over the lock screen (full-screen notifications). Earlier: nothing to allow. */
+  @ReactMethod
+  fun openFullScreenSettings(promise: Promise) {
+    if (Build.VERSION.SDK_INT < 34) {
+      promise.resolve(false)
+      return
+    }
+    val screen = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", reactContext.packageName, null))
+    promise.resolve(start(screen) || openAppDetails())
   }
 
   /**

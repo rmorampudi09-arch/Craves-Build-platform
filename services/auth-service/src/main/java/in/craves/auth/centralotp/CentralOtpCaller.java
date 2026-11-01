@@ -13,9 +13,11 @@ import org.springframework.stereotype.Component;
 
 /**
  * Who asks for or checks a code, for the per-IP and per-install limits (CentralOtpStore). The IP is known only when
- * CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER names a header the edge sets itself (X-Azure-ClientIP behind Front Door). A
- * request from the web server's own addresses (CRAVES_CENTRAL_OTP_FORWARDING_IPS) is a browser's, whose IP the web
- * server sends as X-Craves-Client-Ip; anyone else's X-Craves-Client-Ip is ignored.
+ * CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER names a header the edge sets itself (X-Azure-SocketIP behind Front Door, the
+ * connection's address; a caller can write X-Azure-ClientIP). A request from the web server's own addresses
+ * (CRAVES_CENTRAL_OTP_FORWARDING_IPS, required with the header) is a browser's, whose IP the web server sends as
+ * X-Craves-Client-Ip; anyone else's X-Craves-Client-Ip is ignored. The install ID comes from the app, so its limit only
+ * slows an honest app: a script can send a new one, or none, each time.
  */
 @Component
 public class CentralOtpCaller {
@@ -46,6 +48,11 @@ public class CentralOtpCaller {
                     }
                     return address;
                 }).collect(Collectors.toUnmodifiableSet());
+        // Every web sign-in comes from the web server's address: unlisted, they would all share its 20 an hour.
+        if (!this.header.isEmpty() && this.forwarders.isEmpty()) {
+            throw new IllegalStateException("CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER needs CRAVES_CENTRAL_OTP_FORWARDING_IPS, the web "
+                    + "server's outbound addresses, or every web sign-in shares one per-IP limit");
+        }
     }
 
     Caller of(HttpServletRequest request) {

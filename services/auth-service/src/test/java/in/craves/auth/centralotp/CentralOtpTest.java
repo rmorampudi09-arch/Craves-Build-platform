@@ -174,41 +174,44 @@ class CentralOtpTest {
     @Test void callerAddressComesOnlyFromTheEdgeHeaderOrWhatTheWebServerForwards() {
         // Unset (the default): no address, so no per-IP limit; the install still counts.
         assertEquals(new CentralOtpCaller.Caller(null, false, "a1b2c3d4e5f60718"), new CentralOtpCaller("", "").of(
-                from("X-Azure-ClientIP", "203.0.113.7", "X-Craves-Installation-Id", "a1b2c3d4e5f60718")));
-        var callers = new CentralOtpCaller("X-Azure-ClientIP", " 20.198.84.102 , 2001:db8::5");
+                from("X-Azure-SocketIP", "203.0.113.7", "X-Craves-Installation-Id", "a1b2c3d4e5f60718")));
+        var callers = new CentralOtpCaller("X-Azure-SocketIP", " 20.198.84.102 , 2001:db8::5");
         // A phone: its own address; an X-Craves-Client-Ip it sends is ignored.
         assertEquals(new CentralOtpCaller.Caller("cb007107", false, null),
-                callers.of(from("X-Azure-ClientIP", "203.0.113.7", "X-Craves-Client-Ip", "198.51.100.1")));
+                callers.of(from("X-Azure-SocketIP", "203.0.113.7", "X-Craves-Client-Ip", "198.51.100.1")));
         // The web server: the browser's address it forwards, and never its own one bucket.
         assertEquals(new CentralOtpCaller.Caller("c6336401", true, null),
-                callers.of(from("X-Azure-ClientIP", "20.198.84.102", "X-Craves-Client-Ip", "198.51.100.1")));
-        assertEquals(new CentralOtpCaller.Caller(null, true, null), callers.of(from("X-Azure-ClientIP", "20.198.84.102")));
+                callers.of(from("X-Azure-SocketIP", "20.198.84.102", "X-Craves-Client-Ip", "198.51.100.1")));
+        assertEquals(new CentralOtpCaller.Caller(null, true, null), callers.of(from("X-Azure-SocketIP", "20.198.84.102")));
         assertEquals(new CentralOtpCaller.Caller(null, true, null),
-                callers.of(from("X-Azure-ClientIP", "2001:db8:0:0:0:0:0:5", "X-Craves-Client-Ip", "web.example")));
+                callers.of(from("X-Azure-SocketIP", "2001:db8:0:0:0:0:0:5", "X-Craves-Client-Ip", "web.example")));
         // Literal addresses only, never a name to look up; IPv4-mapped is the IPv4 address; IPv6 counts per /64.
         for (String bad : List.of("localhost", "example.com", "1.2.3.4, 5.6.7.8", "01.2.3.4", "1.2.3", "fe80::1%eth0", "[::1]", "")) {
-            assertNull(callers.of(from("X-Azure-ClientIP", bad)).ip(), bad);
+            assertNull(callers.of(from("X-Azure-SocketIP", bad)).ip(), bad);
         }
-        assertEquals("cb007107", callers.of(from("X-Azure-ClientIP", "::ffff:203.0.113.7")).ip());
-        assertEquals("20010db800010002" + "0".repeat(16), callers.of(from("X-Azure-ClientIP", "2001:db8:1:2:aaaa::1")).ip());
-        assertEquals("20010db800010002" + "0".repeat(16), callers.of(from("X-Azure-ClientIP", "2001:db8:1:2::bbbb")).ip());
+        assertEquals("cb007107", callers.of(from("X-Azure-SocketIP", "::ffff:203.0.113.7")).ip());
+        assertEquals("20010db800010002" + "0".repeat(16), callers.of(from("X-Azure-SocketIP", "2001:db8:1:2:aaaa::1")).ip());
+        assertEquals("20010db800010002" + "0".repeat(16), callers.of(from("X-Azure-SocketIP", "2001:db8:1:2::bbbb")).ip());
         for (String bad : List.of("short", "has space1", "x".repeat(129), "android/id/1")) {
             assertNull(callers.of(from("X-Craves-Installation-Id", bad)).install(), bad);
         }
         // A typo stops the start, instead of putting every web sign-in in the web server's one bucket.
-        assertThrows(IllegalArgumentException.class, () -> new CentralOtpCaller("X-Azure-ClientIP", "20.198.84.102,web-1"));
+        assertThrows(IllegalArgumentException.class, () -> new CentralOtpCaller("X-Azure-SocketIP", "20.198.84.102,web-1"));
         assertThrows(IllegalArgumentException.class, () -> new CentralOtpCaller("X Azure ClientIP", ""));
+        // So does the header without the web server's addresses: every web sign-in would share its one bucket.
+        assertTrue(assertThrows(IllegalStateException.class, () -> new CentralOtpCaller("X-Azure-SocketIP", " , "))
+                .getMessage().contains("CRAVES_CENTRAL_OTP_FORWARDING_IPS"));
     }
     @Test void controllerCountsTheCallersBucketsAndOnlyARiderSendAsksForTheRiderTemplate() {
         var provider=mock(CentralOtpProvider.class); var identity=mock(CentralOtpIdentity.class);
         when(provider.send(phone,true)).thenReturn(true);
-        var controller=new CentralOtpController(store,provider,identity,new CentralOtpCaller("X-Azure-ClientIP",""),true);
+        var controller=new CentralOtpController(store,provider,identity,new CentralOtpCaller("X-Azure-SocketIP","20.198.84.102"),true);
         var web=controller.send(new CentralOtpController.SendRequest("9876543210","91",null),
-                from("X-Azure-ClientIP","203.0.113.7","X-Craves-Installation-Id","a1b2c3d4e5f60718")).getBody();
+                from("X-Azure-SocketIP","203.0.113.7","X-Craves-Installation-Id","a1b2c3d4e5f60718")).getBody();
         assertFalse(web.autoRead()); verify(provider).send(phone,false);
         assertEquals(1, count("ip:"+CentralOtpStore.hash("cb007107"))*count("install:"+CentralOtpStore.hash("a1b2c3d4e5f60718")));
         controller.verify(new CentralOtpController.VerifyRequest(web.challengeId(),"123456"),
-                from("X-Azure-ClientIP","203.0.113.7","X-Craves-Installation-Id","a1b2c3d4e5f60718"));
+                from("X-Azure-SocketIP","203.0.113.7","X-Craves-Installation-Id","a1b2c3d4e5f60718"));
         assertEquals(1, count("vip:"+CentralOtpStore.hash("cb007107"))*count("vinst:"+CentralOtpStore.hash("a1b2c3d4e5f60718")));
         cooldown();
         var rider=controller.send(new CentralOtpController.SendRequest("9876543210","91",null),from("X-Craves-App","rider")).getBody();

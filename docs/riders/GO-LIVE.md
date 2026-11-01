@@ -218,18 +218,27 @@ The pilot doesn't need these. Each setting is off until set, so a deploy changes
 
 | Setting | Default | What it does |
 |---|---|---|
-| `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER` | empty: the caller's address is unknown, so there is no per-IP limit | The header with the caller's address. In production: `X-Azure-ClientIP`, which Front Door sets. |
-| `CRAVES_CENTRAL_OTP_FORWARDING_IPS` | empty | The web server's outbound addresses, comma-separated: today `20.198.84.102` (`docs/runbooks/production-environment.md`). Every web sign-in comes from there, so for these the address the web server sends in `X-Craves-Client-Ip` (the browser's) counts instead. Anyone else's `X-Craves-Client-Ip` is ignored. A value that isn't an IP address stops auth-service from starting. |
+| `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER` | empty: the caller's address is unknown, so there is no per-IP limit | The header with the caller's address. In production: `X-Azure-SocketIP`, the address of the connection Front Door received. Never `X-Azure-ClientIP`: Microsoft notes the caller can overwrite it. Set without `CRAVES_CENTRAL_OTP_FORWARDING_IPS`, auth-service refuses to start. |
+| `CRAVES_CENTRAL_OTP_FORWARDING_IPS` | empty | The web server's outbound addresses, comma-separated: today `20.198.84.102` (`docs/runbooks/production-environment.md`). Every web sign-in comes from there, so for these the address the web server sends in `X-Craves-Client-Ip` counts instead: the browser's `X-Azure-SocketIP` as Front Door gave it to the web server, the only header it forwards. Anyone else's `X-Craves-Client-Ip` is ignored. A value that isn't an IP address stops auth-service from starting, and so does removing this while the header is set: remove the header first. |
 | `CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID` | empty: riders get the usual template | The MSG91 template for rider sign-ins. With it, the rider app reads the code with no tap. |
 
 **The limits.** They come on top of today's 100 codes a minute for everyone and 5 an hour per phone. A refused request counts nowhere and gets `429 OTP_RATE_LIMIT`, as today.
 - Sending codes: 20 an hour per address, and 10 an hour per rider app install (the app sends its install ID from this release on; no setting needed).
 - Checking codes: 60 an hour per address, and 30 an hour per install. A check refused here doesn't use up one of the code's 5 tries.
 - An IPv6 address counts as its /64, the block one phone or home gets.
+- The install limits are advisory: the install ID comes from the app, so a script can send a new one, or none, each time. They only slow an app that misbehaves; the address, phone and global limits are the ones a script can't get round.
 
 **Turning on the per-IP limits safely.**
 1. Set `CRAVES_CENTRAL_OTP_FORWARDING_IPS=20.198.84.102`, after checking it is still the web app's outbound address. On its own it changes nothing.
-2. At a quiet hour, set `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER=X-Azure-ClientIP`. Nobody can be refused before one address has asked for 20 codes in the hour, so watch auth-service's `OTP_SEND` lines (one per code the limits let through; they hold no phone, address or install) for that first hour:
+2. At a quiet hour, set `CRAVES_CENTRAL_OTP_CLIENT_IP_HEADER=X-Azure-SocketIP`. Nobody can be refused before one address has asked for 20 codes in the hour, so its first minutes are safe for a check that needs it on (auth-service reads no address without it): an `X-Azure-SocketIP` a caller writes must never reach auth-service. From a computer that isn't the web server, ask for a code for a team phone, posing as the web server:
+
+   ```bash
+   curl -sS https://api.craves.in/api/v1/auth/otp/send -H 'Content-Type: application/json' \
+     -H 'X-Azure-SocketIP: 20.198.84.102' -H 'X-Craves-Client-Ip: 192.0.2.10' \
+     -d '{"phoneNumber":"<team phone, 10 digits>","countryCode":"91"}'
+   ```
+
+   Its `OTP_SEND` line must say `ipKnown=true viaForwarder=false`: Front Door put the computer's own address in the header. `viaForwarder=true` means the header as sent reached auth-service, so anyone could pose as the web server and choose their address: remove the setting at once, and leave it off until Front Door or the gateway overwrites that header. Then watch the `OTP_SEND` lines (one per code the limits let through; they hold no phone, address or install) for that first hour:
    - `ipKnown=true` on every line. `false` means the header doesn't reach auth-service: nothing is limited, so the setting does nothing.
    - `viaForwarder=true` on web sign-ins. If they show `false`, all web sign-ins share the web server's 20: remove the setting at once.
    - `ipSendsThisHour` mostly 1 or 2. A number that keeps climbing across different people means the header holds one shared address, not each caller's: remove the setting.
@@ -243,10 +252,10 @@ The pilot doesn't need these. Each setting is off until set, so a deploy changes
    ```
 3. Keep watching `OTP_RATE_LIMIT` refusals for a week. People on one mobile network can share an address, and then they share its 20. If real riders or customers are refused, remove the setting.
 
-The per-IP limit holds only for callers that come through Front Door: one that can reach the gateway directly can write its own `X-Azure-ClientIP`. The phone and global limits hold either way.
+The per-IP limit holds only for callers that come through Front Door: one that can reach the gateway directly can write its own `X-Azure-SocketIP`. The phone and global limits hold either way.
 
 **Codes with no tap for riders.**
-1. Get the app's hash: `scripts/riders/app-hash.sh <keystore file> <alias>`, with the rider signing keystore (GitHub secret `RIDER_KEYSTORE_BASE64`, decoded to a file) and its alias (`RIDER_KEY_ALIAS`). It prints 11 characters, such as `FA+9qCX9VSu`. For an app installed from Google Play with Play App Signing, use the certificate Play signs with instead (Play Console, App integrity): `scripts/riders/app-hash.sh --cert deployment_cert.der`.
+1. Get the app's hash: `scripts/riders/app-hash.sh <keystore file> <alias>`, with the rider signing keystore (GitHub secret `RIDER_KEYSTORE_BASE64`, decoded to a file) and its alias (`RIDER_KEY_ALIAS`). It prints 11 characters, such as `FA+9qCX9VSu`. The hash comes from the key the installed app is signed with, so Play App Signing must use the existing rider key (`RELEASE.md`, Play internal testing, step 2): then Play installs and APK installs share one hash and one template. If Play signs with a key of its own, Play installs have another hash (`scripts/riders/app-hash.sh --cert deployment_cert.der`, with the certificate from Play Console, App integrity) and need their own template; there is one `CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID`, so the other installs would type the code.
 2. Register a new, rider-only OTP template on DLT, at most 140 characters, whose fixed text ends with the hash on its own line. For example: "{#numeric#} is your Craves Rider sign-in code. It expires in 10 minutes." then a new line and the hash. The hash is fixed text, never a variable (it can contain `+` and `/`), and the code is tagged `#numeric#`, as in the usual template.
 3. Once DLT approves it, add the same text in MSG91 as an OTP template with that DLT template ID.
 4. Set `CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID` on auth-service to the new MSG91 template ID (24 characters). Only the rider app sends `X-Craves-App: rider`, so only its sign-ins use the new template, and only they are told to read the code with no tap. The web and older rider apps keep the usual template and the one-tap Allow sheet.

@@ -72,6 +72,36 @@ export function parseAdminChefApplication(value: unknown): AdminChefApplication 
   return { id, phoneNumber, email, firstName, lastName, addressLine1, addressLine2: optionalText(raw.addressLine2, 250), landmark: optionalText(raw.landmark, 160), city, state, postalCode: optionalText(raw.postalCode, 20), latitude: coordinate(raw.latitude, -90, 90), longitude: coordinate(raw.longitude, -180, 180), status: status as AdminChefApplicationStatus, rejectionReason: optionalText(raw.rejectionReason, 1000), submittedAt, reviewedAt: raw.reviewedAt == null ? null : instant(raw.reviewedAt), documents: documents as AdminChefDocument[], referenceCode: /^CRV-[0-9]{5,12}$/.test(String(raw.referenceCode)) ? String(raw.referenceCode) : null };
 }
 
+/** Someone who started the Chef application and has not submitted it. Partial drafts can lack names, email or phone. */
+export type AdminChefDraft = {
+  identityId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  emailVerified: boolean;
+  phoneNumber: string | null;
+  step: string;
+  reviewStatus: string;
+  applicationId: string | null;
+  startedAt: string;
+  lastActivityAt: string;
+};
+
+function parseAdminChefDraft(value: unknown): AdminChefDraft | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const identityId = text(raw.identityId, 64); const startedAt = instant(raw.startedAt); const lastActivityAt = instant(raw.lastActivityAt);
+  if (!identityId || !startedAt || !lastActivityAt) return null;
+  const applicationId = text(raw.applicationId, 64);
+  return { identityId, firstName: optionalText(raw.firstName, 120), lastName: optionalText(raw.lastName, 120), email: optionalText(raw.email, 320), emailVerified: raw.emailVerified === true, phoneNumber: optionalText(raw.phoneNumber, 24), step: text(raw.step, 40) ?? "personal", reviewStatus: text(raw.reviewStatus, 40) ?? "DRAFT", applicationId: applicationId && UUID.test(applicationId) ? applicationId : null, startedAt, lastActivityAt };
+}
+
+export function parseAdminChefDrafts(value: unknown): AdminChefDraft[] | null {
+  if (!Array.isArray(value) || value.length > 1000) return null;
+  const parsed = value.map(parseAdminChefDraft);
+  return parsed.some(item => item === null) ? null : parsed as AdminChefDraft[];
+}
+
 export function parseAdminChefApplications(value: unknown): AdminChefApplication[] | null {
   if (!Array.isArray(value) || value.length > 1000) return null;
   const parsed = value.map(parseAdminChefApplication);

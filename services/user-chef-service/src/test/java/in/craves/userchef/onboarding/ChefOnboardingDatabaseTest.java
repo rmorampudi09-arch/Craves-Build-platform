@@ -250,11 +250,17 @@ class ChefOnboardingDatabaseTest {
         return service.drafts(admin).stream().filter(d->d.identityId().equals(user.identityId())).findFirst().orElse(null);
     }
     @Test void adminsSeeEveryoneWhoStartedUntilTheySubmit() {
+        service.mine(user); // signed in with the phone OTP, nothing saved yet
+        DraftApplicant draft=listed();
+        assertEquals("signed-in",draft.step());assertEquals("NOT_STARTED",draft.reviewStatus());
+        assertEquals("+919000000000",draft.phoneNumber());assertNull(draft.firstName());assertNull(draft.email());
         Details partial=new Details("Stuck@Example.test","Stuck","Chef",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en",null);
         run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
-        DraftApplicant draft=listed();
+        assertEquals(1,service.drafts(admin).stream().filter(d->d.identityId().equals(user.identityId())).count());
+        draft=listed();
         assertEquals("Stuck",draft.firstName());assertEquals("Stuck@Example.test",draft.email());assertFalse(draft.emailVerified());
         assertEquals("personal",draft.step());assertEquals("DRAFT",draft.reviewStatus());assertNull(draft.applicationId());
+        assertEquals("+919000000000",draft.phoneNumber());
         jdbc.update("INSERT INTO auth_email_projection(identity_id,email,email_revision,verified_at) VALUES (?,?,1,now())",
             user.identityId(),"stuck@example.test");
         assertTrue(listed().emailVerified());
@@ -266,6 +272,14 @@ class ChefOnboardingDatabaseTest {
         photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
         run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
         assertNull(listed());
+    }
+    @Test void anOlderDraftWithoutAStoredPhoneGetsTheSignInPhoneFromAuth() {
+        UUID older=UUID.randomUUID();
+        jdbc.update("INSERT INTO chef_onboarding_draft(identity_id,details) VALUES (?,?::jsonb)",older,
+            "{\"email\":\"\",\"firstName\":\"\",\"lastName\":\"\",\"language\":\"en\"}");
+        when(auth.contact(older)).thenReturn(new AuthInternalClient.Contact(older,"+919111111111","Asha"));
+        DraftApplicant draft=service.drafts(admin).stream().filter(d->d.identityId().equals(older)).findFirst().orElseThrow();
+        assertEquals("+919111111111",draft.phoneNumber());assertEquals("Asha",draft.firstName());assertEquals("personal",draft.step());
     }
     @Test void termsAndBankEnrollmentAreRequiredByServerAndCorrectionKeepsDecisionHistory() {
         save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);

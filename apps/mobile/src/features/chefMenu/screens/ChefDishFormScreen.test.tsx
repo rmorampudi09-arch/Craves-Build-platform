@@ -1,8 +1,9 @@
 import React from 'react';
-import {Alert, Image, StyleSheet, Switch, Text, TextInput} from 'react-native';
+import {Alert, Image, Modal, StyleSheet, Switch, Text, TextInput} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
+import {DishLabelsConflictError, type TaxonomyVocabulary} from '../../dishLabels/api/taxonomyApi';
 import type {ChefMenuItem} from '../api/chefMenuApi';
 import {ChefToastProvider} from '../../chefShell/components/ui';
 import {ChefAddMenuItemScreen} from './ChefAddMenuItemScreen';
@@ -24,6 +25,13 @@ const mockApi = {
   uploadImage: jest.fn(),
   deleteItem: jest.fn(),
 };
+const mockTaxonomy = {
+  vocabulary: jest.fn(),
+  chefLabels: jest.fn(),
+  saveChefLabels: jest.fn(),
+};
+const mockForgetNearby = jest.fn();
+let mockTaxonomyOn = false;
 // Stands in for the navigator: going back is stopped by usePreventRemove while it is on, like the real one.
 let mockPrevent: {enabled: boolean; callback?: (event: {data: {action: unknown}}) => void} = {enabled: false};
 const mockLeft = jest.fn();
@@ -69,6 +77,33 @@ jest.mock('../api/chefMenuApi', () => ({
     deleteItem: (...args: unknown[]) => mockApi.deleteItem(...args),
   },
 }));
+jest.mock('../../../core/advanced/advancedFeatures', () => ({useAdvancedFeature: () => mockTaxonomyOn}));
+jest.mock('../../dishLabels/api/taxonomyApi', () => ({
+  ...jest.requireActual('../../dishLabels/api/taxonomyApi'),
+  taxonomyApi: {
+    vocabulary: (...args: unknown[]) => mockTaxonomy.vocabulary(...args),
+    chefLabels: (...args: unknown[]) => mockTaxonomy.chefLabels(...args),
+    saveChefLabels: (...args: unknown[]) => mockTaxonomy.saveChefLabels(...args),
+  },
+}));
+jest.mock('../../dishLabels/state/nearbyDishLabels', () => ({
+  forgetNearbyDishLabels: (...args: unknown[]) => mockForgetNearby(...args),
+}));
+
+const cuisine = (code: string, name: string, parentCode: string | null = null) => ({code, kind: 'CUISINE' as const, parentCode, name});
+const diet = (code: string, name: string) => ({code, kind: 'DIET' as const, parentCode: null, name});
+const VOCABULARY: TaxonomyVocabulary = {
+  cuisines: [
+    cuisine('south-indian', 'South Indian'),
+    cuisine('karnataka', 'Karnataka', 'south-indian'),
+    cuisine('udupi', 'Udupi', 'karnataka'),
+    cuisine('andhra', 'Andhra', 'south-indian'),
+    cuisine('north-indian', 'North Indian'),
+    cuisine('chinese', 'Chinese'),
+    cuisine('continental', 'Continental'),
+  ],
+  diets: [diet('jain', 'Jain'), diet('vegan', 'Vegan'), diet('halal', 'Halal')],
+};
 
 const ID = '123e4567-e89b-42d3-a456-426614174001';
 const NEW_ID = '123e4567-e89b-42d3-a456-426614174002';
@@ -180,6 +215,10 @@ async function fillRequired() {
   await type('Ready in', '20');
   await type('Packed weight', '400');
 }
+
+beforeEach(() => {
+  mockTaxonomyOn = false;
+});
 
 describe('ChefDishFormScreen', () => {
   beforeEach(() => {
@@ -739,6 +778,194 @@ describe('ChefDishFormScreen', () => {
         expect(has("We couldn't delete Dum Chicken biriyani. If it's in a meal plan, change the plan first.")).toBe(true);
         expect(mockLeft).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('labels', () => {
+    const CONFLICT = 'These labels changed somewhere else. We loaded the latest; check them and save again.';
+    const checked = (label: string) => withLabel(label)?.props.accessibilityState?.checked;
+    const closeSheet = () => act(async () => tree.root.findAllByType(Modal).find(modal => modal.props.visible)!.props.onRequestClose());
+
+    beforeEach(() => {
+      mockTaxonomyOn = true;
+      mockTaxonomy.vocabulary.mockResolvedValue(VOCABULARY);
+      mockTaxonomy.chefLabels.mockResolvedValue({menuItemId: ID, cuisines: ['andhra'], diets: ['jain'], version: 3});
+      mockTaxonomy.saveChefLabels.mockImplementation((menuItemId: string, labels: object, version: number | null) =>
+        Promise.resolve({menuItemId, ...labels, version: (version ?? 0) + 1}),
+      );
+    });
+
+    it('hides labels when the taxonomy feature is off', async () => {
+      mockTaxonomyOn = false;
+      await mount('edit', {menuItemId: ID});
+      expect(has('More details (optional)')).toBe(true);
+      expect(has('Cuisine')).toBe(false);
+      expect(has('Diet')).toBe(false);
+      expect(mockTaxonomy.vocabulary).not.toHaveBeenCalled();
+    });
+
+    it("hides labels when the dish's labels could not be loaded, so a save cannot wipe them", async () => {
+      mockTaxonomy.chefLabels.mockRejectedValue(new Error('offline'));
+      await mount('edit', {menuItemId: ID});
+      expect(has('Cuisine')).toBe(false);
+      await type('Price', '170');
+      mockApi.replaceItem.mockResolvedValue(dish({price: 170}));
+      await press('Save changes');
+      await settle();
+      expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
+      expect(has('Changes saved')).toBe(true);
+    });
+
+    it('shows saved labels for an existing dish', async () => {
+      await mount('edit', {menuItemId: ID});
+      expect(mockTaxonomy.chefLabels).toHaveBeenCalledWith(ID);
+      expect(has('Cuisine')).toBe(true);
+      expect(has('Up to 3. The first is the main one.')).toBe(true);
+      expect(has('Diet')).toBe(true);
+      expect(checked('Andhra')).toBe(true);
+      expect(checked('Jain')).toBe(true);
+      expect(checked('Vegan')).toBe(false);
+      expect(withLabel('Andhra')!.props.accessibilityRole).toBe('checkbox');
+      // The chosen cuisine comes first, then the top-level ones; Karnataka (a region under South Indian) waits behind More….
+      expect(['Andhra', 'South Indian', 'North Indian', 'Chinese', 'Continental'].map(label => checked(label) !== undefined)).toEqual(Array(5).fill(true));
+      expect(withLabel('Karnataka')).toBeUndefined();
+      expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(true);
+    });
+
+    it('changing only labels enables Save changes and saves them', async () => {
+      await mount('edit', {menuItemId: ID});
+      await press('Vegan');
+      expect(checked('Vegan')).toBe(true);
+      expect(withLabel('Save changes')!.props.accessibilityState.disabled).toBe(false);
+      await press('Save changes');
+      await settle();
+      expect(mockTaxonomy.saveChefLabels).toHaveBeenCalledTimes(1);
+      expect(mockTaxonomy.saveChefLabels).toHaveBeenCalledWith(ID, {cuisines: ['andhra'], diets: ['jain', 'vegan']}, 3);
+      expect(mockApi.replaceItem).not.toHaveBeenCalled();
+      expect(mockForgetNearby).toHaveBeenCalledWith([ID]);
+      expect(has('Changes saved')).toBe(true);
+      expect(mockLeft).toHaveBeenCalledTimes(1);
+    });
+
+    it('a save without label changes sends no labels', async () => {
+      await mount('edit', {menuItemId: ID});
+      await type('Price', '170');
+      mockApi.replaceItem.mockResolvedValue(dish({price: 170}));
+      await press('Save changes');
+      await settle();
+      expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
+      expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
+      expect(has('Changes saved')).toBe(true);
+    });
+
+    it('More… lists every cuisine under its top-level one, and a fourth cuisine is refused', async () => {
+      await mount('add', undefined);
+      expect(mockTaxonomy.chefLabels).not.toHaveBeenCalled();
+      expect(checked('South Indian')).toBe(false);
+      await press('More cuisines');
+      expect(has('South Indian')).toBe(true);
+      expect(['Karnataka', 'Udupi', 'Andhra'].map(label => Boolean(withLabel(label)))).toEqual([true, true, true]);
+      await press('Udupi');
+      expect(withLabel('Udupi, selected')).toBeTruthy();
+      await closeSheet();
+      await press('North Indian');
+      await press('Chinese');
+      expect(has('Up to 3 cuisines.')).toBe(false);
+      await press('Continental');
+      expect(has('Up to 3 cuisines.')).toBe(true);
+      expect(checked('Continental')).toBe(false);
+      // Taking one off makes room again.
+      await press('Chinese');
+      expect(has('Up to 3 cuisines.')).toBe(false);
+      expect(has('Up to 3. The first is the main one.')).toBe(true);
+    });
+
+    it('a new dish saves its labels after it is created', async () => {
+      await mount('add', undefined);
+      await fillRequired();
+      await press('North Indian');
+      await press('Jain');
+      mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', images: []}));
+      await press('Publish dish');
+      await settle();
+      expect(mockTaxonomy.saveChefLabels).toHaveBeenCalledWith(NEW_ID, {cuisines: ['north-indian'], diets: ['jain']}, null);
+      expect(mockApi.createItem.mock.invocationCallOrder[0]).toBeLessThan(mockTaxonomy.saveChefLabels.mock.invocationCallOrder[0]);
+      expect(mockForgetNearby).toHaveBeenCalledWith([NEW_ID]);
+      expect(has('Tomato curry is live')).toBe(true);
+      expect(mockLeft).toHaveBeenCalledTimes(1);
+    });
+
+    it('a new dish without labels sends none', async () => {
+      await mount('add', undefined);
+      await fillRequired();
+      mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', images: []}));
+      await press('Publish dish');
+      await settle();
+      expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
+      expect(has('Tomato curry is live')).toBe(true);
+    });
+
+    it('a failed label save keeps the new dish and says so', async () => {
+      await mount('add', undefined);
+      await fillRequired();
+      await press('Vegan');
+      mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', images: []}));
+      mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
+      await press('Publish dish');
+      await settle();
+      expect(mockApi.createItem).toHaveBeenCalledTimes(1);
+      expect(has("Tomato curry is live, but its labels didn't save. Open the dish to add them again.")).toBe(true);
+      expect(mockLeft).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failed label save on a draft says it is saved', async () => {
+      await mount('add', undefined);
+      await fillRequired();
+      await press('Vegan');
+      mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', status: 'DRAFT', available: false}));
+      mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
+      await press('Save draft');
+      await settle();
+      expect(has("Tomato curry is saved, but its labels didn't save. Open the dish to add them again.")).toBe(true);
+    });
+
+    it('a conflict shows the reload message, keeps the other changes and stays', async () => {
+      await mount('edit', {menuItemId: ID});
+      await type('Price', '170');
+      await press('Vegan');
+      mockApi.replaceItem.mockResolvedValue(dish({price: 170}));
+      mockTaxonomy.saveChefLabels.mockRejectedValue(new DishLabelsConflictError());
+      mockTaxonomy.chefLabels.mockResolvedValue({menuItemId: ID, cuisines: ['karnataka'], diets: ['jain'], version: 4});
+      await press('Save changes');
+      await settle();
+      expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
+      expect(has(CONFLICT)).toBe(true);
+      expect(mockLeft).not.toHaveBeenCalled();
+      expect(has('Changes saved')).toBe(false);
+      expect(mockForgetNearby).not.toHaveBeenCalled();
+      // The latest labels are shown, and the price is already saved.
+      expect(checked('Karnataka')).toBe(true);
+      expect(checked('Vegan')).toBe(false);
+      expect(input('Price').props.value).toBe('170');
+
+      await press('Vegan');
+      mockTaxonomy.saveChefLabels.mockResolvedValue({menuItemId: ID, cuisines: ['karnataka'], diets: ['jain', 'vegan'], version: 5});
+      await press('Save changes');
+      await settle();
+      expect(mockTaxonomy.saveChefLabels).toHaveBeenLastCalledWith(ID, {cuisines: ['karnataka'], diets: ['jain', 'vegan']}, 4);
+      expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
+      expect(has('Changes saved')).toBe(true);
+    });
+
+    it('any other failure says the labels did not save and stays', async () => {
+      await mount('edit', {menuItemId: ID});
+      await press('Vegan');
+      mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
+      await press('Save changes');
+      await settle();
+      expect(has("Labels didn't save. Try again.")).toBe(true);
+      expect(checked('Vegan')).toBe(true);
+      expect(mockLeft).not.toHaveBeenCalled();
     });
   });
 });

@@ -16,9 +16,11 @@ export interface NearbyDishLabels {
 }
 
 const LOOKUP_CHUNK = 100;
+// A chef can relabel a dish at any time, so cached answers are asked again after this.
+const LABEL_CACHE_TTL_MS = 10 * 60 * 1000;
 
-// Every dish already looked up; null means "seen, no labels" so it is not asked again.
-const looked = new Map<string, DishLabelCodes | null>();
+// Every dish already looked up; dish null means "seen, no labels" so it is not asked again.
+const looked = new Map<string, {dish: DishLabelCodes | null; at: number}>();
 let vocabulary: TaxonomyVocabulary | null = null;
 let snapshot: NearbyDishLabels | null = null;
 let latestLoad = 0;
@@ -40,23 +42,38 @@ export async function loadNearbyDishLabels(
   await loadAdvancedFeatures();
   if (!isAdvancedFeatureOn('taxonomy')) return finish(null);
   try {
+    const now = Date.now();
     if (!vocabulary) vocabulary = await taxonomyApi.vocabulary();
-    const unseen = [...new Set(menuItemIds)].filter(id => !looked.has(id));
+    const unseen = [...new Set(menuItemIds)].filter(id => {
+      const entry = looked.get(id);
+      return !entry || now - entry.at > LABEL_CACHE_TTL_MS;
+    });
     for (let i = 0; i < unseen.length; i += LOOKUP_CHUNK) {
       const chunk = unseen.slice(i, i + LOOKUP_CHUNK);
       const answered = new Map(
         (await taxonomyApi.lookup(chunk)).map(dish => [dish.menuItemId, dish]),
       );
-      chunk.forEach(id => looked.set(id, answered.get(id) ?? null));
+      const at = Date.now();
+      chunk.forEach(id => looked.set(id, {dish: answered.get(id) ?? null, at}));
     }
     const byId = new Map<string, DishLabelCodes>();
     for (const id of menuItemIds) {
-      const dish = looked.get(id);
+      const dish = looked.get(id)?.dish;
       if (dish) byId.set(id, dish);
     }
     return finish({vocabulary, byId});
   } catch {
     return finish(null);
+  }
+}
+
+/** Drops these dishes from the cache and snapshot so the next load asks for them again (e.g. after a chef saves labels). */
+export function forgetNearbyDishLabels(menuItemIds: readonly string[]): void {
+  menuItemIds.forEach(id => looked.delete(id));
+  if (snapshot) {
+    const byId = new Map(snapshot.byId);
+    menuItemIds.forEach(id => byId.delete(id));
+    snapshot = {vocabulary: snapshot.vocabulary, byId};
   }
 }
 

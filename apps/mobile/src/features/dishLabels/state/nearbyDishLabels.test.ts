@@ -6,6 +6,7 @@ import {
 } from '../../../core/advanced/advancedFeatures';
 import {taxonomyApi, type DishLabelCodes} from '../api/taxonomyApi';
 import {
+  forgetNearbyDishLabels,
   getNearbyDishLabelsSnapshot,
   loadNearbyDishLabels,
   resetNearbyDishLabelsForTests,
@@ -37,9 +38,12 @@ const answer = async (asked: string[]) =>
 // The gate only reads "on" once the feature list has loaded, as at a cold start.
 let gateAfterLoad: boolean;
 let gate: boolean;
+let now: number;
 
 beforeEach(() => {
   jest.resetAllMocks();
+  now = 1_000_000;
+  jest.spyOn(Date, 'now').mockImplementation(() => now);
   resetNearbyDishLabelsForTests();
   gateAfterLoad = true;
   gate = false;
@@ -51,6 +55,10 @@ beforeEach(() => {
   jest.mocked(isAdvancedFeatureOn).mockImplementation(() => gate);
   vocabulary.mockResolvedValue(VOCABULARY);
   lookup.mockImplementation(answer);
+});
+
+afterEach(() => {
+  jest.mocked(Date.now).mockRestore();
 });
 
 describe('loadNearbyDishLabels', () => {
@@ -114,6 +122,36 @@ describe('loadNearbyDishLabels', () => {
     release();
     await older;
     expect(getNearbyDishLabelsSnapshot()).toBe(newer);
+  });
+});
+
+describe('refreshing cached labels', () => {
+  it('forgetting a dish makes the next load ask for it again', async () => {
+    await loadNearbyDishLabels(['dish-0', 'dish-1']);
+    lookup.mockClear();
+    forgetNearbyDishLabels(['dish-0']);
+    expect([...getNearbyDishLabelsSnapshot()!.byId.keys()]).toEqual(['dish-1']);
+    const result = await loadNearbyDishLabels(['dish-0', 'dish-1']);
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith(['dish-0']);
+    expect([...result!.byId.keys()]).toEqual(['dish-0', 'dish-1']);
+  });
+
+  it('forgetting leaves a missing snapshot missing', () => {
+    forgetNearbyDishLabels(['dish-0']);
+    expect(getNearbyDishLabelsSnapshot()).toBeNull();
+  });
+
+  it('entries older than 10 minutes are looked up again', async () => {
+    await loadNearbyDishLabels(['dish-0', 'dish-9']);
+    lookup.mockClear();
+    now += 10 * 60 * 1000;
+    await loadNearbyDishLabels(['dish-0', 'dish-9']);
+    expect(lookup).not.toHaveBeenCalled();
+    now += 1;
+    await loadNearbyDishLabels(['dish-0', 'dish-9']);
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith(['dish-0', 'dish-9']);
   });
 });
 

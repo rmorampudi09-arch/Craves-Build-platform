@@ -21,7 +21,7 @@ const FOOTER_COLUMNS = [
 const socialLinks = [
   {
     label: 'LinkedIn',
-    href: '#social',
+    href: 'https://www.linkedin.com/company/145186832/',
     icon: (
       <svg
         className="footer__icon-linkedin"
@@ -38,7 +38,7 @@ const socialLinks = [
 
   {
     label: 'Instagram',
-    href: '#social',
+    href: 'https://www.instagram.com/craves.in_/',
     icon: (
       <svg
         className="footer__icon-instagram"
@@ -60,7 +60,7 @@ const socialLinks = [
 
   {
     label: 'YouTube',
-    href: '#social',
+    href: 'https://www.youtube.com/@Craves_in',
     icon: (
       <svg
         className="footer__icon-youtube"
@@ -79,7 +79,7 @@ const socialLinks = [
 
   {
     label: 'Facebook',
-    href: '#social',
+    href: 'https://www.facebook.com/profile.php?id=61594485405454',
     icon: (
       <svg
         className="footer__icon-facebook"
@@ -146,6 +146,9 @@ const Footer = () => {
                 className="footer__social-link"
                 href={item.href}
                 data-channel={item.label}
+                // Official profiles open in a new tab; '#social' (X) still opens the availability notice.
+                target={item.href.startsWith('#') ? undefined : '_blank'}
+                rel={item.href.startsWith('#') ? undefined : 'noopener noreferrer'}
                 aria-label={item.label}
                 title={item.label}
               >

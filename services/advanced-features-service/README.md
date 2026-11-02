@@ -27,6 +27,7 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 | Saved feed, recovery, familiarity (E01, E02, E06) | `savedfeed` | `adv_saved_feed` | `/api/v1/advanced/saved-feed` | `saved-feed-v1.yaml` | `CRAVES_ADV_SAVED_FEED_ENABLED` |
 | Personalized ranking (E07) | `personalized` | `adv_personalized` (no tables) | `/api/v1/advanced/personalized` | `personalized-v1.yaml` | `CRAVES_ADV_PERSONALIZED_ENABLED` |
 | Semantic search (E09) | `semanticsearch` | `adv_semantic_search` | `/api/v1/advanced/semantic-search` | `semantic-search-v1.yaml` | `CRAVES_ADV_SEMANTIC_SEARCH_ENABLED` |
+| Conversational AI search (E08) | `aisearch` | `adv_ai_search` (no tables) | `/api/v1/advanced/ai-search` | `ai-search-v1.yaml` | `CRAVES_ADV_AI_SEARCH_ENABLED` (needs `CRAVES_ADV_AI_SEARCH_URL`, `_MODEL`, `_KEY`) |
 | Live order activity (E39) | `liveactivities` | `adv_live_activities` | `/api/v1/advanced/live-activities` | `live-activities-v1.yaml` | `CRAVES_ADV_LIVE_ACTIVITIES_ENABLED` |
 | Policies: serviceability, cancellation/refund, provider ranking, notification frequency (015, 062, 072, 088) | `policies` | `adv_policies` | `/api/v1/advanced/policies` | `policies-v1.yaml` | `CRAVES_ADV_POLICIES_ENABLED` |
 | Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |

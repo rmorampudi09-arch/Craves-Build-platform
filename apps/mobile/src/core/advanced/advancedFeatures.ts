@@ -63,8 +63,9 @@ let appStateSubscription: NativeEventSubscription | null = null;
 const listeners = new Set<() => void>();
 
 // Starts a new read even if one finished. Until the answer arrives the previous
-// result stays; a failed read turns everything off until the next read. Only
-// the newest read may write the result, so a slow older answer is dropped.
+// result stays; a failed re-read keeps it too (so a chef's picks survive a bad
+// moment), and only a failed first read means everything is off. Only the
+// newest read may write the result, so a slow older answer is dropped.
 export function refreshAdvancedFeatures(): Promise<
   ReadonlySet<AdvancedFeatureId>
 > {
@@ -72,7 +73,7 @@ export function refreshAdvancedFeatures(): Promise<
   const request = publicApiClient
     .get<unknown>('/api/v1/advanced/features', {})
     .then(response => parseAdvancedFeatures(response.data) ?? EMPTY)
-    .catch(() => EMPTY)
+    .catch(() => loaded ?? EMPTY)
     .then(features => {
       if (mine === latestRequest) {
         loaded = features;

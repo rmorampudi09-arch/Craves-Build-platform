@@ -176,12 +176,12 @@ describe('advancedFeatures gate', () => {
     expect(isAdvancedFeatureOn('taxonomy')).toBe(true);
   });
 
-  it('a failed re-read turns every feature off', async () => {
+  it('a failed re-read keeps the features from the last good read', async () => {
     get.mockResolvedValueOnce(on('taxonomy'));
     await loadAdvancedFeatures();
     get.mockRejectedValueOnce(new Error('offline'));
-    await refreshAdvancedFeatures();
-    expect(isAdvancedFeatureOn('taxonomy')).toBe(false);
+    await expect(refreshAdvancedFeatures()).resolves.toEqual(new Set(['taxonomy']));
+    expect(isAdvancedFeatureOn('taxonomy')).toBe(true);
   });
 
   it('an older response cannot overwrite a newer one', async () => {

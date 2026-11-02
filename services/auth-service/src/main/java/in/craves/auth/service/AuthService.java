@@ -195,6 +195,13 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
+    public in.craves.auth.api.InternalIdentityContactResponse internalIdentityContact(UUID identityId) {
+        AuthIdentity identity = identityRepository.findById(identityId)
+            .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));
+        return new in.craves.auth.api.InternalIdentityContactResponse(identity.getId(), identity.getPhoneNumber(), identity.getDisplayName());
+    }
+
+    @Transactional(readOnly = true)
     public InternalIdentityEmailResponse internalIdentityEmail(UUID identityId) {
         AuthIdentity identity = identityRepository.findById(identityId)
             .orElseThrow(() -> AuthException.badRequest("IDENTITY_NOT_FOUND", "Identity was not found"));

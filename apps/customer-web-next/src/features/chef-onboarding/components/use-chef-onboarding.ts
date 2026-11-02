@@ -78,6 +78,16 @@ function verifiedState(raw: unknown): OnboardingState {
 }
 /** The applicant's home inside Chef Mode; leaving the form always lands here, never on customer screens. */
 const APPLICATION_HUB = "/chef/application/status";
+const AUTOSAVE_DELAY_MS = 3000;
+/** A draft keeps everything typed; half-typed values the server would refuse (a short pincode or FSSAI number) wait for Save. */
+export function draftable(details: OnboardingDetails) {
+  return {
+    ...details,
+    dateOfBirth: details.dateOfBirth || null,
+    postalCode: /^[0-9]{6}$/.test(details.postalCode) ? details.postalCode : "",
+    fssaiNumber: /^[0-9]{14}$/.test(details.fssaiNumber.trim()) ? details.fssaiNumber.trim() : "",
+  };
+}
 /** What the chef typed but had not saved when "Sign in again" left the page (this tab only). */
 const UNSAVED_KEY = "craves.chef-application-unsaved";
 const UNSAVED_MAX_AGE_MS = 2 * 60 * 60 * 1000;
@@ -146,6 +156,7 @@ export function useChefOnboarding() {
   const currentState = useRef(state),
     currentDetails = useRef(details),
     inFlight = useRef(false),
+    autosave = useRef<Promise<void> | null>(null),
     mounted = useRef(true);
   const owner = useRef(captureSessionContext()),
     upload = useRef<XMLHttpRequest | null>(null),
@@ -347,7 +358,28 @@ export function useChefOnboarding() {
       setDirty(true);
     }
   }, []);
+  // What the applicant types is kept as a draft a few seconds later, even if they never press Save, so admins see it.
+  useEffect(() => {
+    if (!dirty || screen === "status" || screen === "submitted") return;
+    const timer = window.setTimeout(() => {
+      const saved = currentState.current;
+      if (inFlight.current || autosave.current || !saved || saved.submitted || saved.legacy || !current()) return;
+      const typed = currentDetails.current;
+      autosave.current = chefOnboardingApi("/api/chef/onboarding", "PATCH", { expectedVersion: saved.version, details: draftable(typed) })
+        .then((raw) => {
+          if (!current()) return;
+          const next = verifiedState(raw); // keeps what is on screen; only the saved version moves on
+          currentState.current = next;
+          setState(next);
+          if (currentDetails.current === typed) setDirty(false);
+        })
+        .catch(() => undefined) // Save and Exit still report any real problem.
+        .finally(() => { autosave.current = null; });
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [dirty, details, screen, current]);
   async function persist(partial = false): Promise<OnboardingState> {
+    await autosave.current; // never two saves with the same version
     const existing = currentState.current;
     if (!existing || !current()) throw new Error("Sign in again to continue.");
     if (existing.submitted || existing.legacy)
@@ -372,6 +404,7 @@ export function useChefOnboarding() {
     setError("");
     setNotice("");
     try {
+      await autosave.current;
       await action();
     } catch (failure) {
       if (current())

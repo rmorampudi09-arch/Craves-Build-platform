@@ -36,6 +36,16 @@ public class InternalIdentityController {
         return authService.internalIdentityEmail(identityId);
     }
 
+    /** User/Chef shows the sign-in phone to admins for Chef applicants whose form never stored it. */
+    @GetMapping("/{identityId}/contact")
+    public in.craves.auth.api.InternalIdentityContactResponse contact(
+        @PathVariable UUID identityId,
+        @RequestHeader(name = INTERNAL_SECRET_HEADER, required = false) String providedSecret
+    ) {
+        requireInternalSecret(providedSecret);
+        return authService.internalIdentityContact(identityId);
+    }
+
     private void requireInternalSecret(String providedSecret) {
         String expectedSecret = properties.getServiceSecret();
         if (!StringUtils.hasText(expectedSecret)) {

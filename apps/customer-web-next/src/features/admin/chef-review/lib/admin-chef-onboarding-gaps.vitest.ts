@@ -114,14 +114,18 @@ describe("Admin approval explains what is still needed", () => {
         phoneNumber: null, step: "personal", reviewStatus: "DRAFT", applicationId: null, startedAt: "2026-11-02T06:00:00Z", lastActivityAt: "2026-11-02T07:00:00Z" },
       { identityId: "eeee1111-1111-4111-8111-111111111111", firstName: "", lastName: "", email: "", emailVerified: false,
         phoneNumber: "+919000000002", step: "documents", reviewStatus: "MORE_INFORMATION_REQUIRED", applicationId: APP, startedAt: "2026-11-01T06:00:00Z", lastActivityAt: "2026-11-01T07:00:00Z" },
+      { identityId: "ffff1111-1111-4111-8111-111111111111", firstName: null, lastName: null, email: null, emailVerified: false,
+        phoneNumber: "+919000000003", step: "signed-in", reviewStatus: "NOT_STARTED", applicationId: null, startedAt: "2026-10-31T06:00:00Z", lastActivityAt: "2026-10-31T06:00:00Z" },
     ]);
     render(createElement(AdminChefReviewList));
     fireEvent.click(await screen.findByRole("button", { name: "NOT SUBMITTED YET" }));
     expect(await screen.findByRole("heading", { name: "Stuck Chef" })).toBeTruthy();
-    expect(screen.getByText(/2 chefs have started and not submitted yet/)).toBeTruthy();
+    expect(screen.getByText(/3 chefs have started and not submitted yet/)).toBeTruthy();
+    expect(screen.getByText(/Stopped at: Signed in with OTP, form not started/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "+919000000003" }).getAttribute("href")).toBe("tel:+919000000003");
     expect(screen.getByText(/Stopped at: Personal details and email code/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "stuck@example.com" }).getAttribute("href")).toBe("mailto:stuck@example.com");
-    expect(screen.getByRole("heading", { name: "Name not entered yet" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Name not entered yet" })).toHaveLength(2);
     expect(screen.getByText("Sent back for changes")).toBeTruthy();
     expect(screen.getByRole("link", { name: "+919000000002" }).getAttribute("href")).toBe("tel:+919000000002");
   });

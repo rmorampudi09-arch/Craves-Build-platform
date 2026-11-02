@@ -5,6 +5,7 @@ import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
 import { parseAdminChefDrafts, type AdminChefDraft } from "@/features/admin/chef-review/lib/admin-chef-review-contract";
 
 const STEPS: Record<string, string> = {
+  "signed-in": "Signed in with OTP, form not started",
   personal: "Personal details and email code",
   kitchen: "Kitchen details",
   "kitchen-photos": "Kitchen photos",
@@ -31,7 +32,7 @@ export function AdminChefDraftList() {
 
   return <>
     {message && <div className="mt-6 rounded-[24px] bg-[#FFF8EC] p-6 text-slate-950" role="status">{message}</div>}
-    {items.length > 0 && <p className="mt-6 text-sm text-slate-600">{items.length} {items.length === 1 ? "chef has" : "chefs have"} started and not submitted yet, latest activity first.</p>}
+    {items.length > 0 && <p className="mt-6 text-sm text-slate-600">{items.length} {items.length === 1 ? "chef has" : "chefs have"} started and not submitted yet, latest activity first.{items.length >= 1000 ? " Showing the latest 1,000." : ""}</p>}
     <div className="mt-4 space-y-4">{items.map(item => <article key={item.identityId} className="rounded-[26px] bg-[#FFF8EC] p-6 text-slate-950">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

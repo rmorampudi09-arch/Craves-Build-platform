@@ -246,6 +246,27 @@ class ChefOnboardingDatabaseTest {
         assertEquals("Only",service.mine(user).details().firstName());
         assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(first.version(),partial))));
     }
+    DraftApplicant listed() {
+        return service.drafts(admin).stream().filter(d->d.identityId().equals(user.identityId())).findFirst().orElse(null);
+    }
+    @Test void adminsSeeEveryoneWhoStartedUntilTheySubmit() {
+        Details partial=new Details("Stuck@Example.test","Stuck","Chef",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en",null);
+        run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
+        DraftApplicant draft=listed();
+        assertEquals("Stuck",draft.firstName());assertEquals("Stuck@Example.test",draft.email());assertFalse(draft.emailVerified());
+        assertEquals("personal",draft.step());assertEquals("DRAFT",draft.reviewStatus());assertNull(draft.applicationId());
+        jdbc.update("INSERT INTO auth_email_projection(identity_id,email,email_revision,verified_at) VALUES (?,?,1,now())",
+            user.identityId(),"stuck@example.test");
+        assertTrue(listed().emailVerified());
+        assertThrows(ApiException.class,()->service.drafts(user));
+        save(ProofKind.PAN,"12345678901234");
+        draft=listed();
+        assertNotNull(draft.applicationId());assertEquals("+919000000000",draft.phoneNumber());
+        assertEquals("kitchen-photos",draft.step());assertFalse(draft.emailVerified());
+        photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertNull(listed());
+    }
     @Test void termsAndBankEnrollmentAreRequiredByServerAndCorrectionKeepsDecisionHistory() {
         save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
         long version=service.mine(user).version();

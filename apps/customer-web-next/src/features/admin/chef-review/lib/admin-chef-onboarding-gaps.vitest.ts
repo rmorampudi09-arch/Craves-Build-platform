@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminChefAttention, summarizeHelp } from "../components/admin-chef-attention";
 import { AdminChefOnboardingContent } from "../components/admin-chef-onboarding-content";
 import { AdminChefReviewDetails } from "../components/admin-chef-review-details";
+import { AdminChefReviewList } from "../components/admin-chef-review-list";
 
 const routes = new Map<string, unknown>();
 const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -104,5 +105,24 @@ describe("Admin approval explains what is still needed", () => {
     render(createElement(AdminChefReviewDetails, { applicationId: APP, onboardingV2Enabled: true }));
     await waitFor(() => expect((screen.getByRole("button", { name: "Approve Chef application" }) as HTMLButtonElement).disabled).toBe(false));
     expect(screen.queryByText(/^Needed:/)).toBeNull();
+  });
+
+  it("lists everyone who started and has not submitted, with ways to contact them", async () => {
+    routes.set("/api/admin/chef-reviews?status=PENDING", []);
+    routes.set("/api/admin/chef-onboarding/applications/drafts", [
+      { identityId: "dddd1111-1111-4111-8111-111111111111", firstName: "Stuck", lastName: "Chef", email: "stuck@example.com", emailVerified: false,
+        phoneNumber: null, step: "personal", reviewStatus: "DRAFT", applicationId: null, startedAt: "2026-11-02T06:00:00Z", lastActivityAt: "2026-11-02T07:00:00Z" },
+      { identityId: "eeee1111-1111-4111-8111-111111111111", firstName: "", lastName: "", email: "", emailVerified: false,
+        phoneNumber: "+919000000002", step: "documents", reviewStatus: "MORE_INFORMATION_REQUIRED", applicationId: APP, startedAt: "2026-11-01T06:00:00Z", lastActivityAt: "2026-11-01T07:00:00Z" },
+    ]);
+    render(createElement(AdminChefReviewList));
+    fireEvent.click(await screen.findByRole("button", { name: "NOT SUBMITTED YET" }));
+    expect(await screen.findByRole("heading", { name: "Stuck Chef" })).toBeTruthy();
+    expect(screen.getByText(/2 chefs have started and not submitted yet/)).toBeTruthy();
+    expect(screen.getByText(/Stopped at: Personal details and email code/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "stuck@example.com" }).getAttribute("href")).toBe("mailto:stuck@example.com");
+    expect(screen.getByRole("heading", { name: "Name not entered yet" })).toBeTruthy();
+    expect(screen.getByText("Sent back for changes")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "+919000000002" }).getAttribute("href")).toBe("tel:+919000000002");
   });
 });

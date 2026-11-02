@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAdminChefApplication } from "./admin-chef-review-contract.ts";
+import { parseAdminChefApplication, parseAdminChefDrafts } from "./admin-chef-review-contract.ts";
 
 const application = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -53,4 +53,14 @@ test("admin review accepts documents up to the 10 MB upload limit", () => {
   const sized = (fileSizeBytes: number) => ({ ...application, documents: [{ ...application.documents[0], fileSizeBytes }] });
   assert.ok(parseAdminChefApplication(sized(10 * 1024 * 1024)));
   assert.equal(parseAdminChefApplication(sized(10 * 1024 * 1024 + 1)), null);
+});
+
+test("unsubmitted drafts keep people who only entered part of their details", () => {
+  const draft = { identityId: "33333333-3333-4333-8333-333333333333", firstName: "", lastName: null, email: "stuck@example.com", emailVerified: false, phoneNumber: null, step: "personal", reviewStatus: "DRAFT", applicationId: null, startedAt: "2026-11-02T06:00:00Z", lastActivityAt: "2026-11-02T07:00:00Z" };
+  const [parsed] = parseAdminChefDrafts([draft]) ?? [];
+  assert.equal(parsed?.firstName, null);
+  assert.equal(parsed?.email, "stuck@example.com");
+  assert.equal(parsed?.emailVerified, false);
+  assert.equal(parseAdminChefDrafts([{ ...draft, startedAt: "not a date" }]), null);
+  assert.equal(parseAdminChefDrafts({}), null);
 });

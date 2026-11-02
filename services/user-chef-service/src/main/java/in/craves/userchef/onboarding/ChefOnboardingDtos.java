@@ -38,6 +38,11 @@ public final class ChefOnboardingDtos {
         String phoneNumber, String message, String status, Instant createdAt, UUID applicationId
     ) {}
     public record HelpPage(List<Help> items, String nextCursor) {}
+    /** Someone who started the Chef application and has not submitted it, or was sent back for changes. */
+    public record DraftApplicant(
+        UUID identityId, String firstName, String lastName, String email, boolean emailVerified, String phoneNumber,
+        String step, String reviewStatus, UUID applicationId, Instant startedAt, Instant lastActivityAt
+    ) {}
     public record HelpStatusRequest(String status) {}
     public record ContentRequest(
         String language, String title, String kind, String body, String contentType, Long fileSizeBytes

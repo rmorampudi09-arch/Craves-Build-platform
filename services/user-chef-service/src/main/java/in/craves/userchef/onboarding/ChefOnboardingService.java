@@ -12,6 +12,7 @@ import in.craves.userchef.web.ApiDtos.KycDocumentType;
 import in.craves.userchef.web.SupportCaseDtos.CreateSupportCaseRequest;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -256,6 +257,37 @@ public class ChefOnboardingService {
         Help last=page.isEmpty()?null:page.getLast();
         return new HelpPage(page,more?last.createdAt()+"|"+last.id():null);
     }
+    private record DraftRow(UUID identityId,Details details,String reviewStatus,UUID applicationId,Instant startedAt,
+        Instant lastActivityAt,String phone,boolean emailVerified) {}
+
+    /** Everyone who started the Chef application and has not submitted it (including sent back for changes), latest activity first. */
+    @Transactional(readOnly=true)
+    public List<DraftApplicant> drafts(CurrentUser admin) {
+        requireAdmin(admin);
+        // shortcut: newest 1000 only; add paging when unsubmitted drafts pass that.
+        var rows=jdbc.query("""
+            SELECT d.identity_id,d.details,d.review_status,d.application_id,d.created_at,d.updated_at,
+                COALESCE(a.phone_number,p.registered_phone_number,(SELECT h.phone_number FROM chef_onboarding_help h
+                    WHERE h.identity_id=d.identity_id ORDER BY h.created_at DESC LIMIT 1)) AS phone,
+                EXISTS(SELECT 1 FROM auth_email_projection e WHERE e.identity_id=d.identity_id
+                    AND lower(e.email)=lower(d.details->>'email')) AS email_verified
+            FROM chef_onboarding_draft d
+            LEFT JOIN chef_application a ON a.id=d.application_id
+            LEFT JOIN customer_profile p ON p.identity_id=d.identity_id
+            WHERE NOT d.submitted AND (a.id IS NULL OR a.status<>'APPROVED')
+            ORDER BY d.updated_at DESC,d.identity_id LIMIT 1000
+            """,(rs,row)->new DraftRow(rs.getObject("identity_id",UUID.class),decode(rs.getString("details")),
+                rs.getString("review_status"),rs.getObject("application_id",UUID.class),rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant(),rs.getString("phone"),rs.getBoolean("email_verified")));
+        return rows.stream().map(r->{
+            List<in.craves.userchef.web.ApiDtos.KycDocumentResponse> docs=r.applicationId()==null ? List.of()
+                : applications.listApplicationEvidenceForAdmin(admin,r.applicationId());
+            return new DraftApplicant(r.identityId(),r.details().firstName(),r.details().lastName(),r.details().email(),
+                r.emailVerified(),r.phone(),ChefOnboardingPolicy.resume(r.details(),docs,false),r.reviewStatus(),
+                r.applicationId(),r.startedAt(),r.lastActivityAt());
+        }).toList();
+    }
+
     @Transactional
     public Help updateHelp(CurrentUser admin,UUID id,HelpStatusRequest request) {
         requireAdmin(admin);

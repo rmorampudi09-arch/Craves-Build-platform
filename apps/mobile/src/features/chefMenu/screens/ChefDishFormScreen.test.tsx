@@ -957,6 +957,48 @@ describe('ChefDishFormScreen', () => {
       expect(has('Changes saved')).toBe(true);
     });
 
+    describe('with a new photo', () => {
+      const choosePhoto = async () => {
+        mockPicker.launchImageLibraryAsync.mockResolvedValue({canceled: false, assets: [{uri: 'file:///new.jpg', mimeType: 'image/jpeg'}]});
+        await press('Change photo');
+        await press('Choose from gallery');
+        await settle();
+      };
+
+      it('editing with a new photo and changed labels saves the labels even when the photo fails', async () => {
+        await mount('edit', {menuItemId: ID});
+        await press('Vegan');
+        await choosePhoto();
+        mockApi.uploadImage.mockRejectedValue(new Error('offline'));
+        await press('Save changes');
+        await settle();
+        expect(mockTaxonomy.saveChefLabels).toHaveBeenCalledWith(ID, {cuisines: ['andhra'], diets: ['jain', 'vegan']}, 3);
+        expect(mockTaxonomy.saveChefLabels.mock.invocationCallOrder[0]).toBeLessThan(mockApi.uploadImage.mock.invocationCallOrder[0]);
+        expect(has("The new photo didn't upload. Your other changes are saved. Try the photo again.")).toBe(true);
+        expect(mockLeft).not.toHaveBeenCalled();
+
+        // Only the photo is left to send.
+        mockApi.uploadImage.mockResolvedValue({});
+        await press('Save changes');
+        await settle();
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(2);
+        expect(mockTaxonomy.saveChefLabels).toHaveBeenCalledTimes(1);
+        expect(has('Changes saved')).toBe(true);
+      });
+
+      it('a failed label save stops before the photo is sent', async () => {
+        await mount('edit', {menuItemId: ID});
+        await press('Vegan');
+        await choosePhoto();
+        mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
+        await press('Save changes');
+        await settle();
+        expect(has("Labels didn't save. Try again.")).toBe(true);
+        expect(mockApi.uploadImage).not.toHaveBeenCalled();
+        expect(mockLeft).not.toHaveBeenCalled();
+      });
+    });
+
     it('any other failure says the labels did not save and stays', async () => {
       await mount('edit', {menuItemId: ID});
       await press('Vegan');

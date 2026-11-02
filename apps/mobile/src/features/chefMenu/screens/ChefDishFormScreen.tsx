@@ -321,6 +321,12 @@ function DishForm({
         }
         saved = submitted;
       }
+      // Labels go before the photo, so a failed upload's "Your other changes are saved" is true. A label failure stays on
+      // the form with its message under the labels, the dish's other changes already saved and the photo not sent yet.
+      if (!(await labels.save(dish.id))) {
+        reset(chefMenuItemToFormValues(saved));
+        return;
+      }
       if (photo) {
         const uploaded = await sendPhoto(dish.id);
         if (uploaded === null) {
@@ -335,10 +341,6 @@ function DishForm({
       }
       setPhoto(null);
       reset(chefMenuItemToFormValues(saved));
-      // The dish's other changes are saved by now; a label failure stays on the form with its message under the labels.
-      if (!(await labels.save(dish.id))) {
-        return;
-      }
       finish(publish ? `${saved.itemName} is live` : 'Changes saved');
     }));
 

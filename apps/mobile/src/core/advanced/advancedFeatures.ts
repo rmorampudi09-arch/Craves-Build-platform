@@ -1,4 +1,9 @@
 import {useEffect, useSyncExternalStore} from 'react';
+import {
+  AppState,
+  type AppStateStatus,
+  type NativeEventSubscription,
+} from 'react-native';
 import {publicApiClient} from '../http/transport';
 
 export type AdvancedFeatureId =
@@ -52,22 +57,50 @@ export function parseAdvancedFeatures(
 
 let loaded: ReadonlySet<AdvancedFeatureId> | null = null;
 let pending: Promise<ReadonlySet<AdvancedFeatureId>> | null = null;
+let latestRequest = 0;
+let appState: AppStateStatus | null = null;
+let appStateSubscription: NativeEventSubscription | null = null;
 const listeners = new Set<() => void>();
 
-// One request per session; a failure caches "everything off" until restart.
-export function loadAdvancedFeatures(): Promise<ReadonlySet<AdvancedFeatureId>> {
-  if (!pending) {
-    pending = publicApiClient
-      .get<unknown>('/api/v1/advanced/features', {})
-      .then(response => parseAdvancedFeatures(response.data) ?? EMPTY)
-      .catch(() => EMPTY)
-      .then(features => {
+// Starts a new read even if one finished. Until the answer arrives the previous
+// result stays; a failed read turns everything off until the next read. Only
+// the newest read may write the result, so a slow older answer is dropped.
+export function refreshAdvancedFeatures(): Promise<
+  ReadonlySet<AdvancedFeatureId>
+> {
+  const mine = ++latestRequest;
+  const request = publicApiClient
+    .get<unknown>('/api/v1/advanced/features', {})
+    .then(response => parseAdvancedFeatures(response.data) ?? EMPTY)
+    .catch(() => EMPTY)
+    .then(features => {
+      if (mine === latestRequest) {
         loaded = features;
         listeners.forEach(listener => listener());
-        return features;
-      });
+      }
+      return features;
+    });
+  pending = request;
+  return request;
+}
+
+function onAppStateChange(next: AppStateStatus) {
+  const wasAway = appState === 'background' || appState === 'inactive';
+  appState = next;
+  if (wasAway && next === 'active') void refreshAdvancedFeatures();
+}
+
+// Launch read, shared by concurrent callers; the first call also starts
+// re-reading each time the app returns to the foreground.
+export function loadAdvancedFeatures(): Promise<ReadonlySet<AdvancedFeatureId>> {
+  if (!appStateSubscription) {
+    appState = AppState.currentState;
+    appStateSubscription = AppState.addEventListener(
+      'change',
+      onAppStateChange,
+    );
   }
-  return pending;
+  return pending ?? refreshAdvancedFeatures();
 }
 
 export function isAdvancedFeatureOn(id: AdvancedFeatureId): boolean {
@@ -89,6 +122,10 @@ export function useAdvancedFeature(id: AdvancedFeatureId): boolean {
 }
 
 export function resetAdvancedFeaturesForTests(): void {
+  latestRequest++;
   loaded = null;
   pending = null;
+  appState = null;
+  appStateSubscription?.remove();
+  appStateSubscription = null;
 }

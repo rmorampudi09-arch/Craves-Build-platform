@@ -289,6 +289,42 @@ it("starts the FSSAI video in the chef's language until the first save, which se
   expect(saved.result.current.details.language).toBe("en");
 });
 
+it("keeps what the chef types as a draft without Save, and Save waits for that draft", async () => {
+  const draft = { ...state, details: null, application: { id, status: "NOT_SUBMITTED", documents: [] } };
+  const saves: { method: string; body: { expectedVersion: number; details: Record<string, unknown> } }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "PATCH" || options?.method === "PUT") {
+        const body = JSON.parse(String(options.body));
+        saves.push({ method: options.method, body });
+        return Response.json({ ...draft, version: body.expectedVersion + 1, details: body.details });
+      }
+      return Response.json(url.includes("/content") ? [] : draft);
+    }),
+  );
+  const hook = renderHook(() => useChefOnboarding(), { wrapper: inLanguage("en") });
+  await waitFor(() => expect(hook.result.current.state).not.toBeNull());
+  vi.useFakeTimers();
+  try {
+    act(() => {
+      hook.result.current.field("firstName", "Ravi");
+      hook.result.current.field("postalCode", "5000");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+  await waitFor(() => expect(hook.result.current.dirty).toBe(false));
+  // A half-typed pincode stays on screen and is not sent, so the rest is never refused.
+  expect(saves).toEqual([{ method: "PATCH", body: expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ firstName: "Ravi", postalCode: "" }) }) }]);
+  expect(hook.result.current.details.postalCode).toBe("5000");
+  await act(() => hook.result.current.persist());
+  expect(saves[1]).toEqual({ method: "PUT", body: expect.objectContaining({ expectedVersion: 2 }) });
+});
+
 it("explains the application status in the chef's language", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ id, status: "PENDING", documents: [] })));
   render(createElement(ChefApplicationStatus, { draftsEnabled: false }), { wrapper: inLanguage("kn") });

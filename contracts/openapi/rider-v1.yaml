@@ -179,7 +179,10 @@ paths:
         OTP after it, returns 423 OTP_LOCKED; the photo route stays open. An order with no delivery code (accepted
         before codes existed) returns 423 OTP_LOCKED at once.
       description: |
-        A repeated key, or a step the trip already took, returns the trip. 409 STEP_CONFLICT (out of order) or
+        A repeated key, or a step the trip already took, returns the trip. The key is bound to the request it first came
+        with: the same key with another step, delivery method (OTP or PHOTO), reason or note is 422
+        IDEMPOTENCY_KEY_REUSED. The tap (ageMs, fix, capturedOffline), the code, the photo and callsMade are not compared:
+        a retry with them changed gets the key's first answer. 409 STEP_CONFLICT (out of order) or
         TRIP_NOT_ACTIVE (the trip ended or went to another courier); 404 TRIP_NOT_FOUND (not this rider's trip);
         422 OTP_INVALID with attemptsLeft; 423 OTP_LOCKED; 503 OTP_UNAVAILABLE (the code could not be checked; try again).
         Photo: 422 CALLS_REQUIRED (fewer than two calls), WAIT_NOT_OVER (the unreachable wait since arriving is still
@@ -281,7 +284,7 @@ components:
         attemptsLeft: {type: integer, minimum: 1, description: Only on 422 OTP_INVALID}
     Paise: {type: integer, description: Indian rupees x 100}
     LabelValue: {type: object, required: [label, value], properties: {label: {type: string}, value: {type: string}}}
-    PayLine: {type: object, required: [label, amountPaise], properties: {component: {type: string, description: 'On Offer and Trip lines: base, drop-km, pickup-km, waiting, cancellation or return-km (the earnings key); TripEarning lines leave it out'}, label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
+    PayLine: {type: object, required: [label, amountPaise], properties: {component: {type: string, description: 'On Offer and Trip lines: base, drop-km, pickup-km, rain (the rain top-up, while rain mode is on), waiting, cancellation or return-km (the earnings key); TripEarning lines leave it out'}, label: {type: string}, amountPaise: {$ref: '#/components/schemas/Paise'}}}
     RiderNotice:
       type: object
       description: A suspension, a 7-day notice or a hold (Telangana Act 21 of 2026, s.14)

@@ -195,6 +195,23 @@ describe("admin fleet BFF", () => {
     expect((await fleetProxy(request(`pilot/kitchens/${DOC}`, { method: "PUT", body: { note: "x".repeat(201) } }), ["pilot", "kitchens", DOC])).status).toBe(400);
   });
 
+  it("reads rain mode and sets only off, on or severe, with an idempotency key", async () => {
+    expect((await fleetProxy(request("rain-mode", { method: "PUT", body: { level: "storm" } }), ["rain-mode"])).status).toBe(400);
+    expect((await fleetProxy(request("rain-mode", { method: "PUT", body: { level: "on" }, key: null }), ["rain-mode"])).status).toBe(400);
+    expect((await fleetProxy(request("rain-mode", { method: "POST", body: { level: "on" } }), ["rain-mode"])).status).toBe(404);
+    expect(upstream).not.toHaveBeenCalled();
+    const mode = { level: "on", inForce: "on", auto: false, setByName: "Admin +91 98xxxxx210", setAt: "2026-11-01T06:30:00Z", rainTopUpPaise: 0 };
+    upstream.mockImplementation(async () => Response.json(mode));
+    expect(await (await fleetProxy(request("rain-mode"), ["rain-mode"])).json()).toEqual(mode);
+    const set = await fleetProxy(request("rain-mode", { method: "PUT", body: { level: "on", auto: true } }), ["rain-mode"]);
+    expect(await set.json()).toEqual(mode);
+    expect(upstream.mock.calls[1].slice(1, 3)).toEqual(["/admin/fleet/rain-mode",
+      { method: "PUT", headers: { "Idempotency-Key": KEY, "Content-Type": "application/json" }, body: JSON.stringify({ level: "on" }) }]);
+    // A server that answers with an unknown level is refused, not passed on.
+    upstream.mockImplementation(async () => Response.json({ ...mode, inForce: "storm" }));
+    expect((await fleetProxy(request("rain-mode"), ["rain-mode"])).status).toBe(502);
+  });
+
   it("forwards only paths and methods that are in the admin fleet contract", () => {
     const yaml = readFileSync(new URL("../../../../../../../contracts/openapi/admin-fleet-v1.yaml", import.meta.url), "utf8");
     const operations = new Set<string>();

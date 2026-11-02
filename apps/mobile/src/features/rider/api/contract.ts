@@ -262,7 +262,7 @@ export interface Trip {
 }
 
 export interface PayLine {
-  /** On Offer and Trip lines: base, drop-km, pickup-km, waiting, cancellation or return-km. TripEarning lines leave it out. */
+  /** On Offer and Trip lines: base, drop-km, pickup-km, rain (rain mode's top-up), waiting, cancellation or return-km. TripEarning lines leave it out. */
   component?: string;
   label: string;
   amountPaise: Paise;

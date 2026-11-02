@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">Craves Rider</string>
+    <string name="app_name" translatable="false">Craves Riders</string>
 
     <!-- Native words in the rider's app language (RiderText.kt, WORKPLAN P2-08); values-te and values-hi keep the same names. -->
     <string name="rider_channel_offers">Order offers</string>
@@ -12,20 +12,20 @@
     <string name="rider_test_ring_title">Test ring</string>
     <string name="rider_test_ring_body">This is how an order offer rings.</string>
     <string name="rider_online_title">You\'re online</string>
-    <string name="rider_online_body">Craves Rider shares your location while you\'re online.</string>
+    <string name="rider_online_body">Craves Riders shares your location while you\'re online.</string>
     <string name="rider_shift_ended">Your shift has ended. Go online again to get orders.</string>
-    <string name="rider_closed_by_phone">Craves Rider was closed by the phone. Open the app to get orders again.</string>
+    <string name="rider_closed_by_phone">Craves Riders was closed by the phone. Open the app to get orders again.</string>
     <string name="rider_allow_location">Allow location to go online.</string>
     <string name="rider_no_internet">No internet. Retrying.</string>
     <string name="rider_notifications_off">Turn on notifications to get orders.</string>
     <string name="rider_trip_cancelled_title">Trip cancelled</string>
-    <string name="rider_trip_cancelled_body">Open Craves Rider to see what\'s next.</string>
+    <string name="rider_trip_cancelled_body">Open Craves Riders to see what\'s next.</string>
     <string name="rider_go_online_title">You\'re offline</string>
     <string name="rider_go_online_body">Tap to go back online and get orders.</string>
     <string name="rider_account_approved_title">You\'re approved</string>
-    <string name="rider_account_approved_body">Open Craves Rider for your next step.</string>
+    <string name="rider_account_approved_body">Open Craves Riders for your next step.</string>
     <string name="rider_account_fixes_title">Your application needs a fix</string>
-    <string name="rider_account_fixes_body">Open Craves Rider to see what ops asked for.</string>
+    <string name="rider_account_fixes_body">Open Craves Riders to see what ops asked for.</string>
     <!-- The TRIP_ENDED push: why the trip ended, by its reason. -->
     <string name="rider_trip_ended_title">Your trip has ended</string>
     <string name="rider_trip_ended_cancelled">Craves ops cancelled this trip. You\'re paid for the trip so far.</string>

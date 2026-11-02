@@ -23,8 +23,11 @@ import org.springframework.web.client.RestClientResponseException;
 @Component
 public class CentralOtpProvider {
     private static final Logger log = LoggerFactory.getLogger(CentralOtpProvider.class);
+    private static final URI MSG91 = URI.create("https://control.msg91.com");
+    private static final String TEMPLATE_ID = "[a-fA-F0-9]{24}";
     private final Msg91Properties secrets;
     private final String template;
+    private final String riderTemplate;
     private final RestTemplate http;
     private final URI base;
     private CentralOtpTestBypass testBypass = CentralOtpTestBypass.disabled();
@@ -32,20 +35,29 @@ public class CentralOtpProvider {
 
     public CentralOtpProvider(Msg91Properties secrets,
             @Value("${CRAVES_MSG91_OTP_TEMPLATE_ID:}") String template) {
-        this(secrets, template, URI.create("https://control.msg91.com"));
+        this(secrets, template, MSG91);
     }
 
     @Autowired
     public CentralOtpProvider(Msg91Properties secrets,
             @Value("${CRAVES_MSG91_OTP_TEMPLATE_ID:}") String template,
-            CentralOtpTestBypass testBypass) {
-        this(secrets, template);
+            CentralOtpTestBypass testBypass,
+            @Value("${CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID:}") String riderTemplate) {
+        this(secrets, template, riderTemplate, MSG91);
         this.testBypass = testBypass;
     }
 
     CentralOtpProvider(Msg91Properties secrets, String template, URI base) {
+        this(secrets, template, "", base);
+    }
+
+    CentralOtpProvider(Msg91Properties secrets, String template, String riderTemplate, URI base) {
         this.secrets = secrets;
         this.template = template;
+        this.riderTemplate = riderTemplate;
+        if (!riderTemplate.isEmpty() && !riderTemplate.matches(TEMPLATE_ID)) {
+            log.warn("CRAVES_MSG91_RIDER_OTP_TEMPLATE_ID is not a template ID: riders get the usual template");
+        }
         this.base = base;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
             @Override protected void prepareConnection(HttpURLConnection connection, String method) throws IOException {
@@ -58,16 +70,21 @@ public class CentralOtpProvider {
         http = new RestTemplate(factory);
     }
 
-    public void send(String phone) {
-        if (testBypass.contains(phone)) { testBypass.send(phone); return; }
-        JsonNode result = call("/api/v5/otp?template_id=" + template + "&mobile=" + phone.substring(1)
-                + "&otp_length=6&otp_expiry=" + CentralOtpStore.CODE_LIFE_MS / 60_000 + "&realTimeResponse=1", HttpMethod.POST);
+    /** Sends the code; true when it went with the rider template, whose SMS the rider app reads with no tap. */
+    public boolean send(String phone, boolean rider) {
+        if (testBypass.contains(phone)) { testBypass.send(phone); return false; }
+        // That template's fixed text ends with the rider app's hash, which Android's SMS Retriever looks for.
+        boolean autoRead = rider && riderTemplate.matches(TEMPLATE_ID);
+        JsonNode result = call("/api/v5/otp?template_id=" + (autoRead ? riderTemplate : template)
+                + "&mobile=" + phone.substring(1) + "&otp_length=6&otp_expiry=" + CentralOtpStore.CODE_LIFE_MS / 60_000
+                + "&realTimeResponse=1", HttpMethod.POST);
         if (!"success".equals(result.path("type").asText())
                 || !result.path("request_id").asText().matches("[A-Za-z0-9_-]{1,200}")) {
             rejected("send", result);
             throw unavailable();
         }
         log.info("MSG91 OTP accepted requestId={}", result.path("request_id").asText());
+        return autoRead;
     }
 
     public void verify(String phone, String code) {
@@ -94,7 +111,7 @@ public class CentralOtpProvider {
 
     private JsonNode call(String path, HttpMethod method) {
         if (!secrets.enabled() || secrets.authkey() == null || secrets.authkey().isBlank()
-                || !template.matches("[a-fA-F0-9]{24}")) {
+                || !template.matches(TEMPLATE_ID)) {
             log.warn("MSG91 OTP configuration unavailable");
             throw unavailable();
         }

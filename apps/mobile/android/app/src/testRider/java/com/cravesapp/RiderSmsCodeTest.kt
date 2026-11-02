@@ -14,6 +14,13 @@ class RiderSmsCodeTest {
   }
 
   @Test
+  fun takesTheCodeNotTheAppHashFromTheRiderTemplate() {
+    // The SMS Retriever's message: the code first, the app hash (which may hold digits) last.
+    assertEquals("482615", RiderSmsCode.codeIn("482615 is your Craves Rider code. Valid 10 minutes.\n123456/9VSu"))
+    assertEquals("482615", RiderSmsCode.codeIn("<#> 482615 is your Craves Rider code.\nFA+9qCX9VSu"))
+  }
+
+  @Test
   fun neverTakesPartOfALongerNumber() {
     assertNull(RiderSmsCode.codeIn("Call 9848012345 for help"))
     assertEquals("482615", RiderSmsCode.codeIn("Order 12345678: your code is 482615"))

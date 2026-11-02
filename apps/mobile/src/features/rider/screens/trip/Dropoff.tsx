@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   linkText: {
     fontSize: typography.button,
     fontWeight: fontWeight.bold,
-    color: colors.flameRedAccessible,
+    color: colors.flameRed,
     textDecorationLine: 'underline',
   },
 });

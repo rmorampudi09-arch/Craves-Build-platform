@@ -199,13 +199,14 @@ public class FleetDispatchJobs {
     }
 
     /**
-     * Orders the customer or the chef cancelled: the trip ends through the craves_fleet adapter's cancel path (offers
-     * withdrawn, stages closed, the rider paid for the state reached). Unfinished trips and those with an open stage only.
+     * Orders the customer or the chef cancelled (order-service's ORDER_CANCELLED, or a refund): the trip ends through the
+     * craves_fleet adapter's cancel path (offers withdrawn, stages closed, the rider told and paid for the state reached).
+     * Unfinished trips and those with an open stage only. A Borzo or Pidge courier booked for one is FleetCourierCancel's.
      */
     int cancelledOrders() {
         List<UUID> cancelled = jdbc.queryForList("SELECT t.id FROM fleet_schema.trip t WHERE t.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED') "
-            + "AND " + FleetTripService.ORDER_REFUNDED + " UNION SELECT s.trip_id FROM fleet_schema.trip_stage s "
-            + "JOIN fleet_schema.trip t ON t.id = s.trip_id WHERE s.state = 'OPEN' AND " + FleetTripService.ORDER_REFUNDED + " LIMIT 20",
+            + "AND " + FleetTripService.ORDER_IS_CANCELLED + " UNION SELECT s.trip_id FROM fleet_schema.trip_stage s "
+            + "JOIN fleet_schema.trip t ON t.id = s.trip_id WHERE s.state = 'OPEN' AND " + FleetTripService.ORDER_IS_CANCELLED + " LIMIT 20",
             UUID.class);
         for (UUID tripId : cancelled) {
             try {
@@ -313,14 +314,21 @@ public class FleetDispatchJobs {
         return trip;
     }
 
-    /** Borzo and Pidge stages: book a handed-back order, close on a courier, move on at the deadline, end in the ops queue. */
+    /**
+     * Borzo and Pidge stages: book a handed-back order, close on a courier, move on at the deadline, end in the ops queue.
+     * Not a stage whose courier Craves cancelled (FleetCourierCancel): that courier didn't give up, and the order's cancel
+     * or ops cancel closes the stage.
+     */
     int courierStages() {
         List<CourierStage> open = jdbc.query("""
             SELECT s.id, s.trip_id, s.provider, s.opened_at, s.deadline_at <= now() AS due, t.chef_sub_order_id, t.order_id,
                    t.order_code, j.id AS job_id, j.provider_id AS job_provider, j.status AS job_status
             FROM fleet_schema.trip_stage s JOIN fleet_schema.trip t ON t.id = s.trip_id
             LEFT JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = t.chef_sub_order_id
-            WHERE s.state = 'OPEN' AND s.provider IN ('BORZO', 'PIDGE', 'OPS_QUEUE') ORDER BY s.deadline_at LIMIT 50""", (row, n) -> courierStage(row));
+            WHERE s.state = 'OPEN' AND s.provider IN ('BORZO', 'PIDGE', 'OPS_QUEUE')
+              AND NOT EXISTS (SELECT 1 FROM delivery_schema.courier_cancel c WHERE c.provider_id = j.provider_id
+                              AND c.provider_delivery_id = j.provider_delivery_id AND c.cancelled_at IS NOT NULL)
+            ORDER BY s.deadline_at LIMIT 50""", (row, n) -> courierStage(row));
         int moved = 0;
         for (CourierStage stage : open) {
             try {
@@ -365,7 +373,7 @@ public class FleetDispatchJobs {
                 // Still the rider's job, and the order still going (a cancelled one is closed by cancelledOrders, not booked).
                 return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_stage s "
                     + "JOIN fleet_schema.trip t ON t.id = s.trip_id JOIN delivery_schema.delivery_job j ON j.id = ? WHERE s.id = ? "
-                    + "AND s.state = 'OPEN' AND j.provider_id = 'craves_fleet' AND NOT " + FleetTripService.ORDER_REFUNDED + ")", Boolean.class,
+                    + "AND s.state = 'OPEN' AND j.provider_id = 'craves_fleet' AND NOT " + FleetTripService.ORDER_IS_CANCELLED + ")", Boolean.class,
                     stage.jobId(), stage.id())) && bookLocked(stage);
             } finally {
                 advisory(connection, "pg_advisory_unlock", stage.tripId());

@@ -7,7 +7,7 @@ related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx"
 
 ## Scope and mode
 
-- **Surface:** the Craves Rider app's 21 screens (`screens/*`) and their shared parts (`components/*`), from joining Craves, through going online and the trip, to getting paid, safety and account. The source is `docs/riders/designs/*.png`, and the build spec is `docs/riders/SCREENS.md`.
+- **Surface:** the Craves Riders app's 21 screens (`screens/*`) and their shared parts (`components/*`), from joining Craves, through going online and the trip, to getting paid, safety and account. The source is `docs/riders/designs/*.png`, and the build spec is `docs/riders/SCREENS.md`.
 - **Mode: Operate.** The rider is in a task: accept an offer, collect, hand over, get paid. Familiar Android patterns and precision beat expression.
 - **Platform:** native Android (React Native rider flavor). Material 3 behaviour applies: system Back, insets, 48 dp targets, font scale and TalkBack.
 - **Visual authority is pinned by the supplied designs.** Build them. Do not explore new directions or add world material.
@@ -34,7 +34,7 @@ related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx"
 ## Constraints
 
 - **Flat surfaces.** White, 1 dp `border` lines, no shadows (`elevation.none`).
-- **Actions.** One `flameRedAccessible` primary action per screen, in the pinned bottom bar. Secondary actions are outline buttons with a `borderStrong` line.
+- **Actions.** One `flameRed` (#F62E18, the Craves brand red, as in the Craves app) primary action per screen, with a white bold label, in the pinned bottom bar. Secondary actions are outline buttons with a `borderStrong` line.
 - **Header.** Status chip plus a red SOS (`error`) on every working screen. The exceptions are sign-in, offer, selfie and the SOS screen itself.
 - **No time pressure.** No customer ETA, delivery deadline, lateness warning or speed score.
 - **No in-app map.** Navigate opens Google Maps in two-wheeler mode.
@@ -50,7 +50,7 @@ THESIS: A working tool that keeps its promises visibly. Pay is first and locked,
 OWN-WORLD:
 - **Surfaces and lines:** white surfaces, 1 dp #E3DDD8 lines, espresso #261A15 text, radius 14 (hero cards 20), no shadows.
 - **Colour roles:**
-  - flame red #D92714 only for the one primary action and red text links;
+  - flame red #F62E18 (the Craves brand red, as in the Craves app) only for the one primary action, red text links, the active tab and the countdown;
   - alarm red #C72C21 only for SOS;
   - soft success, warning and info fills for status and reassurance.
 - **Type:** Roboto 400/700, with 900 reserved for offer pay (72) and the order code (60).

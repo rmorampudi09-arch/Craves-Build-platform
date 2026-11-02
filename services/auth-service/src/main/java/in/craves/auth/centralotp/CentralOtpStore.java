@@ -8,6 +8,8 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,7 @@ public class CentralOtpStore {
     }
     /** How long a code works: 10 minutes (NIST SP 800-63B-4); MSG91 is told the same (CentralOtpProvider). */
     static final long CODE_LIFE_MS = 600_000;
+    private static final Logger log = LoggerFactory.getLogger(CentralOtpStore.class);
     private final JdbcTemplate db;
     private final TransactionTemplate transaction;
     private final SecureRandom random = new SecureRandom();
@@ -31,7 +34,7 @@ public class CentralOtpStore {
         transaction.setTimeout(5);
     }
 
-    Claim send(String phone, String previous) {
+    Claim send(String phone, String previous, CentralOtpCaller.Caller caller) {
         return Objects.requireNonNull(transaction.execute(status -> {
             long now = System.currentTimeMillis();
             db.execute("SET LOCAL lock_timeout = '1000ms'");
@@ -56,8 +59,16 @@ public class CentralOtpStore {
                     throw AuthException.badRequest("OTP_RESEND_LIMIT", "The resend limit was reached. Start again shortly.");
                 }
             }
+            // Per caller, so one script can't spend the shared minute budget and lock everyone out; checked first, so a
+            // refused request never waits on that shared row (a refusal rolls back: it adds to no bucket).
+            int ipSends = caller.ip() == null ? 0 : limit("ip:" + hash(caller.ip()), now / 3600000, 20);
+            if (caller.install() != null) { limit("install:" + hash(caller.install()), now / 3600000, 10); }
             limit("global", now / 60000, 100);
             limit("phone:" + hash(phone), now / 3600000, 5);
+            // Holds no address, install or phone: only whether the limits apply, and this address's sends this hour (a
+            // count that keeps climbing across different people means they share one address: docs/riders/GO-LIVE.md §11).
+            log.info("OTP_SEND ipKnown={} viaForwarder={} installKnown={} ipSendsThisHour={}",
+                    caller.ip() != null, caller.viaForwarder(), caller.install() != null, ipSends);
             byte[] bytes = new byte[32]; random.nextBytes(bytes);
             String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
             UUID operation = UUID.randomUUID();
@@ -76,7 +87,7 @@ public class CentralOtpStore {
         }));
     }
 
-    Claim verify(String challenge) {
+    Claim verify(String challenge, CentralOtpCaller.Caller caller) {
         return Objects.requireNonNull(transaction.execute(status -> {
             long now = System.currentTimeMillis();
             db.execute("SET LOCAL lock_timeout = '1000ms'");
@@ -87,6 +98,9 @@ public class CentralOtpStore {
             String state = (String) row.get("state");
             if ((!"ACTIVE".equals(state) && !"VERIFYING".equals(state))
                     || (long) row.get("expires_at") <= now || (int) row.get("attempts") >= 5) { throw restart(); }
+            // In the attempt's transaction: they count with it, and a check they refuse rolls back without using a try.
+            if (caller.ip() != null) { limit("vip:" + hash(caller.ip()), now / 3600000, 60); }
+            if (caller.install() != null) { limit("vinst:" + hash(caller.install()), now / 3600000, 30); }
             UUID operation = UUID.randomUUID();
             db.update("UPDATE auth_phone_otp SET state='VERIFYING',operation_id=?,lease_until=?,attempts=attempts+1,"
                     + "updated_at=? WHERE challenge_hash=?", operation, now + 30000, now, hash(challenge));
@@ -103,7 +117,8 @@ public class CentralOtpStore {
                 state, state, now, hash(claim.challenge()), claim.operation(), now, now) == 1;
     }
 
-    private void limit(String scope, long bucket, int maximum) {
+    // Every scope but "global" counts hours: the cleanup in send() removes only those older than 48 of them.
+    private int limit(String scope, long bucket, int maximum) {
         Integer count = db.queryForObject("INSERT INTO auth_phone_otp_limits(scope,bucket,count) VALUES (?,?,1) "
                 + "ON CONFLICT(scope,bucket) DO UPDATE SET count=auth_phone_otp_limits.count+1 RETURNING count",
                 Integer.class, scope, bucket);
@@ -111,6 +126,7 @@ public class CentralOtpStore {
             throw new AuthException(HttpStatus.TOO_MANY_REQUESTS, "OTP_RATE_LIMIT",
                     "Too many verification requests. Please try again later.");
         }
+        return count;
     }
 
     static String hash(String value) {

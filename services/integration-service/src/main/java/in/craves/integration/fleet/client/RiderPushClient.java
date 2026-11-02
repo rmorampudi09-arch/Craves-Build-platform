@@ -94,8 +94,8 @@ public class RiderPushClient {
             return "OFF";
         }
         return realtime(Map.of("app", "rider", "token", fcmToken, "data", Map.of("type", "ACCOUNT", "decision", approved ? "APPROVE" : "FIXES"),
-            "notification", approved ? Map.of("title", "You're approved", "body", "Open Craves Rider for your next step.")
-                : Map.of("title", "Your application needs a fix", "body", "Open Craves Rider to see what ops asked for."),
+            "notification", approved ? Map.of("title", "You're approved", "body", "Open Craves Riders for your next step.")
+                : Map.of("title", "Your application needs a fix", "body", "Open Craves Riders to see what ops asked for."),
             "ttlSeconds", 600, "collapseKey", "account"));
     }
 

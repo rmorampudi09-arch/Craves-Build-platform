@@ -1,5 +1,6 @@
 package in.craves.integration.fleet.trip;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -187,6 +188,31 @@ class FleetTripControllerTest {
         mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/delivered").header("Authorization", "Bearer rider").header("Idempotency-Key", "d9")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"OTP\",\"otp\":\"4821\",\"ageMs\":90000,\"capturedOffline\":true}"))
             .andExpect(status().isOk());
+    }
+
+    /** Phase C: a key sent again with other details is refused in words the rider can act on. */
+    @Test
+    void aKeySentAgainWithOtherDetailsIs422() throws Exception {
+        when(trips.failed(identity, TRIP, "UNSAFE", null, "f1", Tap.NONE))
+            .thenThrow(FleetApiException.unprocessable("IDEMPOTENCY_KEY_REUSED", FleetTripService.KEY_REUSED));
+        mvc.perform(post("/api/v1/rider/trips/" + TRIP + "/failed").header("Authorization", "Bearer rider").header("Idempotency-Key", "f1")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"UNSAFE\"}"))
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"))
+            .andExpect(jsonPath("$.message").value("This step was already sent with different details. Open the trip again."));
+    }
+
+    /**
+     * What a key is bound to (FleetTripService.requestHash): stored hashes outlive deploys, so this form never changes. The
+     * fields that decide the step count in any order; a missing one is left out.
+     */
+    @Test
+    void theRequestAKeyIsBoundToKeepsItsForm() {
+        // SHA-256 of "POST /api/v1/rider/trips/{TRIP}/failed\n{\"note\":\"Gate locked\",\"reason\":\"UNSAFE\"}".
+        assertThat(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "UNSAFE", "note", "Gate locked"))
+            .isEqualTo("6d52c7e854c2e2e7491bd7261d5e468a6432bde074662dfc2bdbea6b69063437");
+        assertThat(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "UNSAFE", "note", null))
+            .isEqualTo(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "UNSAFE"))
+            .isNotEqualTo(FleetTripService.requestHash("/trips/" + TRIP + "/failed", "reason", "WRONG_ADDRESS"));
     }
 
     static Trip trip() {

@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.flameRedAccessible,
+    backgroundColor: colors.flameRed,
   },
   brandName: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
   label: {

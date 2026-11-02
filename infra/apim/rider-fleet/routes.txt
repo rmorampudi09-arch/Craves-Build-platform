@@ -92,6 +92,8 @@ route|admin|fleet-get-setup|GET|/setup|admin
 route|admin|fleet-post-rate-cards|POST|/rate-cards|admin
 route|admin|fleet-post-rate-cards-version-publish|POST|/rate-cards/{version}/publish|admin
 route|admin|fleet-post-dispatch-policies|POST|/dispatch-policies|admin
+route|admin|fleet-get-rain-mode|GET|/rain-mode|admin
+route|admin|fleet-put-rain-mode|PUT|/rain-mode|admin
 route|admin|fleet-put-pilot-riders-riderId|PUT|/pilot/riders/{riderId}|admin
 route|admin|fleet-delete-pilot-riders-riderId|DELETE|/pilot/riders/{riderId}|admin
 route|admin|fleet-put-pilot-kitchens-chefId|PUT|/pilot/kitchens/{chefId}|admin

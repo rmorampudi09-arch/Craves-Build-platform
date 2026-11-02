@@ -13,6 +13,8 @@ import {RiderShellContext} from '../navigation';
 import {riderKeys} from '../state/riderQueries';
 import {RiderStringsProvider} from '../strings/StringsProvider';
 import {en} from '../strings/en';
+import {hi} from '../strings/hi';
+import {kn} from '../strings/kn';
 import {te} from '../strings/te';
 import {EarningsScreen} from './EarningsScreen';
 import {HelpScreen} from './HelpScreen';
@@ -277,6 +279,12 @@ describe('Trip pay (16)', () => {
     expect(payLabel({label: en.pay.final.waiting, amountPaise: 300}, te.pay.final, 'te')).toBe(te.pay.final.waiting);
     expect(payLabel({label: 'TDS, section 194-O', amountPaise: -100}, te.pay.final, 'te')).toBe('TDS, section 194-O');
     expect(payLabel({component: 'base', label: 'Base pay, first 2 km', amountPaise: 4000}, en.pay.final, 'en')).toBe('Base pay, first 2 km');
+    // Rain mode's top-up (FleetPay "rain"): on the offer and on the finished trip, in every language.
+    for (const [language, strings] of [['te', te], ['hi', hi], ['kn', kn]] as const) {
+      expect(payLabel({component: 'rain', label: 'rain top-up', amountPaise: 2000}, strings.pay.offer, language)).toBe(strings.pay.offer.rain);
+      expect(payLabel({component: 'rain', label: 'Rain top-up', amountPaise: 2000}, strings.pay.final, language)).toBe(strings.pay.final.rain);
+    }
+    expect([en.pay.offer.rain, en.pay.final.rain]).toEqual(['rain top-up', 'Rain top-up']);
   });
 
   it('keeps the report open when sending fails', async () => {

@@ -10,16 +10,20 @@ import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRou
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DeliveryCommandWorker {
+    /** The receipt and the command's last error when its order was cancelled before a courier was booked. */
+    static final String ORDER_CANCELLED = "ORDER_CANCELLED";
     private final DeliveryCommandRepository commands;
     private final DeliveryJobRepository deliveryJobs;
     private final DeliveryProviderRouter router;
     private final DeliveryCommandCompletionService completionService;
     private final DeliveryCommandProperties properties;
     private final DeliveryCommandRetryProperties retryProperties;
+    private DeliveryCommandScheduler foodTiming;
 
     public DeliveryCommandWorker(DeliveryCommandRepository commands,
                                  DeliveryJobRepository deliveryJobs,
@@ -35,9 +39,23 @@ public class DeliveryCommandWorker {
         this.retryProperties = retryProperties;
     }
 
+    /** With delivery commands on: a command due before its riders would meet the food waits (R16 18, holdUntil). */
+    @Autowired(required = false)
+    public void setFoodTiming(DeliveryCommandScheduler scheduler) {
+        this.foodTiming = scheduler;
+    }
+
     public WorkerReceipt process(DeliveryCommandMessage message) {
         if (message == null || message.commandId() == null || message.chefSubOrderId() == null) {
             throw new DeliveryCommandNonRetryableException("Delivery command identity is missing");
+        }
+        // Before the claim, so a wait counts no attempt and the command stays SCHEDULED for the chef's ready tap.
+        // shortcut: a waiting command keeps its first dispatch_at (FOOD_TIMED_DISPATCH logs the wait); store the new
+        // time too once dispatch timing is analysed from the table.
+        Instant heldUntil = foodTiming == null ? null : foodTiming.holdUntil(message).orElse(null);
+        if (heldUntil != null) {
+            throw new DeliveryCommandDeferredException("Riders near the kitchen would arrive before the food", heldUntil,
+                "food-timed-" + message.commandId() + "-" + heldUntil.toEpochMilli());
         }
 
         Optional<CommandRecord> claimed = commands.claim(
@@ -52,6 +70,12 @@ public class DeliveryCommandWorker {
         if (existingJob.isPresent()) {
             commands.markCompleted(message.commandId());
             return new WorkerReceipt(existingJob.get(), true, "ALREADY_COMPLETED");
+        }
+        // R16 item 11: order-service cancelled the order (ORDER_CANCELLED; a refund alone never stops the food) before anyone
+        // was booked, so no rider is offered it and no courier booked.
+        if (commands.orderCancelled(message.chefSubOrderId())) {
+            commands.markDeadLetter(command.id(), ORDER_CANCELLED);
+            return new WorkerReceipt(null, false, ORDER_CANCELLED);
         }
 
         // Until the fleet stage answers, a provider wait is Craves riders deciding: it must not lengthen the courier back-off.
@@ -138,6 +162,10 @@ public class DeliveryCommandWorker {
         }
         if ("RECONCILIATION_PENDING".equals(command.status())) {
             return new WorkerReceipt(null, true, "RECONCILIATION_PENDING");
+        }
+        // Another copy of a cancelled order's command (a ready tap or a decline also sends one): done, not a dead letter.
+        if ("DEAD_LETTER".equals(command.status()) && commands.orderCancelled(chefSubOrderId)) {
+            return new WorkerReceipt(null, true, ORDER_CANCELLED);
         }
         if ("WAITING_FOR_PROVIDER".equals(command.status())) {
             Instant retryAt = command.nextProviderRetryAt();

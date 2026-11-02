@@ -17,7 +17,7 @@
     <!-- Phone setup's one-tap "Allow" for running in the background (RiderDeviceModule.openBatterySettings). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- riderLabel: "Craves Rider", or "Craves Rider Demo" for a demo build (build.gradle, cravesRiderDemo). -->
+    <!-- riderLabel: "Craves Riders", or "Craves Riders Demo" for a demo build (build.gradle, cravesRiderDemo). -->
     <application android:label="${riderLabel}" tools:replace="android:label">
         <activity android:name=".MainActivity" android:label="${riderLabel}" tools:replace="android:label" />
         <service

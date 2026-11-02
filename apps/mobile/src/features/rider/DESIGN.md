@@ -1,11 +1,10 @@
 ---
 version: alpha
-name: Craves Rider
+name: Craves Riders
 description: "The Craves delivery-partner app for Android riders in Hyderabad: flat white surfaces, 1 dp warm-grey borders, espresso text, one flame-red action per screen and a red SOS on every working screen. Built for a phone held one-handed on a scooter in sun or rain, where pay, codes and timers must read at a glance and nothing ever pressures the rider on time."
 
 colors:
   flameRed: "#F62E18"
-  flameRedAccessible: "#D92714"
   textPrimary: "#261A15"
   espresso: "#261A15"
   textSecondary: "#706864"
@@ -216,14 +215,14 @@ components:
     padding: "2px {spacing.xs}"
     height: 20px
   button-primary:
-    backgroundColor: "{colors.flameRedAccessible}"
+    backgroundColor: "{colors.flameRed}"
     textColor: "{colors.white}"
     typography: "{typography.button}"
     rounded: "{rounded.md}"
     padding: "0px {spacing.lg}"
     height: 56px
   button-primary-offer:
-    backgroundColor: "{colors.flameRedAccessible}"
+    backgroundColor: "{colors.flameRed}"
     textColor: "{colors.white}"
     typography: "{typography.heading}"
     rounded: "{rounded.md}"
@@ -254,7 +253,7 @@ components:
     rounded: "{rounded.md}"
     height: 56px
   button-ghost:
-    textColor: "{colors.flameRedAccessible}"
+    textColor: "{colors.flameRed}"
     typography: "{typography.button}"
     height: 48px
   button-ghost-neutral:
@@ -270,7 +269,7 @@ components:
     typography: "{typography.smallStrong}"
     height: 64px
   tab-item-active:
-    textColor: "{colors.flameRedAccessible}"
+    textColor: "{colors.flameRed}"
     typography: "{typography.smallStrong}"
   trip-step-segment-done:
     backgroundColor: "{colors.textPrimary}"
@@ -285,7 +284,7 @@ components:
     rounded: "{rounded.pill}"
     height: 8px
   countdown-fill:
-    backgroundColor: "{colors.flameRedAccessible}"
+    backgroundColor: "{colors.flameRed}"
     rounded: "{rounded.pill}"
     height: 8px
   timer-bar-fill:
@@ -371,7 +370,7 @@ components:
 
 ## Overview
 
-Craves Rider is the Android app delivery partners use to go online, take an offer, carry one order from a home kitchen to a customer, and see what they earned. The rider holds the phone one-handed, often on a moving scooter in Hyderabad sun or rain, wearing a helmet, on a mid-range Xiaomi, Oppo, Vivo, Realme or Samsung phone. The design answers that scene with a quiet, high-contrast working surface.
+Craves Riders is the Android app delivery partners use to go online, take an offer, carry one order from a home kitchen to a customer, and see what they earned. The rider holds the phone one-handed, often on a moving scooter in Hyderabad sun or rain, wearing a helmet, on a mid-range Xiaomi, Oppo, Vivo, Realme or Samsung phone. The design answers that scene with a quiet, high-contrast working surface.
 
 - **Surfaces.** White surfaces, 1 dp warm-grey borders and espresso text.
 - **Colour.** Flame red marks exactly one action per screen. The SOS red sits in every working screen's header.
@@ -381,7 +380,7 @@ Craves Rider is the Android app delivery partners use to go online, take an offe
 
 **Key characteristics**
 - **Flat.** No shadow anywhere. Depth comes from a 1 dp `{colors.border}` line or, for the one thing that matters most on a screen, a 1 dp `{colors.textPrimary}` line.
-- **One primary action** in a pinned bottom bar, 56 dp, `{colors.flameRedAccessible}`. Secondary actions are white outline buttons with a `{colors.borderStrong}` line.
+- **One primary action** in a pinned bottom bar, 56 dp, `{colors.flameRed}`. Secondary actions are white outline buttons with a `{colors.borderStrong}` line.
 - **A status chip and SOS in the header** of every working screen, so the rider always knows whether they are offline, waiting, or on which step of a trip.
 - **Big numbers only where they carry the decision:** pay on the offer, the code at the kitchen, the OTP at the door.
 - **Roboto, the system face,** in three weights: 400, 700 and 900.
@@ -390,8 +389,7 @@ Craves Rider is the Android app delivery partners use to go online, take an offe
 ## Colors
 
 ### Action and alarm
-- **Flame red, accessible** (`{colors.flameRedAccessible}` — `#D92714`): primary buttons, red text links ("Change number", "Customer not answering?", "Report a problem"), the active tab, and the offer countdown fill. It passes 4.5:1 on white for text.
-- **Flame red** (`{colors.flameRed}` — `#F62E18`): the brand red. It is not used on rider screens, because white text on it fails contrast. Keep it out of text-bearing surfaces.
+- **Flame red** (`{colors.flameRed}` — `#F62E18`): the Craves brand red, as in the Craves app: primary buttons (white bold labels on it), red text links ("Change number", "Customer not answering?", "Report a problem"), the active tab, and the offer countdown fill.
 - **Error** (`{colors.error}` — `#C72C21`): alarm red, used for the SOS header button, the SOS screen ("Emergency" title and the "Call Craves ops" button), and the "Not accepted" document badge. Nothing else.
 
 ### Text and lines
@@ -519,7 +517,7 @@ tokens.ts `elevation.card` and `elevation.primaryAction` exist for other app sur
 
 **`bottom-action-bar`.** Pinned, white, a 1 dp `{colors.border}` top line, 16 padding. Holds one primary button, optionally with one outline button or a neutral text button 8 below it.
 
-**`tab-bar`.** 64 dp, a 1 dp top line, three equal items: an outline icon 24 over a label in `{typography.smallStrong}`. Active `{colors.flameRedAccessible}`, inactive `{colors.textSecondary}`. Only on Home, Earnings and Profile.
+**`tab-bar`.** 64 dp, a 1 dp top line, three equal items: an outline icon 24 over a label in `{typography.smallStrong}`. Active `{colors.flameRed}`, inactive `{colors.textSecondary}`. Only on Home, Earnings and Profile.
 
 **`trip-step-segment-done` / `-todo`.** Four 4 dp pills across the content width with 4 dp gaps. Done and current segments are `{colors.textPrimary}`; upcoming segments are `{colors.border}`. Announced as one element, "Trip step N of 4".
 
@@ -569,14 +567,14 @@ All buttons use `{rounded.md}` and have no shadow.
 
 | Component | Height | Fill / line | Label | Notes |
 |---|---|---|---|---|
-| `button-primary` | 56 | `{colors.flameRedAccessible}` | white `{typography.button}` | Optional white 20 dp left icon (phone). |
+| `button-primary` | 56 | `{colors.flameRed}` | white `{typography.button}` | Optional white 20 dp left icon (phone). |
 | `button-primary-offer` | 64 | as primary | `{typography.heading}` | "Accept" on the offer, the one moment where speed and certainty matter most. |
 | `button-sos-call` | 72 | `{colors.error}` | white `{typography.heading}` | Phone icon 24. SOS screen only. |
 | `button-outline` | 56 | white, 1 dp `{colors.borderStrong}` | `{colors.textPrimary}` `{typography.button}` | Optional 24 dp icon. Two outline buttons may sit side by side with a 12 dp gap ("Call chef" / "Navigate"). |
 | `button-outline-compact` | 48 | as outline | `{typography.bodyStrong}` | In-card secondary actions: "Upload again", "Open autostart settings", "Call for a claim". |
 | outline-strong | 72 | 1 dp `{colors.textPrimary}` | two lines | "Call 112" / "Police, fire, ambulance". |
 | `button-locked` | 56 | `{colors.muted}`, no line | `{colors.textSecondary}`, lock icon 20 | Marks an action that unlocks later. Hint: "Unlocks when the timer ends". |
-| `button-ghost` | 48 hit area | none | `{colors.flameRedAccessible}` `{typography.button}` | Text-only action. Underlined when it is an escape route ("Customer not answering?", "Change number"). |
+| `button-ghost` | 48 hit area | none | `{colors.flameRed}` `{typography.button}` | Text-only action. Underlined when it is an escape route ("Customer not answering?", "Change number"). |
 | `button-ghost-neutral` | 48 hit area | none | `{colors.textSecondary}` `{typography.bodyStrong}` | "Sign out", "Resend code in 24s". |
 
 The shared `Button` differs from this design:
@@ -616,7 +614,7 @@ The real code is the 8-character short order number (e.g. "#0BDE0101"). Keep it 
 **Sign-in fields.** One `InputField` each, no `maxLength` (Android cuts a paste to it before the app sees it):
 - The mobile number keeps its 10 digits from whatever arrives: typed, pasted or autofilled with +91, a 0 or spaces.
 - The code takes typed digits, a pasted "482 615" or a whole SMS, and the sixth digit checks it: no Verify tap (Verify stays, for a retry).
-- With Google Play services, Android asks once per SMS, in its own sheet, whether Craves Rider may read that message; Allow fills the code in. One `{typography.small}` line under the field says so ("When the SMS comes, tap Allow and the code fills in by itself.") only where the phone can do it.
+- With Google Play services, Android asks once per SMS, in its own sheet, whether Craves Riders may read that message; Allow fills the code in. One `{typography.small}` line under the field says so ("When the SMS comes, tap Allow and the code fills in by itself.") only where the phone can do it.
 
 **Rate-card row (`rate-card-row`).** Label in `{typography.body}` `{colors.textSecondary}` filling the row; value in `{typography.bodyStrong}` `{colors.textPrimary}` right-aligned. The value may wrap ("Link added when the state portal opens"). 1 dp `{colors.border}` dividers sit between rows inside the card padding. The same row without dividers is the trip-pay breakdown, closed by a divider and a bold "Total" row.
 
@@ -647,7 +645,7 @@ Every screen that loads something shows one of these, never a blank screen, a sp
 | Refused (the server said no, with a code) | alert | "This didn't load", then the server's own words in English, the app's words for the code in Telugu, Hindi and Kannada | Try again |
 
 - **Failed actions** (accept, withdraw, report, send your side) say the same thing in one line, in a warning banner by the button or an alert, from `riderMessage`. The rider's words stay in the field.
-- **The start of the app** shows the name "Craves Rider" and an espresso spinner while it checks the sign-in; when that fails, the offline state with "You stay signed in" and Sign out as a `button-ghost-neutral` below, never a forced sign-out (unsynced trip steps stay on the phone).
+- **The start of the app** shows the name "Craves Riders" in white on flame red, with a rider riding along (`RiderSplash`, still with Reduce motion on), while it checks the sign-in; when that fails, the offline state with "You stay signed in" and Sign out as a `button-ghost-neutral` below, never a forced sign-out (unsynced trip steps stay on the phone).
 - **SOS without the rider role** (signing up, closed) shows "Calls work any time…" instead of a failure: both calls always work, and the location goes to ops only for a rider the server knows.
 - **Waiting for the rate card** (`RATES_PENDING`): an approved rider whose city has no published rate card yet sees why they can't accept terms, with "Check again", instead of an error.
 

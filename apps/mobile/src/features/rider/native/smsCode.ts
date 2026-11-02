@@ -2,6 +2,7 @@ import {DeviceEventEmitter, NativeModules, Platform} from 'react-native';
 
 interface NativeSmsCode {
   start(): Promise<boolean>;
+  startRetriever(): Promise<boolean>;
   stop(): void;
 }
 
@@ -11,10 +12,14 @@ export const SMS_CODE_EVENT = 'riderSmsCode';
 
 /**
  * Waits up to 5 minutes for the sign-in SMS. Android asks the rider once, in its own sheet, whether the app may read that
- * one message; with Allow, onCode gets its 6-digit code. `started` is false where the phone can't (no Play services, no
- * native module), and the rider types the code as before.
+ * one message; with Allow, onCode gets its 6-digit code. With autoRead (auth-service sent the rider template, whose text
+ * ends with this app's hash) the SMS Retriever reads it instead, with no tap and no sheet. `started` is false where the
+ * phone can't (no Play services, no native module), and the rider types the code as before.
  */
-export function listenForSmsCode(onCode: (code: string) => void): {started: Promise<boolean>; stop(): void} {
+export function listenForSmsCode(
+  onCode: (code: string) => void,
+  autoRead = false,
+): {started: Promise<boolean>; stop(): void} {
   if (!native) {
     return {started: Promise.resolve(false), stop: () => undefined};
   }
@@ -23,7 +28,7 @@ export function listenForSmsCode(onCode: (code: string) => void): {started: Prom
       onCode(code);
     }
   });
-  const started = native.start().catch(() => false);
+  const started = (autoRead ? native.startRetriever() : native.start()).catch(() => false);
   return {
     started,
     stop() {

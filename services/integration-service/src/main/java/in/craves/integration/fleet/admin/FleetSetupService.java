@@ -14,7 +14,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
+import in.craves.integration.fleet.FleetPolicyStore.RateCard;
 import in.craves.integration.fleet.FleetProperties;
+import in.craves.integration.fleet.FleetRain;
 import in.craves.integration.fleet.admin.FleetAdminModels.Admin;
 import in.craves.integration.fleet.admin.FleetAdminModels.BuiltInDispatch;
 import in.craves.integration.fleet.admin.FleetAdminModels.DispatchPolicyInput;
@@ -23,6 +25,8 @@ import in.craves.integration.fleet.admin.FleetAdminModels.FleetSetup;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotKitchen;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotNote;
 import in.craves.integration.fleet.admin.FleetAdminModels.PilotRider;
+import in.craves.integration.fleet.admin.FleetAdminModels.RainMode;
+import in.craves.integration.fleet.admin.FleetAdminModels.RainModeInput;
 import in.craves.integration.fleet.admin.FleetAdminModels.RateCardDraft;
 import in.craves.integration.fleet.admin.FleetAdminModels.RateCardVersion;
 import in.craves.integration.fleet.admin.FleetAdminService.Done;
@@ -42,6 +46,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -60,6 +65,7 @@ public class FleetSetupService {
     private static final Duration NOTICE = Duration.ofDays(14);
     private static final Set<String> MODES = Set.of("off", "shadow", "live");
     private static final List<String> LANGUAGES = List.of("en", "te", "hi");
+    static final long MAX_RAIN_TOP_UP_PAISE = 10_000;
     // The same order as FleetPolicyStore's in-force reads, so the console shows the version that pays and dispatches.
     private static final String IN_FORCE = "WHERE status = 'PUBLISHED' AND effective_from <= now() "
         + "ORDER BY effective_from DESC, created_at DESC LIMIT 1";
@@ -74,6 +80,7 @@ public class FleetSetupService {
     private final FleetPolicyStore policies;
     private final FleetAdminService admin;
     private final boolean testMode;
+    private FleetRain rain;
 
     public FleetSetupService(JdbcTemplate jdbc, ObjectMapper json, FleetPolicyStore policies, FleetAdminService admin,
                              FleetProperties properties) {
@@ -82,6 +89,12 @@ public class FleetSetupService {
         this.policies = policies;
         this.admin = admin;
         this.testMode = properties.testMode();
+    }
+
+    /** Rain mode (R16 19), a bean whenever the fleet is: the console's switch. */
+    @Autowired
+    public void setRain(FleetRain rain) {
+        this.rain = rain;
     }
 
     @Transactional(readOnly = true)
@@ -116,6 +129,11 @@ public class FleetSetupService {
         if (input.effectiveFrom() == null) {
             throw FleetApiException.invalid("Choose when the rate card starts.");
         }
+        // Outside the declared ranges (it only adds to pay), so held to a fixed bound against a slip of the keyboard.
+        long rainTopUp = input.rainTopUpPaise() == null ? 0 : input.rainTopUpPaise();
+        if (rainTopUp < 0 || rainTopUp > MAX_RAIN_TOP_UP_PAISE) {
+            throw FleetApiException.invalid("Set the rain top-up to ₹0 to ₹100 an order.");
+        }
         Map<String, List<String>> summary = summary(input.summaryOfChanges());
         String url = fullTextUrl(input.fullTextUrl());
         Map<String, Long> values = new LinkedHashMap<>();
@@ -135,10 +153,10 @@ public class FleetSetupService {
             FleetPolicyStore.refuse(FleetPolicyStore.publishProblems(values, ranges, effectiveFrom, Instant.now(), false));
             List<Object> args = new ArrayList<>(List.of(version, Timestamp.from(effectiveFrom)));
             args.addAll(given);
-            args.addAll(Arrays.asList(admin.write(ranges), admin.write(summary), url));
+            args.addAll(Arrays.asList(admin.write(ranges), admin.write(summary), url, rainTopUp));
             jdbc.update("INSERT INTO fleet_schema.rate_card (version, effective_from, " + String.join(", ", RATE_CARD_FIELDS)
-                + ", ranges, summary_of_changes, full_text_url) VALUES (?, ?, " + "?, ".repeat(RATE_CARD_FIELDS.size())
-                + "CAST(? AS jsonb), CAST(? AS jsonb), ?)", args.toArray());
+                + ", ranges, summary_of_changes, full_text_url, rain_top_up_paise) VALUES (?, ?, " + "?, ".repeat(RATE_CARD_FIELDS.size())
+                + "CAST(? AS jsonb), CAST(? AS jsonb), ?, ?)", args.toArray());
             return new Done(rateCard(version), null, version, "Drafted rate card " + version + ", to start " + effectiveFrom + ".");
         });
     }
@@ -231,6 +249,29 @@ public class FleetSetupService {
                 + "least the rounds × “Time a rider has to accept”, or run fewer rounds.");
         }
         return List.of(atOnce, rounds, band);
+    }
+
+    /** Rain mode for the console (R16 19): the ops switch, the level in force and the rate card in force's rain top-up. */
+    @Transactional(readOnly = true)
+    public RainMode rainMode() {
+        FleetRain.Status status = rain.status();
+        return new RainMode(status.setting().level(), status.level(), status.auto(), status.setting().setByName(),
+            status.setting().setAt(), policies.rateCardInForce(null).map(RateCard::rainTopUpPaise).orElse(0L));
+    }
+
+    /**
+     * Sets rain mode: off, on or severe. Each change is audited and logged (FLEET_RAIN_MODE). The server can't know when
+     * riders were told, so the console asks ops to use it only once riders had 14 days' notice.
+     */
+    @Transactional
+    public Object setRainMode(Admin by, UUID key, RainModeInput input) {
+        if (input == null || input.level() == null || !FleetRain.LEVELS.contains(input.level())) {
+            throw FleetApiException.invalid("Choose off, on or severe.");
+        }
+        return admin.once(by, key, "RAIN_MODE_SET", input.level(), () -> {
+            rain.set(input.level(), by.id(), by.name());
+            return new Done(rainMode(), null, input.level(), "Set rain mode to " + input.level() + ".");
+        });
     }
 
     /** Adds the rider to the test-mode allow-list; adding again only changes the note. */
@@ -365,7 +406,7 @@ public class FleetSetupService {
             row.getInt("pickup_free_m"), row.getLong("pickup_per_km_paise"), row.getInt("wait_free_minutes"),
             row.getLong("wait_per_minute_paise"), row.getLong("slot_guarantee_per_hour_paise"), row.getLong("cancellation_fee_paise"),
             row.getLong("return_per_km_paise"), row.getInt("unreachable_wait_minutes"), camel(read(row.getString("ranges"), RANGES)),
-            read(row.getString("summary_of_changes"), TEXT), row.getString("full_text_url"));
+            read(row.getString("summary_of_changes"), TEXT), row.getString("full_text_url"), row.getLong("rain_top_up_paise"));
     }
 
     private DispatchPolicyVersion dispatchPolicy(ResultSet row) throws SQLException {

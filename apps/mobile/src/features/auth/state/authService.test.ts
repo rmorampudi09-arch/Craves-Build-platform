@@ -171,7 +171,7 @@ describe('authService phone OTP by MSG91', () => {
     clearLocalMock.mockResolvedValue(undefined);
     signOutMock.mockResolvedValue(undefined);
     // Leave no challenge from an earlier test: a used one is cleared by a successful verify.
-    sendMock.mockResolvedValue('z'.repeat(43));
+    sendMock.mockResolvedValue({challengeId: 'z'.repeat(43), autoRead: false});
     verifyMock.mockResolvedValue('custom-token');
     customTokenMock.mockResolvedValue('firebase-id-token');
     exchangeMock.mockResolvedValue(createTokenPair());
@@ -185,52 +185,82 @@ describe('authService phone OTP by MSG91', () => {
 
   it('sends, verifies, signs in with the custom token and exchanges it', async () => {
     const tokens = createTokenPair();
-    sendMock.mockResolvedValue(first);
+    sendMock.mockResolvedValue({challengeId: first, autoRead: false});
     verifyMock.mockResolvedValue('custom-token');
     customTokenMock.mockResolvedValue('firebase-id-token');
     exchangeMock.mockResolvedValue(tokens);
 
-    await authService.beginMsg91Phone('+919848012345');
-    expect(sendMock).toHaveBeenCalledWith('9848012345', undefined);
+    await expect(authService.beginMsg91Phone('+919848012345')).resolves.toEqual({autoRead: false});
+    expect(sendMock).toHaveBeenCalledWith('9848012345', undefined, undefined);
     await expect(authService.confirmMsg91Otp('482913')).resolves.toEqual(tokens);
-    expect(verifyMock).toHaveBeenCalledWith(first, '482913');
+    expect(verifyMock).toHaveBeenCalledWith(first, '482913', undefined);
     expect(customTokenMock).toHaveBeenCalledWith('custom-token');
     expect(exchangeMock).toHaveBeenCalledWith('firebase-id-token');
     expect(acceptTokenPairMock).toHaveBeenCalledWith(tokens);
   });
 
-  it('resends on the same challenge, and starts again when the server no longer knows it', async () => {
-    sendMock.mockResolvedValueOnce(first).mockResolvedValueOnce(first);
-    await authService.beginMsg91Phone('+919848012345');
-    await authService.beginMsg91Phone('+919848012345');
-    expect(sendMock).toHaveBeenLastCalledWith('9848012345', first);
+  it("passes the rider app's client to both calls and answers whether the SMS reads itself", async () => {
+    const rider = {app: 'rider' as const, installationId: 'a1b2c3d4e5f60718'};
+    sendMock.mockResolvedValueOnce({challengeId: first, autoRead: true});
+    await expect(authService.beginMsg91Phone('+919848012345', rider)).resolves.toEqual({autoRead: true});
+    expect(sendMock).toHaveBeenCalledWith('9848012345', undefined, rider);
+    // A restart sends the client again, and the new answer stands.
+    sendMock.mockRejectedValueOnce(new AppApiError('OTP_RESTART', 'Start again')).mockResolvedValueOnce({challengeId: second, autoRead: false});
+    await expect(authService.beginMsg91Phone('+919848012345', rider)).resolves.toEqual({autoRead: false});
+    expect(sendMock).toHaveBeenLastCalledWith('9848012345', undefined, rider);
+    verifyMock.mockResolvedValue('custom-token');
+    customTokenMock.mockResolvedValue('id');
+    exchangeMock.mockResolvedValue(createTokenPair());
+    await authService.confirmMsg91Otp('482913', rider);
+    expect(verifyMock).toHaveBeenCalledWith(second, '482913', rider);
+  });
 
-    sendMock.mockRejectedValueOnce(new AppApiError('OTP_RESTART', 'Start again')).mockResolvedValueOnce(second);
+  it('resends on the same challenge, and starts again when the server no longer knows it', async () => {
+    sendMock.mockResolvedValueOnce({challengeId: first, autoRead: false}).mockResolvedValueOnce({challengeId: first, autoRead: false});
     await authService.beginMsg91Phone('+919848012345');
-    expect(sendMock).toHaveBeenLastCalledWith('9848012345', undefined);
+    await authService.beginMsg91Phone('+919848012345');
+    expect(sendMock).toHaveBeenLastCalledWith('9848012345', first, undefined);
+
+    sendMock.mockRejectedValueOnce(new AppApiError('OTP_RESTART', 'Start again')).mockResolvedValueOnce({challengeId: second, autoRead: false});
+    await authService.beginMsg91Phone('+919848012345');
+    expect(sendMock).toHaveBeenLastCalledWith('9848012345', undefined, undefined);
     verifyMock.mockResolvedValue('custom-token');
     customTokenMock.mockResolvedValue('id');
     exchangeMock.mockResolvedValue(createTokenPair());
     await authService.confirmMsg91Otp('482913');
-    expect(verifyMock).toHaveBeenCalledWith(second, '482913');
+    expect(verifyMock).toHaveBeenCalledWith(second, '482913', undefined);
   });
 
   it('keeps the challenge after a wrong code and drops it after any other failure', async () => {
-    sendMock.mockResolvedValue(first);
+    sendMock.mockResolvedValue({challengeId: first, autoRead: false});
     await authService.beginMsg91Phone('+919848012345');
     verifyMock.mockRejectedValueOnce(new AppApiError('OTP_INVALID', 'Wrong code'));
     await expect(authService.confirmMsg91Otp('111111')).rejects.toMatchObject({code: 'OTP_INVALID'});
 
     verifyMock.mockRejectedValueOnce(new AppApiError('OTP_RESTART', 'Start again'));
     await expect(authService.confirmMsg91Otp('222222')).rejects.toMatchObject({code: 'OTP_RESTART'});
-    expect(verifyMock).toHaveBeenNthCalledWith(2, first, '222222');
+    expect(verifyMock).toHaveBeenNthCalledWith(2, first, '222222', undefined);
 
     await expect(authService.confirmMsg91Otp('333333')).rejects.toMatchObject({code: 'OTP_EXPIRED'});
     expect(verifyMock).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the challenge after the verify rate limit, so the next Verify works without a resend', async () => {
+    sendMock.mockResolvedValue({challengeId: first, autoRead: false});
+    await authService.beginMsg91Phone('+919848012345');
+    verifyMock.mockRejectedValueOnce(new AppApiError('OTP_RATE_LIMIT', 'Too many tries', 429));
+    await expect(authService.confirmMsg91Otp('111111')).rejects.toMatchObject({code: 'OTP_RATE_LIMIT'});
+
+    verifyMock.mockResolvedValueOnce('custom-token');
+    customTokenMock.mockResolvedValue('id');
+    exchangeMock.mockResolvedValue(createTokenPair());
+    await expect(authService.confirmMsg91Otp('482913')).resolves.toEqual(createTokenPair());
+    expect(verifyMock).toHaveBeenNthCalledWith(2, first, '482913', undefined);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
   it('passes cooldown and resend-limit refusals through without starting again', async () => {
-    sendMock.mockResolvedValueOnce(first);
+    sendMock.mockResolvedValueOnce({challengeId: first, autoRead: false});
     await authService.beginMsg91Phone('+919848012345');
     sendMock.mockRejectedValueOnce(new AppApiError('OTP_COOLDOWN', 'Wait'));
     await expect(authService.beginMsg91Phone('+919848012345')).rejects.toMatchObject({code: 'OTP_COOLDOWN'});

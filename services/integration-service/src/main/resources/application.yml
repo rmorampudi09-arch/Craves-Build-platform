@@ -57,6 +57,11 @@ craves:
     # Riders may take a break while online and choose the farthest pickup and drop they hear of (Phase 4). Switch on once
     # the APIM routes for /shift/pause, /shift/resume and /preferences are published and the app that shows them is out.
     rider-choices-enabled: ${CRAVES_FLEET_RIDER_CHOICES_ENABLED:false}
+    # R16 16 (DISPATCH.md §2, "A phone that doesn't ring"), 0 = off: with rounds, an offer whose phone hasn't reported ringing
+    # this many seconds after it went out (15: one idle poll and a margin) no longer holds up the next rider; the first
+    # accept wins. It changes who hears of an order: 14 days' notice to riders first, and only once offer_outcomes shows
+    # over 20% of offers expiring unanswered for two weeks with every rider on app 1.1.0 or later (GO-LIVE.md §8).
+    unheard-next-rider-seconds: ${CRAVES_FLEET_UNHEARD_NEXT_RIDER_SECONDS:0}
     # The fleet engine (Phase 5, services/fleet-engine, docs/riders/SCALE.md). off: nothing is written to Redis. shadow:
     # rider events and every order's ranking go to the engine, which compares and logs (FLEET_ENGINE_SHADOW); offers stay
     # Java's. live: dispatch asks the engine first and ranks itself after reply-timeout-ms. Partitions and key prefix must
@@ -79,6 +84,10 @@ craves:
     eta:
       mode: ${CRAVES_FLEET_ETA_MODE:off}
       model-version: ${CRAVES_FLEET_ETA_MODEL_VERSION:}
+    # Rain mode (R16 19, docs/riders/DISPATCH.md "Rain mode"): ops switch it from the console. With this on, it also comes on
+    # by itself while the last 30 minutes' rides to the door run 1.3 times the travel-time model's minutes (eta.mode live
+    # only). Riders must have had 14 days' notice before its first use, automatic or not.
+    rain-auto: ${CRAVES_FLEET_RAIN_AUTO:false}
     # RIDER grant and revoke (auth-service InternalRoleController); no call is made until both are set.
     auth-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
     internal-service-key: ${CRAVES_INTERNAL_SERVICE_KEY:}
@@ -164,6 +173,12 @@ craves:
     chef-accepted-subscription-name: ${SERVICE_BUS_CHEF_ACCEPTED_SUBSCRIPTION:integration-service-chef-accepted}
     queue-name: ${SERVICE_BUS_DELIVERY_COMMAND_QUEUE:delivery-command}
     lead-time-minutes: ${CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES:10}
+    # R16 10: off until 2 to 4 weeks of ready taps (pilot_health.sql ready_vs_promise); docs/riders/GO-LIVE.md.
+    ready-correction-enabled: ${CRAVES_DELIVERY_READY_CORRECTION_ENABLED:false}
+    # R16 18: start at predicted ready - free riders' predicted ride to the kitchen - 2 min, never earlier than the lead says.
+    # Works only with CRAVES_FLEET_ETA_MODE=live, a version whose ranking passed and dispatch live; off until 500 delivered
+    # legs and the ready correction has run (docs/riders/DISPATCH.md §9).
+    food-timed-dispatch-enabled: ${CRAVES_DELIVERY_FOOD_TIMED_DISPATCH_ENABLED:false}
     quote-timeout-seconds: ${CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS:4}
     max-provider-attempts: ${CRAVES_DELIVERY_MAX_PROVIDER_ATTEMPTS:3}
     max-delivery-attempts: ${CRAVES_DELIVERY_MAX_DELIVERY_ATTEMPTS:5}

@@ -16,6 +16,8 @@ public final class DeliveryCommandModels {
     public static final String ORDER_READY_FOR_PICKUP = "ORDER_READY_FOR_PICKUP";
     /** The chef handed the food to the courier (order-service markHandedOver; P2-05). */
     public static final String ORDER_HANDED_OVER = "ORDER_HANDED_OVER";
+    /** order-service cancelled the chef order after acceptance (OrderCancelledEventFactory; R16 item 11). */
+    public static final String ORDER_CANCELLED = "ORDER_CANCELLED";
     public static final String DELIVERY_COMMAND = "DELIVERY_COMMAND";
     public static final String DELIVERY_STATUS_CHANGED = "DELIVERY_STATUS_CHANGED";
 
@@ -50,6 +52,14 @@ public final class DeliveryCommandModels {
         UUID orderId,
         UUID chefSubOrderId,
         Instant handedOverAt
+    ) {}
+
+    /** contracts/events/order-cancelled-v1.schema.json's data. */
+    public record OrderCancelledData(
+        UUID checkoutId,
+        UUID chefSubOrderId,
+        String reason,
+        Instant cancelledAt
     ) {}
 
     public record DeliveryCommandMessage(

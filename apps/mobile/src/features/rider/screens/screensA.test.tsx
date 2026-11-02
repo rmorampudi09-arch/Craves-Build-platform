@@ -28,7 +28,10 @@ import {PrivacyNoticeScreen} from './PrivacyNoticeScreen';
 import {TermsScreen} from './TermsScreen';
 
 const mockNavigation = {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn(), popTo: jest.fn(), isFocused: () => true};
-const mockSession = {beginPhone: jest.fn(async (_phone: string) => undefined), confirmOtp: jest.fn(async (_code: string) => undefined)};
+const mockSession = {
+  beginPhone: jest.fn(async (_phone: string) => ({autoRead: false})),
+  confirmOtp: jest.fn(async (_code: string) => undefined),
+};
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/native', () => ({
@@ -152,7 +155,7 @@ const flush = () =>
 beforeEach(() => {
   jest.clearAllMocks();
   // clearAllMocks keeps unused mock*Once values; never let one leak into the next test.
-  mockSession.beginPhone.mockReset().mockResolvedValue(undefined);
+  mockSession.beginPhone.mockReset().mockResolvedValue({autoRead: false});
   mockSession.confirmOtp.mockReset().mockResolvedValue(undefined);
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
@@ -177,7 +180,7 @@ describe('Sign in', () => {
     await act(async () => input('rider-phone-input').props.onChangeText('98480 12345'));
     await act(async () => press('rider-send-code').props.onPress());
     expect(mockSession.beginPhone).toHaveBeenCalledWith('+919848012345');
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('Otp', {phone: '+919848012345'});
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Otp', {phone: '+919848012345', autoRead: false});
   });
 
   it('takes a number pasted or filled in with +91, 0 or spaces, and never lets Android cut it short', async () => {
@@ -988,8 +991,8 @@ describe('Phone setup', () => {
     await render(<PhoneSetupScreen {...props} />);
     const text = allText();
     expect(text).toContain('4 of 7 done');
-    expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Rider.');
-    expect(text).toContain('Open recent apps, press and hold the Craves Rider card, then tap the lock.');
+    expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Riders.');
+    expect(text).toContain('Open recent apps, press and hold the Craves Riders card, then tap the lock.');
     expect(text).not.toContain('Allow location');
     await act(async () => tree.root.findByProps({label: "I've locked it"}).props.onPress());
     expect(allText()).toContain('5 of 7 done');
@@ -999,7 +1002,7 @@ describe('Phone setup', () => {
     (riderDevice.state as jest.Mock).mockResolvedValueOnce({...device('xiaomi'), fullScreenAllowed: false});
     await render(<PhoneSetupScreen {...props} />);
     expect(allText()).toContain(
-      'Show offers over the lock screen | Recommended | Tap the button and allow full screen notifications for Craves Rider.',
+      'Show offers over the lock screen | Recommended | Tap the button and allow full screen notifications for Craves Riders.',
     );
     expect(allText()).toContain('3 of 7 done');
     expect(press('rider-setup-done')).toBeTruthy();
@@ -1011,7 +1014,7 @@ describe('Phone setup', () => {
     (riderDevice.state as jest.Mock).mockResolvedValueOnce(device('samsung'));
     await render(<PhoneSetupScreen {...props} />);
     expect(allText()).toContain('On your Samsung: open Settings, then Battery, then Background usage limits');
-    expect(allText()).toContain('tap the Craves Rider icon above its card, then tap Keep open.');
+    expect(allText()).toContain('tap the Craves Riders icon above its card, then tap Keep open.');
   });
 
   it('opens the app settings when location was refused for good', async () => {
@@ -1331,7 +1334,7 @@ describe('Go online', () => {
 
   it.each([
     ['DOCUMENTS_EXPIRED', 'A document has expired. Upload the new one in Profile, then go online.'],
-    ['APP_UPDATE_REQUIRED', 'Update the Craves Rider app to go online.'],
+    ['APP_UPDATE_REQUIRED', 'Update the Craves Riders app to go online.'],
     ['RIDER_NOT_ACTIVE', "Your account can't do this right now. Open your account page to see why."],
   ])('says why the server refused the shift (403 %s)', async (code, text) => {
     (riderApi.startShift as jest.Mock).mockRejectedValueOnce(refusal(403, code, 'Renew these before going online: Insurance'));
@@ -1526,6 +1529,12 @@ describe('Offer', () => {
   it('shows just the lock when the server sends no breakdown', async () => {
     await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: {...offer, payLines: []}, receivedAtMs: Date.now()}}} />);
     expect(allText()).toContain('₹67 | Locked once you accept.');
+  });
+
+  it("adds rain mode's top-up to the breakdown, in the server's total", async () => {
+    const rainy = {...offer, payPaise: 8700, payLines: [...offer.payLines, {component: 'rain', label: 'rain top-up', amountPaise: 2000}]};
+    await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: rainy, receivedAtMs: Date.now()}}} />);
+    expect(allText()).toContain('₹87 | ₹40 base + ₹18 drop distance + ₹9 ride to the kitchen + ₹20 rain top-up. Locked once you accept.');
   });
 
   it('stops the ring and holds Decline while Accept is on its way; with no answer, the offer stays and both come back', async () => {

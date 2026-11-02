@@ -17,11 +17,12 @@ import java.util.OptionalLong;
  */
 public final class FleetPay {
     /** Offer lines, short so the app can join them into one sentence ("₹40 base + ₹13.50 drop distance"). */
-    static final Map<String, String> OFFER_LABELS = Map.of("base", "base", "drop-km", "drop distance", "pickup-km", "ride to the kitchen");
+    static final Map<String, String> OFFER_LABELS = Map.of("base", "base", "drop-km", "drop distance", "pickup-km", "ride to the kitchen",
+        "rain", "rain top-up");
     /** Lines on the finished trip and in earnings. */
     public static final Map<String, String> FINAL_LABELS = Map.of("base", "Base pay", "drop-km", "Drop distance",
         "pickup-km", "Ride to the kitchen", "waiting", "Waiting at the kitchen", "cancellation", "Cancellation fee",
-        "return-km", "Return to the kitchen");
+        "return-km", "Return to the kitchen", "rain", "Rain top-up");
 
     private FleetPay() {
     }
@@ -45,15 +46,27 @@ public final class FleetPay {
 
     /** The locked pay an offer shows before accepting. */
     public static PayQuote quote(RateCard card, int dropDistanceM, int pickupDistanceM) {
+        return quote(card, dropDistanceM, pickupDistanceM, false);
+    }
+
+    /** raining: rain mode is on (FleetRain), so the card's rain top-up is a line of its own, when the card has one. */
+    public static PayQuote quote(RateCard card, int dropDistanceM, int pickupDistanceM, boolean raining) {
         List<PayLine> lines = new ArrayList<>();
         add(lines, OFFER_LABELS, "base", card.basePaise());
         add(lines, OFFER_LABELS, "drop-km", kmPay(card.dropPerKmPaise(), dropDistanceM, card.baseDropM()));
         add(lines, OFFER_LABELS, "pickup-km", kmPay(card.pickupPerKmPaise(), pickupDistanceM, card.pickupFreeM()));
+        add(lines, OFFER_LABELS, "rain", raining ? card.rainTopUpPaise() : 0);
         return new PayQuote(card.version(), dropDistanceM, pickupDistanceM, List.copyOf(lines), total(lines));
     }
 
     /** The pay a trip ends with, from its locked card and distances and the paid waiting seconds. */
     public static List<PayLine> finalLines(RateCard card, Ending ending, int dropDistanceM, int pickupDistanceM, long waitSeconds) {
+        return finalLines(card, ending, dropDistanceM, pickupDistanceM, waitSeconds, 0);
+    }
+
+    /** rainPaise: the rain top-up the accepted offer locked, paid with full pay (not on a cancellation before pickup). */
+    public static List<PayLine> finalLines(RateCard card, Ending ending, int dropDistanceM, int pickupDistanceM, long waitSeconds,
+                                           long rainPaise) {
         List<PayLine> lines = new ArrayList<>();
         long pickupPay = kmPay(card.pickupPerKmPaise(), pickupDistanceM, card.pickupFreeM());
         switch (ending) {
@@ -67,6 +80,7 @@ public final class FleetPay {
                 add(lines, FINAL_LABELS, "base", card.basePaise());
                 add(lines, FINAL_LABELS, "drop-km", kmPay(card.dropPerKmPaise(), dropDistanceM, card.baseDropM()));
                 add(lines, FINAL_LABELS, "pickup-km", pickupPay);
+                add(lines, FINAL_LABELS, "rain", rainPaise);
                 add(lines, FINAL_LABELS, "waiting", waitPay(card, waitSeconds));
                 if (ending == Ending.FAILED_AFTER_PICKUP) {
                     add(lines, FINAL_LABELS, "return-km", kmPay(card.returnPerKmPaise(), dropDistanceM, 0));

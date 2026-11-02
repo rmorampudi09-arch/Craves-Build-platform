@@ -41,8 +41,12 @@ const pilotRider = { riderId: RIDER, name: "Ravi Kumar", status: "ACTIVE", note:
 const pilotKitchen = { chefId: CHEF, note: "Asha's kitchen", addedAt: at };
 const base = { testMode: true, dispatchPolicy: null, dispatchPolicies: [], rateCard: null, rateCards: [card], pilotRiders: [pilotRider], pilotKitchens: [pilotKitchen] };
 let setup: Record<string, unknown> = base;
+const rainOff = { level: "off", inForce: "off", auto: false, setByName: null, setAt: null, rainTopUpPaise: 0 };
+let rain: Record<string, unknown> = rainOff;
+const RAIN_NOTICE = "Rain mode changes how orders are offered, so riders must have been told about it 14 days before its first use. Switch it on only once that notice has gone out.";
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const reads = (method: string, path: string) => method === "GET" && path === "setup" ? json(setup)
+  : method === "GET" && path === "rain-mode" ? json(rain)
   : method === "GET" && path === "riders?search=sita" ? json({ riders: [{ riderId: SITA, name: "Sita Devi", phoneMasked: "+91 98xxxxx210", status: "ACTIVE", pendingDocuments: 0, pendingDevice: false, createdAt: at }], nextCursor: null })
     : json({ code: "UNMOCKED", message: `${method} ${path}` }, 500);
 const sends = () => calls.filter(call => call.method !== "GET");
@@ -53,6 +57,7 @@ const section = async (heading: string) => (await screen.findByRole("heading", {
 beforeEach(() => {
   calls.length = 0;
   setup = base;
+  rain = rainOff;
   vi.stubGlobal("confirm", vi.fn(() => true));
   answer = reads;
 });
@@ -239,6 +244,71 @@ describe("dispatch", () => {
   });
 });
 
+describe("rain mode", () => {
+  it("is off with the notice shown, and goes on only after a confirmation that names the notice", async () => {
+    render(createElement(FleetSetup));
+    const panel = await section("Rain mode");
+    expect(await within(panel).findByText("In force now: Off")).toBeTruthy();
+    expect(within(panel).getByText(RAIN_NOTICE)).toBeTruthy();
+    expect(panel.textContent).toContain("riders get at least 45 s to accept and an order at most 2 rounds, the search for a rider starts 5 minutes earlier");
+    expect(panel.textContent).toContain("Never switched on. The automatic switch is off. It is a server setting; this page can't change it.");
+    expect(within(panel).getByText("The rate card in force has no rain top-up, so offers add none.")).toBeTruthy();
+    expect((within(panel).getByLabelText("Off") as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(within(panel).getByLabelText("On"));
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    fireEvent.click(button("Save rain mode", panel));
+    expect(window.confirm).toHaveBeenCalledWith(`Switch rain mode on? ${RAIN_NOTICE}`);
+    expect(sends()).toHaveLength(0);
+
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    answer = (method, path) => method === "PUT" ? json({ ...rainOff, level: "on", inForce: "on", setByName: "Admin +91 98xxxxx210", setAt: at }) : reads(method, path);
+    fireEvent.click(button("Save rain mode", panel));
+    expect(await within(panel).findByText("Rain mode saved.")).toBeTruthy();
+    expect(sends()).toEqual([{ method: "PUT", path: "rain-mode", key: expect.stringMatching(/^[0-9a-f-]{36}$/), body: { level: "on" } }]);
+    expect(within(panel).getByText("In force now: On")).toBeTruthy();
+    expect(panel.textContent).toContain("Set to On by Admin +91 98xxxxx210, 22 Oct 2026, 10:00 am IST.");
+  });
+
+  it("asks before severe, and turns rain mode off without asking", async () => {
+    rain = { ...rainOff, level: "on", inForce: "on", setByName: "Asha", setAt: at };
+    render(createElement(FleetSetup));
+    const panel = await section("Rain mode");
+    await within(panel).findByText("In force now: On");
+    fireEvent.click(within(panel).getByLabelText("Severe — new orders straight to Borzo or Pidge"));
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    fireEvent.click(button("Save rain mode", panel));
+    expect(window.confirm).toHaveBeenCalledWith(`Switch rain mode to severe? New orders go straight to Borzo or Pidge. ${RAIN_NOTICE}`);
+
+    answer = (method, path) => method === "PUT" ? json({ ...rainOff, setByName: "Asha", setAt: at }) : reads(method, path);
+    fireEvent.click(within(panel).getByLabelText("Off"));
+    fireEvent.click(button("Save rain mode", panel));
+    expect(await within(panel).findByText("Rain mode saved.")).toBeTruthy();
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(sends().map(call => call.body)).toEqual([{ level: "off" }]);
+    expect(within(panel).getByText("In force now: Off")).toBeTruthy();
+  });
+
+  it("says when it came on by itself, and the rain top-up of the rate card in force", async () => {
+    rain = { ...rainOff, inForce: "on", auto: true, rainTopUpPaise: 2000 };
+    render(createElement(FleetSetup));
+    const panel = await section("Rain mode");
+    expect(await within(panel).findByText("In force now: On, switched on by itself: the last 30 minutes' rides to the door took 1.3 times their predicted minutes.")).toBeTruthy();
+    expect(panel.textContent).toContain("The automatic switch is on: while this is Off, rain mode comes on by itself when rides run 1.3 times their predicted minutes.");
+    expect(within(panel).getByText("Rain top-up on the rate card in force: ₹20.00 an order.")).toBeTruthy();
+    expect((within(panel).getByLabelText("Off") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("keeps the rest of the page when rain mode can't be read", async () => {
+    answer = (method, path) => path === "rain-mode" ? json({ code: "FLEET_OPERATION_NOT_FOUND", message: "This fleet operation does not exist." }, 404) : reads(method, path);
+    render(createElement(FleetSetup));
+    const panel = await section("Rain mode");
+    expect(await within(panel).findByText("This fleet operation does not exist.")).toBeTruthy();
+    expect(within(panel).queryByRole("button", { name: "Save rain mode" })).toBeNull();
+    expect(within(await section("Dispatch")).getByRole("button", { name: "Save dispatch policy" })).toBeTruthy();
+  });
+});
+
 describe("rate card", () => {
   it("publishes the first card at once after a confirmation", async () => {
     render(createElement(FleetSetup));
@@ -293,13 +363,17 @@ describe("rate card", () => {
     }
     for (const label of ["Free waiting, minutes", "Wait for an unreachable customer, minutes"]) { type(`${label}: lowest`, "5", form); type(`${label}: highest`, "15", form); }
     type("Base pay, ₹", "42.5", form);
+    // Rain mode's top-up has no declared range: it only adds to pay.
+    expect((within(form).getByLabelText("Rain top-up an order while rain mode is on, ₹") as HTMLInputElement).value).toBe("0.00");
+    expect(within(form).queryByLabelText(/Rain top-up.*: lowest/)).toBeNull();
+    type("Rain top-up an order while rain mode is on, ₹", "15", form);
     type("Starts (IST)", "2026-10-22T10:00", form);
     type(/What changes, in English/, "Base pay is ₹42.50.\nWaiting is paid after 8 minutes.", form);
     answer = (method, path) => method === "POST" ? json({ ...card, version: "2026-10-v2", basePaise: 4250 }, 201) : reads(method, path);
     fireEvent.click(button("Save draft", form));
     expect(await within(form).findByText("Draft saved. Check it in the table, then publish it.")).toBeTruthy();
     const body = sends()[0].body as Record<string, unknown> & { ranges: Record<string, number[]> };
-    expect(body).toMatchObject({ basePaise: 4250, baseDropM: 2000, waitPerMinutePaise: 150, effectiveFrom: "2026-10-22T04:30:00.000Z", summaryOfChanges: { en: ["Base pay is ₹42.50.", "Waiting is paid after 8 minutes."] } });
+    expect(body).toMatchObject({ basePaise: 4250, baseDropM: 2000, waitPerMinutePaise: 150, rainTopUpPaise: 1500, effectiveFrom: "2026-10-22T04:30:00.000Z", summaryOfChanges: { en: ["Base pay is ₹42.50.", "Waiting is paid after 8 minutes."] } });
     expect([body.ranges.basePaise, body.ranges.baseDropM, body.ranges.slotGuaranteePerHourPaise, body.ranges.waitFreeMinutes]).toEqual([[3000, 6000], [500, 3000], [0, 20000], [5, 15]]);
   });
 });

@@ -13,6 +13,9 @@ export const RATE_CARD_FIELDS = [
 ] as const;
 // How orders are offered (Phase 4, docs/riders/DISPATCH.md): riders at once, rounds, fair band in metres.
 export const RULE_FIELDS = ["offersAtOnce", "offerRounds", "fairBandM"] as const;
+// Rain mode (docs/riders/DISPATCH.md, "Rain mode"): off, on, or severe (new orders straight to Borzo or Pidge).
+export const RAIN_LEVELS = ["off", "on", "severe"] as const;
+export const RAIN_TOP_UP_MAX_PAISE = 10_000;
 /**
  * The dispatch values every new version gets (owner's decision, 1 Nov 2026): one rider at a time, nearest first, then the next
  * rider, the way food delivery apps hand out orders. Ops can't choose them. The setup sends them as builtInDispatch; these stand
@@ -50,6 +53,8 @@ export const builtInDispatchSchema = z.object({ ...each(DISPATCH_FIELDS, count),
 export const rateCardSchema = z.object({
   ...versionMeta, ...each(RATE_CARD_FIELDS, count), ranges: z.object(each(RATE_CARD_FIELDS, range.optional())),
   summaryOfChanges: z.object({ en: lines, te: lines.nullish(), hi: lines.nullish() }), fullTextUrl: z.string().max(400).nullish(),
+  // Rain mode: added to each order offered while it is on; an older server sends none.
+  rainTopUpPaise: count.default(0),
 });
 export const pilotRiderSchema = z.object({ riderId: id, name: personName, status: riderStatusSchema, note, addedAt: instant });
 export const pilotKitchenSchema = z.object({ chefId: id, note, addedAt: instant });
@@ -70,9 +75,17 @@ export const rateCardDraftSchema = z.object({
   fullTextUrl: z.string().max(400, "Keep the link to 400 characters.").url("Enter the full terms link as https://…").startsWith("https://", "Enter the full terms link as https://…").optional(),
   // Only while no rate card is published; later cards keep the first published ranges.
   ranges: z.object(each(RATE_CARD_FIELDS, range.refine(([min, max]) => min <= max, "A lowest value is above its highest."))).optional(),
+  // Outside the ranges (it only adds to pay); the server takes ₹0 to ₹100.
+  rainTopUpPaise: count.max(RAIN_TOP_UP_MAX_PAISE, "Set the rain top-up to ₹0 to ₹100 an order.").optional(),
 });
 /** {mode} or {mode, effectiveFrom}: the server gives a new version the built-in values; an off starting now keeps those riders are shown. */
 export const dispatchPolicyInputSchema = z.object({ mode: z.enum(DISPATCH_MODES), effectiveFrom: instant.optional() });
+/** Rain mode (R16 19): level is the ops switch; inForce what dispatch runs on now, also on while the automatic switch finds rides slow. */
+export const rainModeSchema = z.object({
+  level: z.enum(RAIN_LEVELS), inForce: z.enum(RAIN_LEVELS), auto: z.boolean(), setByName: z.string().max(200).nullish(), setAt: instant.nullish(),
+  rainTopUpPaise: count,
+});
+export const rainModeInputSchema = z.object({ level: z.enum(RAIN_LEVELS) });
 /** PUT pilot/... sends {note} or no body. */
 export const pilotNoteSchema = z.object({ note: z.string().trim().min(1).max(200, "Keep the note to 200 characters.").optional() }).optional();
 
@@ -84,6 +97,8 @@ export type PilotRider = z.infer<typeof pilotRiderSchema>;
 export type PilotKitchen = z.infer<typeof pilotKitchenSchema>;
 export type RateCardDraft = z.infer<typeof rateCardDraftSchema>;
 export type DispatchPolicyInput = z.infer<typeof dispatchPolicyInputSchema>;
+export type RainLevel = (typeof RAIN_LEVELS)[number];
+export type RainMode = z.infer<typeof rainModeSchema>;
 
 /** How the console shows an API integer: paise as rupees, metres as km, the rest as they are. */
 export type Unit = "rupees" | "km" | "minutes" | "seconds" | "percent" | "count";
@@ -193,20 +208,26 @@ export function dispatchFromForm(form: DispatchForm, notice: string, now = Date.
 
 export type RateCardForm = Record<RateCardField, string> & {
   ranges: Record<RateCardField, [string, string]>; effectiveFrom: string; en: string; te: string; hi: string; fullTextUrl: string;
+  rainTopUpPaise: string;
 };
+
+/** The new draft's amounts: the rate card's values, and the rain top-up, which has no declared range. */
+export const DRAFT_INPUTS: readonly UnitInput<RateCardField | "rainTopUpPaise">[] = [
+  ...RATE_CARD_INPUTS, { field: "rainTopUpPaise", label: "Rain top-up an order while rain mode is on, ₹", unit: "rupees" },
+];
 
 export function rateCardForm(card: RateCard | null, effectiveFrom = ""): RateCardForm {
   const text = (unit: Unit, value: number | undefined) => value === undefined ? "" : toUnitText(unit, value);
   return {
     ...Object.fromEntries(RATE_CARD_INPUTS.map(({ field, unit }) => [field, text(unit, card?.[field])])) as Record<RateCardField, string>,
     ranges: Object.fromEntries(RATE_CARD_INPUTS.map(({ field, unit }) => [field, [text(unit, card?.ranges[field]?.[0]), text(unit, card?.ranges[field]?.[1])]])) as Record<RateCardField, [string, string]>,
-    effectiveFrom, en: "", te: "", hi: "", fullTextUrl: "",
+    effectiveFrom, en: "", te: "", hi: "", fullTextUrl: "", rainTopUpPaise: toUnitText("rupees", card?.rainTopUpPaise ?? 0),
   };
 }
 
 /** The new-draft form as the API body, or the first problem. Only the first card sends ranges; later ones need 14 days' notice. */
 export function draftFromForm(form: RateCardForm, firstCard: boolean, now = Date.now()): RateCardDraft | string {
-  const values = readValues(RATE_CARD_INPUTS, form);
+  const values = readValues(DRAFT_INPUTS, form);
   if (typeof values === "string") return values;
   if (!firstCard && form.effectiveFrom && tooSoon(form.effectiveFrom, now)) return "Pick a start at least 14 days and 1 hour from now: riders get 14 days' notice.";
   const ranges = {} as Record<RateCardField, [number, number]>;
@@ -239,6 +260,8 @@ export const SETUP_ROUTES: readonly FleetRoute[] = [
   { method: "POST", path: "rate-cards", body: rateCardDraftSchema, response: rateCardSchema },
   { method: "POST", path: "rate-cards/:version/publish", response: rateCardSchema },
   { method: "POST", path: "dispatch-policies", body: dispatchPolicyInputSchema, response: dispatchPolicySchema },
+  { method: "GET", path: "rain-mode", response: rainModeSchema },
+  { method: "PUT", path: "rain-mode", body: rainModeInputSchema, response: rainModeSchema },
   // PUT upserts (re-adding updates the note); DELETE answers 204, also when the rider or kitchen was not listed.
   { method: "PUT", path: "pilot/riders/:id", body: pilotNoteSchema, response: pilotRiderSchema },
   { method: "DELETE", path: "pilot/riders/:id", response: z.null() },

@@ -9,7 +9,8 @@ import {Icon} from '../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
 import {BottomAction} from '../../features/rider/components/BottomAction';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
-import {ProblemCard, RiderSplash, StateCard} from '../../features/rider/components/StateCard';
+import {RiderSplash} from '../../features/rider/components/RiderSplash';
+import {ProblemCard, StateCard} from '../../features/rider/components/StateCard';
 import {RiderScreen, Title} from '../../features/rider/components/ui';
 import {resolveGate} from '../../features/rider/domain/gate';
 import type {ReceivedOffer} from '../../features/rider/domain/offerTiming';
@@ -59,7 +60,7 @@ function RiderTabs() {
     <Tabs.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.flameRedAccessible,
+        tabBarActiveTintColor: colors.flameRed,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarLabelStyle: {fontSize: typography.small, fontWeight: fontWeight.bold},
         tabBarStyle: {

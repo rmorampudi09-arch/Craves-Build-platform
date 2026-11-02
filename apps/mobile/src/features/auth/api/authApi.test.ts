@@ -99,20 +99,43 @@ describe('authApi exact auth contracts', () => {
 
     it('sends the 10 digits with country code 91, and the challenge on a resend', async () => {
       postMock.mockResolvedValue({data: {challengeId, expiresAt: 1, resendAvailableAt: 2}});
-      await expect(authApi.sendPhoneOtp('9848012345')).resolves.toBe(challengeId);
-      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/otp/send', {phoneNumber: '9848012345', countryCode: '91'}, {timeout: 15000});
+      await expect(authApi.sendPhoneOtp('9848012345')).resolves.toEqual({challengeId, autoRead: false});
+      expect(postMock).toHaveBeenCalledWith(
+        '/api/v1/auth/otp/send',
+        {phoneNumber: '9848012345', countryCode: '91'},
+        {timeout: 15000, headers: {}},
+      );
       await authApi.sendPhoneOtp('9848012345', challengeId);
       expect(postMock).toHaveBeenLastCalledWith(
         '/api/v1/auth/otp/send',
         {phoneNumber: '9848012345', countryCode: '91', challengeId},
-        {timeout: 15000},
+        {timeout: 15000, headers: {}},
       );
+    });
+
+    it('names the rider app and its install, and reads the code with no tap only when the server says so', async () => {
+      const rider = {app: 'rider' as const, installationId: 'a1b2c3d4e5f60718'};
+      const headers = {'X-Craves-App': 'rider', 'X-Craves-Installation-Id': 'a1b2c3d4e5f60718'};
+      postMock.mockResolvedValue({data: {challengeId, expiresAt: 1, resendAvailableAt: 2, autoRead: true}});
+      await expect(authApi.sendPhoneOtp('9848012345', undefined, rider)).resolves.toEqual({challengeId, autoRead: true});
+      expect(postMock).toHaveBeenLastCalledWith('/api/v1/auth/otp/send', expect.anything(), {timeout: 15000, headers});
+      postMock.mockResolvedValue({data: {challengeId, expiresAt: 1, resendAvailableAt: 2, autoRead: 'true'}});
+      await expect(authApi.sendPhoneOtp('9848012345', undefined, rider)).resolves.toEqual({challengeId, autoRead: false});
+      postMock.mockResolvedValue({data: {firebaseCustomToken: customToken}});
+      await authApi.verifyPhoneOtp(challengeId, '482913', rider);
+      expect(postMock).toHaveBeenLastCalledWith('/api/v1/auth/otp/verify', {challengeId, otp: '482913'}, {timeout: 15000, headers});
+      // No install id without the rider native module: the header is left out, not sent empty.
+      await authApi.verifyPhoneOtp(challengeId, '482913', {app: 'rider', installationId: null});
+      expect(postMock).toHaveBeenLastCalledWith('/api/v1/auth/otp/verify', expect.anything(), {
+        timeout: 15000,
+        headers: {'X-Craves-App': 'rider'},
+      });
     });
 
     it('verifies the code and answers the Firebase custom token', async () => {
       postMock.mockResolvedValue({data: {firebaseCustomToken: customToken}});
       await expect(authApi.verifyPhoneOtp(challengeId, '482913')).resolves.toBe(customToken);
-      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/otp/verify', {challengeId, otp: '482913'}, {timeout: 15000});
+      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/otp/verify', {challengeId, otp: '482913'}, {timeout: 15000, headers: {}});
     });
 
     it('refuses answers that are not the expected shape', async () => {

@@ -458,7 +458,7 @@ public class FleetEarnings {
         trips.forEach(trip -> rows.put((UUID) trip.get("id"), new ArrayList<>()));
         jdbc.queryForList("SELECT trip_id, label, net_paise, reason FROM fleet_schema.rider_earning WHERE trip_id IN ("
             + String.join(", ", Collections.nCopies(rows.size(), "?")) + ") ORDER BY revision, component = 'tds', "
-            + "array_position(ARRAY['base', 'drop-km', 'pickup-km', 'waiting', 'cancellation', 'return-km'], component::text), component",
+            + "array_position(ARRAY['base', 'drop-km', 'pickup-km', 'rain', 'waiting', 'cancellation', 'return-km'], component::text), component",
             rows.keySet().toArray()).forEach(row -> rows.get((UUID) row.get("trip_id")).add(row));
         List<TripEarning> result = new ArrayList<>();
         for (Map<String, Object> trip : trips) {

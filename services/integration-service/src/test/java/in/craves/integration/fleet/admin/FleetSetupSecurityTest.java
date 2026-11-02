@@ -60,6 +60,7 @@ class FleetSetupSecurityTest {
             post(FLEET + "/rate-cards").contentType(MediaType.APPLICATION_JSON).content("{\"basePaise\":4000}"),
             post(FLEET + "/rate-cards/2026-10-v2/publish"),
             post(FLEET + "/dispatch-policies").contentType(MediaType.APPLICATION_JSON).content("{\"mode\":\"off\"}"),
+            put(FLEET + "/rain-mode").contentType(MediaType.APPLICATION_JSON).content("{\"level\":\"on\"}"),
             put(FLEET + "/pilot/riders/" + rider), delete(FLEET + "/pilot/riders/" + rider),
             put(FLEET + "/pilot/kitchens/" + chef), delete(FLEET + "/pilot/kitchens/" + chef));
     }
@@ -112,6 +113,24 @@ class FleetSetupSecurityTest {
         mvc.perform(as(delete(FLEET + "/pilot/riders/" + rider), "OPERATIONS_ADMIN").header("Idempotency-Key", key))
             .andExpect(status().isNoContent()).andExpect(header().string("Cache-Control", "no-store"));
         verify(service).removePilotRider(any(), eq(UUID.fromString(key)), eq(rider));
+    }
+
+    /** Rain mode (R16 19): ops, support and audit read it; only operations switch it, each switch with its key. */
+    @Test
+    void readersSeeRainModeAndOperatorsSwitchIt() throws Exception {
+        when(service.rainMode()).thenReturn(new FleetAdminModels.RainMode("off", "on", true, null, null, 2000));
+        for (String role : List.of("PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN")) {
+            mvc.perform(as(get(FLEET + "/rain-mode"), role)).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.level").value("off")).andExpect(jsonPath("$.inForce").value("on"))
+                .andExpect(jsonPath("$.rainTopUpPaise").value(2000));
+        }
+        for (String role : List.of("COMPLIANCE_ADMIN", "PAYMENTS_ADMIN", "ADMIN", "RIDER")) {
+            mvc.perform(as(get(FLEET + "/rain-mode"), role)).andExpect(status().isForbidden());
+        }
+        String key = UUID.randomUUID().toString();
+        mvc.perform(as(put(FLEET + "/rain-mode"), "OPERATIONS_ADMIN").header("Idempotency-Key", key)
+            .contentType(MediaType.APPLICATION_JSON).content("{\"level\":\"severe\"}")).andExpect(status().isOk());
+        verify(service).setRainMode(any(), eq(UUID.fromString(key)), eq(new FleetAdminModels.RainModeInput("severe")));
     }
 
     @Test

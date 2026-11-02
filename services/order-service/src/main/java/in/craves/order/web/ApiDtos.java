@@ -86,7 +86,9 @@ public final class ApiDtos {
     ) {
     }
 
-    public record CheckoutRequest(UUID deliveryAddressId, String note, com.fasterxml.jackson.databind.JsonNode referralBenefits) {
+    public record CheckoutRequest(UUID deliveryAddressId, String note, com.fasterxml.jackson.databind.JsonNode referralBenefits,
+                                  com.fasterxml.jackson.databind.JsonNode batchHolds) {
+        public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits) { this(deliveryAddressId,note,referralBenefits,null); }
         public CheckoutRequest(UUID deliveryAddressId,String note) { this(deliveryAddressId,note,null); }
         public CheckoutRequest(String note) {
             this(null, note);

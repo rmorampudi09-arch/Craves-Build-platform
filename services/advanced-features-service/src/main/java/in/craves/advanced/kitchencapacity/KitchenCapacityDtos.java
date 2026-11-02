@@ -32,7 +32,10 @@ public final class KitchenCapacityDtos {
 
     public record NewHold(@NotNull @Min(1) @Max(50) Integer portions) { }
 
-    public record HoldConfirmation(@NotNull UUID orderId) { }
+    /** menuItemId and maxPortions are optional checks (order-service sends them at checkout): the hold must be for that dish and no bigger. */
+    public record HoldConfirmation(@NotNull UUID orderId, UUID menuItemId, @Min(1) Integer maxPortions) {
+        public HoldConfirmation(UUID orderId) { this(orderId, null, null); }
+    }
 
     public record HoldVoid(@NotBlank @Size(max = 300) String reason) { }
 

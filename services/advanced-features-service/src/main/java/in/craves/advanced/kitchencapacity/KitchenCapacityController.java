@@ -70,7 +70,7 @@ public class KitchenCapacityController {
 
     @PostMapping("/holds/{holdId}/confirm")
     public ResponseEntity<PortionHold> confirmHold(@PathVariable UUID holdId, @Valid @RequestBody HoldConfirmation request) {
-        return ok(service.confirm(CurrentUser.id(), holdId, request.orderId()));
+        return ok(service.confirm(CurrentUser.id(), holdId, request.orderId(), request.menuItemId(), request.maxPortions()));
     }
 
     @DeleteMapping("/holds/{holdId}")

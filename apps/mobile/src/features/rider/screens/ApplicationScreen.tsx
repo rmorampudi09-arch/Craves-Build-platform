@@ -293,13 +293,25 @@ function DocumentRow({doc, mode, divider, onSent}: {doc: Doc; mode: 'apply' | 'r
   const action =
     doc.status === 'MISSING' ? ap.addPhoto : sentBack ? ap.newPhoto : doc.status === 'PENDING' && mode === 'apply' ? ap.changePhoto : null;
 
+  // One photo at a time: a second tap during the face check or the upload would open another camera.
+  const sending = useRef(false);
+
   async function send() {
+    if (sending.current) {
+      return;
+    }
+    sending.current = true;
     setError(null);
     try {
       // The reference selfie is taken live with the front camera, never picked from the gallery.
       const uri =
         type === 'SELFIE'
-          ? await takeSelfie({cancel: strings.common.cancel, denied: strings.goOnline.cameraDenied, openSettings: a.openSettings})
+          ? await takeSelfie({
+              ...strings.goOnline,
+              cancel: strings.common.cancel,
+              denied: strings.goOnline.cameraDenied,
+              openSettings: a.openSettings,
+            })
           : await chooseDocumentPhoto({
               title: name,
               take: ap.takePhoto,
@@ -316,6 +328,8 @@ function DocumentRow({doc, mode, divider, onSent}: {doc: Doc; mode: 'apply' | 'r
       await queryClient.invalidateQueries({queryKey: riderKeys.profile});
     } catch (caught) {
       setError(riderMessage(caught, strings, language));
+    } finally {
+      sending.current = false;
     }
   }
 

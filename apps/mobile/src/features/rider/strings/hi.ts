@@ -292,11 +292,12 @@ export const hi: RiderStrings = {
     recents: 'Recent apps में Craves Rider को लॉक करें',
     testRing: 'टेस्ट रिंग',
     rang: 'आपका फ़ोन बजा और वाइब्रेट हुआ',
-    locationSteps: 'बटन दबाएँ और ऐप इस्तेमाल करते समय लोकेशन की अनुमति दें।',
+    locationSteps: 'बटन दबाएँ और ऐप इस्तेमाल करते समय लोकेशन की अनुमति दें, "Precise" चालू रखें।',
     notificationsSteps: 'बटन दबाएँ और नोटिफ़िकेशन की अनुमति दें।',
     lockScreenSteps:
       'बटन दबाएँ और Craves Rider के लिए फ़ुल स्क्रीन नोटिफ़िकेशन की अनुमति दें। फिर फ़ोन लॉक होने पर भी नया ऑफ़र अपने आप खुल जाएगा।',
-    batterySteps: 'बटन दबाएँ, Craves Rider ढूँढें और "Don\'t optimise" या "No restrictions" चुनें।',
+    batterySteps:
+      'बटन दबाएँ और "Allow" चुनें। अगर इसकी जगह सूची खुले, तो Craves Rider ढूँढें और "Don\'t optimise" या "No restrictions" चुनें।',
     ringSteps: 'ऑफ़र आने पर जैसे बजता है, वैसे ही आपका फ़ोन बजेगा और वाइब्रेट होगा।',
     autostartSteps: {
       xiaomi: 'आपके Xiaomi में: Security खोलें, फिर Permissions, फिर Autostart, और Craves Rider चालू करें।',
@@ -390,6 +391,15 @@ export const hi: RiderStrings = {
     openSettings: 'सेटिंग्स खोलें',
     noAlerts: 'इस फ़ोन पर अभी ऑर्डर अलर्ट नहीं आ सकते। फ़ोन सेटअप पूरा करें, फिर ऑनलाइन जाएँ।',
     photoTooBig: 'यह फ़ोटो भेजने के लिए बहुत बड़ी है। फिर से लें।',
+    faceTitle: 'सेल्फ़ी फिर से लें',
+    retake: 'फिर से लें',
+    face: {
+      none: 'आपका चेहरा नहीं दिखा। हेलमेट, मास्क और काला चश्मा उतारें, रोशनी की ओर मुँह करें और कैमरे की ओर देखें।',
+      many: 'सेल्फ़ी में सिर्फ़ आप होने चाहिए।',
+      far: 'फ़ोन पास रखें, ताकि फ़ोटो में ज़्यादातर आपका चेहरा दिखे।',
+      turned: 'सिर सीधा रखें और सीधे कैमरे की ओर देखें।',
+      eyes: 'आँखें खुली रखें और काला चश्मा उतारें।',
+    },
   },
   offer: {
     title: 'नया ऑर्डर',

@@ -58,6 +58,7 @@ const VOCABULARY: TaxonomyVocabulary = {
     cuisine('south-indian', 'South Indian'),
     cuisine('andhra', 'Andhra', 'south-indian'),
     cuisine('chinese', 'Chinese'),
+    cuisine('thai', 'Thai'),
   ],
   diets: [diet('jain', 'Jain'), diet('vegan', 'Vegan')],
 };
@@ -161,15 +162,27 @@ describe('CustomerFilterSortScreen label choices', () => {
     expect(lastApplied().dietTags).toEqual([]);
   });
 
-  it('customers can pick more than three cuisines and untick one', () => {
+  it('customers can pick more than three cuisines', () => {
     mockSnapshot = nearby(
       {cuisines: ['andhra'], diets: []},
       {cuisines: ['chinese'], diets: []},
+      {cuisines: ['thai'], diets: []},
     );
+    const {root} = render();
+
+    ['South Indian', 'Andhra', 'Chinese', 'Thai'].forEach(label => press(chip(root, label)));
+    press(root.findByProps({testID: 'apply-discovery-filters'}));
+
+    expect(lastApplied().cuisineIds).toEqual(['south-indian', 'andhra', 'chinese', 'thai']);
+  });
+
+  it('unticking a cuisine removes its code', () => {
+    mockSnapshot = nearby({cuisines: ['andhra'], diets: []}, {cuisines: ['chinese'], diets: []});
     const {root} = render();
 
     ['South Indian', 'Andhra', 'Chinese'].forEach(label => press(chip(root, label)));
     press(chip(root, 'Andhra'));
+    expect(chip(root, 'Andhra').props.accessibilityState).toEqual({checked: false});
     press(root.findByProps({testID: 'apply-discovery-filters'}));
 
     expect(lastApplied().cuisineIds).toEqual(['south-indian', 'chinese']);

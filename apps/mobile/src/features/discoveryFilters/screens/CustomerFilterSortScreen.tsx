@@ -24,9 +24,12 @@ import {
   typography,
   iconSize,
 } from '../../../design/tokens';
+import {isAdvancedFeatureOn} from '../../../core/advanced/advancedFeatures';
 import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {termsOnDishes} from '../../dishLabels/domain/dishLabels';
+import {getNearbyDishLabelsSnapshot} from '../../dishLabels/state/nearbyDishLabels';
 import {discoverySearchActions} from '../../discoverySearch/state/discoverySearchSlice';
 import {getDiscoveryFilterCapabilities} from '../discoveryFilterApplication';
 import {
@@ -123,6 +126,9 @@ const SPICE_ROWS: readonly {value: DiscoverySpiceLevel; label: string}[] = [
   {value: 'SPICY', label: 'Spicy'},
 ];
 
+const toggleCode = (codes: string[], code: string): string[] =>
+  codes.includes(code) ? codes.filter(item => item !== code) : [...codes, code];
+
 function cloneFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnapshot {
   return {
     sort: filters.sort,
@@ -159,6 +165,16 @@ export function CustomerFilterSortScreen() {
   const [draft, setDraft] = useState<DiscoveryFilterSnapshot>(() =>
     cloneFilters(applied),
   );
+  // Read once when the screen opens, so the choices do not shift while Home reloads behind it.
+  const [labelTerms] = useState(() => {
+    const snapshot =
+      origin === 'HOME' && isAdvancedFeatureOn('taxonomy')
+        ? getNearbyDishLabelsSnapshot()
+        : null;
+    return snapshot
+      ? termsOnDishes([...snapshot.byId.values()], snapshot.vocabulary)
+      : {cuisines: [], diets: []};
+  });
   const allowRemoveRef = useRef(false);
   const isDirty = !areDiscoveryFiltersEqual(draft, applied);
 
@@ -207,6 +223,10 @@ export function CustomerFilterSortScreen() {
           : [...current.diets, value],
       };
     });
+  };
+
+  const toggleLabels = (field: 'cuisineIds' | 'dietTags', code: string) => {
+    setDraft(current => ({...current, [field]: toggleCode(current[field], code)}));
   };
 
   const resetDraft = () => {
@@ -269,6 +289,21 @@ export function CustomerFilterSortScreen() {
     allowRemoveRef.current = true;
     navigation.goBack();
   };
+
+  const dietRows = [
+    ...DIET_ROWS.map(row => ({
+      key: row.value,
+      label: row.label,
+      isSelected: (filters: DiscoveryFilterSnapshot) => filters.diets.includes(row.value),
+      toggle: () => toggleDiet(row.value),
+    })),
+    ...labelTerms.diets.map(term => ({
+      key: `tag:${term.code}`,
+      label: term.name,
+      isSelected: (filters: DiscoveryFilterSnapshot) => filters.dietTags.includes(term.code),
+      toggle: () => toggleLabels('dietTags', term.code),
+    })),
+  ];
 
   const originLabel = origin === 'HOME' ? 'nearby meals' : 'home chefs';
 
@@ -447,31 +482,51 @@ export function CustomerFilterSortScreen() {
             ) : null}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Cuisine</Text>
-            <Text style={styles.sectionHint}>Choose one or more cuisines.</Text>
-            <View style={styles.unavailableCard}>
-              <Text style={styles.unavailableTitle}>Cuisine filters are coming soon</Text>
-              <Text style={styles.unavailableText}>
-                For now, use search on Home to find a cuisine.
-              </Text>
+          {origin === 'CHEFS' || labelTerms.cuisines.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Cuisine</Text>
+              <Text style={styles.sectionHint}>Choose one or more cuisines.</Text>
+              {origin === 'CHEFS' ? (
+                <View style={styles.unavailableCard}>
+                  <Text style={styles.unavailableTitle}>Cuisine filters are coming soon</Text>
+                  <Text style={styles.unavailableText}>
+                    For now, use search on Home to find a cuisine.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.chipRow}>
+                  {labelTerms.cuisines.map(term => {
+                    const selected = draft.cuisineIds.includes(term.code);
+                    return (
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{checked: selected}}
+                        key={term.code}
+                        onPress={() => toggleLabels('cuisineIds', term.code)}
+                        style={[styles.filterChip, selected && styles.filterChipSelected]}>
+                        <Text style={styles.filterChipText}>{term.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
-          </View>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Diet</Text>
             <Text style={styles.sectionHint}>Select any dietary constraints that apply.</Text>
             {capabilities.supportsDiet ? (
               <View style={styles.card}>
-                {DIET_ROWS.map((row, index) => {
-                  const selected = draft.diets.includes(row.value);
+                {dietRows.map((row, index) => {
+                  const selected = row.isSelected(draft);
                   return (
                     <Pressable
-                      key={row.value}
+                      key={row.key}
                       accessibilityLabel={row.label}
                       accessibilityRole="checkbox"
                       accessibilityState={{checked: selected}}
-                      onPress={() => toggleDiet(row.value)}
+                      onPress={row.toggle}
                       style={({pressed}) => [
                         styles.optionRow,
                         index > 0 && styles.optionDivider,

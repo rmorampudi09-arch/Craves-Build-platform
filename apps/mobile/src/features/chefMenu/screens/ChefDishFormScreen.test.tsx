@@ -905,9 +905,44 @@ describe('ChefDishFormScreen', () => {
       expect(has('Tomato curry is live')).toBe(true);
     });
 
+    it('diets without a cuisine stop a new dish before anything is sent', async () => {
+      await mount('add', undefined);
+      await fillRequired();
+      await press('Jain');
+      await press('Publish dish');
+      await settle();
+      expect(has('Pick at least one cuisine to save diet labels.')).toBe(true);
+      expect(mockApi.createItem).not.toHaveBeenCalled();
+      expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
+      expect(mockLeft).not.toHaveBeenCalled();
+    });
+
+    it('diets without a cuisine stop an edit before anything is sent', async () => {
+      await mount('edit', {menuItemId: ID});
+      await type('Price', '170');
+      await press('Andhra');
+      await press('Save changes');
+      await settle();
+      expect(has('Pick at least one cuisine to save diet labels.')).toBe(true);
+      expect(mockApi.replaceItem).not.toHaveBeenCalled();
+      expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
+      expect(mockLeft).not.toHaveBeenCalled();
+    });
+
+    it('clearing every label still saves', async () => {
+      await mount('edit', {menuItemId: ID});
+      await press('Andhra');
+      await press('Jain');
+      await press('Save changes');
+      await settle();
+      expect(mockTaxonomy.saveChefLabels).toHaveBeenCalledWith(ID, {cuisines: [], diets: []}, 3);
+      expect(has('Changes saved')).toBe(true);
+    });
+
     it('a failed label save keeps the new dish and says so', async () => {
       await mount('add', undefined);
       await fillRequired();
+      await press('North Indian');
       await press('Vegan');
       mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', images: []}));
       mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
@@ -921,6 +956,7 @@ describe('ChefDishFormScreen', () => {
     it('a failed label save on a draft says it is saved', async () => {
       await mount('add', undefined);
       await fillRequired();
+      await press('North Indian');
       await press('Vegan');
       mockApi.createItem.mockResolvedValue(dish({id: NEW_ID, itemName: 'Tomato curry', status: 'DRAFT', available: false}));
       mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));

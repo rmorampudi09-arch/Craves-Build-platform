@@ -17,6 +17,8 @@ export interface ChefDishLabelsModel {
   setSelection: (next: LabelSelection) => void;
   changed: boolean;
   error: string | null;
+  /** False, with a message under the labels, when the picks cannot be saved; call before anything is sent. */
+  ready: () => boolean;
   /** True when nothing changed or the save worked. */
   save: (menuItemId: string) => Promise<boolean>;
 }
@@ -24,6 +26,8 @@ export interface ChefDishLabelsModel {
 const NONE: LabelSelection = {cuisines: [], diets: []};
 const CONFLICT = 'These labels changed somewhere else. We loaded the latest; check them and save again.';
 const FAILED = "Labels didn't save. Try again.";
+// The server refuses diets without a cuisine; clearing everything is fine.
+const NO_CUISINE = 'Pick at least one cuisine to save diet labels.';
 
 // Order counts: the first cuisine is the main one.
 const sameCodes = (a: readonly string[], b: readonly string[]) =>
@@ -80,6 +84,14 @@ export function useChefDishLabels(menuItemId: string | null): ChefDishLabelsMode
     enabled &&
     (!sameCodes(selection.cuisines, saved.labels.cuisines) || !sameCodes(selection.diets, saved.labels.diets));
 
+  const ready = (): boolean => {
+    if (changed && selection.diets.length > 0 && selection.cuisines.length === 0) {
+      setError(NO_CUISINE);
+      return false;
+    }
+    return true;
+  };
+
   const save = async (id: string): Promise<boolean> => {
     if (!changed) {
       return true;
@@ -105,5 +117,5 @@ export function useChefDishLabels(menuItemId: string | null): ChefDishLabelsMode
     }
   };
 
-  return {enabled, vocabulary, selection, setSelection, changed, error, save};
+  return {enabled, vocabulary, selection, setSelection, changed, error, ready, save};
 }

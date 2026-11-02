@@ -280,6 +280,9 @@ function DishForm({
 
   const saveNew = (intent: ChefMenuSubmitIntent) =>
     runSave(handleSubmit(async values => {
+      if (!labels.ready()) {
+        return;
+      }
       addModel.clearError();
       setPhotoError(null);
       const created = await addModel.submit(values, intent);
@@ -307,7 +310,7 @@ function DishForm({
 
   const saveEdit = (publish: boolean) =>
     runSave(handleSubmit(async values => {
-      if (!dish) {
+      if (!dish || !labels.ready()) {
         return;
       }
       editModel.clearError();

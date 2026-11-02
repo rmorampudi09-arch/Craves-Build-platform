@@ -127,6 +127,7 @@ function cloneFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnapshot
   return {
     sort: filters.sort,
     cuisineIds: [...filters.cuisineIds],
+    dietTags: [...filters.dietTags],
     diets: [...filters.diets],
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,

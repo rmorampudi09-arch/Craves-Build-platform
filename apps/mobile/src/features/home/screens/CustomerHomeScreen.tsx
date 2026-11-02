@@ -82,7 +82,11 @@ import {
   useCustomerFavoritesQuery,
   useToggleCustomerFavorite,
 } from '../../favorites/query/customerFavoritesQueries';
-import {applyHomeDiscoveryFilters} from '../../discoveryFilters/discoveryFilterApplication';
+import {
+  applyDishLabelFilters,
+  applyHomeDiscoveryFilters,
+} from '../../discoveryFilters/discoveryFilterApplication';
+import {useNearbyDishLabels} from '../../dishLabels/state/nearbyDishLabels';
 import {
   discoveryFilterActions,
   getActiveDiscoveryFilterCount,
@@ -525,9 +529,17 @@ export function CustomerHomeScreen() {
     () => flattenNearbyDishPages(feed.data?.pages),
     [feed.data?.pages],
   );
+  const dishLabels = useNearbyDishLabels(dishes.map(dish => dish.id));
+  // Show the unfiltered list while labels (re)load rather than an empty one.
+  const labelsForFilter = dishLabels.pending ? null : dishLabels.labels;
   const filteredAndSortedDishes = useMemo(
-    () => applyHomeDiscoveryFilters(dishes, appliedFilters),
-    [appliedFilters, dishes],
+    () =>
+      applyDishLabelFilters(
+        applyHomeDiscoveryFilters(dishes, appliedFilters),
+        appliedFilters,
+        labelsForFilter,
+      ),
+    [appliedFilters, dishes, labelsForFilter],
   );
   const visibleDishes = useMemo(
     () => filterHomeDishes(filteredAndSortedDishes, search.query, selectedCategory),

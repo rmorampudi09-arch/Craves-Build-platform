@@ -1,3 +1,5 @@
+import {dishMatchesLabels} from '../dishLabels/domain/dishLabels';
+import type {NearbyDishLabels} from '../dishLabels/state/nearbyDishLabels';
 import type {NearbyDish} from '../home/api/homeFeedApi';
 import type {
   DiscoveryFilterSnapshot,
@@ -103,4 +105,20 @@ export function applyHomeDiscoveryFilters(
   }
 
   return filtered;
+}
+
+/** Keeps dishes carrying the picked cuisine/diet labels. No labels loaded (off, failed, loading) means no filtering. */
+export function applyDishLabelFilters(
+  dishes: readonly NearbyDish[],
+  filters: DiscoveryFilterSnapshot,
+  labels: NearbyDishLabels | null,
+): NearbyDish[] {
+  if (!labels || (filters.cuisineIds.length === 0 && filters.dietTags.length === 0)) {
+    return dishes as NearbyDish[];
+  }
+  const selection = {cuisines: filters.cuisineIds, diets: filters.dietTags};
+  return dishes.filter(dish => {
+    const codes = labels.byId.get(dish.id);
+    return codes !== undefined && dishMatchesLabels(codes, selection, labels.vocabulary);
+  });
 }

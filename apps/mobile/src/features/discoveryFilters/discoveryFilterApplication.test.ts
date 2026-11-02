@@ -1,11 +1,17 @@
 import type {NearbyDish} from '../home/api/homeFeedApi';
-import {applyHomeDiscoveryFilters} from './discoveryFilterApplication';
+import type {NearbyDishLabels} from '../dishLabels/state/nearbyDishLabels';
+import {
+  applyDishLabelFilters,
+  applyHomeDiscoveryFilters,
+} from './discoveryFilterApplication';
 import {
   areDiscoveryFiltersEqual,
   createDefaultDiscoveryFilters,
   discoveryFilterActions,
   discoveryFilterReducer,
+  getActiveDiscoveryFilterCount,
   resolveDiscoveryFilterSession,
+  type DiscoveryFilterSnapshot,
   type DiscoveryFilterState,
 } from './state/discoveryFilterSlice';
 
@@ -51,6 +57,7 @@ describe('P38 discovery filters', () => {
         filters: {
           sort: 'PRICE_LOW_TO_HIGH',
           cuisineIds: [],
+          dietTags: [],
           diets: ['VEG'],
           minPrice: 100,
           maxPrice: 300,
@@ -65,6 +72,7 @@ describe('P38 discovery filters', () => {
     ).toEqual({
       sort: 'PRICE_LOW_TO_HIGH',
       cuisineIds: [],
+      dietTags: [],
       diets: ['VEG'],
       minPrice: 100,
       maxPrice: 300,
@@ -82,6 +90,7 @@ describe('P38 discovery filters', () => {
         {
           sort: 'RECOMMENDED',
           cuisineIds: ['b', 'a', 'a'],
+          dietTags: [],
           diets: ['EGG', 'VEG'],
           minPrice: 100,
           maxPrice: 300,
@@ -91,6 +100,7 @@ describe('P38 discovery filters', () => {
         {
           sort: 'RECOMMENDED',
           cuisineIds: ['a', 'b'],
+          dietTags: [],
           diets: ['VEG', 'EGG'],
           minPrice: 100,
           maxPrice: 300,
@@ -111,6 +121,7 @@ describe('P38 discovery filters', () => {
     const result = applyHomeDiscoveryFilters(source, {
       sort: 'PRICE_LOW_TO_HIGH',
       cuisineIds: [],
+      dietTags: [],
       diets: ['VEG'],
       minPrice: null,
       maxPrice: null,
@@ -142,6 +153,7 @@ describe('P38 discovery filters', () => {
     const result = applyHomeDiscoveryFilters([quick, slow, spicy], {
       sort: 'PREPARATION_TIME_ASC',
       cuisineIds: [],
+      dietTags: [],
       diets: ['VEG'],
       minPrice: 150,
       maxPrice: 250,
@@ -162,6 +174,7 @@ describe('P38 discovery filters', () => {
         filters: {
           sort: 'RECOMMENDED',
           cuisineIds: [],
+          dietTags: [],
           diets: [],
           minPrice: 500,
           maxPrice: 100,
@@ -183,6 +196,7 @@ describe('P38 discovery filters', () => {
           applied: {
             sort: 'PRICE_HIGH_TO_LOW',
             cuisineIds: [],
+            dietTags: [],
             diets: ['EGG'],
             minPrice: null,
             maxPrice: null,
@@ -207,5 +221,79 @@ describe('P38 discovery filters', () => {
 
     expect(next.sessions.HOME.applied).toEqual(createDefaultDiscoveryFilters());
     expect(next.sessions.CHEFS).toBe(seeded.sessions.CHEFS);
+  });
+});
+
+describe('dish label filters', () => {
+  const vocabulary: NearbyDishLabels['vocabulary'] = {
+    cuisines: [
+      {code: 'south-indian', kind: 'CUISINE', parentCode: null, name: 'South Indian'},
+      {code: 'andhra', kind: 'CUISINE', parentCode: 'south-indian', name: 'Andhra'},
+      {code: 'punjabi', kind: 'CUISINE', parentCode: null, name: 'Punjabi'},
+    ],
+    diets: [{code: 'jain', kind: 'DIET', parentCode: null, name: 'Jain'}],
+  };
+  const labels: NearbyDishLabels = {
+    vocabulary,
+    byId: new Map([
+      ['biryani', {menuItemId: 'biryani', cuisines: ['andhra'], diets: ['jain']}],
+      ['paneer', {menuItemId: 'paneer', cuisines: ['punjabi'], diets: []}],
+    ]),
+  };
+  const dishes = [
+    dish('biryani', 200, 'NON_VEG'),
+    dish('paneer', 180, 'VEG'),
+    dish('plain', 100, 'VEG'),
+  ];
+
+  it('label filter leaves dishes alone when nothing is picked', () => {
+    expect(
+      applyDishLabelFilters(dishes, createDefaultDiscoveryFilters(), labels),
+    ).toBe(dishes);
+  });
+
+  it('label filter keeps only matching dishes', () => {
+    const result = applyDishLabelFilters(
+      dishes,
+      {...createDefaultDiscoveryFilters(), cuisineIds: ['south-indian']},
+      labels,
+    );
+    expect(result.map(item => item.id)).toEqual(['biryani']);
+  });
+
+  it('label filter needs every picked diet and drops unlabelled dishes', () => {
+    const filters = {...createDefaultDiscoveryFilters(), dietTags: ['jain']};
+    expect(applyDishLabelFilters(dishes, filters, labels).map(item => item.id)).toEqual([
+      'biryani',
+    ]);
+  });
+
+  it('label filter shows everything when labels are unavailable', () => {
+    const filters = {...createDefaultDiscoveryFilters(), cuisineIds: ['andhra']};
+    expect(applyDishLabelFilters(dishes, filters, null)).toBe(dishes);
+  });
+
+  it('dietTags count as active filters and change equality', () => {
+    const base = createDefaultDiscoveryFilters();
+    const withTag = {...base, dietTags: ['jain']};
+    expect(getActiveDiscoveryFilterCount(withTag)).toBe(1);
+    expect(areDiscoveryFiltersEqual(base, withTag)).toBe(false);
+    expect(
+      areDiscoveryFiltersEqual(
+        {...base, dietTags: ['jain', 'gluten-free', 'jain']},
+        {...base, dietTags: ['gluten-free', 'jain']},
+      ),
+    ).toBe(true);
+  });
+
+  it('treats a missing dietTags as none', () => {
+    const legacy: Partial<DiscoveryFilterSnapshot> = createDefaultDiscoveryFilters();
+    delete legacy.dietTags;
+    expect(
+      areDiscoveryFiltersEqual(
+        legacy as DiscoveryFilterSnapshot,
+        createDefaultDiscoveryFilters(),
+      ),
+    ).toBe(true);
   });
 });

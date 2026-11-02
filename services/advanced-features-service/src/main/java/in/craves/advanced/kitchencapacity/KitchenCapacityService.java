@@ -158,11 +158,11 @@ public class KitchenCapacityService implements PersonalDataContributor {
         return view(hold);
     }
 
-    /** Confirms a live hold with the order it became. Repeating it with the same order is harmless. */
+    /** Confirms a live hold with the order it became; a given menuItemId or maxPortions must match the hold, else nothing changes (409). Repeating it with the same order is harmless. */
     @Transactional
-    public PortionHold confirm(UUID person, UUID holdId, UUID orderId) {
+    public PortionHold confirm(UUID person, UUID holdId, UUID orderId, UUID menuItemId, Integer maxPortions) {
         Hold found = ownHold(person, holdId, false);
-        repository.batch(found.batchId(), true); // same lock order as hold(): no portion is ever counted twice
+        Batch batch = repository.batch(found.batchId(), true).orElseThrow(); // same lock order as hold(): no portion is ever counted twice
         Hold hold = repository.hold(holdId, true).orElseThrow();
         if (HoldStatus.CONFIRMED.name().equals(hold.status())) {
             if (orderId.equals(hold.orderId())) return view(hold);
@@ -171,6 +171,12 @@ public class KitchenCapacityService implements PersonalDataContributor {
         if (HoldStatus.RELEASED.name().equals(hold.status())) throw ApiProblem.conflict("HOLD_RELEASED", "This hold was released");
         Instant now = clock.instant();
         if (!now.isBefore(hold.expiresAt())) throw ApiProblem.conflict("HOLD_EXPIRED", "This hold expired; hold the portions again");
+        if (menuItemId != null && !menuItemId.equals(batch.menuItemId())) {
+            throw ApiProblem.conflict("HOLD_DISH_MISMATCH", "This hold is for another dish");
+        }
+        if (maxPortions != null && hold.portions() > maxPortions) {
+            throw ApiProblem.conflict("HOLD_EXCEEDS_ORDER", "This hold has more portions than the order");
+        }
         repository.setHold(holdId, HoldStatus.CONFIRMED.name(), orderId, now);
         return view(repository.hold(holdId, false).orElseThrow());
     }

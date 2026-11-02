@@ -90,6 +90,11 @@ class SemanticSearchIT extends IntegrationTestBase {
         mvc.perform(get(BASE + "/plan").param("q", "!!")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
         mvc.perform(get(BASE + "/dishes").param("q", "dal").param("latitude", "1e-999999999").param("longitude", "1e999999999").param("radiusMeters", "5000"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_LOCATION"));
+        // A tiny value in range with a huge scale is refused before any rounding (rounding it would take seconds of CPU).
+        long started = System.nanoTime();
+        mvc.perform(get(BASE + "/dishes").param("q", "dal").param("latitude", "1e-30000000").param("longitude", "78.4").param("radiusMeters", "5000"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_LOCATION"));
+        assertThat(System.nanoTime() - started).isLessThan(2_000_000_000L);
         mvc.perform(post(BASE + "/admin/concepts").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"phrase\":\"tiny\",\"searchTerms\":[\"" + "\u3300".repeat(20) + "\"]}")).andExpect(status().isBadRequest());
         assertThat(MENU_SEARCH.calls).isEmpty();

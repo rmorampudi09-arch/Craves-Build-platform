@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- A ringing offer opens over the lock screen (RiderOffers); Android 14+ also asks the rider (phone setup). -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Phone setup's one-tap "Allow" for running in the background (RiderDeviceModule.openBatterySettings). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- riderLabel: "Craves Rider", or "Craves Rider Demo" for a demo build (build.gradle, cravesRiderDemo). -->
     <application android:label="${riderLabel}" tools:replace="android:label">

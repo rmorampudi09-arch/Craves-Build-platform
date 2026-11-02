@@ -68,6 +68,7 @@ jest.mock('../native/riderDevice', () => ({
     openAppSettings: jest.fn(async () => true),
     openFullScreenSettings: jest.fn(async () => true),
     installationId: jest.fn(async () => 'android-id-1'),
+    faces: jest.fn(async () => null),
   },
 }));
 // Live or demo per test; the rest of riderConfig as it is (a demo build).
@@ -421,6 +422,8 @@ describe('Account status and the application', () => {
       expect(Alert.alert).not.toHaveBeenCalled();
       expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith({cameraType: 'front', mediaTypes: ['images'], quality: 0.5});
       expect(ImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();
+      // The phone looked for the face before sending (here it can't check, so the photo goes as it is).
+      expect(riderDevice.faces).toHaveBeenCalledWith('file:///photo.jpg');
       expect(riderApi.uploadDocument).toHaveBeenCalledWith('SELFIE', 'file:///photo.jpg');
     });
 
@@ -1015,7 +1018,7 @@ describe('Phone setup', () => {
     (riderDevice.locationGranted as jest.Mock).mockResolvedValueOnce(false);
     (riderDevice.requestLocation as jest.Mock).mockResolvedValueOnce(false);
     await render(<PhoneSetupScreen {...props} />);
-    expect(allText()).toContain('Tap the button and allow location while using the app.');
+    expect(allText()).toContain('Tap the button and allow location while using the app, with Precise on.');
     await act(async () => tree.root.findByProps({label: 'Allow location'}).props.onPress());
     expect(riderDevice.openAppSettings).toHaveBeenCalled();
   });
@@ -1275,6 +1278,49 @@ describe('Go online', () => {
     (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValueOnce({canceled: true, assets: null});
     await render(<GoOnlineScreen {...props} />);
     await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect(riderApi.startShift).not.toHaveBeenCalled();
+    expect(mockNavigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it('asks for the selfie again, saying why, until the phone sees a face', async () => {
+    (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
+    (ImagePicker.launchCameraAsync as jest.Mock)
+      .mockResolvedValueOnce({canceled: false, assets: [{uri: 'file:///helmet.jpg'}]})
+      .mockResolvedValueOnce({canceled: false, assets: [{uri: 'file:///face.jpg'}]});
+    (riderDevice.faces as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{widthRatio: 0.35, yaw: 3, roll: -2, leftEye: 0.9, rightEye: 0.95}]);
+    (Alert.alert as jest.Mock).mockImplementationOnce((_title, _message, buttons) => buttons[1].onPress());
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect([title, message]).toEqual([
+      'Take the selfie again',
+      "We couldn't see your face. Take off your helmet, mask and dark glasses, face the light and look at the camera.",
+    ]);
+    expect(buttons.map((button: {text: string}) => button.text)).toEqual(['Cancel', 'Take again']);
+    expect(riderApi.startShift).toHaveBeenCalledTimes(1);
+    expect(riderApi.startShift).toHaveBeenCalledWith('file:///face.jpg', 'android-id-1');
+  });
+
+  it('takes one selfie at a time, even on a double tap', async () => {
+    (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
+    await render(<GoOnlineScreen {...props} />);
+    const shutter = press('rider-selfie-shutter').props;
+    await act(async () => {
+      await Promise.all([shutter.onPress(), shutter.onPress()]);
+    });
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledTimes(1);
+    expect(riderApi.startShift).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays put when the rider cancels a selfie the phone refused', async () => {
+    (riderDevice.faces as jest.Mock).mockResolvedValueOnce([{widthRatio: 0.3, yaw: 2, roll: 0, leftEye: 0.05, rightEye: 0.1}]);
+    (Alert.alert as jest.Mock).mockImplementationOnce((_title, _message, buttons) => buttons[0].onPress());
+    await render(<GoOnlineScreen {...props} />);
+    await act(async () => press('rider-selfie-shutter').props.onPress());
+    expect((Alert.alert as jest.Mock).mock.calls[0][1]).toBe('Keep your eyes open, and take off dark glasses.');
+    expect(ImagePicker.launchCameraAsync).toHaveBeenCalledTimes(1);
     expect(riderApi.startShift).not.toHaveBeenCalled();
     expect(mockNavigation.goBack).not.toHaveBeenCalled();
   });

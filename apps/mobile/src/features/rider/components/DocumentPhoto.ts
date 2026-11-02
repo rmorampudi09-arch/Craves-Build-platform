@@ -1,5 +1,7 @@
 import {Alert, Linking} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import {faceProblem, type FaceProblem} from '../domain/selfieFace';
+import {riderDevice} from '../native/riderDevice';
 
 export interface PhotoWords {
   title: string;
@@ -62,13 +64,47 @@ export function chooseDocumentPhoto(words: PhotoWords): Promise<string | null> {
   });
 }
 
-/** A selfie, live from the front camera as JPEG: going online, and the reference one at sign-up. Null when cancelled. */
-export async function selfieShot(): Promise<ImagePicker.ImagePickerAsset | null> {
-  const shot = await ImagePicker.launchCameraAsync({cameraType: ImagePicker.CameraType.front, mediaTypes: ['images'], quality: 0.5});
-  return shot.canceled ? null : (shot.assets[0] ?? null);
+export interface SelfieWords {
+  faceTitle: string;
+  face: Record<FaceProblem, string>;
+  retake: string;
+  cancel: string;
+}
+
+/** Says why the selfie can't be used; resolves true when the rider takes it again. */
+function retake(words: SelfieWords, problem: FaceProblem): Promise<boolean> {
+  return new Promise(resolve =>
+    Alert.alert(
+      words.faceTitle,
+      words.face[problem],
+      [
+        {text: words.cancel, style: 'cancel', onPress: () => resolve(false)},
+        {text: words.retake, onPress: () => resolve(true)},
+      ],
+      {cancelable: true, onDismiss: () => resolve(false)},
+    ),
+  );
+}
+
+/**
+ * A selfie, live from the front camera as JPEG: going online, and the reference one at sign-up. Taken again until the
+ * phone sees one face, near enough, looking at the camera with eyes open (faceProblem). Null when cancelled.
+ */
+export async function selfieShot(words: SelfieWords): Promise<ImagePicker.ImagePickerAsset | null> {
+  for (;;) {
+    const shot = await ImagePicker.launchCameraAsync({cameraType: ImagePicker.CameraType.front, mediaTypes: ['images'], quality: 0.5});
+    const photo = shot.canceled ? null : (shot.assets[0] ?? null);
+    const problem = photo && faceProblem(await riderDevice.faces(photo.uri));
+    if (!problem) {
+      return photo;
+    }
+    if (!(await retake(words, problem))) {
+      return null;
+    }
+  }
 }
 
 /** The reference selfie at sign-up (document SELFIE): never from the gallery or a file. Null when cancelled or refused. */
-export async function takeSelfie(words: Pick<PhotoWords, 'cancel' | 'denied' | 'openSettings'>): Promise<string | null> {
-  return (await cameraAllowed(words)) ? ((await selfieShot())?.uri ?? null) : null;
+export async function takeSelfie(words: Pick<PhotoWords, 'denied' | 'openSettings'> & SelfieWords): Promise<string | null> {
+  return (await cameraAllowed(words)) ? ((await selfieShot(words))?.uri ?? null) : null;
 }

@@ -97,6 +97,10 @@ JS sends the token with `POST /api/v1/rider/devices` `{installationId, fcmToken,
 
 The delivery photo (app 1.1.0): `CravesRiderDevice.keepPhoto(uri)` copies the camera's photo into `filesDir/rider-photos/<uuid>.jpg`, upright (EXIF rotation applied), the long edge at most 1600 px, JPEG quality 80, and resolves its `file://` URI; the queue sends that copy and `deletePhoto(uri)` removes it once the server has answered (sent or refused). `deletePhoto` only deletes inside `rider-photos`. If the copy can't be made or fully written, `keepPhoto` leaves no file and fails, and the camera's own photo is queued instead. A missing copy is never sent: the step becomes a refusal "Take the photo again" on screen.
 
+The selfie face check (app 1.3.1): `CravesRiderDevice.checkFace(uri)` runs ML Kit's bundled face model on the phone (the photo never leaves it) on the photo made upright with its long edge at 1024 px, and resolves one `{widthRatio, yaw, roll, leftEye?, rightEye?}` per face (width over the photo's short edge; head angles in degrees; eye-open chances 0 to 1 when known). `domain/selfieFace.ts` decides: no face, a second face at least half as wide, a face under 0.18 of the short edge, a head turned or tilted over 25°, or both eyes under 0.3 asks the rider to take it again and says why; the sign-up and go-online selfies both use it. If the check can't run, the selfie goes as it is (ops still reviews it).
+
+Phone setup (app 1.3.1): the battery button opens Android's one-tap "Allow" dialog (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, permission `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`), then the optimisation list, then app details; the row turns green from `isIgnoringBatteryOptimizations`. A Play release needs that use declared (offers must ring while the phone sleeps). Location asks for precise and approximate together (Android 12+ ignores precise alone) and is done only with precise.
+
 ## Trip-step outbox (P2-02)
 
 **When.** Live rider builds use it once the server sets `features.nativeTripOutbox` on `GET /me`, which it does exactly while `CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED` is on (trip steps take the shift credential, P2-01). Until then, and in mock builds, trip steps go through the JS queue (`tripQueue`, AsyncStorage). When it turns on, the JS queue moves in once (`moveAll`, then `outboxImport`), each OTP back from the secure store into its body, its refusals with it; a failed move keeps the JS queue, which goes on sending. A trip with steps in one queue keeps using that queue, so its steps stay in order; when the switch goes off, steps still in the outbox go with the app's token.
@@ -128,7 +132,7 @@ The rider APK workflow fails if any rider-only permission appears in `src/main/A
 
 ## Dependencies (rider only)
 
-In `android/app/build.gradle`: `riderImplementation` `com.google.android.gms:play-services-location:21.3.0`, and `com.google.firebase:firebase-messaging` on the Firebase BOM that `@react-native-firebase/app` uses (`sdkVersions.android.firebase` in its package.json). The google-services plugin reads `android/app/src/rider/google-services.json` for rider variants; the APK workflow writes that file. Tests only: `testRiderImplementation` `junit:junit:4.13.2` for `src/testRider` (never in the APK).
+In `android/app/build.gradle`: `riderImplementation` `com.google.android.gms:play-services-location:21.3.0`, `com.google.mlkit:face-detection:16.1.7` (the selfie check; bundled model, about 7 MB), and `com.google.firebase:firebase-messaging` on the Firebase BOM that `@react-native-firebase/app` uses (`sdkVersions.android.firebase` in its package.json). The google-services plugin reads `android/app/src/rider/google-services.json` for rider variants; the APK workflow writes that file. Tests only: `testRiderImplementation` `junit:junit:4.13.2` for `src/testRider` (never in the APK).
 
 ## How to test
 

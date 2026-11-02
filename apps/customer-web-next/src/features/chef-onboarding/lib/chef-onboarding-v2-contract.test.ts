@@ -34,6 +34,12 @@ test("unknown routes, extra segments and traversal cannot reach other APIs", () 
   ])
     assert.equal(onboardingRoute("PUT", path, false), null);
   assert.equal(onboardingRoute("POST", ["applications", id], true), null);
+  assert.equal(
+    onboardingRoute("GET", ["applications", "drafts"], true),
+    "/backoffice/chef-onboarding/applications/drafts",
+  );
+  assert.equal(onboardingRoute("GET", ["applications", "drafts"], false), null);
+  assert.equal(onboardingRoute("POST", ["applications", "drafts"], true), null);
 });
 test("saved FSSAI resume state survives parsing and malformed state cannot appear complete", () => {
   const application = { id: null, status: "NOT_SUBMITTED", documents: [] };

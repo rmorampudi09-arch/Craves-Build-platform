@@ -20,6 +20,7 @@ export function onboardingRoute(method: string, path: string[], admin: boolean):
       return "/chef/onboarding/" + joined;
   } else {
     if(path.length===3 && path[0]==="applications" && UUID.test(path[1]!) && path[2]==="review" && method==="POST") return "/backoffice/chef-onboarding/"+joined;
+    if (joined === "applications/drafts" && method === "GET") return "/backoffice/chef-onboarding/applications/drafts";
     if (
       (joined === "help" && method === "GET") ||
       (joined === "content" && ["GET", "POST"].includes(method))

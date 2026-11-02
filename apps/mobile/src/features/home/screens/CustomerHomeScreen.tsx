@@ -85,6 +85,7 @@ import {
 import {
   applyDishLabelFilters,
   applyHomeDiscoveryFilters,
+  shouldLoadMoreForLabelFilter,
 } from '../../discoveryFilters/discoveryFilterApplication';
 import {useNearbyDishLabels} from '../../dishLabels/state/nearbyDishLabels';
 import {
@@ -545,6 +546,23 @@ export function CustomerHomeScreen() {
     () => filterHomeDishes(filteredAndSortedDishes, search.query, selectedCategory),
     [filteredAndSortedDishes, search.query, selectedCategory],
   );
+  const labelFilterActive =
+    appliedFilters.cuisineIds.length > 0 || appliedFilters.dietTags.length > 0;
+  // A failed page load must not retry in a loop, so an error stops the extra loading.
+  const loadMoreForLabels =
+    !feed.isFetchNextPageError &&
+    shouldLoadMoreForLabelFilter({
+      labelSelectionActive: labelFilterActive,
+      labelsPending: dishLabels.pending,
+      hasNextPage: feed.hasNextPage,
+      isFetchingNextPage: feed.isFetchingNextPage,
+      matchingCount: visibleDishes.length,
+      loadedPages: feed.data?.pages.length ?? 0,
+    });
+  const fetchNextFeedPage = feed.fetchNextPage;
+  useEffect(() => {
+    if (loadMoreForLabels) void fetchNextFeedPage();
+  }, [loadMoreForLabels, fetchNextFeedPage]);
   const listData = useMemo<HomeFeedListItem[]>(() => {
     if (feed.locationRequired) {
       return [{kind: 'empty', key: 'empty'}];
@@ -875,6 +893,10 @@ export function CustomerHomeScreen() {
             testID="customer-home-no-search-results"
           />
         );
+      }
+      // Label filters match loaded pages only: keep loading before saying nothing matches.
+      if (loadMoreForLabels || (labelFilterActive && feed.isFetchingNextPage)) {
+        return <HomeFeedSkeleton />;
       }
       return (
         <TerminalState

@@ -122,3 +122,26 @@ export function applyDishLabelFilters(
     return codes !== undefined && dishMatchesLabels(codes, selection, labels.vocabulary);
   });
 }
+
+/** Label filters run on loaded pages only, so Home keeps loading pages until this many dishes match... */
+const LABEL_FILTER_TARGET_MATCHES = 20;
+/** ...or this many pages are loaded (the feed keeps at most 10). */
+export const LABEL_FILTER_MAX_PAGES = 10;
+
+export function shouldLoadMoreForLabelFilter(state: {
+  labelSelectionActive: boolean;
+  labelsPending: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  matchingCount: number;
+  loadedPages: number;
+}): boolean {
+  return (
+    state.labelSelectionActive &&
+    !state.labelsPending &&
+    state.hasNextPage &&
+    !state.isFetchingNextPage &&
+    state.matchingCount < LABEL_FILTER_TARGET_MATCHES &&
+    state.loadedPages < LABEL_FILTER_MAX_PAGES
+  );
+}

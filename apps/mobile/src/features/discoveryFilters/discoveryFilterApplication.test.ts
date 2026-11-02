@@ -3,6 +3,7 @@ import type {NearbyDishLabels} from '../dishLabels/state/nearbyDishLabels';
 import {
   applyDishLabelFilters,
   applyHomeDiscoveryFilters,
+  shouldLoadMoreForLabelFilter,
 } from './discoveryFilterApplication';
 import {
   areDiscoveryFiltersEqual,
@@ -295,5 +296,31 @@ describe('dish label filters', () => {
         createDefaultDiscoveryFilters(),
       ),
     ).toBe(true);
+  });
+});
+
+describe('loading more pages for a label filter', () => {
+  const ready = {
+    labelSelectionActive: true,
+    labelsPending: false,
+    hasNextPage: true,
+    isFetchingNextPage: false,
+    matchingCount: 3,
+    loadedPages: 1,
+  };
+
+  it('asks for the next page while a label filter is on and matches are few', () => {
+    expect(shouldLoadMoreForLabelFilter(ready)).toBe(true);
+  });
+
+  it.each([
+    ['no label selection', {labelSelectionActive: false}],
+    ['labels still loading', {labelsPending: true}],
+    ['no next page', {hasNextPage: false}],
+    ['a page is already loading', {isFetchingNextPage: true}],
+    ['20 dishes already match', {matchingCount: 20}],
+    ['10 pages are loaded', {loadedPages: 10}],
+  ])('stops when %s', (_name, change) => {
+    expect(shouldLoadMoreForLabelFilter({...ready, ...change})).toBe(false);
   });
 });

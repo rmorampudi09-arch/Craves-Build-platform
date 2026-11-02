@@ -158,7 +158,8 @@ function DishForm({
   const addModel = useChefAddMenuItemModel();
   const editModel = useChefEditMenuItemModel();
   const setOn = useDishSwitch(menu.updateAvailability);
-  const labels = useChefDishLabels(editing ? dish.id : null);
+  // The labels sit at the bottom of a long form, so their messages also show as a toast the chef sees from the Save button.
+  const labels = useChefDishLabels(editing ? dish.id : null, toast.show);
 
   const [photo, setPhoto] = React.useState<DishPhoto | null>(null);
   const [photoBusy, setPhotoBusy] = React.useState(false);

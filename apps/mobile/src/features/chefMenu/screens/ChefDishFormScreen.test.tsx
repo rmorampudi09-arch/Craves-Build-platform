@@ -168,6 +168,7 @@ const lines = () => {
   return all.filter(node => !all.some(outer => outer !== node && outer.findAllByType(Text).includes(node))).map(node => textIn(node.props.children));
 };
 const has = (text: string) => lines().includes(text);
+const count = (text: string) => lines().filter(line => line === text).length;
 const withLabel = (label: string): ReactTestInstance | undefined =>
   tree.root.findAll(node => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function')[0];
 const press = (label: string) => {
@@ -923,7 +924,8 @@ describe('ChefDishFormScreen', () => {
       await press('Andhra');
       await press('Save changes');
       await settle();
-      expect(has('Pick at least one cuisine to save diet labels.')).toBe(true);
+      // Under the labels and in a toast: the labels sit at the bottom of the form, out of sight of the Save button.
+      expect(count('Pick at least one cuisine to save diet labels.')).toBe(2);
       expect(mockApi.replaceItem).not.toHaveBeenCalled();
       expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
       expect(mockLeft).not.toHaveBeenCalled();
@@ -975,7 +977,7 @@ describe('ChefDishFormScreen', () => {
       await press('Save changes');
       await settle();
       expect(mockApi.replaceItem).toHaveBeenCalledTimes(1);
-      expect(has(CONFLICT)).toBe(true);
+      expect(count(CONFLICT)).toBe(2);
       expect(mockLeft).not.toHaveBeenCalled();
       expect(has('Changes saved')).toBe(false);
       expect(mockForgetNearby).not.toHaveBeenCalled();

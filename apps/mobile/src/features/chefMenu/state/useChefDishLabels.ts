@@ -33,8 +33,11 @@ const NO_CUISINE = 'Pick at least one cuisine to save diet labels.';
 const sameCodes = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((code, index) => code === b[index]);
 
-/** The cuisine and diet labels of one dish; `menuItemId` null for a dish that does not exist yet. */
-export function useChefDishLabels(menuItemId: string | null): ChefDishLabelsModel {
+/**
+ * The cuisine and diet labels of one dish; `menuItemId` null for a dish that does not exist yet. `onError` also gets
+ * each message shown under the labels, so the screen can show it where the chef is looking.
+ */
+export function useChefDishLabels(menuItemId: string | null, onError?: (message: string) => void): ChefDishLabelsModel {
   const on = useAdvancedFeature('taxonomy');
   const [vocabulary, setVocabulary] = React.useState<TaxonomyVocabulary | null>(null);
   // What the server holds. A new dish has nothing to load; an existing one stays null until loaded, so a failed load
@@ -79,6 +82,11 @@ export function useChefDishLabels(menuItemId: string | null): ChefDishLabelsMode
     };
   }, [apply, menuItemId, on]);
 
+  const fail = (message: string) => {
+    setError(message);
+    onError?.(message);
+  };
+
   const enabled = on && vocabulary !== null && saved !== null;
   const changed =
     enabled &&
@@ -86,7 +94,7 @@ export function useChefDishLabels(menuItemId: string | null): ChefDishLabelsMode
 
   const ready = (): boolean => {
     if (changed && selection.diets.length > 0 && selection.cuisines.length === 0) {
-      setError(NO_CUISINE);
+      fail(NO_CUISINE);
       return false;
     }
     return true;
@@ -103,15 +111,15 @@ export function useChefDishLabels(menuItemId: string | null): ChefDishLabelsMode
       return true;
     } catch (cause) {
       if (!(cause instanceof DishLabelsConflictError)) {
-        setError(FAILED);
+        fail(FAILED);
         return false;
       }
       try {
         apply(await taxonomyApi.chefLabels(id));
-        setError(CONFLICT);
+        fail(CONFLICT);
       } catch {
         // The latest could not be loaded, so do not claim it was.
-        setError(FAILED);
+        fail(FAILED);
       }
       return false;
     }

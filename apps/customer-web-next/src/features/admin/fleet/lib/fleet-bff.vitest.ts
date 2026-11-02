@@ -35,6 +35,9 @@ describe("admin fleet BFF", () => {
   it("forwards only known filters", async () => {
     expect((await fleetProxy(request("riders?status=BLOCKED"), ["riders"])).status).toBe(400);
     expect((await fleetProxy(request("riders?sort=name"), ["riders"])).status).toBe(400);
+    // Prototype names used to throw instead of answering 400.
+    expect((await fleetProxy(request("riders?constructor=1"), ["riders"])).status).toBe(400);
+    expect((await fleetProxy(request("riders?__proto__=1"), ["riders"])).status).toBe(400);
     expect(upstream).not.toHaveBeenCalled();
     upstream.mockResolvedValue(Response.json({ riders: [], nextCursor: null }));
     expect((await fleetProxy(request("riders?status=ACTIVE&search=98"), ["riders"])).status).toBe(200);

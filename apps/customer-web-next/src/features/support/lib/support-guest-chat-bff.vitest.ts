@@ -16,7 +16,7 @@ describe("guest support chat BFF", () => {
 
   it("forwards the conversation without any session, with a hashed visitor key and the website channel", async () => {
     upstream.mockResolvedValue(Response.json({ reply: "Tap Resend OTP after 30 seconds.", supportCase: null }));
-    const response = await POST(request(valid, { "x-azure-clientip": "203.0.113.7", "x-forwarded-for": "198.51.100.1, 10.0.0.1" }));
+    const response = await POST(request(valid, { "x-azure-socketip": "203.0.113.7", "x-azure-clientip": "198.51.100.2", "x-forwarded-for": "198.51.100.1, 10.0.0.1" }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ reply: "Tap Resend OTP after 30 seconds.", supportCase: null });
     const [path, init, timeout] = upstream.mock.calls[0];
@@ -28,10 +28,25 @@ describe("guest support chat BFF", () => {
     expect(timeout).toBe(40_000);
   });
 
-  it("falls back to the first forwarded address", async () => {
+  it.each([
+    ["caller-written address headers", { "x-azure-clientip": "203.0.113.7", "x-forwarded-for": "198.51.100.1, 10.0.0.1" }],
+    ["no address header", {}],
+    ["a socket header that is not an IP", { "x-azure-socketip": "evil.example" }],
+  ])("shares the unknown bucket for %s", async (_, headers) => {
     upstream.mockResolvedValue(Response.json({ reply: "Hi", supportCase: null }));
-    await POST(request(valid, { "x-forwarded-for": "198.51.100.1, 10.0.0.1" }));
-    expect(upstream.mock.calls[0][1].headers["X-Craves-Visitor"]).toBe(hash("198.51.100.1"));
+    await POST(request(valid, headers));
+    expect(upstream.mock.calls[0][1].headers["X-Craves-Visitor"]).toBe(hash("unknown"));
+  });
+
+  it("gives an IPv6 visitor one bucket for their whole /64", async () => {
+    upstream.mockResolvedValue(Response.json({ reply: "Hi", supportCase: null }));
+    await POST(request(valid, { "x-azure-socketip": "2001:db8::1" }));
+    await POST(request(valid, { "x-azure-socketip": "2001:DB8:0:0:ffff:ffff:ffff:fffe" }));
+    await POST(request(valid, { "x-azure-socketip": "2001:db8:0:1::1" }));
+    const keys = upstream.mock.calls.map(call => call[1].headers["X-Craves-Visitor"]);
+    expect(keys[0]).toBe(hash("2001:0db8:0000:0000::/64"));
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
   });
 
   it.each([

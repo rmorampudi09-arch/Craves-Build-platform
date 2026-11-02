@@ -7,7 +7,8 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 out=/mnt/user-data/outputs/bundles
 mkdir -p "$out"
-paths=(services/advanced-features-service contracts/openapi/advanced infra/advanced-features infra/apim/advanced-features docs/advanced-features scripts/advanced-features)
+paths=(services/advanced-features-service contracts/openapi/advanced infra/advanced-features infra/apim/advanced-features docs/advanced-features scripts/advanced-features
+       services/order-service services/integration-service)  # M24/M25 hooks, additive only (bundle-import.yml)
 base=$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse origin/main)
 mapfile -t changed < <( { git diff --name-only "$base" -- "${paths[@]}"; git ls-files --others --exclude-standard -- "${paths[@]}"; } \
   | sort -u | grep -v '/target/' || true)

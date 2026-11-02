@@ -92,6 +92,13 @@ components:
       type: object
     HoldConfirmation:
       properties:
+        maxPortions:
+          format: int32
+          minimum: 1
+          type: integer
+        menuItemId:
+          format: uuid
+          type: string
         orderId:
           format: uuid
           type: string

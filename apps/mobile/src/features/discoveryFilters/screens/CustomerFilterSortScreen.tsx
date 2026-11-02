@@ -171,8 +171,14 @@ export function CustomerFilterSortScreen() {
       origin === 'HOME' && isAdvancedFeatureOn('taxonomy')
         ? getNearbyDishLabelsSnapshot()
         : null;
+    // The applied choices always show, even when no nearby dish carries them now, so they can be unticked.
+    const appliedLabels = {
+      menuItemId: 'applied',
+      cuisines: applied.cuisineIds,
+      diets: applied.dietTags,
+    };
     return snapshot
-      ? termsOnDishes([...snapshot.byId.values()], snapshot.vocabulary)
+      ? termsOnDishes([...snapshot.byId.values(), appliedLabels], snapshot.vocabulary)
       : {cuisines: [], diets: []};
   });
   const allowRemoveRef = useRef(false);

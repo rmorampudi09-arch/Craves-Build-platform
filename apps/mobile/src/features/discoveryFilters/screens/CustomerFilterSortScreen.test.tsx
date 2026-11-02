@@ -215,6 +215,22 @@ describe('CustomerFilterSortScreen label choices', () => {
     expect(lastApplied().dietTags).toEqual([]);
   });
 
+  it('keeps applied cuisines and diets that no nearby dish carries now, so they can be unticked', () => {
+    mockSnapshot = nearby({cuisines: ['chinese'], diets: []});
+    mockApplied = {...createDefaultDiscoveryFilters(), cuisineIds: ['andhra'], dietTags: ['vegan']};
+    const {root} = render();
+
+    expect(chip(root, 'Andhra').props.accessibilityState).toEqual({checked: true});
+    expect(byLabel(root, 'Vegan').props.accessibilityState).toEqual({checked: true});
+
+    press(chip(root, 'Andhra'));
+    press(byLabel(root, 'Vegan'));
+    press(root.findByProps({testID: 'apply-discovery-filters'}));
+
+    expect(lastApplied().cuisineIds).toEqual([]);
+    expect(lastApplied().dietTags).toEqual([]);
+  });
+
   it('Chefs origin is unchanged', () => {
     mockOrigin = 'CHEFS';
     mockSnapshot = nearby({cuisines: ['andhra'], diets: ['jain']});

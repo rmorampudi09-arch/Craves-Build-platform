@@ -71,6 +71,25 @@ public class AuthInternalClient {
         } catch (ApiException ex) { throw ex; }
         catch (Exception ex) { throw new ApiException(503, "EMAIL_AUTHORITY_UNAVAILABLE", "Email verification is temporarily unavailable"); }
     }
+    /** The sign-in phone and name Auth holds, or null when Auth cannot say; only admin lists use it. */
+    public Contact contact(UUID identityId) {
+        if (identityId == null || !StringUtils.hasText(properties.getAuthServiceBaseUrl()) || !StringUtils.hasText(properties.getServiceSecret()))
+            return null;
+        try {
+            java.net.URI origin = java.net.URI.create(properties.getAuthServiceBaseUrl());
+            if (!"https".equalsIgnoreCase(origin.getScheme()) || origin.getHost() == null || origin.getUserInfo() != null) return null;
+            var reply = emailHttp.get(origin.resolve("/internal/v1/identities/" + identityId + "/contact"), properties.getServiceSecret());
+            if (reply.statusCode() != 200) return null;
+            Contact contact = new com.fasterxml.jackson.databind.ObjectMapper()
+                .disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(reply.body(), Contact.class);
+            return identityId.equals(contact.identityId()) ? contact : null;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+    public record Contact(UUID identityId, String phoneNumber, String displayName) {
+        @Override public String toString() { return "Contact[REDACTED]"; }
+    }
     static String canonicalEmail(UUID identityId, String suppliedEmail, InternalIdentityEmail response) {
         if (response == null || identityId == null || suppliedEmail == null || !identityId.equals(response.identityId()) ||
             !"ACTIVE".equals(response.status()) || !response.emailVerified() ||

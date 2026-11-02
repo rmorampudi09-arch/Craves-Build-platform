@@ -163,6 +163,13 @@ public class MediaStorageService {
     /** Shrinks the photo when it is oversized, then stores it with long-lived caching for browsers and Front Door. */
     /** Shrunk and stripped of camera metadata (GPS); a photo that cannot be read is refused. */
     static MenuPhotoOptimizer.Photo publishable(byte[] data, String contentType) {
+        // WebP passes through unchanged, so nothing else ever reads its bytes: check the RIFF/WEBP signature here,
+        // or anything declared "image/webp" would be hosted publicly, cached for a year, exactly as sent.
+        if ("image/webp".equals(contentType) && !(data.length >= 12
+                && data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F'
+                && data[8] == 'W' && data[9] == 'E' && data[10] == 'B' && data[11] == 'P')) {
+            throw ApiException.badRequest("PHOTO_UNREADABLE", "This photo could not be read. Please try another photo.");
+        }
         try {
             return PhotoMetadata.clean(data, contentType);
         } catch (IllegalArgumentException ex) {

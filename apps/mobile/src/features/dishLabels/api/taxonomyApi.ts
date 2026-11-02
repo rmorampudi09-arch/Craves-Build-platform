@@ -181,6 +181,8 @@ export const taxonomyApi = {
       ).data;
     } catch (error) {
       const status = toAppApiError(error).status;
+      // Already cleared (e.g. on another phone): the dish has no labels, which is what was asked.
+      if (clearing && status === 404) return emptyLabels(menuItemId);
       if (status === 409 || status === 412) throw new DishLabelsConflictError();
       throw error;
     }

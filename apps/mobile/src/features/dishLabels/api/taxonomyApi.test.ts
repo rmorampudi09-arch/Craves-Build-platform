@@ -126,6 +126,22 @@ describe('taxonomyApi', () => {
     expect(apiClient.put).not.toHaveBeenCalled();
   });
 
+  it('saveChefLabels clearing labels that are already gone (404) counts as cleared', async () => {
+    (apiClient.delete as jest.Mock).mockRejectedValue(http(404));
+
+    await expect(
+      taxonomyApi.saveChefLabels(ID, {cuisines: [], diets: []}, 7),
+    ).resolves.toEqual({menuItemId: ID, cuisines: [], diets: [], version: null});
+  });
+
+  it('saveChefLabels a 404 on a PUT still fails', async () => {
+    (apiClient.put as jest.Mock).mockRejectedValue(http(404));
+
+    await expect(
+      taxonomyApi.saveChefLabels(ID, {cuisines: ['andhra'], diets: []}, 7),
+    ).rejects.toMatchObject({status: 404});
+  });
+
   it('saveChefLabels turns 412 into DishLabelsConflictError', async () => {
     (apiClient.put as jest.Mock).mockRejectedValue(http(412));
 

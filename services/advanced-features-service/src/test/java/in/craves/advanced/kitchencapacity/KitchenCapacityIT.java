@@ -91,7 +91,11 @@ class KitchenCapacityIT extends IntegrationTestBase {
         send(post(BASE + "/holds/" + aliceHold + "/confirm"), alice, order.formatted(UUID.randomUUID())).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("HOLD_EXPIRED"));
         send(post(BASE + "/holds/" + bobHold + "/confirm"), alice, order.formatted(bobOrder)).andExpect(status().isNotFound());
-        send(post(BASE + "/holds/" + bobHold + "/confirm"), bob, order.formatted(bobOrder)).andExpect(status().isOk())
+        String checked = "{\"orderId\":\"%s\",\"menuItemId\":\"%s\",\"maxPortions\":%d}";
+        send(post(BASE + "/holds/" + bobHold + "/confirm"), bob, checked.formatted(bobOrder, UUID.randomUUID(), 5)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("HOLD_DISH_MISMATCH"));
+        send(post(BASE + "/holds/" + bobHold + "/confirm"), bob, checked.formatted(bobOrder, biryani.id(), 0)).andExpect(status().isBadRequest());
+        send(post(BASE + "/holds/" + bobHold + "/confirm"), bob, checked.formatted(bobOrder, biryani.id(), 1)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED")).andExpect(jsonPath("$.orderId").value(bobOrder.toString()));
         send(post(BASE + "/holds/" + bobHold + "/confirm"), bob, order.formatted(bobOrder)).andExpect(status().isOk());
         send(post(BASE + "/holds/" + bobHold + "/confirm"), bob, order.formatted(UUID.randomUUID())).andExpect(status().isConflict());

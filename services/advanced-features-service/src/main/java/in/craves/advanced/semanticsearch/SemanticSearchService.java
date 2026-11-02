@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SemanticSearchService {
     static final int PER_SEARCH = 20;
+    /** Decimal places accepted in a coordinate; real clients send at most 17. */
+    static final int MAX_COORDINATE_SCALE = 30;
     /** shortcut: searches run one after another; after this budget the rest are skipped and complete=false. Run them in parallel if it bites. */
     static final long BUDGET_NANOS = 3_000_000_000L;
     private final SemanticSearchRepository repository;
@@ -62,14 +64,16 @@ public class SemanticSearchService {
 
     /** Not transactional: the concepts are read first, then Catalog is asked with no database connection held. */
     public SemanticSearchResult search(String query, BigDecimal latitude, BigDecimal longitude, int radiusMeters) {
-        if (latitude == null || longitude == null || latitude.abs().compareTo(BigDecimal.valueOf(90)) > 0
-                || longitude.abs().compareTo(BigDecimal.valueOf(180)) > 0 || radiusMeters <= 0) {
-            throw ApiProblem.badRequest("INVALID_LOCATION", "latitude must be within ±90, longitude within ±180 and radiusMeters above 0");
-        }
+        checkLocation(latitude, longitude, radiusMeters);
+        return search(plan(query), latitude, longitude, radiusMeters);
+    }
+
+    /** Runs a plan made by {@link #plan} (or by AI search, M20, which starts from one) against Catalog. */
+    public SemanticSearchResult search(SearchPlan plan, BigDecimal latitude, BigDecimal longitude, int radiusMeters) {
+        checkLocation(latitude, longitude, radiusMeters);
         // Bounded scale: a value like 1e-999999999 would otherwise become a gigantic string in the Catalog URL.
         BigDecimal lat = latitude.setScale(6, RoundingMode.HALF_UP);
         BigDecimal lng = longitude.setScale(6, RoundingMode.HALF_UP);
-        SearchPlan plan = plan(query);
         long deadline = System.nanoTime() + BUDGET_NANOS;
         List<List<FoundDish>> results = new ArrayList<>();
         boolean complete = true;
@@ -92,6 +96,14 @@ public class SemanticSearchService {
         }
         if (firstFailure != null && results.stream().allMatch(List::isEmpty)) throw firstFailure;
         return new SemanticSearchResult(plan, complete, SemanticSearchRules.merge(plan.searches(), results));
+    }
+
+    public static void checkLocation(BigDecimal latitude, BigDecimal longitude, int radiusMeters) {
+        // Scale first: rounding a value like 1e-30000000 to 6 decimals costs seconds of CPU and megabytes of heap.
+        if (latitude == null || longitude == null || latitude.scale() > MAX_COORDINATE_SCALE || longitude.scale() > MAX_COORDINATE_SCALE
+                || latitude.abs().compareTo(BigDecimal.valueOf(90)) > 0 || longitude.abs().compareTo(BigDecimal.valueOf(180)) > 0 || radiusMeters <= 0) {
+            throw ApiProblem.badRequest("INVALID_LOCATION", "latitude must be within ±90, longitude within ±180 and radiusMeters above 0");
+        }
     }
 
     @Transactional(readOnly = true)

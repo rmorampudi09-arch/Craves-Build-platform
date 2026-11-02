@@ -1,0 +1,189 @@
+components:
+  schemas:
+    AiChatMessage:
+      properties:
+        role:
+          pattern: USER|ASSISTANT
+          type: string
+        text:
+          maxLength: 500
+          minLength: 0
+          type: string
+      required:
+      - role
+      - text
+      type: object
+    AiSearchDishesRequest:
+      properties:
+        latitude:
+          type: number
+        longitude:
+          type: number
+        messages:
+          items:
+            $ref: "#/components/schemas/AiChatMessage"
+          maxItems: 10
+          minItems: 1
+          type: array
+        radiusMeters:
+          format: int32
+          type: integer
+      required:
+      - latitude
+      - longitude
+      - messages
+      type: object
+    AiSearchDishesResult:
+      properties:
+        aiUsed:
+          type: boolean
+        complete:
+          type: boolean
+        dishes:
+          items:
+            $ref: "#/components/schemas/SemanticDish"
+          type: array
+        plan:
+          $ref: "#/components/schemas/SearchPlan"
+        reply:
+          type: string
+      type: object
+    AiSearchPlanRequest:
+      properties:
+        messages:
+          items:
+            $ref: "#/components/schemas/AiChatMessage"
+          maxItems: 10
+          minItems: 1
+          type: array
+      required:
+      - messages
+      type: object
+    AiSearchPlanResult:
+      properties:
+        aiUsed:
+          type: boolean
+        plan:
+          $ref: "#/components/schemas/SearchPlan"
+        reply:
+          type: string
+      type: object
+    PlannedSearch:
+      properties:
+        ownWords:
+          type: boolean
+        text:
+          type: string
+      type: object
+    SearchPlan:
+      properties:
+        category:
+          type: string
+        foodType:
+          type: string
+        matchedPhrases:
+          items:
+            type: string
+          type: array
+        normalized:
+          type: string
+        query:
+          type: string
+        searches:
+          items:
+            $ref: "#/components/schemas/PlannedSearch"
+          type: array
+        spiceLevel:
+          type: string
+      type: object
+    SemanticDish:
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+        distanceMeters:
+          format: int64
+          type: integer
+        foodType:
+          type: string
+        imageUrl:
+          type: string
+        itemName:
+          type: string
+        kitchenId:
+          format: uuid
+          type: string
+        kitchenName:
+          type: string
+        matchedBy:
+          items:
+            type: string
+          type: array
+        menuItemId:
+          format: uuid
+          type: string
+        pricePaise:
+          format: int64
+          type: integer
+        score:
+          format: int32
+          type: integer
+        spiceLevel:
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_AI_SEARCH_ENABLED."
+  title: Craves ai-search API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/ai-search/dishes:
+    post:
+      operationId: aiSearchDishes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSearchDishesRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AiSearchDishesResult"
+          description: OK
+      tags:
+      - ai-search-controller
+      x-craves-auth: user
+  /api/v1/advanced/ai-search/plan:
+    post:
+      operationId: aiSearchPlan
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSearchPlanRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AiSearchPlanResult"
+          description: OK
+      tags:
+      - ai-search-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

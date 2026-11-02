@@ -123,6 +123,17 @@ export function applyDishLabelFilters(
   });
 }
 
+/**
+ * The labels Home filters with. While labels reload, useNearbyDishLabels keeps the last settled ones, so a new page
+ * never flashes unfiltered dishes; null (no label filtering) only before the first load or after a failed one.
+ */
+export function labelsForHomeFilter(dishLabels: {
+  labels: NearbyDishLabels | null;
+  pending: boolean;
+}): NearbyDishLabels | null {
+  return dishLabels.labels;
+}
+
 /** Label filters run on loaded pages only, so Home keeps loading pages until this many dishes match... */
 const LABEL_FILTER_TARGET_MATCHES = 20;
 /** ...or this many pages are loaded (the feed keeps at most 10). */

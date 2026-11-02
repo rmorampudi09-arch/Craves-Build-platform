@@ -3,6 +3,7 @@ import type {NearbyDishLabels} from '../dishLabels/state/nearbyDishLabels';
 import {
   applyDishLabelFilters,
   applyHomeDiscoveryFilters,
+  labelsForHomeFilter,
   shouldLoadMoreForLabelFilter,
 } from './discoveryFilterApplication';
 import {
@@ -322,5 +323,25 @@ describe('loading more pages for a label filter', () => {
     ['10 pages are loaded', {loadedPages: 10}],
   ])('stops when %s', (_name, change) => {
     expect(shouldLoadMoreForLabelFilter({...ready, ...change})).toBe(false);
+  });
+});
+
+describe('labels Home filters with', () => {
+  const labels: NearbyDishLabels = {vocabulary: {cuisines: [], diets: []}, byId: new Map()};
+
+  it('keeps the last settled labels while new ones load, so a new page does not flash unfiltered dishes', () => {
+    expect(labelsForHomeFilter({labels, pending: true})).toBe(labels);
+  });
+
+  it('is null while the first labels load', () => {
+    expect(labelsForHomeFilter({labels: null, pending: true})).toBeNull();
+  });
+
+  it('is the labels once they settle', () => {
+    expect(labelsForHomeFilter({labels, pending: false})).toBe(labels);
+  });
+
+  it('is null after a failed load', () => {
+    expect(labelsForHomeFilter({labels: null, pending: false})).toBeNull();
   });
 });

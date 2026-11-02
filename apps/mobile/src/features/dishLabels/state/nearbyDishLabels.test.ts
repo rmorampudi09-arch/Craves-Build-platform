@@ -176,4 +176,30 @@ describe('useNearbyDishLabels', () => {
     expect([...latest.labels!.byId.keys()]).toEqual(['dish-50', 'dish-51']);
     await act(async () => tree.unmount());
   });
+  it('keeps the last labels while it reloads, and has none after a failed load', async () => {
+    let latest!: ReturnType<typeof useNearbyDishLabels>;
+    const Probe = ({list}: {list: string[]}) => {
+      latest = useNearbyDishLabels(list);
+      return null;
+    };
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(React.createElement(Probe, {list: ids(2)}));
+    });
+    const first = latest.labels;
+    expect(first).not.toBeNull();
+
+    let fail!: (cause: Error) => void;
+    lookup.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
+    await act(async () => {
+      tree.update(React.createElement(Probe, {list: ids(3)}));
+    });
+    expect(latest.pending).toBe(true);
+    expect(latest.labels).toBe(first);
+
+    await act(async () => fail(new Error('offline')));
+    expect(latest.pending).toBe(false);
+    expect(latest.labels).toBeNull();
+    await act(async () => tree.unmount());
+  });
 });

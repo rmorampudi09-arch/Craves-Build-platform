@@ -85,6 +85,7 @@ import {
 import {
   applyDishLabelFilters,
   applyHomeDiscoveryFilters,
+  labelsForHomeFilter,
   shouldLoadMoreForLabelFilter,
 } from '../../discoveryFilters/discoveryFilterApplication';
 import {useNearbyDishLabels} from '../../dishLabels/state/nearbyDishLabels';
@@ -531,8 +532,7 @@ export function CustomerHomeScreen() {
     [feed.data?.pages],
   );
   const dishLabels = useNearbyDishLabels(dishes.map(dish => dish.id));
-  // Show the unfiltered list while labels (re)load rather than an empty one.
-  const labelsForFilter = dishLabels.pending ? null : dishLabels.labels;
+  const labelsForFilter = labelsForHomeFilter(dishLabels);
   const filteredAndSortedDishes = useMemo(
     () =>
       applyDishLabelFilters(
@@ -895,7 +895,10 @@ export function CustomerHomeScreen() {
         );
       }
       // Label filters match loaded pages only: keep loading before saying nothing matches.
-      if (loadMoreForLabels || (labelFilterActive && feed.isFetchingNextPage)) {
+      if (
+        loadMoreForLabels ||
+        (labelFilterActive && (feed.isFetchingNextPage || dishLabels.pending))
+      ) {
         return <HomeFeedSkeleton />;
       }
       return (

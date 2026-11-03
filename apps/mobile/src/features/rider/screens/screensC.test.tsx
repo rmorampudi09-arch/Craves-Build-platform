@@ -20,6 +20,7 @@ import {EarningsScreen} from './EarningsScreen';
 import {HelpScreen} from './HelpScreen';
 import {PayoutsScreen} from './PayoutsScreen';
 import {NoticeScreen} from './NoticeScreen';
+import {RulesScreen} from './RulesScreen';
 import {ProfileScreen} from './ProfileScreen';
 import {SosScreen} from './SosScreen';
 import {payLabel, TripDetailScreen} from './TripDetailScreen';
@@ -160,14 +161,22 @@ describe('Earnings (15)', () => {
     const text = allText();
     expect(text).toMatch(/Today, (Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d+ \w{3}/);
     expect(text).toContain('₹414');
-    expect(text).toContain('2 trips');
-    expect(text).toContain('Payouts and withdrawals');
-    expect(text).toContain('Madhapur to Kondapur | 7:52 pm | ₹67 | Credited');
-    expect(text).toContain('Ameerpet to Kukatpally | 1:24 pm, tap to see why | ₹58 | On hold');
+    expect(text).toContain('Today | This week | Payouts');
+    expect(text).toContain('₹414 | 2 trips');
+    // The trip on hold, as drawn: what the server says, by when a person decides, and the way to add the rider's side.
+    expect(text).toContain(
+      "On hold: Ameerpet to Kukatpally | ₹58 | You left this order with a photo after the customer didn't answer. A person reviews it by Mon 26 Oct. Nothing else is affected. | Add your side",
+    );
+    expect(text).toContain('7:52 pm · Madhapur to Kondapur | 4.0 km | ₹67');
+    expect(text).not.toContain('Credited'); // a credited trip needs no badge
+    expect(text).toContain('1:24 pm · Ameerpet to Kukatpally | 4.0 km · tap to see why | ₹58 | On hold');
+    expect(text).toContain('Free withdrawal any day from the Payouts tab.');
     await press('earning-t4');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('TripDetail', {tripId: 't4'});
-    await press('rider-open-payouts');
+    await press('rider-range-payouts');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Payouts');
+    await press('rider-earnings-add-side');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Notice');
   });
 
   it('shows the day on each row for this week', async () => {
@@ -178,7 +187,7 @@ describe('Earnings (15)', () => {
     await press('rider-range-week');
     expect(tree.root.findByProps({testID: 'rider-range-week'}).props.accessibilityState).toEqual({selected: true});
     expect(allText()).toContain('This week (Mon–Sun)');
-    expect(allText()).toContain('Wed 21 Oct, 1:24 pm, tap to see why');
+    expect(allText()).toContain('Wed 21 Oct, 1:24 pm · Ameerpet to Kukatpally | 4.0 km · tap to see why');
   });
 
   it('pages through 200 trips without counting a partial list', async () => {
@@ -484,14 +493,20 @@ describe('Notice (19)', () => {
   it('explains the notice, keeps the rider working and sets out what happens next', async () => {
     await render(<NoticeScreen />, [[riderKeys.me, {...me, notice}]]);
     const text = allText();
-    expect(text).toContain('Notice | SOS | Review of a delivery | Sent Wed 21 Oct, 6:05 pm');
-    expect(text).toContain('You can keep working. Your account is not paused. Only the pay for this one order is on hold.');
-    expect(text).toContain("What happened | The customer for order CR-4093 says it didn't arrive.");
-    expect(text).toContain("What we're checking | Your photo at the door (1:24 pm)");
-    expect(tree.root.findAll(node => node.props.accessibilityLabel === '1. Tell us your side by Wed 28 Oct.').length).toBeGreaterThan(0);
-    expect(text).toContain('Wed 28 Oct');
+    expect(text).toContain('Your account | SOS | Review of a delivery | Sent Wed 21 Oct, 6:05 pm');
+    expect(text).toContain(
+      'A review is open on your account | You can keep working. Nothing changes unless a person at Craves decides so, and you will hear from them first.',
+    );
+    expect(text).toContain("What it is about | The customer for order CR-4093 says it didn't arrive.");
+    expect(text).toContain('What we have | Your photo at the door (1:24 pm)');
+    // Who decides and the held pay were not sent: the screen says so rather than leaving a gap.
+    expect(text).toContain("Who decides | A person at Craves, not the system | Decision by | Wed 28 Oct | On hold meanwhile | That trip's pay only");
+    expect(text).toContain('If a pause or an end to your account were ever decided');
+    expect(text).toContain('Tell us your side by Wed 28 Oct.');
     expect(text).toContain('A person at Craves looks at everything. The app never decides on its own.');
-    expect(text).toContain('Telangana Grievance Redressal Officer');
+    expect(text).toContain('Grievance officer and the Telangana portal | Add your side | Call a person at Craves');
+    await press('rider-notice-grievance');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Terms', {mode: 'view'});
     await press('rider-notice-call');
     expect(Linking.openURL).toHaveBeenCalledWith('tel:+911111111111');
   });
@@ -530,6 +545,52 @@ describe('Notice (19)', () => {
     expect(allText()).toContain('No notices');
     expect(has('rider-notice-give')).toBe(false);
     expect(has('rider-notice-call')).toBe(true);
+  });
+});
+
+describe('How you get orders (R-06)', () => {
+  const terms = {
+    version: '2026-10-v1',
+    effectiveFrom: '2026-10-20T00:00:00Z',
+    summaryOfChanges: [],
+    rateCardLines: [],
+    grievanceLines: [],
+    offerRules: {offersAtOnce: 1, offerRounds: 3, offerSeconds: 30, radiusM: 3000, fairBandM: 0},
+  };
+
+  it("lists the rules in force from the server, with the rate card and the grievance officer on Terms", async () => {
+    await render(<RulesScreen />, [[riderKeys.terms, terms]]);
+    const text = allText();
+    expect(text).toContain('How you get orders');
+    expect(text).toContain('Each order goes to one rider at a time. You get 30 seconds to decide.');
+    expect(text).toContain('Nearest first: the free riders closest to the kitchen hear first.');
+    expect(text).toContain('If a rider passes or the time runs out, the next rider hears, in up to 3 rounds.');
+    expect(text).toContain('Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.');
+    expect(text).toContain('Each offer says why it came to you. | Rate card 2026-10-v1 | Grievance officer');
+    expect(has('rider-rules-changes')).toBe(false);
+    await press('rider-rules-grievance');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Terms', {mode: 'view'});
+  });
+
+  it('says what changes and from when only while newer terms wait', async () => {
+    await render(<RulesScreen />, [
+      [
+        riderKeys.terms,
+        {
+          ...terms,
+          upcoming: {version: '2026-11-v2', effectiveFrom: '2026-11-17T00:00:00Z', summaryOfChanges: ['Two rules are new: orders near you are shared out together.'], rateCardLines: []},
+        },
+      ],
+    ]);
+    expect(has('rider-rules-changes')).toBe(true);
+    expect(allText()).toContain(
+      'Changes from 17 Nov | Two rules are new: orders near you are shared out together. | You were told 14 days ahead, as the Telangana Gig Workers Act requires. Everything else is unchanged.',
+    );
+  });
+
+  it('says so when the server has published no rules yet', async () => {
+    await render(<RulesScreen />, [[riderKeys.terms, {...terms, offerRules: undefined}]]);
+    expect(allText()).toContain('The order rules have not been published yet.');
   });
 });
 

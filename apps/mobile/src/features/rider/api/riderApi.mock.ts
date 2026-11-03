@@ -1082,6 +1082,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
               checking:
                 "The customer's report, the drop location and the call log for that order.",
               tripId: 'past-3',
+              decidedBy: 'Priya, rider ops',
+              heldPaise: 5400,
             },
       };
     },

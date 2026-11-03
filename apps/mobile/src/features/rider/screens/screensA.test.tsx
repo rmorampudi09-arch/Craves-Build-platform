@@ -1085,7 +1085,7 @@ describe('Home', () => {
     const text = allText();
     expect(text).toContain('Hi, Ravi');
     expect(text).toContain('Heavy rain expected after 8 pm.');
-    expect(text).toContain('Today | ₹347 | 5 trips');
+    expect(text).toContain('Today | ₹347 | Trips | 5');
     expect(text).toContain('Your next slot | 7:00 pm to 10:00 pm | Madhapur and Kondapur');
     expect(text).toContain("At least ₹80 an hour while you're online in this slot, even when orders are slow.");
     await act(async () => press('rider-go-online').props.onPress());
@@ -1094,12 +1094,12 @@ describe('Home', () => {
 
   it("shows today's pay per online hour once there is one, and the riders' middle only when the server sends it", async () => {
     await render(<HomeScreen />, seed(onlineHome));
-    expect(allText()).not.toContain('an hour online today');
+    expect(allText()).not.toContain('Per online hour');
     await render(<HomeScreen />, seed({...onlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253}));
-    expect(allText()).toContain('Today | ₹347 | 5 trips | Online today: 3 h 45 min | ₹92.53 an hour online today');
-    expect(allText()).not.toContain("today's riders");
+    expect(allText()).toContain('Today | ₹347 | Online today: 3 h 45 min | Per online hour | ₹92.53 | Trips | 5');
+    expect(allText()).not.toContain('Fleet middle');
     await render(<HomeScreen />, seed({...offlineHome, todayOnlineMinutes: 225, todayPerHourPaise: 9253, fleetPerHourPaise: 8500}));
-    expect(allText()).toContain("₹92.53 an hour online today | Half of today's riders made ₹85 an hour or more.");
+    expect(allText()).toContain('Per online hour | ₹92.53 | Fleet middle today | ₹85 | Trips | 5');
   });
 
   it('never makes up a guaranteed rate the server did not send', async () => {

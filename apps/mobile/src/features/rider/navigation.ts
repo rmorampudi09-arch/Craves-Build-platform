@@ -19,6 +19,8 @@ export type RiderStackParamList = {
   Payouts: undefined;
   Help: undefined;
   Notice: undefined;
+  /** How you get orders (app 1.3.3, R-06). */
+  Rules: undefined;
   Sos: {tripId?: string};
   DevPanel: undefined;
 };

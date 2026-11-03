@@ -18,7 +18,7 @@ import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
 import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 
 /** Switches the whole app's language; each label is in its own script. 40 dp to see, 48 dp to touch. */
-function LanguageChips() {
+export function LanguageChips() {
   const {strings, language, setLanguage} = useStrings();
   if (RIDER_LANGUAGES.length < 2) {
     return null;

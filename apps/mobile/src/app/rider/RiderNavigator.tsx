@@ -28,6 +28,7 @@ import {GoOnlineScreen} from '../../features/rider/screens/GoOnlineScreen';
 import {HelpScreen} from '../../features/rider/screens/HelpScreen';
 import {HomeScreen} from '../../features/rider/screens/HomeScreen';
 import {NoticeScreen} from '../../features/rider/screens/NoticeScreen';
+import {RulesScreen} from '../../features/rider/screens/RulesScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
 import {PayoutsScreen} from '../../features/rider/screens/PayoutsScreen';
 import {PhoneSetupScreen} from '../../features/rider/screens/PhoneSetupScreen';
@@ -184,6 +185,7 @@ function SignedIn() {
             <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Notice" component={NoticeScreen} />
+            <Stack.Screen name="Rules" component={RulesScreen} />
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />

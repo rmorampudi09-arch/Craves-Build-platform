@@ -67,6 +67,11 @@ jest.mock('../native/riderOnlineService', () => ({
     testRing: jest.fn(async () => undefined),
     stopRinging: jest.fn(),
     lastFix: () => ({lat: 17.4615, lng: 78.3657, accuracyM: 10, at: '2026-10-19T10:00:00Z'}),
+    onReached: () => () => undefined,
+    pendingReached: async () => null,
+    reachedNotYet: jest.fn(),
+    reachedDone: jest.fn(),
+    takeStepTap: () => null,
   },
 }));
 jest.mock('../native/riderDevice', () => ({

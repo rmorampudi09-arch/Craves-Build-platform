@@ -17,6 +17,9 @@ export interface RiderNotice {
   checking?: string;
   /** The one trip whose pay is on hold, if any. */
   tripId?: string;
+  /** App 1.3.3 (R-06): who decides, by name and team, and the pay on hold meanwhile; the screen says when they are missing. */
+  decidedBy?: string;
+  heldPaise?: Paise;
 }
 
 export interface RiderMe {

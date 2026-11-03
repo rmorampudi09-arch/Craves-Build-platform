@@ -12,7 +12,7 @@ import {RefusalNotices} from '../components/RefusalNotices';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {Timeline} from '../components/Timeline';
-import {Card, Money, RiderScreen} from '../components/ui';
+import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatClock, formatRupees} from '../domain/format';
 import {riderMessage} from '../domain/problem';
 import {riderOnlineService} from '../native/riderOnlineService';
@@ -58,15 +58,28 @@ function PerHour({home}: {home: HomeSummary}) {
           {h.onlineToday(Math.floor(minutes / 60), minutes % 60)}
         </Text>
       ) : null}
-      {home.todayPerHourPaise !== undefined ? (
-        <Text style={styles.body} testID="rider-per-hour">
-          {h.perHour(formatRupees(home.todayPerHourPaise))}
-        </Text>
-      ) : null}
+      {home.todayPerHourPaise !== undefined ? <RateRow label={h.perOnlineHour} value={formatRupees(home.todayPerHourPaise)} /> : null}
       {home.todayPerHourPaise !== undefined && home.fleetPerHourPaise !== undefined ? (
-        <Text style={styles.small}>{h.fleetPerHour(formatRupees(home.fleetPerHourPaise))}</Text>
+        <RateRow label={h.fleetMiddle} value={formatRupees(home.fleetPerHourPaise)} />
       ) : null}
+      <RateRow label={h.tripsLabel} value={String(home.todayTrips)} />
     </>
+  );
+}
+
+/** Today, as drawn: the total beside the label, then the rows. */
+function TodayCard({home}: {home: HomeSummary}) {
+  const h = useStrings().strings.home;
+  return (
+    <Card style={styles.tight}>
+      <View style={styles.spread}>
+        <Text style={styles.strong}>{h.today}</Text>
+        <Text style={styles.hero} testID="rider-today-earnings">
+          {formatRupees(home.todayEarningsPaise)}
+        </Text>
+      </View>
+      <PerHour home={home} />
+    </Card>
   );
 }
 
@@ -79,12 +92,7 @@ function OfflineCards({home}: {home: HomeSummary}) {
   const slot = home.nextSlot;
   return (
     <>
-      <Card>
-        <Text style={styles.small}>{h.today}</Text>
-        <Money paise={home.todayEarningsPaise} testID="rider-today-earnings" />
-        <Text style={styles.small}>{h.trips(home.todayTrips)}</Text>
-        <PerHour home={home} />
-      </Card>
+      <TodayCard home={home} />
       {slot ? (
         <Card style={styles.slot}>
           <View style={styles.tight}>
@@ -249,18 +257,7 @@ function OnlineCards({
           />
         ) : null}
       </Card>
-      <Card>
-        <View style={styles.spread}>
-          <View>
-            <Text style={styles.small}>{h.today}</Text>
-            <Text style={styles.hero} testID="rider-today-earnings">
-              {formatRupees(home.todayEarningsPaise)}
-            </Text>
-          </View>
-          <Text style={styles.secondary}>{h.trips(home.todayTrips)}</Text>
-        </View>
-        <PerHour home={home} />
-      </Card>
+      <TodayCard home={home} />
       {home.restPoint ? (
         <Card style={styles.iconCard}>
           <Icon name="map-marker-outline" size={iconSize.lg} color={colors.textPrimary} surface={false} />
@@ -344,7 +341,10 @@ export function HomeScreen() {
         online ? (
           <BottomAction label={h.goOffline} variant="outline" onPress={goOffline} testID="rider-go-offline" />
         ) : (
-          <BottomAction label={h.goOnline} onPress={goOnline} disabled={!home.data} testID="rider-go-online" />
+          <View style={styles.tight}>
+            <BottomAction label={h.goOnline} onPress={goOnline} disabled={!home.data} testID="rider-go-online" />
+            {phone.ready ? <Text style={[styles.small, styles.center]}>{h.selfieFirst}</Text> : null}
+          </View>
         )
       }>
       {home.isError ? <ProblemCard error={home.error} onRetry={refresh} testID="rider-home-problem" /> : null}

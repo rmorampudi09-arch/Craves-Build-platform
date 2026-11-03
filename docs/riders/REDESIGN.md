@@ -25,6 +25,7 @@ translations were written with the app, and wait for the P2-08 native-speaker re
 
 | Commit | What | Artboards |
 |---|---|---|
+| R-06 | Home: Today as rows (per online hour, fleet middle, trips) and "A quick selfie first" under Go online when the phone is set up. Earnings: Today / This week / Payouts chips, the total with trips, online time and per-hour line, the fleet line, the amber On hold card with "Add your side", trip rows "20:31 · kitchen to area / 4.0 km · wait ₹6 · tip ₹8.90", and the Monday payout line (bank last four, last payout with UTR, free withdrawal) from what the server has sent. Rules: a new "How you get orders" screen from Profile with the server's rules one per line, "Changes from <date>" only while `Terms.upcoming` waits, and the rate card and grievance officer links. Account under review: the notice screen as drawn (amber card, five lines that say when the server has not sent a field, the "if a pause…" card, Add your side, Call a person at Craves, the grievance link). | Main, HomeOffline, Earnings, Rules, AccountReview |
 | R-05 | The trip as drawn: order title and "₹61 locked · kitchen" line, Ride to / Deliver to, rows (distance with minutes, food ready, hand over, pay for this trip), Navigate and Call, "Calls go through Craves" only with `features.maskedCalls` (off by default); at the kitchen the espresso card with "0BDE 0101", "Waiting since", the free-wait card and two ticks that never hold up Picked up; the hand-over with its "If Anil isn't answering" card and "Delivered is enabled once all 4 digits match"; Trip complete with the green header, the server's lines, "Your pay", the rate card and "Offer said at least ₹X", today's trips and online time. The server now sends `rateCardVersion`, `offerPayPaise`, both offer distances, `pickedUpAt` and `finishedAt`. | ToKitchen, AtKitchen, ToCustomer, Handover, TripComplete |
 | R-04 | The foreground notification per step (`RiderTripNotice`, unit-tested): "To Lakshmi's Kitchen · order 0BDE 0101", one line, and Back to Craves, the step's action and SOS. A tapped action opens the app, which posts the step only while the trip screen shows that step; SOS opens the SOS screen. No new permission: it is the online service's own notification, redrawn. | MapsNotification |
 | R-03 | "Reached <kitchen>?": the Kotlin service asks once the phone has been within 50 m of the kitchen for 20 s on TO_KITCHEN (`RiderReached`, a pure state machine with its own unit test). In the app it is the sheet as drawn; with Google Maps in front it is a heads-up with Yes and Not yet. Yes posts arrived-pickup; Not yet keeps quiet until the phone moves and stands still again. | ReachedPrompt |
@@ -56,5 +57,11 @@ R-02 to R-09 are added to this table as they land.
   said. The hand-over header is the customer's first name (the canvas adds "Flat 304"; the full address is under it).
   "Paid on Monday" is the design's promise; the app shows it as drawn and the payout day stays the server's. The free-wait
   card keeps its countdown and words (the behaviour tests cover them) under the "Waiting since" line.
+- **R-06:** Home keeps its greeting header, shift card, break and heading-home cards (their behaviour tests stand); the
+  canvas's "Nearest kitchen is 0.6 km" hero and "This week" card need data `/home` does not send, so they are not built.
+  Earnings rows show the kitchen's area, not its name (`TripEarning` has no name), and "wait 4 min" reads as the
+  server's waiting pay ("wait ₹6"). The rules are the server's `OfferRules` lines, so a server without them shows one
+  sentence saying so; the two rules the canvas adds (shared-out orders, next-order offers) come with R-09's policy text.
+  "Add your side, with photos" takes words only, as before: photos on a notice are not in this PR.
 - **R-01 was written from the canvas, not from the `rider-redesign-R01.patch` file**, which was not available where this
   branch was built.

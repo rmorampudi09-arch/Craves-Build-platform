@@ -31,6 +31,7 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 | Live order activity (E39) | `liveactivities` | `adv_live_activities` | `/api/v1/advanced/live-activities` | `live-activities-v1.yaml` | `CRAVES_ADV_LIVE_ACTIVITIES_ENABLED` |
 | Policies: serviceability, cancellation/refund, provider ranking, notification frequency (015, 062, 072, 088) | `policies` | `adv_policies` | `/api/v1/advanced/policies` | `policies-v1.yaml` | `CRAVES_ADV_POLICIES_ENABLED` |
 | Account deletion requests (privacy) | `accountdeletion` | `adv_account_deletion` | `/api/v1/advanced/account-deletion` | `account-deletion-v1.yaml` | `CRAVES_ADV_ACCOUNT_DELETION_ENABLED` |
+| Download my data (privacy) | `mydata` | `adv_my_data` (no tables) | `/api/v1/advanced/my-data` | `my-data-v1.yaml` | `CRAVES_ADV_MY_DATA_ENABLED` |
 | Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
 | Feature switches | `platform.module` | – | `/api/v1/advanced/features` (public), `/modules` (staff) | `advanced-v1.yaml` | – |
 

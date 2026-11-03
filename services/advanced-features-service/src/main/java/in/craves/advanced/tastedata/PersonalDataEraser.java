@@ -49,7 +49,7 @@ public class PersonalDataEraser {
         return new Erased(total, modules, skipped);
     }
 
-    boolean usable(String moduleId) {
+    public boolean usable(String moduleId) {
         return runtime.modules().stream().filter(m -> m.id().equals(moduleId)).findFirst().map(module -> {
             try {
                 runtime.ensureReady(module);

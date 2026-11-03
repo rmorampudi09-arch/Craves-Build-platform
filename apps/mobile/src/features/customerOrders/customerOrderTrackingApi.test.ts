@@ -72,6 +72,7 @@ describe('P55 customer delivery tracking API', () => {
       observedAt: null,
       history: [],
       courierLocation: null,
+      deliveryCode: null,
     });
   });
 
@@ -81,6 +82,15 @@ describe('P55 customer delivery tracking API', () => {
     expect(
       parseCustomerOrderTrackingResponse(tracking({courierLocation: {latitude: 'x'}}))?.courierLocation,
     ).toBeNull();
+  });
+
+  it('reads the 4-digit delivery code, and treats anything else as no code', () => {
+    expect(parseCustomerOrderTrackingResponse(tracking({deliveryCode: '4821'}))?.deliveryCode).toBe('4821');
+    expect(parseCustomerOrderTrackingResponse(tracking({deliveryCode: '0042'}))?.deliveryCode).toBe('0042');
+    expect(parseCustomerOrderTrackingResponse(tracking())?.deliveryCode).toBeNull();
+    for (const deliveryCode of [null, '482', '48210', 'abcd', 4821]) {
+      expect(parseCustomerOrderTrackingResponse(tracking({deliveryCode}))?.deliveryCode).toBeNull();
+    }
   });
 
   it('strips unapproved fields and removes non-HTTPS tracking URLs', () => {

@@ -1,11 +1,14 @@
 import {httpClient} from '../../core/http/httpClient';
+import {captureException} from '../../core/observability/observability';
 import {
   CUSTOMER_ORDERS_PATH,
   CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT,
   customerOrdersApi,
+  parseCustomerOrderResponse,
   parseCustomerOrdersResponse,
 } from './api/customerOrdersApi';
 
+jest.mock('../../core/observability/observability', () => ({captureException: jest.fn()}));
 jest.mock('../../core/http/httpClient', () => ({
   httpClient: {
     get: jest.fn(),
@@ -89,8 +92,49 @@ describe('P52 customer orders API', () => {
     expect(result?.[0].grandTotal).toEqual({amount: '229', currency: 'INR'});
   });
 
-  it('rejects unknown statuses rather than inventing lifecycle semantics', () => {
-    expect(parseCustomerOrdersResponse([order({status: 'UNKNOWN'})])).toBeNull();
+  it('keeps a meal-plan order, which has no checkout, in the list and the detail', () => {
+    // Subscription orders are stored with checkout_id NULL and all-zero money.
+    const mealOrder = order({
+      checkoutId: null,
+      status: 'CHEF_ACCEPTANCE_PENDING',
+      foodSubtotal: 0,
+      platformFee: 0,
+      taxAmount: 0,
+      deliveryFee: 0,
+      grandTotal: 0,
+    });
+
+    expect(parseCustomerOrdersResponse([mealOrder, order({
+      id: '88888888-8888-4888-8888-888888888888',
+      createdAt: '2026-08-08T11:00:00Z',
+    })])).toHaveLength(2);
+    expect(parseCustomerOrderResponse(mealOrder)?.checkoutId).toBeNull();
+  });
+
+  it('drops a row that fails the schema, keeps the rest, and reports its id', () => {
+    const broken = order({id: '99999999-9999-4999-8999-999999999999', status: 'UNKNOWN'});
+
+    const result = parseCustomerOrdersResponse([
+      broken,
+      order({createdAt: '2026-08-08T11:00:00Z'}),
+      'not an order',
+    ]);
+
+    expect(result?.map(item => item.id)).toEqual(['11111111-1111-4111-8111-111111111111']);
+    expect(captureException).toHaveBeenCalledTimes(2);
+    expect(captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      'customer_order_row_dropped',
+      {orderId: broken.id},
+    );
+  });
+
+  it('still rejects a response that is not a list', () => {
+    expect(parseCustomerOrdersResponse({orders: []})).toBeNull();
+  });
+
+  it('keeps the detail strict: unknown statuses are rejected, not guessed', () => {
+    expect(parseCustomerOrderResponse(order({status: 'UNKNOWN'}))).toBeNull();
   });
 
   it('rejects a response larger than the exact backend recent-order window', () => {

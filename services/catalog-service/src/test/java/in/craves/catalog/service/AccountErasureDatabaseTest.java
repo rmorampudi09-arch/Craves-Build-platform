@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -51,6 +53,7 @@ class AccountErasureDatabaseTest {
 
     JdbcTemplate jdbc;
     AccountErasureService erasure;
+    TransactionTemplate transactions;
     KitchenScheduleService schedule;
     DiscoveryCacheService cache;
     MediaStorageService media;
@@ -91,7 +94,8 @@ class AccountErasureDatabaseTest {
             UUID.randomUUID().toString().replace("-", "").repeat(2), List.of(chef, otherChef)));
         schedule = new KitchenScheduleService(jdbc, new ObjectMapper().findAndRegisterModules(), finance);
         cache = mock(DiscoveryCacheService.class);
-        erasure = new AccountErasureService(jdbc, media, schedule, cache, new TransactionTemplate(new DataSourceTransactionManager(ds)));
+        transactions = new TransactionTemplate(new DataSourceTransactionManager(ds));
+        erasure = new AccountErasureService(jdbc, media, schedule, cache, transactions);
 
         seedKitchen(kitchen, chef, "main");
         for (String address : List.of("Second address", "Third address", "Fourth address")) {
@@ -132,6 +136,7 @@ class AccountErasureDatabaseTest {
     void seedDish(UUID kitchenId, UUID dish, String status, boolean available) {
         jdbc.update("INSERT INTO catalog_schema.menu_item(id,kitchen_id,item_name,category,food_type,price,is_available,status,unit_package_weight_grams,thermobox_required) VALUES (?,?,'Fixture meal','Lunch','VEG',100,?,?,500,false)",
             dish, kitchenId, available, status);
+        jdbc.update("UPDATE catalog_schema.menu_item SET description = 'Grandma Lakshmi recipe, pick up at 12 Test Street' WHERE id = ?", dish);
     }
 
     void seedImage(UUID dish, String blobName, boolean primary) {
@@ -221,7 +226,7 @@ class AccountErasureDatabaseTest {
         Map<String, Integer> counts = erasure.erase(chef, Scope.CHEF, request);
 
         assertEquals(Map.of("kitchen_profile", 1, "kitchen_pickup_location", 4, "pickup_location_provisioning_outbox", 3,
-            "menu_item", 2, "menu_item_image", 5, "media_blob", 7), counts);
+            "menu_item", 3, "menu_item_image", 5, "media_blob", 7), counts);
         // kitchen: every personal column replaced, closed, still the same row of the same person
         var k = jdbc.queryForMap("SELECT * FROM catalog_schema.kitchen_profile WHERE id = ?", kitchen);
         assertEquals(chef, k.get("identity_id"));
@@ -249,6 +254,11 @@ class AccountErasureDatabaseTest {
         // menu
         assertEquals(0, count("catalog_schema.menu_item WHERE kitchen_id = ? AND (status <> 'ARCHIVED' OR is_available)", kitchen));
         assertEquals(3, count("catalog_schema.menu_item WHERE kitchen_id = ?", kitchen));
+        // the dish text a person wrote goes too (the archived dish included); the name stays
+        assertEquals(0, count("catalog_schema.menu_item WHERE kitchen_id = ? AND description IS NOT NULL", kitchen));
+        assertEquals(3, count("catalog_schema.menu_item WHERE kitchen_id = ? AND item_name = 'Fixture meal'", kitchen));
+        // marked imported, so the registration photos can never be copied back onto the erased kitchen
+        assertEquals(1, count("catalog_schema.kitchen_profile WHERE id = ? AND kitchen_photos_imported_at IS NOT NULL", kitchen));
         assertEquals(0, count("catalog_schema.menu_item_image WHERE menu_item_id IN (?, ?, ?)", dishA, dishB, dishOld));
         // nobody else
         assertEquals(other, otherChefRows());
@@ -301,7 +311,7 @@ class AccountErasureDatabaseTest {
     }
 
     @Test void photosOutsideTheCatalogMediaStoreAreOnlyCleared() {
-        jdbc.update("UPDATE catalog_schema.kitchen_profile SET kitchen_photo_url = 'https://elsewhere.example/public/kitchens/x/kitchen/a.png' WHERE id = ?", kitchen);
+        jdbc.update("UPDATE catalog_schema.kitchen_profile SET kitchen_photo_url = 'https://elsewhere.example/public/kitchens/x/kitchen/a.png', kitchen_photos_imported_at = '2026-01-01T00:00:00Z' WHERE id = ?", kitchen);
 
         Map<String, Integer> counts = erasure.erase(chef, Scope.CHEF, request);
 
@@ -309,6 +319,7 @@ class AccountErasureDatabaseTest {
         assertTrue(deleted.stream().noneMatch(blob -> blob.contains("elsewhere") || blob.contains("legacy")));
         assertNull(jdbc.queryForObject("SELECT kitchen_photo_url FROM catalog_schema.kitchen_profile WHERE id = ?", String.class, kitchen));
         assertEquals(0, count("catalog_schema.menu_item_image WHERE menu_item_id = ?", dishB));
+        assertEquals(1, count("catalog_schema.kitchen_profile WHERE id = ? AND kitchen_photos_imported_at = '2026-01-01T00:00:00Z'", kitchen)); // an earlier import time is kept
     }
 
     @Test void aBlobDeleteFailureFailsTheEraseChangesNothingAndTheRetryFinishesIt() {
@@ -327,6 +338,21 @@ class AccountErasureDatabaseTest {
         assertEquals(0, count("catalog_schema.menu_item_image WHERE menu_item_id = ?", dishB));
     }
 
+    @Test void anErasedKitchenIsNeverImportedAgain() {
+        // the kitchen was never imported (kitchen_photos_imported_at NULL), the case the start-up backfill picks up
+        assertEquals(1, count("catalog_schema.kitchen_profile WHERE id = ? AND kitchen_photos_imported_at IS NULL", kitchen));
+        erasure.erase(chef, Scope.CHEF, request);
+        var client = mock(UserChefKitchenPhotoClient.class);
+        var importer = new KitchenPhotoImporter(jdbc, transactions, mock(MediaStorageService.class), client, mock(DiscoveryCacheService.class));
+
+        assertFalse(importer.importKitchen(kitchen));
+        importer.backfill();
+
+        verify(client, never()).fetch(eq(chef), anyInt());
+        assertNull(jdbc.queryForObject("SELECT kitchen_photo_url FROM catalog_schema.kitchen_profile WHERE id = ?", String.class, kitchen));
+        assertNull(jdbc.queryForObject("SELECT kitchen_photo_2_url FROM catalog_schema.kitchen_profile WHERE id = ?", String.class, kitchen));
+    }
+
     @Test void everyKitchenRowOfThePersonIsErased() {
         // kitchen_profile.identity_id is UNIQUE today; the erase must not depend on it
         jdbc.execute("ALTER TABLE catalog_schema.kitchen_profile DROP CONSTRAINT kitchen_profile_identity_id_key");
@@ -338,7 +364,7 @@ class AccountErasureDatabaseTest {
         Map<String, Integer> counts = erasure.erase(chef, Scope.ALL, request);
 
         assertEquals(2, counts.get("kitchen_profile"));
-        assertEquals(3, counts.get("menu_item"));
+        assertEquals(4, counts.get("menu_item"));
         assertEquals(0, count("catalog_schema.kitchen_profile WHERE identity_id = ? AND (status <> 'INACTIVE' OR phone_number IS NOT NULL)", chef));
         assertEquals(0, count(PICKUP + " WHERE kitchen_id = ? AND " + PICKUP_NOT_ANONYMISED, second));
         assertTrue(deleted.contains("public/dishes/twin/t1.png"));

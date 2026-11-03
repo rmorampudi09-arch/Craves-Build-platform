@@ -98,17 +98,19 @@ public class AccountErasureService {
 
     private void eraseRows(UUID identityId, Map<String, Integer> counts) {
         // One statement that also closes the kitchen: the pickup trigger then adds its new version already anonymised
-        // and, because the kitchen is no longer ACTIVE, never queues it for the delivery provider. Rows already erased are skipped.
+        // and, because the kitchen is no longer ACTIVE, never queues it for the delivery provider. Marking the photos
+        // imported stops KitchenPhotoImporter copying the chef's registration photos back. Rows already erased are skipped.
         counts.put("kitchen_profile", jdbc.update("""
             UPDATE catalog_schema.kitchen_profile
                SET kitchen_name = ?, display_name = NULL, description = NULL, phone_number = NULL, email = NULL,
                    address_line1 = ?, address_line2 = NULL, landmark = NULL, area_name = NULL, city = ?, state = ?,
                    postal_code = NULL, latitude = NULL, longitude = NULL, social_links = '{}'::jsonb, service_areas = '[]'::jsonb,
-                   chef_photo_url = NULL, kitchen_photo_url = NULL, kitchen_photo_2_url = NULL, status = 'INACTIVE', updated_at = now()
+                   chef_photo_url = NULL, kitchen_photo_url = NULL, kitchen_photo_2_url = NULL, status = 'INACTIVE',
+                   kitchen_photos_imported_at = COALESCE(kitchen_photos_imported_at, now()), updated_at = now()
              WHERE identity_id = ?
-               AND (kitchen_name, display_name, description, phone_number, email, address_line1, address_line2, landmark, area_name, city, state,
+               AND (kitchen_photos_imported_at IS NULL OR (kitchen_name, display_name, description, phone_number, email, address_line1, address_line2, landmark, area_name, city, state,
                     postal_code, latitude, longitude, social_links, service_areas, chef_photo_url, kitchen_photo_url, kitchen_photo_2_url, status)
-                   IS DISTINCT FROM (?, NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL, ?, ?, NULL, NULL, NULL, '{}'::jsonb, '[]'::jsonb, NULL, NULL, NULL, 'INACTIVE')
+                   IS DISTINCT FROM (?, NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL, ?, ?, NULL, NULL, NULL, '{}'::jsonb, '[]'::jsonb, NULL, NULL, NULL, 'INACTIVE'))
             """, DELETED_KITCHEN_NAME, DELETED, DELETED, DELETED, identityId, DELETED_KITCHEN_NAME, DELETED, DELETED, DELETED));
         // Every version, retired ones included (they keep the real old address); ids stay because orders and the provider refer to them.
         counts.put("kitchen_pickup_location", jdbc.update("""
@@ -127,8 +129,8 @@ public class AccountErasureService {
             """.formatted(MY_KITCHENS),
             OUTBOX_STOPPED_REASON, identityId));
         counts.put("menu_item", jdbc.update("""
-            UPDATE catalog_schema.menu_item SET status = 'ARCHIVED', is_available = false, updated_at = now()
-             WHERE (status <> 'ARCHIVED' OR is_available) AND kitchen_id IN %s
+            UPDATE catalog_schema.menu_item SET status = 'ARCHIVED', is_available = false, description = NULL, updated_at = now()
+             WHERE (status <> 'ARCHIVED' OR is_available OR description IS NOT NULL) AND kitchen_id IN %s
             """.formatted(MY_KITCHENS), identityId));
         counts.put("menu_item_image", jdbc.update("""
             DELETE FROM catalog_schema.menu_item_image

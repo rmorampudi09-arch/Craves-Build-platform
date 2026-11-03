@@ -128,3 +128,8 @@ craves:
       enabled: ${CRAVES_DOMAIN_EVENT_SERVICE_BUS_ENABLED:false}
       fully-qualified-namespace: ${CRAVES_SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
       topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

@@ -64,7 +64,10 @@ public class ChefApplicationService {
     /**
      * Chef-side account erasure leaves the person's application row anonymised with erased_at set (a person has one
      * row). When they apply again the same row becomes a fresh draft: pending, nothing submitted or reviewed, no saved
-     * details. Their old evidence is hidden from the new draft, not deleted: rows and blobs stay, with a history snapshot.
+     * details. Their old KYC documents are hidden from the new draft (removed_at). A document type has one row per
+     * application (unique application_id + document_type), so uploading the same type again overwrites that row in
+     * place. The kept record of the erased application's evidence is therefore the REOPENED_AFTER_ERASURE history
+     * snapshot taken here (blob, status, reviewer, review time); nothing rewrites or deletes it, and the blobs stay in storage.
      */
     @Transactional
     public void reopenIfErased(UUID identityId) {
@@ -92,6 +95,14 @@ public class ChefApplicationService {
                 + "fssai_reviewed_by = NULL, fssai_reviewed_at = NULL, fssai_review_evidence = NULL, "
                 + "version = chef_onboarding_draft.version + 1, updated_at = now()",
             identityId, applicationId);
+    }
+
+    /** An erased application belongs to a deleted account: it is never approved, rejected or reviewed. */
+    public void requireNotErased(UUID applicationId) {
+        if (Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM chef_application WHERE id = ? AND erased_at IS NOT NULL)", Boolean.class, applicationId))) {
+            throw ApiException.conflict("CHEF_APPLICATION_ERASED", "This application belongs to a deleted account and cannot be reviewed");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -230,6 +241,7 @@ public class ChefApplicationService {
         }
         emailProjection.lockIdentity(application.identityId());
         jdbcTemplate.query("SELECT id FROM chef_application WHERE id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),applicationId);
+        requireNotErased(applicationId);
         // Re-read after the projection lock: an email replacement may have synchronized while review was opened.
         application = getApplicationForAdmin(admin, applicationId);
         if (application.status() != ChefApplicationStatus.PENDING) {
@@ -248,6 +260,7 @@ public class ChefApplicationService {
     public ChefApplicationResponse reject(CurrentUser admin, UUID applicationId, AdminDecisionRequest request) {
         requireDecisionAccess(admin);
         jdbcTemplate.query("SELECT id FROM chef_application WHERE id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),applicationId);
+        requireNotErased(applicationId);
         if (request == null || !StringUtils.hasText(request.reason())) {
             throw ApiException.badRequest("REJECTION_REASON_REQUIRED", "Rejection reason is required");
         }

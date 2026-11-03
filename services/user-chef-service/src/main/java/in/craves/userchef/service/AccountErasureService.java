@@ -92,9 +92,11 @@ public class AccountErasureService {
             DELETED, DELETED, identityId, DELETED, DELETED));
         counts.put("chef_onboarding_visit", jdbc.update(
             "UPDATE chef_onboarding_visit SET phone_number = ? WHERE identity_id = ? AND phone_number <> ?", DELETED, identityId, DELETED));
+        // REOPENED_AFTER_ERASURE snapshots are the kept KYC record of an erased application: never rewritten.
         for (String table : new String[] {"chef_onboarding_document_history", "chef_onboarding_action_audit"}) {
             counts.put(table, jdbc.update(
-                "UPDATE " + table + " SET snapshot = " + stripped("snapshot") + " WHERE identity_id = ? AND " + hasPersonal("snapshot"),
+                "UPDATE " + table + " SET snapshot = " + stripped("snapshot") + " WHERE identity_id = ? AND action <> 'REOPENED_AFTER_ERASURE' AND "
+                    + hasPersonal("snapshot"),
                 identityId));
         }
     }

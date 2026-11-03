@@ -53,6 +53,7 @@ class AccountErasureDatabaseTest {
     ChefApplicationService applications;
     RegistrationKitchenPhotoService kitchenPhotos;
     BlobDocumentStorageService storage;
+    AuthInternalClient auth;
     CurrentUser person;
     CurrentUser admin;
     UUID bystander;
@@ -74,7 +75,7 @@ class AccountErasureDatabaseTest {
             System.getenv("ONBOARDING_TEST_DB_USER"), System.getenv("ONBOARDING_TEST_DB_PASSWORD"));
         jdbc = new JdbcTemplate(scoped);
         tx = new TransactionTemplate(new DataSourceTransactionManager(scoped));
-        var auth = mock(AuthInternalClient.class);
+        auth = mock(AuthInternalClient.class);
         when(auth.requireVerifiedEmail(any(), anyString())).thenAnswer(call -> call.getArgument(1));
         var projection = mock(AuthEmailProjectionService.class);
         storage = mock(BlobDocumentStorageService.class);
@@ -138,7 +139,7 @@ class AccountErasureDatabaseTest {
     }
     void approve() {
         jdbc.update("UPDATE chef_application SET status='APPROVED',reviewed_at=now(),reviewed_by_identity_id=? WHERE identity_id=?", admin.identityId(), person.identityId());
-        jdbc.update("UPDATE chef_kyc_document SET status='APPROVED' WHERE identity_id=?", person.identityId());
+        jdbc.update("UPDATE chef_kyc_document SET status='APPROVED',review_reason='Checked',reviewed_by_identity_id=?,reviewed_at=now() WHERE identity_id=?", admin.identityId(), person.identityId());
     }
     void customer(UUID id) {
         jdbc.update("INSERT INTO customer_profile(identity_id,registered_phone_number,first_name,last_name,email) VALUES (?,'+919111111111','Asha','Rao','asha@example.test')", id);
@@ -319,6 +320,8 @@ class AccountErasureDatabaseTest {
         approve();
         jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number='12345678901234',fssai_reviewed_by=?,fssai_reviewed_at=now() WHERE identity_id=?", admin.identityId(), person.identityId());
         var kycBefore = rows("chef_kyc_document WHERE identity_id=?", person.identityId());
+        var oldEvidence = jdbc.queryForList("SELECT id,document_type,blob_name,status,review_reason,reviewed_by_identity_id,reviewed_at FROM chef_kyc_document WHERE identity_id=?", person.identityId());
+        assertEquals(4, oldEvidence.size());
         UUID applicationId = jdbc.queryForObject("SELECT id FROM chef_application WHERE identity_id=?", UUID.class, person.identityId());
         erase(Scope.CHEF);
         assertNotNull(jdbc.queryForObject("SELECT erased_at FROM chef_application WHERE id=?", java.sql.Timestamp.class, applicationId));
@@ -365,6 +368,34 @@ class AccountErasureDatabaseTest {
         assertEquals(4, fresh.documents().size());
         assertTrue(fresh.documents().stream().allMatch(d -> "UPLOADED".equals(d.status())));
         assertEquals("review", fresh.resumeStep());
+
+        // One row per document type: re-uploading the same type overwrites the hidden row in place (unique
+        // application_id + document_type). The kept KYC record of the erased application is the history snapshot taken
+        // at reopening: old blob, status and reviewer stay readable from it, and the blobs stay in storage.
+        for (var old : oldEvidence) {
+            var kept = jdbc.queryForMap("SELECT snapshot->>'blob_name' AS blob_name, snapshot->>'status' AS status, snapshot->>'review_reason' AS review_reason, "
+                + "snapshot->>'reviewed_by_identity_id' AS reviewer, snapshot->>'reviewed_at' AS reviewed_at, snapshot->>'document_type' AS document_type, snapshot->>'removed_at' AS removed_at "
+                + "FROM chef_onboarding_document_history WHERE identity_id=? AND action='REOPENED_AFTER_ERASURE' AND document_id=?", person.identityId(), old.get("id"));
+            assertEquals(old.get("blob_name"), kept.get("blob_name"), "old blob stays referenced");
+            assertEquals("APPROVED", kept.get("status"));
+            assertEquals(old.get("status"), kept.get("status"));
+            assertEquals("Checked", kept.get("review_reason"));
+            assertEquals(admin.identityId().toString(), kept.get("reviewer"));
+            assertNotNull(kept.get("reviewed_at"));
+            assertEquals(old.get("document_type"), kept.get("document_type"));
+            assertNull(kept.get("removed_at"), "the snapshot is the evidence as it stood when the person left");
+            assertNotEquals(old.get("blob_name"), text("SELECT blob_name FROM chef_kyc_document WHERE id=?", old.get("id")), "the live row now holds the new upload");
+        }
+        // Nothing later rewrites or deletes those history rows, a second erase included.
+        assertEquals(4, count("chef_onboarding_document_history WHERE identity_id=? AND action='REOPENED_AFTER_ERASURE'", person.identityId()));
+        // Even a snapshot that carried a personal key would be left alone: it is the KYC record.
+        jdbc.update("INSERT INTO chef_onboarding_document_history(id,document_id,identity_id,action,snapshot) VALUES (?,?,?,'REOPENED_AFTER_ERASURE',?::jsonb)",
+            UUID.randomUUID(), UUID.randomUUID(), person.identityId(), "{\"blob_name\":\"kyc/contaminated\",\"email\":\"x@example.test\"}");
+        var keptRows = rows("chef_onboarding_document_history WHERE identity_id=? AND action='REOPENED_AFTER_ERASURE'", person.identityId());
+        assertEquals(5, keptRows.size());
+        erase(Scope.CHEF);
+        erase(Scope.ALL);
+        assertEquals(keptRows, rows("chef_onboarding_document_history WHERE identity_id=? AND action='REOPENED_AFTER_ERASURE'", person.identityId()));
     }
 
     @Test void anApplicationFromTheOldFormWithoutADraftAlsoReopensAsAFreshDraft() {
@@ -489,5 +520,58 @@ class AccountErasureDatabaseTest {
         assertEquals(staffBefore, rows("support_case_message WHERE case_id IN (?,?) AND sender_role IN ('SUPPORT_ADMIN','PLATFORM_ADMIN')", customerCase, chefCase));
         assertEquals(historyBefore, rows("support_case_status_history WHERE case_id IN (?,?)", customerCase, chefCase));
         assertEquals(otherBefore, rows("support_case_message WHERE case_id=?", otherCase));
+    }
+
+    @Test void emailProjectionNeverWritesARealEmailIntoAnErasedApplication() {
+        chefApplicant();
+        customer(person.identityId());
+        erase(Scope.CHEF);
+        var projection = new in.craves.userchef.email.AuthEmailProjectionService(jdbc);
+        long revision = 1;
+        var event = new in.craves.userchef.email.AuthEmailProjectionService.Event(UUID.randomUUID(), person.identityId(), "new@example.test", true, revision,
+            java.time.Instant.now().minusSeconds(30).truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+
+        var receipt = run(() -> projection.receive(event, "a".repeat(64)));
+
+        assertEquals("APPLIED", receipt.status());
+        assertEquals(DELETED, text("SELECT email FROM chef_application WHERE identity_id=?", person.identityId()), "an erased application is never refilled");
+        assertNotNull(jdbc.queryForObject("SELECT erased_at FROM chef_application WHERE identity_id=?", java.sql.Timestamp.class, person.identityId()));
+        assertEquals("new@example.test", text("SELECT email FROM customer_profile WHERE identity_id=?", person.identityId()), "the customer side still follows its login email");
+        // A person who never erased still gets the new email on the application.
+        CurrentUser other = new CurrentUser(bystander, "other", "+919000000009", List.of("CUSTOMER"));
+        jdbc.update("INSERT INTO chef_application(id,identity_id,phone_number,email,first_name,last_name,address_line1,city,state) VALUES (?,?,'+919000000009','old@example.test','Other','Chef','Kitchen','Hyderabad','Telangana')", UUID.randomUUID(), bystander);
+        var otherEvent = new in.craves.userchef.email.AuthEmailProjectionService.Event(UUID.randomUUID(), bystander, "other@example.test", true, revision,
+            java.time.Instant.now().minusSeconds(30).truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+        run(() -> projection.receive(otherEvent, "b".repeat(64)));
+        assertEquals("other@example.test", text("SELECT email FROM chef_application WHERE identity_id=?", other.identityId()));
+    }
+
+    @Test void anErasedApplicationCannotBeApprovedRejectedOrReviewedEvenWithAMatchingEmail() {
+        chefApplicant();
+        long version = onboarding.mine(person).version();
+        run(() -> onboarding.submit(person, new ChefOnboardingController.SubmitRequest(version, true, ChefOnboardingService.TERMS_VERSION), "Bearer test"));
+        UUID applicationId = jdbc.queryForObject("SELECT id FROM chef_application WHERE identity_id=?", UUID.class, person.identityId());
+        for (var document : jdbc.queryForList("SELECT id FROM chef_kyc_document WHERE application_id=?", UUID.class, applicationId))
+            jdbc.update("UPDATE chef_kyc_document SET status='APPROVED' WHERE id=?", document);
+        jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number='12345678901234',fssai_reviewed_by=?,fssai_reviewed_at=now() WHERE identity_id=?", admin.identityId(), person.identityId());
+        assertEquals("PENDING", text("SELECT status FROM chef_application WHERE id=?", applicationId));
+        erase(Scope.CHEF);
+        // What the unguarded email projection used to do: the real email is back and matches the verified one.
+        jdbc.update("UPDATE chef_application SET email='amma@example.test' WHERE id=?", applicationId);
+        long draftVersion = jdbc.queryForObject("SELECT version FROM chef_onboarding_draft WHERE identity_id=?", Long.class, person.identityId());
+
+        var approve = assertThrows(ApiException.class, () -> run(() -> applications.approve(admin, applicationId)));
+        var reject = assertThrows(ApiException.class, () -> run(() -> applications.reject(admin, applicationId, new in.craves.userchef.web.ApiDtos.AdminDecisionRequest("Not suitable"))));
+        var review = assertThrows(ApiException.class, () -> run(() -> onboarding.reviewAction(admin, applicationId, new ReviewAction(draftVersion, "START_REVIEW", null, null, null))));
+
+        for (var refused : List.of(approve, reject, review)) {
+            assertEquals(409, refused.getStatus());
+            assertEquals("CHEF_APPLICATION_ERASED", refused.getCode());
+        }
+        org.mockito.Mockito.verify(auth, org.mockito.Mockito.never()).grantChefRole(any(), any());
+        assertEquals("PENDING", text("SELECT status FROM chef_application WHERE id=?", applicationId));
+        assertEquals(0, count("admin_chef_decision_audit WHERE application_id=?", applicationId));
+        assertEquals(draftVersion, jdbc.queryForObject("SELECT version FROM chef_onboarding_draft WHERE identity_id=?", Long.class, person.identityId()));
+        assertEquals("PENDING", text("SELECT review_status FROM chef_onboarding_draft WHERE identity_id=?", person.identityId()), "no review action got through");
     }
 }

@@ -412,6 +412,7 @@ public class ChefOnboardingService {
         requireEnabled();requireAdmin(admin);
         var application=applications.getApplicationForAdmin(admin,applicationId);
         jdbc.query("SELECT id FROM chef_application WHERE id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),applicationId);
+        applications.requireNotErased(applicationId);
         var draft=find(application.identityId(),true);
         if(draft==null || request==null || request.expectedVersion()==null || request.expectedVersion()!=draft.version())
             throw ApiException.conflict("ONBOARDING_VERSION_CHANGED","Reload this application before reviewing.");

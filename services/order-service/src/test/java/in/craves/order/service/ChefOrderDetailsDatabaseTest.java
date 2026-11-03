@@ -109,6 +109,19 @@ class ChefOrderDetailsDatabaseTest {
     }
 
     @Test
+    void chefFinishesAnOrderAfterClosingTheKitchenAndOtherChefsStillCannotSeeIt() {
+        UUID id = placeOrder("note");
+        jdbc.update("UPDATE order_schema.customer_order SET status = 'CHEF_ACCEPTED' WHERE id = ?", id);
+        // Catalog refuses a closed kitchen; ownership comes from the order row, as in the chef order list.
+        when(catalog.getKitchen(kitchen)).thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active"));
+
+        assertEquals(OrderStatus.CHEF_ACCEPTED, orders.getChefOrderDetail(chefActor, id).status());
+        assertEquals(OrderStatus.READY_FOR_PICKUP, orders.markReadyForPickup(chefActor, id).status());
+        ResponseStatusException other = assertThrows(ResponseStatusException.class, () -> orders.getOrderForChef(otherChefActor, id));
+        assertEquals(HttpStatus.FORBIDDEN, other.getStatusCode());
+    }
+
+    @Test
     void checkoutStoresTheTrimmedNoteAndOnlyTheChefSeesIt() {
         UUID id = placeOrder("  Less spicy  ");
 

@@ -298,9 +298,9 @@ class BorzoPidgeHandoffWorkerTest {
     }
 
     @Test
-    void unresolvedPidgeFallbackKeepsRetryingAndPagesOnceAtTheAttemptLimit(CapturedOutput output) {
-        Handoff atLimit = pidgePhase(20);
-        Handoff pastLimit = pidgePhase(21);
+    void unresolvedPidgeFallbackKeepsRetryingAndPagesOnceAboutTenMinutesIn(CapturedOutput output) {
+        Handoff atLimit = pidgePhase(7);
+        Handoff pastLimit = pidgePhase(8);
         when(handoffs.claimDue(1)).thenReturn(List.of(atLimit), List.of(pastLimit), List.of());
         for (Handoff handoff : List.of(atLimit, pastLimit)) {
             HandoffJob job = job(handoff, "SEARCHING");
@@ -318,7 +318,7 @@ class BorzoPidgeHandoffWorkerTest {
         verify(handoffs).retry(eq(pastLimit.deliveryJobId()), eq("PROCESSING_PIDGE"), any(), any());
         verify(handoffs, never()).manualReview(any(), any());
         assertTrue(output.getAll().contains("CRAVES_ALERT alert=DELIVERY_HANDOFF_STALLED jobId="
-            + atLimit.deliveryJobId() + " attempts=20 "));
+            + atLimit.deliveryJobId() + " attempts=7 "));
         assertFalse(output.getAll().contains("jobId=" + pastLimit.deliveryJobId() + " attempts="));
     }
 

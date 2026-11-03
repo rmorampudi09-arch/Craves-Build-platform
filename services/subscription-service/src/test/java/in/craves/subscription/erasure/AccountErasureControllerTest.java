@@ -99,6 +99,16 @@ class AccountErasureControllerTest {
     }
 
     @Test
+    void blockersListAStillRunningSubscription() throws Exception {
+        when(service.blockers(IDENTITY, Scope.ALL)).thenReturn(
+            List.of(new Blocker("SUBSCRIPTION_STILL_ACTIVE", "1 meal plan subscription(s) are still running")));
+
+        mockMvc.perform(call("/blockers", "{\"identityId\":\"" + IDENTITY + "\",\"scope\":\"ALL\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.blockers[0].code").value("SUBSCRIPTION_STILL_ACTIVE"));
+    }
+
+    @Test
     void prepareAnswersDoneWithCounts() throws Exception {
         when(service.prepare(IDENTITY, Scope.ALL, REQUEST)).thenReturn(ErasureResponse.done(Map.of("customer_subscription", 2)));
 

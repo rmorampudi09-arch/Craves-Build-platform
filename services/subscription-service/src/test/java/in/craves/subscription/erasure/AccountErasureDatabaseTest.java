@@ -208,7 +208,7 @@ class AccountErasureDatabaseTest {
 
     @Test
     void eraseIsBlockedWhileAnInvoiceIsUnpaid() {
-        UUID mine = subscribe(customer, plan, "PENDING_PAYMENT", "Leave at the gate");
+        UUID mine = subscribe(customer, plan, "CANCELLED", "Leave at the gate");
         invoice(mine, plan, "PAYMENT_PENDING");
         db.update("INSERT INTO subscription_schema.subscription_day_credit(id,subscription_id,kind,first_date,last_date,status,choice_deadline) "
             + "VALUES (?,?,'DECLINE',?,?,'PENDING_CHOICE',now() + interval '2 days')", UUID.randomUUID(), mine, LocalDate.now(), LocalDate.now());
@@ -221,6 +221,32 @@ class AccountErasureDatabaseTest {
         assertNull(blocked.counts());
         assertEquals(List.of("DAY_CREDIT_CHOICE_PENDING", "SUBSCRIPTION_UNPAID_INVOICE"), codes(blocked.blockers()));
         assertEquals("Leave at the gate", notes(mine));
+    }
+
+    @Test
+    void eraseIsBlockedWhileASubscriptionIsStillActive() {
+        UUID active = subscribe(customer, plan, "ACTIVE", "Leave at the gate");
+        subscribe(customer, plan, "PAUSED", null);
+        subscribe(customer, plan, "PENDING_PAYMENT", null);
+        subscribe(customer, plan, "PAYMENT_FAILED", null);
+        subscribe(customer, plan, "EXPIRED", null);
+        subscribe(UUID.randomUUID(), plan, "ACTIVE", null);
+
+        assertEquals(List.of("SUBSCRIPTION_STILL_ACTIVE"), codes(service.blockers(customer, Scope.CUSTOMER)));
+        assertEquals(List.of("SUBSCRIPTION_STILL_ACTIVE"), codes(service.blockers(customer, Scope.ALL)));
+        assertEquals("4 meal plan subscription(s) are still running", service.blockers(customer, Scope.CUSTOMER).get(0).detail());
+        assertEquals(List.of(), service.blockers(customer, Scope.CHEF));
+        ErasureResponse blocked = service.erase(customer, Scope.ALL, request);
+
+        assertEquals("BLOCKED", blocked.status());
+        assertEquals(List.of("SUBSCRIPTION_STILL_ACTIVE"), codes(blocked.blockers()));
+        assertEquals("Leave at the gate", notes(active));
+
+        // Once prepare has cancelled the plans that can be cancelled and the rest have ended, erase goes through.
+        db.update("UPDATE subscription_schema.customer_subscription SET status = 'CANCELLED' WHERE customer_identity_id = ?", customer);
+        assertEquals(List.of(), service.blockers(customer, Scope.CUSTOMER));
+        assertEquals("DONE", service.erase(customer, Scope.CUSTOMER, request).status());
+        assertEquals(AccountErasureService.ERASED_TEXT, notes(active));
     }
 
     @Test

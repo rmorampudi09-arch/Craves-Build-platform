@@ -18,8 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Account deletion. CUSTOMER: plans are cancelled when deletion is requested (prepare), and their free text is blanked at
- * erase. CHEF: plans stop taking subscribers at request and are archived at erase. Money rows (invoices, credits) and
+ * Account deletion. CUSTOMER: plans are cancelled when deletion is requested (prepare), erase waits while any is still
+ * running, and their free text is blanked at erase. CHEF: plans stop taking subscribers at request and are archived at erase. Money rows (invoices, credits) and
  * status history are never changed. Every step is safe to repeat.
  */
 @Service
@@ -40,6 +40,9 @@ public class AccountErasureService {
     public List<Blocker> blockers(UUID identityId, Scope scope) {
         List<Blocker> blockers = new ArrayList<>();
         if (scope != Scope.CHEF) {
+            // Anything not finished waits, even if it started after prepare cancelled the plans (a bill paid during the 30 days).
+            addIfAny(blockers, "SUBSCRIPTION_STILL_ACTIVE", "meal plan subscription(s) are still running", count(
+                "customer_subscription WHERE customer_identity_id = ? AND status NOT IN ('CANCELLED', 'EXPIRED')", identityId));
             addIfAny(blockers, "SUBSCRIPTION_UNPAID_INVOICE", "meal plan bill(s) are still waiting for payment", count(
                 "subscription_invoice WHERE customer_identity_id = ? AND status IN ('PAYMENT_REQUESTED', 'PAYMENT_PENDING')", identityId));
             addIfAny(blockers, "DAY_CREDIT_CHOICE_PENDING", "refund-or-extend choice(s) for missed or paused days are still open", count(

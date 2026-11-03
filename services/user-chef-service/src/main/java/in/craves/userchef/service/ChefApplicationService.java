@@ -101,8 +101,13 @@ public class ChefApplicationService {
     public void requireNotErased(UUID applicationId) {
         if (Boolean.TRUE.equals(jdbcTemplate.queryForObject(
             "SELECT EXISTS (SELECT 1 FROM chef_application WHERE id = ? AND erased_at IS NOT NULL)", Boolean.class, applicationId))) {
-            throw ApiException.conflict("CHEF_APPLICATION_ERASED", "This application belongs to a deleted account and cannot be reviewed");
+            throw erasedApplication();
         }
+    }
+
+    /** One error for every review path: an erased application and its locked KYC documents are closed. */
+    static ApiException erasedApplication() {
+        return ApiException.conflict("CHEF_APPLICATION_ERASED", "This application belongs to a deleted account and cannot be reviewed");
     }
 
     @Transactional(readOnly = true)

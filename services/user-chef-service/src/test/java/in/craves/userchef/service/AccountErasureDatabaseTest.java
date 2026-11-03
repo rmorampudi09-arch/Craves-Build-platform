@@ -54,6 +54,8 @@ class AccountErasureDatabaseTest {
     RegistrationKitchenPhotoService kitchenPhotos;
     BlobDocumentStorageService storage;
     AuthInternalClient auth;
+    NotificationInternalClient notifications;
+    ChefDocumentReviewService reviews;
     CurrentUser person;
     CurrentUser admin;
     UUID bystander;
@@ -83,7 +85,9 @@ class AccountErasureDatabaseTest {
             "documents", "kyc/" + UUID.randomUUID(), "photo.jpg", "image/jpeg", 20));
         when(storage.downloadKycDocument(anyString(), anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyLong()))
             .thenReturn(new StoredDocumentBytes("photo.jpg", "image/jpeg", new byte[] {1, 2, 3}));
-        applications = new ChefApplicationService(jdbc, storage, auth, mock(NotificationInternalClient.class), projection, true);
+        notifications = mock(NotificationInternalClient.class);
+        applications = new ChefApplicationService(jdbc, storage, auth, notifications, projection, true);
+        reviews = new ChefDocumentReviewService(jdbc, storage, notifications);
         var bank = mock(ChefBankEnrollmentClient.class);
         when(bank.requireEnrollment(anyString(), anyString())).thenReturn(UUID.randomUUID());
         onboarding = new ChefOnboardingService(jdbc, new ObjectMapper().findAndRegisterModules(), applications, auth, projection,
@@ -573,5 +577,30 @@ class AccountErasureDatabaseTest {
         assertEquals(0, count("admin_chef_decision_audit WHERE application_id=?", applicationId));
         assertEquals(draftVersion, jdbc.queryForObject("SELECT version FROM chef_onboarding_draft WHERE identity_id=?", Long.class, person.identityId()));
         assertEquals("PENDING", text("SELECT review_status FROM chef_onboarding_draft WHERE identity_id=?", person.identityId()), "no review action got through");
+    }
+
+    @Test void anErasedApplicationsDocumentsCannotBeApprovedOrRejectedAndItsRowsStayAsTheyWere() {
+        chefApplicant();
+        UUID applicationId = jdbc.queryForObject("SELECT id FROM chef_application WHERE identity_id=?", UUID.class, person.identityId());
+        UUID document = jdbc.queryForObject("SELECT id FROM chef_kyc_document WHERE application_id=? AND document_type='KITCHEN_PHOTO_1'", UUID.class, applicationId);
+        UUID other = jdbc.queryForObject("SELECT id FROM chef_kyc_document WHERE application_id=? AND document_type='KITCHEN_PHOTO_2'", UUID.class, applicationId);
+        // Before the erase the same calls are allowed: the document is awaiting review on a pending application.
+        run(() -> reviews.approve(admin, applicationId, other));
+        assertEquals("APPROVED", text("SELECT status FROM chef_kyc_document WHERE id=?", other));
+        erase(Scope.CHEF);
+        var before = rows("chef_kyc_document WHERE application_id=?", applicationId);
+        int audits = count("admin_chef_document_decision_audit WHERE application_id=?", applicationId);
+        assertEquals("UPLOADED", text("SELECT status FROM chef_kyc_document WHERE id=?", document));
+
+        var approve = assertThrows(ApiException.class, () -> run(() -> reviews.approve(admin, applicationId, document)));
+        var reject = assertThrows(ApiException.class, () -> run(() -> reviews.reject(admin, applicationId, document, "Photo is not clear enough")));
+
+        for (var refused : List.of(approve, reject)) {
+            assertEquals(409, refused.getStatus());
+            assertEquals("CHEF_APPLICATION_ERASED", refused.getCode());
+        }
+        assertEquals(before, rows("chef_kyc_document WHERE application_id=?", applicationId), "locked KYC rows are unchanged");
+        assertEquals(audits, count("admin_chef_document_decision_audit WHERE application_id=?", applicationId));
+        org.mockito.Mockito.verify(notifications, org.mockito.Mockito.never()).chefDocumentRejected(any(), any(), any(), any(), any());
     }
 }

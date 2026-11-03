@@ -71,7 +71,7 @@ describe('ChefOperationalProvider with an expired sign-in', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     inboxCalls = 0;
-    tokenMemory.set('expired-token', 900);
+    tokenMemory.set('expired-token', 0);
     (chefOperationalApi.listOrders as jest.Mock).mockResolvedValue([]);
     (chefOperationalApi.listNotifications as jest.Mock).mockResolvedValue([]);
     (sessionManager.refresh as jest.Mock).mockImplementation(async () => {

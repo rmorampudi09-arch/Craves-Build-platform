@@ -24,19 +24,24 @@ apiClient.interceptors.response.use(
     const original = error.config as AuthRetriableConfig | undefined;
     const status = error.response?.status;
     const sentBearer = original?.headers?.get('Authorization');
-    // Order, catalog, subscription and notification services answer an expired bearer with an empty 403.
+    const current = tokenMemory.get();
+    // Another request may have renewed the token since this one was sent.
+    const renewedSinceSent = Boolean(current) && sentBearer !== `Bearer ${current}`;
+    // Order, catalog, subscription and notification services answer an expired bearer with an empty 403;
+    // with a fresh token it is a real refusal, so no refresh-token rotation.
     const authRejected =
-      status === 401 || (status === 403 && Boolean(sentBearer) && isBodyLess403(error));
+      status === 401 ||
+      (status === 403 &&
+        Boolean(sentBearer) &&
+        isBodyLess403(error) &&
+        (renewedSinceSent || !tokenMemory.isFresh()));
 
     if (authRejected && original && !original._cravesAuthRetried) {
       original._cravesAuthRetried = true;
       try {
-        const current = tokenMemory.get();
-        // Another request may have renewed the token since this one was sent; reuse it.
-        const accessToken =
-          current && sentBearer !== `Bearer ${current}`
-            ? current
-            : (await sessionManager.refresh())?.accessToken;
+        const accessToken = renewedSinceSent
+          ? current
+          : (await sessionManager.refresh())?.accessToken;
         if (accessToken) {
           if (original.signal?.aborted) {
             throw new CanceledError('Request cancelled.', original);

@@ -51,7 +51,8 @@ describe('apiClient sign-in renewal', () => {
     jest.resetAllMocks();
     sentAuthorization.length = 0;
     replies = [];
-    tokenMemory.set('expired-token', 900);
+    // Zero lifetime = already past its refresh time, like a token the phone slept through.
+    tokenMemory.set('expired-token', 0);
     apiClient.defaults.adapter = async config => {
       sentAuthorization.push(config.headers.get('Authorization') as string | undefined);
       return reply(config, replies.shift() ?? {status: 200});
@@ -72,7 +73,7 @@ describe('apiClient sign-in renewal', () => {
     expect(sentAuthorization).toEqual(['Bearer expired-token', 'Bearer fresh-token']);
   });
 
-  it('renews once and retries after a body-less 403 on a signed request', async () => {
+  it('renews once and retries after a body-less 403 when the sent token is stale', async () => {
     replies = [{status: 403}, {status: 200, data: {ok: true}}];
     refreshTo('fresh-token');
 
@@ -80,6 +81,19 @@ describe('apiClient sign-in renewal', () => {
 
     expect(refreshMock).toHaveBeenCalledTimes(1);
     expect(sentAuthorization).toEqual(['Bearer expired-token', 'Bearer fresh-token']);
+  });
+
+  it('surfaces a body-less 403 unchanged, with no renewal, while the token is still fresh', async () => {
+    tokenMemory.set('live-token', 900);
+    replies = [{status: 403}];
+
+    await expect(apiClient.get('/api/v1/chef/orders')).rejects.toMatchObject({
+      status: 403,
+      code: 'HTTP_403',
+    });
+
+    expect(refreshMock).not.toHaveBeenCalled();
+    expect(sentAuthorization).toEqual(['Bearer live-token']);
   });
 
   it('renews and retries a POST that was refused before the controller ran', async () => {

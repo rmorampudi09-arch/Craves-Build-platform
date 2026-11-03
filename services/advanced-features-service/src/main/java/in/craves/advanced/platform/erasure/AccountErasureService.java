@@ -51,39 +51,40 @@ public class AccountErasureService {
      */
     @Transactional
     public Erased eraseAll(UUID person, boolean includeDisabled) {
-        boolean tasteData = reachable(TasteDataModule.ID, includeDisabled);
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        counts.put(TasteDataModule.ID, tasteData ? jdbc.update("DELETE FROM adv_taste_data.consent WHERE person_id = ?", person) : 0);
-        List<String> modules = eraseModules(person, includeDisabled, counts);
-        // Stored replies of the person's keyed requests (they can hold names and notes) go too; they are caches, so the receipt does not count them.
-        // shortcut: no index on actor_id; the table keeps only 48 hours of keyed requests. Add one if erasing gets slow.
-        if (!includeDisabled || migrated(PLATFORM_SCHEMA)) jdbc.update("DELETE FROM adv_platform.idempotency_record WHERE actor_id = ?", person);
-        return receipt(person, tasteData, includeDisabled, modules, counts);
+        return run(person, includeDisabled, false);
     }
 
     /**
-     * What the coordinator asks for. CUSTOMER and ALL erase everything, including modules that are switched off. CHEF erases nothing:
-     * every module's data is the person's own as a customer, and the chef's ids in kitchen-capacity (batch, kitchen_load) are kitchen
-     * operating records that stay, so a dual-role person's customer data survives a chef-only request.
+     * What the coordinator asks for. ALL erases everything, including modules that are switched off. CUSTOMER does the same through
+     * {@link PersonalDataContributor#eraseCustomerSide}, so records that name a dual-role person as the chef (a dispute against them, an
+     * amendment they handled) keep their ids. CHEF erases nothing: the records that name the person as a chef or kitchen (kitchen-capacity
+     * batches, disputes against them, amendments they handled) are kitchen operating records that stay, and the rest is their customer data,
+     * which a chef-only request keeps.
      */
     @Transactional
     public Map<String, Integer> erase(UUID requestId, UUID identity, Scope scope) {
-        Map<String, Integer> counts = scope == Scope.CHEF ? Map.of() : eraseAll(identity, true).counts();
+        Map<String, Integer> counts = scope == Scope.CHEF ? Map.of() : run(identity, true, scope == Scope.CUSTOMER).counts();
         log.info("account erasure service={} requestId={} scope={} counts={}", SERVICE, requestId, scope, counts);
         return counts;
     }
 
-    private List<String> eraseModules(UUID person, boolean includeDisabled, Map<String, Integer> counts) {
+    private Erased run(UUID person, boolean includeDisabled, boolean customerSideOnly) {
+        boolean tasteData = reachable(TasteDataModule.ID, includeDisabled);
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        counts.put(TasteDataModule.ID, tasteData ? jdbc.update("DELETE FROM adv_taste_data.consent WHERE person_id = ?", person) : 0);
         List<String> modules = new ArrayList<>();
         for (PersonalDataContributor contributor : contributors) {
             if (reachable(contributor.moduleId(), includeDisabled)) {
-                counts.put(contributor.moduleId(), contributor.erase(person));
+                counts.put(contributor.moduleId(), customerSideOnly ? contributor.eraseCustomerSide(person) : contributor.erase(person));
                 modules.add(contributor.moduleId());
             } else {
                 counts.put(contributor.moduleId(), 0);
             }
         }
-        return modules;
+        // Stored replies of the person's keyed requests (they can hold names and notes) go too; they are caches, so the receipt does not count them.
+        // shortcut: no index on actor_id; the table keeps only 48 hours of keyed requests. Add one if erasing gets slow.
+        if (!includeDisabled || migrated(PLATFORM_SCHEMA)) jdbc.update("DELETE FROM adv_platform.idempotency_record WHERE actor_id = ?", person);
+        return receipt(person, tasteData, includeDisabled, modules, counts);
     }
 
     private Erased receipt(UUID person, boolean tasteData, boolean includeDisabled, List<String> modules, Map<String, Integer> counts) {

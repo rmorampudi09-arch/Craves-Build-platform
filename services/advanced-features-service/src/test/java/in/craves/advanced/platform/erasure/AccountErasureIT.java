@@ -21,11 +21,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** taste-memory is switched off but its schema exists (the test migrates it); trust is switched off and never migrated. */
+/** taste-memory is switched off but its schema exists (the test migrates it); partner-offers is switched off and never migrated. */
 @TestPropertySource(properties = {
         "craves.internal.service-secret=" + AccountErasureIT.SECRET,
         "CRAVES_ADV_TASTE_MEMORY_ENABLED=false",
-        "CRAVES_ADV_TRUST_ENABLED=false"})
+        "CRAVES_ADV_PARTNER_OFFERS_ENABLED=false"})
 class AccountErasureIT extends IntegrationTestBase {
     static final String SECRET = "test-internal-secret-0123456789";
     private static final String BASE = "/internal/v1/account-erasure";
@@ -131,17 +131,17 @@ class AccountErasureIT extends IntegrationTestBase {
 
     @Test
     void internalEraseSkipsAModuleWhoseSchemaNeverExisted() throws Exception {
-        assertThat(jdbc.queryForObject("SELECT to_regnamespace('adv_trust') IS NULL", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT to_regnamespace('adv_partner_offers') IS NULL", Boolean.class)).isTrue();
         UUID person = UUID.randomUUID();
         makeFoodList(person);
 
         internal(BASE, erasureBody(person, "CUSTOMER"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DONE"))
-                .andExpect(jsonPath("$.counts.trust").value(0))
+                .andExpect(jsonPath("$.counts.partner-offers").value(0))
                 .andExpect(jsonPath("$.counts.food-lists").value(1));
 
         // Erasing never creates the schema it skipped.
-        assertThat(jdbc.queryForObject("SELECT to_regnamespace('adv_trust') IS NULL", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT to_regnamespace('adv_partner_offers') IS NULL", Boolean.class)).isTrue();
         assertThat(foodLists(person)).isZero();
     }
 
@@ -169,6 +169,71 @@ class AccountErasureIT extends IntegrationTestBase {
         assertThat(count("SELECT count(*) FROM adv_taste_data.erasure_receipt WHERE person_id = ?", person)).isZero();
     }
 
+    private static final UUID NIL = new UUID(0, 0);
+
+    @Test
+    void customerErasureKeepsTheChefSideOfADualRolePerson() throws Exception {
+        UUID person = UUID.randomUUID();
+        Seed seed = seedDualRole(person);
+
+        internal(BASE, erasureBody(person, "CUSTOMER"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.counts.trust").value(1)).andExpect(jsonPath("$.counts.order-amendments").value(1));
+
+        // As a customer: gone from the dispute (withdrawn, text cleared) and from the amendment (notes cleared).
+        assertThat(jdbc.queryForMap("SELECT customer_id, description, status FROM adv_trust.dispute WHERE id = ?", seed.customerDispute()))
+                .containsEntry("customer_id", NIL).containsEntry("description", null).containsEntry("status", "WITHDRAWN");
+        assertThat(jdbc.queryForMap("SELECT customer_id, proposer_id, note, answered_by FROM adv_order_amendments.amendment WHERE id = ?", seed.customerAmendment()))
+                .containsEntry("customer_id", NIL).containsEntry("proposer_id", NIL).containsEntry("note", null).containsEntry("answered_by", seed.otherChef());
+        // As the chef: the person is still on the dispute against them and on the amendments they proposed and answered.
+        assertThat(jdbc.queryForMap("SELECT chef_id, chef_statement FROM adv_trust.dispute WHERE id = ?", seed.chefDispute()))
+                .containsEntry("chef_id", person).containsEntry("chef_statement", "Delivered at 1pm");
+        assertThat(jdbc.queryForObject("SELECT proposer_id FROM adv_order_amendments.amendment WHERE id = ?", UUID.class, seed.proposedAsChef())).isEqualTo(person);
+        assertThat(jdbc.queryForObject("SELECT answered_by FROM adv_order_amendments.amendment WHERE id = ?", UUID.class, seed.answeredAsChef())).isEqualTo(person);
+
+        // Retry: nothing more to do.
+        internal(BASE, erasureBody(person, "CUSTOMER"))
+                .andExpect(jsonPath("$.counts.trust").value(0)).andExpect(jsonPath("$.counts.order-amendments").value(0));
+    }
+
+    @Test
+    void allScopeErasesBothSidesOfADualRolePerson() throws Exception {
+        UUID person = UUID.randomUUID();
+        Seed seed = seedDualRole(person);
+
+        internal(BASE, erasureBody(person, "ALL"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.counts.trust").value(2)).andExpect(jsonPath("$.counts.order-amendments").value(3));
+
+        assertThat(jdbc.queryForMap("SELECT customer_id, description FROM adv_trust.dispute WHERE id = ?", seed.customerDispute()))
+                .containsEntry("customer_id", NIL).containsEntry("description", null);
+        assertThat(jdbc.queryForObject("SELECT chef_id FROM adv_trust.dispute WHERE id = ?", UUID.class, seed.chefDispute())).isEqualTo(NIL);
+        assertThat(jdbc.queryForObject("SELECT proposer_id FROM adv_order_amendments.amendment WHERE id = ?", UUID.class, seed.proposedAsChef())).isEqualTo(NIL);
+        assertThat(jdbc.queryForObject("SELECT answered_by FROM adv_order_amendments.amendment WHERE id = ?", UUID.class, seed.answeredAsChef())).isEqualTo(NIL);
+        assertThat(jdbc.queryForObject("SELECT customer_id FROM adv_order_amendments.amendment WHERE id = ?", UUID.class, seed.customerAmendment())).isEqualTo(NIL);
+        assertThat(count("SELECT count(*) FROM adv_trust.dispute WHERE chef_id = ? OR customer_id = ?", person, person)).isZero();
+    }
+
+    private record Seed(UUID customerDispute, UUID chefDispute, UUID customerAmendment, UUID proposedAsChef, UUID answeredAsChef, UUID otherChef) { }
+
+    /** One person who is a customer and a chef: a dispute each way, an amendment they proposed as the customer, one they proposed and one they answered as the chef. */
+    private Seed seedDualRole(UUID person) {
+        Seed seed = new Seed(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        jdbc.update("INSERT INTO adv_trust.dispute_policy (version, window_hours, created_by, created_at) VALUES (1, 24, ?, now()) ON CONFLICT DO NOTHING", UUID.randomUUID());
+        String dispute = "INSERT INTO adv_trust.dispute (id, order_id, customer_id, kitchen_id, category, description, order_value_paise, refundable_paise, "
+                + "chef_statement, chef_id, status, policy_version, version, created_at, updated_at) VALUES (?, ?, ?, ?, 'LATE', ?, 50000, 50000, ?, ?, 'OPEN', 1, 0, now(), now())";
+        jdbc.update(dispute, seed.customerDispute(), UUID.randomUUID(), person, UUID.randomUUID(), "It came cold", null, seed.otherChef());
+        jdbc.update(dispute, seed.chefDispute(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "Never arrived", "Delivered at 1pm", person);
+        String amendment = "INSERT INTO adv_order_amendments.amendment (id, order_id, seq, kitchen_id, customer_id, proposed_by, proposer_id, changes, food_delta_paise, "
+                + "note, status, answer_note, answered_by, expires_at, version, created_at, updated_at) "
+                + "VALUES (?, ?, 1, ?, ?, ?, ?, '[{\"kind\":\"REMOVE\"}]'::jsonb, -100, 'a note', 'ACCEPTED', 'ok', ?, now() + interval '1 day', 0, now(), now())";
+        UUID other = UUID.randomUUID();
+        jdbc.update(amendment, seed.customerAmendment(), UUID.randomUUID(), UUID.randomUUID(), person, "CUSTOMER", person, seed.otherChef());
+        jdbc.update(amendment, seed.proposedAsChef(), UUID.randomUUID(), UUID.randomUUID(), other, "CHEF", person, other);
+        jdbc.update(amendment, seed.answeredAsChef(), UUID.randomUUID(), UUID.randomUUID(), other, "CUSTOMER", other, person);
+        return seed;
+    }
+
     private ResultActions internal(String path, String body) throws Exception {
         return mvc.perform(post(path).header("X-Craves-Internal-Secret", SECRET).contentType(MediaType.APPLICATION_JSON).content(body));
     }
@@ -188,8 +253,8 @@ class AccountErasureIT extends IntegrationTestBase {
         return count("SELECT count(*) FROM adv_food_lists.food_list WHERE owner_id = ?", person);
     }
 
-    private int count(String sql, UUID person) {
-        return jdbc.queryForObject(sql, Integer.class, person);
+    private int count(String sql, UUID... args) {
+        return jdbc.queryForObject(sql, Integer.class, (Object[]) args);
     }
 
     /** What ModuleRuntime did for the module while it was still switched on. */

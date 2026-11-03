@@ -10,6 +10,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -57,6 +59,15 @@ class RedisRevocationConsumerTest {
         for(String scheme:List.of("bearer ","BEARER ","bEaReR ")){
             var error=assertThrows(ResponseStatusException.class,()->interceptor("ACTIVE|3",false).preHandle(request("2",scheme),new MockHttpServletResponse(),new Object()));
             assertEquals(401,error.getStatusCode().value(),scheme);
+        }
+    }
+    @Test void providerWebhookSecretIsNeverReadAsACravesToken() throws Exception {
+        // CravesJwtAuthenticationFilter skips the Pidge webhook, so Spring leaves an anonymous token and the header holds Pidge's secret.
+        for(String scheme:List.of("Bearer ","bearer ")){
+            var request=new MockHttpServletRequest("POST","/api/v1/webhooks/delivery/pidge");
+            request.addHeader("Authorization",scheme+"provider-secret");
+            SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken("key","anonymousUser",AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+            assertTrue(interceptor("ACTIVE|2",false).preHandle(request,new MockHttpServletResponse(),new Object()),scheme);
         }
     }
     @Test void malformedProjectionFailsClosed() {

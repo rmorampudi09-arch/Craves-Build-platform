@@ -230,6 +230,10 @@ export interface Offer {
    * is then measured from that drop. Accepting works as any offer; the trip opens once the current one ends.
    */
   afterTrip?: {dropLocality: string; dropMinutes: number; foodReadyAt?: string};
+  /** The kitchen, for the map preview (R-02); left out by older servers, and the map with it. */
+  kitchenAt?: {lat: number; lng: number};
+  /** The centre of the customer's AREA, never the door: the preview shades 300 m around it. */
+  customerAreaAt?: {lat: number; lng: number};
 }
 
 export type TripStep =

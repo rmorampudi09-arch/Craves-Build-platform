@@ -449,6 +449,16 @@ components:
         itemsCount: {type: integer, minimum: 1, description: 'Items in the sealed bag ("About 28 min in total, 2 items")'}
         payLines: {type: array, description: 'How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance")', items: {$ref: '#/components/schemas/PayLine'}}
         reason: {$ref: '#/components/schemas/OfferReason'}
+        kitchenName: {type: string, description: 'App 1.3.3: the offer title ("New order · Lakshmi''s Kitchen")'}
+        pickupMinutes: {type: integer, description: 'App 1.3.3: minutes from the rider to the kitchen, when the travel-time model ran'}
+        foodReadyInMinutes: {type: integer, description: 'App 1.3.3: minutes until the chef says the food is ready; left out until the kitchen says'}
+        afterTrip: {type: object, description: 'App 1.3.3: a next-order offer, starting after the current drop', required: [dropLocality, dropMinutes], properties: {dropLocality: {type: string}, dropMinutes: {type: integer}, foodReadyAt: {type: string, format: date-time}}}
+        kitchenAt: {$ref: '#/components/schemas/Point', description: 'App 1.3.3: the kitchen, for the map preview'}
+        customerAreaAt: {$ref: '#/components/schemas/Point', description: 'App 1.3.3: the centre of the customer''s area (a 0.005° cell), never the door; the preview shades 300 m around it'}
+    Point:
+      type: object
+      required: [lat, lng]
+      properties: {lat: {type: number}, lng: {type: number}}
     Place:
       type: object
       required: [area, address, lat, lng]

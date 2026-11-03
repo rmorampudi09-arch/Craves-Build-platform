@@ -408,6 +408,7 @@ export const te: RiderStrings = {
     atLeast: 'మీకు కనీసం వచ్చేది',
     titleFor: (kitchen: string) => `కొత్త ఆర్డర్ · ${kitchen}`,
     locked: 'కనీసం ఇంత మీకు వస్తుంది, టిప్ ఉంటే అదనం. అంగీకరించే ముందే పే లాక్ అవుతుంది.',
+    mapLabel: 'మ్యాప్: కిచెన్, కస్టమర్ ఏరియా, మీరు ఉన్న చోటు',
     foodReadyIn: 'ఫుడ్ రెడీ అయ్యేది',
     wholeTrip: 'మొత్తం ట్రిప్',
     aboutMinutes: (minutes: number) => `సుమారు ${minutes} నిమి`,

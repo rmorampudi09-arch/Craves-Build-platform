@@ -321,6 +321,10 @@ export function createMockRiderApi(options: MockOptions = {}) {
       pickupDistanceM,
       dropDistanceM,
       kitchenArea: kitchen.area,
+      kitchenName: kitchen.kitchenName,
+      kitchenAt: { lat: kitchen.lat, lng: kitchen.lng },
+      // The area's rough centre, as the server sends it: the drop rounded to a 0.005° cell, never the door.
+      customerAreaAt: { lat: Math.round(customer.lat / 0.005) * 0.005, lng: Math.round(customer.lng / 0.005) * 0.005 },
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
       itemsCount: 1 + (n % 3),

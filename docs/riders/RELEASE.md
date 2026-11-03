@@ -39,6 +39,7 @@ Any other value fails the build. To switch pull request builds to live, set the 
 | `RIDER_KEYSTORE_BASE64` | secret | live; mock uses a cached throwaway key without it | The rider signing keystore, base64 (`base64 -w0 rider.keystore`). |
 | `RIDER_KEYSTORE_PASSWORD` | secret | with the keystore | The keystore password, also used as the key password. |
 | `RIDER_KEY_ALIAS` | secret | with the keystore | The key alias (`rider` when unset). |
+| `RIDER_MAPS_API_KEY` | secret | the offer's map preview (app 1.3.3); without it the offer shows its text rows only | A Google Maps SDK for Android key, restricted in Google Cloud to the package `com.cravesapp.rider` and the rider signing key's SHA-256 (each run summary prints it). Only the Maps SDK for Android API enabled; never the Static Maps API. Never in the repo. |
 | `CRAVES_RIDER_API_MODE` | variable | pull request builds | `mock` or `live`. |
 
 **Never change the rider signing key.** The app binds each rider to one phone by `ANDROID_ID` (`X-Craves-Installation-Id`), and Android gives each signing key a different `ANDROID_ID`. A build signed with another key can't install over the old one, and after a reinstall every rider's phone counts as new and needs ops approval again. That is why live builds refuse to run without the keystore secret. Keep a copy of the keystore and its password in the company password manager, not only in GitHub. The decoded key is written to the runner's temp folder, never to the Actions cache.

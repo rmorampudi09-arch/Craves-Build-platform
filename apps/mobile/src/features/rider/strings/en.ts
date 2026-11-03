@@ -403,6 +403,7 @@ export const en = {
     titleFor: (kitchen: string) => `New order · ${kitchen}`,
     atLeast: 'You get at least',
     locked: 'You get at least this, plus any tip. Pay is locked before you accept.',
+    mapLabel: "Map: the kitchen, the customer's area and where you are",
     foodReadyIn: 'Food ready in',
     wholeTrip: 'Whole trip',
     aboutMinutes: (minutes: number) => `about ${minutes} min`,

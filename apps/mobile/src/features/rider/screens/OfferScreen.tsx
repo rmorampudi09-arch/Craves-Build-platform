@@ -8,6 +8,7 @@ import {idempotencyKey, riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {CountdownBar} from '../components/CountdownBar';
+import {OfferMap} from '../components/OfferMap';
 import {OfflineBanner} from '../components/OfflineBanner';
 import {RateRow} from '../components/ui';
 import {formatClock, formatKm, formatRupees} from '../domain/format';
@@ -184,6 +185,7 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
           <Text style={styles.secondary}>{next ? o.fromDrop(kitchen, pickupKm) : o.locked}</Text>
           {parts ? <Text style={styles.small}>{parts}</Text> : null}
         </View>
+        <OfferMap kitchen={offer.kitchenAt} customerArea={offer.customerAreaAt} label={o.mapLabel} />
         <View style={styles.rows}>
           {rows.map(([label, value]) => (
             <RateRow key={label} label={label} value={value} />

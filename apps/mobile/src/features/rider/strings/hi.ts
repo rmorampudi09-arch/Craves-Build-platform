@@ -406,6 +406,7 @@ export const hi: RiderStrings = {
     atLeast: 'आपको कम से कम मिलेंगे',
     titleFor: (kitchen: string) => `नया ऑर्डर · ${kitchen}`,
     locked: 'कम से कम इतना आपको मिलेगा, टिप अलग से। स्वीकार करने से पहले ही पे लॉक हो जाता है।',
+    mapLabel: 'नक्शा: किचन, ग्राहक का इलाका और आप कहाँ हैं',
     foodReadyIn: 'खाना कितनी देर में तैयार',
     wholeTrip: 'पूरी ट्रिप',
     aboutMinutes: (minutes: number) => `लगभग ${minutes} मिनट`,

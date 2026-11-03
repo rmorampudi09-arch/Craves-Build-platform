@@ -411,6 +411,7 @@ export const kn: RiderStrings = {
     atLeast: 'ನಿಮಗೆ ಕನಿಷ್ಠ ಸಿಗುವ ಹಣ',
     titleFor: (kitchen: string) => `ಹೊಸ ಆರ್ಡರ್ · ${kitchen}`,
     locked: 'ಕನಿಷ್ಠ ಇಷ್ಟು ನಿಮಗೆ ಸಿಗುತ್ತದೆ, ಟಿಪ್ ಇದ್ದರೆ ಹೆಚ್ಚುವರಿ. ಒಪ್ಪಿಕೊಳ್ಳುವ ಮೊದಲೇ ಪೇ ಲಾಕ್ ಆಗುತ್ತದೆ.',
+    mapLabel: 'ನಕ್ಷೆ: ಕಿಚನ್, ಗ್ರಾಹಕರ ಪ್ರದೇಶ ಮತ್ತು ನೀವಿರುವ ಸ್ಥಳ',
     foodReadyIn: 'ಊಟ ರೆಡಿ ಆಗುವುದು',
     wholeTrip: 'ಇಡೀ ಟ್ರಿಪ್',
     aboutMinutes: (minutes: number) => `ಸುಮಾರು ${minutes} ನಿಮಿಷ`,

@@ -10,5 +10,5 @@ class RiderDevicePackage : ReactPackage {
     listOf(RiderDeviceModule(reactContext), RiderSmsCodeModule(reactContext))
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
-    emptyList()
+    listOf(RiderOfferMapManager())
 }

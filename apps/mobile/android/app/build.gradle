@@ -145,6 +145,11 @@ android {
             }
             // The launcher name (src/rider/AndroidManifest.xml).
             manifestPlaceholders += [riderLabel: cravesRiderDemo ? "Craves Riders Demo" : "@string/app_name"]
+            // The offer's map preview (RiderOfferMap.kt): the Google Maps key from the RIDER_MAPS_API_KEY secret
+            // (docs/riders/RELEASE.md), never in the repo. Without it the offer shows its text rows only.
+            def riderMapsApiKey = (System.getenv('RIDER_MAPS_API_KEY') ?: '').trim()
+            manifestPlaceholders += [riderMapsApiKey: riderMapsApiKey]
+            buildConfigField "boolean", "RIDER_MAPS_KEY", riderMapsApiKey.isEmpty() ? "false" : "true"
             // Keep in step with RIDER_APP_VERSION in src/features/rider/riderConfig.ts; rider-apk.yml fails the build otherwise.
             versionName "1.3.2"
             buildConfigField "String", "CRAVES_APP", "\"rider\""
@@ -198,6 +203,8 @@ dependencies {
 
     // Rider app only (android/app/src/rider): the online service and offer pushes. Never the customer flavor or src/main.
     riderImplementation("com.google.android.gms:play-services-location:21.3.0")
+    // The offer's map preview in lite mode (RiderOfferMap.kt); the key comes from the build, see the rider flavor above.
+    riderImplementation("com.google.android.gms:play-services-maps:19.0.0")
     // The Firebase BOM @react-native-firebase/app uses, so both resolve one set of Firebase libraries.
     riderImplementation(platform("com.google.firebase:firebase-bom:${rnfbAndroidSdk.firebase}"))
     riderImplementation("com.google.firebase:firebase-messaging")

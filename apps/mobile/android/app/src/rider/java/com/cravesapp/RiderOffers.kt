@@ -47,6 +47,9 @@ object RiderOffers {
   const val EXTRA_REACHED = "craves.rider.reachedTripId"
   const val EXTRA_REACHED_YES = "craves.rider.reachedYes"
   const val REACHED_CHANNEL = "rider_reached"
+  /** The trip notification's actions (R-04): the step the rider tapped (a TripAction), or SOS. */
+  const val EXTRA_TAP_STEP = "craves.rider.tapStep"
+  const val EXTRA_TAP_SOS = "craves.rider.tapSos"
   private const val REACHED_NOTIFICATION_ID = 4
   private const val TAG = "CravesRiderOffer"
   private const val OFFER_NOTIFICATION_ID = 2
@@ -296,6 +299,14 @@ object RiderOffers {
 
   fun cancelReached(context: Context) {
     NotificationManagerCompat.from(context).cancel(REACHED_NOTIFICATION_ID)
+  }
+
+  /** Opens the app with what the rider tapped on the trip notification (R-04); JS reads it once (getPendingTap). */
+  fun tapIntent(context: Context, step: String?, sos: Boolean): PendingIntent {
+    val intent = (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent(Intent.ACTION_MAIN).setPackage(context.packageName))
+      .putExtra(EXTRA_TAP_SOS, sos)
+    step?.let { intent.putExtra(EXTRA_TAP_STEP, it) }
+    return PendingIntent.getActivity(context, if (sos) 5 else 6, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
   }
 
   private fun reachedIntent(context: Context, tripId: String, yes: Boolean): PendingIntent {

@@ -19,6 +19,7 @@ import android.provider.Settings
 import android.util.AtomicFile
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
@@ -151,6 +152,9 @@ class RiderOnlineService : Service() {
 
   /** "Reached the kitchen?" (R-03), fed by every fix on the executor thread and answered from JS or the notification. */
   private val reached = RiderReached()
+  /** The active trip as the server last sent it, for the notification's step and actions (R-04); null off a trip. */
+  @Volatile private var tripNotice: JSONObject? = null
+  private var noticeSignature = ""
 
   private val callback =
     object : LocationCallback() {
@@ -431,6 +435,17 @@ class RiderOnlineService : Service() {
     }
     tripSignature = signature
     val nowOnTrip = trip != null && step !in ENDED_STEPS
+    // The notification follows the step: a new trip, step or food-ready flag redraws it (R-04).
+    tripNotice = if (nowOnTrip) trip else null
+    val noticeNow = if (nowOnTrip) "$signature:$step:${trip?.has("chefReadyAt")}" else ""
+    if (noticeNow != noticeSignature) {
+      noticeSignature = noticeNow
+      try {
+        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, ongoing())
+      } catch (error: SecurityException) {
+        Log.w(TAG, "can't redraw the trip notification", error)
+      }
+    }
     // The batch delay follows the upload period: ask again when the trip starts or ends, or the idle period changed.
     val relocate = nowOnTrip != onTrip || (!nowOnTrip && idle != idleUploadMs)
     onTrip = nowOnTrip
@@ -595,15 +610,36 @@ class RiderOnlineService : Service() {
   /** Words in the rider's app language (P2-08). */
   private fun text(id: Int) = RiderText.get(this, id)
 
-  private fun ongoing(): Notification =
-    NotificationCompat.Builder(this, RiderOffers.ONLINE_CHANNEL)
+  /**
+   * "You're online" while waiting; on a trip, the step as drawn (REDESIGN.md, MapsNotification): "To Lakshmi's Kitchen ·
+   * order 0BDE 0101", one line, and Back to Craves, the step's action and SOS. Same id, so startForeground's notification
+   * is the one redrawn; the low-importance channel keeps it quiet.
+   */
+  private fun ongoing(): Notification {
+    val builder = NotificationCompat.Builder(this, RiderOffers.ONLINE_CHANNEL)
       .setSmallIcon(applicationInfo.icon)
-      .setContentTitle(text(R.string.rider_online_title))
-      .setContentText(text(R.string.rider_online_body))
       .setContentIntent(RiderOffers.openAppIntent(this, null))
       .setOngoing(true)
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-      .build()
+    val trip = tripNotice
+    val content = trip?.let {
+      RiderTripNotice.content(
+        it.optString("step"), it.optJSONObject("kitchen")?.optString("kitchenName").orEmpty(),
+        it.optJSONObject("customer")?.optString("firstName").orEmpty(), it.optString("orderCode"), it.has("chefReadyAt"),
+      )
+    }
+    if (content == null) {
+      return builder.setContentTitle(text(R.string.rider_online_title)).setContentText(text(R.string.rider_online_body)).build()
+    }
+    builder
+      .setContentTitle(RiderText.get(this, content.title, *content.titleArgs.toTypedArray()))
+      .setContentText(text(content.body))
+      .setOnlyAlertOnce(true)
+      .addAction(0, text(R.string.rider_notice_back), RiderOffers.openAppIntent(this, null))
+    content.action?.let { builder.addAction(0, text(it), RiderOffers.tapIntent(this, step = content.tapStep, sos = false)) }
+    builder.addAction(0, text(R.string.rider_notice_sos), RiderOffers.tapIntent(this, step = null, sos = true))
+    return builder.build()
+  }
 
   companion object {
     private const val TAG = "CravesRiderOnline"

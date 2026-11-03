@@ -35,4 +35,18 @@
     <string name="rider_reached_body">మీ ఫోన్ కిచెన్ నుండి సుమారు %1$d మీ. దూరంలో ఉన్నట్టుంది. అవును అంటే కిచెన్ వెయిట్ మొదలవుతుంది.</string>
     <string name="rider_reached_yes">అవును, వచ్చాను</string>
     <string name="rider_reached_not_yet">ఇంకా లేదు</string>
+    <!-- The trip notification (app 1.3.3, R-04): the step, the order code and three actions. -->
+    <string name="rider_notice_to_kitchen">%1$s కి · ఆర్డర్ %2$s</string>
+    <string name="rider_notice_at_kitchen">%1$s లో · ఆర్డర్ %2$s</string>
+    <string name="rider_notice_to_customer">%1$s కి · ఆర్డర్ %2$s</string>
+    <string name="rider_notice_ride">చేరుకున్నాక చేరాను నొక్కండి.</string>
+    <string name="rider_notice_food_ready">ఫుడ్ రెడీ. చేరుకున్నాక చేరాను నొక్కండి.</string>
+    <string name="rider_notice_pickup">చెఫ్‌కి ఆర్డర్ నంబర్ చెప్పి, తీసుకున్నాను నొక్కండి.</string>
+    <string name="rider_notice_drop">తలుపు దగ్గర 4 అంకెల కోడ్ అడగండి.</string>
+    <string name="rider_notice_handover">పూర్తి చేయడానికి కస్టమర్ 4 అంకెల కోడ్‌ను Craves లో టైప్ చేయండి.</string>
+    <string name="rider_notice_back">Craves కి వెళ్ళండి</string>
+    <string name="rider_notice_reached">కిచెన్‌కి చేరాను</string>
+    <string name="rider_notice_picked_up">తీసుకున్నాను</string>
+    <string name="rider_notice_at_door">తలుపు దగ్గర ఉన్నాను</string>
+    <string name="rider_notice_sos">SOS</string>
 </resources>

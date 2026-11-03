@@ -91,8 +91,14 @@ jest.mock('../native/riderOnlineService', () => ({
     pendingReached: async () => mockReached.pending,
     reachedNotYet: jest.fn(),
     reachedDone: jest.fn(),
+    takeStepTap: () => {
+      const step = mockTap.step;
+      mockTap.step = null;
+      return step;
+    },
   },
 }));
+const mockTap: {step: string | null} = {step: null};
 const mockReached: {listener: ((prompt: unknown) => void) | null; pending: unknown} = {listener: null, pending: null};
 const mockFix: {value: {lat: number; lng: number; accuracyM: number; at: string} | null} = {value: null};
 
@@ -400,6 +406,20 @@ describe('Trip: "Reached the kitchen?" (R-03)', () => {
     await render({...trip, step: 'AT_KITCHEN', arrivedKitchenAt: new Date(Date.now() - 60_000).toISOString()});
     await act(async () => mockReached.listener?.(prompt));
     expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+  });
+});
+
+describe('Trip: a step tapped on the notification (R-04)', () => {
+  it('posts the tapped step once the screen shows that step, and ignores a tap for another step', async () => {
+    mockTap.step = 'arrived-pickup';
+    await render(trip);
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
+    (tripQueue.enqueue as jest.Mock).mockClear();
+    // "Picked up" tapped while the trip is still on its way to the kitchen: nothing is posted.
+    mockTap.step = 'picked-up';
+    await render(trip);
+    expect(tripQueue.enqueue).not.toHaveBeenCalled();
+    expect(mockTap.step).toBeNull();
   });
 });
 

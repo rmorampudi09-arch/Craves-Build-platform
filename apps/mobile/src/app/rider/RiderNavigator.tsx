@@ -9,6 +9,7 @@ import {Icon} from '../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
 import {BottomAction} from '../../features/rider/components/BottomAction';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
+import {riderOnlineService, type NotificationTap} from '../../features/rider/native/riderOnlineService';
 import {RiderSplash} from '../../features/rider/components/RiderSplash';
 import {ProblemCard, StateCard} from '../../features/rider/components/StateCard';
 import {RiderScreen, Title} from '../../features/rider/components/ui';
@@ -133,6 +134,18 @@ function SignedIn() {
       navigationRef.navigate('Offer', offer);
     }
   }, []);
+  // The trip notification's actions (R-04): SOS opens the SOS screen; a step action opens the trip, which posts the step.
+  const openTap = useCallback((tap: NotificationTap) => {
+    if (!navigationRef.isReady()) {
+      return;
+    }
+    if (tap.sos) {
+      navigationRef.navigate('Sos', {});
+    } else if (tap.step) {
+      riderOnlineService.keepStepTap(tap.step);
+      navigationRef.navigate('Trip');
+    }
+  }, []);
 
   if (!me.data) {
     return me.isError ? (
@@ -186,7 +199,7 @@ function SignedIn() {
         ) : null}
       </Stack.Navigator>
       {gate.kind === 'ready' ? (
-        <RiderRuntime riderId={riderId} nativeOutbox={me.data.features?.nativeTripOutbox === true} openOffer={openOffer} />
+        <RiderRuntime riderId={riderId} nativeOutbox={me.data.features?.nativeTripOutbox === true} openOffer={openOffer} openTap={openTap} />
       ) : null}
     </RiderShellContext.Provider>
   );

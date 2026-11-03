@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useIsFocused} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import type {DeliverBody, FailBody, Trip, TripAction} from '../api/contract';
@@ -18,6 +18,9 @@ import {NotAnswering} from './trip/NotAnswering';
 import {call} from './trip/parts';
 import {AtKitchen, ToKitchen} from './trip/Pickup';
 import {TripEnd} from './trip/TripEnd';
+
+/** The step each notification action belongs to; tapped on another step it is ignored. */
+const STEP_OF_TAP: Partial<Record<TripAction, Trip['step']>> = {'arrived-pickup': 'TO_KITCHEN', 'picked-up': 'AT_KITCHEN', 'arrived-drop': 'PICKED_UP'};
 
 export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const {strings} = useStrings();
@@ -83,6 +86,18 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     riderOnlineService.pendingReached().then(prompt => prompt && setReached(prompt));
     return off;
   }, []);
+
+  // A step tapped on the trip notification (R-04) posts once this screen shows that step; a stale tap does nothing.
+  const runRef = useRef<(action: TripAction) => Promise<boolean>>(async () => false);
+  useEffect(() => {
+    if (!focused || !trip) {
+      return;
+    }
+    const tapped = riderOnlineService.takeStepTap();
+    if (tapped && STEP_OF_TAP[tapped] === displayedStep(trip.step, queued)) {
+      runRef.current(tapped);
+    }
+  }, [focused, trip, queued]);
 
   useEffect(() => {
     const offSent = tripQueue.onSent((entry, sent) => {
@@ -166,6 +181,8 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     }
     return outcome.kind !== 'rejected';
   }
+
+  runRef.current = run;
 
   function backToWaiting() {
     queryClient.setQueryData(riderKeys.activeTrip, null);

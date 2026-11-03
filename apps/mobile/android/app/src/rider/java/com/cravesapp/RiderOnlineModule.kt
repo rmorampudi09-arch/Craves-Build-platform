@@ -169,6 +169,24 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
     })
   }
 
+  /** What the rider tapped on the trip notification (R-04): `{step?, sos}`, read once; null when the app opened otherwise. */
+  @ReactMethod
+  fun getPendingTap(promise: Promise) {
+    val intent = reactContext.currentActivity?.intent
+    val step = intent?.getStringExtra(RiderOffers.EXTRA_TAP_STEP)
+    val sos = intent?.getBooleanExtra(RiderOffers.EXTRA_TAP_SOS, false) ?: false
+    intent?.removeExtra(RiderOffers.EXTRA_TAP_STEP)
+    intent?.removeExtra(RiderOffers.EXTRA_TAP_SOS)
+    if (step == null && !sos) {
+      promise.resolve(null)
+      return
+    }
+    promise.resolve(Arguments.createMap().apply {
+      step?.let { putString("step", it) }
+      putBoolean("sos", sos)
+    })
+  }
+
   @ReactMethod
   fun reachedNotYet() {
     RiderOnlineService.reachedNotYet(reactContext)

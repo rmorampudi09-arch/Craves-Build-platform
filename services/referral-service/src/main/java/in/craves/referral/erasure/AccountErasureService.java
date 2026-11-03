@@ -46,9 +46,10 @@ public class AccountErasureService {
     /**
      * FRAUD_CASE_OPEN belongs to the person, not to one side, so every scope sees it; a reviewed case (cleared or confirmed) is history.
      * CASH_OUT_IN_FLIGHT (CUSTOMER, ALL): a cash-out that is not PAID or RELEASED; its reserved money would be stranded, as the
-     * forfeiture leaves it alone. REWARD_PENDING (ALL only): a PENDING reward of a member that is still active, which ALL is about to
-     * retire so that it could never be credited; with one side only the member stays, so the reward still credits it. The
-     * unfinished-cash-out statuses are the ones CashoutService counts as open.
+     * forfeiture leaves it alone. REWARD_PENDING (ALL only): a PENDING reward of a member that is still active and could still be
+     * credited, which ALL is about to retire so that it never would be; with one side only the member stays, so the reward still
+     * credits it. A member with a CONFIRMED fraud case is held for good (ProgramService.held), so its reward never settles and
+     * must not block forever. The unfinished-cash-out statuses are the ones CashoutService counts as open.
      */
     public List<Blocker> blockers(UUID identity, Scope scope) {
         List<Blocker> found = new ArrayList<>();
@@ -63,7 +64,8 @@ public class AccountErasureService {
             found.add(new Blocker("CASH_OUT_IN_FLIGHT", "A cash-out of this person's referral balance is not finished; it must be paid or released before the account can be deleted"));
         }
         if (scope == Scope.ALL && db.count("SELECT count(*) FROM referral_schema.reward r JOIN referral_schema.member m ON m.user_id=r.beneficiary_id "
-                + "WHERE r.beneficiary_id=? AND r.status='PENDING' AND m.is_active", identity) > 0) {
+                + "WHERE r.beneficiary_id=? AND r.status='PENDING' AND m.is_active "
+                + "AND NOT EXISTS (SELECT 1 FROM referral_schema.fraud_case f WHERE f.user_id=r.beneficiary_id AND f.status='CONFIRMED')", identity) > 0) {
             found.add(new Blocker("REWARD_PENDING", "A referral reward for this person is still pending; it must be credited or cancelled before the whole account can be deleted"));
         }
         return found;
@@ -74,9 +76,11 @@ public class AccountErasureService {
             if (!schemaExists()) {
                 return done(0, 0);
             }
-            // Holds off a fraud case or an auth status event for this member, and a cash-out request or a settlement for its wallet, until we commit.
-            db.rows("SELECT user_id FROM referral_schema.member WHERE user_id=? FOR UPDATE", identity);
+            // Lock order is wallet, then member, like every other flow (Store.lockWallets, then an insert that references the member);
+            // the reverse order deadlocks against a settlement or a cash-out. Together the locks hold off a cash-out request, a
+            // settlement, a fraud case and an auth status event for this person until we commit.
             var wallet = db.rows("SELECT available_paise FROM referral_schema.wallet WHERE user_id=? FOR UPDATE", identity);
+            db.rows("SELECT user_id FROM referral_schema.member WHERE user_id=? FOR UPDATE", identity);
             List<Blocker> blockers = blockers(identity, scope);
             if (!blockers.isEmpty()) {
                 return new Result(false, null, blockers);

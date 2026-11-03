@@ -6,6 +6,9 @@ import in.craves.referral.erasure.AccountErasureService.Scope;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static in.craves.referral.infra.Store.*;
@@ -195,5 +198,35 @@ class AccountErasureIT {
         UUID id=UUID.randomUUID();
         assertTrue(erasure.blockers(id,Scope.ALL).isEmpty());
         assertTrue(erasure.erase(UUID.randomUUID(),id,Scope.ALL).done());
+    }
+    @Test void aPendingRewardOfAMemberWithAConfirmedFraudCaseDoesNotBlock() {
+        // A confirmed case holds the member for good (ProgramService.held), so its pending reward can never settle.
+        var owner=r.member(null);pendingReward(owner);
+        r.program.fraud(owner.id(),"test-case:"+owner.id(),"DUPLICATE_IDENTITY_SIGNAL","TEST_ONLY");
+        UUID id=uuid(r.db.one("SELECT id FROM referral_schema.fraud_case WHERE user_id=?",owner.id()),"id");
+        r.program.resolveFraud(UUID.randomUUID(),id,false,"TEST_ONLY_REVIEW");
+        assertEquals("CONFIRMED",r.db.one("SELECT status FROM referral_schema.fraud_case WHERE id=?",id).get("status"));
+        assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
+        assertEquals(1,erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts().get("member"));
+    }
+    /** Every other flow takes the wallet first and then inserts a row that references the member (a fraud case here). */
+    @Test void eraseTakesTheWalletBeforeTheMemberSoAFlowHoldingTheWalletCannotDeadlock() throws Exception {
+        var owner=r.member(null);var holding=new CountDownLatch(1);var go=new CountDownLatch(1);
+        var pool=Executors.newFixedThreadPool(2);
+        try {
+            var flow=pool.submit(()->r.db.tx(()->{
+                r.db.lockWallets(List.of(owner.id()));holding.countDown();
+                try { assertTrue(go.await(20,TimeUnit.SECONDS)); } catch(InterruptedException ex) { throw new IllegalStateException(ex); }
+                r.program.fraud(owner.id(),"test-case:"+owner.id(),"DUPLICATE_IDENTITY_SIGNAL","TEST_ONLY");return null;
+            }));
+            assertTrue(holding.await(10,TimeUnit.SECONDS));
+            var erase=pool.submit(()->erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL));
+            // Wait until the erase is really blocked on the wallet, then let the other flow insert its row.
+            for(int i=0;i<100 && r.db.count("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%referral_schema.wallet%FOR UPDATE%'")==0;i++) Thread.sleep(100);
+            go.countDown();
+            flow.get(20,TimeUnit.SECONDS);
+            var result=erase.get(20,TimeUnit.SECONDS);
+            assertFalse(result.done());assertEquals(List.of("FRAUD_CASE_OPEN"),codes(result.blockers()));
+        } finally { go.countDown();pool.shutdownNow(); }
     }
 }

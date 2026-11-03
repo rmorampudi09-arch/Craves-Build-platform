@@ -766,6 +766,23 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(mockCreatePlan).not.toHaveBeenCalled();
     });
 
+    it('leaves for real on Discard: the guard is off by the time the exit is sent, so the sheet does not come back', () => {
+      // Like React Navigation: an exit sent while the guard is on is caught again.
+      mockDispatch.mockImplementation(action => {
+        const [guarded, onPrevent] = leaveGuard();
+        if (guarded) onPrevent({data: {action}});
+      });
+      render();
+      type('Plan name', 'Half done');
+      tryLeave();
+
+      press('Discard');
+
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'GO_BACK'});
+      expect(leaveGuard()[0]).toBe(false);
+      expect(allText()).not.toContain('Save as draft?');
+    });
+
     it('brings the chef to the Meals step to read why removing every meal keeps the old schedule', async () => {
       mockPlans = [plan({})];
       mockSchedule = lunchSchedule();

@@ -235,6 +235,8 @@ function MealPlanEditor({
   const [copying, setCopying] = React.useState(false);
   // State lags a frame behind a tap; the lock keeps a double tap to one request.
   const saving = React.useRef(false);
+  // Where the chef was heading when they chose Discard.
+  const discardedExit = React.useRef<unknown>(null);
 
   // Errors appear after the first Next / save attempt and then follow the chef's edits.
   const errors = attempt ? validateMealPlanForm(form, slots, attempt) : {};
@@ -269,7 +271,12 @@ function MealPlanEditor({
 
   React.useEffect(() => {
     if (leaving) {
-      navigation.goBack();
+      // Runs once the guard is off: an exit sent while it is on is caught again and reopens "Save as draft?".
+      if (discardedExit.current) {
+        navigation.dispatch(discardedExit.current as never);
+      } else {
+        navigation.goBack();
+      }
     }
   }, [leaving, navigation]);
 
@@ -899,9 +906,9 @@ function MealPlanEditor({
         <ChefActionButton
           label="Discard"
           onPress={() => {
-            const action = pendingLeave;
+            discardedExit.current = pendingLeave;
             setPendingLeave(null);
-            navigation.dispatch(action as never);
+            setLeaving(true);
           }}
           tone="neutral"
         />

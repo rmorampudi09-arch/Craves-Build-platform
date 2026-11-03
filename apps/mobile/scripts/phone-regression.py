@@ -6,7 +6,7 @@ It taps only what it can see on screen, by text or accessibility label, and refu
 the run ends with a scan of the phone log for crashes.
 
 Usage (phone on USB, app installed and signed in):
-  python scripts/phone-regression.py [--serial SERIAL] [--out DIR] [--chef-dish "Ravi's test"] [--no-chef]
+  python scripts/phone-regression.py [--serial SERIAL] [--out DIR] [--chef-dish "Potato Curry"] [--no-chef]
   python scripts/phone-regression.py --self-check
 Writes DIR/NN-step.png and DIR/report.md. Exit code 1 when a step failed or the app crashed.
 """
@@ -62,25 +62,36 @@ class Phone:
             time.sleep(0.5)
         raise StepFailed('could not read the screen (uiautomator dump failed)')
 
-    def find(self, pattern, nodes=None):
+    def find(self, pattern, nodes=None, lowest=False):
+        """First match on screen, or with `lowest` the one nearest the bottom (the tab bar beats a same-named label)."""
         rx = re.compile(pattern)
-        for node in nodes if nodes is not None else self.nodes():
-            if rx.search(node['text']) or rx.search(node['desc']):
-                return node
-        return None
+        matches = [n for n in (nodes if nodes is not None else self.nodes())
+                   if rx.search(n['text']) or rx.search(n['desc'])]
+        if not matches:
+            return None
+        return max(matches, key=lambda n: n['y']) if lowest else matches[0]
 
-    def wait_for(self, pattern, timeout=12.0):
+    def wait_for(self, pattern, timeout=12.0, lowest=False):
         end = time.time() + timeout
         while True:
-            node = self.find(pattern)
+            node = self.find(pattern, lowest=lowest)
             if node:
                 return node
             if time.time() > end:
                 raise StepFailed(f'"{pattern}" did not appear')
             time.sleep(0.7)
 
-    def tap(self, pattern, timeout=12.0):
-        node = self.wait_for(pattern, timeout)
+    def scroll_to(self, pattern, tries=6, down=True):
+        """Scrolls until a match sits clear of the floating tab bar."""
+        for _ in range(tries + 1):
+            node = self.find(pattern)
+            if node and node['y'] < self.size[1] * 0.82:
+                return node
+            self.scroll(down=down)
+        raise StepFailed(f'"{pattern}" not found after scrolling')
+
+    def tap(self, pattern, timeout=12.0, scroll=False, up=False, lowest=False):
+        node = self.scroll_to(pattern, down=not up) if scroll else self.wait_for(pattern, timeout, lowest)
         label = node['text'] or node['desc']
         if DENY.match(label.strip()):
             raise StepFailed(f'refused to tap "{label}" (it would change data)')
@@ -138,6 +149,9 @@ class Walk:
         index = len(self.rows) + 1
         shot = f'{index:02d}-{re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")}.png'
         try:
+            # The phone's screen-time reminder ("You've used … for 30 minutes") covers the app; OK only closes it.
+            if self.phone.find(r"^You've used .* for "):
+                self.phone.tap(r'^OK$')
             detail = action() or ''
             check_screen(self.phone)
             status = 'PASS'
@@ -150,13 +164,17 @@ class Walk:
         print(f'{index:02d} {status:4} {name}  {detail}', flush=True)
         return status == 'PASS'
 
+    def snap(self, label):
+        """Screenshot of an inner screen, taken before the step goes back (the step's own shot shows where it ends)."""
+        self.phone.screenshot(os.path.join(self.out, f'{len(self.rows) + 1:02d}b-{label}.png'))
+
     def skip(self, name, why):
         self.rows.append((len(self.rows) + 1, name, 'SKIP', why, ''))
         print(f'{len(self.rows):02d} SKIP {name}  {why}', flush=True)
 
 
 def tab(phone, name):
-    phone.tap(rf'^{name}$|^{name},')
+    phone.tap(rf'^{name}$|^{name},', lowest=True)
     return f'{name} tab'
 
 
@@ -166,6 +184,21 @@ def scroll_through(phone):
         check_screen(phone)
     for _ in range(2):
         phone.scroll(down=False)
+
+
+def switch_role(phone, row, tabs):
+    """Taps a role-switch row on Profile, confirms the "Switch to … mode?" dialog, and waits for that role's tabs."""
+    tab(phone, 'Profile')
+    phone.tap(row, scroll=True)
+    try:
+        phone.tap(r'^(SWITCH|Switch)$', timeout=4)
+    except StepFailed:
+        pass
+    end = time.time() + 20
+    while not tabs_visible(phone, tabs):
+        if time.time() > end:
+            raise StepFailed(f'{"/".join(tabs)} tabs did not appear')
+        time.sleep(1)
 
 
 def run(args):
@@ -183,9 +216,7 @@ def run(args):
             if tabs_visible(phone, CUSTOMER_TABS):
                 return 'customer mode'
             if tabs_visible(phone, CHEF_TABS):
-                tab(phone, 'Profile')
-                phone.tap(r'^Switch to customer mode$')
-                phone.wait_for(r'^Chefs$|^Chefs,', 20)
+                switch_role(phone, r'^Switch to customer mode$', CUSTOMER_TABS)
                 return 'opened in chef mode, switched to customer'
             time.sleep(1)
         raise StepFailed('app did not reach its tabs within 25 s')
@@ -201,21 +232,24 @@ def run(args):
     def filters(tab_name):
         def action():
             tab(phone, tab_name)
-            phone.tap(r'^Filters$')
+            # Home's header hides the Filters button until the list is back at the very top.
+            phone.tap(r'^Filters$', scroll=True, up=True)
             phone.wait_for(r'Sort')
             check_screen(phone)
+            walk.snap('inner')
             phone.back()
         return action
 
     def kitchen_and_dish():
         tab(phone, 'Chefs')
-        phone.tap(r'\d+(\.\d+)? ?km')
-        phone.wait_for(r'₹')
+        phone.tap(r'\d+(\.\d+)? ?k?m away')
+        phone.wait_for(r'^Ratings & reviews$|\d+ dish')
         check_screen(phone)
         phone.tap(r'^₹ ?\d+')
         phone.wait_for(r'^Add$|^Add to cart$|Not cooking|Sold out')
         detail = 'kitchen page and dish sheet open'
         check_screen(phone)
+        walk.snap('inner')
         phone.back()
         phone.back()
         return detail
@@ -223,15 +257,18 @@ def run(args):
     def orders():
         tab(phone, 'Orders')
         check_screen(phone)
-        phone.tap(r'Delivered|Cancelled|On the way|Preparing|Cooking|Ready|Placed')
-        phone.wait_for(r'Total|Bill|Order details|Item')
+        phone.tap(r'#[0-9A-Z]{6,}')
+        phone.wait_for(r'^Order details$')
+        phone.wait_for(r'^Total$')
         check_screen(phone)
+        walk.snap('inner')
         phone.back()
 
     def saved():
         tab(phone, 'Profile')
         phone.tap(r'^Saved$')
         check_screen(phone)
+        walk.snap('inner')
         phone.back()
 
     def privacy():
@@ -239,6 +276,7 @@ def run(args):
         phone.tap(r'^Settings$')
         phone.tap(r'^Privacy & security$')
         check_screen(phone)
+        walk.snap('inner')
         phone.back()
         phone.back()
 
@@ -246,6 +284,7 @@ def run(args):
         tab(phone, 'Home')
         phone.tap(r'^Notifications')
         check_screen(phone)
+        walk.snap('inner')
         phone.back()
 
     walk.step('Customer Home scrolls', home)
@@ -260,18 +299,15 @@ def run(args):
     if args.no_chef:
         walk.skip('Chef side', '--no-chef')
         return walk
-    tab(phone, 'Profile')
-    if not phone.find(r'^Switch to Chef mode$'):
-        walk.skip('Chef side', 'this account has no chef mode')
+    try:
+        tab(phone, 'Profile')
+        phone.scroll_to(r'^Switch to Chef mode$')
+    except StepFailed as e:
+        walk.skip('Chef side', f'no chef mode on Profile ({e})')
         return walk
 
     def to_chef():
-        phone.tap(r'^Switch to Chef mode$')
-        end = time.time() + 20
-        while not tabs_visible(phone, CHEF_TABS):
-            if time.time() > end:
-                raise StepFailed('chef tabs did not appear')
-            time.sleep(1)
+        switch_role(phone, r'^Switch to Chef mode$', CHEF_TABS)
 
     def chef_tab(name, scroll=True):
         def action():
@@ -282,27 +318,26 @@ def run(args):
 
     def chef_dish():
         tab(phone, 'Menu')
-        phone.tap(re.escape(args.chef_dish))
+        phone.wait_for(r'₹')
+        if args.chef_dish:
+            phone.tap(re.escape(args.chef_dish).replace("'", "['’]"), scroll=True)
+        else:
+            phone.tap(r'^₹ ?\d+')
         phone.wait_for(r'Cuisine|Price|Dish name')
         check_screen(phone)
+        walk.snap('inner')
         phone.back()
         if phone.find(r'^Discard'):
             raise StepFailed('leaving an untouched dish asked to discard changes')
 
     def to_customer():
-        tab(phone, 'Profile')
-        phone.tap(r'^Switch to customer mode$')
-        end = time.time() + 20
-        while not tabs_visible(phone, CUSTOMER_TABS):
-            if time.time() > end:
-                raise StepFailed('customer tabs did not come back')
-            time.sleep(1)
+        switch_role(phone, r'^Switch to customer mode$', CUSTOMER_TABS)
 
     if walk.step('Switch to chef mode', to_chef):
         walk.step('Chef Home scrolls', chef_tab('Home'))
         walk.step('Chef Orders', chef_tab('Orders'))
         walk.step('Chef Menu', chef_tab('Menu'))
-        walk.step(f'Chef dish editor ({args.chef_dish})', chef_dish)
+        walk.step(f'Chef dish editor ({args.chef_dish or "first dish"})', chef_dish)
         walk.step('Chef Earnings scrolls', chef_tab('Earnings'))
         walk.step('Chef Profile', chef_tab('Profile', scroll=False))
         walk.step('Switch back to customer mode', to_customer)
@@ -341,7 +376,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--serial', default=os.environ.get('ANDROID_SERIAL', ''))
     parser.add_argument('--out', default=f'phone-regression-{datetime.datetime.now():%Y%m%d-%H%M}')
-    parser.add_argument('--chef-dish', default="Ravi's test")
+    parser.add_argument('--chef-dish', default='', help='dish to open in the editor (default: the first dish)')
     parser.add_argument('--no-chef', action='store_true')
     parser.add_argument('--self-check', action='store_true')
     args = parser.parse_args()

@@ -22,6 +22,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.common.LifecycleState
 import com.facebook.react.bridge.WritableMap
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -148,6 +149,9 @@ class RiderOnlineService : Service() {
   private var drainPct = 0.0
   private var unpluggedMs = 0L
 
+  /** "Reached the kitchen?" (R-03), fed by every fix on the executor thread and answered from JS or the notification. */
+  private val reached = RiderReached()
+
   private val callback =
     object : LocationCallback() {
       override fun onLocationResult(result: LocationResult) {
@@ -170,6 +174,7 @@ class RiderOnlineService : Service() {
 
   override fun onCreate() {
     super.onCreate()
+    service = this
     executor = Executors.newSingleThreadScheduledExecutor()
     fused = LocationServices.getFusedLocationProviderClient(this)
     boot = RiderOutbox.bootCount(this)
@@ -185,6 +190,11 @@ class RiderOnlineService : Service() {
       Log.w(TAG, "can't start in the foreground", error)
       end(text(R.string.rider_closed_by_phone), clearShift = false)
       return START_NOT_STICKY
+    }
+    // "Not yet" on the reached heads-up (RiderOffers.askReached): the service is already running, so only answer it.
+    if (intent?.action == ACTION_REACHED_NOT_YET) {
+      reachedNotYet(this)
+      return START_STICKY
     }
     val saved = loadShift(this)
     if (saved == null) {
@@ -214,6 +224,7 @@ class RiderOnlineService : Service() {
 
   override fun onDestroy() {
     running = false
+    if (service === this) service = null
     synchronized(callback) {
       destroyed = true
       fused.removeLocationUpdates(callback)
@@ -249,6 +260,20 @@ class RiderOnlineService : Service() {
     fixes.addLast(fix)
     while (fixes.size > RiderOutboxCore.MAX_FIXES_KEPT) fixes.removeFirst()
     lastFix = fix
+    reached.onFix(location.latitude, location.longitude, if (location.hasSpeed()) location.speed else null, location.time)?.let { ask(it) }
+  }
+
+  /** The question goes to JS; while the app isn't in front (Google Maps is), a heads-up with Yes and Not yet asks it too. */
+  private fun ask(prompt: RiderReached.Prompt) {
+    val inFront = RiderEvents.react?.lifecycleState == LifecycleState.RESUMED
+    RiderEvents.emit("riderReached") {
+      Arguments.createMap().apply {
+        putString("tripId", prompt.tripId)
+        putString("kitchenName", prompt.kitchenName)
+        putInt("distanceM", prompt.distanceM)
+      }
+    }
+    if (!inFront) RiderOffers.askReached(this, prompt)
   }
 
   /** Balanced power while waiting for offers; high accuracy on a trip, for the customer map and distance evidence. */
@@ -386,6 +411,9 @@ class RiderOnlineService : Service() {
 
     val trip = response.optJSONObject("activeTrip")
     val step = trip?.optString("step").orEmpty()
+    val kitchen = trip?.optJSONObject("kitchen")
+    reached.trip(trip?.optString("tripId"), step, kitchen?.optString("kitchenName").orEmpty(), kitchen?.optDouble("lat") ?: 0.0, kitchen?.optDouble("lng") ?: 0.0)
+    if (step != "TO_KITCHEN") RiderOffers.cancelReached(this)
     val signature = if (trip == null) "" else "${trip.optString("tripId")}:${trip.optInt("version")}"
     if (trip != null && signature != tripSignature) {
       RiderEvents.emit("riderTripChanged") {
@@ -580,6 +608,20 @@ class RiderOnlineService : Service() {
   companion object {
     private const val TAG = "CravesRiderOnline"
     private const val NOTIFICATION_ID = 1
+    const val ACTION_REACHED_NOT_YET = "com.cravesapp.rider.REACHED_NOT_YET"
+    /** The open "Reached?" question, for JS starting after it was asked, or null. */
+    @Volatile private var service: RiderOnlineService? = null
+    val reachedPrompt: RiderReached.Prompt? get() = service?.reached?.prompt
+
+    fun reachedNotYet(context: Context) {
+      service?.reached?.notYet()
+      RiderOffers.cancelReached(context)
+    }
+
+    fun reachedDone(context: Context) {
+      service?.reached?.done()
+      RiderOffers.cancelReached(context)
+    }
     private const val PREFS = "craves_rider_shift"
     private const val CREDENTIAL_HEADER = "X-Craves-Shift-Credential"
     private const val TRIP_UPLOAD_MS = 15_000L

@@ -1,6 +1,6 @@
 // Steps 1 and 2 of the trip: ride to the kitchen, then collect the bag (docs/riders/SCREENS.md 9 and 10).
 import React, {memo, useEffect, useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Modal, StyleSheet, Text, View} from 'react-native';
 import {Icon} from '../../../../shared/components';
 import {colors, iconSize, radius, spacing} from '../../../../design/tokens';
 import {BottomAction} from '../../components/BottomAction';
@@ -8,14 +8,21 @@ import {CountdownBar} from '../../components/CountdownBar';
 import {RefusalNotices} from '../../components/RefusalNotices';
 import {Card, HeroCard, RiderScreen} from '../../components/ui';
 import {formatRupees, formatTimer} from '../../domain/format';
+import type {ReachedPrompt} from '../../native/riderOnlineService';
 import {useStrings} from '../../strings/StringsProvider';
 import {call, navigateTo, OrderCard, PlaceCard, SyncNote, text, TripHeader, TwoUp, type StepProps} from './parts';
 
 // Rider-only type size (DESIGN.md typography.orderCode).
 const ORDER_CODE_SIZE = 60;
 
-export function ToKitchen({trip, run, syncing}: StepProps) {
+export function ToKitchen({trip, run, syncing, reached, onNotYet}: StepProps & {reached?: ReachedPrompt | null; onNotYet?: () => void}) {
   const t = useStrings().strings.trip;
+  // Yes on the heads-up (Google Maps in front) is already the answer: post the step, no sheet.
+  useEffect(() => {
+    if (reached?.yes) {
+      run('arrived-pickup');
+    }
+  }, [reached, run]);
   return (
     <RiderScreen
       header={<TripHeader title={t.titles.TO_KITCHEN} trip={trip} step={1} />}
@@ -23,6 +30,25 @@ export function ToKitchen({trip, run, syncing}: StepProps) {
       footer={
         <BottomAction label={t.reachedKitchen} onPress={() => run('arrived-pickup')} testID="rider-reached-kitchen" />
       }>
+      {reached && !reached.yes ? (
+        <Modal transparent animationType="slide" onRequestClose={onNotYet} testID="rider-reached-sheet">
+          <View style={styles.sheetBack}>
+            <View style={styles.sheet}>
+              <View style={styles.grip} />
+              <Text accessibilityRole="header" style={styles.sheetTitle}>
+                {t.reachedTitle(reached.kitchenName || trip.kitchen.kitchenName)}
+              </Text>
+              <Text style={text.body}>
+                {t.reachedBody(reached.distanceM)}
+                {trip.waitPayPerMinutePaise ? ` ${t.reachedFreeWait(Math.round(trip.waitFreeSeconds / 60), formatRupees(trip.waitPayPerMinutePaise))}` : ''}
+              </Text>
+              <BottomAction label={t.reachedYes} onPress={() => run('arrived-pickup')} testID="rider-reached-yes" />
+              <BottomAction label={t.reachedNotYet} variant="outline" onPress={() => onNotYet?.()} testID="rider-reached-not-yet" />
+              <Text style={[text.small, styles.center]}>{t.reachedNotYetNote}</Text>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
       <PlaceCard label={t.pickUpFrom} name={trip.kitchen.kitchenName} place={trip.kitchen} />
@@ -181,6 +207,12 @@ const FreeWait = memo(function FreeWaitView({
 });
 
 const styles = StyleSheet.create({
+  // The reached sheet, as drawn: white, 28 dp top corners, over a dimmed trip screen.
+  sheetBack: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(38, 26, 21, 0.5)'},
+  sheet: {backgroundColor: colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.md, paddingBottom: spacing.lg, gap: spacing.sm},
+  grip: {width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: 'center'},
+  sheetTitle: {fontSize: 28, lineHeight: 34, fontWeight: '700', color: colors.textPrimary},
+  center: {textAlign: 'center'},
   tight: {gap: spacing.xs},
   flex: {flex: 1},
   codeCard: {paddingVertical: spacing.lg, gap: spacing.xxs},

@@ -29,4 +29,10 @@
     <string name="rider_trip_ended_released">Craves ऑप्स टीम ने यह ऑर्डर Borzo या Pidge को दे दिया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
     <string name="rider_trip_ended_handed">Craves ऑप्स टीम ने यह ऑर्डर दूसरे राइडर को दे दिया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
     <string name="rider_trip_ended_order_cancelled">कस्टमर का ऑर्डर रद्द हो गया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
+    <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
+    <string name="rider_channel_reached">किचन पहुँच गए?</string>
+    <string name="rider_reached_title">%1$s पहुँच गए?</string>
+    <string name="rider_reached_body">आपका फ़ोन किचन से करीब %1$d मी. दूर दिख रहा है। हाँ कहने पर किचन का इंतज़ार शुरू होता है।</string>
+    <string name="rider_reached_yes">हाँ, आ गया</string>
+    <string name="rider_reached_not_yet">अभी नहीं</string>
 </resources>

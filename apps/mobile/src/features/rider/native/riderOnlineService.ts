@@ -37,8 +37,23 @@ export interface RiderOnlineService {
   onFcmToken(cb: (token: string) => void): () => void;
   /** The offer whose notification opened the app, or one that rang while JS wasn't running. */
   pendingOffer(): Promise<ReceivedOffer | null>;
+  /** "Reached <kitchen>?" (R-03): native asks once the phone has been within 50 m of the kitchen for 20 s on TO_KITCHEN. */
+  onReached(cb: (prompt: ReachedPrompt) => void): () => void;
+  /** The question still open when JS starts, or the heads-up tap that opened the app (yes: already answered on it). */
+  pendingReached(): Promise<ReachedPrompt | null>;
+  /** Not yet: native asks again once the phone moves and then stands still. */
+  reachedNotYet(): void;
+  /** The rider is at the kitchen (Yes, or their own tap): nothing more to ask this step. */
+  reachedDone(): void;
   /** Trip actions waiting to sync and the oldest one's Date.now(), for the native health report (blueprint A5). */
   setQueueStats(pending: number, oldestAt: number): void;
+}
+
+export interface ReachedPrompt {
+  tripId: string;
+  kitchenName: string;
+  distanceM: number;
+  yes?: boolean;
 }
 
 const UPLOAD_EVERY_MS = 10_000;
@@ -131,6 +146,11 @@ function createJsOnlineService() {
     fcmToken: async () => 'mock-fcm-token',
     onFcmToken: (_cb: (token: string) => void) => () => undefined,
     pendingOffer: async (): Promise<ReceivedOffer | null> => null,
+    // The JS loop has no geofence: demo builds tap "I've reached the kitchen" themselves.
+    onReached: (_cb: (prompt: ReachedPrompt) => void) => () => undefined,
+    pendingReached: async (): Promise<ReachedPrompt | null> => null,
+    reachedNotYet: () => undefined,
+    reachedDone: () => undefined,
     setQueueStats: (_pending: number, _oldestAt: number) => undefined,
     /** Dev panel: poll now instead of waiting up to 10 seconds. */
     pollNow: poll,
@@ -149,6 +169,9 @@ interface NativeRiderOnline {
   getFcmToken(): Promise<string>;
   getPendingOffer(): Promise<NativeOffer | null>;
   setQueueStats?(pending: number, oldestAtMs: number): void;
+  getPendingReached?(): Promise<ReachedPrompt | null>;
+  reachedNotYet?(): void;
+  reachedDone?(): void;
 }
 
 /** A riderOffer event: the Offer JSON exactly as FCM or /locations delivered it, and which came first. */
@@ -240,6 +263,10 @@ function createNativeOnlineService(native: NativeRiderOnline) {
       return tapped && held ? (held.receivedAtMs > tapped.receivedAtMs ? held : tapped) : tapped ?? held;
     },
     setQueueStats: (pending: number, oldestAt: number) => native.setQueueStats?.(pending, oldestAt),
+    onReached: (cb: (prompt: ReachedPrompt) => void) => on('riderReached', cb),
+    pendingReached: () => (native.getPendingReached ? native.getPendingReached().catch(() => null) : Promise.resolve(null)),
+    reachedNotYet: () => native.reachedNotYet?.(),
+    reachedDone: () => native.reachedDone?.(),
     /** The dev panel exists only in mock builds, which use the JS loop. */
     pollNow: async () => undefined,
   };

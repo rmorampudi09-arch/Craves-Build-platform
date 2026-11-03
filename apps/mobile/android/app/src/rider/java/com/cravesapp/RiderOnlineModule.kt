@@ -143,6 +143,42 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(RiderOnlineService.lastFix?.toMap())
   }
 
+  /**
+   * "Reached <kitchen>?" (R-03) for a JS that starts after it was asked: the heads-up that opened the app (yes: the rider
+   * already answered on it), else the question the service still has open. The intent's answer is read once.
+   */
+  @ReactMethod
+  fun getPendingReached(promise: Promise) {
+    val intent = reactContext.currentActivity?.intent
+    val tapped = intent?.getStringExtra(RiderOffers.EXTRA_REACHED)
+    val yes = intent?.getBooleanExtra(RiderOffers.EXTRA_REACHED_YES, false) ?: false
+    intent?.removeExtra(RiderOffers.EXTRA_REACHED)
+    intent?.removeExtra(RiderOffers.EXTRA_REACHED_YES)
+    val open = RiderOnlineService.reachedPrompt
+    val prompt = when {
+      tapped != null -> RiderReached.Prompt(tapped, open?.kitchenName.orEmpty(), open?.distanceM ?: 0)
+      else -> open
+    }
+    promise.resolve(prompt?.let {
+      Arguments.createMap().apply {
+        putString("tripId", it.tripId)
+        putString("kitchenName", it.kitchenName)
+        putInt("distanceM", it.distanceM)
+        putBoolean("yes", tapped != null && yes)
+      }
+    })
+  }
+
+  @ReactMethod
+  fun reachedNotYet() {
+    RiderOnlineService.reachedNotYet(reactContext)
+  }
+
+  @ReactMethod
+  fun reachedDone() {
+    RiderOnlineService.reachedDone(reactContext)
+  }
+
   @ReactMethod
   fun getFcmToken(promise: Promise) {
     try {

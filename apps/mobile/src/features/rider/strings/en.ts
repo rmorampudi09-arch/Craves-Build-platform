@@ -461,6 +461,13 @@ export const en = {
     navigate: 'Navigate',
     navigateNote: 'Navigate opens Google Maps in two-wheeler mode.',
     reachedKitchen: "I've reached the kitchen",
+    // "Reached <kitchen>?" (R-03): native asks once the phone has been at the kitchen for 20 s.
+    reachedTitle: (kitchen: string) => `Reached ${kitchen}?`,
+    reachedBody: (metres: number) => `Your phone looks about ${metres} m from the gate. Confirming starts the kitchen wait.`,
+    reachedFreeWait: (minutes: number, perMinute: string) => `The first ${minutes} minutes are free for the chef; after that you are paid ${perMinute} a minute.`,
+    reachedYes: "Yes, I'm here",
+    reachedNotYet: 'Not yet',
+    reachedNotYetNote: 'If you tap Not yet, the question comes back once you stop moving.',
     matchCode: "Match this code with the chef's screen",
     codeA11y: (spelled: string) => `Order code ${spelled}`,
     itemsFrom: (count: number, kitchen: string) => `${count} ${count === 1 ? 'item' : 'items'} from ${kitchen}`,

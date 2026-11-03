@@ -470,6 +470,12 @@ export const kn: RiderStrings = {
     navigate: 'ದಾರಿ ತೋರಿಸಿ',
     navigateNote: '"ದಾರಿ ತೋರಿಸಿ" ಒತ್ತಿದರೆ Google Maps ಟೂ-ವೀಲರ್ ಮೋಡ್‌ನಲ್ಲಿ ತೆರೆಯುತ್ತದೆ.',
     reachedKitchen: 'ಕಿಚನ್ ತಲುಪಿದ್ದೇನೆ',
+    reachedTitle: (kitchen: string) => `${kitchen} ತಲುಪಿದಿರಾ?`,
+    reachedBody: (metres: number) => `ನಿಮ್ಮ ಫೋನ್ ಗೇಟಿನಿಂದ ಸುಮಾರು ${metres} ಮೀ. ದೂರದಲ್ಲಿದೆ ಎಂದು ತೋರುತ್ತದೆ. ದೃಢೀಕರಿಸಿದರೆ ಕಿಚನ್ ಕಾಯುವಿಕೆ ಶುರುವಾಗುತ್ತದೆ.`,
+    reachedFreeWait: (minutes: number, perMinute: string) => `ಮೊದಲ ${minutes} ನಿಮಿಷ ಶೆಫ್‌ಗೆ ಉಚಿತ; ಆಮೇಲೆ ನಿಮಿಷಕ್ಕೆ ${perMinute} ನಿಮಗೆ ಸಿಗುತ್ತದೆ.`,
+    reachedYes: 'ಹೌದು, ಬಂದಿದ್ದೇನೆ',
+    reachedNotYet: 'ಇನ್ನೂ ಇಲ್ಲ',
+    reachedNotYetNote: 'ಇನ್ನೂ ಇಲ್ಲ ಒತ್ತಿದರೆ, ನೀವು ನಿಂತ ಮೇಲೆ ಈ ಪ್ರಶ್ನೆ ಮತ್ತೆ ಬರುತ್ತದೆ.',
     matchCode: 'ಶೆಫ್ ಸ್ಕ್ರೀನ್‌ನಲ್ಲೂ ಇದೇ ಕೋಡ್ ಇದೆಯಾ ನೋಡಿ',
     codeA11y: (spelled: string) => `ಆರ್ಡರ್ ಕೋಡ್ ${spelled}`,
     itemsFrom: (count: number, kitchen: string) =>

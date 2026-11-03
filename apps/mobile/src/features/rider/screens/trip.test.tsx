@@ -84,8 +84,16 @@ jest.mock('../native/riderOnlineService', () => ({
     fcmToken: async () => null,
     onFcmToken: () => () => undefined,
     pendingOffer: async () => null,
+    onReached: (cb: (prompt: unknown) => void) => {
+      mockReached.listener = cb;
+      return () => undefined;
+    },
+    pendingReached: async () => mockReached.pending,
+    reachedNotYet: jest.fn(),
+    reachedDone: jest.fn(),
   },
 }));
+const mockReached: {listener: ((prompt: unknown) => void) | null; pending: unknown} = {listener: null, pending: null};
 const mockFix: {value: {lat: number; lng: number; accuracyM: number; at: string} | null} = {value: null};
 
 const me: RiderMe = {
@@ -341,6 +349,57 @@ describe('Trip: to the kitchen (step 1)', () => {
     expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
     expect(allText()).toContain('At the kitchen');
     expect(allText()).toContain('Saved · will sync');
+  });
+});
+
+describe('Trip: "Reached the kitchen?" (R-03)', () => {
+  const {riderOnlineService} = jest.requireMock('../native/riderOnlineService');
+  const prompt = {tripId: 't1', kitchenName: "Lakshmi's Kitchen", distanceM: 30};
+  afterEach(() => {
+    mockReached.pending = null;
+  });
+
+  it('asks when native says the phone has been at the kitchen, and Yes posts arrived-pickup', async () => {
+    await render(trip);
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+    await act(async () => mockReached.listener?.(prompt));
+    const text = allText();
+    expect(text).toContain("Reached Lakshmi's Kitchen?");
+    expect(text).toContain('Your phone looks about 30 m from the gate. Confirming starts the kitchen wait.');
+    expect(text).toContain('The first 8 minutes are free for the chef; after that you are paid ₹1.50 a minute.');
+    expect(text).toContain('If you tap Not yet, the question comes back once you stop moving.');
+    await press('rider-reached-yes');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
+    expect(riderOnlineService.reachedDone).toHaveBeenCalled();
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+  });
+
+  it('Not yet closes the sheet and tells native, which asks again once the phone stops', async () => {
+    await render(trip);
+    await act(async () => mockReached.listener?.(prompt));
+    await press('rider-reached-not-yet');
+    expect(riderOnlineService.reachedNotYet).toHaveBeenCalled();
+    expect(tripQueue.enqueue).not.toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup'}));
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+  });
+
+  it('a question still open when the screen opens shows, and Yes from the heads-up posts the step with no sheet', async () => {
+    mockReached.pending = prompt;
+    await render(trip);
+    expect(allText()).toContain("Reached Lakshmi's Kitchen?");
+    mockReached.pending = {...prompt, yes: true};
+    await render(trip);
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
+  });
+
+  it('ignores a question about another trip or another step', async () => {
+    await render(trip);
+    await act(async () => mockReached.listener?.({...prompt, tripId: 'other'}));
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+    await render({...trip, step: 'AT_KITCHEN', arrivedKitchenAt: new Date(Date.now() - 60_000).toISOString()});
+    await act(async () => mockReached.listener?.(prompt));
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
   });
 });
 

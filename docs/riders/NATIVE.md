@@ -82,11 +82,15 @@ When a location call reports the rider's trip as `CANCELLED` (ops, the customer 
 | `outboxState()` | `{entries, refusals}` from memory, never a sealed code and never waiting for a send |
 | `outboxDefer(entryId)` | The step is still waiting once the tap is over: it now counts as captured offline |
 | `outboxDismissRefusal(tripId)` | The rider dismissed a refusal notice |
+| `getPendingReached()` | App 1.3.3 (R-03): the "Reached <kitchen>?" question still open when JS starts (`{tripId, kitchenName, distanceM, yes}`), or the heads-up tap that opened the app (`yes: true` when the rider answered Yes on it; JS then posts arrived-pickup with no sheet). The intent's answer is read once |
+| `reachedNotYet()` | Not yet: `RiderReached` stays quiet until the phone moves and then stands still (under 1 m/s) for 20 s, or leaves the 50 m and comes back |
+| `reachedDone()` | The rider is at the kitchen (Yes, or their own "I've reached" tap): nothing more to ask this step. Also takes the heads-up down |
 
 | Event | Payload |
 |---|---|
 | `riderOffer` | `{offer: string (Offer JSON), receivedAtMs: number, channel: "fcm" \| "locations"}` |
 | `riderTripChanged` | `{tripId, step, version}` |
+| `riderReached` | `{tripId, kitchenName, distanceM}` (R-03): the phone has been within 50 m of the kitchen for 20 s on TO_KITCHEN (`RiderReached`, from the service's own fixes). While the app isn't in front, the same question is a heads-up on `rider_reached` with Yes and Not yet, and a full-screen intent on a sleeping phone |
 | `riderStatus` | `{state: "ONLINE" \| "OFFLINE" \| "ERROR", connected, lastFix?, message?}` after every upload and when the service stops. While offers can't ring (notifications off, or the `rider_offers_ring` channel turned down) a successful upload reports `ERROR` "Turn on notifications to get orders." with `connected: true`; the server sends that phone no offers (`can_ring`), and Home's notifications warning shows (device state `notificationsEnabled` is the same check) |
 | `riderFcmToken` | `{token}` |
 | `riderOutboxChanged` | `{answer}`: a pass the outbox ran by itself (after an upload, on a new network, from the job), as `{results, needsAuth}` JSON. JS tells the trip screen about sent and refused steps, then reads the list again |

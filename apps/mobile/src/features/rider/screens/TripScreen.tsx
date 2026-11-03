@@ -8,7 +8,7 @@ import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {RiderScreen, Title} from '../components/ui';
 import {useRiderShell, type RiderScreenProps} from '../navigation';
-import {riderOnlineService} from '../native/riderOnlineService';
+import {riderOnlineService, type ReachedPrompt} from '../native/riderOnlineService';
 import {riderKeys, useActiveTrip, useRiderMe} from '../state/riderQueries';
 import {displayedStep} from '../domain/tripSteps';
 import {tripQueue, usePendingEntries} from '../state/tripQueue';
@@ -36,6 +36,8 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   const [photoDelivery, setPhotoDelivery] = useState(false);
   // A step on its way to the server: with the native outbox its first try is not in `entries`.
   const [sending, setSending] = useState(false);
+  // "Reached <kitchen>?" from the native service (R-03); the heads-up's Yes arrives already answered.
+  const [reached, setReached] = useState<ReachedPrompt | null>(null);
   const focused = useIsFocused();
   // Steps whose first try is over and still wait: the screen shows where they lead. A step on its first try shows when
   // the server answers (its button is busy), so a delivery code is never "saved" while it is being checked.
@@ -76,6 +78,12 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   // A wrong or locked OTP shows by the boxes, also when the queue replays a code sent while offline. A replayed step
   // that went through brings the server's trip before it leaves the queue, so the step on screen never goes back.
   const tripId = trip?.tripId;
+  useEffect(() => {
+    const off = riderOnlineService.onReached(setReached);
+    riderOnlineService.pendingReached().then(prompt => prompt && setReached(prompt));
+    return off;
+  }, []);
+
   useEffect(() => {
     const offSent = tripQueue.onSent((entry, sent) => {
       if (entry.tripId === tripId) {
@@ -128,6 +136,7 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
 
   // The server's step with this trip's queued steps applied: a restart opens where the rider left off (blueprint A3).
   const step = displayedStep(trip.step, queued);
+  const reachedHere = reached && reached.tripId === trip.tripId && step === 'TO_KITCHEN' ? reached : null;
 
   /** Sends a step through the offline queue; false when the server refused it. A queued step shows at once (the queue's entries). */
   async function run(action: TripAction, body?: DeliverBody | FailBody): Promise<boolean> {
@@ -136,6 +145,10 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
     }
     // Retried OTPs need a new key, or the server would replay the first (wrong) answer.
     const attempt = action === 'delivered' ? Date.now() : undefined;
+    if (action === 'arrived-pickup') {
+      riderOnlineService.reachedDone();
+      setReached(null);
+    }
     setSending(true);
     const outcome = await tripQueue.enqueue({
       riderId,
@@ -175,7 +188,18 @@ export function TripScreen({navigation}: RiderScreenProps<'Trip'>) {
   }
 
   if (step === 'TO_KITCHEN') {
-    return <ToKitchen trip={trip} run={run} syncing={pending > 0} />;
+    return (
+      <ToKitchen
+        trip={trip}
+        run={run}
+        syncing={pending > 0}
+        reached={reachedHere}
+        onNotYet={() => {
+          riderOnlineService.reachedNotYet();
+          setReached(null);
+        }}
+      />
+    );
   }
 
   if (step === 'AT_KITCHEN') {

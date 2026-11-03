@@ -32,4 +32,10 @@
     <string name="rider_trip_ended_released">Craves ops gave this order to Borzo or Pidge. You\'re paid for the trip so far.</string>
     <string name="rider_trip_ended_handed">Craves ops gave this order to another rider. You\'re paid for the trip so far.</string>
     <string name="rider_trip_ended_order_cancelled">The customer\'s order was cancelled. You\'re paid for the trip so far.</string>
+    <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
+    <string name="rider_channel_reached">Reached the kitchen?</string>
+    <string name="rider_reached_title">Reached %1$s?</string>
+    <string name="rider_reached_body">Your phone looks about %1$d m from the kitchen. Yes starts the kitchen wait.</string>
+    <string name="rider_reached_yes">Yes, I\'m here</string>
+    <string name="rider_reached_not_yet">Not yet</string>
 </resources>

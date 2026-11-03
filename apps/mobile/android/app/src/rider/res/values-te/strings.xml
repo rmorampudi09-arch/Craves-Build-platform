@@ -29,4 +29,10 @@
     <string name="rider_trip_ended_released">Craves ఆప్స్ టీమ్ ఈ ఆర్డర్‌ని Borzo లేదా Pidgeకి ఇచ్చింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
     <string name="rider_trip_ended_handed">Craves ఆప్స్ టీమ్ ఈ ఆర్డర్‌ని వేరే రైడర్‌కి ఇచ్చింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
     <string name="rider_trip_ended_order_cancelled">కస్టమర్ ఆర్డర్ రద్దయింది. ఇప్పటివరకు చేసిన ట్రిప్‌కి మీకు చెల్లింపు అందుతుంది.</string>
+    <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
+    <string name="rider_channel_reached">కిచెన్‌కి చేరారా?</string>
+    <string name="rider_reached_title">%1$s కి చేరారా?</string>
+    <string name="rider_reached_body">మీ ఫోన్ కిచెన్ నుండి సుమారు %1$d మీ. దూరంలో ఉన్నట్టుంది. అవును అంటే కిచెన్ వెయిట్ మొదలవుతుంది.</string>
+    <string name="rider_reached_yes">అవును, వచ్చాను</string>
+    <string name="rider_reached_not_yet">ఇంకా లేదు</string>
 </resources>

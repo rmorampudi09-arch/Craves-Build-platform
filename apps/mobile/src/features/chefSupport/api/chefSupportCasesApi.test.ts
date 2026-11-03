@@ -133,12 +133,26 @@ describe('chefSupportCasesApi contract', () => {
     });
   });
 
-  it('rejects a customer support case from the Chef surface', async () => {
+  it('leaves the customer cases of the same account out of the Chef list', async () => {
+    // The server lists every case of the identity, whatever role it was raised in.
     (httpClient.get as jest.Mock).mockResolvedValue({
-      cases: [{...summary, requesterRole: 'CUSTOMER'}],
-      nextCursor: null,
-      hasMore: false,
+      cases: [
+        {...summary, id: '55555555-5555-4555-8555-555555555555', requesterRole: 'CUSTOMER'},
+        summary,
+      ],
+      nextCursor: 'next-page',
+      hasMore: true,
     });
+
+    await expect(chefSupportCasesApi.list()).resolves.toEqual({
+      cases: [summary],
+      nextCursor: 'next-page',
+      hasMore: true,
+    });
+  });
+
+  it('still rejects a list that is not a support case page', async () => {
+    (httpClient.get as jest.Mock).mockResolvedValue({cases: [{id: 'x'}], nextCursor: null, hasMore: false});
 
     await expect(chefSupportCasesApi.list()).rejects.toThrow(
       'CHEF_SUPPORT_CASES_INVALID_RESPONSE',

@@ -11,9 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Account deletion for notification-service. In-app notices are deleted per role. Request rows stay (the delivery
- * attempt and dead-letter tables point at them) but lose their text, address and payload, and a request that was not
- * sent yet is stopped first so it can never go out blank. Devices and channel preferences belong to the whole account,
- * so only ALL removes them, and only the customer/chef app's devices: a rider phone is another app's.
+ * attempt and dead-letter tables point at them) but lose their title, text, address, payload and error texts, and so do
+ * the error texts of their attempt and dead-letter rows. A request that was not sent yet is stopped first so it can
+ * never go out blank. Devices and channel preferences belong to the whole account, so only ALL removes them, and only
+ * the customer/chef app's devices: a rider phone is another app's.
  * pdf_document, its audit and e-mail rows and the verification receipts are legal records behind triggers; never touched.
  */
 @Service
@@ -39,14 +40,25 @@ public class AccountErasureService {
         // The statuses are the ones the worker claims (PENDING, FAILED, a PROCESSING lease) plus DEAD_LETTER, which an admin can requeue.
         counts.put("notification_request_stopped", update(identityId, scope, """
             UPDATE notification_schema.notification_request
-               SET status = 'SKIPPED', last_error = 'Account erased; not sent', next_attempt_at = NULL, lock_token = NULL,
-                   locked_at = NULL, updated_at = now()
+               SET status = 'SKIPPED', next_attempt_at = NULL, lock_token = NULL, locked_at = NULL, updated_at = now()
              WHERE recipient_identity_id = ?%s AND status IN ('PENDING', 'PROCESSING', 'FAILED', 'DEAD_LETTER')
             """));
+        // Provider errors can quote the address, so the attempt and dead-letter rows lose their text too (the rows stay).
+        update(identityId, scope, """
+            UPDATE notification_schema.notification_delivery_attempt SET error_message = NULL
+             WHERE error_message IS NOT NULL AND request_id IN (
+                   SELECT id FROM notification_schema.notification_request WHERE recipient_identity_id = ?%s)
+            """);
+        update(identityId, scope, """
+            UPDATE notification_schema.channel_delivery_dead_letter SET final_error_message = NULL
+             WHERE final_error_message IS NOT NULL AND notification_request_id IN (
+                   SELECT id FROM notification_schema.notification_request WHERE recipient_identity_id = ?%s)
+            """);
         counts.put("notification_request", update(identityId, scope, """
             UPDATE notification_schema.notification_request
-               SET body = '', payload = '{}'::jsonb, delivery_address = NULL, updated_at = now()
-             WHERE recipient_identity_id = ?%s AND (body <> '' OR payload <> '{}'::jsonb OR delivery_address IS NOT NULL)
+               SET body = '', payload = '{}'::jsonb, delivery_address = NULL, title = NULL, last_error = NULL, updated_at = now()
+             WHERE recipient_identity_id = ?%s AND (body <> '' OR payload <> '{}'::jsonb OR delivery_address IS NOT NULL
+                   OR title IS NOT NULL OR last_error IS NOT NULL)
             """));
         counts.put("in_app_notification", update(identityId, scope,
             "DELETE FROM " + NS + "in_app_notification WHERE recipient_identity_id = ?%s"));

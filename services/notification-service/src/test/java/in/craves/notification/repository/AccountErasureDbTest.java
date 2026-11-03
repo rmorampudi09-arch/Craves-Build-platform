@@ -79,13 +79,35 @@ class AccountErasureDbTest {
         jdbc.update("""
             INSERT INTO notification_schema.notification_request(
                 id, request_key, source_service, event_type, recipient_identity_id, recipient_role, channel,
-                delivery_address, title, body, payload, status, lock_token, locked_at, next_attempt_at)
+                delivery_address, title, body, payload, status, lock_token, locked_at, next_attempt_at, last_error)
             VALUES (?, ?, 'order', 'ORDER_PLACED', ?, ?, 'EMAIL', 'ravi@example.com', 'Your order',
-                    ?, '{"name":"Ravi"}'::jsonb, ?, ?, ?, ?)
+                    ?, '{"name":"Ravi"}'::jsonb, ?, ?, ?, ?, 'rejected: ravi@example.com')
             """, id, "key-" + id, identity, role, BODY, status,
             processing ? UUID.randomUUID() : null, processing ? Timestamp.from(Instant.now()) : null,
             "SENT".equals(status) ? null : Timestamp.from(Instant.now()));
         return id;
+    }
+
+    /** A failed attempt and a dead-letter row for the request, both quoting the provider error. */
+    private void providerErrors(UUID request) {
+        jdbc.update("""
+            INSERT INTO notification_schema.notification_delivery_attempt(
+                id, request_id, channel, provider, attempt_number, status, error_message)
+            VALUES (?, ?, 'EMAIL', 'acs', 1, 'FAILED', 'mailbox ravi@example.com unknown')
+            """, UUID.randomUUID(), request);
+        jdbc.update("""
+            INSERT INTO notification_schema.channel_delivery_dead_letter(
+                id, notification_request_id, channel, final_error_code, final_error_message, attempt_count)
+            VALUES (?, ?, 'EMAIL', 'SMTP_REJECTED', 'mailbox ravi@example.com unknown', 1)
+            """, UUID.randomUUID(), request);
+    }
+
+    private List<String> providerErrorTexts(UUID request) {
+        return jdbc.queryForList("""
+            SELECT coalesce(error_message, '-') FROM notification_schema.notification_delivery_attempt WHERE request_id = ?
+            UNION ALL
+            SELECT coalesce(final_error_message, '-') FROM notification_schema.channel_delivery_dead_letter WHERE notification_request_id = ?
+            """, String.class, request, request);
     }
 
     private int count(String table, String column, UUID identity) {
@@ -98,7 +120,7 @@ class AccountErasureDbTest {
     }
 
     private Map<String, Object> requestRow(UUID id) {
-        return jdbc.queryForMap("SELECT body, payload::text AS payload, delivery_address, status, lock_token, title FROM "
+        return jdbc.queryForMap("SELECT body, payload::text AS payload, delivery_address, status, lock_token, title, last_error FROM "
             + NS + "notification_request WHERE id = ?", id);
     }
 
@@ -151,7 +173,7 @@ class AccountErasureDbTest {
         assertThat(count("in_app_notification", "recipient_identity_id", me)).isZero();
         assertThat(count("notification_preference", "recipient_identity_id", me)).isZero();
         assertThat(requestRow(sent)).containsEntry("body", "").containsEntry("payload", "{}")
-            .containsEntry("delivery_address", null).containsEntry("title", "Your order");
+            .containsEntry("delivery_address", null).containsEntry("title", null);
         // the rider app token is not the customer/chef account's: ALL keeps it, and everything of the other identity
         assertThat(jdbc.queryForList("SELECT app FROM " + NS + "push_device_registration WHERE recipient_identity_id = ?", String.class, me))
             .containsExactly("rider");
@@ -180,6 +202,33 @@ class AccountErasureDbTest {
         // nothing the delivery worker or an admin requeue could pick up is left for this role
         assertThat(jdbc.queryForObject("SELECT count(*) FROM " + NS + "notification_request WHERE recipient_identity_id = ? "
             + "AND recipient_role = 'CUSTOMER' AND status IN ('PENDING','PROCESSING','FAILED','DEAD_LETTER')", Integer.class, me)).isZero();
+    }
+
+    @Test
+    void erasedRequestsLoseTitlesAndProviderErrors() {
+        UUID customer = request(me, "CUSTOMER", "DEAD_LETTER");
+        UUID chef = request(me, "CHEF", "DEAD_LETTER");
+        UUID others = request(someoneElse, "CUSTOMER", "DEAD_LETTER");
+        List.of(customer, chef, others).forEach(this::providerErrors);
+
+        service.erase(me, Scope.CUSTOMER, requestId);
+
+        assertThat(requestRow(customer)).containsEntry("title", null).containsEntry("last_error", null);
+        assertThat(providerErrorTexts(customer)).containsExactly("-", "-");
+        for (UUID untouched : List.of(chef, others)) { // another role, another identity
+            assertThat(requestRow(untouched)).containsEntry("title", "Your order").containsEntry("last_error", "rejected: ravi@example.com");
+            assertThat(providerErrorTexts(untouched)).containsExactly("mailbox ravi@example.com unknown", "mailbox ravi@example.com unknown");
+        }
+
+        service.erase(me, Scope.ALL, requestId);
+
+        assertThat(requestRow(chef)).containsEntry("title", null).containsEntry("last_error", null);
+        assertThat(providerErrorTexts(chef)).containsExactly("-", "-");
+        assertThat(requestRow(others)).containsEntry("title", "Your order");
+        assertThat(providerErrorTexts(others)).containsExactly("mailbox ravi@example.com unknown", "mailbox ravi@example.com unknown");
+        // the rows are kept (the child tables point at them) and a second call has nothing left to blank
+        assertThat(count("notification_request", "recipient_identity_id", me)).isEqualTo(2);
+        assertThat(service.erase(me, Scope.ALL, requestId).values()).containsOnly(0);
     }
 
     @Test

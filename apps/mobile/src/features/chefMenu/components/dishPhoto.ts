@@ -1,7 +1,10 @@
 import {Alert, Linking} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import {toAppApiError} from '../../../core/http/apiError';
 import {shrinkPhoto} from '../../../core/media/shrinkPhoto';
-import {CHEF_MENU_IMAGE_CONTENT_TYPES, chefMenuApi} from '../api/chefMenuApi';
+import {CHEF_MENU_IMAGE_CONTENT_TYPES, chefMenuApi, type ChefMenuItemImage} from '../api/chefMenuApi';
+
+const MENU_IMAGE_LIMIT_REACHED = 'MENU_IMAGE_LIMIT_REACHED';
 
 export type DishPhoto = ImagePicker.ImagePickerAsset;
 export type DishPhotoSource = 'camera' | 'gallery';
@@ -52,14 +55,50 @@ export async function pickDishPhoto(source: DishPhotoSource): Promise<{photo: Di
   }
 }
 
-/** Sends the photo as the dish's main one. False when it did not upload (the dish itself is already saved). */
-export async function uploadDishPhoto(menuItemId: string, photo: DishPhoto): Promise<boolean> {
+/** Deletes dish photos one by one. One that will not delete is left: the new photo is already saved, so the save must not fail. */
+async function removeImages(menuItemId: string, images: readonly ChefMenuItemImage[]): Promise<void> {
+  for (const image of images) {
+    try {
+      await chefMenuApi.deleteImage(menuItemId, image.id);
+    } catch {
+      // Left in place: it can be cleared on the next photo change.
+    }
+  }
+}
+
+/**
+ * Sends the photo as the dish's main one and then deletes the dish's old photos, so they do not pile up to the server's
+ * limit of 5. False when it did not upload (the dish itself is already saved), 'limit' when the dish is full of photos
+ * that could not be cleared.
+ */
+export async function uploadDishPhoto(
+  menuItemId: string,
+  photo: DishPhoto,
+  oldImages: readonly ChefMenuItemImage[] = [],
+): Promise<boolean | 'limit'> {
   try {
-    const formData = new FormData();
-    formData.append('file', (await shrinkPhoto(photo, `craves-dish-${menuItemId}.jpg`)) as unknown as Blob);
-    await chefMenuApi.uploadImage(menuItemId, formData, true);
+    const file = await shrinkPhoto(photo, `craves-dish-${menuItemId}.jpg`);
+    const send = () => {
+      const formData = new FormData();
+      formData.append('file', file as unknown as Blob);
+      return chefMenuApi.uploadImage(menuItemId, formData, true);
+    };
+    let stale = oldImages;
+    try {
+      await send();
+    } catch (error) {
+      const extras = stale.filter(image => !image.primary);
+      if (toAppApiError(error).code !== MENU_IMAGE_LIMIT_REACHED || extras.length === 0) {
+        throw error;
+      }
+      // A dish saved by an older build can already hold 5 photos: free the extra ones (not the cover), then send once more.
+      await removeImages(menuItemId, extras);
+      stale = stale.filter(image => image.primary);
+      await send();
+    }
+    await removeImages(menuItemId, stale);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return toAppApiError(error).code === MENU_IMAGE_LIMIT_REACHED ? 'limit' : false;
   }
 }

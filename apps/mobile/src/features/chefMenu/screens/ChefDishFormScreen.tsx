@@ -29,7 +29,7 @@ import {
   VegMark,
   useChefToast,
 } from '../../chefShell/components/ui';
-import {CHEF_MENU_FOOD_TYPES, CHEF_MENU_SPICE_LEVELS, type ChefMenuItem} from '../api/chefMenuApi';
+import {CHEF_MENU_FOOD_TYPES, CHEF_MENU_SPICE_LEVELS, type ChefMenuItem, type ChefMenuItemImage} from '../api/chefMenuApi';
 import {ChefMenuCategorySelector} from '../components/ChefMenuCategorySelector';
 import {FormField, GroupLabel, OptionChip} from '../components/DishFormField';
 import {DishLabelsSection} from '../components/DishLabelsSection';
@@ -259,8 +259,8 @@ function DishForm({
 
   // A second tap must not send the photo again, even before the busy state has reached the buttons.
   const photoLock = React.useRef(false);
-  /** True when sent (or nothing to send), false when it did not upload, null when it is already being sent. */
-  const sendPhoto = async (menuItemId: string): Promise<boolean | null> => {
+  /** True when sent (or nothing to send), false when it did not upload, 'limit' when the dish is full of photos, null when it is already being sent. */
+  const sendPhoto = async (menuItemId: string, oldImages: ChefMenuItemImage[] = []): Promise<boolean | 'limit' | null> => {
     if (!photo) {
       return true;
     }
@@ -270,9 +270,9 @@ function DishForm({
     photoLock.current = true;
     setPhotoBusy(true);
     try {
-      const uploaded = await uploadDishPhoto(menuItemId, photo);
+      const uploaded = await uploadDishPhoto(menuItemId, photo, oldImages);
       // After a good upload the screen is on its way out: the lock stays so a late tap cannot send it again.
-      photoLock.current = uploaded;
+      photoLock.current = uploaded === true;
       return uploaded;
     } finally {
       setPhotoBusy(false);
@@ -299,7 +299,7 @@ function DishForm({
       }
       const labelled = await labels.save(created.id);
       finish(
-        !uploaded
+        uploaded !== true
           ? `${created.itemName} is saved, but the photo didn't upload. Open the dish to add it again.`
           : !labelled
             ? `${created.itemName} ${intent === 'ADD_ITEM' ? 'is live' : 'is saved'}, but its labels didn't save. Open the dish to add them again.`
@@ -332,14 +332,18 @@ function DishForm({
         return;
       }
       if (photo) {
-        const uploaded = await sendPhoto(dish.id);
+        const uploaded = await sendPhoto(dish.id, dish.images);
         if (uploaded === null) {
           return;
         }
         await menu.refresh().catch(() => undefined);
-        if (!uploaded) {
+        if (uploaded !== true) {
           reset(chefMenuItemToFormValues(saved));
-          setPhotoError("The new photo didn't upload. Your other changes are saved. Try the photo again.");
+          setPhotoError(
+            uploaded === 'limit'
+              ? "This dish already has the most photos it can hold, and we couldn't remove the old ones. Please try again."
+              : "The new photo didn't upload. Your other changes are saved. Try the photo again.",
+          );
           return;
         }
       }

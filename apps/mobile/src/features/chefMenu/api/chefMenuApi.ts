@@ -647,4 +647,15 @@ export const chefMenuApi = {
     );
     return requireImageResponse(response);
   },
+  /** Removes one saved photo of a dish (the next one becomes the cover). The server answers with the dish; nothing here needs it. */
+  async deleteImage(menuItemId: string, imageId: string, signal?: AbortSignal): Promise<void> {
+    const id = requireMenuItemId(menuItemId);
+    if (!isChefMenuItemId(imageId)) {
+      throw new Error('Chef menu image ID must be a UUID.');
+    }
+    await httpClient.delete<unknown>(
+      `/api/v1/kitchens/me/menu-items/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`,
+      {signal},
+    );
+  },
 };

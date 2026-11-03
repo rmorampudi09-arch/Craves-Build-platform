@@ -357,6 +357,16 @@ describe('chefMenuApi contract model', () => {
     );
   });
 
+  it('deletes one dish photo with DELETE /images/{imageId}', async () => {
+    const remove = jest.spyOn(httpClient, 'delete').mockResolvedValue(menuItem);
+    const imageId = '123e4567-e89b-42d3-a456-426614174055';
+
+    await chefMenuApi.deleteImage(MENU_ITEM_ID, imageId);
+
+    expect(remove).toHaveBeenCalledWith(`/api/v1/kitchens/me/menu-items/${MENU_ITEM_ID}/images/${imageId}`, {signal: undefined});
+    await expect(chefMenuApi.deleteImage(MENU_ITEM_ID, 'not-an-image-id')).rejects.toThrow('Chef menu image ID must be a UUID.');
+  });
+
   it('rejects malformed menu item identifiers before a write is sent', async () => {
     await expect(
       chefMenuApi.replaceItem('not-a-menu-item-id', request),
